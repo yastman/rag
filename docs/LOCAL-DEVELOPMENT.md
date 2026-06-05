@@ -402,7 +402,52 @@ Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the 
 - For swarm worktrees, set `RAG_RUNTIME_ENV_FILE=/repo/.env` when local Telegram credentials live only in the main checkout.
 - Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
 
-## 11. Common Issues
+## 11. WSL Agent Watchers
+
+The repo ships a CLI to manage WSL auto-start watcher services for
+codeindexer and codegraph. These are user-scoped systemd units that start
+automatically when your WSL session begins.
+
+```bash
+# Preview the units without writing any files
+uv run python scripts/wsl_agent_watchers.py --dry-run --repo-root /home/user/projects/rag-fresh
+
+# Check whether systemd is available and the units are installed
+uv run python scripts/wsl_agent_watchers.py --check --repo-root /home/user/projects/rag-fresh
+
+# Install the units
+uv run python scripts/wsl_agent_watchers.py --install --repo-root /home/user/projects/rag-fresh
+```
+
+`--check` verifies that user systemd is actually running or degraded, not just
+that the `systemctl` binary exists. In WSL, enable systemd in `/etc/wsl.conf`
+and restart the distro before installing these units.
+
+The installer resolves `codeindexer` and `npx` from the current `PATH` and
+writes those paths into the units. If your `npx` comes from `nvm`, pin it
+explicitly:
+
+```bash
+uv run python scripts/wsl_agent_watchers.py --install \
+  --repo-root /home/user/projects/rag-fresh \
+  --codeindexer-bin /home/user/.local/bin/codeindexer \
+  --npx-bin /home/user/.nvm/versions/node/v24.14.0/bin/npx
+```
+
+After installing, enable and start the services:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable codeindexer.service codegraph-rag-fresh.service
+systemctl --user start codeindexer.service codegraph-rag-fresh.service
+```
+
+The units are idempotent — re-running `--install` overwrites existing unit files
+safely. Use `--user-systemd-dir` and `--config-root` for custom locations
+(for example, in test environments). When systemd is unavailable, `--check`
+reports the status clearly without writing any files.
+
+## 12. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`. Run `make preflight-bot` for a diagnostic report.
 - Bot crash-loops with `TokenValidationError`: `.env` is missing and the CI fallback `TELEGRAM_BOT_TOKEN=123456789:ABC...fghi` is not a valid Telegram token. `cp .env.example .env` then set real `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and a provider key.
