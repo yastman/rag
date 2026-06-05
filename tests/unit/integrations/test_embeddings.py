@@ -11,6 +11,7 @@ import httpx
 import pytest
 from langchain_core.embeddings import Embeddings
 
+from src.runtime.integrations.embeddings import InProcessBgeM3Provider
 from telegram_bot.integrations.embeddings import (
     BGEM3Embeddings,
     BGEM3HybridEmbeddings,
@@ -366,3 +367,103 @@ class TestBGEM3HybridTimeout:
         client = await emb._client._get_client()
         assert client.timeout.read == expected_read
         assert client.timeout.connect == expected_connect
+
+
+class TestInProcessBgeM3Provider:
+    class _FakeBgeM3Model:
+        def encode(
+            self,
+            texts,
+            *,
+            batch_size,
+            max_length,
+            return_dense,
+            return_sparse,
+            return_colbert_vecs,
+        ):
+            assert texts == ["query"]
+            assert batch_size == 4
+            assert max_length == 128
+            result = {}
+            if return_dense:
+                result["dense_vecs"] = [[0.1, 0.2, 0.3]]
+            if return_sparse:
+                result["lexical_weights"] = [{"10": 0.5, 20: 0.25}]
+            if return_colbert_vecs:
+                result["colbert_vecs"] = [[[0.01, 0.02], [0.03, 0.04]]]
+            return result
+
+    async def test_local_provider_matches_http_client_contract(self):
+        provider = InProcessBgeM3Provider(
+            model_factory=lambda: self._FakeBgeM3Model(),
+            batch_size=4,
+            max_length=128,
+        )
+
+        dense = await provider.encode_dense(["query"])
+        sparse = await provider.encode_sparse(["query"])
+        hybrid = await provider.encode_hybrid(["query"])
+        colbert = await provider.encode_colbert(["query"])
+
+        assert dense.vectors == [[0.1, 0.2, 0.3]]
+        assert sparse.weights == [{"indices": [10, 20], "values": [0.5, 0.25]}]
+        assert hybrid.dense_vecs == [[0.1, 0.2, 0.3]]
+        assert hybrid.lexical_weights == [{"indices": [10, 20], "values": [0.5, 0.25]}]
+        assert hybrid.colbert_vecs == [[[0.01, 0.02], [0.03, 0.04]]]
+        assert colbert.colbert_vecs == [[[0.01, 0.02], [0.03, 0.04]]]
+
+    async def test_local_provider_handles_empty_batches_without_loading_model(self):
+        called = False
+
+        def _factory():
+            nonlocal called
+            called = True
+            return self._FakeBgeM3Model()
+
+        provider = InProcessBgeM3Provider(model_factory=_factory)
+
+        assert (await provider.encode_dense([])).vectors == []
+        assert (await provider.encode_sparse([])).weights == []
+        assert (await provider.encode_hybrid([])).dense_vecs == []
+        assert (await provider.encode_colbert([])).colbert_vecs == []
+        assert called is False
+
+
+class TestGraphConfigBgeM3ProviderSelection:
+    def test_default_embedding_provider_remains_http(self):
+        from src.runtime.graph.config import GraphConfig
+        from src.services.bge_m3_client import BGEM3Client
+
+        cfg = GraphConfig()
+
+        assert cfg.retrieval_dense_provider == "http_bge_m3"
+        assert cfg.retrieval_sparse_provider == "http_bge_m3"
+        assert isinstance(cfg.create_embeddings()._client, BGEM3Client)
+        assert isinstance(cfg.create_sparse_embeddings()._client, BGEM3Client)
+        assert isinstance(cfg.create_hybrid_embeddings()._client, BGEM3Client)
+
+    def test_env_can_select_local_bge_m3_provider(self, monkeypatch):
+        from src.runtime.graph.config import GraphConfig
+        from src.runtime.integrations.embeddings import InProcessBgeM3Provider
+
+        monkeypatch.setenv("RETRIEVAL_DENSE_PROVIDER", "local_bge_m3")
+        monkeypatch.setenv("RETRIEVAL_SPARSE_PROVIDER", "local_bge_m3")
+
+        cfg = GraphConfig.from_env()
+
+        assert cfg.retrieval_dense_provider == "local_bge_m3"
+        assert cfg.retrieval_sparse_provider == "local_bge_m3"
+        assert isinstance(cfg.create_embeddings()._client, InProcessBgeM3Provider)
+        assert isinstance(cfg.create_sparse_embeddings()._client, InProcessBgeM3Provider)
+        assert isinstance(cfg.create_hybrid_embeddings()._client, InProcessBgeM3Provider)
+
+    def test_hybrid_provider_stays_http_when_only_one_channel_is_local(self, monkeypatch):
+        from src.runtime.graph.config import GraphConfig
+        from src.services.bge_m3_client import BGEM3Client
+
+        monkeypatch.setenv("RETRIEVAL_DENSE_PROVIDER", "local_bge_m3")
+        monkeypatch.setenv("RETRIEVAL_SPARSE_PROVIDER", "http_bge_m3")
+
+        cfg = GraphConfig.from_env()
+
+        assert isinstance(cfg.create_hybrid_embeddings()._client, BGEM3Client)

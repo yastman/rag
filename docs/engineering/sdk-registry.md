@@ -324,6 +324,23 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - Middleware/CORS добавлять только там, где это часть surface contract, не копировать без причины
   - Preserve structured error/health responses; не заменять их ad-hoc debug поведением
 
+## FlagEmbedding / BGE-M3 local provider
+- **triggers:** BGE-M3, FlagEmbedding, embeddings, dense, sparse, ColBERT, in-process embeddings, `ml-local`
+- **context7_id:** FlagEmbedding docs when available; otherwise use repo-local contracts first
+- **как_у_нас:**
+  - `src/models/embedding_model.py` — lazy `get_bge_m3_model()` singleton; imports FlagEmbedding only when used
+  - `src/runtime/integrations/embeddings.py` — `InProcessBgeM3Provider` opt-in adapter and HTTP wrappers
+  - `src/runtime/graph/config.py` — provider flags `RETRIEVAL_DENSE_PROVIDER` / `RETRIEVAL_SPARSE_PROVIDER`
+  - `services/bge-m3-api/app.py` — HTTP ONNX INT8 service contract to preserve
+- **паттерны:**
+  - Keep HTTP BGE-M3 as default unless `RETRIEVAL_DENSE_PROVIDER=local_bge_m3` and/or `RETRIEVAL_SPARSE_PROVIDER=local_bge_m3` explicitly opts in.
+  - Local provider must preserve HTTP client result contracts: dense vectors, `{"indices", "values"}` sparse weights, and ColBERT multivectors.
+  - Use `get_bge_m3_model()`; do not instantiate FlagEmbedding at import time.
+- **gotchas:**
+  - `ml-local` is optional; do not make FlagEmbedding/torch required for default bot runtime without Artem approval.
+  - Do not switch defaults, remove the BGE-M3 container, change Qdrant schema, or require reindexing without an explicit migration decision.
+  - ONNX INT8 service vectors and local PyTorch/FlagEmbedding vectors may differ; measure parity before default migration.
+
 ## httpx
 - **triggers:** httpx, http client, external api, retry, timeout, transport, kommo, docling-serve, vectorizer service
 - **context7_id:** /encode/httpx
