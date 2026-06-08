@@ -211,11 +211,11 @@ runtime стадией. Для E2E он нужен как подготовка �
 test docs -> ingest/index -> Qdrant collection -> assistant request
 ```
 
-### 4.6. Observability Должна Быть Product Logs First
+### 4.6. Observability Должна Быть Подходящей Для SDK
 
-Принятая модель Stage 0: structured JSON logs через `log_event(...)` — основной
-механизм отладки. Langfuse/OTel могут оставаться, но не должны быть обязательным
-runtime, CI или release gate.
+Если SDK жестко вызывает глобальный метод логирования (например, `log_event`), он будет конфликтовать с системами логирования приложений-хостов.
+SDK должен использовать стандартный Python `logging.getLogger("rag_core")` или принимать инжектируемый интерфейс телеметрии/callback.
+Langfuse/OTel могут оставаться, но только как optional listeners.
 
 Обязательные product events для core path:
 
@@ -236,15 +236,16 @@ src/
   core/
     __init__.py
     assistant.py              # run_assistant_request()
+    builder.py                # AssistantApp.from_config() — SDK инкапсуляция сборки зависимостей
     contracts.py              # AssistantRequest/Result, UserContext, CrmAction
     dependencies.py           # optional Protocols / dependency bundle
 
   runtime/
     pipeline/
-      assistant_pipeline.py   # classify -> retrieve -> generate -> grounding -> crm proposal
+      assistant_pipeline.py   # ЕДИНСТВЕННЫЙ оркестратор: classify -> retrieve -> generate -> grounding -> crm proposal
       contracts.py
     retrieval/
-      service.py              # wrapper over existing retrieval/qdrant/rerank/cache path
+      service.py              # Чистый поиск (без генерации)
       contracts.py
     generation/
       service.py              # pure core generation, no Telegram message send
@@ -254,8 +255,6 @@ src/
       policy.py
     crm/
       actions.py              # propose only; no live writes without HITL
-    graph/
-      ...                     # canonical LangGraph modules if retained
     cache/
       policy.py               # semantic response cache policy if moved
 
@@ -493,20 +492,19 @@ PR. Langfuse hooks оставить wrapper-level до отдельного opti
 - old `generate_response()` callers работают;
 - no user-visible answer behavior change outside intentional tests.
 
-### Phase E — Перенести RAG Pipeline Ownership
+### Phase E — Выделение Чистого Retrieval Service
 
-**Цель:** core больше не должен динамически импортировать
-`telegram_bot.agents.rag_pipeline`.
+**Цель:** Упразднить размытое понятие `rag_pipeline` как отдельного оркестратора, отделив чистый поиск (retrieval) от генерации (generation).
 
 **Tasks:**
 
-1. Создать `src/runtime/pipeline/rag.py` или
-   `src/runtime/retrieval/service.py`.
-2. Перенести `rag_pipeline()` как canonical implementation.
-3. Оставить shim:
+1. Создать `src/runtime/retrieval/service.py`.
+2. Перенести логику поиска (retrieval, cache-check, grade, rerank) из старого `rag_pipeline()`.
+3. Логику rewrite/generation из `rag_pipeline` перенести в Phase D (`generation_service`).
+4. Оставить shim:
 
    ```text
-   telegram_bot/agents/rag_pipeline.py -> src.runtime.pipeline.rag
+   telegram_bot/agents/rag_pipeline.py -> temporary shim calling retrieval + generation
    ```
 
 4. Переключить callers:
@@ -529,9 +527,9 @@ state.
 - focused RAG pipeline tests pass;
 - E2E harness can call core path with dependencies.
 
-### Phase F — Собрать `src.runtime.pipeline.assistant_pipeline`
+### Phase F — Собрать Императивный Оркестратор `assistant_pipeline`
 
-**Цель:** единая runtime orchestration функция становится реальным ядром.
+**Цель:** единая runtime orchestration функция становится реальным ядром SDK. Мы официально отказываемся от LangGraph внутри `src.runtime`, чтобы не дублировать логику оркестрации.
 
 **Target API:**
 
@@ -570,29 +568,21 @@ async def run_assistant_pipeline(
 - all product logs include `request_id`;
 - core tests cover success, cache hit, generation, fallback, dependency failure.
 
-### Phase G — Подключить Telegram Как Тонкий Adapter
+### Phase G — Инкапсуляция Зависимостей и Подключение Telegram
 
-**Цель:** Telegram text path вызывает core entrypoint и рендерит
-`AssistantResult`.
+**Цель:** Telegram text path вызывает SDK через инкапсулированный Builder (`AssistantApp`), передавая только `UserContext` и рендеря `AssistantResult`.
 
 **Tasks:**
 
-1. В `PropertyBot` собрать adapter dependency bundle once at startup:
-   - cache;
-   - embeddings;
-   - sparse embeddings;
-   - qdrant;
-   - reranker;
-   - llm;
-   - config.
-2. В text handler заменить direct orchestration на:
+1. В `src/core/builder.py` создать `AssistantApp.from_config(...)`, который внутри себя инициализирует все зависимости (qdrant, llm, embeddings). Нельзя заставлять адаптеры прокидывать низкоуровневые объекты.
+2. В `PropertyBot` при старте просто вызвать `core_app = AssistantApp.from_config(config)`.
+3. В text handler заменить direct orchestration на:
 
    ```python
-   result = await run_assistant_request(
+   result = await core_app.run_assistant_request(
        user_text,
        collection=config.qdrant_collection,
        user_context=UserContext(...),
-       dependencies=core_dependencies,
    )
    ```
 
