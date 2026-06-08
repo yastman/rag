@@ -602,3 +602,29 @@ add AssistantRequest, preserve src.core public imports and run_assistant_request
 behavior, update focused core tests if possible, and do not touch Telegram,
 RAG pipeline, generation, Docker, or dependencies.
 ```
+
+## Follow-up Execution Slice: CORE-011 … CORE-018
+
+Дата: 2026-06-08
+Статус: accepted execution slice after `CORE-001` … `CORE-010` foundation.
+
+| Issue | Название | Lane | Решение / результат |
+|---|---|---|---|
+| `CORE-011` / `#2394` | Remove PR Guardrails | Quick execution | Убрать PR-body guardrail job/template/script/tests, оставить быстрые static CI gates. |
+| `CORE-013` / `#2396` | Trim obsolete guardrail tests | Quick execution | Удалить тесты, которые защищали удалённый PR-body gate, и оставить только lightweight reviewer fields. |
+| `CORE-014` / `#2397` | Keep CI contract focused | Quick execution | Контракты CI проверяют lint/uv-lock/compose-config/secret-scan, но не требуют PR metadata policy. |
+| `CORE-015` / `#2398` | Shrink Makefile live-core wiring | Quick execution | Вынести core live E2E command в shared `CORE_LIVE_PYTEST` и использовать `uv run --no-sync`. |
+| `CORE-007` / `#2388` | Core live E2E golden path | Plan needed | Прямой `run_assistant_request()` остаётся защищённым live gate; artifacts пишутся локально для debug/release evidence. |
+| `CORE-016` / `#2399` | Live E2E evidence hardening | Plan needed | Golden-case artifacts фиксируют query case, retrieved docs, route/error and response text without optional surfaces. |
+| `CORE-018` / `#2403` | `create_agent` vs procedural core decision | Design first | Accepted ADR: core text RAG path is procedural; `create_agent` remains adapter/conversational shell only. |
+
+Execution order:
+
+1. `CORE-018` first: unblock `CORE-005`/`CORE-008` by accepting procedural
+   core ownership in [`../adr/0019-core-text-path-procedural-runtime.md`](../adr/0019-core-text-path-procedural-runtime.md).
+2. `CORE-011`/`CORE-013`/`CORE-014`: remove PR metadata policy from required CI
+   so monolith PRs are not blocked by template-policy churn.
+3. `CORE-015`: make `e2e-core-live` use the existing environment via
+   `UV_RUN_NO_SYNC`, not an implicit dependency sync.
+4. `CORE-007`/`CORE-016`: keep real reliability proof in the live core E2E path
+   and store local artifacts from the synthetic corpus.

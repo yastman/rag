@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -258,6 +259,39 @@ def load_golden_case(case_id: str) -> GoldenCase:
             )
 
     raise KeyError(f"Golden case not found: {case_id}")
+
+
+def write_case_artifact(
+    *,
+    case: GoldenCase,
+    collection_name: str,
+    response_text: str,
+    retrieved_doc_ids: list[str],
+    route: str,
+    error_type: str | None,
+) -> Path:
+    """Write a lightweight JSON artifact for live core E2E debugging.
+
+    Artifacts are local-only by default and never include production data because
+    the golden corpus is synthetic.
+    """
+
+    artifact_root = Path(os.getenv("E2E_CORE_ARTIFACT_DIR", ".artifacts/e2e_core"))
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    artifact_path = artifact_root / f"{case.id}.json"
+    payload = {
+        "case": asdict(case),
+        "collection_name": collection_name,
+        "route": route,
+        "error_type": error_type,
+        "retrieved_doc_ids": retrieved_doc_ids,
+        "response_text": response_text,
+    }
+    artifact_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return artifact_path
 
 
 async def require_live_services(env: LiveE2EEnv) -> None:
