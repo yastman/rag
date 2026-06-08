@@ -68,6 +68,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from langgraph.errors import GraphRecursionError
 
 from src.retrieval.topic_classifier import get_query_topic_hint
+from src.runtime.grounding.policy import get_grounding_mode
 
 from . import (
     _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
@@ -125,7 +126,6 @@ from .services.cache_policy import (
     resolve_semantic_cache_signature,
 )
 from .services.forum_bridge import ForumBridge
-from .services.grounding_policy import get_grounding_mode
 from .services.handoff_state import HandoffData, HandoffState
 from .services.query_filter_signal import detect_filter_sensitive_query
 from .services.redis_monitor import RedisHealthMonitor
