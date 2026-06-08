@@ -24,12 +24,20 @@
   функции `run_assistant_request()`, тип результата `AssistantResult`, политику
   CRM/HITL, корреляцию логов и повторное использование существующих модулей.
 
+- [`monolith-core-plan.md`](monolith-core-plan.md) — **единый план** монолитного
+  ядра (источник правды). Консолидирует аудит кода, целевую архитектуру, сверку с
+  SDK-native baseline (ADR 0015), фазы реализации A..J, milestone
+  `Stabilize Core Monolith` и issues `CORE-001…CORE-010`. Заменяет ранее
+  раздельные `monolith-core-audit-implementation-plan.md` и
+  `monolith-core-issue-backlog.md`.
+
 ## Навигация
 
 - Основной план: [`product-simplification-e2e-plan.md`](product-simplification-e2e-plan.md)
 - Рабочий процесс: [`yaroslav-simplification-workflow.md`](yaroslav-simplification-workflow.md)
 - Решения Этапа 0: [`product-simplification-stage-0-decisions.md`](product-simplification-stage-0-decisions.md)
 - Контракт точки входа: [`unified-assistant-entrypoint-contract.md`](unified-assistant-entrypoint-contract.md)
+- Единый план монолитного ядра: [`monolith-core-plan.md`](monolith-core-plan.md)
 
 ## Статус
 
