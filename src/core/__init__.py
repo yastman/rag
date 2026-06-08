@@ -1,12 +1,13 @@
 """Core application module exports."""
 
-from .assistant import (
+from .assistant import run_assistant_request
+from .contracts import (
     AssistantError,
+    AssistantRequest,
     AssistantResult,
     CoreDependencies,
     CrmAction,
     UserContext,
-    run_assistant_request,
 )
 
 
@@ -22,6 +23,7 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     "AssistantError",
+    "AssistantRequest",
     "AssistantResult",
     "CoreDependencies",
     "CrmAction",

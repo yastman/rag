@@ -2,7 +2,7 @@
 
 The module intentionally defines a narrow, synchronous-import-safe contract:
 
-- lightweight data containers (`UserContext`, `AssistantResult`, `CrmAction`)
+- public data containers imported from `src.core.contracts`
 - recoverable core result model
 - thin async entrypoint `run_assistant_request()` that preserves caller API without
   touching live integrations
@@ -13,73 +13,18 @@ from __future__ import annotations
 import asyncio
 import importlib
 import time
-from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from src.core.contracts import (
+    AssistantError,
+    AssistantRequest,
+    AssistantResult,
+    CoreDependencies,
+    CrmAction,
+    UserContext,
+)
 from src.utils.product_events import log_event
-
-
-@dataclass
-class UserContext:
-    """Minimal user/session context for core assistant request handling."""
-
-    user_id: str = ""
-    session_id: str = ""
-    role: str = "client"
-    filters: dict[str, Any] | None = None
-    language: str = "ru"
-
-
-@dataclass
-class CoreDependencies:
-    """Runtime collaborators required to execute the existing RAG path."""
-
-    cache: Any
-    embeddings: Any
-    sparse_embeddings: Any
-    qdrant: Any
-    reranker: Any | None = None
-    llm: Any | None = None
-    config: Any | None = None
-
-
-@dataclass
-class CrmAction:
-    """Intent for a proposed CRM action, awaiting explicit confirmation."""
-
-    action_type: str
-    payload: dict[str, Any]
-    summary: str
-
-
-@dataclass
-class AssistantResult:
-    """Structured response object returned by the assistant core entrypoint."""
-
-    response_text: str
-    route: str = ""
-    request_type: str = ""
-    retrieved_doc_ids: list[str] = field(default_factory=list)
-    retrieved_sources: list[dict[str, str]] = field(default_factory=list)
-    documents_count: int = 0
-    latency_ms: float = 0.0
-    error_type: str | None = None
-    error_message: str | None = None
-    proposed_crm_action: CrmAction | None = None
-    request_id: str = ""
-    cache_hit: bool = False
-    llm_model: str | None = None
-    llm_call_count: int = 0
-    rerank_applied: bool = False
-
-
-class AssistantError(RuntimeError):
-    """Unrecoverable error from the core assistant."""
-
-    def __init__(self, message: str, *, error_type: str = "internal") -> None:
-        super().__init__(message)
-        self.error_type = error_type
 
 
 async def run_assistant_request(
@@ -322,6 +267,7 @@ def _extract_llm_model(generation_result: dict[str, Any]) -> str | None:
 
 __all__ = [
     "AssistantError",
+    "AssistantRequest",
     "AssistantResult",
     "CoreDependencies",
     "CrmAction",

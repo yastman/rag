@@ -1,0 +1,9 @@
+{
+  "src/core/assistant.py": [
+    "telegram_bot.agents.rag_pipeline",
+    "telegram_bot.services.generate_response"
+  ],
+  "src/runtime/graph/builder.py": [
+    "telegram_bot.graph.graph:build_graph"
+  ]
+}
