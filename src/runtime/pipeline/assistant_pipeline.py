@@ -12,7 +12,9 @@ from src.core.contracts import (
     CoreDependencies,
     UserContext,
 )
+from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.generation import GenerationRequest, generate_answer
+from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.rag import rag_pipeline
 from src.utils.product_events import log_event
 
@@ -79,10 +81,16 @@ async def run_assistant_pipeline(
                 rerank_applied=bool(rag_result.get("rerank_applied", False)),
             )
 
+        topic_hint = get_query_topic_hint(request.query)
+        grounding_mode = get_grounding_mode(query_type=request_type, topic_hint=topic_hint)
+        grade_confidence = rag_result.get("grade_confidence")
+
         generation = await generate_answer(
             GenerationRequest(
                 query=request.query,
                 documents=documents,
+                grounding_mode=grounding_mode,
+                grade_confidence=grade_confidence,
                 config=dependencies.config,
             ),
             generate=legacy_generate,
@@ -117,6 +125,7 @@ async def run_assistant_pipeline(
             llm_model=llm_model,
             llm_call_count=1,
             rerank_applied=bool(rag_result.get("rerank_applied", False)),
+            proposed_crm_action=generation_result.get("proposed_crm_action"),
         )
     except Exception as exc:
         result = AssistantResult(
