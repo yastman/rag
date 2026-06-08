@@ -12,6 +12,11 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from src.runtime.grounding.policy import (
+    build_safe_fallback_response,
+    is_strict_grounding_safe,
+    should_safe_fallback,
+)
 from telegram_bot.integrations.prompt_manager import (
     get_prompt,
     get_prompt_with_config,
@@ -23,11 +28,6 @@ from telegram_bot.integrations.prompt_templates import (
 )
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.coverage_mode import detect_coverage_mode
-from telegram_bot.services.grounding_policy import (
-    build_safe_fallback_response,
-    is_strict_grounding_safe,
-    should_safe_fallback,
-)
 from telegram_bot.services.metrics import PipelineMetrics
 from telegram_bot.services.response_style_detector import ResponseStyleDetector
 from telegram_bot.services.telegram_formatting import (

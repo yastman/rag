@@ -1,12 +1,6 @@
-"""Compatibility shim for runtime grounding policy.
+"""Runtime grounding policy exports."""
 
-Deprecated: re-export shim for CORE-002. Import from
-``src.runtime.grounding.policy`` in new code.
-"""
-
-from __future__ import annotations
-
-from src.runtime.grounding.policy import (
+from .policy import (
     STRICT_GROUNDING_CONFIDENCE_THRESHOLD,
     STRICT_QUERY_TYPES,
     STRICT_TOPICS,

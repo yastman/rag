@@ -33,6 +33,26 @@ def test_module_imports_no_telegram_or_fastapi() -> None:
         assert forbidden not in mod_src.__dict__, f"src.core.assistant must not import {forbidden}"
 
 
+def test_core_public_contract_imports() -> None:
+    """src.core should re-export every public assistant contract."""
+    from src.core import (
+        AssistantError,
+        AssistantRequest,
+        AssistantResult,
+        CoreDependencies,
+        CrmAction,
+        UserContext,
+    )
+    from src.core import contracts
+
+    assert AssistantError is contracts.AssistantError
+    assert AssistantRequest is contracts.AssistantRequest
+    assert AssistantResult is contracts.AssistantResult
+    assert CoreDependencies is contracts.CoreDependencies
+    assert CrmAction is contracts.CrmAction
+    assert UserContext is contracts.UserContext
+
+
 # =============================================================================
 # UserContext
 # =============================================================================
@@ -80,6 +100,51 @@ class TestUserContext:
         assert is_dataclass(UserContext)
         assert not hasattr(UserContext, "model_validate")
         assert "pydantic" not in UserContext.__module__
+
+
+# =============================================================================
+# AssistantRequest
+# =============================================================================
+
+
+class TestAssistantRequest:
+    """Tests for the AssistantRequest dataclass."""
+
+    def test_creation_with_required_fields(self) -> None:
+        """AssistantRequest should accept query and collection with safe defaults."""
+        from src.core import AssistantRequest, UserContext
+
+        request = AssistantRequest(query="hello", collection="kb")
+
+        assert request.query == "hello"
+        assert request.collection == "kb"
+        assert isinstance(request.user_context, UserContext)
+        assert request.request_id == ""
+
+    def test_custom_context_and_request_id(self) -> None:
+        """AssistantRequest should carry caller-provided context and request_id."""
+        from src.core import AssistantRequest, UserContext
+
+        ctx = UserContext(user_id="u-1", session_id="s-1", filters={"city": "Sofia"})
+        request = AssistantRequest(
+            query="q",
+            collection="c",
+            user_context=ctx,
+            request_id="req-1",
+        )
+
+        assert request.user_context is ctx
+        assert request.request_id == "req-1"
+        assert request.user_context.filters == {"city": "Sofia"}
+
+    def test_importable_from_core_and_assistant_modules(self) -> None:
+        """AssistantRequest should be available from both public core surfaces."""
+        from src.core import AssistantRequest as FromCore
+        from src.core.assistant import AssistantRequest as FromAssistant
+        from src.core.contracts import AssistantRequest as FromContracts
+
+        assert FromCore is FromContracts
+        assert FromAssistant is FromContracts
 
 
 # =============================================================================
