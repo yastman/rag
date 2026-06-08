@@ -526,9 +526,10 @@ class TestRagCoreObserveContract:
         """
         from unittest.mock import patch
 
+        from src.runtime.services import rag_core as src_rag_core
         from telegram_bot.services import rag_core as rag_core_mod
 
-        with patch.object(rag_core_mod, "_update_current_span") as mock_update:
+        with patch.object(src_rag_core, "_update_current_span") as mock_update:
             rag_core_mod.build_retrieved_context(
                 [
                     {"text": "hello", "score": 0.5, "metadata": {}},
@@ -550,12 +551,13 @@ class TestRagCoreObserveContract:
         """``check_semantic_cache`` must NOT include the raw query in span metadata."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
+        from src.runtime.services import rag_core as src_rag_core
         from telegram_bot.services import rag_core as rag_core_mod
 
         cache = MagicMock()
         cache.check_semantic = AsyncMock(return_value=None)
 
-        with patch.object(rag_core_mod, "_update_current_span") as mock_update:
+        with patch.object(src_rag_core, "_update_current_span") as mock_update:
             await rag_core_mod.check_semantic_cache(
                 "очень секретный текст пользователя",
                 [0.1, 0.2, 0.3],
