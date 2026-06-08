@@ -71,12 +71,13 @@ def test_pre_push_gate_excludes_baseline_type_check() -> None:
     assert "type-check" not in line
 
 
-def test_guardrail_jobs_exist() -> None:
-    """PR CI must include pr-guardrails, uv-lock, and compose-config jobs."""
+def test_static_validation_jobs_exist() -> None:
+    """PR CI keeps static validation jobs but no PR-body guardrail job."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     data = yaml.safe_load(text)
-    for job_key in ("pr-guardrails", "uv-lock", "compose-config"):
+    for job_key in ("uv-lock", "compose-config"):
         assert job_key in data["jobs"], f"missing '{job_key}' job in CI workflow"
+    assert "pr-guardrails" not in data["jobs"], "PR-body guardrail job was removed by CORE-011"
 
 
 def test_top_level_permissions_present() -> None:
