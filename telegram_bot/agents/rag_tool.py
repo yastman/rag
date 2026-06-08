@@ -21,7 +21,7 @@ from langgraph.runtime import Runtime
 from src.runtime.graph.nodes.classify import classify_query
 from src.runtime.graph.nodes.guard import guard_node
 from telegram_bot.agents.context import get_bot_context
-from telegram_bot.agents.rag_pipeline import rag_pipeline
+from src.runtime.pipeline.rag import rag_pipeline
 from telegram_bot.observability import get_client, observe
 from telegram_bot.pipelines.state_contract import PreAgentStateContract
 from telegram_bot.scoring import write_langfuse_scores

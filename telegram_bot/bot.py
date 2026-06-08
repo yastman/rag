@@ -866,7 +866,7 @@ class PropertyBot:
     async def _run_miniapp_rag(self, chat_id: int, topic_id: int, user_message: str) -> None:
         """Run RAG pipeline for Mini App request (no aiogram Message available)."""
         try:
-            from telegram_bot.agents.rag_pipeline import rag_pipeline
+            from src.runtime.pipeline.rag import rag_pipeline
             from telegram_bot.services.generate_response import generate_response
 
             rag_result = await rag_pipeline(
