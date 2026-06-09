@@ -49,9 +49,7 @@ def _read_global_addopts() -> str:
         body,
         re.DOTALL,
     )
-    assert addopts is not None, (
-        "Missing addopts triple-quoted string in [tool.pytest.ini_options]"
-    )
+    assert addopts is not None, "Missing addopts triple-quoted string in [tool.pytest.ini_options]"
     return addopts.group("value")
 
 

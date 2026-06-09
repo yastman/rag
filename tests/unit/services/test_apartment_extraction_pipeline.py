@@ -204,7 +204,6 @@ class TestExtractionPipelineObservability:
         )
 
 
-
 class TestRegexWinsForNumeric:
     """Regression for #1609: numeric fields extracted by regex must win over LLM.
 

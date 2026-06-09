@@ -416,6 +416,35 @@ async def test_generate_response_keeps_citations_when_sources_enabled() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_response_formats_context_without_sources_when_sources_disabled() -> None:
+    config, client = _make_non_streaming_config(answer="Ответ.")
+    config.show_sources = False
+    lf = MagicMock()
+
+    await generate_response(
+        query="Что нужно для ВНЖ?",
+        documents=[{"text": "Описание ВНЖ", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "Что нужно для ВНЖ?"}],
+    )
+
+    client.chat.completions.create.assert_awaited_once()
+    called_messages = client.chat.completions.create.await_args.kwargs["messages"]
+
+    context_found = False
+    for msg in called_messages:
+        content = msg.get("content", "")
+        if "Описание ВНЖ" in content:
+            assert "Фрагмент контекста" in content
+            assert "[Объект 1]" not in content
+            context_found = True
+            break
+
+    assert context_found, "Expected to find the retrieved context in the LLM messages"
+
+
+@pytest.mark.asyncio
 async def test_generate_response_streaming_sets_response_sent_and_message_ref() -> None:
     config, client = _make_non_streaming_config()
     config.streaming_enabled = True

@@ -70,9 +70,7 @@ class TestSetupQdrantIndexesFurnishedSchema:
 
             mock_client = MockClient.return_value
             calls = mock_client.create_payload_index.call_args_list
-            field_names = [
-                (call.kwargs or call[1]).get("field_name") for call in calls
-            ]
+            field_names = [(call.kwargs or call[1]).get("field_name") for call in calls]
             assert "metadata.furniture" not in field_names, (
                 f"legacy metadata.furniture index must not be created; got {field_names!r}"
             )

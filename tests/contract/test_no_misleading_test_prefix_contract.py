@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 REPO = Path(__file__).resolve().parents[2]
 
 # Directories that we never traverse for the purposes of this check.

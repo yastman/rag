@@ -88,17 +88,13 @@ def test_check_frozen_runs_both_lint_and_typecheck_no_sync() -> None:
     """The read-only gate must actually cover ruff + mypy via the no-sync runner."""
     block = _target_block(_makefile_text(), "check-frozen")
     no_sync_lines = [
-        line
-        for line in block.splitlines()
-        if ("$(UV_RUN_NO_SYNC)" in line or "--no-sync" in line)
+        line for line in block.splitlines() if ("$(UV_RUN_NO_SYNC)" in line or "--no-sync" in line)
     ]
     joined = "\n".join(no_sync_lines)
     assert "ruff check" in joined, (
         "check-frozen must run 'ruff check' via the no-sync runner (#2296)."
     )
-    assert "mypy" in joined, (
-        "check-frozen must run 'mypy' via the no-sync runner (#2296)."
-    )
+    assert "mypy" in joined, "check-frozen must run 'mypy' via the no-sync runner (#2296)."
 
 
 def test_uv_run_no_sync_macro_is_no_sync() -> None:
@@ -125,11 +121,7 @@ class TestDetectorSelfChecks:
         assert bad == ["uv run ruff check src/"]
 
     def test_accepts_no_sync_and_macro(self) -> None:
-        block = (
-            "check-frozen:\n"
-            "\tuv run --no-sync ruff check src/\n"
-            "\t$(UV_RUN_NO_SYNC) mypy src/\n"
-        )
+        block = "check-frozen:\n\tuv run --no-sync ruff check src/\n\t$(UV_RUN_NO_SYNC) mypy src/\n"
         bad = [
             ln
             for ln in _uv_run_invocations(block)

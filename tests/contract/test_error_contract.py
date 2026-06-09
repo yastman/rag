@@ -34,10 +34,12 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # re-raised so the outer voice-session trace records the failure (#1810).
     "telegram_bot/graph/nodes/transcribe.py": ["ERROR"],
     "src/runtime/graph/nodes/transcribe.py": ["ERROR"],
+    "src/runtime/pipeline/rag.py": ["ERROR"],
     # Agent tools — pipeline wrapper error paths
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
     "telegram_bot/agents/history_tool.py": ["ERROR"],
     "telegram_bot/agents/rag_pipeline.py": ["ERROR"],
+    "src/runtime/pipeline/rag.py": ["ERROR"],
     "telegram_bot/agents/history_graph/nodes.py": ["ERROR"],
     # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
@@ -45,6 +47,10 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "telegram_bot/services/generate_response.py": ["ERROR", "WARNING"],
     "telegram_bot/services/qdrant.py": ["ERROR", "WARNING"],
     "src/runtime/services/qdrant.py": ["ERROR", "WARNING"],
+    # SDK-native runtime pipeline — curated ERROR spans on the embedding,
+    # rerank (ColBERT) and rewrite (LLM) failure paths inside ``except``
+    # blocks; mirrors the telegram_bot pipeline counterparts (core migration).
+    "src/runtime/pipeline/rag.py": ["ERROR"],
     "telegram_bot/services/history_service.py": ["ERROR"],
     "telegram_bot/middlewares/error_handler.py": ["ERROR"],
     # CRM callback handlers — exception path of CRM dialog/wrapper spans
@@ -88,7 +94,8 @@ def _collect_error_span_calls(
         if not directory.exists():
             continue
         for py_file in directory.rglob("*.py"):
-            if any(ex in str(py_file) for ex in exclude):
+            rel_path_str = str(py_file.relative_to(REPO_ROOT))
+            if any(ex in rel_path_str for ex in exclude):
                 continue
             try:
                 tree = ast.parse(py_file.read_text())
@@ -132,7 +139,8 @@ def _collect_python_files(
         if not directory.exists():
             continue
         for py_file in directory.rglob("*.py"):
-            if any(ex in str(py_file) for ex in exclude):
+            rel_path_str = str(py_file.relative_to(REPO_ROOT))
+            if any(ex in rel_path_str for ex in exclude):
                 continue
             files.append(py_file)
     return files

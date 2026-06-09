@@ -62,12 +62,20 @@ def _identity_observe(*args: Any, **kwargs: Any) -> Callable[[_T], _T]:
 
 def _load_observe() -> Callable[..., Callable[[_T], _T]]:
     try:
-        return _load_telegram_attr("telegram_bot.observability", "observe")
+        return cast(
+            Callable[..., Callable[[_T], _T]],
+            _load_telegram_attr("telegram_bot.observability", "observe"),
+        )
     except Exception:  # pragma: no cover - import-safety fallback for lightweight tooling
         return _identity_observe
 
 
 def _get_client() -> Any:
+    # ``telegram_bot.observability.get_client`` is the Langfuse ``get_client``
+    # factory; it must be *called* to obtain the client instance that exposes
+    # ``update_current_span``. Returning the factory itself caused
+    # ``AttributeError: 'function' object has no attribute 'update_current_span'``
+    # whenever the runtime pipeline recorded a span (e.g. miniapp path).
     return _load_telegram_attr("telegram_bot.observability", "get_client")()
 
 
@@ -120,7 +128,15 @@ def _new_query_preprocessor() -> Any:
 
 
 observe = _load_observe()
-get_client = _get_client
+
+
+def get_client() -> Any:
+    # ``_get_client()`` already returns the Langfuse client instance (it calls
+    # the ``telegram_bot.observability.get_client`` factory), so this wrapper
+    # must NOT call the result again.
+    return _get_client()
+
+
 SEMANTIC_CACHE_SCHEMA_VERSION = "v8"
 
 
@@ -1563,8 +1579,7 @@ async def _expand_small_to_big(
         if expanded:
             for i, ec in enumerate(expanded):
                 if i < len(final_docs):
-                    final_docs[i]["text"] = ec.expanded_text
-                    final_docs[i]["_expanded"] = True
+                    final_docs[i] = {**final_docs[i], "text": ec.expanded_text, "_expanded": True}
             logger.debug("Small-to-big expanded %d chunks", len(expanded))
     except Exception as e:
         logger.warning("Small-to-big expansion failed: %s", e, exc_info=True)

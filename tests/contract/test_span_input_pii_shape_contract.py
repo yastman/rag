@@ -144,8 +144,7 @@ def test_no_raw_pii_literal_in_span_input(violations: list[str]) -> None:
     assert not violations, (
         "Curated update_current_span(input=...) payloads must not embed raw PII "
         "literals (#2214). Use a hashed/truncated/placeholder value or a runtime "
-        "variable that the SDK mask redacts. Offending sites:\n  "
-        + "\n  ".join(violations)
+        "variable that the SDK mask redacts. Offending sites:\n  " + "\n  ".join(violations)
     )
 
 
