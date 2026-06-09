@@ -116,8 +116,7 @@ def test_langfuse_runtime_does_not_use_forbidden_python(dockerfile: str) -> None
             f"see #1307, #1381)."
         )
         assert f"python{forbidden}" not in text, (
-            f"{dockerfile} pins forbidden uv image python{forbidden} "
-            f"(see #1307, #1381)."
+            f"{dockerfile} pins forbidden uv image python{forbidden} (see #1307, #1381)."
         )
 
 
@@ -159,9 +158,7 @@ def test_mini_app_frontend_builder_preserves_digest_pinning() -> None:
     """The Mini App frontend builder Node image must keep an ``@sha256:`` pin."""
     text = _read(MINI_APP_FRONTEND_DOCKERFILE)
     builder_lines = [line for line in _from_lines(text) if "node:" in line]
-    assert builder_lines, (
-        f"{MINI_APP_FRONTEND_DOCKERFILE}: no Node FROM line found"
-    )
+    assert builder_lines, f"{MINI_APP_FRONTEND_DOCKERFILE}: no Node FROM line found"
     for line in builder_lines:
         assert _DIGEST_RE.search(line), (
             f"{MINI_APP_FRONTEND_DOCKERFILE}: Node FROM line missing "
@@ -184,7 +181,7 @@ def test_policy_matches_legacy_unit_test_constants() -> None:
 
     # Legacy suite must enforce the same Python floor.
     assert f'"python3.{LANGFUSE_PY_FLOOR.split(".")[1]}"' in docker_static or (
-        f'python:{LANGFUSE_PY_FLOOR}' in docker_static
+        f"python:{LANGFUSE_PY_FLOOR}" in docker_static
     ), (
         "tests/unit/test_docker_static_validation.py must reference Python "
         f"{LANGFUSE_PY_FLOOR}; if the policy changes, update both files."

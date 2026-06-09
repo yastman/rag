@@ -77,9 +77,7 @@ def _collect_violations() -> list[tuple[Path, str, str]]:
             for decorator in definition.decorator_list:
                 marker = _decorator_marker_name(decorator)
                 if marker in FOREIGN_LANE_MARKERS:
-                    violations.append(
-                        (path.relative_to(REPO_ROOT), definition.name, marker)
-                    )
+                    violations.append((path.relative_to(REPO_ROOT), definition.name, marker))
     return violations
 
 

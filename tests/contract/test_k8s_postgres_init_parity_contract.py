@@ -60,9 +60,7 @@ def test_configmap_parses_as_valid_yaml() -> None:
     """The ConfigMap must be valid YAML and a Kubernetes ConfigMap."""
     doc = _load_configmap()
     assert isinstance(doc, dict), "ConfigMap must be a YAML mapping"
-    assert doc.get("kind") == "ConfigMap", (
-        f"expected kind=ConfigMap, got {doc.get('kind')!r}"
-    )
+    assert doc.get("kind") == "ConfigMap", f"expected kind=ConfigMap, got {doc.get('kind')!r}"
     assert "data" in doc and isinstance(doc["data"], dict), (
         "ConfigMap must have a non-empty `data:` mapping"
     )
@@ -76,9 +74,7 @@ def test_every_docker_init_script_has_a_configmap_key() -> None:
     mean missing files at first-boot init.
     """
     docker_scripts = sorted(p.name for p in DOCKER_INIT_DIR.glob("*.sql"))
-    assert docker_scripts, (
-        "expected SQL init scripts under docker/postgres/init/"
-    )
+    assert docker_scripts, "expected SQL init scripts under docker/postgres/init/"
     data = _load_configmap()["data"]
     missing = [name for name in docker_scripts if name not in data]
     assert not missing, (
@@ -100,9 +96,7 @@ def test_synced_script_content_matches_docker(script_name: str) -> None:
     Compose Postgres.
     """
     docker_path = DOCKER_INIT_DIR / script_name
-    assert docker_path.exists(), (
-        f"docker source missing: {docker_path}"
-    )
+    assert docker_path.exists(), f"docker source missing: {docker_path}"
     docker_content = docker_path.read_text(encoding="utf-8")
 
     data = _load_configmap()["data"]

@@ -127,7 +127,7 @@ def test_fast_lane_target_uses_canonical_marker(target: str) -> None:
     # Match `-m "<expr>"` or `-m '<expr>'`
     marker_match = re.search(r"""-m\s+(["'])(?P<expr>[^"']*)\1""", invocation)
     assert marker_match, (
-        f"Target `{target}` must pass an explicit `-m \"...\"` marker "
+        f'Target `{target}` must pass an explicit `-m "..."` marker '
         f"expression. Found:\n  {invocation}"
     )
     expr = marker_match.group("expr").strip()
@@ -141,8 +141,9 @@ def test_fast_lane_target_uses_canonical_marker(target: str) -> None:
 def test_pytest_requires_extras_ignore_definition_present() -> None:
     """The shared variable must remain defined (don't accidentally inline)."""
     text = _read_makefile_text()
-    assert "PYTEST_REQUIRES_EXTRAS_IGNORE :=" in text or \
-        "PYTEST_REQUIRES_EXTRAS_IGNORE ?=" in text, (
+    assert (
+        "PYTEST_REQUIRES_EXTRAS_IGNORE :=" in text or "PYTEST_REQUIRES_EXTRAS_IGNORE ?=" in text
+    ), (
         "Expected `PYTEST_REQUIRES_EXTRAS_IGNORE` to be defined as a Make "
         "variable so all fast-lane targets share the single source of truth."
     )

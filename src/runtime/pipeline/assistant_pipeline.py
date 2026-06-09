@@ -168,7 +168,8 @@ def _as_document_list(value: Any) -> list[dict[str, Any]]:
 def _extract_doc_ids(documents: list[dict[str, Any]]) -> list[str]:
     ids: list[str] = []
     for doc in documents:
-        metadata = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        meta_val = doc.get("metadata")
+        metadata = meta_val if isinstance(meta_val, dict) else {}
         candidate = (
             metadata.get("source_id")
             or metadata.get("doc_id")
@@ -185,7 +186,8 @@ def _extract_doc_ids(documents: list[dict[str, Any]]) -> list[str]:
 def _extract_sources(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
     sources: list[dict[str, str]] = []
     for doc in documents:
-        metadata = doc.get("metadata") if isinstance(doc.get("metadata"), dict) else {}
+        meta_val = doc.get("metadata")
+        metadata = meta_val if isinstance(meta_val, dict) else {}
         source: dict[str, str] = {}
         title = metadata.get("title") or metadata.get("source") or doc.get("title")
         url = metadata.get("url") or doc.get("url")

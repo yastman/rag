@@ -86,7 +86,8 @@ def collect_observe_decorators(
         if not directory.exists():
             continue
         for py_file in directory.rglob("*.py"):
-            if any(ex in str(py_file) for ex in exclude):
+            rel_path_str = str(py_file.relative_to(REPO_ROOT))
+            if any(ex in rel_path_str for ex in exclude):
                 continue
             try:
                 tree = ast.parse(py_file.read_text())

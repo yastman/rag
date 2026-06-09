@@ -107,7 +107,7 @@ class TestRunSmokeTestEngineSelection:
                 captured["embedding_model"] = embedding_model
                 captured["query_count"] = 0
 
-            def search(self, query: str, top_k: int = 10):  # noqa: D401, ARG002
+            def search(self, query: str, top_k: int = 10):
                 captured["query_count"] = int(captured.get("query_count", 0)) + 1
                 # Always return an empty list — we only care about wiring here.
                 return []
@@ -148,7 +148,7 @@ class TestRunSmokeTestSloEvaluation:
                 self.collection_name = collection_name
                 self.embedding_model = embedding_model
 
-            def search(self, query: str, top_k: int = 10):  # noqa: ARG002
+            def search(self, query: str, top_k: int = 10):
                 # Inverse-lookup the expected article from the query string is
                 # heavy — instead, return all 30 expected articles in order so
                 # the first hit matches whichever query came in. ``run_smoke_test``
@@ -195,7 +195,7 @@ class TestSmokeTestResultStructure:
             def __init__(self, collection_name: str, embedding_model: object) -> None:
                 pass
 
-            def search(self, query: str, top_k: int = 10):  # noqa: ARG002
+            def search(self, query: str, top_k: int = 10):
                 return []
 
         smoke_module = sys.modules["src.evaluation.smoke_test"]

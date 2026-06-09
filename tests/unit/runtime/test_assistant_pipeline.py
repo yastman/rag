@@ -35,7 +35,7 @@ async def test_run_assistant_pipeline_returns_assistant_result(monkeypatch) -> N
         }
 
     classify_mod = types.ModuleType("src.runtime.graph.nodes.classify")
-    classify_mod.classify_query = lambda query: "GENERAL"
+    classify_mod.classify_query = lambda _: "GENERAL"
     generate_mod = types.ModuleType("telegram_bot.services.generate_response")
     generate_mod.generate_response = fake_generate_response
 

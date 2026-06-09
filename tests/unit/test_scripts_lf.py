@@ -12,8 +12,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LF_SCRIPT = REPO_ROOT / "scripts" / "lf"
@@ -67,7 +65,11 @@ class TestLfHealthEnvLoading:
                 f"stderr={result.stderr!r}"
             )
             # curl failure is expected (no real service), but not shell syntax error
-            assert "LANGFUSE_HOST" not in result.stderr.split(": parameter")[0] if ": parameter" in result.stderr else True
+            assert (
+                "LANGFUSE_HOST" not in result.stderr.split(": parameter")[0]
+                if ": parameter" in result.stderr
+                else True
+            )
 
     def test_health_sources_env_file_before_host_check(self):
         """The env file must be sourced before the host variable is expanded."""

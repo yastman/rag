@@ -369,3 +369,81 @@ class TestIndexerMetadataFields:
         source = inspect.getsource(DocumentIndexer)
         assert '"doc_id": chunk.document_name' in source
         assert '"chunk_order": chunk.order' in source
+
+
+class TestRagPipelineSmallToBig:
+    """Test _expand_small_to_big integration in the RAG pipeline."""
+
+    @pytest.mark.asyncio
+    async def test_expand_small_to_big_no_inplace_mutation(self):
+        """Test that _expand_small_to_big does not mutate the input dictionaries in-place."""
+        from src.runtime.pipeline.rag import _expand_small_to_big
+        from telegram_bot.services.small_to_big import ExpandedChunk
+
+        # Setup mocks
+        mock_qdrant = MagicMock()
+        mock_qdrant.client = AsyncMock()
+        mock_qdrant.collection_name = "test_collection"
+
+        mock_config = MagicMock()
+        mock_config.small_to_big_mode = "on"
+        mock_config.max_expanded_chunks = 5
+        mock_config.max_context_tokens = 1000
+        mock_config.small_to_big_window_before = 1
+        mock_config.small_to_big_window_after = 1
+
+        # Input data
+        final_docs = [
+            {"text": "original text 1", "metadata": {"doc_id": "doc1", "order": 1}},
+            {"text": "original text 2", "metadata": {"doc_id": "doc2", "order": 2}},
+        ]
+
+        # Keep references to verify they are not mutated
+        doc_1_orig = final_docs[0]
+        doc_1_orig_copy = dict(doc_1_orig)
+        doc_2_orig = final_docs[1]
+        doc_2_orig_copy = dict(doc_2_orig)
+
+        mock_expanded = [
+            ExpandedChunk(
+                original_chunk=doc_1_orig,
+                expanded_text="expanded text 1",
+                neighbor_chunks=[],
+                total_tokens_estimate=10,
+            ),
+            ExpandedChunk(
+                original_chunk=doc_2_orig,
+                expanded_text="expanded text 2",
+                neighbor_chunks=[],
+                total_tokens_estimate=10,
+            ),
+        ]
+
+        with patch(
+            "telegram_bot.services.small_to_big.SmallToBigService.expand_context",
+            new_callable=AsyncMock,
+        ) as mock_expand:
+            mock_expand.return_value = mock_expanded
+
+            await _expand_small_to_big(final_docs, qdrant=mock_qdrant, config=mock_config)
+
+        # The list itself should be updated with new dictionaries
+        assert len(final_docs) == 2
+        assert final_docs[0]["text"] == "expanded text 1"
+        assert final_docs[0]["_expanded"] is True
+        assert final_docs[1]["text"] == "expanded text 2"
+        assert final_docs[1]["_expanded"] is True
+
+        # The original dictionary objects should NOT have been mutated
+        assert doc_1_orig == doc_1_orig_copy
+        assert "text" in doc_1_orig
+        assert doc_1_orig["text"] == "original text 1"
+        assert "_expanded" not in doc_1_orig
+
+        assert doc_2_orig == doc_2_orig_copy
+        assert doc_2_orig["text"] == "original text 2"
+        assert "_expanded" not in doc_2_orig
+
+        # Confirm identity has changed (new dictionary created)
+        assert final_docs[0] is not doc_1_orig
+        assert final_docs[1] is not doc_2_orig
