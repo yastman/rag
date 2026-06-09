@@ -93,9 +93,7 @@ class TestHandleMenuButton:
         state = _make_state()
         bot._handle_search = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value="search"
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value="search"):
             await bot.handle_menu_button(message, state)
 
         bot._handle_search.assert_awaited_once()
@@ -106,9 +104,7 @@ class TestHandleMenuButton:
         state = _make_state()
         bot._handle_services = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value="services"
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value="services"):
             await bot.handle_menu_button(message, state)
 
         bot._handle_services.assert_awaited_once()
@@ -119,9 +115,7 @@ class TestHandleMenuButton:
         state = _make_state()
         bot._handle_viewing = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value="viewing"
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value="viewing"):
             await bot.handle_menu_button(message, state)
 
         bot._handle_viewing.assert_awaited_once()
@@ -132,9 +126,7 @@ class TestHandleMenuButton:
         state = _make_state()
         bot._handle_bookmarks = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value="bookmarks"
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value="bookmarks"):
             await bot.handle_menu_button(message, state)
 
         bot._handle_bookmarks.assert_awaited_once()
@@ -145,9 +137,7 @@ class TestHandleMenuButton:
         state = _make_state()
         bot._handle_ask = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value="ask"
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value="ask"):
             await bot.handle_menu_button(message, state)
 
         bot._handle_ask.assert_awaited_once()
@@ -158,9 +148,7 @@ class TestHandleMenuButton:
         state = _make_state()
         bot._handle_manager = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value="manager"
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value="manager"):
             await bot.handle_menu_button(message, state)
 
         bot._handle_manager.assert_awaited_once()
@@ -176,9 +164,7 @@ class TestHandleMenuButton:
         bot._handle_ask = AsyncMock()
         bot._handle_manager = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value=None
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value=None):
             await bot.handle_menu_button(message, state)
 
         bot._handle_search.assert_not_awaited()
@@ -194,9 +180,7 @@ class TestHandleMenuButton:
         state = _make_state(current_state="PhoneCollectorStates:waiting_phone")
         bot._handle_search = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value="search"
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value="search"):
             await bot.handle_menu_button(message, state)
 
         state.clear.assert_awaited_once()
@@ -207,9 +191,7 @@ class TestHandleMenuButton:
         state = _make_state(current_state="SomeOtherState:step")
         bot._handle_search = AsyncMock()
 
-        with patch(
-            "telegram_bot.bot.parse_menu_button", return_value="search"
-        ):
+        with patch("telegram_bot.bot.parse_menu_button", return_value="search"):
             await bot.handle_menu_button(message, state)
 
         state.clear.assert_not_awaited()
@@ -408,9 +390,7 @@ class TestHandleApartmentFastPath:
         extract_result.meta.confidence = "LOW"
         bot._apartment_pipeline.extract = AsyncMock(return_value=extract_result)
 
-        result = await bot._handle_apartment_fast_path(
-            user_text="find apartment", message=message
-        )
+        result = await bot._handle_apartment_fast_path(user_text="find apartment", message=message)
 
         assert result is None
 
@@ -436,9 +416,7 @@ class TestHandleApartmentFastPath:
             {"score": 0.9, "id": "1", "payload": {}},
             {"score": 0.1, "id": "2", "payload": {}},
         ]
-        bot._apartments_service.search_with_filters = AsyncMock(
-            return_value=(search_results, 2)
-        )
+        bot._apartments_service.search_with_filters = AsyncMock(return_value=(search_results, 2))
 
         with patch(
             "telegram_bot.services.apartments_service.check_escalation",
@@ -472,9 +450,7 @@ class TestHandleApartmentFastPath:
             {"score": 0.9, "id": "1", "payload": {}},
             {"score": 0.85, "id": "2", "payload": {}},
         ]
-        bot._apartments_service.search_with_filters = AsyncMock(
-            return_value=(search_results, 2)
-        )
+        bot._apartments_service.search_with_filters = AsyncMock(return_value=(search_results, 2))
 
         bot._send_markdown_chunks = AsyncMock()
 

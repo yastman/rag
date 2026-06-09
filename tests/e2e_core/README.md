@@ -78,6 +78,17 @@ asserts:
 LLM evaluation uses temperature 0 and fact-based checks to minimize
 non-determinism.
 
+## Live Gate
+
+`make e2e-core-live` uses `uv run --no-sync` through the shared Makefile
+`CORE_LIVE_PYTEST` command. It expects the environment to already have test
+dependencies installed and will not intentionally sync/download dependencies.
+
+The command writes local JSON debug artifacts under `.artifacts/e2e_core/` by
+default. Override with `E2E_CORE_ARTIFACT_DIR=/path/to/dir` when collecting
+release/nightly evidence. The artifact data comes only from this synthetic
+fixture corpus.
+
 ## Live LLM Mode
 
 `make e2e-core-live` uses a deterministic fake LLM so the fast product gate

@@ -134,9 +134,7 @@ def test_parallel_args_default_remains_worksteal() -> None:
     behaving the same when no override is exported.
     """
     text = _read_makefile_text()
-    match = re.search(
-        r"^PYTEST_PARALLEL_ARGS\s*\?=\s*(.+?)$", text, re.MULTILINE
-    )
+    match = re.search(r"^PYTEST_PARALLEL_ARGS\s*\?=\s*(.+?)$", text, re.MULTILINE)
     assert match, "PYTEST_PARALLEL_ARGS must be defined with `?=` so callers can override it"
     default = match.group(1).strip()
     assert default == "-n auto --dist=worksteal", (

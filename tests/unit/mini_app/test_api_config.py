@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytestmark = pytest.mark.requires_extras
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from httpx import ASGITransport, AsyncClient
 
@@ -45,9 +45,7 @@ async def test_phone_endpoint_returns_json():
     app.dependency_overrides[get_validated_init_data] = _stub_init_data
     app.state.kommo_client = mock_kommo
     try:
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(
                 "/api/phone",
                 json={"phone": "+359888123456", "source": "test", "user_id": 123},

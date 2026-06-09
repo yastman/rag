@@ -1,6 +1,5 @@
 """Core application module exports."""
 
-from .assistant import run_assistant_request
 from .contracts import (
     AssistantError,
     AssistantRequest,
@@ -12,8 +11,12 @@ from .contracts import (
 
 
 def __getattr__(name: str) -> object:
-    """Load legacy pipeline exports lazily to keep assistant imports lightweight."""
+    """Load runtime-bearing exports lazily to keep core contracts import-safe."""
 
+    if name == "run_assistant_request":
+        from .assistant import run_assistant_request
+
+        return run_assistant_request
     if name == "RAGPipeline":
         from .pipeline import RAGPipeline
 

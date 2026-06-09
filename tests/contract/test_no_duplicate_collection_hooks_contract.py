@@ -149,9 +149,7 @@ def test_no_sub_conftest_duplicates_root_modifyitems() -> None:
     """No sub-conftest may define a hook that mirrors the root auto-marker shape (#1515 D2)."""
     definitions = _collect_definitions()
     offenders = [
-        rel
-        for rel, _func, looks_auto in definitions
-        if looks_auto and rel != ROOT_CONFTEST_REL
+        rel for rel, _func, looks_auto in definitions if looks_auto and rel != ROOT_CONFTEST_REL
     ]
     assert not offenders, (
         "Sub-conftest files must not re-implement the root's auto-marker walk. "
