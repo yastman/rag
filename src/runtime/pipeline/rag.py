@@ -1571,8 +1571,7 @@ async def _expand_small_to_big(
         if expanded:
             for i, ec in enumerate(expanded):
                 if i < len(final_docs):
-                    final_docs[i]["text"] = ec.expanded_text
-                    final_docs[i]["_expanded"] = True
+                    final_docs[i] = {**final_docs[i], "text": ec.expanded_text, "_expanded": True}
             logger.debug("Small-to-big expanded %d chunks", len(expanded))
     except Exception as e:
         logger.warning("Small-to-big expansion failed: %s", e, exc_info=True)
