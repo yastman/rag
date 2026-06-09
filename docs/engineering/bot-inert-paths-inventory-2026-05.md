@@ -98,4 +98,4 @@ the deletion in `tests/contract/test_dead_code_audit_2026_05_contract.py`.
 - Parent: [#1978](https://github.com/yastman/rag/issues/1978).
 - Companion docs: [`dead-code-audit-2026-05.md`](dead-code-audit-2026-05.md),
   `scripts-inventory-2026-05.md` (delivered separately under #1997).
-- Contract test: [`tests/contract/test_dead_code_audit_2026_05_contract.py`](../../tests/contract/test_dead_code_audit_2026_05_contract.py).
+- Contract test: `tests/contract/test_dead_code_audit_2026_05_contract.py` (removed during the 2026-05 contract simplification).

@@ -289,7 +289,7 @@ async def test_run_miniapp_rag_success(mock_config):
 
     with (
         patch(
-            "telegram_bot.agents.rag_pipeline.rag_pipeline",
+            "src.runtime.pipeline.rag.rag_pipeline",
             new_callable=AsyncMock,
             return_value={"documents": [{"text": "doc1"}]},
         ),
@@ -316,7 +316,7 @@ async def test_run_miniapp_rag_error_sends_fallback(mock_config):
     bot.bot = AsyncMock()
 
     with patch(
-        "telegram_bot.agents.rag_pipeline.rag_pipeline",
+        "src.runtime.pipeline.rag.rag_pipeline",
         new_callable=AsyncMock,
         side_effect=RuntimeError("Pipeline crashed"),
     ):
@@ -333,7 +333,7 @@ async def test_run_miniapp_rag_no_documents(mock_config):
     bot.bot = AsyncMock()
 
     with patch(
-        "telegram_bot.agents.rag_pipeline.rag_pipeline",
+        "src.runtime.pipeline.rag.rag_pipeline",
         new_callable=AsyncMock,
         return_value={"documents": []},
     ):
