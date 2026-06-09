@@ -62,7 +62,10 @@ def _identity_observe(*args: Any, **kwargs: Any) -> Callable[[_T], _T]:
 
 def _load_observe() -> Callable[..., Callable[[_T], _T]]:
     try:
-        return _load_telegram_attr("telegram_bot.observability", "observe")
+        return cast(
+            Callable[..., Callable[[_T], _T]],
+            _load_telegram_attr("telegram_bot.observability", "observe"),
+        )
     except Exception:  # pragma: no cover - import-safety fallback for lightweight tooling
         return _identity_observe
 
