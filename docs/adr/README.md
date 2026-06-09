@@ -22,6 +22,7 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0016 - OpenTelemetry Metrics vs Prometheus](0016-otel-metrics-vs-prometheus.md)
 - [0017 - OpenTelemetry trace sampling roadmap](0017-otel-trace-sampling-roadmap.md)
 - [0018 - W3C Baggage vs `propagate_attributes`](0018-w3c-baggage-vs-propagate-attributes.md)
+- [0019 - Core text path uses procedural runtime, not `create_agent`](0019-core-text-path-procedural-runtime.md)
 
 ## When To Use
 

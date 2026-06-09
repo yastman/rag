@@ -24,6 +24,7 @@ import ast
 import importlib
 from pathlib import Path
 
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIT_TEST_PATH = REPO_ROOT / "tests" / "unit" / "evaluation" / "test_smoke_test.py"
 
@@ -64,9 +65,7 @@ def test_real_smoke_queries_shape() -> None:
             assert required_field in q, (
                 f"smoke query missing required field {required_field!r}: {q!r}"
             )
-        assert q["type"] in valid_types, (
-            f"smoke query has unknown type {q['type']!r}: {q!r}"
-        )
+        assert q["type"] in valid_types, f"smoke query has unknown type {q['type']!r}: {q!r}"
 
 
 def test_real_slo_thresholds_shape() -> None:

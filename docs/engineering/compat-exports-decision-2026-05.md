@@ -87,7 +87,7 @@ PR should:
    `src/_compat.py` and the `from src._compat import …` lines at the
    top of each affected `__init__.py`.
 5. Pin the deletions in
-   [`tests/contract/test_dead_code_audit_2026_05_contract.py`](../../tests/contract/test_dead_code_audit_2026_05_contract.py)
+   `tests/contract/test_dead_code_audit_2026_05_contract.py` (removed during the 2026-05 contract simplification)
    so the shims do not accidentally come back.
 
 Suggested PR cuts (one per row, smallest blast radius first):

@@ -69,9 +69,7 @@ def test_factory_returns_compiled_agent_with_three_middleware(
     embeddings = MagicMock()
     captured: dict[str, Any] = {}
 
-    real_create_agent = __import__(
-        "langchain.agents", fromlist=["create_agent"]
-    ).create_agent
+    real_create_agent = __import__("langchain.agents", fromlist=["create_agent"]).create_agent
 
     def spy_create_agent(**kwargs: Any) -> Any:
         captured.update(kwargs)

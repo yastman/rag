@@ -42,8 +42,8 @@ def test_core_public_contract_imports() -> None:
         CoreDependencies,
         CrmAction,
         UserContext,
+        contracts,
     )
-    from src.core import contracts
 
     assert AssistantError is contracts.AssistantError
     assert AssistantRequest is contracts.AssistantRequest
@@ -110,7 +110,7 @@ class TestUserContext:
 class TestAssistantRequest:
     """Tests for the AssistantRequest dataclass."""
 
-    def test_creation_with_required_fields(self) -> None:
+    def test_assistant_request_creation_with_required_fields(self) -> None:
         """AssistantRequest should accept query and collection with safe defaults."""
         from src.core import AssistantRequest, UserContext
 
@@ -550,7 +550,7 @@ class TestRunAssistantRequestRuntime:
 
         with (
             patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
-            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+            patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("telegram_bot.services.generate_response.generate_response", gen),
         ):
             result = await run_assistant_request(
@@ -611,7 +611,7 @@ class TestRunAssistantRequestRuntime:
 
         with (
             patch("src.runtime.graph.nodes.classify.classify_query", return_value="FAQ"),
-            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+            patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("telegram_bot.services.generate_response.generate_response", gen),
         ):
             result = await run_assistant_request(
@@ -636,7 +636,7 @@ class TestRunAssistantRequestRuntime:
 
         with (
             patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
-            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+            patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
         ):
             result = await run_assistant_request(
                 "Найди квартиру",
@@ -665,7 +665,7 @@ class TestRunAssistantRequestRuntime:
 
         with (
             patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
-            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+            patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("telegram_bot.services.generate_response.generate_response", gen),
             caplog.at_level(logging.INFO, logger="src.utils.product_events"),
         ):

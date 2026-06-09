@@ -51,6 +51,8 @@ PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_ARGS ?= -n 2 --dist=worksteal
 PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
+CORE_LIVE_TEST_PATH := tests/e2e/test_core_live_ingest_answer.py
+CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH) -v --tb=short -m "e2e and requires_services"
 PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/test_document_parser.py \
 	tests/unit/test_evaluator.py \
@@ -883,7 +885,7 @@ e2e-test: ## Run pytest E2E suite (Docker/live services)
 
 e2e-core-live: ## Run simplification core live golden path (Qdrant + BGE-M3)
 	@echo "$(BLUE)Running simplification core live E2E golden path...$(NC)"
-	E2E_CORE_STRICT=1 uv run pytest tests/e2e/test_core_live_ingest_answer.py -v --tb=short -m "e2e and requires_services"
+	E2E_CORE_STRICT=1 $(CORE_LIVE_PYTEST)
 	@echo "$(GREEN)✓ Simplification core live E2E complete$(NC)"
 
 e2e-core-live-real-llm: ## Run simplification core live golden path with real LLM provider
@@ -897,7 +899,7 @@ e2e-core-live-real-llm: ## Run simplification core live golden path with real LL
 		echo "$(RED)Missing required real LLM env:$$missing$(NC)"; \
 		exit 1; \
 	fi; \
-	E2E_CORE_STRICT=1 E2E_CORE_REAL_LLM=1 uv run pytest tests/e2e/test_core_live_ingest_answer.py -v --tb=short -m "e2e and requires_services"
+	E2E_CORE_STRICT=1 E2E_CORE_REAL_LLM=1 $(CORE_LIVE_PYTEST)
 	@echo "$(GREEN)✓ Simplification core live real LLM E2E complete$(NC)"
 
 e2e-telegram-test: ## Run Telegram userbot E2E runner (Telethon + judge)

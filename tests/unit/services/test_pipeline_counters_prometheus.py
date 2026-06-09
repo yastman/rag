@@ -176,9 +176,7 @@ class TestRecordPipelineEvent:
                 "rag_pipeline_events_total",
                 {"event": event},
             )
-            assert val == pytest.approx(1.0), (
-                f"Expected counter=1 for event '{event}', got {val}"
-            )
+            assert val == pytest.approx(1.0), f"Expected counter=1 for event '{event}', got {val}"
 
 
 # ---------------------------------------------------------------------------

@@ -134,9 +134,7 @@ def test_success_path_assertions_require_no_error_key() -> None:
             continue
         sources = _assert_sources(func)
         # Accept either '"error" not in stats' or "error" not in collection_stats.
-        has_no_error = any(
-            "'error' not in" in src.replace('"', "'") for src in sources
-        )
+        has_no_error = any("'error' not in" in src.replace('"', "'") for src in sources)
         if not has_no_error:
             missing.append(f"{func.name}: {sources}")
     assert not missing, (
@@ -193,6 +191,6 @@ def test_negative_test_kept_intact() -> None:
     """Negative-path test must still exist and still check graceful failure (#1629)."""
     tree = ast.parse(TARGET.read_text(encoding="utf-8"))
     names = {f.name for f in _iter_test_methods(tree)}
-    assert (
-        "test_ingest_gdrive_without_credentials_fails_gracefully" in names
-    ), "Refactor must not remove the dedicated negative-path test"
+    assert "test_ingest_gdrive_without_credentials_fails_gracefully" in names, (
+        "Refactor must not remove the dedicated negative-path test"
+    )

@@ -84,8 +84,7 @@ def _strip_jsonc(text: str) -> str:
         i += 1
     cleaned = "".join(out)
     # Drop trailing commas before closing braces/brackets.
-    cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
-    return cleaned
+    return re.sub(r",(\s*[}\]])", r"\1", cleaned)
 
 
 def test_tsconfig_test_json_exists_and_parses() -> None:
@@ -99,9 +98,7 @@ def test_tsconfig_test_json_exists_and_parses() -> None:
     try:
         json.loads(_strip_jsonc(raw))
     except json.JSONDecodeError as exc:  # pragma: no cover - assertion path
-        pytest.fail(
-            f"{TSCONFIG_TEST.relative_to(REPO_ROOT)} is not valid JSON(C): {exc}"
-        )
+        pytest.fail(f"{TSCONFIG_TEST.relative_to(REPO_ROOT)} is not valid JSON(C): {exc}")
 
 
 def test_tsconfig_test_json_includes_test_globs() -> None:
@@ -146,9 +143,7 @@ def test_api_test_does_not_reference_stale_thread_id() -> None:
     """
     text = API_TEST.read_text()
     offenders = [
-        (idx + 1, line)
-        for idx, line in enumerate(text.splitlines())
-        if "thread_id" in line
+        (idx + 1, line) for idx, line in enumerate(text.splitlines()) if "thread_id" in line
     ]
     assert not offenders, (
         "Found stale `thread_id` references in api.test.ts at lines "

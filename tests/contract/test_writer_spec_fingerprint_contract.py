@@ -32,12 +32,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TARGET_MODULE_PATH = (
-    REPO_ROOT
-    / "src"
-    / "ingestion"
-    / "unified"
-    / "targets"
-    / "qdrant_hybrid_target.py"
+    REPO_ROOT / "src" / "ingestion" / "unified" / "targets" / "qdrant_hybrid_target.py"
 )
 
 
@@ -59,9 +54,7 @@ def test_writer_key_attribute_exists_in_class_body() -> None:
         if isinstance(node, ast.ClassDef) and node.name == "QdrantHybridTargetConnector":
             for item in ast.walk(node):
                 if isinstance(item, (ast.Assign, ast.AnnAssign)):
-                    targets = (
-                        item.targets if isinstance(item, ast.Assign) else [item.target]
-                    )
+                    targets = item.targets if isinstance(item, ast.Assign) else [item.target]
                     for t in targets:
                         if isinstance(t, ast.Name) and t.id == "_writer_key":
                             return
@@ -75,9 +68,7 @@ def test_get_writer_contains_key_comparison() -> None:
     """The ``_get_writer`` method must compare the spec fingerprint against
     ``_writer_key`` (not just check ``_writer is None``)."""
     src = _read_src()
-    assert "_writer_key" in src, (
-        "_get_writer must use a _writer_key fingerprint comparison."
-    )
+    assert "_writer_key" in src, "_get_writer must use a _writer_key fingerprint comparison."
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +105,7 @@ def _make_spec(*, use_local_embeddings: bool = True, voyage_model: str = "voyage
     from src.ingestion.unified.targets.qdrant_hybrid_target import (
         QdrantHybridTargetSpec,
     )
+
     return QdrantHybridTargetSpec(
         collection_name="test_collection",
         qdrant_url="http://localhost:6333",
@@ -129,6 +121,7 @@ def _call_get_writer(spec, writer_instance):
     from src.ingestion.unified.targets.qdrant_hybrid_target import (
         QdrantHybridTargetConnector,
     )
+
     with patch(
         "src.ingestion.unified.targets.qdrant_hybrid_target.QdrantHybridWriter",
         return_value=writer_instance,
