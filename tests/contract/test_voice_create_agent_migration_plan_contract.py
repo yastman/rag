@@ -76,8 +76,7 @@ def test_adr_has_required_heading(heading: str) -> None:
     text = ADR_PATH.read_text(encoding="utf-8")
     # Heading style in this repo is '## Heading' (or '### Sub'); accept both.
     assert (f"## {heading}" in text) or (f"### {heading}" in text), (
-        f"ADR-0010 missing required heading: {heading!r}. "
-        f"Required headings: {REQUIRED_HEADINGS}."
+        f"ADR-0010 missing required heading: {heading!r}. Required headings: {REQUIRED_HEADINGS}."
     )
 
 

@@ -137,7 +137,6 @@ def test_main_query_score_count_is_above_legacy_14() -> None:
     )
 
 
-
 # --- #2213: document WHEN scores are written ---
 
 _WHEN_SECTION_RE = re.compile(r"^#{2,3}\s+When are scores written", re.MULTILINE | re.IGNORECASE)

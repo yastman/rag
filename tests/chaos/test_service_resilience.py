@@ -120,7 +120,9 @@ async def test_kommo_401_refreshes_token_and_recovers():
         request=req,
     )
 
-    with patch.object(client._client, "request", side_effect=[resp_401, resp_200]):
+    with patch.object(
+        client._client._transport, "handle_async_request", side_effect=[resp_401, resp_200]
+    ):
         leads = await client.search_leads(responsible_user_id=7, limit=5)
 
     assert len(leads) == 1

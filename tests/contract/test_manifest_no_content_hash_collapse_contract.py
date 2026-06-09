@@ -17,7 +17,6 @@ original path was still active.
 """
 
 import ast
-import textwrap
 from pathlib import Path
 
 
@@ -64,8 +63,7 @@ class TestManifestNoCopyCollapse:
         """GDriveManifest.get_or_create_id method must exist."""
         fn = _get_function_ast()
         assert fn is not None, (
-            f"Method '{_FUNCTION_NAME}' not found in GDriveManifest "
-            f"in {MANIFEST_PATH}"
+            f"Method '{_FUNCTION_NAME}' not found in GDriveManifest in {MANIFEST_PATH}"
         )
 
     def test_function_references_path_to_hash(self) -> None:
