@@ -11,7 +11,7 @@ Scores are computed and written via `src/scoring.py` (re-exported through the
 - `write_crm_scores()` — CRM tool usage scores
 
 > **Drift guard:** the doc/code parity is enforced by
-> [`tests/contract/test_rag_quality_scores_doc_drift.py`](../tests/contract/test_rag_quality_scores_doc_drift.py).
+> `tests/contract/test_rag_quality_scores_doc_drift.py` (removed in CORE-013 doc-drift contract cleanup).
 > Whenever a new `name=...` is added to `scoring.py`, add a row below or
 > entry in `DOC_EXEMPT_SCORE_NAMES`.
 
