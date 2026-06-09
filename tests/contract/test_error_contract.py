@@ -34,6 +34,7 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # re-raised so the outer voice-session trace records the failure (#1810).
     "telegram_bot/graph/nodes/transcribe.py": ["ERROR"],
     "src/runtime/graph/nodes/transcribe.py": ["ERROR"],
+    "src/runtime/pipeline/rag.py": ["ERROR"],
     # Agent tools — pipeline wrapper error paths
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
     "telegram_bot/agents/history_tool.py": ["ERROR"],
@@ -93,7 +94,8 @@ def _collect_error_span_calls(
         if not directory.exists():
             continue
         for py_file in directory.rglob("*.py"):
-            if any(ex in str(py_file) for ex in exclude):
+            rel_path_str = str(py_file.relative_to(REPO_ROOT))
+            if any(ex in rel_path_str for ex in exclude):
                 continue
             try:
                 tree = ast.parse(py_file.read_text())
@@ -137,7 +139,8 @@ def _collect_python_files(
         if not directory.exists():
             continue
         for py_file in directory.rglob("*.py"):
-            if any(ex in str(py_file) for ex in exclude):
+            rel_path_str = str(py_file.relative_to(REPO_ROOT))
+            if any(ex in rel_path_str for ex in exclude):
                 continue
             files.append(py_file)
     return files
