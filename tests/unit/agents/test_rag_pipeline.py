@@ -532,7 +532,7 @@ async def test_hybrid_retrieve_emits_topic_relax_trace_markers(mock_cache, mock_
     )
     mock_lf = MagicMock()
 
-    with patch("telegram_bot.agents.rag_pipeline.get_client", return_value=mock_lf):
+    with patch("src.runtime.pipeline.rag.get_client", return_value=mock_lf):
         result = await _hybrid_retrieve(
             "виды внж в болгарии?",
             [0.1] * 1024,
@@ -1360,7 +1360,7 @@ async def test_skip_rewrite_bypasses_rewrite_loop(
 
     with (
         patch(
-            "telegram_bot.agents.rag_pipeline._rewrite_query",
+            "src.runtime.pipeline.rag._rewrite_query",
             new_callable=AsyncMock,
         ) as mock_rewrite,
         patch.dict("os.environ", {"MAX_REWRITE_ATTEMPTS": "1"}),
@@ -1404,7 +1404,7 @@ async def test_skip_rewrite_false_allows_rewrite(
 
     with (
         patch(
-            "telegram_bot.agents.rag_pipeline._rewrite_query",
+            "src.runtime.pipeline.rag._rewrite_query",
             new=AsyncMock(return_value=mock_rewrite_result),
         ) as mock_rewrite,
         patch.dict("os.environ", {"MAX_REWRITE_ATTEMPTS": "1"}),
