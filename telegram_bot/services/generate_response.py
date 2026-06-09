@@ -193,9 +193,14 @@ def _get_linkable_prompt_object(name: str, fallback: str, variables: dict[str, s
     return prompt_obj
 
 
-def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEXT_DOCS) -> str:
+def _format_context(
+    documents: list[dict[str, Any]],
+    max_docs: int = _MAX_CONTEXT_DOCS,
+    *,
+    sources_enabled: bool = True,
+) -> str:
     """Format top-N retrieved documents into LLM context string."""
-    return _format_context_for_mode(documents, max_docs=max_docs, sources_enabled=True)
+    return _format_context_for_mode(documents, max_docs=max_docs, sources_enabled=sources_enabled)
 
 
 def _format_context_for_mode(

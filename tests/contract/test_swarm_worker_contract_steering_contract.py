@@ -116,9 +116,7 @@ def test_swarm_worker_contract_distinguishes_lanes_and_review_gate() -> None:
         f"gate before final acceptance."
     )
     # Explicit review gate trigger words.
-    assert (
-        "p0" in text or "destructive" in text or "security" in text
-    ), (
+    assert "p0" in text or "destructive" in text or "security" in text, (
         "swarm-worker-contract.md must explicitly call out the review "
         "gate trigger lanes (P0 / security / destructive) per #1937."
     )

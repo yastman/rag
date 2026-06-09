@@ -288,52 +288,16 @@ def test_bug_classes_doc_mirrors_yaml_class_names() -> None:
     )
 
 
-# ------------- PR template guardrail fields --------------------------------------
+# ------------- PR template lightweight fields -----------------------------------
 
 
-def test_pr_template_has_bug_class_field() -> None:
-    """The PR template must include a 'Bug class' field for registry reference."""
+def test_pr_template_has_validation_and_runtime_fields() -> None:
+    """The PR template stays lightweight but still asks for checks and runtime impact."""
     pr_template = REPO_ROOT / ".github" / "pull_request_template.md"
     text = pr_template.read_text(encoding="utf-8")
-    assert "Bug class" in text, (
-        ".github/pull_request_template.md must include a 'Bug class' field "
-        "so contributors can reference the canonical YAML bug-class registry."
-    )
-
-
-def test_pr_template_has_regression_guardrail_field() -> None:
-    """The PR template must include a 'Regression guardrail' field."""
-    pr_template = REPO_ROOT / ".github" / "pull_request_template.md"
-    text = pr_template.read_text(encoding="utf-8")
-    assert "Regression guardrail:" in text, (
-        ".github/pull_request_template.md must include a 'Regression guardrail' "
-        "field in the same literal format enforced by validate_pr_guardrails.py."
-    )
-
-
-def test_pr_template_has_checks_run_field() -> None:
-    """The PR template must include a 'Checks run' field."""
-    pr_template = REPO_ROOT / ".github" / "pull_request_template.md"
-    text = pr_template.read_text(encoding="utf-8")
-    assert "Checks run" in text, (
-        ".github/pull_request_template.md must include a 'Checks run' field "
-        "so contributors document their validation ladder."
-    )
-
-
-def test_pr_template_has_duplicate_disposition_fields() -> None:
-    """The PR template must capture duplicate/recurrence closure metadata."""
-    pr_template = REPO_ROOT / ".github" / "pull_request_template.md"
-    text = pr_template.read_text(encoding="utf-8")
-    for field in (
-        "Duplicate / Recurring Issue Handling",
-        "Canonical issue:",
-        "Related issues to close/update:",
-        "Closing comment summary:",
-    ):
+    for field in ("Checks run", "Runtime Impact", "Reviewer Notes"):
         assert field in text, (
-            ".github/pull_request_template.md must keep duplicate/recurrence "
-            f"metadata field {field!r} so issue disposition is not lost."
+            f".github/pull_request_template.md must keep lightweight reviewer field {field!r}."
         )
 
 

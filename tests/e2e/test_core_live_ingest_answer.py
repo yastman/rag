@@ -16,6 +16,7 @@ from tests.e2e_core.live_harness import (
     make_qdrant_context,
     recreate_collection,
     require_live_services,
+    write_case_artifact,
 )
 
 
@@ -64,6 +65,14 @@ async def _run_core_live_case(
         else:
             assert result.documents_count == expected_documents_count
         assert set(case.must_retrieve).issubset(set(result.retrieved_doc_ids))
+        write_case_artifact(
+            case=case,
+            collection_name=context.collection_name,
+            response_text=result.response_text,
+            retrieved_doc_ids=result.retrieved_doc_ids,
+            route=result.route,
+            error_type=result.error_type,
+        )
 
         for expected in case.must_contain:
             assert expected in result.response_text
@@ -116,6 +125,14 @@ async def test_core_live_llm_dependency_failure_returns_user_safe_fallback() -> 
         assert result.llm_model == "fallback"
         assert result.llm_call_count == 1
         assert set(case.must_retrieve).issubset(set(result.retrieved_doc_ids))
+        write_case_artifact(
+            case=case,
+            collection_name=context.collection_name,
+            response_text=result.response_text,
+            retrieved_doc_ids=result.retrieved_doc_ids,
+            route=result.route,
+            error_type=result.error_type,
+        )
         assert result.response_text
         assert "сервис временно недоступен" in result.response_text.lower()
     finally:
@@ -217,6 +234,14 @@ async def test_core_live_crm_hitl_requires_confirmation_before_mock_crm_write() 
         assert set(case.must_retrieve).issubset(set(result.retrieved_doc_ids))
         assert result.proposed_crm_action is None
         assert crm.writes == []
+        write_case_artifact(
+            case=case,
+            collection_name=context.collection_name,
+            response_text=result.response_text,
+            retrieved_doc_ids=result.retrieved_doc_ids,
+            route=result.route,
+            error_type=result.error_type,
+        )
 
         for expected in case.must_contain:
             assert expected in result.response_text
