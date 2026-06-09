@@ -15,7 +15,7 @@ from src.contextualization.base import ContextualizedChunk, ContextualizeProvide
 class TestContextualizedChunkCreation:
     """Tests for ContextualizedChunk dataclass creation."""
 
-    def test_creation_with_required_fields(self):
+    def test_chunk_creation_with_required_fields(self):
         """Test chunk creation with only required fields."""
         chunk = ContextualizedChunk(
             original_text="Test text",
