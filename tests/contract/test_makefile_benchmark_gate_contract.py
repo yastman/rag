@@ -49,14 +49,9 @@ def test_test_full_phase1_exports_run_benchmark_tests() -> None:
     # Phase 1 is the parallel-safe pytest line that includes
     # $(PYTEST_FULL_PARALLEL_DIRS). It must export RUN_BENCHMARK_TESTS=1
     # for the ColBERT benchmark gate to actually run.
-    parallel_lines = [
-        line
-        for line in body.splitlines()
-        if "$(PYTEST_FULL_PARALLEL_DIRS)" in line
-    ]
+    parallel_lines = [line for line in body.splitlines() if "$(PYTEST_FULL_PARALLEL_DIRS)" in line]
     assert parallel_lines, (
-        "test-full must invoke pytest against $(PYTEST_FULL_PARALLEL_DIRS) "
-        "in its parallel phase"
+        "test-full must invoke pytest against $(PYTEST_FULL_PARALLEL_DIRS) in its parallel phase"
     )
     for line in parallel_lines:
         assert "RUN_BENCHMARK_TESTS=1" in line, (
@@ -77,9 +72,7 @@ def test_test_benchmark_standalone_target_exists() -> None:
         "test-benchmark must export RUN_BENCHMARK_TESTS=1 — otherwise the "
         "ColBERT benchmark assertions will skip silently."
     )
-    assert "tests/benchmark" in body, (
-        "test-benchmark must point pytest at tests/benchmark/."
-    )
+    assert "tests/benchmark" in body, "test-benchmark must point pytest at tests/benchmark/."
 
 
 def test_benchmark_dir_still_listed_in_full_parallel_dirs() -> None:

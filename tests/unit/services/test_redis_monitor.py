@@ -134,9 +134,7 @@ async def test_start_sets_max_connections_for_monitor_pool():
 
     with (
         patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url,
-        patch(
-            "telegram_bot.services.redis_monitor.AsyncIOScheduler"
-        ) as mock_scheduler_cls,
+        patch("telegram_bot.services.redis_monitor.AsyncIOScheduler") as mock_scheduler_cls,
     ):
         mock_client = AsyncMock()
         mock_from_url.return_value = mock_client
@@ -155,9 +153,7 @@ async def test_start_registers_scheduler_job_and_stop_shuts_down():
 
     with (
         patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url,
-        patch(
-            "telegram_bot.services.redis_monitor.AsyncIOScheduler"
-        ) as mock_scheduler_cls,
+        patch("telegram_bot.services.redis_monitor.AsyncIOScheduler") as mock_scheduler_cls,
     ):
         mock_client = AsyncMock()
         mock_from_url.return_value = mock_client

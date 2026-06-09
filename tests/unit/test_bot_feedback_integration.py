@@ -220,9 +220,7 @@ class TestHandleHitlCallback:
         callback = _make_callback(data="hitl:cancel")
 
         mock_agent = AsyncMock()
-        mock_agent.ainvoke = AsyncMock(
-            return_value={"messages": [MagicMock(content="Cancelled")]}
-        )
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [MagicMock(content="Cancelled")]})
 
         bot._resolve_user_role = AsyncMock(return_value="client")
         bot._agent_checkpointer = MagicMock()

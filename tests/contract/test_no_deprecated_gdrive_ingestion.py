@@ -154,6 +154,4 @@ def test_unified_ingestion_gdrive_surface_present() -> None:
     )
 
     flow_src = flow_path.read_text(encoding="utf-8")
-    assert "gdrive" in flow_src.lower(), (
-        "GDrive support seems absent from unified/flow.py."
-    )
+    assert "gdrive" in flow_src.lower(), "GDrive support seems absent from unified/flow.py."

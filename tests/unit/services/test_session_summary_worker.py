@@ -240,7 +240,9 @@ class TestSessionSummaryWorkerObserveInstrumentation:
             "update_current_span calls"
         )
 
-    def test_session_summary_worker_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+    def test_session_summary_worker_observe_decorator_applied_with_correct_kwargs(
+        self, monkeypatch
+    ):
         """@observe must be applied with the trace-coverage audit's exact kwargs.
 
         Specifically the LLM-call wrapper must use:
@@ -398,7 +400,9 @@ class TestSessionSummaryWorkerObserveInstrumentation:
 
         assert result == "Краткая выжимка"
 
-    async def test_session_summary_worker_exception_path_records_error_level_and_reraises(self, monkeypatch):
+    async def test_session_summary_worker_exception_path_records_error_level_and_reraises(
+        self, monkeypatch
+    ):
         """On LLM exception: span level=ERROR with status_message, then re-raise.
 
         Per issue #1662 Implementation Plan step 4: record ERROR span and

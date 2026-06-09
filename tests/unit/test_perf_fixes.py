@@ -150,8 +150,12 @@ async def test_warmup_bge_calls_hybrid_embed():
 
     # Mock the problematic import chain before importing PropertyBot
     _mocked = {}
-    for mod in ("src.retrieval", "src.retrieval.topic_classifier",
-                "src.retrieval.search_engines", "src.retrieval.search_engine_shared"):
+    for mod in (
+        "src.retrieval",
+        "src.retrieval.topic_classifier",
+        "src.retrieval.search_engines",
+        "src.retrieval.search_engine_shared",
+    ):
         if mod not in sys.modules:
             _mocked[mod] = sys.modules.setdefault(mod, _MagicMock())
 
@@ -176,8 +180,12 @@ async def test_warmup_bge_failure_nonfatal():
     from unittest.mock import MagicMock as _MagicMock
 
     _mocked = {}
-    for mod in ("src.retrieval", "src.retrieval.topic_classifier",
-                "src.retrieval.search_engines", "src.retrieval.search_engine_shared"):
+    for mod in (
+        "src.retrieval",
+        "src.retrieval.topic_classifier",
+        "src.retrieval.search_engines",
+        "src.retrieval.search_engine_shared",
+    ):
         if mod not in sys.modules:
             _mocked[mod] = sys.modules.setdefault(mod, _MagicMock())
 

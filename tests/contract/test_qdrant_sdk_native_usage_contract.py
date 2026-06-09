@@ -118,9 +118,7 @@ def _find_fusion_rrf_literals(tree: ast.AST, file_path: Path) -> list[tuple[Path
     return offenders
 
 
-def _find_custom_rrf_or_boost_fns(
-    tree: ast.AST, file_path: Path
-) -> list[tuple[Path, int, str]]:
+def _find_custom_rrf_or_boost_fns(tree: ast.AST, file_path: Path) -> list[tuple[Path, int, str]]:
     """Flag function definitions whose name re-implements an SDK primitive."""
     offenders: list[tuple[Path, int, str]] = []
     for fn in _iter_function_defs(tree):
@@ -182,8 +180,7 @@ def test_no_legacy_fusion_rrf_attribute() -> None:
         "Legacy `Fusion.RRF` attribute access found. Replace with the canonical "
         "`models.RrfQuery(rrf=models.Rrf(k=...))` per #1751:\n"
         + "\n".join(
-            f"  {p.relative_to(REPO_ROOT)}:{lineno} -> {expr}"
-            for p, lineno, expr in offenders
+            f"  {p.relative_to(REPO_ROOT)}:{lineno} -> {expr}" for p, lineno, expr in offenders
         )
     )
 
@@ -213,7 +210,6 @@ def test_no_deprecated_qdrant_client_search_calls() -> None:
         "Deprecated `client.search(...)` call detected. Replace with "
         "`client.query_points(...)` (see Qdrant Python client docs):\n"
         + "\n".join(
-            f"  {p.relative_to(REPO_ROOT)}:{lineno} -> {expr}(...)"
-            for p, lineno, expr in offenders
+            f"  {p.relative_to(REPO_ROOT)}:{lineno} -> {expr}(...)" for p, lineno, expr in offenders
         )
     )

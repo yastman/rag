@@ -241,7 +241,6 @@ async def test_crm_update_contact_cancel():
     mock_kommo.update_contact.assert_not_called()
 
 
-
 # --- pending resume trace-id store (#2224) ---
 
 

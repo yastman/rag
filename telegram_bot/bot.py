@@ -2577,91 +2577,167 @@ class PropertyBot:
                         "Client direct pipeline failed; falling back to sdk_agent",
                     )
 
-            # Build tools list via shared helper
-            from .agents.tool_assembly import build_agent_tools
+            from .assistant_core_adapter import core_entrypoint_enabled
 
-            tools = build_agent_tools(
-                role=role,
-                config=self.config,
-                history_service=self._history_service,
-                funnel_analytics_service=self._funnel_analytics_service,
-                nurturing_service=self._nurturing_service,
-                lead_scoring_store=self._lead_scoring_store,
-                kommo_client=getattr(self, "_kommo_client", None),
-            )
+            if core_entrypoint_enabled():
+                from src.core import CoreDependencies
 
-            # Create agent via SDK — route through LiteLLM proxy (#420)
-            agent = create_bot_agent(
-                model=self.config.supervisor_model,
-                tools=tools,
-                checkpointer=self._agent_checkpointer,
-                language=language,
-                base_url=self.config.llm_base_url,
-                api_key=self.config.llm_api_key,
-                role=role,
-                max_history_messages=self.config.agent_max_history_messages,
-                max_tokens=self.config.supervisor_max_tokens,
-            )
+                from .assistant_core_adapter import build_user_context, run_core_text_request
 
-            # Build context for tool DI
-            ctx = BotContext(
-                telegram_user_id=user_id,
-                session_id=session_id,
-                language=language,
-                kommo_client=getattr(self, "_kommo_client", None),
-                history_service=self._history_service,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                cache=self._cache,
-                reranker=self._reranker,
-                llm=self._llm,
-                content_filter_enabled=self.config.content_filter_enabled,
-                guard_mode=self.config.guard_mode,
-                role=role,
-                manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
-                history_relevance_threshold=self.config.history_relevance_threshold,
-                original_query=message.text or "",
-                original_user_query=message.text or "",
-                bot=bot,
-                manager_ids=list(self.config.manager_ids),
-                apartments_service=self._apartments_service,
-                search_event_store=self._search_event_store,
-            )
-
-            # Initialize handler inside propagation context so it inherits session/user/tags.
-            langfuse_handler = create_callback_handler()
-            callbacks = [langfuse_handler] if langfuse_handler else []
-            async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                response_text, result = await self._astream_supervisor_with_recovery(
-                    agent=agent,
-                    tools=tools,
+                user_context = build_user_context(
+                    user_id=user_id,
+                    session_id=session_id,
                     role=role,
-                    user_text=user_text,
-                    chat_id=message.chat.id,
-                    callbacks=callbacks,
-                    bot_context=ctx,
-                    rag_result_store=rag_result_store,
-                    forum_thread_id=forum_thread_id,
-                    use_streaming=message.chat.type == "private",
+                    filters=extracted_filters or None,
+                    language=language,
+                )
+                dependencies = CoreDependencies(
+                    cache=self._cache,
+                    embeddings=self._embeddings,
+                    sparse_embeddings=self._sparse,
+                    qdrant=self._qdrant,
+                    reranker=self._reranker,
+                    llm=self._llm,
+                    config=self.config,
+                )
+                async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                    core_result = await run_core_text_request(
+                        query=user_text,
+                        collection=self.config.qdrant_collection,
+                        user_context=user_context,
+                        dependencies=dependencies,
+                    )
+                response_text = core_result.response_text
+                rag_result_store["query_type"] = core_result.request_type or query_type
+                rag_result_store["cache_hit"] = core_result.cache_hit
+                rag_result_store["rerank_applied"] = core_result.rerank_applied
+                rag_result_store["sources_count"] = core_result.documents_count
+                rag_result_store["grade_confidence"] = (
+                    1.0 if core_result.documents_count > 0 else 0.0
+                )
+                rag_result_store["grounded"] = True
+                rag_result_store["legal_answer_safe"] = True
+                rag_result_store["semantic_cache_safe_reuse"] = True
+                rag_result_store["documents"] = [
+                    {
+                        "metadata": {
+                            "title": src.get("title", ""),
+                            "url": src.get("url", ""),
+                        },
+                        "score": 1.0,
+                    }
+                    for src in core_result.retrieved_sources
+                ]
+                if core_result.proposed_crm_action:
+                    action = core_result.proposed_crm_action
+                    payload = {
+                        "action_type": action.action_type,
+                        "payload": action.payload,
+                        "preview": action.summary,
+                    }
+                    await self._send_hitl_confirmation(
+                        message=message,
+                        payload=payload,
+                        thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
+                    )
+                    return None  # type: ignore[return-value]
+
+                class DummyContext:
+                    response_sent = False
+                    history_reply_markup = None
+
+                ctx = DummyContext()
+                messages = []
+            else:
+                # Build tools list via shared helper
+                from .agents.tool_assembly import build_agent_tools
+
+                tools = build_agent_tools(
+                    role=role,
+                    config=self.config,
+                    history_service=self._history_service,
+                    funnel_analytics_service=self._funnel_analytics_service,
+                    nurturing_service=self._nurturing_service,
+                    lead_scoring_store=self._lead_scoring_store,
+                    kommo_client=getattr(self, "_kommo_client", None),
                 )
 
-            # Check for HITL interrupt (#443)
-            interrupt_data = result.get("__interrupt__")
-            if interrupt_data:
-                interrupt_payload = interrupt_data[0].value
-                await self._send_hitl_confirmation(
-                    message=message,
-                    payload=interrupt_payload,
-                    thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
+                # Create agent via SDK — route through LiteLLM proxy (#420)
+                agent = create_bot_agent(
+                    model=self.config.supervisor_model,
+                    tools=tools,
+                    checkpointer=self._agent_checkpointer,
+                    language=language,
+                    base_url=self.config.llm_base_url,
+                    api_key=self.config.llm_api_key,
+                    role=role,
+                    max_history_messages=self.config.agent_max_history_messages,
+                    max_tokens=self.config.supervisor_max_tokens,
                 )
-                return None  # type: ignore[return-value]
 
-            # Extract response from final message
-            messages = result.get("messages", [])
-            if not response_text and messages:
-                last_msg = messages[-1]
-                response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                # Build context for tool DI
+                ctx = BotContext(
+                    telegram_user_id=user_id,
+                    session_id=session_id,
+                    language=language,
+                    kommo_client=getattr(self, "_kommo_client", None),
+                    history_service=self._history_service,
+                    embeddings=self._embeddings,
+                    sparse_embeddings=self._sparse,
+                    qdrant=self._qdrant,
+                    cache=self._cache,
+                    reranker=self._reranker,
+                    llm=self._llm,
+                    content_filter_enabled=self.config.content_filter_enabled,
+                    guard_mode=self.config.guard_mode,
+                    role=role,
+                    manager_id=(
+                        self.config.kommo_responsible_user_id if role == "manager" else None
+                    ),
+                    history_relevance_threshold=self.config.history_relevance_threshold,
+                    original_query=message.text or "",
+                    original_user_query=message.text or "",
+                    bot=bot,
+                    manager_ids=list(self.config.manager_ids),
+                    apartments_service=self._apartments_service,
+                    search_event_store=self._search_event_store,
+                )
+
+                # Initialize handler inside propagation context so it inherits session/user/tags.
+                langfuse_handler = create_callback_handler()
+                callbacks = [langfuse_handler] if langfuse_handler else []
+                async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                    response_text, result = await self._astream_supervisor_with_recovery(
+                        agent=agent,
+                        tools=tools,
+                        role=role,
+                        user_text=user_text,
+                        chat_id=message.chat.id,
+                        callbacks=callbacks,
+                        bot_context=ctx,
+                        rag_result_store=rag_result_store,
+                        forum_thread_id=forum_thread_id,
+                        use_streaming=message.chat.type == "private",
+                    )
+
+                # Check for HITL interrupt (#443)
+                interrupt_data = result.get("__interrupt__")
+                if interrupt_data:
+                    interrupt_payload = interrupt_data[0].value
+                    await self._send_hitl_confirmation(
+                        message=message,
+                        payload=interrupt_payload,
+                        thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
+                    )
+                    return None  # type: ignore[return-value]
+
+                # Extract response from final message
+                messages = result.get("messages", [])
+                if not response_text and messages:
+                    last_msg = messages[-1]
+                    response_text = (
+                        last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                    )
 
             # Extract LLM metrics from supervisor agent response (#515)
             if messages:

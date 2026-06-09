@@ -40,9 +40,7 @@ _IMPORT_RE = re.compile(
 )
 
 
-@pytest.mark.parametrize(
-    "path", FORBIDDEN_PATHS, ids=lambda p: str(p.relative_to(REPO_ROOT))
-)
+@pytest.mark.parametrize("path", FORBIDDEN_PATHS, ids=lambda p: str(p.relative_to(REPO_ROOT)))
 def test_orphan_bot_bridge_files_are_absent(path: Path) -> None:
     if path.exists():
         raise AssertionError(
@@ -68,8 +66,7 @@ def test_no_runtime_import_of_bot_bridge() -> None:
             for match in _IMPORT_RE.finditer(text):
                 line_no = text[: match.start()].count("\n") + 1
                 offenders.append(
-                    f"{py_file.relative_to(REPO_ROOT)}:{line_no}: "
-                    f"{match.group(0).strip()}"
+                    f"{py_file.relative_to(REPO_ROOT)}:{line_no}: {match.group(0).strip()}"
                 )
     assert not offenders, (
         "Runtime code imports a bot_bridge module. The Mini App ↔ bot "
