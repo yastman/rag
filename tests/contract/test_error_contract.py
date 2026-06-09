@@ -34,12 +34,10 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # re-raised so the outer voice-session trace records the failure (#1810).
     "telegram_bot/graph/nodes/transcribe.py": ["ERROR"],
     "src/runtime/graph/nodes/transcribe.py": ["ERROR"],
-    "src/runtime/pipeline/rag.py": ["ERROR"],
     # Agent tools — pipeline wrapper error paths
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
     "telegram_bot/agents/history_tool.py": ["ERROR"],
     "telegram_bot/agents/rag_pipeline.py": ["ERROR"],
-    "src/runtime/pipeline/rag.py": ["ERROR"],
     "telegram_bot/agents/history_graph/nodes.py": ["ERROR"],
     # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
@@ -51,6 +49,9 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # rerank (ColBERT) and rewrite (LLM) failure paths inside ``except``
     # blocks; mirrors the telegram_bot pipeline counterparts (core migration).
     "src/runtime/pipeline/rag.py": ["ERROR"],
+    # SDK-native generation service — ERROR span on the LLM-failure fallback
+    # path (CORE-004 split). Mirrors telegram_bot/services/generate_response.py.
+    "src/runtime/generation/service.py": ["ERROR"],
     "telegram_bot/services/history_service.py": ["ERROR"],
     "telegram_bot/middlewares/error_handler.py": ["ERROR"],
     # CRM callback handlers — exception path of CRM dialog/wrapper spans
