@@ -83,8 +83,11 @@ class LocalBgeM3Provider(EmbeddingProvider):
             def _load():
                 return BGEM3FlagModel(self.model_name, use_fp16=self.use_fp16)
 
-            loop = asyncio.get_running_loop()
-            _MODEL_INSTANCE = await loop.run_in_executor(None, _load)
+            # asyncio.to_thread copies the current contextvars into the worker
+            # thread (Langfuse/OTEL span context), unlike a bare
+            # loop.run_in_executor(None, ...). See observability contextvars
+            # contract.
+            _MODEL_INSTANCE = await asyncio.to_thread(_load)
             logger.info("Local BGE-M3 model initialized successfully.")
             return _MODEL_INSTANCE
 
@@ -116,5 +119,6 @@ class LocalBgeM3Provider(EmbeddingProvider):
                 # Convert list/numpy arrays to list of float lists
                 return [vec.tolist() if hasattr(vec, "tolist") else list(vec) for vec in dense_vecs]
 
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(None, _encode)
+            # asyncio.to_thread propagates contextvars to the worker thread
+            # (observability contextvars contract).
+            return await asyncio.to_thread(_encode)

@@ -1,6 +1,7 @@
 """LiteLLM adapter for text generation."""
 
 import logging
+import os
 from typing import Any
 
 from src.adapters.llm.base import (
@@ -20,6 +21,10 @@ class LiteLlmProvider(LLMProvider):
 
     def __init__(self, default_model: str = "gpt-4o-mini") -> None:
         self.default_model = default_model
+        try:
+            self.timeout_seconds = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
+        except ValueError:
+            self.timeout_seconds = 60.0
 
     async def generate(
         self,
@@ -32,6 +37,7 @@ class LiteLlmProvider(LLMProvider):
         from litellm.exceptions import AuthenticationError, RateLimitError, Timeout
 
         target_model = model or self.default_model
+        kwargs.setdefault("timeout", self.timeout_seconds)
 
         try:
             response = await litellm.acompletion(
