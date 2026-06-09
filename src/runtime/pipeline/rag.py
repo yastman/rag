@@ -62,7 +62,10 @@ def _identity_observe(*args: Any, **kwargs: Any) -> Callable[[_T], _T]:
 
 def _load_observe() -> Callable[..., Callable[[_T], _T]]:
     try:
-        return _load_telegram_attr("telegram_bot.observability", "observe")
+        return cast(
+            Callable[..., Callable[[_T], _T]],
+            _load_telegram_attr("telegram_bot.observability", "observe"),
+        )
     except Exception:  # pragma: no cover - import-safety fallback for lightweight tooling
         return _identity_observe
 
@@ -1576,8 +1579,7 @@ async def _expand_small_to_big(
         if expanded:
             for i, ec in enumerate(expanded):
                 if i < len(final_docs):
-                    final_docs[i]["text"] = ec.expanded_text
-                    final_docs[i]["_expanded"] = True
+                    final_docs[i] = {**final_docs[i], "text": ec.expanded_text, "_expanded": True}
             logger.debug("Small-to-big expanded %d chunks", len(expanded))
     except Exception as e:
         logger.warning("Small-to-big expansion failed: %s", e, exc_info=True)
