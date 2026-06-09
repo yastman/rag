@@ -128,7 +128,15 @@ def _new_query_preprocessor() -> Any:
 
 
 observe = _load_observe()
-get_client = _get_client
+
+
+def get_client() -> Any:
+    # ``_get_client()`` already returns the Langfuse client instance (it calls
+    # the ``telegram_bot.observability.get_client`` factory), so this wrapper
+    # must NOT call the result again.
+    return _get_client()
+
+
 SEMANTIC_CACHE_SCHEMA_VERSION = "v8"
 
 

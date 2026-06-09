@@ -1718,7 +1718,7 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
     mock_reranker.rerank = AsyncMock(return_value=[{"index": 0, "score": 0.9}])
 
     with patch(
-        "telegram_bot.agents.rag_pipeline._rerank",
+        "src.runtime.pipeline.rag._rerank",
         new_callable=AsyncMock,
     ) as mock_rerank_fn:
         result = await rag_pipeline(
