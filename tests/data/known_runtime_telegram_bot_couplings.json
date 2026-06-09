@@ -1,4 +1,12 @@
 {
+  "src/runtime/generation/service.py": [
+    "telegram_bot.integrations.prompt_manager",
+    "telegram_bot.integrations.prompt_templates",
+    "telegram_bot.observability",
+    "telegram_bot.services.coverage_mode",
+    "telegram_bot.services.metrics",
+    "telegram_bot.services.response_style_detector"
+  ],
   "src/runtime/graph/builder.py": [
     "telegram_bot.graph.graph:build_graph"
   ],

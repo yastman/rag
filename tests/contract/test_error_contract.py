@@ -52,6 +52,9 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # SDK-native query preprocessor — ERROR spans on the HyDE generation
     # API-failure paths (CORE-023 move from telegram_bot.services).
     "src/runtime/services/query_preprocessor.py": ["ERROR"],
+    # SDK-native generation service — ERROR span on the LLM-failure fallback
+    # path (CORE-004 split). Mirrors telegram_bot/services/generate_response.py.
+    "src/runtime/generation/service.py": ["ERROR"],
     "telegram_bot/services/history_service.py": ["ERROR"],
     "telegram_bot/middlewares/error_handler.py": ["ERROR"],
     # CRM callback handlers — exception path of CRM dialog/wrapper spans
