@@ -251,7 +251,9 @@ class TestHotLeadNotifierObserveInstrumentation:
         assert len(output_calls) >= 1
         assert output_calls[-1]["output"].get("notified") is False
 
-    async def test_hot_lead_notifier_exception_path_records_error_level_and_reraises(self, monkeypatch):
+    async def test_hot_lead_notifier_exception_path_records_error_level_and_reraises(
+        self, monkeypatch
+    ):
         """On exception, update_current_span(level='ERROR', ...) and re-raise."""
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)

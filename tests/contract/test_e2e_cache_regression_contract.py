@@ -53,9 +53,7 @@ def test_cache_test_does_not_skip_after_queries_ran() -> None:
     tree = ast.parse(TARGET.read_text(encoding="utf-8"))
     func = _function(tree, "test_cache_miss_then_hit_on_repeated_query")
     skip_calls = [
-        node
-        for node in ast.walk(func)
-        if isinstance(node, ast.Call) and _is_pytest_skip(node)
+        node for node in ast.walk(func) if isinstance(node, ast.Call) and _is_pytest_skip(node)
     ]
     assert not skip_calls, (
         "test_cache_miss_then_hit_on_repeated_query must not call "
@@ -71,16 +69,10 @@ def test_cache_test_asserts_miss_and_hit_observed() -> None:
     func = _function(tree, "test_cache_miss_then_hit_on_repeated_query")
 
     assert_sources = [
-        ast.unparse(node.test)
-        for node in ast.walk(func)
-        if isinstance(node, ast.Assert)
+        ast.unparse(node.test) for node in ast.walk(func) if isinstance(node, ast.Assert)
     ]
-    has_hits = any(
-        "hits" in src and (">= 1" in src or "> 0" in src) for src in assert_sources
-    )
-    has_misses = any(
-        "misses" in src and (">= 1" in src or "> 0" in src) for src in assert_sources
-    )
+    has_hits = any("hits" in src and (">= 1" in src or "> 0" in src) for src in assert_sources)
+    has_misses = any("misses" in src and (">= 1" in src or "> 0" in src) for src in assert_sources)
     assert has_hits and has_misses, (
         "test_cache_miss_then_hit_on_repeated_query must assert both "
         "hits >= 1 and misses >= 1 (or > 0) once the live stack has "

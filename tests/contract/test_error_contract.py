@@ -38,6 +38,7 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
     "telegram_bot/agents/history_tool.py": ["ERROR"],
     "telegram_bot/agents/rag_pipeline.py": ["ERROR"],
+    "src/runtime/pipeline/rag.py": ["ERROR"],
     "telegram_bot/agents/history_graph/nodes.py": ["ERROR"],
     # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],

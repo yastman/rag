@@ -29,12 +29,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DOC_PATH = (
-    REPO_ROOT
-    / "docs"
-    / "engineering"
-    / "voice-create-agent-migration-sequence.md"
-)
+DOC_PATH = REPO_ROOT / "docs" / "engineering" / "voice-create-agent-migration-sequence.md"
 
 
 REQUIRED_ISSUE_REFS: tuple[str, ...] = (
@@ -89,8 +84,7 @@ def test_sequence_doc_records_2050_as_done_and_2048_as_unblocked() -> None:
     """
     text = DOC_PATH.read_text(encoding="utf-8").lower()
     assert "closed" in text or "done" in text, (
-        "Sequencing doc must mark sibling issues as closed/done so the "
-        "reader can see what is left."
+        "Sequencing doc must mark sibling issues as closed/done so the reader can see what is left."
     )
     assert "unblock" in text or "unblocks" in text, (
         "Sequencing doc must call out that #1948 unblocks #2048 — "

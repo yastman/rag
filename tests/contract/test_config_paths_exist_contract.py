@@ -21,15 +21,11 @@ This test asserts:
 
 from __future__ import annotations
 
-import sys
+import tomllib  # type: ignore[no-redef]
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover
-    import tomli as tomllib  # type: ignore[no-redef]
-
 import yaml
+
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -54,11 +50,7 @@ def test_legacy_directories_do_not_exist() -> None:
 
 
 def test_no_old_or_backup_python_files() -> None:
-    offenders = [
-        p
-        for p in _all_python_files(REPO)
-        if p.name.endswith(("_old.py", "_backup.py"))
-    ]
+    offenders = [p for p in _all_python_files(REPO) if p.name.endswith(("_old.py", "_backup.py"))]
     assert offenders == [], (
         f"Found *_old.py / *_backup.py files; either remove them or "
         f"re-justify the pylint ignore-patterns rule: {offenders}"
@@ -82,9 +74,7 @@ def test_pyproject_ruff_per_file_ignores_no_legacy() -> None:
 def test_pyproject_bandit_exclude_dirs_no_legacy() -> None:
     cfg = _pyproject()
     excludes = cfg["tool"]["bandit"].get("exclude_dirs", [])
-    assert "legacy" not in excludes, (
-        "bandit.exclude_dirs still includes dead 'legacy' entry"
-    )
+    assert "legacy" not in excludes, "bandit.exclude_dirs still includes dead 'legacy' entry"
 
 
 def test_pyproject_pylint_ignore_no_legacy_and_no_old_backup_patterns() -> None:
@@ -94,8 +84,7 @@ def test_pyproject_pylint_ignore_no_legacy_and_no_old_backup_patterns() -> None:
         "pylint.ignore still includes dead 'legacy' entry"
     )
     assert "ignore-patterns" not in pylint_main, (
-        "pylint.ignore-patterns is dead (no *_old.py/*_backup.py files exist) "
-        "and must be removed"
+        "pylint.ignore-patterns is dead (no *_old.py/*_backup.py files exist) and must be removed"
     )
 
 
@@ -110,9 +99,7 @@ def test_pyproject_pytest_norecursedirs_no_legacy() -> None:
 def test_pyproject_coverage_omit_no_legacy() -> None:
     cfg = _pyproject()
     omit = cfg["tool"]["coverage"]["run"].get("omit", [])
-    assert "*/legacy/*" not in omit, (
-        "coverage.run.omit still references dead */legacy/* glob"
-    )
+    assert "*/legacy/*" not in omit, "coverage.run.omit still references dead */legacy/* glob"
 
 
 def test_precommit_hooks_no_legacy_exclude() -> None:
@@ -124,6 +111,5 @@ def test_precommit_hooks_no_legacy_exclude() -> None:
             if not exclude:
                 continue
             assert "legacy" not in exclude, (
-                f"pre-commit hook {hook.get('id')!r} still excludes "
-                f"dead path: {exclude!r}"
+                f"pre-commit hook {hook.get('id')!r} still excludes dead path: {exclude!r}"
             )

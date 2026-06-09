@@ -36,9 +36,12 @@ def _docstring_nodes(tree: ast.AST) -> set[ast.Constant]:
         if not isinstance(body, list) or not body:
             continue
         first = body[0]
-        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
-            if isinstance(first.value.value, str):
-                out.add(first.value)
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+        ):
+            out.add(first.value)
     return out
 
 

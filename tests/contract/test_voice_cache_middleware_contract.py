@@ -106,8 +106,7 @@ def test_abefore_agent_is_hook_config_with_jump_to_end() -> None:
                 if kw.arg != "can_jump_to":
                     continue
                 if isinstance(kw.value, ast.List) and any(
-                    isinstance(elt, ast.Constant) and elt.value == "end"
-                    for elt in kw.value.elts
+                    isinstance(elt, ast.Constant) and elt.value == "end" for elt in kw.value.elts
                 ):
                     found = True
     assert found, (

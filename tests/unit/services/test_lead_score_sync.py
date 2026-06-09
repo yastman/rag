@@ -306,7 +306,9 @@ class TestLeadScoreSyncObserveInstrumentation:
         assert captured_output["skipped"] == 1
 
     @pytest.mark.asyncio
-    async def test_lead_score_sync_exception_path_records_error_level_and_reraises(self, monkeypatch):
+    async def test_lead_score_sync_exception_path_records_error_level_and_reraises(
+        self, monkeypatch
+    ):
         """On exception, update_current_span(level='ERROR', ...) and re-raise."""
         self._disable_observe_and_propagate(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)

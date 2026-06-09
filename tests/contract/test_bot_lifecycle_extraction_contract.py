@@ -63,10 +63,7 @@ def test_lifecycle_module_exists_and_exports_helpers() -> None:
     )
     module = importlib.import_module(LIFECYCLE_MODULE)
     missing = [name for name in REQUIRED_HELPERS if not hasattr(module, name)]
-    assert not missing, (
-        f"{LIFECYCLE_MODULE} must export {REQUIRED_HELPERS}; "
-        f"missing: {missing}"
-    )
+    assert not missing, f"{LIFECYCLE_MODULE} must export {REQUIRED_HELPERS}; missing: {missing}"
     for name in REQUIRED_HELPERS:
         assert inspect.iscoroutinefunction(getattr(module, name)), (
             f"{LIFECYCLE_MODULE}.{name} must be async (`async def`)."

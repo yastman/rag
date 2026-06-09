@@ -297,9 +297,9 @@ def test_pr_template_has_validation_and_runtime_fields() -> None:
     text = pr_template.read_text(encoding="utf-8")
     for field in ("Checks run", "Runtime Impact", "Reviewer Notes"):
         assert field in text, (
-            ".github/pull_request_template.md must keep lightweight reviewer "
-            f"field {field!r}."
+            f".github/pull_request_template.md must keep lightweight reviewer field {field!r}."
         )
+
 
 def test_bug_issue_template_collects_duplicate_and_bug_class_metadata() -> None:
     """Bug reports must collect enough metadata for duplicate/recurrence triage."""

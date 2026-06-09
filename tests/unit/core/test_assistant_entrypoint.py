@@ -42,8 +42,8 @@ def test_core_public_contract_imports() -> None:
         CoreDependencies,
         CrmAction,
         UserContext,
+        contracts,
     )
-    from src.core import contracts
 
     assert AssistantError is contracts.AssistantError
     assert AssistantRequest is contracts.AssistantRequest
@@ -110,7 +110,7 @@ class TestUserContext:
 class TestAssistantRequest:
     """Tests for the AssistantRequest dataclass."""
 
-    def test_creation_with_required_fields(self) -> None:
+    def test_assistant_request_creation_with_required_fields(self) -> None:
         """AssistantRequest should accept query and collection with safe defaults."""
         from src.core import AssistantRequest, UserContext
 
