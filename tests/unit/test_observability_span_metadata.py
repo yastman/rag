@@ -121,7 +121,10 @@ class TestRAGPipelineSpanMetadata:
 
     @pytest.fixture(scope="class")
     def rag_spans(self):
-        path = REPO_ROOT / "telegram_bot" / "agents" / "rag_pipeline.py"
+        # The RAG pipeline observe-decorated spans live in the runtime module
+        # since the core migration; telegram_bot/agents/rag_pipeline.py is now a
+        # thin compatibility shim.
+        path = REPO_ROOT / "src" / "runtime" / "pipeline" / "rag.py"
         return _collect_observe_decorators(path)
 
     def test_grade_documents_has_evaluator_type(self, rag_spans):
