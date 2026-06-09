@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from src.core.assistant import UserContext, run_assistant_request
@@ -245,6 +247,210 @@ async def test_core_live_crm_hitl_requires_confirmation_before_mock_crm_write() 
 
         for expected in case.must_contain:
             assert expected in result.response_text
+    finally:
+        if harness is not None:
+            await harness.aclose()
+        cleanup_collection(env, context)
+
+
+class InMemoryLiveCache:
+    """Mock cache that implements basic get/store semantics for E2E testing."""
+
+    def __init__(self) -> None:
+        self.semantic_store: dict[str, str] = {}
+        self.embeddings: dict[str, list[float]] = {}
+        self.sparse_embeddings: dict[str, Any] = {}
+
+    async def get_bge_m3_query_bundle(self, query: str) -> None:
+        return None
+
+    async def store_bge_m3_query_bundle(self, query: str, bundle: Any) -> None:
+        return None
+
+    async def get_embedding(self, query: str) -> list[float] | None:
+        return self.embeddings.get(query)
+
+    async def store_embedding(self, query: str, vector: list[float]) -> None:
+        self.embeddings[query] = vector
+
+    async def get_sparse_embedding(self, query: str) -> Any:
+        return self.sparse_embeddings.get(query)
+
+    async def store_sparse_embedding(self, query: str, vector: Any) -> None:
+        self.sparse_embeddings[query] = vector
+
+    async def check_semantic(self, query: str, **kwargs: Any) -> str | None:
+        return self.semantic_store.get(query)
+
+    async def store_semantic(self, query: str, response: str, **kwargs: Any) -> None:
+        self.semantic_store[query] = response
+
+    async def get_search_results(
+        self, dense_vector: list[float], filters: dict[str, Any] | None
+    ) -> None:
+        return None
+
+    async def store_search_results(
+        self,
+        dense_vector: list[float],
+        filters: dict[str, Any] | None,
+        results: list[dict[str, Any]],
+    ) -> None:
+        return None
+
+    async def get_rerank_results(
+        self, query: str, documents: list[dict[str, Any]], top_k: int
+    ) -> None:
+        return None
+
+    async def store_rerank_results(
+        self,
+        query: str,
+        documents: list[dict[str, Any]],
+        top_k: int,
+        reranked: list[dict[str, Any]],
+    ) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_core_live_strict_grounding_fallback() -> None:
+    """Strict grounding must return safe fallback when no documents are found for a high-risk topic."""
+    env = LiveE2EEnv.from_env()
+    await require_live_services(env)
+
+    # High-risk legal query
+    query = "Какие юридические правила получения ВНЖ?"
+    context = make_qdrant_context(env)
+    harness = None
+
+    try:
+        recreate_collection(env, context.collection_name)
+
+        harness = build_live_core_harness(env, context.collection_name)
+        result = await run_assistant_request(
+            query,
+            collection=context.collection_name,
+            user_context=UserContext(
+                user_id="2336",
+                session_id=f"{context.collection_name}:strict-grounding",
+                role="client",
+            ),
+            dependencies=harness.dependencies,
+        )
+
+        assert result.error_type is None, result.error_message
+        assert result.route == "rag_search"
+        assert result.documents_count == 0
+        # Strict mode was triggered, empty docs -> safe fallback
+        assert "не могу дать надежный ответ" in result.response_text.lower()
+    finally:
+        if harness is not None:
+            await harness.aclose()
+        cleanup_collection(env, context)
+
+
+@pytest.mark.asyncio
+async def test_core_live_semantic_cache_hit() -> None:
+    """Test that a repeat query hits the semantic cache."""
+    env = LiveE2EEnv.from_env()
+    await require_live_services(env)
+
+    case = load_golden_case("beach_studio_sea_under_120k")
+    context = make_qdrant_context(env)
+    harness = None
+
+    try:
+        recreate_collection(env, context.collection_name)
+        indexed_points = await index_fixture_documents(
+            env,
+            context.collection_name,
+            document_ids=["sunny_beach_studio"],
+        )
+        assert indexed_points >= 1
+
+        cache = InMemoryLiveCache()
+        await cache.store_semantic(case.query, "Cached response for beachfront studio.")
+
+        harness = build_live_core_harness(env, context.collection_name)
+        harness.dependencies.cache = cache
+
+        result = await run_assistant_request(
+            case.query,
+            collection=context.collection_name,
+            user_context=UserContext(
+                user_id="2336",
+                session_id=f"{context.collection_name}:cache-hit",
+                role="client",
+            ),
+            dependencies=harness.dependencies,
+        )
+
+        assert result.error_type is None, result.error_message
+        assert result.route == "cache_hit"
+        assert result.cache_hit is True
+        assert result.response_text == "Cached response for beachfront studio."
+    finally:
+        if harness is not None:
+            await harness.aclose()
+        cleanup_collection(env, context)
+
+
+@pytest.mark.asyncio
+async def test_core_live_crm_proposal_data_only() -> None:
+    """CRM proposal data must propagate to AssistantResult without actual CRM writes."""
+    from unittest.mock import patch
+
+    from src.core.contracts import CrmAction
+
+    crm = MockCrmClient()
+    env = LiveE2EEnv.from_env()
+    await require_live_services(env)
+
+    case = load_golden_case("beach_studio_sea_under_120k")
+    context = make_qdrant_context(env)
+    harness = None
+
+    try:
+        recreate_collection(env, context.collection_name)
+        indexed_points = await index_fixture_documents(
+            env,
+            context.collection_name,
+            document_ids=["sunny_beach_studio"],
+        )
+        assert indexed_points >= 1
+
+        harness = build_live_core_harness(env, context.collection_name, crm=crm)
+
+        target_action = CrmAction(
+            action_type="schedule_viewing",
+            payload={"property_id": "sunny-beach-studio-001"},
+            summary="Schedule viewing for studio",
+        )
+
+        with patch("telegram_bot.services.generate_response.generate_response") as mock_generate:
+            mock_generate.return_value = {
+                "response": "Предлагаю записать вас на просмотр.",
+                "proposed_crm_action": target_action,
+                "llm_provider_model": "test-model",
+                "usage_details": {"input": 10, "output": 10},
+            }
+
+            result = await run_assistant_request(
+                case.query,
+                collection=context.collection_name,
+                user_context=UserContext(
+                    user_id="2336",
+                    session_id=f"{context.collection_name}:crm-prop",
+                    role="client",
+                ),
+                dependencies=harness.dependencies,
+            )
+
+        assert result.error_type is None, result.error_message
+        assert result.route == "rag_search"
+        assert result.proposed_crm_action == target_action
+        assert crm.writes == []  # No actual CRM write
     finally:
         if harness is not None:
             await harness.aclose()
