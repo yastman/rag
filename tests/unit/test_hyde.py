@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import openai
 import pytest
 
-from telegram_bot.services.query_preprocessor import HyDEGenerator, QueryPreprocessor
+from src.runtime.services.query_preprocessor import HyDEGenerator, QueryPreprocessor
 
 
 def _mock_completion(content: str) -> MagicMock:
@@ -196,7 +196,7 @@ class TestHyDEObserveInstrumentation:
     @staticmethod
     def _patched_lf(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         """Replace get_client used by HyDE module with a recording mock."""
-        from telegram_bot.services import query_preprocessor as qp_mod
+        from src.runtime.services import query_preprocessor as qp_mod
 
         mock_lf = MagicMock()
         monkeypatch.setattr(qp_mod, "get_client", lambda: mock_lf)
@@ -212,7 +212,7 @@ class TestHyDEObserveInstrumentation:
         import importlib
         import sys
 
-        from telegram_bot import observability as observability_mod
+        from src import observability as observability_mod
 
         def fake_observe(**_kwargs):
             def decorator(func):
@@ -222,21 +222,21 @@ class TestHyDEObserveInstrumentation:
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
         # Reload query_preprocessor so it picks up the no-op decorator.
-        sys.modules.pop("telegram_bot.services.query_preprocessor", None)
-        importlib.import_module("telegram_bot.services.query_preprocessor")
+        sys.modules.pop("src.runtime.services.query_preprocessor", None)
+        importlib.import_module("src.runtime.services.query_preprocessor")
 
     def test_hyde_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (#1661 contract)."""
-        from telegram_bot.services import query_preprocessor as qp_mod
+        from src.runtime.services import query_preprocessor as qp_mod
 
         assert hasattr(qp_mod, "observe"), (
-            "telegram_bot.services.query_preprocessor must import `observe` "
-            "from telegram_bot.observability for the @observe decorator on "
+            "src.runtime.services.query_preprocessor must import `observe` "
+            "from src.observability for the @observe decorator on "
             "HyDEGenerator.generate_hypothetical_document"
         )
         assert hasattr(qp_mod, "get_client"), (
-            "telegram_bot.services.query_preprocessor must import `get_client` "
-            "from telegram_bot.observability for curated update_current_span calls"
+            "src.runtime.services.query_preprocessor must import `get_client` "
+            "from src.observability for curated update_current_span calls"
         )
 
     def test_hyde_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
@@ -244,7 +244,7 @@ class TestHyDEObserveInstrumentation:
         import importlib
         import sys
 
-        from telegram_bot import observability as observability_mod
+        from src import observability as observability_mod
 
         captured: dict[str, object] = {}
 
@@ -257,8 +257,8 @@ class TestHyDEObserveInstrumentation:
             return decorator
 
         monkeypatch.setattr(observability_mod, "observe", recording_observe)
-        sys.modules.pop("telegram_bot.services.query_preprocessor", None)
-        importlib.import_module("telegram_bot.services.query_preprocessor")
+        sys.modules.pop("src.runtime.services.query_preprocessor", None)
+        importlib.import_module("src.runtime.services.query_preprocessor")
 
         assert captured.get("name") == "hyde-generate-document"
         assert captured.get("capture_input") is False
@@ -270,7 +270,7 @@ class TestHyDEObserveInstrumentation:
         mock_lf = self._patched_lf(monkeypatch)
 
         # Re-import to bind the no-op observe applied above.
-        from telegram_bot.services.query_preprocessor import HyDEGenerator
+        from src.runtime.services.query_preprocessor import HyDEGenerator
 
         hyde = HyDEGenerator(model="test-model")
         hyde.client = AsyncMock()
@@ -299,7 +299,7 @@ class TestHyDEObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.query_preprocessor import HyDEGenerator
+        from src.runtime.services.query_preprocessor import HyDEGenerator
 
         long_doc = "Подробное описание объекта недвижимости. " * 30
         hyde = HyDEGenerator()
@@ -326,8 +326,8 @@ class TestHyDEObserveInstrumentation:
         """HyDE generation must not require an initialized Langfuse client."""
         self._disable_observe(monkeypatch)
 
-        from telegram_bot.services import query_preprocessor as qp_mod
-        from telegram_bot.services.query_preprocessor import HyDEGenerator
+        from src.runtime.services import query_preprocessor as qp_mod
+        from src.runtime.services.query_preprocessor import HyDEGenerator
 
         monkeypatch.setattr(qp_mod, "get_client", lambda: None)
 
@@ -346,7 +346,7 @@ class TestHyDEObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.query_preprocessor import HyDEGenerator
+        from src.runtime.services.query_preprocessor import HyDEGenerator
 
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
