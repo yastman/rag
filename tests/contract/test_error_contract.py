@@ -49,6 +49,9 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # rerank (ColBERT) and rewrite (LLM) failure paths inside ``except``
     # blocks; mirrors the telegram_bot pipeline counterparts (core migration).
     "src/runtime/pipeline/rag.py": ["ERROR"],
+    # SDK-native query preprocessor — ERROR spans on the HyDE generation
+    # API-failure paths (CORE-023 move from telegram_bot.services).
+    "src/runtime/services/query_preprocessor.py": ["ERROR"],
     # SDK-native generation service — ERROR span on the LLM-failure fallback
     # path (CORE-004 split). Mirrors telegram_bot/services/generate_response.py.
     "src/runtime/generation/service.py": ["ERROR"],

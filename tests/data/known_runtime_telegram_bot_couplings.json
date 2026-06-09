@@ -23,5 +23,8 @@
     "telegram_bot.services.query_preprocessor",
     "telegram_bot.services.rag_core",
     "telegram_bot.services.small_to_big"
+  ],
+  "src/runtime/services/query_preprocessor.py": [
+    "telegram_bot.integrations.prompt_manager"
   ]
 }
