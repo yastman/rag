@@ -18,13 +18,12 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import importlib.util
 import logging
 import time
 from collections.abc import Callable
-from typing import Any, TypeVar, cast
-
-import importlib.util
 from pathlib import Path
+from typing import Any, TypeVar, cast
 
 
 _T = TypeVar("_T")
@@ -69,7 +68,12 @@ def _load_observe() -> Callable[..., Callable[[_T], _T]]:
 
 
 def _get_client() -> Any:
-    return _load_telegram_attr("telegram_bot.observability", "get_client")
+    # ``telegram_bot.observability.get_client`` is the Langfuse ``get_client``
+    # factory; it must be *called* to obtain the client instance that exposes
+    # ``update_current_span``. Returning the factory itself caused
+    # ``AttributeError: 'function' object has no attribute 'update_current_span'``
+    # whenever the runtime pipeline recorded a span (e.g. miniapp path).
+    return _load_telegram_attr("telegram_bot.observability", "get_client")()
 
 
 def _cache_policy_attr(name: str) -> Any:
