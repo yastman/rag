@@ -121,7 +121,7 @@ class TestRAGPipelineSpanMetadata:
 
     @pytest.fixture(scope="class")
     def rag_spans(self):
-        path = REPO_ROOT / "telegram_bot" / "agents" / "rag_pipeline.py"
+        path = REPO_ROOT / "src" / "runtime" / "pipeline" / "rag.py"
         return _collect_observe_decorators(path)
 
     def test_grade_documents_has_evaluator_type(self, rag_spans):
