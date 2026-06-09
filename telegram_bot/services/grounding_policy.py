@@ -18,6 +18,7 @@ from src.runtime.grounding.policy import (
     should_safe_fallback,
 )
 
+
 __all__ = [
     "STRICT_GROUNDING_CONFIDENCE_THRESHOLD",
     "STRICT_QUERY_TYPES",
