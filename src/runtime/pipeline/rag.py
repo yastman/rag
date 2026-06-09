@@ -18,13 +18,12 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import importlib.util
 import logging
 import time
 from collections.abc import Callable
-from typing import Any, TypeVar, cast
-
-import importlib.util
 from pathlib import Path
+from typing import Any, TypeVar, cast
 
 
 _T = TypeVar("_T")
@@ -121,7 +120,12 @@ def _new_query_preprocessor() -> Any:
 
 
 observe = _load_observe()
-get_client = _get_client
+
+
+def get_client() -> Any:
+    return _get_client()()
+
+
 SEMANTIC_CACHE_SCHEMA_VERSION = "v8"
 
 
