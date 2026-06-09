@@ -71,7 +71,7 @@ For a contributor picking up the next move:
 ## Cross-references
 
 * [ADR-0010 — voice path migration plan](../adr/0010-voice-path-create-agent-migration-plan.md) — the *why*.
-* [`tests/contract/test_voice_create_agent_migration_plan_contract.py`](../../tests/contract/test_voice_create_agent_migration_plan_contract.py) — pins ADR-0010 status + structure.
-* [`tests/contract/test_voice_migration_sequence_doc_contract.py`](../../tests/contract/test_voice_migration_sequence_doc_contract.py) — pins this document.
+* `tests/contract/test_voice_create_agent_migration_plan_contract.py` (removed in CORE-013) — pinned ADR-0010 status + structure.
+* `tests/contract/test_voice_migration_sequence_doc_contract.py` (removed in CORE-013) — pinned this document.
 * [`tests/contract/test_layering_no_telegram_bot_imports_contract.py`](../../tests/contract/test_layering_no_telegram_bot_imports_contract.py) — guards the `src/` ↔ `telegram_bot/` boundary that #2048 must respect when extracting lifecycle.
 * [#1265](https://github.com/yastman/rag/issues/1265) — bot.py decomposition track that #2048 piggy-backs on.
