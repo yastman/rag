@@ -17,6 +17,7 @@ MAKEFILE = REPO_ROOT / "Makefile"
 
 CORE_LIVE_TARGETS = ("e2e-core-live", "e2e-core-live-real-llm")
 CORE_TEST_PATH = "tests/e2e/test_core_live_ingest_answer.py"
+CORE_TEST_VARIABLE = "CORE_LIVE_TEST_PATH"
 OPTIONAL_SURFACE_TOKENS = (
     "e2e-telegram",
     "telegram",
@@ -52,12 +53,13 @@ def _target_body(text: str, target: str) -> str:
 
 def test_core_live_targets_exist_and_run_core_e2e_file() -> None:
     text = _makefile_text()
+    assert f"{CORE_TEST_VARIABLE} := {CORE_TEST_PATH}" in text
     for target in CORE_LIVE_TARGETS:
         body = _target_body(text, target)
-        assert CORE_TEST_PATH in body, (
-            f"{target} must run the protected core E2E file {CORE_TEST_PATH!r}"
+        assert "$(CORE_LIVE_PYTEST)" in body, (
+            f"{target} must run the shared protected core E2E command"
         )
-        assert "requires_services" in body, f"{target} must keep the live-service marker gate"
+        assert "requires_services" in text, f"{target} must keep the live-service marker gate"
 
 
 def test_core_live_targets_do_not_require_optional_surfaces() -> None:
@@ -86,3 +88,9 @@ def test_core_live_real_llm_target_is_explicit_opt_in() -> None:
     assert "LLM_MODEL" in body
     assert "LLM_API_KEY" in body
     assert "OPENAI_API_KEY" in body
+
+
+def test_core_live_targets_use_no_sync_pytest_command() -> None:
+    text = _makefile_text()
+
+    assert "CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH)" in text

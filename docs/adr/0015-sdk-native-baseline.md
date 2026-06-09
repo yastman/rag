@@ -24,7 +24,7 @@ The default for every new feature is **SDK-native first**. Custom implementation
 |---|---|---|
 | Bot handlers | `aiogram.Router` + `Dispatcher.include_router(...)` | `telegram_bot/bot.py`, `telegram_bot/handlers/` |
 | FSM dialogs | `aiogram_dialog.Dialog` with `Window`, `MessageInput`, `Select`, `Cancel`, `Column`, etc. | `telegram_bot/dialogs/*.py`, locked by `tests/unit/dialogs/test_dialogs_fsm_coverage.py` and per-dialog migration contracts (`test_demo_dialog_*`, `test_crm_quick_actions_fsm_migration_contract.py`) |
-| Agent (text path) | `langchain.agents.create_agent` v1 with `before_model` middleware | `telegram_bot/bot.py::_handle_query_supervisor`, `telegram_bot/agents/` |
+| Agent (Telegram conversational shell) | `langchain.agents.create_agent` v1 with `before_model` middleware for adapter/tool-loop behavior; the product-owned core text RAG path is procedural per [ADR-0019](0019-core-text-path-procedural-runtime.md) | `telegram_bot/bot.py::_handle_query_supervisor`, `telegram_bot/agents/`, `src.core.run_assistant_request()` |
 | Agent draft streaming | LangGraph `agent.astream(..., stream_mode=["messages", "values"])` plus direct Telegram `send_message_draft(...)`; no `DraftStreamer` abstraction | `telegram_bot/_bot_streaming.py::_stream_agent_to_draft`, `tests/unit/services/test_draft_streamer_removed.py`; follow-up PR #2112 pins the current contract |
 | History trimmer | `before_model` middleware | `telegram_bot/agents/` |
 | Observability — traces | Langfuse SDK + OTEL with graceful Python 3.14 degradation | `src/observability.py` (canonical), `telegram_bot/observability.py` (re-export shim) |

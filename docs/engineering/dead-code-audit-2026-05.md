@@ -53,7 +53,7 @@ the fourth is either "no" or "the tests test only this dead symbol".
 
 The legacy ingestion modules called out in the issue
 (`src/ingestion/docling_client.py`, `src/ingestion/service.py`) are already
-guarded by [`tests/contract/test_legacy_ingestion_removed_contract.py`](../../tests/contract/test_legacy_ingestion_removed_contract.py)
+guarded by `tests/contract/test_legacy_ingestion_removed_contract.py` (removed during the 2026-05 contract simplification)
 with documented `KNOWN_LIVE_CALLERS`, so they are intentionally retained
 until those callers migrate. No new action here; tracked under #1532.
 
@@ -84,4 +84,4 @@ the follow-up issue.
 - Methodology cross-link:
   [`docs/engineering/repo-hygiene-runbook.md`](repo-hygiene-runbook.md)
 - Contract test:
-  [`tests/contract/test_dead_code_audit_2026_05_contract.py`](../../tests/contract/test_dead_code_audit_2026_05_contract.py)
+  `tests/contract/test_dead_code_audit_2026_05_contract.py` (removed during the 2026-05 contract simplification)

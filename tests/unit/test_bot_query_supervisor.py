@@ -518,3 +518,128 @@ class TestQuerySupervisorSemanticCache:
         # Agent was invoked directly
         mock_agent_factory.assert_called_once()
         assert "I am doing well!" in result
+
+
+# ---------------------------------------------------------------------------
+# TestQuerySupervisorCoreEntrypoint
+# ---------------------------------------------------------------------------
+
+
+class TestQuerySupervisorCoreEntrypoint:
+    """Tests for the new assistant core entrypoint integration behind flag."""
+
+    async def test_core_entrypoint_called_and_agent_bypassed(self, monkeypatch):
+        """When ASSISTANT_CORE_ENTRYPOINT_ENABLED=True, invoke assistant core request and bypass legacy agent."""
+        monkeypatch.setenv("ASSISTANT_CORE_ENTRYPOINT_ENABLED", "True")
+
+        config = _make_config(content_filter_enabled=False)
+        bot = _create_bot(config)
+        message = _make_message("What is the cost of Sunny Beach studio?")
+
+        from src.core import AssistantResult
+
+        # Reusable mocks for the core call
+        mock_result = AssistantResult(
+            response_text="Sunny Beach studio is 110k EUR.",
+            route="rag_search",
+            request_type="GENERAL",
+            retrieved_doc_ids=["sb_studio"],
+            retrieved_sources=[{"title": "Sunny Beach Studio", "url": "fixture://sb_studio"}],
+            documents_count=1,
+            latency_ms=120.0,
+            cache_hit=False,
+            rerank_applied=True,
+        )
+
+        with (
+            patch("telegram_bot.bot.classify_query", return_value="GENERAL"),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.get_client") as mock_get_client,
+            patch("telegram_bot.bot.write_langfuse_scores"),
+            patch("telegram_bot.bot.score"),
+            patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ) as mock_run_core,
+            patch("telegram_bot.bot.maybe_store_semantic_response", new_callable=AsyncMock),
+        ):
+            mock_prop.return_value.__enter__ = MagicMock(return_value=None)
+            mock_prop.return_value.__exit__ = MagicMock(return_value=False)
+            mock_lf = MagicMock()
+            mock_lf.get_current_trace_id.return_value = "trace_core"
+            mock_get_client.return_value = mock_lf
+
+            bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._spawn_history_save = MagicMock(return_value=None)
+
+            result = await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            )
+
+        # 1. Assert result is response from core
+        assert result == "Sunny Beach studio is 110k EUR."
+        # 2. Assert run_core_text_request was called once
+        mock_run_core.assert_awaited_once()
+        # 3. Assert legacy agent was NOT created
+        mock_agent_factory.assert_not_called()
+        # 4. Assert answer was sent to message
+        message.answer.assert_awaited_once()
+
+    async def test_core_entrypoint_with_hitl_action(self, monkeypatch):
+        """When core returns a proposed CRM action, trigger HITL confirmation keyboard."""
+        monkeypatch.setenv("ASSISTANT_CORE_ENTRYPOINT_ENABLED", "True")
+
+        config = _make_config(content_filter_enabled=False)
+        bot = _create_bot(config)
+        message = _make_message("Book Sunny Beach studio")
+
+        from src.core import AssistantResult, CrmAction
+
+        # Reusable mocks for the core call
+        mock_result = AssistantResult(
+            response_text="Sure, proposing lead booking.",
+            route="rag_search",
+            request_type="GENERAL",
+            proposed_crm_action=CrmAction(
+                action_type="create_lead",
+                payload={"city": "Sunny Beach"},
+                summary="Propose Sunny Beach booking",
+            ),
+        )
+
+        with (
+            patch("telegram_bot.bot.classify_query", return_value="GENERAL"),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.get_client") as mock_get_client,
+            patch("telegram_bot.bot.write_langfuse_scores"),
+            patch("telegram_bot.bot.score"),
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+            patch.object(bot, "_send_hitl_confirmation", new_callable=AsyncMock) as mock_send_hitl,
+        ):
+            mock_prop.return_value.__enter__ = MagicMock(return_value=None)
+            mock_prop.return_value.__exit__ = MagicMock(return_value=False)
+            mock_lf = MagicMock()
+            mock_lf.get_current_trace_id.return_value = "trace_hitl"
+            mock_get_client.return_value = mock_lf
+
+            bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._spawn_history_save = MagicMock(return_value=None)
+
+            result = await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            )
+
+        # 1. Method should return None to caller to fall out of routing
+        assert result is None
+        # 2. Assert HITL confirmation was sent
+        mock_send_hitl.assert_awaited_once()
+        payload = mock_send_hitl.call_args[1]["payload"]
+        assert payload["action_type"] == "create_lead"
+        assert payload["preview"] == "Propose Sunny Beach booking"

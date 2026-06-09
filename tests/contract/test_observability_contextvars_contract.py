@@ -34,7 +34,7 @@ def _iter_python_files() -> list[Path]:
         if not directory.exists():
             continue
         for path in directory.rglob("*.py"):
-            path_str = str(path)
+            path_str = "/" + str(path.relative_to(REPO_ROOT))
             if any(fragment in path_str for fragment in EXCLUDE_DIRS):
                 continue
             files.append(path)

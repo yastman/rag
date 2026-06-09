@@ -227,6 +227,7 @@ docs/audits/
 docs/archive/
 
 # Build artifacts & test outputs
+.artifacts/
 test_output*.txt
 coverage.json
 .test_durations

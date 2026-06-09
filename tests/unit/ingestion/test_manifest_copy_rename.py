@@ -78,9 +78,7 @@ class TestCopyVsRenameDetection:
     # ------------------------------------------------------------------
     # RED test 3: delete one copy must not affect the other copy's file_id.
     # ------------------------------------------------------------------
-    def test_delete_one_copy_doesnt_affect_other(
-        self, manifest: GDriveManifest
-    ) -> None:
+    def test_delete_one_copy_doesnt_affect_other(self, manifest: GDriveManifest) -> None:
         """Two copies exist; deleting one must not disturb the other's file_id.
 
         After copy A and copy B each have their own distinct file_id, removing
@@ -99,16 +97,12 @@ class TestCopyVsRenameDetection:
 
         # B's identity must be unchanged
         id_b_after = manifest.get_or_create_id("root/copy_b.pdf", HASH)
-        assert id_b_after == id_b, (
-            "Deleting one copy must not change the other copy's file_id."
-        )
+        assert id_b_after == id_b, "Deleting one copy must not change the other copy's file_id."
 
     # ------------------------------------------------------------------
     # RED test 4: determinism — same path+hash always returns the same ID.
     # ------------------------------------------------------------------
-    def test_path_aware_file_id_is_deterministic(
-        self, manifest: GDriveManifest
-    ) -> None:
+    def test_path_aware_file_id_is_deterministic(self, manifest: GDriveManifest) -> None:
         """Calling get_or_create_id twice with the same path+hash returns the same ID."""
         HASH = "f0f0f0f0a1a1a1a1"
         PATH = "reports/q1.pdf"
@@ -116,18 +110,14 @@ class TestCopyVsRenameDetection:
         id1 = manifest.get_or_create_id(PATH, HASH)
         id2 = manifest.get_or_create_id(PATH, HASH)
 
-        assert id1 == id2, (
-            "get_or_create_id must be idempotent: same path+hash → same file_id."
-        )
+        assert id1 == id2, "get_or_create_id must be idempotent: same path+hash → same file_id."
 
     # ------------------------------------------------------------------
     # Bonus: after copy A is removed and the content re-appears at path C,
     # the surviving copy B's id is NOT reused — path C gets a fresh id.
     # (Because B is still active — path C is a new copy of B, not a rename.)
     # ------------------------------------------------------------------
-    def test_third_copy_after_first_deleted_gets_new_id(
-        self, manifest: GDriveManifest
-    ) -> None:
+    def test_third_copy_after_first_deleted_gets_new_id(self, manifest: GDriveManifest) -> None:
         """Adding a third path while one copy still exists is still a copy."""
         HASH = "112233440aabbccd"
 

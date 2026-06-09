@@ -207,3 +207,25 @@ def test_fake_llm_config_builds_grounded_answer_from_context() -> None:
 
     assert "Sunny Beach" in result.choices[0].message.content
     assert "110000" in result.choices[0].message.content
+
+
+def test_write_case_artifact_writes_lightweight_json(tmp_path) -> None:
+    from tests.e2e_core.live_harness import load_golden_case, write_case_artifact
+
+    case = load_golden_case("beach_studio_sea_under_120k")
+
+    with mock.patch.dict(os.environ, {"E2E_CORE_ARTIFACT_DIR": str(tmp_path)}, clear=True):
+        artifact_path = write_case_artifact(
+            case=case,
+            collection_name="test_collection",
+            response_text="Sunny Beach Studio costs 110000 EUR.",
+            retrieved_doc_ids=["sunny_beach_studio"],
+            route="rag_search",
+            error_type=None,
+        )
+
+    assert artifact_path == tmp_path / "beach_studio_sea_under_120k.json"
+    text = artifact_path.read_text(encoding="utf-8")
+    assert "test_collection" in text
+    assert "Sunny Beach Studio" in text
+    assert "sunny_beach_studio" in text
