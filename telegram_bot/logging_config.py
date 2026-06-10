@@ -35,18 +35,11 @@ class JSONFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
-        # Logs <-> Traces correlation (#2217 / Epic G).
-        # ``opentelemetry.instrumentation.logging.LoggingInstrumentor`` (activated
-        # in src/observability_otel.py per #2225) injects ``otelTraceID`` and
-        # ``otelSpanID`` into every LogRecord from the active OTEL context.
-        # Langfuse v4 SDK runs on top of OTEL, so these IDs match
-        # ``langfuse.get_current_trace_id()`` / ``get_current_observation_id()``
-        # — the same values that:
-        #   * land in Sentry events as ``langfuse_trace_id`` tag (#2218);
-        #   * carry ``traceparent`` across HTTP boundaries (#2225 + #2226).
+        # Preserve compatibility with log records that already carry trace
+        # identifiers. DEPS-OBS1 removes monolith OTEL auto-instrumentation,
+        # but optional listeners or tests may still attach these attributes.
         # The OTEL "no active trace" sentinel is the literal string ``"0"``
-        # — treat it as absence so Loki queries can use ``| trace_id != ""``
-        # without matching every line.
+        # — treat it as absence so Loki queries can use ``| trace_id != ""``.
         otel_trace_id = getattr(record, "otelTraceID", None)
         if otel_trace_id and otel_trace_id != "0":
             log_data["trace_id"] = otel_trace_id
