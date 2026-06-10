@@ -118,9 +118,9 @@ Langfuse project. The bot's prompt-management layer falls back to
 inline defaults, so query behavior is unaffected — this is expected
 "dev state" until the operator runs the prompt seed.
 
-Remediation: seed the prompts (see `scripts/setup_langfuse_dashboards.py`
-and the Langfuse SDK docs) or accept the fallback. The probe surfaces
-this category so prompt drift is not silently ignored.
+Remediation: seed the prompts (see the Langfuse SDK docs) or accept the
+fallback. The probe surfaces this category so prompt drift is not silently
+ignored.
 
 ### metrics_port_conflict
 

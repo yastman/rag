@@ -475,56 +475,6 @@ def find_transient_files() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Backward-compat helpers (kept so external callers/tests stay green)
-# ---------------------------------------------------------------------------
-
-
-def find_merged_branches() -> list[str]:
-    """Backward-compat: list of branch names eligible for safe deletion."""
-    fetch_remote_state()
-    current = _current_branch()
-    worktrees = collect_worktrees()
-    branches = classify_branches(
-        collect_branches(base=base_branch, current=current, worktrees=worktrees),
-        base=base_branch,
-    )
-    return [b.name for b in branches if b.category == "safe-to-delete"]
-
-
-def find_no_upstream_branches() -> list[str]:
-    """Backward-compat: branches without upstream tracking."""
-    raw = _run(
-        [
-            "git",
-            "for-each-ref",
-            "--format=%(refname:short) %(upstream)",
-            "refs/heads/",
-        ],
-        check=False,
-    )
-    if not raw:
-        return []
-    out: list[str] = []
-    for line in raw.splitlines():
-        parts = line.split(maxsplit=1)
-        branch = parts[0]
-        upstream = parts[1] if len(parts) > 1 else ""
-        if not upstream:
-            out.append(branch)
-    return out
-
-
-def find_stale_worktrees() -> list[dict[str, str]]:
-    """Backward-compat: dicts of ``{path, reason}`` for any non-safe worktree."""
-    worktrees = collect_worktrees()
-    out: list[dict[str, str]] = []
-    for wt in worktrees:
-        if wt.category != "safe":
-            out.append({"path": wt.path, "reason": ", ".join(wt.reasons) or "unknown"})
-    return out
-
-
-# ---------------------------------------------------------------------------
 # Report assembly
 # ---------------------------------------------------------------------------
 
@@ -620,18 +570,6 @@ def fix_safe_branches(
         elif not quiet:
             print(f"  FAILED to delete {branch.name}: {result.stderr.strip()}")
     return deleted
-
-
-# Backward-compat shim: existing tests/code may call ``fix_merged_branches``.
-def fix_merged_branches(
-    branches: list[str], *, dry_run: bool = False, quiet: bool = False
-) -> list[str]:
-    """Backward-compatible shim accepting plain branch names."""
-    return fix_safe_branches(
-        [BranchInfo(name=b, category="safe-to-delete") for b in branches],
-        dry_run=dry_run,
-        quiet=quiet,
-    )
 
 
 # ---------------------------------------------------------------------------

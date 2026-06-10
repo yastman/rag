@@ -60,11 +60,6 @@ ROLLING_WINDOW_ALLOWLIST: frozenset[str] = frozenset(
         # latencies recorded during a benchmark run, then emits a
         # Prometheus text-format dump. Not a runtime path.
         "src/evaluation/metrics_logger.py",
-        # Reporting scripts: format Langfuse / trace dashboard payloads.
-        # They consume p50/p95 columns rather than producing rolling
-        # quantiles in the live request path.
-        "scripts/setup_langfuse_dashboards.py",
-        "scripts/validate_traces.py",
     }
 )
 

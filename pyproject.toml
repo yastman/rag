@@ -97,10 +97,10 @@ voice = [
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
 ]
 
-# Docling service (standalone docling-serve image)
-docling = [
-    "docling-serve[ui]>=1.0.0",
-]
+# Docling service dependencies live in services/docling because the root
+# project talks to docling-serve over HTTP. Keeping this root extra empty avoids
+# pulling KFP/Kubernetes service-only packages into the application lockfile.
+docling = []
 
 # Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
 ingest = [

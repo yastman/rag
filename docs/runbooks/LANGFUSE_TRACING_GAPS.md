@@ -2,7 +2,7 @@
 
 - **Owner:** Observability / On-call
 - **Last verified:** 2026-05-12
-- **Verification command:** `make validate-traces-fast`
+- **Verification command:** make e2e-core-live
 
 Use this runbook when traces are missing from Langfuse or observability is broken.
 
@@ -10,7 +10,7 @@ Use this runbook when traces are missing from Langfuse or observability is broke
 
 - Queries not appearing in Langfuse UI
 - Incomplete traces (missing spans)
-- `make validate-traces-fast` failing
+- make e2e-core-live failing
 - Missing scores in Langfuse
 - Traces show `LLM failed: Connection error` despite healthy Langfuse ingestion
 - Repeated traceback spam with `HTTPConnectionPool(host='localhost', port=3001)` when running bot natively and local Langfuse is down
@@ -198,7 +198,7 @@ print(f"Current trace: {lf.get_current_trace_id()}")
 ### 6. Run Trace Validation
 
 ```bash
-make validate-traces-fast
+make e2e-core-live
 ```
 
 This checks required direct families plus Telegram nested-family/root-context contract. Validation should focus on missing or outdated:
@@ -244,19 +244,13 @@ The audit intentionally never prints raw Telegram payloads, trace input/output v
    ```
 3. Restart bot
 
-### Prisma `P1000 Authentication failed against database server` During `make validate-traces-fast`
+### Legacy Prisma `P1000` During Removed Trace Diagnostics
 
-**Cause:** `validate-traces-fast` fell back to `tests/fixtures/compose.ci.env` (no `.env` present), while an existing local Postgres volume (`dev_postgres_data`) was initialized with a password that does not match the fallback `POSTGRES_PASSWORD`.
+The old Langfuse trace Makefile diagnostics included a Postgres auth preflight for stale local `dev_postgres_data` volumes. Those diagnostics were removed in DEPS-14; if a local Postgres auth loop appears while running current checks, recreate the local `.env` with the volume password or reset the stale volume:
 
-**Fix:**
-1. Create/update `.env` with the `POSTGRES_PASSWORD` used when the volume was initialized.
-2. Or delete the stale local volume and let Compose reinitialize it:
-   ```bash
-   docker volume rm dev_postgres_data
-   ```
-3. Re-run `make validate-traces-fast`.
-
-`validate-traces-fast` includes a preflight guard that allows the known-safe fallback (`POSTGRES_PASSWORD=postgres`) with existing `dev_postgres_data`, and fails early when fallback password and existing volume credentials can mismatch.
+```bash
+docker volume rm dev_postgres_data
+```
 
 ### Trace Family Missing
 
@@ -357,7 +351,7 @@ docker compose restart bot
 
 ## Prevention
 
-- Regular `make validate-traces-fast` runs
+- Regular make e2e-core-live runs
 - Monitor Langfuse ingestion rate
 - Alert on trace family gaps
 - Distinguish proxy-generated `litellm-acompletion` traces from app-instrumented `telegram-message` traces when triaging gaps

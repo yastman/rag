@@ -52,7 +52,6 @@ Run these selectively, not on every save.
 | Eval | `tests/eval/` | RAG quality (faithfulness, relevance) | Minutes |
 | Baseline | `tests/baseline/` | Observability metric regressions | Minutes |
 | Benchmark | `tests/benchmark/` | Parser/reranker throughput comparisons | Varies |
-| Observability | `tests/observability/` | Trace collector/manager infrastructure | Varies |
 | Chaos | `tests/chaos/` | Degraded-service behavior and fallbacks | Minutes |
 | Load | `tests/load/` | Concurrent throughput and cache eviction | Minutes |
 | E2E | `tests/e2e/` | Full-stack pipeline and Telegram flows | Slow |

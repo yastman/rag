@@ -326,7 +326,7 @@ addresses, private customer/domain records, personal recordings, or unlicensed i
   mini app, voice, and ingestion runtime parity with Compose.
 - Treat Loki/Alertmanager as local/dev monitoring unless production VPS
   evidence is added.
-- Add CI or release-gate wiring for `validate_traces.py` and RAGAS evaluation
+- Add CI or release-gate wiring for RAGAS evaluation and product-log review
   instead of keeping them as mostly manual quality tools.
 - Add a prompt-version A/B harness using Langfuse labels and dataset
   experiments.
