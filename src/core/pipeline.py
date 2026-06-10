@@ -4,8 +4,6 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from langfuse import observe
-
 from src.config import APIProvider, Settings
 from src.contextualization import (
     ClaudeContextualizer,
@@ -14,6 +12,7 @@ from src.contextualization import (
 )
 from src.ingestion import DocumentChunker, DocumentIndexer, UniversalDocumentParser
 from src.models import get_sentence_transformer
+from src.observability import observe
 from src.retrieval import create_search_engine
 
 
@@ -118,7 +117,7 @@ class RAGPipeline:
             #
             # ``self.search_engine.search`` is ``@observe``-decorated.
             # ``asyncio.to_thread`` preserves the current contextvars.Context,
-            # keeping the worker span nested under the active Langfuse parent
+            # keeping the worker span nested under the active observability parent
             # instead of emitting a top-level orphan trace (#2167).
             search_results = await asyncio.to_thread(
                 self.search_engine.search,
@@ -131,7 +130,7 @@ class RAGPipeline:
             #
             # Both inner calls (``_encode_query`` and ``search_engine.search``)
             # are ``@observe``-decorated, so both thread hops use
-            # ``asyncio.to_thread`` to preserve the active Langfuse context.
+            # ``asyncio.to_thread`` to preserve the active observability context.
             query_embedding = await asyncio.to_thread(self._encode_query, query)
 
             # Step 2: Search using configured search engine (async)

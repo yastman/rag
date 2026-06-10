@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from langfuse.openai import AsyncOpenAI
-
+from src.runtime.llm import create_litellm_chat_client
 from telegram_bot.observability import observe
 
 
@@ -28,7 +28,7 @@ _SYSTEM_PROMPT = """\
 async def generate_handoff_summary(
     history: list[dict[str, str]],
     *,
-    llm: AsyncOpenAI | None = None,
+    llm: Any | None = None,
     model: str = "gpt-4o-mini",
     min_messages: int = 3,
 ) -> str | None:
@@ -43,12 +43,7 @@ async def generate_handoff_summary(
     ]
     try:
         if llm is None:
-            import os
-
-            llm = AsyncOpenAI(
-                api_key=os.getenv("LLM_API_KEY", "sk-dev"),
-                base_url=os.getenv("LLM_BASE_URL", "http://litellm:4000/v1"),
-            )
+            llm = create_litellm_chat_client(model=model)
         resp = await llm.chat.completions.create(
             model=model,
             messages=messages,  # type: ignore[arg-type]
