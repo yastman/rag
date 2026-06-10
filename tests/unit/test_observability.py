@@ -401,10 +401,6 @@ class TestLangfuseInitThreadSafety:
             patch("src.observability.Langfuse", side_effect=_slow_factory),
             patch("src.observability.sync_langfuse_model_definitions", return_value=0),
             patch("src.observability.atexit") as mock_atexit,
-            patch(
-                "src.observability_otel.activate_otel_instrumentations",
-                lambda: None,
-            ),
         ):
             threads = [threading.Thread(target=_worker) for _ in range(n_threads)]
             for t in threads:
@@ -734,7 +730,7 @@ class TestObservabilityBootstrap:
 
 
 class TestDisableOtelExporter:
-    """Tests for _disable_otel_exporter() shutdown logic."""
+    """Tests for _disable_otel_exporter() env-only shutdown logic."""
 
     def test_sets_otel_sdk_disabled_env_var(self, monkeypatch):
         """_disable_otel_exporter explicitly disables OTel SDK export path."""
@@ -743,68 +739,26 @@ class TestDisableOtelExporter:
         from src.observability import _disable_otel_exporter
 
         monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
-        with patch("opentelemetry.trace.get_tracer_provider", return_value=MagicMock()):
-            _disable_otel_exporter()
+        _disable_otel_exporter()
 
         assert os.environ.get("OTEL_SDK_DISABLED") == "true"
 
-    def test_calls_shutdown_on_sdk_tracer_provider(self):
-        """_disable_otel_exporter calls shutdown() when provider is SdkTracerProvider."""
-        from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
+    def test_shutdown_flag_does_not_import_otel(self, monkeypatch):
+        """DEPS-OBS1 keeps OTel packages out of the monolith core path."""
+        import builtins
 
         from src.observability import _disable_otel_exporter
 
-        real_provider = SdkTracerProvider()
-        real_provider.shutdown = MagicMock()  # type: ignore[method-assign]
+        real_import = builtins.__import__
 
-        with (
-            patch("opentelemetry.trace.get_tracer_provider", return_value=real_provider),
-            patch("opentelemetry.trace.set_tracer_provider"),
-        ):
-            _disable_otel_exporter()
+        def _guarded_import(name, *args, **kwargs):
+            if name.startswith("opentelemetry"):
+                raise AssertionError(f"unexpected OTel import: {name}")
+            return real_import(name, *args, **kwargs)
 
-        real_provider.shutdown.assert_called_once()
+        monkeypatch.setattr(builtins, "__import__", _guarded_import)
+        _disable_otel_exporter(shutdown=True)
 
-    def test_does_not_replace_provider_with_noop(self):
-        """_disable_otel_exporter keeps SDK provider in place (Langfuse v3 needs add_span_processor)."""
-        from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
-
-        from src.observability import _disable_otel_exporter
-
-        real_provider = SdkTracerProvider()
-        real_provider.shutdown = MagicMock()  # type: ignore[method-assign]
-
-        with (
-            patch("opentelemetry.trace.get_tracer_provider", return_value=real_provider),
-            patch("opentelemetry.trace.set_tracer_provider") as mock_set,
-        ):
-            _disable_otel_exporter()
-
-        mock_set.assert_not_called()
-        real_provider.shutdown.assert_called_once()
-
-    def test_handles_import_error_gracefully(self, monkeypatch):
-        """_disable_otel_exporter silently passes when opentelemetry is not installed."""
-        import sys
-
-        from src.observability import _disable_otel_exporter
-
-        monkeypatch.setitem(sys.modules, "opentelemetry", None)
-
-        # Should not raise
-        _disable_otel_exporter()
-
-    def test_no_shutdown_when_provider_is_not_sdk(self):
-        """_disable_otel_exporter does not call shutdown() on non-SdkTracerProvider."""
-        from opentelemetry.trace import NoOpTracerProvider
-
-        from src.observability import _disable_otel_exporter
-
-        noop_provider = NoOpTracerProvider()
-
-        with patch("opentelemetry.trace.get_tracer_provider", return_value=noop_provider):
-            # NoOpTracerProvider has no shutdown() — should complete without error
-            _disable_otel_exporter()
 
 
 class TestInitializeLangfuseCallsDisableOtel:

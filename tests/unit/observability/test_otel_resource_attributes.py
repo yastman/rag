@@ -183,7 +183,6 @@ class TestInitializeLangfusePassesRelease:
         with (
             patch.object(observability, "Langfuse", side_effect=_fake_langfuse),
             patch.object(observability, "sync_langfuse_model_definitions", return_value=0),
-            patch("src.observability_otel.activate_otel_instrumentations"),
         ):
             observability.initialize_langfuse(force=True)
 
@@ -202,7 +201,6 @@ class TestInitializeLangfusePassesRelease:
         with (
             patch.object(observability, "Langfuse", return_value=MagicMock()),
             patch.object(observability, "sync_langfuse_model_definitions", return_value=0),
-            patch("src.observability_otel.activate_otel_instrumentations"),
         ):
             observability.initialize_langfuse(force=True)
 

@@ -16,7 +16,6 @@ from typing import Any, cast
 
 import httpx
 from dotenv import load_dotenv
-from opentelemetry import trace
 
 from src.observability import get_client, initialize_langfuse, observe, propagate_attributes
 from src.observability_sentry import initialize_sentry, set_runtime_tags
@@ -286,21 +285,7 @@ def _setup_langfuse() -> None:
             exc_info=True,
         )
 
-    provider = trace.get_tracer_provider()
-
-    try:
-        from livekit.agents.telemetry import set_tracer_provider
-    except ImportError:
-        # Older LiveKit versions or partial installs: spans still flow via the
-        # global provider that initialize_langfuse() registered.
-        logger.debug("livekit.agents.telemetry unavailable; relying on global provider")
-        return
-
-    try:
-        set_tracer_provider(provider)
-        logger.info("Langfuse OTEL tracing configured (LiveKit telemetry wired)")
-    except Exception:
-        logger.exception("Failed to wire LiveKit telemetry to Langfuse provider")
+    logger.info("Langfuse initialized for voice-agent; OTEL auto-wiring is disabled")
 
 
 class VoiceBot(Agent):
@@ -425,8 +410,8 @@ async def entrypoint(ctx: agents.JobContext):
     propagated via ``langfuse_trace_id``) nest correctly into a single
     Langfuse trace tree per LiveKit call. Without this outer context the
     inner @observe spans would either become orphaned top-level traces or
-    materialize against a different OTEL provider than the SDK singleton,
-    which is the failure mode reported in #2160.
+    materialize outside the active Langfuse SDK context, which is the failure
+    mode reported in #2160.
     """
     if _LIVEKIT_IMPORT_ERROR is not None:
         raise RuntimeError(
