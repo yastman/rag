@@ -64,9 +64,10 @@ path is the existing Langfuse OTel ingestion).
 ## Follow-up implementation issue
 
 Because SDK-native support exists, the behavioural change is tracked separately:
-prove voice -> RAG same-trace continuity at runtime (via `make
-validate-traces-fast` + the #2252 continuity check), then deprecate the manual
-`langfuse_trace_id` payload/metadata path. See the issue linked from #2257.
+prove voice -> RAG same-trace continuity at runtime with core E2E plus
+JSON/product-log review (`make e2e-core-live`) and the #2252 continuity check,
+then deprecate the manual `langfuse_trace_id` payload/metadata path. See the
+issue linked from #2257.
 
 ## References
 

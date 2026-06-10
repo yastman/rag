@@ -8,7 +8,7 @@ Operator entrypoint for container/service investigations and incident response. 
 |---|---|
 | Remote Docker workflow (SSH, Colima, env sync, bot container) | See Docker runbook below |
 | Native Git/GitHub hygiene | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
-| Recent Langfuse traces (Russian: "изучи последние трейсы") | `make validate-traces-fast` → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
+| Recent Langfuse traces (Russian: "изучи последние трейсы") | core E2E plus JSON/product-log review (`make e2e-core-live`) → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
 | Langfuse worker queue timeouts / LiteLLM auth noise / prompt misses | `uv run python -m scripts.probe.observability_diagnostic` → [`OBSERVABILITY_DIAGNOSTIC.md`](OBSERVABILITY_DIAGNOSTIC.md) |
 | Qdrant health / query / index issues (Russian: "изучи последние qdrant запросы") | `curl -fsS http://localhost:6333/readyz` → [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Redis / cache degradation (Russian: "сломался redis") | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |

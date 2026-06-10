@@ -19,6 +19,8 @@ OPTIONAL_TRACE_TARGETS = (
     "e2e-test-traces",
     "e2e-test-traces-core",
     "langfuse-latest-trace-audit",
+)
+OBSOLETE_TRACE_TARGETS = (
     "validate-traces",
     "validate-traces-fast",
     "validate-voice-traces",
@@ -26,9 +28,6 @@ OPTIONAL_TRACE_TARGETS = (
 )
 REQUIRED_WORDS = ("required", "must", "gate")
 TRACE_GATE_TOKENS = (
-    "validate-traces",
-    "validate-traces-fast",
-    "validate-voice-traces",
     "e2e-test-traces",
     "E2E_VALIDATE_LANGFUSE",
 )
@@ -53,6 +52,16 @@ def _target_body(text: str, target: str) -> str:
             break
         body_lines.append(line)
     return "\n".join(body_lines)
+
+
+
+def test_obsolete_trace_targets_are_removed() -> None:
+    text = _makefile_text()
+
+    for target in OBSOLETE_TRACE_TARGETS:
+        assert not re.search(rf"^{re.escape(target)}:", text, re.MULTILINE), (
+            f"{target} should not remain as a Makefile target"
+        )
 
 
 def test_trace_targets_are_named_optional_diagnostics() -> None:

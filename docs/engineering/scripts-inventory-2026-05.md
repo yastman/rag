@@ -59,9 +59,9 @@ formal CODEOWNERS assignment.
 | `setup_ingestion_collection.py` | `Makefile` (qdrant-ensure) | ingestion |
 | `validate_done_json.py` | `.pre-commit-config.yaml` (DONE JSON schema check) | governance |
 | `validate_queries.py` | imported by `scripts/validate_traces.py` + 14 tests | observability |
-| `validate_traces.py` | `Makefile` (validate-traces, validate-traces-fast) | observability |
-| `validate_trace_runtime.py` | `Makefile` (validate-trace-runtime) | observability |
-| `validate_voice_traces.py` | `Makefile` (validate-voice-traces) | observability |
+| `validate_traces.py` | no Makefile target after DEPS-14; pending observability script cleanup | observability |
+| `validate_trace_runtime.py` | no Makefile target after DEPS-14; pending observability script cleanup | observability |
+| `validate_voice_traces.py` | no Makefile target after DEPS-14; pending observability script cleanup | observability |
 
 ### `keep` — operationally important manual tools
 

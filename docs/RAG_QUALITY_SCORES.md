@@ -135,7 +135,7 @@ Written via `write_crm_scores()` when CRM tools are invoked:
 
 ## Validation
 
-Required trace families validated by `make validate-traces-fast`:
+Required trace families validated by core E2E plus JSON/product-log review (`make e2e-core-live`):
 - `rag-api-query`
 - `voice-session`
 - `ingestion-cli-run`
