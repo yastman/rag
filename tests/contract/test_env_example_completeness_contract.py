@@ -210,6 +210,7 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
 ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     # --- Docker Compose top-level controls ----------------------------------
     "COMPOSE_FILE": "Read by docker compose CLI, not Python",
+    "COMPOSE_PROJECT_NAME": "Read by docker compose CLI/project naming, not Python",
     "BGE_M3_ONNX_MODEL_HOST_DIR": "Consumed by Compose named-context interpolation (compose.yml) at build time; not read by Python",
     "MINIO_API_PORT": "Consumed by compose.dev.yml host-port interpolation for the MinIO API; not read by Python",
     "MINIO_CONSOLE_PORT": "Consumed by compose.dev.yml host-port interpolation for the MinIO console; not read by Python",
@@ -224,6 +225,7 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "SALT": "Read by Langfuse server image",
     "ENCRYPTION_KEY": "Read by Langfuse server image",
     "LANGFUSE_DOCKER_HOST": "Container-network alias for langfuse; consumed by compose env_file",
+    "LANGFUSE_BASE_URL": "Legacy/operator alias documented for Langfuse tooling; not read by simplified Python runtime",
     "LANGFUSE_REDIS_PASSWORD": (
         "Read by redis-langfuse / langfuse / langfuse-worker compose services "
         "(REDIS_AUTH + redis-server --requirepass); not consumed by any Python code"
@@ -233,7 +235,12 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
         "Read by OpenTelemetry SDK from Compose service env; documented in "
         ".env.example as an operator override for tracecontext+baggage"
     ),
+    # --- Telegram alerting / metrics ops vars ------------------------------
+    "TELEGRAM_ALERTING_BOT_TOKEN": "Consumed by alerting/Loki operational setup, not Python runtime",
+    "TELEGRAM_ALERTING_CHAT_ID": "Consumed by alerting/Loki operational setup, not Python runtime",
+    "TELEGRAM_BOT_METRICS_ENABLED": "Legacy metrics toggle kept for operator docs; metrics server was retired",
     # --- Misc ops vars -----------------------------------------------------
+    "LOG_CORRELATION_SOURCE": "Operator-provided log dump path for manual correlation checks; no Python runtime reader",
     "MLFLOW_TRACKING_URI": "Read by mlflow CLI tooling, not the bot",
 }
 

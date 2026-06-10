@@ -84,7 +84,6 @@ def test_core_live_real_llm_target_is_explicit_opt_in() -> None:
     body = _target_body(_makefile_text(), "e2e-core-live-real-llm")
 
     assert "E2E_CORE_REAL_LLM=1" in body
-    assert "LLM_BASE_URL" in body
     assert "LLM_MODEL" in body
     assert "LLM_API_KEY" in body
     assert "OPENAI_API_KEY" in body

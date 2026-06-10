@@ -469,7 +469,7 @@ class TestCheckSingleDep:
         result = await _check_single_dep("bge_m3", config, client)
         assert result is True
 
-    async def test_litellm_proxy_is_not_a_preflight_dependency(self):
+    def test_litellm_proxy_is_not_a_preflight_dependency(self):
         assert "litellm" not in DEP_CLASSIFICATION
 
     async def test_langfuse_uses_get_langfuse_client(self):
