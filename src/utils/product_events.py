@@ -65,6 +65,10 @@ _PRODUCT_FIELDS: frozenset[str] = frozenset(
         "llm_model",
         "input_tokens",
         "output_tokens",
+        "metric_name",
+        "metric_value",
+        "stage",
+        "count",
     }
 )
 

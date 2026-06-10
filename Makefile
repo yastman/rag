@@ -11,6 +11,7 @@
 	test-contract \
 	preflight-bot \
 	preflight-qdrant \
+	release-polling-lock \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
 	remote-active-up remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
@@ -19,6 +20,8 @@
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev_redis_1
+POLLING_LOCK_KEY ?= telegram-bot:polling
+RELEASE_POLLING_LOCK_FORCE ?= 0
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
 K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
@@ -395,7 +398,7 @@ BOT_RESPONSE_SMOKE_FLAGS ?=
 preflight-qdrant: ## Fail fast when localhost:6333 is unreachable (run before preflight-bot and bot)
 	@if ! timeout 1 bash -c 'echo >/dev/tcp/localhost/6333' 2>/dev/null; then \
 		echo "$(RED)✗ Qdrant is not reachable on localhost:6333$(NC)" >&2; \
-		echo "$(YELLOW)Run 'make local-up' to start required local services (redis, qdrant, bge-m3, litellm)$(NC)" >&2; \
+		echo "$(YELLOW)Run 'make local-up' to start required local services (redis, qdrant, bge-m3)$(NC)" >&2; \
 		exit 1; \
 	fi
 	@echo "$(GREEN)✓ Qdrant reachable$(NC)"
@@ -423,8 +426,6 @@ test-bot-health-vps: ## Preflight: verify Qdrant + LLM from inside Docker networ
 	print(f'  Qdrant collections: {names}'); \
 	assert 'gdrive_documents_bge' in names, 'gdrive_documents_bge not found'; \
 	print('  ✓ Qdrant OK'); \
-	urllib.request.urlopen('http://litellm:4000/health/liveliness', timeout=10); \
-	print('  ✓ LiteLLM OK'); \
 	"
 	@echo "$(GREEN)✓ VPS bot health preflight passed$(NC)"
 
@@ -488,8 +489,8 @@ REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
-REMOTE_ACTIVE_SERVICES := mini-app-frontend mini-app-api bge-m3 litellm redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
-REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base litellm bot
+REMOTE_ACTIVE_SERVICES := mini-app-frontend mini-app-api bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
+REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base bot
 
 remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
 	@echo "$(BLUE)Remote Docker status ($(REMOTE_DOCKER_HOST))...$(NC)"
@@ -525,7 +526,6 @@ remote-env-check: ## Verify remote .env exists and report missing required varia
 		if [ ! -f .env ]; then echo 'Error: remote .env not found'; exit 1; fi; \
 		missing=''; \
 		if ! grep -qE '^TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN] .env; then missing=\"$$missing TELEGRAM_BOT_TOKEN\"; fi; \
-		if ! grep -qE '^LITELLM_MASTER_KEY=' .env; then missing=\"$$missing LITELLM_MASTER_KEY\"; fi; \
 		if ! grep -qE '^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)=' .env; then missing=\"$$missing (CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)\"; fi; \
 		if ! grep -qE '^NEXTAUTH_SECRET=' .env; then missing=\"$$missing NEXTAUTH_SECRET\"; fi; \
 		if ! grep -qE '^SALT=' .env; then missing=\"$$missing SALT\"; fi; \
@@ -592,7 +592,7 @@ remote-local-logs: ## Show recent remote MacBook compose logs
 remote-core-health: ## Check minimal RAG bot core health on remote MacBook Docker
 	@echo "$(BLUE)Remote core health ($(REMOTE_DOCKER_HOST))...$(NC)"
 	@fail=0; \
-	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('litellm',4000),('postgres',5432),('redis',6379),('user-base',8000)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
+	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('postgres',5432),('redis',6379),('user-base',8000)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
 	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(RED)container not found$(NC)"; fail=1; fi; \
 	exit $$fail
@@ -603,7 +603,6 @@ remote-core-env-check: ## Verify core-only required variables in remote .env
 		if [ ! -f .env ]; then echo 'Error: remote .env not found'; exit 1; fi; \
 		missing=''; \
 		if ! grep -qE '^TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN] .env; then missing=\"$$missing TELEGRAM_BOT_TOKEN\"; fi; \
-		if ! grep -qE '^LITELLM_MASTER_KEY=' .env; then missing=\"$$missing LITELLM_MASTER_KEY\"; fi; \
 		if ! grep -qE '^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)=' .env; then missing=\"$$missing (CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)\"; fi; \
 		if [ -n \"$$missing\" ]; then \
 			echo \"Missing variables:$$missing\"; \
@@ -631,7 +630,7 @@ docker-core-up: ## Start default local compose stack (unprofiled services)
 	$(LOCAL_COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
-docker-bot-up: preflight-bot ## Start core + bot services (litellm, bot)
+docker-bot-up: preflight-bot ## Start core + bot services (bot)
 	@echo "$(BLUE)Starting bot services...$(NC)"
 	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
@@ -752,8 +751,10 @@ qa: all-checks test ## Full quality assurance
 # Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 # =============================================================================
 
-.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate run-bot bot
+
+.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate release-polling-lock run-bot bot
 LOCAL_SERVICES := postgres redis qdrant bge-m3 litellm
+
 LOCAL_INGEST_SERVICES := docling
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
 
@@ -764,6 +765,51 @@ local-up:  ## Start local Docker services (bot runs via make run-bot)
 local-up-ingest:  ## Start local services + docling for ingestion workflows
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_ALL_SERVICES)
 	@echo "$(GREEN)✓ Local services + docling started$(NC)"
+
+release-polling-lock:  ## Delete the local Redis Telegram polling lock after confirming no bot is alive
+	@$(ENV_LOAD) \
+	container="$${REDIS_CONTAINER:-$(REDIS_CONTAINER)}"; \
+	key="$${POLLING_LOCK_KEY:-$(POLLING_LOCK_KEY)}"; \
+	force="$${RELEASE_POLLING_LOCK_FORCE:-$(RELEASE_POLLING_LOCK_FORCE)}"; \
+	if [ "$$force" != "1" ] && [ "$$force" != "true" ]; then \
+		running_bot_containers="$$(docker ps --filter name=bot --format '{{.Names}}' | tr '\n' ' ')"; \
+		if [ -n "$$running_bot_containers" ]; then \
+			echo "$(RED)Refusing to release polling lock while bot container(s) are running: $$running_bot_containers$(NC)"; \
+			echo "$(YELLOW)Stop the bot first, or set RELEASE_POLLING_LOCK_FORCE=1 for an emergency override.$(NC)"; \
+			exit 1; \
+		fi; \
+		native_bot_pids="$$(if command -v pgrep >/dev/null 2>&1; then pgrep -f 'python.*-m telegram_bot[.]main' || true; fi)"; \
+		if [ -n "$$native_bot_pids" ]; then \
+			echo "$(RED)Refusing to release polling lock while native bot process(es) are running: $$native_bot_pids$(NC)"; \
+			echo "$(YELLOW)Stop make run-bot first, or set RELEASE_POLLING_LOCK_FORCE=1 for an emergency override.$(NC)"; \
+			exit 1; \
+		fi; \
+	fi; \
+	if ! docker inspect "$$container" >/dev/null 2>&1; then \
+		container="$$(docker ps --filter name=redis -q | head -1)"; \
+	fi; \
+	if [ -z "$$container" ]; then \
+		echo "$(RED)No Redis container found. Start services with 'make local-up' first.$(NC)"; \
+		exit 1; \
+	fi; \
+	redis_exec() { \
+		if [ -n "$${REDIS_PASSWORD:-}" ]; then \
+			docker exec -e REDISCLI_AUTH="$$REDIS_PASSWORD" "$$container" redis-cli "$$@"; \
+		else \
+			docker exec "$$container" redis-cli "$$@"; \
+		fi; \
+	}; \
+	owner="$$(redis_exec GET "$$key")"; \
+	pttl="$$(redis_exec PTTL "$$key")"; \
+	if [ -z "$$owner" ]; then \
+		echo "$(GREEN)Polling lock '$$key' is already free in Redis container '$$container'.$(NC)"; \
+		exit 0; \
+	fi; \
+	echo "$(YELLOW)Deleting polling lock '$$key' from Redis container '$$container'.$(NC)"; \
+	echo "$(YELLOW)Owner: $$owner$(NC)"; \
+	echo "$(YELLOW)PTTL ms: $$pttl$(NC)"; \
+	redis_exec DEL "$$key" >/dev/null; \
+	echo "$(GREEN)✓ Polling lock released. Run 'make run-bot' again.$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
 	$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
@@ -861,7 +907,7 @@ deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scri
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup langfuse-latest-trace-audit trace-audit-snapshot
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -892,7 +938,6 @@ e2e-core-live-real-llm: ## Run simplification core live golden path with real LL
 	@echo "$(BLUE)Running simplification core live E2E with real LLM...$(NC)"
 	@$(ENV_LOAD) \
 	missing=""; \
-	if [ -z "$$LLM_BASE_URL" ]; then missing="$$missing LLM_BASE_URL"; fi; \
 	if [ -z "$$LLM_MODEL" ]; then missing="$$missing LLM_MODEL"; fi; \
 	if [ -z "$$LLM_API_KEY$$OPENAI_API_KEY" ]; then missing="$$missing (LLM_API_KEY|OPENAI_API_KEY)"; fi; \
 	if [ -n "$$missing" ]; then \
@@ -923,16 +968,6 @@ e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=fil
 e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
-
-langfuse-latest-trace-audit: ## Optional diagnostic: sanitized post-E2E Langfuse latest-trace audit
-	@echo "$(BLUE)Running sanitized latest-trace audit...$(NC)"
-	uv run python scripts/e2e/langfuse_latest_trace_audit.py --limit 20
-	@echo "$(GREEN)✓ Latest-trace audit complete$(NC)"
-
-trace-audit-snapshot: ## One-command runtime trace-data audit -> docs/engineering/<date>-trace-audit-snapshot.md (#2221)
-	@echo "$(BLUE)Running trace-data audit snapshot...$(NC)"
-	uv run python -m scripts.audit.trace_audit_snapshot
-	@echo "$(GREEN)✓ Trace-audit snapshot written$(NC)"
 
 # =============================================================================
 # BASELINE & OBSERVABILITY
@@ -1238,53 +1273,6 @@ qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
 	@echo "  • Monitor volume size: docker system df -v | grep qdrant"
 	@echo "$(GREEN)✓ Qdrant cleanup complete$(NC)"
 
-# =============================================================================
-# TRACE VALIDATION (#110)
-# =============================================================================
-
-.PHONY: validate-traces validate-traces-fast validate-voice-traces langfuse-latency-audit
-
-# Local host defaults for native trace validation (issue #1380).
-# Callers can override per-variable: make validate-traces-fast QDRANT_URL=http://custom:6333 REDIS_URL=redis://:x@custom:6379
-LANGFUSE_DEV_KEY_DASH ?= -
-TRACE_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)
-
-validate-traces: ## Optional diagnostic: full rebuild + trace validation + report
-	@echo "$(BLUE)Optional full rebuild + trace validation...$(NC)"
-	$(LOCAL_COMPOSE_CMD) build --no-cache bot litellm bge-m3
-	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
-	uv run python scripts/validate_traces.py --report
-	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
-
-validate-traces-fast: ## Optional diagnostic: no rebuild; validate trace families when requested
-	@echo "$(BLUE)Optional fast trace validation (no rebuild)...$(NC)"
-	uv run python scripts/validate_trace_runtime.py --env-file "$(TRACE_ENV_FILE)"
-	MINIO_API_PORT="$(or $(MINIO_API_PORT),0)" \
-	MINIO_CONSOLE_PORT="$(or $(MINIO_CONSOLE_PORT),0)" \
-	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
-	QDRANT_URL="$(or $(QDRANT_URL),http://localhost:6333)" \
-	BGE_M3_URL="$(or $(BGE_M3_URL),http://localhost:8000)" \
-	REDIS_URL="$(or $(REDIS_URL),redis://localhost:6379)" \
-	LLM_BASE_URL="$(or $(LLM_BASE_URL),http://localhost:4000)" \
-	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
-	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	uv run dotenv -f "$(TRACE_ENV_FILE)" run --no-override -- \
-		uv run python scripts/validate_traces.py --report
-	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
-
-langfuse-latency-audit: ## Optional diagnostic #2179: per-stage observation latencies from recent traces
-	@uv run python -m scripts.probe.langfuse_latency_audit --limit $${LANGFUSE_LATENCY_LIMIT:-50}
-
-validate-voice-traces: ## Optional diagnostic: voice trace validation (reads Langfuse)
-	@echo "$(BLUE)Optional voice trace validation...$(NC)"
-	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
-	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	uv run python scripts/validate_voice_traces.py
-	@echo "$(GREEN)Voice trace validation complete$(NC)"
-
-# =============================================================================
 # K3S DEPLOYMENT
 # =============================================================================
 
@@ -1294,7 +1282,7 @@ validate-voice-traces: ## Optional diagnostic: voice trace validation (reads Lan
 k3s-core: ## Deploy core services (postgres, redis, qdrant) to k3s
 	kubectl apply -k k8s/overlays/core/ --load-restrictor=LoadRestrictionsNone
 
-k3s-bot: ## Deploy bot stack to k3s (core + ML + litellm + bot)
+k3s-bot: ## Deploy bot stack to k3s (core + ML + bot)
 	kubectl apply -k k8s/overlays/bot/ --load-restrictor=LoadRestrictionsNone
 
 k3s-ingest: ## Deploy ingestion stack to k3s (core + docling + bge-m3 + ingestion)

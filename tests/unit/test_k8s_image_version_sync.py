@@ -38,7 +38,6 @@ def _k8s_image(deployment_path: Path, container_name: str) -> str:
     [
         ("qdrant", K8S_BASE / "qdrant" / "deployment.yaml", "qdrant"),
         ("redis", K8S_BASE / "redis" / "deployment.yaml", "redis"),
-        ("litellm", K8S_BASE / "litellm" / "deployment.yaml", "litellm"),
     ],
 )
 def test_k8s_image_matches_compose(service: str, deployment: Path, container: str) -> None:

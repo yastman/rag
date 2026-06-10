@@ -93,15 +93,6 @@ _initialized = False
 _skip_logged = False
 
 
-def _resolve(value: str | None, env_name: str, default: str | None = None) -> str | None:
-    """Return *value* when set, else env var, else default. Strips whitespace."""
-    candidate = value if value is not None else os.getenv(env_name, "")
-    candidate = (candidate or "").strip()
-    if candidate:
-        return candidate
-    return default
-
-
 def _resolve_dsn(explicit: str | None) -> str | None:
     """Return a non-blank DSN or ``None``."""
     candidate = explicit if explicit is not None else os.getenv("SENTRY_DSN", "")

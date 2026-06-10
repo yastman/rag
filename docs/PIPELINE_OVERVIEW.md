@@ -93,7 +93,7 @@ Runtime path:
 ## 5) Observability
 
 - App traces/scores: Langfuse (`telegram_bot/observability.py`, scoring hooks)
-- Required trace families validated by `make validate-traces-fast`:
+- Required trace families validated by make e2e-core-live:
   - `rag-api-query`
   - `voice-session`
   - `ingestion-cli-run`
@@ -109,6 +109,6 @@ make sync-drive-status
 make ingest-unified-preflight
 make ingest-unified-bootstrap
 make ingest-unified
-make validate-traces-fast
+make e2e-core-live
 make monitoring-up
 ```

@@ -114,13 +114,9 @@ class TestBGEM3Client:
         assert result.processing_time == 0.1
         assert "/encode/hybrid" in mock_http.post.call_args[0][0]
 
-    async def test_encode_hybrid_injects_trace_context_headers(self, client, monkeypatch):
+    async def test_encode_hybrid_injects_langfuse_context_headers(self, client, monkeypatch):
         from src.services import bge_m3_client as mod
 
-        def fake_inject(headers: dict[str, str]) -> None:
-            headers["traceparent"] = "00-11111111111111111111111111111111-2222222222222222-01"
-
-        monkeypatch.setattr(mod, "inject", fake_inject)
         monkeypatch.setattr(
             mod,
             "get_client",
@@ -149,7 +145,6 @@ class TestBGEM3Client:
         await client.encode_hybrid(["hello"])
 
         headers = mock_http.post.call_args.kwargs["headers"]
-        assert headers["traceparent"] == ("00-11111111111111111111111111111111-2222222222222222-01")
         assert headers["x-langfuse-trace-id"] == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         assert headers["x-langfuse-parent-observation-id"] == "bbbbbbbbbbbbbbbb"
 
@@ -404,13 +399,9 @@ class TestBGEM3SyncClient:
             call_url = mock_post.call_args[0][0]
             assert "/encode/hybrid" in call_url
 
-    def test_encode_hybrid_sync_injects_trace_context_headers(self, sync_client, monkeypatch):
+    def test_encode_hybrid_sync_injects_langfuse_context_headers(self, sync_client, monkeypatch):
         from src.services import bge_m3_client as mod
 
-        def fake_inject(headers: dict[str, str]) -> None:
-            headers["traceparent"] = "00-33333333333333333333333333333333-4444444444444444-01"
-
-        monkeypatch.setattr(mod, "inject", fake_inject)
         monkeypatch.setattr(
             mod,
             "get_client",
@@ -435,7 +426,6 @@ class TestBGEM3SyncClient:
             sync_client.encode_hybrid(["hello"])
 
         headers = mock_post.call_args.kwargs["headers"]
-        assert headers["traceparent"] == ("00-33333333333333333333333333333333-4444444444444444-01")
         assert headers["x-langfuse-trace-id"] == "cccccccccccccccccccccccccccccccc"
         assert headers["x-langfuse-parent-observation-id"] == "dddddddddddddddd"
 

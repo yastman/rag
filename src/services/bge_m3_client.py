@@ -17,7 +17,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
-from opentelemetry.propagate import inject
 
 from src.observability import get_client, observe
 from src.services._retry import bge_retry
@@ -32,9 +31,8 @@ LANGFUSE_PARENT_OBSERVATION_ID_HEADER = "x-langfuse-parent-observation-id"
 
 
 def _trace_context_headers() -> dict[str, str]:
-    """Return trace context headers for downstream BGE service calls."""
+    """Return Langfuse context headers for downstream BGE service calls."""
     headers: dict[str, str] = {}
-    inject(headers)
     headers.update(_langfuse_trace_context_headers())
     return headers
 

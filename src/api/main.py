@@ -49,16 +49,6 @@ async def lifespan(app: FastAPI):
 
     cfg = GraphConfig.from_env()
 
-    # Activate FastAPI OTEL auto-instrumentation (#2225). The SDK-native
-    # FastAPIInstrumentor.instrument_app(app) adds standard ASGI server
-    # spans with http.method / http.route / http.status_code semantic
-    # attrs and auto-extracts traceparent / baggage from incoming headers
-    # so any @observe span downstream nests under the originating
-    # cross-service trace. Idempotent and best-effort — never blocks boot.
-    from src.observability_otel import instrument_fastapi_app
-
-    instrument_fastapi_app(app)
-
     cache = CacheLayerManager(
         redis_url=cfg.redis_url,
         cache_thresholds=cfg.cache_thresholds,
@@ -378,13 +368,10 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
         "user_id": str(req.user_id),
         "metadata": {"source": req.channel},
         "tags": ["api", "rag", req.channel],
-        # Inject user_id/session_id/tags into the W3C 'baggage' HTTP header
-        # so downstream calls (bge-m3, user-base, kommo, qdrant) carry the
-        # Langfuse trace attributes automatically. HTTPXClientInstrumentor
-        # (#2225) injects the default OTEL propagator (which includes
-        # baggage by default) on every outbound request — no per-call
-        # plumbing needed (replaces the manual #2229 inject(headers)
-        # pattern; see #2226).
+        # Keep Langfuse request metadata attached to the top-level API
+        # observation. DEPS-OBS1 removes monolith OTEL auto-propagation, so
+        # downstream calls rely on explicit product/request metadata instead
+        # of HTTPXClientInstrumentor trace headers.
         "as_baggage": True,
     }
 

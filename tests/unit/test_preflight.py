@@ -8,6 +8,7 @@ import pytest
 from telegram_bot.preflight import (
     CACHE_KEY_PREFIXES,
     CRITICAL_RETRIES,
+    DEP_CLASSIFICATION,
     PreflightError,
     _build_dependency_report,
     _check_redis_deep,
@@ -468,27 +469,8 @@ class TestCheckSingleDep:
         result = await _check_single_dep("bge_m3", config, client)
         assert result is True
 
-    async def test_litellm_health_uses_readiness(self):
-        config = _make_config()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        client = AsyncMock(spec=httpx.AsyncClient)
-        client.get = AsyncMock(return_value=mock_resp)
-
-        result = await _check_single_dep("litellm", config, client)
-
-        assert result is True
-        client.get.assert_awaited_once_with(f"{config.llm_base_url}/health/readiness")
-
-    async def test_litellm_non_200_fails(self):
-        config = _make_config()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 500
-        client = AsyncMock(spec=httpx.AsyncClient)
-        client.get = AsyncMock(return_value=mock_resp)
-
-        result = await _check_single_dep("litellm", config, client)
-        assert result is False
+    def test_litellm_proxy_is_not_a_preflight_dependency(self):
+        assert "litellm" not in DEP_CLASSIFICATION
 
     async def test_langfuse_uses_get_langfuse_client(self):
         config = _make_config()

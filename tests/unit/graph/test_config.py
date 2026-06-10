@@ -11,7 +11,7 @@ class TestGraphConfig:
         from telegram_bot.graph.config import GraphConfig
 
         cfg = GraphConfig()
-        assert cfg.llm_base_url == "http://litellm:4000"
+        assert cfg.llm_base_url == ""
         assert cfg.llm_model == "gpt-4o-mini"
         assert cfg.bge_m3_url == "http://bge-m3:8000"
         assert cfg.search_top_k == 40
@@ -64,7 +64,6 @@ class TestGraphConfig:
         from telegram_bot.graph.config import GraphConfig
 
         env = {
-            "LLM_BASE_URL": "http://llm:4000",
             "LLM_MODEL": "test-model",
             "BGE_M3_URL": "http://bge:8000",
             "QDRANT_URL": "http://qdrant:6333",
@@ -73,7 +72,7 @@ class TestGraphConfig:
         }
         with patch.dict(os.environ, env, clear=True):
             cfg = GraphConfig.from_env()
-        assert cfg.llm_base_url == "http://llm:4000"
+        assert cfg.llm_base_url == ""
         assert cfg.llm_model == "test-model"
         assert cfg.bge_m3_url == "http://bge:8000"
         assert cfg.search_top_k == 10
@@ -98,37 +97,26 @@ class TestGraphConfig:
         assert cfg.cache_ttl["STRUCTURED"] == 7200
 
     def test_create_llm(self):
+        from src.runtime.llm.router import LiteLLMChatClient
         from telegram_bot.graph.config import GraphConfig
 
-        with patch("langfuse.openai.AsyncOpenAI") as mock_cls:
-            mock_cls.return_value = MagicMock()
-            cfg = GraphConfig(llm_model="test-model", llm_base_url="http://test:4000")
-            llm = cfg.create_llm()
-        assert llm is not None
-        mock_cls.assert_called_once_with(
-            api_key="no-key",
-            base_url="http://test:4000",
-            max_retries=2,
-            timeout=60.0,
-        )
+        cfg = GraphConfig(llm_model="test-model", llm_base_url="http://test:4000")
+        llm = cfg.create_llm()
 
-    def test_create_llm_auto_trace_false_uses_plain_openai(self):
+        assert isinstance(llm, LiteLLMChatClient)
+        assert llm.default_model == "test-model"
+        assert llm._langfuse_auto_trace is False
+
+    def test_create_llm_auto_trace_false_uses_litellm_sdk(self):
+        from src.runtime.llm.router import LiteLLMChatClient
         from telegram_bot.graph.config import GraphConfig
 
-        with (
-            patch("openai.AsyncOpenAI") as mock_plain,
-            patch("langfuse.openai.AsyncOpenAI") as mock_langfuse,
-        ):
-            mock_plain.return_value = MagicMock()
+        with patch("langfuse.openai.AsyncOpenAI") as mock_langfuse:
             cfg = GraphConfig(llm_model="test-model", llm_base_url="http://test:4000")
             llm = cfg.create_llm(auto_trace=False)
-        assert llm is not None
-        mock_plain.assert_called_once_with(
-            api_key="no-key",
-            base_url="http://test:4000",
-            max_retries=2,
-            timeout=60.0,
-        )
+
+        assert isinstance(llm, LiteLLMChatClient)
+        assert llm.default_model == "test-model"
         mock_langfuse.assert_not_called()
         assert getattr(llm, "_langfuse_auto_trace", None) is False
 
@@ -142,7 +130,7 @@ class TestGraphConfig:
 
         assert llm is not None
         assert mock_chat_openai.call_args.kwargs["model"] == "router-model"
-        assert mock_chat_openai.call_args.kwargs["base_url"] == "http://test:4000"
+        assert "base_url" not in mock_chat_openai.call_args.kwargs
 
     def test_create_embeddings(self):
         from telegram_bot.graph.config import GraphConfig
@@ -177,7 +165,7 @@ class TestGraphConfig:
 
         with patch.dict(os.environ, {}, clear=True):
             cfg = GraphConfig.from_env()
-        assert cfg.llm_base_url == "http://litellm:4000"
+        assert cfg.llm_base_url == ""
         assert cfg.domain == "недвижимость"
         assert cfg.domain_language == "ru"
 
@@ -364,7 +352,7 @@ class TestCreateSummarizeModel:
         cfg = MagicMock()
         cfg.llm_model = "gpt-4o-mini"
         cfg.llm_api_key = "sk-test"
-        cfg.llm_base_url = "http://litellm:4000"
+        cfg.llm_base_url = ""
 
         sentinel = MagicMock(name="ChatModel")
         with patch("langchain.chat_models.init_chat_model", return_value=sentinel) as mock_icm:
@@ -376,10 +364,10 @@ class TestCreateSummarizeModel:
         assert kwargs.get("model") == "gpt-4o-mini"
         assert kwargs.get("model_provider") == "openai"
         assert kwargs.get("api_key") == "sk-test"
-        assert kwargs.get("base_url") == "http://litellm:4000"
+        assert "base_url" not in kwargs
 
     def test_falls_back_to_no_key_placeholder_when_api_key_missing(self):
-        """Empty api_key must fall back to 'no-key' placeholder for LiteLLM proxy."""
+        """Empty api_key must fall back to 'no-key' placeholder."""
         from unittest.mock import patch
 
         from telegram_bot.graph.graph import _create_summarize_model
@@ -387,7 +375,7 @@ class TestCreateSummarizeModel:
         cfg = MagicMock()
         cfg.llm_model = "gpt-4o-mini"
         cfg.llm_api_key = None
-        cfg.llm_base_url = "http://litellm:4000"
+        cfg.llm_base_url = ""
 
         with patch("langchain.chat_models.init_chat_model") as mock_icm:
             _create_summarize_model(cfg)

@@ -1,28 +1,19 @@
-"""demo_handler.transcribe_voice must route Whisper through the LiteLLM proxy (#2214).
-
-The default (no-injected-llm) client is a bare ``AsyncOpenAI()``, which targets
-the public OpenAI endpoint. The transcription uses ``model="whisper"`` — a
-LiteLLM alias — so it must go through the LiteLLM proxy (``LLM_BASE_URL``), which
-also carries the ``success_callback: ["langfuse"]`` config. Without
-``base_url``/``api_key`` the call hits public OpenAI (404 on the alias) and
-bypasses the proxy.
-"""
+"""demo_handler.transcribe_voice uses direct OpenAI Whisper after proxy removal."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 
-class TestTranscribeVoiceLiteLLMRouting:
-    async def test_transcribe_voice_default_client_uses_litellm_proxy_env(
+class TestTranscribeVoiceOpenAIRouting:
+    async def test_transcribe_voice_default_client_uses_openai_api_key(
         self, monkeypatch
     ) -> None:
-        import langfuse.openai as lf_openai
+        import openai
 
         from telegram_bot.handlers.demo_handler import transcribe_voice
 
-        monkeypatch.setenv("LLM_API_KEY", "test-key")
-        monkeypatch.setenv("LLM_BASE_URL", "http://litellm:4000/v1")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
         created: dict = {}
         mock_client = MagicMock()
@@ -32,7 +23,7 @@ class TestTranscribeVoiceLiteLLMRouting:
             created["kwargs"] = kwargs
             return mock_client
 
-        monkeypatch.setattr(lf_openai, "AsyncOpenAI", _factory)
+        monkeypatch.setattr(openai, "AsyncOpenAI", _factory)
 
         message = AsyncMock()
         message.voice = MagicMock(file_id="f1")
@@ -45,17 +36,15 @@ class TestTranscribeVoiceLiteLLMRouting:
 
         assert result == "привет"
         assert created.get("kwargs", {}).get("api_key") == "test-key"
-        assert created.get("kwargs", {}).get("base_url") == "http://litellm:4000/v1"
 
-    async def test_transcribe_voice_default_client_falls_back_to_local_proxy(
+    async def test_transcribe_voice_default_client_falls_back_to_dev_key(
         self, monkeypatch
     ) -> None:
-        import langfuse.openai as lf_openai
+        import openai
 
         from telegram_bot.handlers.demo_handler import transcribe_voice
 
         monkeypatch.delenv("LLM_API_KEY", raising=False)
-        monkeypatch.delenv("LLM_BASE_URL", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
         created: dict = {}
@@ -66,7 +55,7 @@ class TestTranscribeVoiceLiteLLMRouting:
             created["kwargs"] = kwargs
             return mock_client
 
-        monkeypatch.setattr(lf_openai, "AsyncOpenAI", _factory)
+        monkeypatch.setattr(openai, "AsyncOpenAI", _factory)
 
         message = AsyncMock()
         message.voice = MagicMock(file_id="f1")
@@ -79,4 +68,3 @@ class TestTranscribeVoiceLiteLLMRouting:
 
         assert result == "привет"
         assert created.get("kwargs", {}).get("api_key") == "sk-dev"
-        assert created.get("kwargs", {}).get("base_url") == "http://localhost:4000/v1"

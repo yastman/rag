@@ -18,10 +18,10 @@ def _bot_config(
         return BotConfig(_env_file=None)
 
 
-def test_bot_config_defaults_prefer_local_litellm_proxy() -> None:
+def test_bot_config_defaults_use_in_process_litellm_router() -> None:
     cfg = _bot_config(drop={"LLM_BASE_URL", "LLM_MODEL"})
 
-    assert cfg.llm_base_url == "http://localhost:4000/v1"
+    assert cfg.llm_base_url == ""
     assert cfg.llm_model == "gpt-4o-mini"
 
 

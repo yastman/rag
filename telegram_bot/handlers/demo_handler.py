@@ -73,12 +73,11 @@ async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
     """Download a Telegram voice message and transcribe via Whisper.
 
     Used by ``telegram_bot.dialogs.demo.on_voice_input``. The optional
-    ``llm`` parameter accepts an ``AsyncOpenAI`` (or compatible) client so
-    tests can inject a mock; the default ``langfuse.openai.AsyncOpenAI``
-    is constructed inline so failures degrade to ``None`` rather than
-    raising at import time.
+    ``llm`` parameter accepts an audio transcription client so tests can inject
+    a mock. Whisper STT remains a direct OpenAI SDK call because the LiteLLM
+    Docker proxy has been removed.
     """
-    from langfuse.openai import AsyncOpenAI
+    from openai import AsyncOpenAI
 
     @observe(name="demo-transcribe-voice")
     async def _run() -> str | None:
@@ -91,16 +90,14 @@ async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
         data.seek(0)
         data.name = "voice.ogg"  # type: ignore[attr-defined]
 
-        # #2214: route the default client through the LiteLLM proxy. model="whisper"
-        # is a LiteLLM alias, so a bare AsyncOpenAI() (public OpenAI) would 404 and
-        # bypass the proxy's success_callback=["langfuse"]. Honour LLM_BASE_URL /
-        # LLM_API_KEY (the canonical proxy env, e.g. http://litellm:4000/v1).
+        # Whisper STT is intentionally direct OpenAI SDK usage. LiteLLM chat
+        # routing now happens in-process via src.runtime.llm.router, and the
+        # removed Docker proxy no longer hosts a Whisper alias.
         client = (
             llm
             if llm is not None
             else AsyncOpenAI(
-                api_key=os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "sk-dev",
-                base_url=os.getenv("LLM_BASE_URL", "http://localhost:4000/v1"),
+                api_key=os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY") or "sk-dev",
             )
         )
         transcript = await client.audio.transcriptions.create(

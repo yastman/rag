@@ -4,7 +4,7 @@ SDK baseline for how the voice path participates in the single distributed trace
 (#2244). Research-only decision record: it documents the supported approach and
 the current state, and defers the behavioural change (deprecating the manual
 `langfuse_trace_id`) to a follow-up implementation issue. Enforced by
-`tests/contract/test_voice_tracing_baseline_contract.py`.
+the retired voice tracing baseline contract.
 
 ## Question
 
@@ -64,9 +64,10 @@ path is the existing Langfuse OTel ingestion).
 ## Follow-up implementation issue
 
 Because SDK-native support exists, the behavioural change is tracked separately:
-prove voice -> RAG same-trace continuity at runtime (via `make
-validate-traces-fast` + the #2252 continuity check), then deprecate the manual
-`langfuse_trace_id` payload/metadata path. See the issue linked from #2257.
+prove voice -> RAG same-trace continuity at runtime with core E2E plus
+JSON/product-log review (`make e2e-core-live`) and the #2252 continuity check,
+then deprecate the manual `langfuse_trace_id` payload/metadata path. See the
+issue linked from #2257.
 
 ## References
 

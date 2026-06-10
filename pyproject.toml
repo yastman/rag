@@ -17,18 +17,6 @@ dependencies = [
     "requests",
     "qdrant-client>=1.17.1",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
     "langfuse>=4.0.0,<5.0",  # Native v4 observability migration
-    # OTEL auto-instrumentation packages (#2225). These live in base deps
-    # because initialize_langfuse() is shared by bot, mini-app, ingestion, and
-    # RAG API runtimes; putting them behind a single extra silently disables
-    # SDK-native child spans for the other containers.
-    "opentelemetry-instrumentation-httpx>=0.58b0",
-    "opentelemetry-instrumentation-asyncpg>=0.58b0",
-    "opentelemetry-instrumentation-redis>=0.58b0",
-    "opentelemetry-instrumentation-grpc>=0.58b0",
-    "opentelemetry-instrumentation-aiohttp-client>=0.58b0",
-    "opentelemetry-instrumentation-requests>=0.58b0",
-    "opentelemetry-instrumentation-logging>=0.58b0",
-    "opentelemetry-instrumentation-fastapi>=0.58b0",
     # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
     # Install via `uv sync --extra voyage` only for legacy GDrive ingestion or
     # contextualized-embedding paths.
@@ -54,10 +42,6 @@ dependencies = [
     # Scheduled nurturing + analytics (#390)
     "apscheduler>=3.11.2,<4.0",           # Async job scheduling (v3 API)
     "phonenumbers>=9.0.25",
-    # Observability (#1648 — SDK-native pipeline metrics, slice 2/4)
-    # prometheus_client provides Histogram for latency distributions, replacing
-    # the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
-    "prometheus-client>=0.20.0,<1.0",
     # Observability (#2060 / umbrella #1417 — Sentry-compatible error tracking).
     # sentry-sdk powers the optional Bugsink/Sentry-Cloud integration in
     # src/observability_sentry.py. It silently no-ops when SENTRY_DSN is unset.
@@ -109,10 +93,10 @@ voice = [
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
 ]
 
-# Docling service (standalone docling-serve image)
-docling = [
-    "docling-serve[ui]>=1.0.0",
-]
+# Docling service dependencies live in services/docling because the root
+# project talks to docling-serve over HTTP. Keeping this root extra empty avoids
+# pulling KFP/Kubernetes service-only packages into the application lockfile.
+docling = []
 
 # Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
 ingest = [
@@ -181,9 +165,9 @@ dev = [
 # =============================================================================
 # UV: Dependency Overrides
 # =============================================================================
-# Override docling-serve's <0.58 constraint on opentelemetry-instrumentation-fastapi
-# to resolve three-way conflict between docling-serve, livekit-agents, and otel-api.
-# See: ROOT-PILLOW-GRADIO-COMPAT.baseline.md for full resolution analysis.
+# Optional docling/livekit extras still need the FastAPI instrumentation
+# pre-release constraint override, but DEPS-OBS1 removes all instrumentation
+# packages from the base monolith dependencies.
 [tool.uv]
 override-dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.58b0",

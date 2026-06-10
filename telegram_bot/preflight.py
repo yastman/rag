@@ -113,7 +113,6 @@ DEP_CLASSIFICATION: dict[str, DepLevel] = {
     "qdrant": DepLevel.CRITICAL,
     "bge_m3": DepLevel.CRITICAL,
     "postgres": DepLevel.OPTIONAL,
-    "litellm": DepLevel.OPTIONAL,
     "langfuse": DepLevel.OPTIONAL,
 }
 
@@ -123,7 +122,6 @@ _DEP_REMEDIATION: dict[str, str] = {
     "qdrant": "Run `make local-up` to start Qdrant, then verify collection configuration",
     "bge_m3": "start the repo-local BGE-M3 service and verify /health and /encode/dense",
     "postgres": "start PostgreSQL or accept degraded user-feature mode",
-    "litellm": "restore LiteLLM proxy readiness or accept degraded generation path",
     "langfuse": "restore Langfuse credentials/connectivity or accept disabled tracing",
 }
 
@@ -650,15 +648,6 @@ async def _check_single_dep(
                 logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
             return False
 
-    if name == "litellm":
-        # Health endpoint is at proxy root, not under /v1
-        base = config.llm_base_url.rstrip("/").removesuffix("/v1")
-        resp = await client.get(f"{base}/health/readiness")
-        if resp.status_code != 200:
-            logger.error("Preflight FAIL: LiteLLM proxy readiness — %s", resp.status_code)
-            return False
-        return True
-
     if name == "langfuse":
         from .observability import get_langfuse_client
 
@@ -716,7 +705,7 @@ async def check_dependencies(
     CRITICAL deps (redis, qdrant, bge_m3) are retried up to CRITICAL_RETRIES
     times with CRITICAL_RETRY_DELAY between attempts.
 
-    OPTIONAL deps (litellm, langfuse) are checked once — failures are logged
+    OPTIONAL deps (langfuse) are checked once — failures are logged
     as warnings but do not block startup.
 
     Returns:
@@ -729,7 +718,7 @@ async def check_dependencies(
     timeout = httpx.Timeout(10.0)
 
     # Order matters: redis_cache depends on redis
-    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres", "litellm", "langfuse"]
+    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres", "langfuse"]
 
     failure_reasons: dict[str, str] = {}
 

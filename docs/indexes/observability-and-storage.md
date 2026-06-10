@@ -6,7 +6,7 @@ Quick orientation for Langfuse traces, Qdrant, and Redis/cache investigations. L
 
 Use this path when traces are missing, gaps appear, or you need to validate scoring.
 
-For terminal-first trace checks, start with `make validate-traces-fast` and the
+For terminal-first trace checks, start with core E2E plus JSON/product-log review (`make e2e-core-live`) and the
 Langfuse tracing gaps runbook.
 
 ### Start Here
@@ -21,7 +21,7 @@ Langfuse tracing gaps runbook.
 | Are traces being exported? | `telegram_bot/observability.py` (Langfuse client + helpers) and `telegram_bot/middlewares/langfuse_middleware.py` (trace root) |
 | What spans are emitted? | Search for `span=` or `trace=` in `telegram_bot/graph/`, `telegram_bot/services/`, `src/api/` |
 | Is scoring configured? | `src/evaluation/` and `telegram_bot/scoring.py` |
-| Trace validation command | `make validate-traces-fast` |
+| Trace validation command | core E2E plus JSON/product-log review (`make e2e-core-live`) |
 
 ### Fast Search
 

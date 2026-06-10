@@ -137,12 +137,12 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - `telegram_bot/services/query_analyzer.py` — query intent / language classification (single non-streaming call)
   - (historical: `telegram_bot/services/llm.py` was the third instructor site for confidence scoring; removed in favour of `telegram_bot/scoring.py` which derives confidence from graph state, see ADR 0008)
 - **паттерны:**
-  - REQUIRED shape: `instructor.from_openai(langfuse.openai.AsyncOpenAI(...))` — это сохраняет langfuse auto-trace wrap. Preflight: `tests/unit/services/test_query_analyzer.py::TestQueryAnalyzerInstructorLangfuseCompat`.
+  - REQUIRED shape: `instructor.from_openai(openai.AsyncOpenAI(...))` — keep one explicit async OpenAI-compatible client instead of letting `instructor.from_provider(...)` construct hidden clients. Preflight: `tests/unit/services/test_query_analyzer.py::TestQueryAnalyzerInstructorCompat`.
   - `chat.completions.create(response_model=PydanticModel, max_retries=2)` для retry на validation error.
   - Результат extraction merge с regex (regex wins на числовых полях).
 - **gotchas:**
   - НЕ писать кастомный JSON parsing из LLM — использовать instructor + Pydantic model.
-  - НЕ использовать `instructor.from_provider("openai/...", async_client=True)` — это строит свой клиент и ломает `langfuse.openai` auto-trace. Semgrep authority: `python.no-instructor-from-provider`; positive shape remains locked by `tests/unit/services/test_instructor_sdk_contract.py`.
+  - НЕ использовать `instructor.from_provider("openai/...", async_client=True)` — это строит свой скрытый client и усложняет единый LLM-routing path. Positive shape remains locked by `tests/unit/services/test_instructor_sdk_contract.py`.
   - Streaming primitives `client.create_partial` / `client.create_iterable` сейчас **отключены** проектным решением — см. [ADR-0008](../adr/0008-instructor-create-partial-deferred.md). Не вводить без обновления ADR.
   - response_model = Pydantic v2 модель с `Field(description=)` для каждого поля.
 
@@ -206,7 +206,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - PII masking через mask= параметр при Langfuse()
 - **gotchas:**
   - Для основного bot/query/runtime path использовать `langfuse.openai.AsyncOpenAI`
-  - НЕ возвращаться к manual `client.api.prompts.get(...)` probing, пока `client.get_prompt(...)` покрывает нужный path. Semgrep authority: `python.no-langfuse-prompts-api-get`.
+  - НЕ возвращаться к manual `client.api.prompts.get(...)` probing, пока `client.get_prompt(...)` покрывает нужный path; keep this as an SDK-registry convention instead of a project Semgrep guardrail.
   - propagate_attributes() ПЕРЕД любым @observe кодом
   - capture_input/output=False на тяжёлых нодах (payload bloat prevention)
   - НЕ писать custom HTTP-клиент для observations. Langfuse Cloud: `api.observations.get_many(...)`; self-hosted OSS v4 может отвечать, что v2 observations доступны только Cloud, тогда fallback — SDK `trace.get(..., fields="...,observations,...")`.
@@ -445,7 +445,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - **Activation:** call `activate_otel_instrumentations()` once at startup (idempotent; per-instrumentor try/except).
   - **Propagators:** declare `OTEL_PROPAGATORS=tracecontext,baggage` explicitly in compose (defense-in-depth).
   - **Log-to-trace correlation:** `LoggingInstrumentor` injects `otelTraceID`/`otelSpanID` into every `LogRecord`.
-  - **Test coverage:** `tests/contract/test_cross_service_trace_instrumentation_contract.py` (inbound FastAPI + outbound HTTPX + activation), `tests/contract/test_otel_propagators_contract.py` (compose OTEL_PROPAGATORS + .env.example doc).
+  - **Test coverage:** `tests/contract/test_cross_service_trace_instrumentation_contract.py` (inbound FastAPI + outbound HTTPX + activation), `the removed OTel propagators contract` (compose OTEL_PROPAGATORS + .env.example doc).
 - **gotchas:**
   - НЕ добавлять OTLP gRPC exporter — Langfuse v4 SDK handles OTLP export internally.
   - НЕ писать ручной propagation (`inject()`/`extract()`/`attach()`/`detach()`) поверх SDK-native FastAPIInstrumentor + HTTPXClientInstrumentor. Ручной propagation (#2229) удаляется в #2253/#2266 после runtime-доказательства cross-service continuity.
@@ -453,7 +453,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - `OTEL_PROPAGATORS` должен включать и `tracecontext`, и `baggage` — потеря baggage ломает Langfuse user/session/tags propagation через сервисные границы (#2226).
   - Double-instrumentation guard: `FastAPIInstrumentor.instrument_app` сам ставит флаг `_is_instrumented_by_opentelemetry`; в shared helper читаем его до вызова.
   - Отсутствующие `opentelemetry-instrumentation-*` пакеты пропускаются silently — это не ошибка, а graceful degradation.
-  - Contracts: `tests/contract/test_cross_service_trace_instrumentation_contract.py`, `tests/contract/test_otel_propagators_contract.py`, `tests/contract/test_end_to_end_trace_flow_contract.py`.
+  - Contracts: `tests/contract/test_cross_service_trace_instrumentation_contract.py`, `the removed OTel propagators contract`, `the removed end-to-end trace flow contract`.
 
 ## prometheus_client
 - **triggers:** prometheus, metrics, histogram, counter, /metrics, make_asgi_app, REGISTRY, scrape
