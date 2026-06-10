@@ -169,6 +169,7 @@ class TestInitializeLangfusePassesRelease:
     def test_release_forwarded_to_langfuse_kwargs(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import src.observability as observability
 
+        monkeypatch.setenv("LANGFUSE_ENABLED", "true")
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
         monkeypatch.delenv("LANGFUSE_HOST", raising=False)
@@ -194,6 +195,7 @@ class TestInitializeLangfusePassesRelease:
 
         import src.observability as observability
 
+        monkeypatch.setenv("LANGFUSE_ENABLED", "true")
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
         monkeypatch.delenv("LANGFUSE_HOST", raising=False)

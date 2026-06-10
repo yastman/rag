@@ -161,6 +161,17 @@ get_client = _real_get_client
 propagate_attributes = _real_propagate
 
 
+def _langfuse_enabled() -> bool:
+    """Return whether Langfuse client construction is explicitly enabled.
+
+    DEPS-OBS2 makes JSON logs the default observability path. Operators must
+    opt in to Langfuse with ``LANGFUSE_ENABLED=true`` before environment-based
+    credentials can construct a client. Explicit function arguments remain a
+    programmatic override for tests and edge-owned optional listeners.
+    """
+    return os.getenv("LANGFUSE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _resolve_config_value(explicit: str | None, env_name: str) -> str | None:
     """Resolve explicit override first, then environment variable."""
     value = explicit if explicit is not None else os.getenv(env_name)
@@ -529,6 +540,15 @@ def _initialize_langfuse_locked(
 
     if _langfuse_client is not None and not force:
         return _langfuse_client
+
+    explicit_config = public_key is not None or secret_key is not None or host is not None
+    if not explicit_config and not _langfuse_enabled():
+        _langfuse_client = None
+        if force or not _langfuse_init_attempted:
+            logger.info("Langfuse disabled (set LANGFUSE_ENABLED=true to enable optional listener)")
+        _langfuse_init_attempted = True
+        _disable_otel_exporter()
+        return None
 
     # Return cached None without re-logging when already attempted
     if _langfuse_init_attempted and _langfuse_client is None and not force:
