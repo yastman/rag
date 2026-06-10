@@ -320,32 +320,16 @@ class TestCommandHandlers:
         for cmd in ["/history", "/metrics", "/clearcache"]:
             assert cmd in call_args, f"{cmd} missing from /help text"
 
-    async def test_cmd_help_metrics_port_default_is_9092(self, mock_config, monkeypatch):
-        """/help shows the default metrics port 9092 (#2190 — 9091 collides with MinIO)."""
-        monkeypatch.delenv("TELEGRAM_BOT_METRICS_PORT", raising=False)
+    async def test_cmd_help_metrics_points_to_json_logs(self, mock_config):
+        """/help advertises structured JSON logs instead of an in-process endpoint."""
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
 
         await cmd_help(bot, message)
 
         call_args = message.answer.call_args[0][0]
-        assert "http://localhost:9092/metrics" in call_args, (
-            "/help must use default 9092 metrics port (not 9091, MinIO conflict)"
-        )
-        assert "9091" not in call_args, "/help must not advertise 9091 (MinIO console port)"
-
-    async def test_cmd_help_metrics_port_respects_env_override(self, mock_config, monkeypatch):
-        """/help respects TELEGRAM_BOT_METRICS_PORT override (#2190)."""
-        monkeypatch.setenv("TELEGRAM_BOT_METRICS_PORT", "9099")
-        bot, _ = _create_bot(mock_config)
-        message = _make_text_message()
-
-        await cmd_help(bot, message)
-
-        call_args = message.answer.call_args[0][0]
-        assert "http://localhost:9099/metrics" in call_args, (
-            "/help must reflect TELEGRAM_BOT_METRICS_PORT env override"
-        )
+        assert "/metrics - Метрики пайплайна в JSON logs" in call_args
+        assert "localhost:909" not in call_args
 
     def test_no_handle_promotions_method(self, mock_config):
         """_handle_promotions removed as dead code (#863)."""
@@ -652,23 +636,17 @@ class TestCommandHandlers:
         assert "30/40" in call_args, "Expected denominator to be hits + misses = 40"
 
     async def test_cmd_metrics(self, mock_config):
-        """Test /metrics command handler emits Prometheus text format (#2058)."""
+        """Test /metrics command handler points to JSON product logs."""
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
-        payload = (
-            b"# HELP bot_cmd_metrics_test_sentinel_total test sentinel\n"
-            b"# TYPE bot_cmd_metrics_test_sentinel_total counter\n"
-            b"bot_cmd_metrics_test_sentinel_total 3.0\n"
-        )
 
-        with patch("prometheus_client.generate_latest", return_value=payload):
-            await cmd_metrics(bot, message)
+        await cmd_metrics(bot, message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
-        assert call_args.startswith("```\n")
-        assert "# HELP" in call_args
-        assert "bot_cmd_metrics_test_sentinel_total" in call_args
+        assert "structured JSON logs" in call_args
+        assert "event=pipeline_latency" in call_args
+        assert "event=pipeline_counter" in call_args
 
     async def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
         """`/call` dispatch metadata should include langfuse_trace_id for continuity (#609)."""

@@ -530,11 +530,9 @@ class PropertyBot:
         self._polling_lock_consecutive_failures: int = 0
         self._polling_lock_owner: str | None = None
 
-        # Prometheus metrics ASGI server (#2057).
-        # Started in start() alongside the aiogram polling loop and
-        # exposes the default prometheus_client.REGISTRY on
-        # TELEGRAM_BOT_METRICS_PORT (default 9092 — 9091 collides with
-        # MinIO console; see #2190).
+        # Metrics server compatibility slot. The in-process Prometheus endpoint
+        # is removed; pipeline counters/latencies are emitted as structured
+        # JSON product logs instead.
         self._metrics_server: Any | None = None
 
         # Bounded fan-out for fire-and-forget history persistence (#1600).
