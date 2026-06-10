@@ -21,8 +21,7 @@ def get_embeddings_provider(provider_name: str | None = None) -> EmbeddingProvid
     Raises:
         ValueError: If the provider name is unknown.
     """
-    name = provider_name or os.getenv("EMBEDDINGS_PROVIDER", "local_bge_m3")
-    name = name.strip().lower()
+    name: str = (provider_name or os.getenv("EMBEDDINGS_PROVIDER", "local_bge_m3")).strip().lower()
 
     if name == "local_bge_m3":
         return LocalBgeM3Provider()

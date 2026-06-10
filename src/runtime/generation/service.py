@@ -163,6 +163,7 @@ async def generate_answer(
 
     config = request.config
     extra = request.extra_kwargs or {}
+    assert config is not None, "GenerationRequest.config must be set"
 
     if generate is not None:
         res = await generate(
@@ -228,7 +229,7 @@ async def generate_answer(
         context = format_context(
             docs,
             effective_max_context_docs,
-            sources_enabled=sources_enabled,
+            sources_enabled=sources_enabled,  # type: ignore[call-arg]
         )
     else:
         context = format_context(docs, effective_max_context_docs)
@@ -592,6 +593,7 @@ async def generate_answer_stream(
     t0 = time.monotonic()
     config = request.config
     extra = request.extra_kwargs or {}
+    assert config is not None, "GenerationRequest.config must be set"
 
     extra.get("logger") or logging.getLogger(__name__)
     lf_client = extra.get("lf_client")
@@ -814,7 +816,7 @@ async def generate_answer_stream(
         context = format_context(
             docs,
             effective_max_context_docs,
-            sources_enabled=sources_enabled,
+            sources_enabled=sources_enabled,  # type: ignore[call-arg]
         )
     else:
         context = format_context(docs, effective_max_context_docs)

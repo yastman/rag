@@ -11,7 +11,7 @@ class ServiceBgeM3Provider(EmbeddingProvider):
     """Embedding provider that calls an external BGE-M3 REST service."""
 
     def __init__(self, client: BGEM3Client | None = None, base_url: str | None = None) -> None:
-        url = base_url or os.getenv("BGE_M3_URL", "http://bge-m3:8000")
+        url = base_url or os.getenv("BGE_M3_URL", "http://bge-m3:8000") or "http://bge-m3:8000"
         self._client = client or BGEM3Client(base_url=url)
 
     async def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
