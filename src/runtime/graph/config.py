@@ -186,10 +186,7 @@ class GraphConfig:
                 explicitly via ``update_current_generation`` without creating orphan
                 root traces.
         """
-        if auto_trace:
-            from langfuse.openai import AsyncOpenAI
-        else:
-            from openai import AsyncOpenAI
+        from openai import AsyncOpenAI
 
         client = AsyncOpenAI(
             api_key=self.llm_api_key or "no-key",
@@ -197,9 +194,9 @@ class GraphConfig:
             max_retries=2,
             timeout=60.0,
         )
-        if not auto_trace:
-            # Mark plain client so helpers can skip Langfuse-specific kwargs safely.
-            object.__setattr__(client, "_langfuse_auto_trace", False)
+        # DEPS-OBS2: core/runtime clients are plain OpenAI-compatible clients.
+        # Mark them so helpers skip Langfuse-specific kwargs safely.
+        object.__setattr__(client, "_langfuse_auto_trace", False)
         return client
 
     def create_supervisor_llm(self, model_override: str | None = None) -> Any:

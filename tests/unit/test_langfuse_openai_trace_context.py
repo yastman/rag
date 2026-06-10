@@ -4,8 +4,8 @@ When ``langfuse.openai.AsyncOpenAI`` auto-traces every completion call without
 awareness of the active trace, it creates orphan ``litellm-acompletion`` root
 traces.  These tests verify that:
 
-1. ``GraphConfig.create_llm(auto_trace=False)`` returns a plain
-   ``openai.AsyncOpenAI`` client that does NOT auto-trace.
+1. ``GraphConfig.create_llm()`` returns a plain ``openai.AsyncOpenAI`` client
+   that does NOT auto-trace from the core/runtime layer.
 2. ``_chat_create_with_optional_name`` skips the Langfuse ``name`` kwarg
    when the client is plain, avoiding a needless TypeError → retry.
 3. ``generate_response`` still records cost and model metadata via the
@@ -32,29 +32,22 @@ from telegram_bot.services.generate_response import (
 class TestGraphConfigAutoTrace:
     """Unit tests for GraphConfig.create_llm auto_trace switch."""
 
-    def test_create_llm_default_uses_langfuse_wrapper(self) -> None:
-        with (
-            patch("langfuse.openai.AsyncOpenAI") as mock_langfuse,
-            patch("openai.AsyncOpenAI") as mock_plain,
-        ):
-            mock_langfuse.return_value = MagicMock()
+    def test_create_llm_default_uses_plain_openai(self) -> None:
+        with patch("openai.AsyncOpenAI") as mock_plain:
+            mock_plain.return_value = MagicMock()
             cfg = GraphConfig(llm_model="m", llm_base_url="http://test:4000")
             llm = cfg.create_llm()
         assert llm is not None
-        mock_langfuse.assert_called_once()
-        mock_plain.assert_not_called()
+        mock_plain.assert_called_once()
+        assert getattr(llm, "_langfuse_auto_trace", None) is False
 
     def test_create_llm_auto_trace_false_uses_plain_openai(self) -> None:
-        with (
-            patch("langfuse.openai.AsyncOpenAI") as mock_langfuse,
-            patch("openai.AsyncOpenAI") as mock_plain,
-        ):
+        with patch("openai.AsyncOpenAI") as mock_plain:
             mock_plain.return_value = MagicMock()
             cfg = GraphConfig(llm_model="m", llm_base_url="http://test:4000")
             llm = cfg.create_llm(auto_trace=False)
         assert llm is not None
         mock_plain.assert_called_once()
-        mock_langfuse.assert_not_called()
         assert getattr(llm, "_langfuse_auto_trace", None) is False
 
 

@@ -1,7 +1,7 @@
 """Query preprocessing for RAG pipeline optimization.
 
-HyDEGenerator uses OpenAI SDK via Langfuse drop-in for auto-tracing.
-QueryPreprocessor is rule-based (no LLM calls).
+HyDEGenerator uses the plain OpenAI-compatible SDK. Langfuse is optional and
+attached outside the core runtime. QueryPreprocessor is rule-based (no LLM calls).
 """
 
 import importlib
@@ -10,7 +10,6 @@ import re
 from typing import Any
 
 import openai
-from langfuse.openai import AsyncOpenAI
 
 from src.observability import get_client, observe
 
@@ -78,7 +77,7 @@ class HyDEGenerator:
         self.api_key = api_key or "not-needed"
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.client = AsyncOpenAI(
+        self.client = openai.AsyncOpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
             max_retries=2,
@@ -89,10 +88,9 @@ class HyDEGenerator:
     async def generate_hypothetical_document(self, query: str) -> str:
         """Generate a hypothetical document that would answer the query.
 
-        Wrapped in ``@observe`` so the auto-traced generation produced by
-        ``langfuse.openai`` becomes a child of a named span (#1661). Curated
-        ``update_current_span`` payloads avoid leaking full prompts/documents
-        into Langfuse.
+        Wrapped in ``@observe`` so optional edge observability can attach a
+        named span. Curated ``update_current_span`` payloads avoid leaking full
+        prompts/documents into telemetry backends.
 
         Args:
             query: User query (typically short, < 5 words)
@@ -129,11 +127,8 @@ class HyDEGenerator:
                 ],
                 "temperature": 0.7,
                 "max_tokens": 200,
-                "name": "hyde-generate",  # langfuse kwarg
             }
-            if prompt_obj is not None:
-                # Link generation observation to its Langfuse Prompt entry (#1666).
-                create_kwargs["langfuse_prompt"] = prompt_obj
+            _ = prompt_obj  # Prompt objects are edge-observability metadata only.
             response = await self.client.chat.completions.create(  # type: ignore[call-overload]
                 **create_kwargs,
             )
