@@ -21,6 +21,7 @@
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev_redis_1
 POLLING_LOCK_KEY ?= telegram-bot:polling
+RELEASE_POLLING_LOCK_FORCE ?= 0
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
 K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
@@ -771,6 +772,21 @@ release-polling-lock:  ## Delete the local Redis Telegram polling lock after con
 	@$(ENV_LOAD) \
 	container="$${REDIS_CONTAINER:-$(REDIS_CONTAINER)}"; \
 	key="$${POLLING_LOCK_KEY:-$(POLLING_LOCK_KEY)}"; \
+	force="$${RELEASE_POLLING_LOCK_FORCE:-$(RELEASE_POLLING_LOCK_FORCE)}"; \
+	if [ "$$force" != "1" ] && [ "$$force" != "true" ]; then \
+		running_bot_containers="$$(docker ps --filter name=bot --format '{{.Names}}' | tr '\n' ' ')"; \
+		if [ -n "$$running_bot_containers" ]; then \
+			echo "$(RED)Refusing to release polling lock while bot container(s) are running: $$running_bot_containers$(NC)"; \
+			echo "$(YELLOW)Stop the bot first, or set RELEASE_POLLING_LOCK_FORCE=1 for an emergency override.$(NC)"; \
+			exit 1; \
+		fi; \
+		native_bot_pids="$$(if command -v pgrep >/dev/null 2>&1; then pgrep -f 'python.*-m telegram_bot[.]main' || true; fi)"; \
+		if [ -n "$$native_bot_pids" ]; then \
+			echo "$(RED)Refusing to release polling lock while native bot process(es) are running: $$native_bot_pids$(NC)"; \
+			echo "$(YELLOW)Stop make run-bot first, or set RELEASE_POLLING_LOCK_FORCE=1 for an emergency override.$(NC)"; \
+			exit 1; \
+		fi; \
+	fi; \
 	if ! docker inspect "$$container" >/dev/null 2>&1; then \
 		container="$$(docker ps --filter name=redis -q | head -1)"; \
 	fi; \

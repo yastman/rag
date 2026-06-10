@@ -62,6 +62,23 @@ def test_release_polling_lock_target_exists_and_uses_rediscli_auth() -> None:
     assert "make run-bot" in block
 
 
+def test_release_polling_lock_requires_bot_not_running_unless_forced() -> None:
+    """The manual unlock target must not create a second live poller by default."""
+    text = _makefile_text()
+    assert "RELEASE_POLLING_LOCK_FORCE ?= 0" in text
+    block_match = re.search(
+        r"^release-polling-lock:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "release-polling-lock target not found in Makefile"
+    block = block_match.group(0)
+    assert "docker ps --filter name=bot" in block
+    assert "telegram_bot[.]main" in block
+    assert "Refusing to release polling lock" in block
+    assert "RELEASE_POLLING_LOCK_FORCE=1" in block
+
+
 def test_release_polling_lock_is_phony() -> None:
     text = _makefile_text()
     phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
