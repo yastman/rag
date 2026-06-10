@@ -34,7 +34,6 @@ dependencies = [
     "asyncpg>=0.31.0",
     "apscheduler>=3.11.2,<4.0",
     "phonenumbers>=9.0.25",
-    "prometheus-client>=0.20.0,<1.0",
     "sentry-sdk>=2.0,<3.0",
     "uvicorn>=0.30.0",
 ]

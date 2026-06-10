@@ -27,7 +27,6 @@ from aiogram.types import (
     Message,
 )
 
-from telegram_bot.metrics_server import resolve_metrics_port
 from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.scoring import write_history_scores
 from telegram_bot.tracing_context import make_session_id
@@ -88,7 +87,6 @@ async def cmd_start(
 
 async def cmd_help(bot: PropertyBot, message: Message) -> None:
     """Handle /help command."""
-    metrics_port = resolve_metrics_port()
     await message.answer(
         "\U0001f50d Примеры запросов:\n\n"
         "По цене:\n"
@@ -108,8 +106,7 @@ async def cmd_help(bot: PropertyBot, message: Message) -> None:
         "/clear - Очистить историю диалога\n"
         "/stats - Показать статистику кеша\n"
         "/history <запрос> - Поиск по истории диалогов\n"
-        "/metrics - Метрики пайплайна (Prometheus)\n"
-        f"HTTP: http://localhost:{metrics_port}/metrics (Prometheus scrape endpoint)\n"
+        "/metrics - Метрики пайплайна в JSON logs\n"
         "/clearcache - Очистить кеш Redis\n"
     )
 
@@ -221,24 +218,13 @@ async def cmd_stats(bot: PropertyBot, message: Message) -> None:
 
 
 async def cmd_metrics(bot: PropertyBot, message: Message) -> None:
-    """Handle /metrics command — emit current Prometheus metrics text format.
-
-    Slice 1/2 of #2058: replaces the deprecated `PipelineMetrics.format_text()`
-    rolling-window dump with the SDK-native
-    :func:`prometheus_client.generate_latest` output. Admin behaviour is
-    preserved (Telegram message in a Markdown code block); the content is
-    now the canonical Prometheus exposition format.
-    """
-    from prometheus_client import REGISTRY, generate_latest
-
-    payload = generate_latest(REGISTRY).decode("utf-8")
-    # Telegram's Markdown code-block has practical length limits; truncate
-    # at 3500 chars (admin command, debugging only) so the message always
-    # delivers even when the registry is large.
-    if len(payload) > 3500:
-        payload = payload[:3500] + "\n# ...truncated"
-    text = f"```\n{payload}\n```"
-    await message.answer(text, parse_mode="Markdown")
+    """Handle /metrics command — point operators to structured JSON logs."""
+    _ = bot
+    await message.answer(
+        "Метрики пайплайна теперь пишутся в structured JSON logs: "
+        "event=pipeline_latency и event=pipeline_counter. "
+        "In-process Prometheus /metrics отключён."
+    )
 
 
 @observe(name="cmd-clearcache", capture_input=False, capture_output=False)
