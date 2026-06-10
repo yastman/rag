@@ -86,7 +86,7 @@ Fan-out to the dedicated runbook for whichever check fails: [`QDRANT_TROUBLESHOO
 ### 4. Trace freshness
 
 ```bash
-make validate-traces-fast
+make e2e-core-live
 ```
 
 If traces are stale or missing, see [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md). Langfuse can be healthy while the bot still records `LLM failed: Connection error` spans — that points back at LiteLLM, not Langfuse.
@@ -119,7 +119,7 @@ If traces are stale or missing, see [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACIN
 |---|---|
 | Runtime logs | `docker compose logs bot --tail=200` |
 | Health probe | `make test-bot-health` |
-| Langfuse traces | Langfuse UI → filter by `service=bot`; or `make validate-traces-fast` |
+| Langfuse traces | Langfuse UI → filter by `service=bot`; or make e2e-core-live |
 | Container metadata | `docker inspect dev-bot-1` |
 
 ## Remediation

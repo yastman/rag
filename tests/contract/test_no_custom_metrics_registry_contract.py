@@ -40,7 +40,9 @@ def _dependencies(path: Path) -> list[str]:
 
 
 def test_root_base_dependencies_do_not_include_prometheus_client() -> None:
-    assert not any(dep.startswith("prometheus-client") for dep in _dependencies(REPO_ROOT / "pyproject.toml"))
+    assert not any(
+        dep.startswith("prometheus-client") for dep in _dependencies(REPO_ROOT / "pyproject.toml")
+    )
 
 
 def test_telegram_base_dependencies_do_not_include_prometheus_client() -> None:
@@ -60,7 +62,9 @@ def test_core_runtime_does_not_import_prometheus_client() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "prometheus_client" or alias.name.startswith("prometheus_client."):
+                    if alias.name == "prometheus_client" or alias.name.startswith(
+                        "prometheus_client."
+                    ):
                         violations.append(f"{rel}:{node.lineno} imports {alias.name}")
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""

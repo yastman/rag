@@ -177,7 +177,7 @@ logger.error(
 
 ```bash
 # Check recent errors in Langfuse
-make validate-traces-fast
+make e2e-core-live
 
 # Check handoff state
 redis-cli GET "handoff:{thread_id}"

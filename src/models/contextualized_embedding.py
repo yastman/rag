@@ -378,7 +378,3 @@ class ContextualizedEmbeddingService:
     def embed_query_sync(self, query: str) -> list[float]:
         """Sync wrapper for embed_query."""
         return asyncio.run(self.embed_query(query))
-
-    def embed_queries_sync(self, queries: list[str]) -> list[list[float]]:
-        """Sync wrapper for embed_queries."""
-        return asyncio.run(self.embed_queries(queries))

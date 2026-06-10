@@ -3,10 +3,10 @@
 These contracts pin the project decision to:
 
 1. Construct known ``instructor`` clients via
-   ``instructor.from_openai(langfuse.openai.AsyncOpenAI(...))`` so the
-   ``langfuse.openai`` auto-trace wrap stays active. The generic
-   ``instructor.from_provider(...)`` denylist is enforced by Semgrep rule
-   ``python.no-instructor-from-provider``.
+   ``instructor.from_openai(openai.AsyncOpenAI(...))`` so runtime code owns the
+   OpenAI-compatible client and routing configuration. The generic
+   ``instructor.from_provider(...)`` denylist stays here as an AST contract,
+   not as a project Semgrep rule.
 
 2. Defer adoption of ``create_partial`` / ``create_iterable`` streaming
    primitives until a real consumer (voice agent, Mini App live chat) ships.
