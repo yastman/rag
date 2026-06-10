@@ -4396,7 +4396,7 @@ class PropertyBot:
                 BotCommand(command="clear", description="Очистить историю диалога"),
                 BotCommand(command="history", description="Поиск по истории диалогов"),
                 BotCommand(command="stats", description="Статистика кеша"),
-                BotCommand(command="metrics", description="Метрики пайплайна (Prometheus)"),
+                BotCommand(command="metrics", description="Метрики пайплайна в JSON logs"),
                 BotCommand(command="clearcache", description="Очистить кеш Redis"),
             ]
         )
@@ -4458,21 +4458,8 @@ class PropertyBot:
             )
             self._polling_lock_scheduler.start()
 
-        # Start Prometheus metrics ASGI server on TELEGRAM_BOT_METRICS_PORT (#2057).
-        # Gated by TELEGRAM_BOT_METRICS_ENABLED so unit tests do not
-        # accidentally bind a real listening port.  The default is "1"
-        # (enabled) for backward-compatible production behaviour.
-        if os.getenv("TELEGRAM_BOT_METRICS_ENABLED", "1") in ("1", "true", "yes"):
-            try:
-                from .metrics_server import start_metrics_server as _start_metrics
-
-                self._metrics_server = await _start_metrics()
-            except BaseException:
-                logger.warning(
-                    "Failed to start Prometheus metrics ASGI server; /metrics HTTP "
-                    "endpoint will be unavailable. Check TELEGRAM_BOT_METRICS_PORT.",
-                    exc_info=True,
-                )
+        # DEPS-OBS3: in-process Prometheus /metrics is removed. Pipeline
+        # counters/latencies are emitted as structured JSON product logs.
 
         try:
             await self.dp.start_polling(self.bot)
@@ -4508,7 +4495,7 @@ class PropertyBot:
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
 
-        # Stop Prometheus metrics ASGI server (#2057).
+        # Stop legacy metrics server if an older runtime attached one.
         if self._metrics_server is not None:
             try:
                 from .metrics_server import stop_metrics_server
