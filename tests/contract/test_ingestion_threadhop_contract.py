@@ -1,7 +1,7 @@
 """Ingestion raw-thread-hop context-propagation contract (#2251).
 
 Background. The Phase-2 contextvars contract (#2220,
-``test_observability_contextvars_contract.py``) guards
+the removed observability contextvars contract) guards
 ``loop.run_in_executor(...)`` near ``@observe``. But the ingestion path
 crosses thread boundaries with *other* raw primitives that the #2220
 scanner does not cover:

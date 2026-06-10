@@ -24,8 +24,6 @@ DOC_BUG_CLASSES = REPO_ROOT / "docs" / "engineering" / "bug-classes.md"
 
 # Bug classes the registry must always cover (worker prompt contract).
 REQUIRED_BUG_CLASSES = {
-    "Langfuse/OTEL/contextvars loss",
-    "Observability trace-coverage drift",
     "uv .venv mutation",
     "Docker/compose drift",
     "RAG quality regression",
@@ -34,6 +32,11 @@ REQUIRED_BUG_CLASSES = {
 }
 
 # Guardrail definitions that must appear in the standards section.
+OBSOLETE_OBSERVABILITY_BUG_CLASSES = {
+    "Langfuse/OTEL/contextvars loss",
+    "Observability trace-coverage drift",
+}
+
 GUARDRAIL_TERMS = [
     "Regression-driven TDD",
     "guardrail",
@@ -175,14 +178,21 @@ def test_registry_table_has_issue_column() -> None:
         assert "canonical_issue" in item, f"{item['name']} missing canonical issue provenance."
 
 
+def test_obsolete_observability_bug_classes_are_removed() -> None:
+    """DEPS-13 removes Langfuse/OTel bug classes from the active registry."""
+    assert _class_names().isdisjoint(OBSOLETE_OBSERVABILITY_BUG_CLASSES)
+
+    mirror = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    for bug_class in OBSOLETE_OBSERVABILITY_BUG_CLASSES:
+        assert bug_class not in mirror
+
+
 # ------------- Issue provenance for duplicated classes ---------------------------
 
 
 @pytest.mark.parametrize(
     "bug_class, min_issue_refs",
     [
-        ("Langfuse/OTEL/contextvars loss", ["#2246", "#2251", "#2301"]),
-        ("Observability trace-coverage drift", ["#2215", "#2246", "#2256"]),
         ("uv .venv mutation", ["#2285", "#2289", "#2296"]),
         ("Docker/compose drift", ["#2123", "#2185", "#2188"]),
         ("Testing hygiene/tautological assertions", ["#1515", "#1539", "#1944"]),
@@ -227,15 +237,6 @@ def test_testing_hygiene_guardrail_refers_to_factual_contract() -> None:
     assert "test-writing-guide.md" in text, (
         ".github/bug-classes.yml Testing hygiene guardrail must "
         "reference docs/engineering/test-writing-guide.md"
-    )
-
-
-def test_observability_guardrail_refers_to_contextvars_contract() -> None:
-    """Observability bug class must cite the context propagation contract test."""
-    text = _flatten_text(_entry("Langfuse/OTEL/contextvars loss"))
-    assert "test_observability_contextvars_contract.py" in text, (
-        ".github/bug-classes.yml Langfuse/OTEL/contextvars row must "
-        "reference tests/contract/test_observability_contextvars_contract.py"
     )
 
 

@@ -1,18 +1,9 @@
 """Logs <-> Traces correlation contract (#2217 / Epic G).
 
-Background. Pre-#2225 the project's JSONFormatter emitted log lines without
-any trace identifier. On a Loki ERROR line, on-call could not pivot to the
-matching Langfuse trace in one click — there was no shared identifier.
-
-Epic O (#2225) activated ``LoggingInstrumentor`` in
-``src/observability_otel.py``. The OTEL ``LoggingInstrumentor`` injects two
-attributes into every ``LogRecord`` automatically:
-
-* ``otelTraceID`` — the active OTEL trace ID (matches Langfuse's
-  ``get_current_trace_id()`` because Langfuse v4 SDK runs on top of OTEL).
-* ``otelSpanID`` — the active OTEL span ID (matches the active observation).
-
-This contract pins:
+Background. The project's JSONFormatter can preserve trace identifiers when
+an optional listener or test attaches them to a ``LogRecord``. DEPS-OBS1 removes
+monolith OpenTelemetry auto-instrumentation, so this contract only pins the
+formatter compatibility surface:
 
 1. ``JSONFormatter`` reads ``record.otelTraceID`` / ``record.otelSpanID``
    when present and emits them as ``trace_id`` / ``span_id`` keys in the
@@ -21,12 +12,6 @@ This contract pins:
    trace, so Loki queries can use ``| trace_id != ""`` to filter.
 3. The default OTEL "no trace" sentinel ``"0"`` is treated as absence.
 
-After this PR + Epic G follow-ups (Loki promtail label, deep-link metadata
-on traces) the Sentry -> Langfuse -> Loki triage chain works end-to-end:
-
-    Sentry event ─[langfuse_trace_id tag, #2218]─> Langfuse trace
-    Langfuse trace.metadata.loki_url ─> Loki query (auto-filtered by trace_id)
-    Loki line ─[trace_id key, this PR]─> back to the same Langfuse trace
 """
 
 from __future__ import annotations
@@ -110,18 +95,3 @@ class TestJsonFormatterEmitsTraceContext:
         assert payload["user_id"] == 12345
         assert payload["latency_ms"] == 42
         assert payload["cache_hit"] is True
-
-
-class TestLoggingInstrumentorIsActivatedAtBoot:
-    """``activate_otel_instrumentations()`` (#2225) must include the
-    ``logging`` instrumentor so ``record.otelTraceID`` is populated."""
-
-    def test_logging_instrumentor_in_resolved_set(self) -> None:
-        from src.observability_otel import _resolve_instrumentors
-
-        resolved = _resolve_instrumentors()
-        assert "logging" in resolved, (
-            "LoggingInstrumentor must be in _resolve_instrumentors() so it "
-            "activates at boot and populates record.otelTraceID for the "
-            "JSONFormatter (#2217). Found: " + ", ".join(sorted(resolved))
-        )

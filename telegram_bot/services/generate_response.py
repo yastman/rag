@@ -548,6 +548,468 @@ async def _generate_streaming(
     )
 
 
+async def _generate_streaming_response(
+    *,
+    req: GenerationRequest,
+    t0: float,
+    query: str,
+    needs_coverage: bool,
+    documents: list[dict[str, Any]],
+    retrieved_context: list[dict[str, Any]] | None,
+    raw_messages: list[Any] | None,
+    latency_stages: dict[str, float] | None,
+    llm_call_count: int,
+    grounding_mode: str,
+    grade_confidence: float | None,
+    message: Any,
+    config: Any,
+    lf_client: Any | None,
+    max_context_docs: int,
+    format_context: Callable[..., str],
+    select_recent_history: Callable[[list[Any], int], list[Any]],
+    build_system_prompt: Callable[[str], str],
+    ensure_history_instruction: Callable[[str], str],
+    build_fallback_response: Callable[[list[dict[str, Any]]], str],
+    generate_streaming: Callable[..., Any],
+    style_detector: ResponseStyleDetector | None,
+    style_prompt_builder: Callable[..., str],
+    style_token_limit: Callable[[Any, str], int],
+    extract_queue_ms: Callable[[Any | None], float | None],
+    extract_sent_message_ref: Callable[[Any], dict[str, int] | None],
+    citation_instruction: str,
+) -> dict[str, Any]:
+    """Generate and deliver a streaming Telegram response."""
+    _ = build_system_prompt
+    _ = build_fallback_response
+    response_sent = False
+    actual_model = config.llm_model
+    ttft_ms = 0.0
+    stream_only_ttft_ms: float | None = None
+    completion_tokens: float | None = None
+    usage_details: dict[str, int] | None = None
+    stream_recovery = False
+    hard_timeout = False
+    sent_msg: Any = None
+
+    docs = documents or []
+    effective_query = query
+    if not effective_query and raw_messages:
+        last_msg = raw_messages[-1]
+        effective_query = (
+            last_msg.get("content", "")
+            if isinstance(last_msg, dict)
+            else getattr(last_msg, "content", "")
+        )
+
+    detector = style_detector or _detector
+    style_info = detector.detect(effective_query)
+    coverage_decision = detect_coverage_mode(effective_query)
+    effective_needs_coverage = bool(needs_coverage) or coverage_decision.needs_coverage
+    sources_enabled = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
+    legal_answer_safe = grounding_mode != "strict" or is_strict_grounding_safe(
+        documents=docs,
+        sources_enabled=sources_enabled,
+        grade_confidence=grade_confidence,
+    )
+    prompt_name = "generate"
+    if effective_needs_coverage:
+        prompt_name = "generate_exhaustive_list"
+
+    legacy_max_tokens = int(config.generate_max_tokens)
+    style_enabled = bool(getattr(config, "response_style_enabled", False))
+    shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
+
+    effective_max_context_docs = len(docs) if effective_needs_coverage else max_context_docs
+    if "sources_enabled" in inspect.signature(format_context).parameters:
+        context = format_context(docs, effective_max_context_docs, sources_enabled=sources_enabled)
+    else:
+        context = format_context(docs, effective_max_context_docs)
+
+    if effective_needs_coverage:
+        system_prompt, prompt_config = get_prompt_with_config(
+            "generate_exhaustive_list",
+            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
+            variables={"domain": config.domain},
+        )
+        max_tokens = min(int(prompt_config.get("max_tokens", legacy_max_tokens)), legacy_max_tokens)
+        prompt_obj = _get_linkable_prompt_object(
+            "generate_exhaustive_list",
+            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
+            variables={"domain": config.domain},
+        )
+        effective_temperature = prompt_config.get("temperature", config.llm_temperature)
+    elif style_enabled and not shadow_mode:
+        system_prompt = style_prompt_builder(
+            style=style_info.style, difficulty=style_info.difficulty, domain=config.domain
+        )
+        max_tokens = min(
+            style_token_limit(style_info.style, style_info.difficulty), legacy_max_tokens
+        )
+        prompt_obj = None
+        effective_temperature = config.llm_temperature
+    else:
+        system_prompt, prompt_config = _build_system_prompt_with_config(config.domain)
+        max_tokens = min(int(prompt_config.get("max_tokens", legacy_max_tokens)), legacy_max_tokens)
+        prompt_obj = _get_linkable_prompt_object(
+            "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
+        )
+        effective_temperature = prompt_config.get("temperature", config.llm_temperature)
+
+    system_prompt = ensure_history_instruction(system_prompt)
+    if sources_enabled and docs:
+        system_prompt = f"{system_prompt}\n\n{citation_instruction}"
+
+    llm_messages = [{"role": "system", "content": system_prompt}]
+    for msg in select_recent_history(raw_messages or [], _MAX_HISTORY_MESSAGES)[:-1]:
+        role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
+        content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
+        if role in ("user", "human"):
+            llm_messages.append({"role": "user", "content": str(content)})
+        elif role in ("assistant", "ai"):
+            llm_messages.append({"role": "assistant", "content": str(content)})
+    llm_messages.append(
+        {
+            "role": "user",
+            "content": f"Контекст:\n{context}\n\nВопрос: {effective_query}\n\nОтветь на вопрос на основе контекста выше.",
+        }
+    )
+
+    # Curated span metadata
+    _update_current_span(
+        lf_client,
+        input={
+            "query_preview": effective_query[:120],
+            "query_len": len(effective_query),
+            "query_hash": hashlib.sha256(effective_query.encode()).hexdigest()[:8],
+            "context_docs_count": len(docs),
+            "streaming_enabled": True,
+            "grounding_mode": grounding_mode,
+            "needs_coverage": effective_needs_coverage,
+            "coverage_reason": coverage_decision.reason
+            or ("state:needs_coverage" if effective_needs_coverage else None),
+        },
+    )
+
+    try:
+        llm = config.create_llm(auto_trace=False)
+        stream_kwargs = {}
+        params = inspect.signature(generate_streaming).parameters
+        if "request" in params:
+            stream_kwargs["request"] = req
+        if "lf_client" in params:
+            stream_kwargs["lf_client"] = lf_client
+        if "temperature" in params:
+            stream_kwargs["temperature"] = effective_temperature
+        if "sanitize_response" in params:
+            stream_kwargs["sanitize_response"] = lambda text: _sanitize_response_text(
+                text, sources_enabled=sources_enabled
+            )
+        if "langfuse_prompt" in params and prompt_obj is not None:
+            stream_kwargs["langfuse_prompt"] = prompt_obj
+
+        stream_result = await generate_streaming(
+            llm,
+            config,
+            llm_messages,
+            message,
+            max_tokens,
+            **stream_kwargs,
+        )
+
+        if len(stream_result) == 5:
+            (
+                answer,
+                actual_model,
+                ttft_ms,
+                completion_tokens,
+                sent_msg,
+            ) = stream_result
+            stream_only_ttft_ms = None
+        elif len(stream_result) == 6:
+            (
+                answer,
+                actual_model,
+                ttft_ms,
+                completion_tokens,
+                stream_only_ttft_ms,
+                sent_msg,
+            ) = stream_result
+        else:
+            (
+                answer,
+                actual_model,
+                ttft_ms,
+                completion_tokens,
+                stream_only_ttft_ms,
+                usage_details,
+                sent_msg,
+            ) = stream_result
+        response_sent = sent_msg is not None
+
+    except Exception as stream_exc:
+        try:
+            # Error recovery path (identical to original)
+            if hasattr(stream_exc, "sent_msg") and hasattr(stream_exc, "partial_text"):
+                _partial_len = len(getattr(stream_exc, "partial_text", ""))
+                if _is_connection_error(stream_exc.__cause__ or stream_exc):
+                    logger.warning(
+                        "Streaming failed after partial delivery (%d chars) due to connection error, falling back to non-streaming",
+                        _partial_len,
+                    )
+                else:
+                    logger.warning(
+                        "Streaming failed after partial delivery (%d chars), falling back to non-streaming with edit",
+                        _partial_len,
+                        exc_info=True,
+                    )
+                sent_msg = getattr(stream_exc, "sent_msg", None)
+                t_llm_start = time.monotonic()
+                create_kwargs = {
+                    "model": config.llm_model,
+                    "messages": llm_messages,
+                    "temperature": effective_temperature,
+                    "max_tokens": max_tokens,
+                    **config.get_reasoning_kwargs(),
+                }
+                if prompt_obj is not None:
+                    create_kwargs["langfuse_prompt"] = prompt_obj
+                response_obj = await _chat_create_with_optional_name(
+                    llm,
+                    observation_name="generate-answer",
+                    **create_kwargs,
+                )
+                t_llm_end = time.monotonic()
+                answer = response_obj.choices[0].message.content or ""
+                answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
+                actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
+                ttft_ms = (t_llm_end - t_llm_start) * 1000
+                usage = getattr(response_obj, "usage", None)
+                if usage is not None:
+                    usage_details = _extract_usage_details(usage)
+                    completion_tokens = _coerce_positive_number(
+                        getattr(usage, "completion_tokens", None)
+                    )
+                stream_recovery = True
+                delivered = False
+                if sent_msg is not None:
+                    try:
+                        await sent_msg.edit_text(format_answer_html(answer), parse_mode="HTML")
+                        delivered = True
+                    except Exception:
+                        try:
+                            await sent_msg.edit_text(answer)
+                            delivered = True
+                        except Exception:
+                            logger.warning(
+                                "Failed to edit partial streaming message; sending recovery answer as new message",
+                                exc_info=True,
+                            )
+                if not delivered:
+                    try:
+                        sent_msg = await message.answer(
+                            format_answer_html(answer),
+                            parse_mode="HTML",
+                            reply_parameters=build_reply_parameters(
+                                message, getattr(message, "text", "") or effective_query
+                            ),
+                        )
+                        delivered = True
+                    except Exception:
+                        try:
+                            sent_msg = await message.answer(answer)
+                            delivered = True
+                        except Exception:
+                            logger.warning(
+                                "Failed to deliver fallback answer after partial stream; respond_node will send final answer",
+                                exc_info=True,
+                            )
+                response_sent = delivered
+            else:
+                if _is_connection_error(stream_exc):
+                    logger.warning(
+                        "Streaming failed due to connection error, falling back to non-streaming"
+                    )
+                else:
+                    logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
+                t_llm_start = time.monotonic()
+                create_kwargs = {
+                    "model": config.llm_model,
+                    "messages": llm_messages,
+                    "temperature": effective_temperature,
+                    "max_tokens": max_tokens,
+                    **config.get_reasoning_kwargs(),
+                }
+                if prompt_obj is not None:
+                    create_kwargs["langfuse_prompt"] = prompt_obj
+                response_obj = await _chat_create_with_optional_name(
+                    llm,
+                    observation_name="generate-answer",
+                    **create_kwargs,
+                )
+                t_llm_end = time.monotonic()
+                answer = response_obj.choices[0].message.content or ""
+                answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
+                actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
+                ttft_ms = (t_llm_end - t_llm_start) * 1000
+                usage = getattr(response_obj, "usage", None)
+                if usage is not None:
+                    usage_details = _extract_usage_details(usage)
+                    completion_tokens = _coerce_positive_number(
+                        getattr(usage, "completion_tokens", None)
+                    )
+                stream_recovery = True
+        except Exception as e:
+            if _is_connection_error(e):
+                logger.warning(
+                    "generate_response: LLM connection failed (%s), using fallback",
+                    type(e).__name__,
+                )
+            else:
+                logger.exception("generate_response: LLM call failed, using fallback")
+            _update_current_span(
+                lf_client,
+                level="ERROR",
+                status_message=f"LLM failed: {str(e)[:200]}",
+            )
+            answer = build_fallback_response(docs)
+            actual_model = "fallback"
+            ttft_ms = 0.0
+            completion_tokens = None
+            usage_details = None
+            stream_only_ttft_ms = None
+            response_sent = False
+            hard_timeout = True
+            stream_recovery = False
+
+    elapsed = time.monotonic() - t0
+    PipelineMetrics.get().record("generate", elapsed * 1000)
+
+    if actual_model != "fallback":
+        generation_payload = {"model": actual_model}
+        if usage_details:
+            generation_payload["usage_details"] = usage_details
+        elif completion_tokens is not None:
+            generation_payload["usage_details"] = {"output": int(completion_tokens)}
+        if prompt_obj is not None:
+            generation_payload["prompt"] = prompt_obj
+        with contextlib.suppress(Exception):
+            _update_current_generation(lf_client, **generation_payload)
+
+    # Build eval context for managed evaluators
+    retrieved_ctx = retrieved_context or []
+    eval_context = "\n\n".join(
+        f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
+        for d in retrieved_ctx[:5]
+        if isinstance(d, dict)
+    )
+
+    span_output = {
+        "response_length": len(answer),
+        "llm_provider_model": actual_model,
+        "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
+        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
+        "llm_response_duration_ms": round(elapsed * 1000, 1),
+        "fallback_used": actual_model == "fallback",
+        "response_sent": response_sent,
+        "eval_query": effective_query[:2000],
+        "eval_answer": answer[:3000],
+        "eval_context": eval_context,
+        "needs_coverage": effective_needs_coverage,
+        "coverage_mode": "exhaustive_list" if effective_needs_coverage else "default",
+        "coverage_reason": coverage_decision.reason
+        or ("state:needs_coverage" if effective_needs_coverage else None),
+        "prompt_name": prompt_name if effective_needs_coverage or style_enabled else "generate",
+        "documents_count": len(docs),
+        "distinct_doc_count": len(
+            {
+                str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
+                for doc in docs
+            }
+        ),
+    }
+    if usage_details:
+        span_output["token_usage"] = {
+            "prompt_tokens": usage_details.get("input"),
+            "completion_tokens": usage_details.get("output"),
+            "total_tokens": usage_details.get("total"),
+        }
+    _update_current_span(lf_client, output=span_output)
+
+    llm_decode_ms = elapsed * 1000 - ttft_ms if ttft_ms > 0 else None
+    if llm_decode_ms is not None and llm_decode_ms < 0:
+        llm_decode_ms = 0.0
+    llm_tps = None
+    if completion_tokens is not None and llm_decode_ms is not None and llm_decode_ms > 0:
+        llm_tps = completion_tokens / (llm_decode_ms / 1000)
+
+    llm_ttft_drift_ms = (
+        max(0.0, ttft_ms - stream_only_ttft_ms)
+        if (stream_only_ttft_ms is not None and ttft_ms > 0)
+        else None
+    )
+    if llm_ttft_drift_ms is not None:
+        _drift_warn_threshold = getattr(config, "ttft_drift_warn_ms", None)
+        if not isinstance(_drift_warn_threshold, (int, float)):
+            _drift_warn_threshold = 500
+        if llm_ttft_drift_ms > _drift_warn_threshold:
+            with contextlib.suppress(Exception):
+                _update_current_span(
+                    lf_client,
+                    level="WARNING",
+                    status_message=f"TTFT drift detected: {llm_ttft_drift_ms:.1f}ms",
+                )
+
+    answer_words = len(answer.split())
+    answer_chars = len(answer)
+    ratio = answer_words / max(style_info.word_count, 1)
+
+    sent_message_ref = (
+        extract_sent_message_ref(sent_msg) if response_sent and sent_msg is not None else None
+    )
+    current_latency = latency_stages or {}
+    current_llm_calls = max(0, int(llm_call_count))
+
+    return _ensure_generation_signal_defaults(
+        {
+            "response": answer,
+            "response_sent": response_sent,
+            "sent_message": sent_message_ref,
+            "llm_provider_model": actual_model,
+            "llm_ttft_ms": ttft_ms,
+            "llm_response_duration_ms": elapsed * 1000,
+            "llm_stream_only_ttft_ms": stream_only_ttft_ms,
+            "llm_ttft_drift_ms": llm_ttft_drift_ms,
+            "llm_call_count": current_llm_calls + 1,
+            "latency_stages": {**current_latency, "generate": elapsed},
+            "llm_decode_ms": llm_decode_ms,
+            "llm_tps": llm_tps,
+            "llm_queue_ms": extract_queue_ms(response_obj) if "response_obj" in locals() else None,
+            "llm_timeout": hard_timeout,
+            "llm_stream_recovery": stream_recovery,
+            "streaming_enabled": True,
+            "response_style": style_info.style,
+            "response_difficulty": style_info.difficulty,
+            "response_style_reasoning": style_info.reasoning,
+            "answer_words": answer_words,
+            "answer_chars": answer_chars,
+            "answer_to_question_ratio": ratio,
+            "response_policy_mode": "coverage"
+            if effective_needs_coverage
+            else (
+                "enforced"
+                if (style_enabled and not shadow_mode)
+                else ("shadow" if shadow_mode else "disabled")
+            ),
+            "grounding_mode": grounding_mode,
+            "safe_fallback_used": False,
+            "grounded": True,
+            "legal_answer_safe": legal_answer_safe,
+            "semantic_cache_safe_reuse": legal_answer_safe,
+            "needs_coverage": effective_needs_coverage,
+        }
+    )
+
+
 def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float | None:
     """Return provider-reported queue time in ms, or None if unavailable/unreliable."""
     return None
@@ -628,450 +1090,35 @@ async def generate_response(
         },
     )
 
-    # Streaming path
     if message is not None and config.streaming_enabled:
-        response_sent = False
-        actual_model = config.llm_model
-        ttft_ms = 0.0
-        stream_only_ttft_ms: float | None = None
-        completion_tokens: float | None = None
-        usage_details: dict[str, int] | None = None
-        stream_recovery = False
-        hard_timeout = False
-        sent_msg: Any = None
-
-        docs = documents or []
-        effective_query = query
-        if not effective_query and raw_messages:
-            last_msg = raw_messages[-1]
-            effective_query = (
-                last_msg.get("content", "")
-                if isinstance(last_msg, dict)
-                else getattr(last_msg, "content", "")
-            )
-
-        detector = style_detector or _detector
-        style_info = detector.detect(effective_query)
-        coverage_decision = detect_coverage_mode(effective_query)
-        effective_needs_coverage = bool(needs_coverage) or coverage_decision.needs_coverage
-        sources_enabled = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
-        legal_answer_safe = grounding_mode != "strict" or is_strict_grounding_safe(
-            documents=docs,
-            sources_enabled=sources_enabled,
+        return await _generate_streaming_response(
+            req=req,
+            t0=t0,
+            query=query,
+            needs_coverage=needs_coverage,
+            documents=documents,
+            retrieved_context=retrieved_context,
+            raw_messages=raw_messages,
+            latency_stages=latency_stages,
+            llm_call_count=llm_call_count,
+            grounding_mode=grounding_mode,
             grade_confidence=grade_confidence,
-        )
-        prompt_name = "generate"
-        if effective_needs_coverage:
-            prompt_name = "generate_exhaustive_list"
-
-        legacy_max_tokens = int(config.generate_max_tokens)
-        style_enabled = bool(getattr(config, "response_style_enabled", False))
-        shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
-
-        effective_max_context_docs = len(docs) if effective_needs_coverage else max_context_docs
-        if "sources_enabled" in inspect.signature(format_context).parameters:
-            context = format_context(
-                docs, effective_max_context_docs, sources_enabled=sources_enabled
-            )
-        else:
-            context = format_context(docs, effective_max_context_docs)
-
-        if effective_needs_coverage:
-            system_prompt, prompt_config = get_prompt_with_config(
-                "generate_exhaustive_list",
-                fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
-                variables={"domain": config.domain},
-            )
-            max_tokens = min(
-                int(prompt_config.get("max_tokens", legacy_max_tokens)), legacy_max_tokens
-            )
-            prompt_obj = _get_linkable_prompt_object(
-                "generate_exhaustive_list",
-                fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
-                variables={"domain": config.domain},
-            )
-            effective_temperature = prompt_config.get("temperature", config.llm_temperature)
-        elif style_enabled and not shadow_mode:
-            system_prompt = style_prompt_builder(
-                style=style_info.style, difficulty=style_info.difficulty, domain=config.domain
-            )
-            max_tokens = min(
-                style_token_limit(style_info.style, style_info.difficulty), legacy_max_tokens
-            )
-            prompt_obj = None
-            effective_temperature = config.llm_temperature
-        else:
-            system_prompt, prompt_config = _build_system_prompt_with_config(config.domain)
-            max_tokens = min(
-                int(prompt_config.get("max_tokens", legacy_max_tokens)), legacy_max_tokens
-            )
-            prompt_obj = _get_linkable_prompt_object(
-                "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
-            )
-            effective_temperature = prompt_config.get("temperature", config.llm_temperature)
-
-        system_prompt = ensure_history_instruction(system_prompt)
-        if sources_enabled and docs:
-            system_prompt = f"{system_prompt}\n\n{citation_instruction}"
-
-        llm_messages = [{"role": "system", "content": system_prompt}]
-        for msg in select_recent_history(raw_messages or [], _MAX_HISTORY_MESSAGES)[:-1]:
-            role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
-            content = (
-                msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
-            )
-            if role in ("user", "human"):
-                llm_messages.append({"role": "user", "content": str(content)})
-            elif role in ("assistant", "ai"):
-                llm_messages.append({"role": "assistant", "content": str(content)})
-        llm_messages.append(
-            {
-                "role": "user",
-                "content": f"Контекст:\n{context}\n\nВопрос: {effective_query}\n\nОтветь на вопрос на основе контекста выше.",
-            }
-        )
-
-        # Curated span metadata
-        _update_current_span(
-            lf_client,
-            input={
-                "query_preview": effective_query[:120],
-                "query_len": len(effective_query),
-                "query_hash": hashlib.sha256(effective_query.encode()).hexdigest()[:8],
-                "context_docs_count": len(docs),
-                "streaming_enabled": True,
-                "grounding_mode": grounding_mode,
-                "needs_coverage": effective_needs_coverage,
-                "coverage_reason": coverage_decision.reason
-                or ("state:needs_coverage" if effective_needs_coverage else None),
-            },
-        )
-
-        try:
-            llm = config.create_llm(auto_trace=False)
-            stream_kwargs = {}
-            params = inspect.signature(generate_streaming).parameters
-            if "request" in params:
-                stream_kwargs["request"] = req
-            if "lf_client" in params:
-                stream_kwargs["lf_client"] = lf_client
-            if "temperature" in params:
-                stream_kwargs["temperature"] = effective_temperature
-            if "sanitize_response" in params:
-                stream_kwargs["sanitize_response"] = lambda text: _sanitize_response_text(
-                    text, sources_enabled=sources_enabled
-                )
-            if "langfuse_prompt" in params and prompt_obj is not None:
-                stream_kwargs["langfuse_prompt"] = prompt_obj
-
-            stream_result = await generate_streaming(
-                llm,
-                config,
-                llm_messages,
-                message,
-                max_tokens,
-                **stream_kwargs,
-            )
-
-            if len(stream_result) == 5:
-                (
-                    answer,
-                    actual_model,
-                    ttft_ms,
-                    completion_tokens,
-                    sent_msg,
-                ) = stream_result
-                stream_only_ttft_ms = None
-            elif len(stream_result) == 6:
-                (
-                    answer,
-                    actual_model,
-                    ttft_ms,
-                    completion_tokens,
-                    stream_only_ttft_ms,
-                    sent_msg,
-                ) = stream_result
-            else:
-                (
-                    answer,
-                    actual_model,
-                    ttft_ms,
-                    completion_tokens,
-                    stream_only_ttft_ms,
-                    usage_details,
-                    sent_msg,
-                ) = stream_result
-            response_sent = sent_msg is not None
-
-        except Exception as stream_exc:
-            try:
-                # Error recovery path (identical to original)
-                if hasattr(stream_exc, "sent_msg") and hasattr(stream_exc, "partial_text"):
-                    _partial_len = len(getattr(stream_exc, "partial_text", ""))
-                    if _is_connection_error(stream_exc.__cause__ or stream_exc):
-                        logger.warning(
-                            "Streaming failed after partial delivery (%d chars) due to connection error, falling back to non-streaming",
-                            _partial_len,
-                        )
-                    else:
-                        logger.warning(
-                            "Streaming failed after partial delivery (%d chars), falling back to non-streaming with edit",
-                            _partial_len,
-                            exc_info=True,
-                        )
-                    sent_msg = getattr(stream_exc, "sent_msg", None)
-                    t_llm_start = time.monotonic()
-                    create_kwargs = {
-                        "model": config.llm_model,
-                        "messages": llm_messages,
-                        "temperature": effective_temperature,
-                        "max_tokens": max_tokens,
-                        **config.get_reasoning_kwargs(),
-                    }
-                    if prompt_obj is not None:
-                        create_kwargs["langfuse_prompt"] = prompt_obj
-                    response_obj = await _chat_create_with_optional_name(
-                        llm,
-                        observation_name="generate-answer",
-                        **create_kwargs,
-                    )
-                    t_llm_end = time.monotonic()
-                    answer = response_obj.choices[0].message.content or ""
-                    answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
-                    actual_model = (
-                        getattr(response_obj, "model", config.llm_model) or config.llm_model
-                    )
-                    ttft_ms = (t_llm_end - t_llm_start) * 1000
-                    usage = getattr(response_obj, "usage", None)
-                    if usage is not None:
-                        usage_details = _extract_usage_details(usage)
-                        completion_tokens = _coerce_positive_number(
-                            getattr(usage, "completion_tokens", None)
-                        )
-                    stream_recovery = True
-                    delivered = False
-                    if sent_msg is not None:
-                        try:
-                            await sent_msg.edit_text(format_answer_html(answer), parse_mode="HTML")
-                            delivered = True
-                        except Exception:
-                            try:
-                                await sent_msg.edit_text(answer)
-                                delivered = True
-                            except Exception:
-                                logger.warning(
-                                    "Failed to edit partial streaming message; sending recovery answer as new message",
-                                    exc_info=True,
-                                )
-                    if not delivered:
-                        try:
-                            sent_msg = await message.answer(
-                                format_answer_html(answer),
-                                parse_mode="HTML",
-                                reply_parameters=build_reply_parameters(
-                                    message, getattr(message, "text", "") or effective_query
-                                ),
-                            )
-                            delivered = True
-                        except Exception:
-                            try:
-                                sent_msg = await message.answer(answer)
-                                delivered = True
-                            except Exception:
-                                logger.warning(
-                                    "Failed to deliver fallback answer after partial stream; respond_node will send final answer",
-                                    exc_info=True,
-                                )
-                    response_sent = delivered
-                else:
-                    if _is_connection_error(stream_exc):
-                        logger.warning(
-                            "Streaming failed due to connection error, falling back to non-streaming"
-                        )
-                    else:
-                        logger.warning(
-                            "Streaming failed, falling back to non-streaming", exc_info=True
-                        )
-                    t_llm_start = time.monotonic()
-                    create_kwargs = {
-                        "model": config.llm_model,
-                        "messages": llm_messages,
-                        "temperature": effective_temperature,
-                        "max_tokens": max_tokens,
-                        **config.get_reasoning_kwargs(),
-                    }
-                    if prompt_obj is not None:
-                        create_kwargs["langfuse_prompt"] = prompt_obj
-                    response_obj = await _chat_create_with_optional_name(
-                        llm,
-                        observation_name="generate-answer",
-                        **create_kwargs,
-                    )
-                    t_llm_end = time.monotonic()
-                    answer = response_obj.choices[0].message.content or ""
-                    answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
-                    actual_model = (
-                        getattr(response_obj, "model", config.llm_model) or config.llm_model
-                    )
-                    ttft_ms = (t_llm_end - t_llm_start) * 1000
-                    usage = getattr(response_obj, "usage", None)
-                    if usage is not None:
-                        usage_details = _extract_usage_details(usage)
-                        completion_tokens = _coerce_positive_number(
-                            getattr(usage, "completion_tokens", None)
-                        )
-                    stream_recovery = True
-            except Exception as e:
-                if _is_connection_error(e):
-                    logger.warning(
-                        "generate_response: LLM connection failed (%s), using fallback",
-                        type(e).__name__,
-                    )
-                else:
-                    logger.exception("generate_response: LLM call failed, using fallback")
-                _update_current_span(
-                    lf_client,
-                    level="ERROR",
-                    status_message=f"LLM failed: {str(e)[:200]}",
-                )
-                answer = build_fallback_response(docs)
-                actual_model = "fallback"
-                ttft_ms = 0.0
-                completion_tokens = None
-                usage_details = None
-                stream_only_ttft_ms = None
-                response_sent = False
-                hard_timeout = True
-                stream_recovery = False
-
-        elapsed = time.monotonic() - t0
-        PipelineMetrics.get().record("generate", elapsed * 1000)
-
-        if actual_model != "fallback":
-            generation_payload = {"model": actual_model}
-            if usage_details:
-                generation_payload["usage_details"] = usage_details
-            elif completion_tokens is not None:
-                generation_payload["usage_details"] = {"output": int(completion_tokens)}
-            if prompt_obj is not None:
-                generation_payload["prompt"] = prompt_obj
-            with contextlib.suppress(Exception):
-                _update_current_generation(lf_client, **generation_payload)
-
-        # Build eval context for managed evaluators
-        retrieved_ctx = retrieved_context or []
-        eval_context = "\n\n".join(
-            f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
-            for d in retrieved_ctx[:5]
-            if isinstance(d, dict)
-        )
-
-        span_output = {
-            "response_length": len(answer),
-            "llm_provider_model": actual_model,
-            "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
-            "llm_stream_only_ttft_ms": stream_only_ttft_ms,
-            "llm_response_duration_ms": round(elapsed * 1000, 1),
-            "fallback_used": actual_model == "fallback",
-            "response_sent": response_sent,
-            "eval_query": effective_query[:2000],
-            "eval_answer": answer[:3000],
-            "eval_context": eval_context,
-            "needs_coverage": effective_needs_coverage,
-            "coverage_mode": "exhaustive_list" if effective_needs_coverage else "default",
-            "coverage_reason": coverage_decision.reason
-            or ("state:needs_coverage" if effective_needs_coverage else None),
-            "prompt_name": prompt_name if effective_needs_coverage or style_enabled else "generate",
-            "documents_count": len(docs),
-            "distinct_doc_count": len(
-                {
-                    str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
-                    for doc in docs
-                }
-            ),
-        }
-        if usage_details:
-            span_output["token_usage"] = {
-                "prompt_tokens": usage_details.get("input"),
-                "completion_tokens": usage_details.get("output"),
-                "total_tokens": usage_details.get("total"),
-            }
-        _update_current_span(lf_client, output=span_output)
-
-        llm_decode_ms = elapsed * 1000 - ttft_ms if ttft_ms > 0 else None
-        if llm_decode_ms is not None and llm_decode_ms < 0:
-            llm_decode_ms = 0.0
-        llm_tps = None
-        if completion_tokens is not None and llm_decode_ms is not None and llm_decode_ms > 0:
-            llm_tps = completion_tokens / (llm_decode_ms / 1000)
-
-        llm_ttft_drift_ms = (
-            max(0.0, ttft_ms - stream_only_ttft_ms)
-            if (stream_only_ttft_ms is not None and ttft_ms > 0)
-            else None
-        )
-        if llm_ttft_drift_ms is not None:
-            _drift_warn_threshold = getattr(config, "ttft_drift_warn_ms", None)
-            if not isinstance(_drift_warn_threshold, (int, float)):
-                _drift_warn_threshold = 500
-            if llm_ttft_drift_ms > _drift_warn_threshold:
-                with contextlib.suppress(Exception):
-                    _update_current_span(
-                        lf_client,
-                        level="WARNING",
-                        status_message=f"TTFT drift detected: {llm_ttft_drift_ms:.1f}ms",
-                    )
-
-        answer_words = len(answer.split())
-        answer_chars = len(answer)
-        ratio = answer_words / max(style_info.word_count, 1)
-
-        sent_message_ref = (
-            extract_sent_message_ref(sent_msg) if response_sent and sent_msg is not None else None
-        )
-        current_latency = latency_stages or {}
-        current_llm_calls = max(0, int(llm_call_count))
-
-        return _ensure_generation_signal_defaults(
-            {
-                "response": answer,
-                "response_sent": response_sent,
-                "sent_message": sent_message_ref,
-                "llm_provider_model": actual_model,
-                "llm_ttft_ms": ttft_ms,
-                "llm_response_duration_ms": elapsed * 1000,
-                "llm_stream_only_ttft_ms": stream_only_ttft_ms,
-                "llm_ttft_drift_ms": llm_ttft_drift_ms,
-                "llm_call_count": current_llm_calls + 1,
-                "latency_stages": {**current_latency, "generate": elapsed},
-                "llm_decode_ms": llm_decode_ms,
-                "llm_tps": llm_tps,
-                "llm_queue_ms": extract_queue_ms(response_obj)
-                if "response_obj" in locals()
-                else None,
-                "llm_timeout": hard_timeout,
-                "llm_stream_recovery": stream_recovery,
-                "streaming_enabled": True,
-                "response_style": style_info.style,
-                "response_difficulty": style_info.difficulty,
-                "response_style_reasoning": style_info.reasoning,
-                "answer_words": answer_words,
-                "answer_chars": answer_chars,
-                "answer_to_question_ratio": ratio,
-                "response_policy_mode": "coverage"
-                if effective_needs_coverage
-                else (
-                    "enforced"
-                    if (style_enabled and not shadow_mode)
-                    else ("shadow" if shadow_mode else "disabled")
-                ),
-                "grounding_mode": grounding_mode,
-                "safe_fallback_used": False,
-                "grounded": True,
-                "legal_answer_safe": legal_answer_safe,
-                "semantic_cache_safe_reuse": legal_answer_safe,
-                "needs_coverage": effective_needs_coverage,
-            }
+            message=message,
+            config=config,
+            lf_client=lf_client,
+            max_context_docs=max_context_docs,
+            format_context=format_context,
+            select_recent_history=select_recent_history,
+            build_system_prompt=build_system_prompt,
+            ensure_history_instruction=ensure_history_instruction,
+            build_fallback_response=build_fallback_response,
+            generate_streaming=generate_streaming,
+            style_detector=style_detector,
+            style_prompt_builder=style_prompt_builder,
+            style_token_limit=style_token_limit,
+            extract_queue_ms=extract_queue_ms,
+            extract_sent_message_ref=extract_sent_message_ref,
+            citation_instruction=citation_instruction,
         )
 
     # Non-streaming path: directly call generate_answer()

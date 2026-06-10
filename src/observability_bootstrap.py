@@ -30,15 +30,7 @@ def disable_otel_exporter(*, shutdown: bool = True) -> None:
     os.environ["OTEL_TRACES_EXPORTER"] = "none"
     os.environ["OTEL_METRICS_EXPORTER"] = "none"
     os.environ["OTEL_LOGS_EXPORTER"] = "none"
-    if not shutdown:
-        return
-    try:
-        from opentelemetry import trace as otel_trace_api
-        from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
-
-        current = otel_trace_api.get_tracer_provider()
-        actual = getattr(current, "_real_provider", current)
-        if isinstance(actual, SdkTracerProvider):
-            actual.shutdown()
-    except ImportError:
-        pass
+    # DEPS-OBS1 removes direct OpenTelemetry imports from the monolith.
+    # The env flags above are enough to prevent exporter work; any SDK-owned
+    # provider shutdown is left to the SDK/client that created it.
+    _ = shutdown

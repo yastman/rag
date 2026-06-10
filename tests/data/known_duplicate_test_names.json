@@ -113,10 +113,6 @@
     "tests/unit/ingestion/test_unified_cli.py",
     "tests/unit/services/test_history_service.py"
   ],
-  "test_creates_dataset_and_items": [
-    "tests/unit/test_export_traces_to_dataset.py",
-    "tests/unit/test_generate_gold_set.py"
-  ],
   "test_custom_values": [
     "tests/unit/ingestion/test_qdrant_hybrid_target.py",
     "tests/unit/test_cocoindex_flow.py",
@@ -307,14 +303,6 @@
     "tests/unit/ingestion/test_colbert_backfill.py",
     "tests/unit/ingestion/test_unified_cli.py"
   ],
-  "test_message_text": [
-    "tests/unit/observability/test_tracing_context.py",
-    "tests/unit/test_langfuse_context_middleware.py"
-  ],
-  "test_message_voice": [
-    "tests/unit/observability/test_tracing_context.py",
-    "tests/unit/test_langfuse_context_middleware.py"
-  ],
   "test_missing_trace_id_returns_none": [
     "tests/unit/test_feedback.py",
     "tests/unit/test_feedback_handler.py"
@@ -322,14 +310,6 @@
   "test_needs_agent_defaults_to_false": [
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
-  ],
-  "test_no_results": [
-    "tests/unit/agents/test_apartment_tools.py",
-    "tests/unit/test_export_traces_to_dataset.py"
-  ],
-  "test_paginates_through_all_pages": [
-    "tests/unit/test_export_traces_to_dataset.py",
-    "tests/unit/test_langfuse_triage.py"
   ],
   "test_payload_has_required_fields": [
     "tests/integration/test_unified_ingestion_e2e.py",
@@ -441,13 +421,5 @@
   "test_supported_dimensions": [
     "tests/unit/models/test_contextualized_pipeline.py",
     "tests/unit/test_contextualized_embeddings.py"
-  ],
-  "test_unknown_event": [
-    "tests/unit/observability/test_tracing_context.py",
-    "tests/unit/test_langfuse_context_middleware.py"
-  ],
-  "test_writes_valid_jsonl": [
-    "tests/unit/test_export_traces_to_dataset.py",
-    "tests/unit/test_generate_gold_set.py"
   ]
 }

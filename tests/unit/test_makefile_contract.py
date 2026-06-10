@@ -37,6 +37,55 @@ def test_redis_container_override_behavior_preserved() -> None:
     )
 
 
+def test_polling_lock_key_default_matches_bot_contract() -> None:
+    """The manual unlock target must use the canonical bot polling lock key."""
+    text = _makefile_text()
+    match = re.search(r"^POLLING_LOCK_KEY\s+\?=\s*(.+)$", text, re.MULTILINE)
+    assert match, "POLLING_LOCK_KEY default not found in Makefile"
+    assert match.group(1).strip() == "telegram-bot:polling"
+
+
+def test_release_polling_lock_target_exists_and_uses_rediscli_auth() -> None:
+    """Operators need a safe local workaround for stale Redis polling locks."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^release-polling-lock:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "release-polling-lock target not found in Makefile"
+    block = block_match.group(0)
+    assert "POLLING_LOCK_KEY" in block
+    assert "REDISCLI_AUTH" in block, "target must not put Redis passwords on redis-cli -a argv"
+    assert "redis_exec DEL \"$$key\"" in block
+    assert "sh -c" not in block, "target should pass keys/passwords as docker exec args"
+    assert "make run-bot" in block
+
+
+def test_release_polling_lock_requires_bot_not_running_unless_forced() -> None:
+    """The manual unlock target must not create a second live poller by default."""
+    text = _makefile_text()
+    assert "RELEASE_POLLING_LOCK_FORCE ?= 0" in text
+    block_match = re.search(
+        r"^release-polling-lock:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "release-polling-lock target not found in Makefile"
+    block = block_match.group(0)
+    assert "docker ps --filter name=bot" in block
+    assert "telegram_bot[.]main" in block
+    assert "Refusing to release polling lock" in block
+    assert "RELEASE_POLLING_LOCK_FORCE=1" in block
+
+
+def test_release_polling_lock_is_phony() -> None:
+    text = _makefile_text()
+    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
+    combined = " ".join(phony_blocks)
+    assert "release-polling-lock" in combined
+
+
 # --- #1282 Local services docling contract tests ---
 
 
@@ -156,99 +205,28 @@ def test_makefile_does_not_use_invalid_core_profile() -> None:
     )
 
 
-def test_validate_traces_targets_use_local_compose_cmd() -> None:
-    """Trace validation targets must use the local Compose contract (LOCAL_COMPOSE_CMD)."""
+def test_obsolete_langfuse_trace_targets_are_removed() -> None:
+    """DEPS-14 removes legacy Langfuse/trace Makefile diagnostics."""
     text = _makefile_text()
-    for target in ("validate-traces", "validate-traces-fast"):
-        block_match = re.search(
-            rf"^{re.escape(target)}:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-            text,
-            re.MULTILINE | re.DOTALL,
-        )
-        assert block_match, f"{target} target not found in Makefile"
-        block = block_match.group(0)
-        assert "$(LOCAL_COMPOSE_CMD)" in block, (
-            f"{target} must use $(LOCAL_COMPOSE_CMD) to respect the local Compose contract "
-            f"(compose.yml:compose.dev.yml with env-file handling)."
-        )
-
-
-def test_validate_traces_fast_runs_postgres_auth_preflight() -> None:
-    text = _makefile_text()
-    block_match = re.search(
-        r"^validate-traces-fast:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "validate-traces-fast target not found in Makefile"
-    block = block_match.group(0)
-    assert "scripts/validate_trace_runtime.py" in block, (
-        "validate-traces-fast must run scripts/validate_trace_runtime.py preflight "
-        "before docker compose up to avoid silent Postgres auth mismatch loops."
+    obsolete_targets = (
+        "validate-traces",
+        "validate-traces-fast",
+        "validate-voice-traces",
+        "langfuse-latency-audit",
+        "langfuse-latest-trace-audit",
+        "trace-audit-snapshot",
     )
 
-
-def test_trace_validation_targets_use_valid_langfuse_key_fallbacks() -> None:
-    """Trace validation targets must render valid shell env assignments."""
-    text = _makefile_text()
-    for target in ("validate-traces-fast", "validate-voice-traces"):
-        block_match = re.search(
-            rf"^{re.escape(target)}:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-            text,
-            re.MULTILINE | re.DOTALL,
+    for target in obsolete_targets:
+        assert not re.search(rf"^{re.escape(target)}:", text, re.MULTILINE), (
+            f"{target} should be removed from Makefile"
         )
-        assert block_match, f"{target} target not found in Makefile"
-        block = block_match.group(0)
-
-        assert (
-            'LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)"'
-            in block
-        )
-        assert (
-            'LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)"'
-            in block
-        )
-        assert "[REDACTED-LANGFUSE-KEY]" not in block, (
-            f"{target} must not contain redacted placeholders in shell env "
-            "assignments; they break `make validate-traces-fast` with a shell syntax error."
-        )
-
-
-def test_validate_traces_fast_loads_runtime_dotenv_without_redis_default() -> None:
-    """Trace validation must not mask .env REDIS_PASSWORD with a stale default."""
-    text = _makefile_text()
-    block_match = re.search(
-        r"^validate-traces-fast:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "validate-traces-fast target not found in Makefile"
-    block = block_match.group(0)
-
-    assert (
-        "TRACE_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)"
-        in text
-    )
-    assert 'uv run dotenv -f "$(TRACE_ENV_FILE)" run --no-override --' in block
-    assert 'REDIS_PASSWORD="$(or $(REDIS_PASSWORD),dev_redis_pass)"' not in block, (
-        "validate-traces-fast must let python-dotenv load REDIS_PASSWORD from the "
-        "same env file Compose uses; a hardcoded default causes auth mismatches."
-    )
-
-
-def test_validate_traces_fast_randomizes_minio_host_ports_by_default() -> None:
-    """Trace validation must not depend on fixed optional MinIO host ports."""
-    text = _makefile_text()
-    block_match = re.search(
-        r"^validate-traces-fast:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "validate-traces-fast target not found in Makefile"
-    block = block_match.group(0)
-
-    assert 'MINIO_API_PORT="$(or $(MINIO_API_PORT),0)"' in block
-    assert 'MINIO_CONSOLE_PORT="$(or $(MINIO_CONSOLE_PORT),0)"' in block
+    assert "the removed trace validation script" not in text
+    assert "scripts/validate_trace_runtime.py" not in text
+    assert "scripts/validate_voice_traces.py" not in text
+    assert "scripts.probe.langfuse_latency_audit" not in text
+    assert "the removed latest-trace audit script" not in text
+    assert "scripts.audit.trace_audit_snapshot" not in text
 
 
 # --- #1307 core trace gate contract tests ---
@@ -314,37 +292,6 @@ def test_e2e_test_traces_core_includes_required_scenarios() -> None:
 
 
 # --- #1490 latest trace audit contract tests ---
-
-
-def test_langfuse_latest_trace_audit_is_phony() -> None:
-    text = _makefile_text()
-    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
-    assert phony_blocks, ".PHONY declaration not found in Makefile"
-    combined = " ".join(phony_blocks)
-    assert "langfuse-latest-trace-audit" in combined, (
-        "langfuse-latest-trace-audit must be declared in .PHONY"
-    )
-
-
-def test_langfuse_latest_trace_audit_target_exists() -> None:
-    text = _makefile_text()
-    assert re.search(r"^langfuse-latest-trace-audit:", text, re.MULTILINE), (
-        "langfuse-latest-trace-audit target must exist in Makefile"
-    )
-
-
-def test_langfuse_latest_trace_audit_runs_audit_script() -> None:
-    text = _makefile_text()
-    block_match = re.search(
-        r"^langfuse-latest-trace-audit:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "langfuse-latest-trace-audit target not found in Makefile"
-    block = block_match.group(0)
-    assert "scripts/e2e/langfuse_latest_trace_audit.py" in block, (
-        "langfuse-latest-trace-audit must invoke scripts/e2e/langfuse_latest_trace_audit.py"
-    )
 
 
 # --- #1486 runtime env contract tests ---

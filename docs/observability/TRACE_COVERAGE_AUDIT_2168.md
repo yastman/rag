@@ -191,7 +191,7 @@ they should be filled by the operator running the audit and posted as a
 comment on this issue along with the outputs of:
 
 ```bash
-make validate-traces-fast
+make e2e-core-live
 make langfuse-latest-trace-audit
 ```
 
@@ -209,6 +209,6 @@ make langfuse-latest-trace-audit
 - Wave 2 PRs: #2158, #2163, #2164, #2165
 - Wave 2 follow-up: #2167 (executor contextvars propagation)
 - Wave 1 burn-down: #1658-#1666
-- Validation tooling: `make validate-traces-fast`,
+- Validation tooling: make e2e-core-live,
   `make langfuse-latest-trace-audit`
 - SDK docs (Context7): `/langfuse/langfuse-python`

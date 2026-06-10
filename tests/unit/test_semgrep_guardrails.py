@@ -22,14 +22,17 @@ NAIVE_UTC_RULE_PATHS = {
 
 REQUIRED_RULE_IDS = {
     "python.no-datetime-utcnow",
-    "python.no-instructor-from-provider",
-    "python.no-langfuse-set-current-trace-io",
-    "python.no-langfuse-prompts-api-get",
     "python.no-qdrant-client-search",
     "python.no-subprocess-shell-true",
     "python.no-os-system",
     "github-actions.no-pull-request-target",
     "compose.no-latest-image",
+}
+
+OBSOLETE_LANGFUSE_RULE_IDS = {
+    "python.no-instructor-from-provider",
+    "python.no-langfuse-set-current-trace-io",
+    "python.no-langfuse-prompts-api-get",
 }
 
 
@@ -49,6 +52,15 @@ def test_semgrep_config_contains_required_rule_ids() -> None:
 
     actual = {rule.get("id") for rule in rules if isinstance(rule, dict)}
     assert actual >= REQUIRED_RULE_IDS
+
+
+def test_semgrep_config_excludes_obsolete_langfuse_rule_ids() -> None:
+    data = _load_yaml(SEMGREP_CONFIG)
+    rules = data.get("rules")
+    assert isinstance(rules, list), ".semgrep/project-guardrails.yml must define rules"
+
+    actual = {rule.get("id") for rule in rules if isinstance(rule, dict)}
+    assert actual.isdisjoint(OBSOLETE_LANGFUSE_RULE_IDS)
 
 
 def _rule_by_id(rule_id: str) -> dict[str, Any]:
