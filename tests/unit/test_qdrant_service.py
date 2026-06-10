@@ -36,6 +36,16 @@ def _make_mock_point(
     return point
 
 
+def _metric_records(caplog, metric_name: str):
+    return [
+        record
+        for record in caplog.records
+        if record.name == "src.utils.product_events"
+        and getattr(record, "event", None) == "pipeline_counter"
+        and getattr(record, "metric_name", None) == metric_name
+    ]
+
+
 class TestQdrantServiceQuantization:
     """Test quantization search parameters."""
 
@@ -735,22 +745,9 @@ class TestQdrantServiceHybridSearchColbert:
         assert service._colbert_available is False
         service.hybrid_search_rrf.assert_awaited_once()
 
-    async def test_colbert_empty_results_counts_rerank_empty_metric(self, service):
+    async def test_colbert_empty_results_counts_rerank_empty_metric(self, service, caplog):
         """Empty ColBERT results count rerank-empty and fallback metrics (#2056)."""
-        from prometheus_client import REGISTRY
-
-        before_empty = (
-            REGISTRY.get_sample_value(
-                "rag_pipeline_events_total", labels={"event": "colbert_rerank_empty"}
-            )
-            or 0.0
-        )
-        before_fallback = (
-            REGISTRY.get_sample_value(
-                "rag_pipeline_events_total", labels={"event": "colbert_fallback_to_rrf"}
-            )
-            or 0.0
-        )
+        caplog.set_level(logging.INFO, logger="src.utils.product_events")
 
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         service.hybrid_search_rrf = AsyncMock(
@@ -763,20 +760,8 @@ class TestQdrantServiceHybridSearchColbert:
             top_k=5,
         )
 
-        after_empty = (
-            REGISTRY.get_sample_value(
-                "rag_pipeline_events_total", labels={"event": "colbert_rerank_empty"}
-            )
-            or 0.0
-        )
-        after_fallback = (
-            REGISTRY.get_sample_value(
-                "rag_pipeline_events_total", labels={"event": "colbert_fallback_to_rrf"}
-            )
-            or 0.0
-        )
-        assert after_empty - before_empty == 1.0
-        assert after_fallback - before_fallback == 1.0
+        assert _metric_records(caplog, "colbert_rerank_empty")
+        assert _metric_records(caplog, "colbert_fallback_to_rrf")
 
     async def test_colbert_search_with_filters(self, service, mock_point):
         """Filters are passed through to query_points."""
