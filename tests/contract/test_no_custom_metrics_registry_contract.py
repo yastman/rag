@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -12,6 +13,25 @@ SCAN_DIRS = [REPO_ROOT / "src", REPO_ROOT / "telegram_bot"]
 _ALLOWED_PROMETHEUS_TEXT = {
     Path("src/evaluation/metrics_logger.py"),  # eval-only text export helper
 }
+
+
+def _tracked_python_files() -> list[Path]:
+    missing_roots = [str(path.relative_to(REPO_ROOT)) for path in SCAN_DIRS if not path.is_dir()]
+    assert missing_roots == [], f"contract scan roots do not exist: {missing_roots}"
+
+    output = subprocess.check_output(
+        [
+            "git",
+            "ls-files",
+            "src/**/*.py",
+            "telegram_bot/**/*.py",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+    )
+    files = [REPO_ROOT / line for line in output.splitlines() if line]
+    assert files, "contract scan found no tracked production Python files"
+    return files
 
 
 def _dependencies(path: Path) -> list[str]:
@@ -32,21 +52,20 @@ def test_telegram_base_dependencies_do_not_include_prometheus_client() -> None:
 
 def test_core_runtime_does_not_import_prometheus_client() -> None:
     violations: list[str] = []
-    for base in SCAN_DIRS:
-        for py_file in base.rglob("*.py"):
-            rel = py_file.relative_to(REPO_ROOT)
-            if rel in _ALLOWED_PROMETHEUS_TEXT:
-                continue
-            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(rel))
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        if alias.name == "prometheus_client" or alias.name.startswith("prometheus_client."):
-                            violations.append(f"{rel}:{node.lineno} imports {alias.name}")
-                elif isinstance(node, ast.ImportFrom):
-                    module = node.module or ""
-                    if module == "prometheus_client" or module.startswith("prometheus_client."):
-                        violations.append(f"{rel}:{node.lineno} imports from {module}")
+    for py_file in _tracked_python_files():
+        rel = py_file.relative_to(REPO_ROOT)
+        if rel in _ALLOWED_PROMETHEUS_TEXT:
+            continue
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(rel))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "prometheus_client" or alias.name.startswith("prometheus_client."):
+                        violations.append(f"{rel}:{node.lineno} imports {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module == "prometheus_client" or module.startswith("prometheus_client."):
+                    violations.append(f"{rel}:{node.lineno} imports from {module}")
     assert violations == []
 
 
