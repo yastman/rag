@@ -34,7 +34,7 @@ Skills are auto-discovered by OpenCode from `~/.config/opencode/skills/`.
 To use a skill locally:
 ```bash
 # Copy to OpenCode skills directory
-cp -r skills/opencode/* ~/.config/opencode/skills/
+cp -r skills/* ~/.config/opencode/skills/
 ```
 
 ## Sources
