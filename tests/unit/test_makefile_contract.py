@@ -57,7 +57,8 @@ def test_release_polling_lock_target_exists_and_uses_rediscli_auth() -> None:
     block = block_match.group(0)
     assert "POLLING_LOCK_KEY" in block
     assert "REDISCLI_AUTH" in block, "target must not put Redis passwords on redis-cli -a argv"
-    assert " DEL '$$key'" in block
+    assert "redis_exec DEL \"$$key\"" in block
+    assert "sh -c" not in block, "target should pass keys/passwords as docker exec args"
     assert "make run-bot" in block
 
 

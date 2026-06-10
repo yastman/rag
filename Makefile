@@ -778,12 +778,15 @@ release-polling-lock:  ## Delete the local Redis Telegram polling lock after con
 		echo "$(RED)No Redis container found. Start services with 'make local-up' first.$(NC)"; \
 		exit 1; \
 	fi; \
-	redis_cli='redis-cli'; \
-	if [ -n "$${REDIS_PASSWORD:-}" ]; then \
-		redis_cli='env REDISCLI_AUTH='"'$$REDIS_PASSWORD'"' redis-cli'; \
-	fi; \
-	owner="$$(docker exec "$$container" sh -c "$$redis_cli GET '$$key'")"; \
-	pttl="$$(docker exec "$$container" sh -c "$$redis_cli PTTL '$$key'")"; \
+	redis_exec() { \
+		if [ -n "$${REDIS_PASSWORD:-}" ]; then \
+			docker exec -e REDISCLI_AUTH="$$REDIS_PASSWORD" "$$container" redis-cli "$$@"; \
+		else \
+			docker exec "$$container" redis-cli "$$@"; \
+		fi; \
+	}; \
+	owner="$$(redis_exec GET "$$key")"; \
+	pttl="$$(redis_exec PTTL "$$key")"; \
 	if [ -z "$$owner" ]; then \
 		echo "$(GREEN)Polling lock '$$key' is already free in Redis container '$$container'.$(NC)"; \
 		exit 0; \
@@ -791,7 +794,7 @@ release-polling-lock:  ## Delete the local Redis Telegram polling lock after con
 	echo "$(YELLOW)Deleting polling lock '$$key' from Redis container '$$container'.$(NC)"; \
 	echo "$(YELLOW)Owner: $$owner$(NC)"; \
 	echo "$(YELLOW)PTTL ms: $$pttl$(NC)"; \
-	docker exec "$$container" sh -c "$$redis_cli DEL '$$key'" >/dev/null; \
+	redis_exec DEL "$$key" >/dev/null; \
 	echo "$(GREEN)✓ Polling lock released. Run 'make run-bot' again.$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
