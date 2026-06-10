@@ -279,13 +279,11 @@ def build_graph(
 
 
 def _create_summarize_model(config: Any) -> Any:
-    """Create a LangChain chat model for SummarizationNode via LiteLLM proxy.
+    """Create a LangChain chat model for SummarizationNode.
 
-    Uses LangChain's SDK-native ``init_chat_model`` (LangChain 1.x) instead of
-    direct ChatOpenAI construction so the abstraction stays provider-neutral
-    (#1653). Tracing is handled by @observe on pipeline nodes and LiteLLM
-    proxy logging. CallbackHandler removed: broken context propagation in
-    async LangGraph (#157).
+    Chat generation now uses the in-process LiteLLM SDK router. Summarization
+    keeps LangChain's provider-neutral factory but no longer points at the
+    removed Docker LiteLLM proxy.
     """
     from langchain.chat_models import init_chat_model
 
@@ -293,7 +291,6 @@ def _create_summarize_model(config: Any) -> Any:
         model=config.llm_model,
         model_provider="openai",
         api_key=config.llm_api_key or "no-key",
-        base_url=config.llm_base_url,
     )
 
 

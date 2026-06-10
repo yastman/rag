@@ -4,7 +4,7 @@ When ``langfuse.openai.AsyncOpenAI`` auto-traces every completion call without
 awareness of the active trace, it creates orphan ``litellm-acompletion`` root
 traces.  These tests verify that:
 
-1. ``GraphConfig.create_llm()`` returns a plain ``openai.AsyncOpenAI`` client
+1. ``GraphConfig.create_llm()`` returns a LiteLLM SDK client
    that does NOT auto-trace from the core/runtime layer.
 2. ``_chat_create_with_optional_name`` skips the Langfuse ``name`` kwarg
    when the client is plain, avoiding a needless TypeError → retry.
@@ -16,7 +16,7 @@ traces.  These tests verify that:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -32,22 +32,22 @@ from telegram_bot.services.generate_response import (
 class TestGraphConfigAutoTrace:
     """Unit tests for GraphConfig.create_llm auto_trace switch."""
 
-    def test_create_llm_default_uses_plain_openai(self) -> None:
-        with patch("openai.AsyncOpenAI") as mock_plain:
-            mock_plain.return_value = MagicMock()
-            cfg = GraphConfig(llm_model="m", llm_base_url="http://test:4000")
-            llm = cfg.create_llm()
-        assert llm is not None
-        mock_plain.assert_called_once()
+    def test_create_llm_default_uses_litellm_sdk(self) -> None:
+        from src.runtime.llm.router import LiteLLMChatClient
+
+        cfg = GraphConfig(llm_model="m", llm_base_url="http://test:4000")
+        llm = cfg.create_llm()
+
+        assert isinstance(llm, LiteLLMChatClient)
         assert getattr(llm, "_langfuse_auto_trace", None) is False
 
-    def test_create_llm_auto_trace_false_uses_plain_openai(self) -> None:
-        with patch("openai.AsyncOpenAI") as mock_plain:
-            mock_plain.return_value = MagicMock()
-            cfg = GraphConfig(llm_model="m", llm_base_url="http://test:4000")
-            llm = cfg.create_llm(auto_trace=False)
-        assert llm is not None
-        mock_plain.assert_called_once()
+    def test_create_llm_auto_trace_false_uses_litellm_sdk(self) -> None:
+        from src.runtime.llm.router import LiteLLMChatClient
+
+        cfg = GraphConfig(llm_model="m", llm_base_url="http://test:4000")
+        llm = cfg.create_llm(auto_trace=False)
+
+        assert isinstance(llm, LiteLLMChatClient)
         assert getattr(llm, "_langfuse_auto_trace", None) is False
 
 
