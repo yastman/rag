@@ -85,8 +85,20 @@ def build_model_list() -> list[dict[str, Any]]:
 def get_litellm_router() -> Router:
     """Return the process-local LiteLLM Router with retries and fallbacks."""
     fallbacks = [
-        {DEFAULT_MODEL_ALIAS: ["gpt-4o-mini-cerebras-oss", "gpt-4o-mini-fallback", "gpt-4o-mini-openai"]},
-        {"gpt-oss-120b": ["gpt-4o-mini-cerebras-oss", "gpt-4o-mini-fallback", "gpt-4o-mini-openai"]},
+        {
+            DEFAULT_MODEL_ALIAS: [
+                "gpt-4o-mini-cerebras-oss",
+                "gpt-4o-mini-fallback",
+                "gpt-4o-mini-openai",
+            ]
+        },
+        {
+            "gpt-oss-120b": [
+                "gpt-4o-mini-cerebras-oss",
+                "gpt-4o-mini-fallback",
+                "gpt-4o-mini-openai",
+            ]
+        },
     ]
     return Router(
         model_list=build_model_list(),
