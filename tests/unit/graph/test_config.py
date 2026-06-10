@@ -100,7 +100,7 @@ class TestGraphConfig:
     def test_create_llm(self):
         from telegram_bot.graph.config import GraphConfig
 
-        with patch("langfuse.openai.AsyncOpenAI") as mock_cls:
+        with patch("openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
             cfg = GraphConfig(llm_model="test-model", llm_base_url="http://test:4000")
             llm = cfg.create_llm()
@@ -111,6 +111,7 @@ class TestGraphConfig:
             max_retries=2,
             timeout=60.0,
         )
+        assert getattr(llm, "_langfuse_auto_trace") is False
 
     def test_create_llm_auto_trace_false_uses_plain_openai(self):
         from telegram_bot.graph.config import GraphConfig

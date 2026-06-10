@@ -181,6 +181,7 @@ class TestInitializeLangfuseHook:
 
         observability._reset_langfuse_client_for_tests()
 
+        monkeypatch.setenv("LANGFUSE_ENABLED", "true")
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
         monkeypatch.delenv("LANGFUSE_HOST", raising=False)
