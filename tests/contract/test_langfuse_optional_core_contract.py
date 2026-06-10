@@ -12,6 +12,9 @@ CORE_RUNTIME_DIRS = [REPO_ROOT / "src" / "core", REPO_ROOT / "src" / "runtime"]
 
 
 def test_core_and_runtime_do_not_import_langfuse_modules() -> None:
+    missing_roots = [str(path.relative_to(REPO_ROOT)) for path in CORE_RUNTIME_DIRS if not path.is_dir()]
+    assert missing_roots == [], f"contract scan roots do not exist: {missing_roots}"
+
     violations: list[str] = []
     for base in CORE_RUNTIME_DIRS:
         for py_file in base.rglob("*.py"):
