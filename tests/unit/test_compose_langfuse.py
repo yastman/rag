@@ -38,7 +38,6 @@ TRACED_SERVICES = [
     "bge-m3",
     "bot",
     "ingestion",
-    "litellm",
     "mini-app-api",
     "rag-api",
     "user-base",
@@ -73,7 +72,7 @@ class TestLangfuseEnvVarsPresent:
         assert var in env, f"compose.yml: {service} missing {var} in environment block"
 
 
-SERVICES_WITH_DEV_DEFAULTS = ["bge-m3", "bot", "litellm", "rag-api", "voice-agent", "ingestion"]
+SERVICES_WITH_DEV_DEFAULTS = ["bge-m3", "bot", "rag-api", "voice-agent", "ingestion"]
 
 
 class TestLangfuseSecretPosture:
@@ -252,80 +251,11 @@ class TestOtelPropagatorsDeclared:
         )
 
 
-class TestLitellmCallbacks:
-    """LiteLLM config must have langfuse callbacks configured."""
+class TestLiteLLMProxyRemoved:
+    """LiteLLM Docker proxy config was replaced by the Python SDK router."""
 
-    def test_success_callback_configured(self):
-        config_path = ROOT / "docker" / "litellm" / "config.yaml"
-        config = yaml.safe_load(config_path.read_text())
-        settings = config.get("litellm_settings", {})
-        callbacks = settings.get("success_callback", [])
-        assert "langfuse" in callbacks, (
-            "docker/litellm/config.yaml: litellm_settings.success_callback must include 'langfuse'"
-        )
+    def test_litellm_service_removed_from_compose(self, compose_base: dict):
+        assert "litellm" not in compose_base["services"]
 
-    def test_failure_callback_configured(self):
-        config_path = ROOT / "docker" / "litellm" / "config.yaml"
-        config = yaml.safe_load(config_path.read_text())
-        settings = config.get("litellm_settings", {})
-        callbacks = settings.get("failure_callback", [])
-        assert "langfuse" in callbacks, (
-            "docker/litellm/config.yaml: litellm_settings.failure_callback must include 'langfuse'"
-        )
-
-
-class TestLangfuseMemoryLimits:
-    """Langfuse dev container must have enough memory to avoid Node heap OOM (#2179).
-
-    Advisory found v3.175.0 crashes with ``JavaScript heap out of memory`` at the
-    1GiB container limit.  Fix: at least 2GiB in compose.dev.yml, plus an explicit
-    ``NODE_OPTIONS=--max-old-space-size=1536`` for safety.
-    """
-
-    def test_dev_langfuse_memory_at_least_2gib(self, compose_dev: dict):
-        svc = compose_dev["services"]["langfuse"]
-        deploy = svc.get("deploy", {})
-        resources = deploy.get("resources", {})
-        limits = resources.get("limits", {})
-        memory_raw = limits.get("memory", "0")
-        mem_str = str(memory_raw).upper()
-
-        # Parse memory value (support "2G", "2g", "2048M", "2147483648")
-        if mem_str.endswith("G"):
-            mem_gib = float(mem_str[:-1])
-        elif mem_str.endswith("M"):
-            mem_gib = float(mem_str[:-1]) / 1024
-        else:
-            # Try raw bytes
-            try:
-                mem_gib = int(mem_str) / (1024**3)
-            except (ValueError, TypeError):
-                mem_gib = 0
-
-        assert mem_gib >= 2.0, (
-            f"compose.dev.yml langfuse service memory limit is {memory_raw!r} "
-            f"({mem_gib:.1f} GiB). The advisory found v3.175.0 crashes with "
-            f"Node heap OOM at 1 GiB.  Raise to at least 2G."
-        )
-
-    def test_dev_langfuse_node_options_heap_size(self, compose_dev: dict):
-        """Verify NODE_OPTIONS with --max-old-space-size is set for langfuse."""
-        env = _get_service_env(compose_dev, "langfuse")
-
-        node_opts = str(env.get("NODE_OPTIONS", ""))
-        assert "--max-old-space-size=" in node_opts, (
-            f"compose.dev.yml langfuse service must set "
-            f"NODE_OPTIONS=--max-old-space-size=<value> to prevent Node heap OOM. "
-            f"Got: {node_opts!r}"
-        )
-
-        # Extract the value and verify it's at least 1536
-        import re
-
-        match = re.search(r"--max-old-space-size=(\d+)", node_opts)
-        assert match, f"Could not parse --max-old-space-size from {node_opts!r}"
-        size_mb = int(match.group(1))
-        assert size_mb >= 1536, (
-            f"compose.dev.yml langfuse NODE_OPTIONS max-old-space-size is {size_mb} MB. "
-            f"Must be at least 1536 to prevent Node heap OOM at 2 GiB container limit."
-        )
+    def test_litellm_docker_config_removed(self):
+        assert not (ROOT / "docker" / "litellm" / "config.yaml").exists()

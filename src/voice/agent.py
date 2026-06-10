@@ -534,10 +534,12 @@ async def _entrypoint_body(
     # Create agent session with ElevenLabs STT/TTS
     session: AgentSession = AgentSession(
         stt=elevenlabs.STT(model_id="scribe_v2_realtime"),
+        # LiveKit's OpenAI plugin is still used for the realtime voice adapter.
+        # Chat/RAG paths use the in-process LiteLLM SDK router; voice no longer
+        # depends on a Docker LiteLLM proxy URL.
         llm=openai.LLM(
-            model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-            base_url=os.getenv("LLM_BASE_URL", "http://litellm:4000"),
-            api_key=os.getenv("LLM_API_KEY", ""),
+            model=os.getenv("VOICE_LLM_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini")),
+            api_key=os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY", ""),
         ),
         tts=elevenlabs.TTS(
             voice_id=os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),

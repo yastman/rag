@@ -395,7 +395,7 @@ BOT_RESPONSE_SMOKE_FLAGS ?=
 preflight-qdrant: ## Fail fast when localhost:6333 is unreachable (run before preflight-bot and bot)
 	@if ! timeout 1 bash -c 'echo >/dev/tcp/localhost/6333' 2>/dev/null; then \
 		echo "$(RED)✗ Qdrant is not reachable on localhost:6333$(NC)" >&2; \
-		echo "$(YELLOW)Run 'make local-up' to start required local services (redis, qdrant, bge-m3, litellm)$(NC)" >&2; \
+		echo "$(YELLOW)Run 'make local-up' to start required local services (redis, qdrant, bge-m3)$(NC)" >&2; \
 		exit 1; \
 	fi
 	@echo "$(GREEN)✓ Qdrant reachable$(NC)"
@@ -423,8 +423,6 @@ test-bot-health-vps: ## Preflight: verify Qdrant + LLM from inside Docker networ
 	print(f'  Qdrant collections: {names}'); \
 	assert 'gdrive_documents_bge' in names, 'gdrive_documents_bge not found'; \
 	print('  ✓ Qdrant OK'); \
-	urllib.request.urlopen('http://litellm:4000/health/liveliness', timeout=10); \
-	print('  ✓ LiteLLM OK'); \
 	"
 	@echo "$(GREEN)✓ VPS bot health preflight passed$(NC)"
 
@@ -488,8 +486,8 @@ REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
-REMOTE_ACTIVE_SERVICES := mini-app-frontend mini-app-api bge-m3 litellm redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
-REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base litellm bot
+REMOTE_ACTIVE_SERVICES := mini-app-frontend mini-app-api bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
+REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base bot
 
 remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
 	@echo "$(BLUE)Remote Docker status ($(REMOTE_DOCKER_HOST))...$(NC)"
@@ -525,7 +523,6 @@ remote-env-check: ## Verify remote .env exists and report missing required varia
 		if [ ! -f .env ]; then echo 'Error: remote .env not found'; exit 1; fi; \
 		missing=''; \
 		if ! grep -qE '^TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN] .env; then missing=\"$$missing TELEGRAM_BOT_TOKEN\"; fi; \
-		if ! grep -qE '^LITELLM_MASTER_KEY=' .env; then missing=\"$$missing LITELLM_MASTER_KEY\"; fi; \
 		if ! grep -qE '^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)=' .env; then missing=\"$$missing (CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)\"; fi; \
 		if ! grep -qE '^NEXTAUTH_SECRET=' .env; then missing=\"$$missing NEXTAUTH_SECRET\"; fi; \
 		if ! grep -qE '^SALT=' .env; then missing=\"$$missing SALT\"; fi; \
@@ -592,7 +589,7 @@ remote-local-logs: ## Show recent remote MacBook compose logs
 remote-core-health: ## Check minimal RAG bot core health on remote MacBook Docker
 	@echo "$(BLUE)Remote core health ($(REMOTE_DOCKER_HOST))...$(NC)"
 	@fail=0; \
-	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('litellm',4000),('postgres',5432),('redis',6379),('user-base',8000)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
+	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('postgres',5432),('redis',6379),('user-base',8000)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
 	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(RED)container not found$(NC)"; fail=1; fi; \
 	exit $$fail
@@ -603,7 +600,6 @@ remote-core-env-check: ## Verify core-only required variables in remote .env
 		if [ ! -f .env ]; then echo 'Error: remote .env not found'; exit 1; fi; \
 		missing=''; \
 		if ! grep -qE '^TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN] .env; then missing=\"$$missing TELEGRAM_BOT_TOKEN\"; fi; \
-		if ! grep -qE '^LITELLM_MASTER_KEY=' .env; then missing=\"$$missing LITELLM_MASTER_KEY\"; fi; \
 		if ! grep -qE '^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)=' .env; then missing=\"$$missing (CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)\"; fi; \
 		if [ -n \"$$missing\" ]; then \
 			echo \"Missing variables:$$missing\"; \
@@ -631,7 +627,7 @@ docker-core-up: ## Start default local compose stack (unprofiled services)
 	$(LOCAL_COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
-docker-bot-up: preflight-bot ## Start core + bot services (litellm, bot)
+docker-bot-up: preflight-bot ## Start core + bot services (bot)
 	@echo "$(BLUE)Starting bot services...$(NC)"
 	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
@@ -753,7 +749,7 @@ qa: all-checks test ## Full quality assurance
 # =============================================================================
 
 .PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate run-bot bot
-LOCAL_SERVICES := postgres redis qdrant bge-m3 litellm
+LOCAL_SERVICES := postgres redis qdrant bge-m3
 LOCAL_INGEST_SERVICES := docling
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
 
@@ -892,7 +888,6 @@ e2e-core-live-real-llm: ## Run simplification core live golden path with real LL
 	@echo "$(BLUE)Running simplification core live E2E with real LLM...$(NC)"
 	@$(ENV_LOAD) \
 	missing=""; \
-	if [ -z "$$LLM_BASE_URL" ]; then missing="$$missing LLM_BASE_URL"; fi; \
 	if [ -z "$$LLM_MODEL" ]; then missing="$$missing LLM_MODEL"; fi; \
 	if [ -z "$$LLM_API_KEY$$OPENAI_API_KEY" ]; then missing="$$missing (LLM_API_KEY|OPENAI_API_KEY)"; fi; \
 	if [ -n "$$missing" ]; then \
@@ -1251,7 +1246,7 @@ TRACE_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compos
 
 validate-traces: ## Optional diagnostic: full rebuild + trace validation + report
 	@echo "$(BLUE)Optional full rebuild + trace validation...$(NC)"
-	$(LOCAL_COMPOSE_CMD) build --no-cache bot litellm bge-m3
+	$(LOCAL_COMPOSE_CMD) build --no-cache bot bge-m3
 	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
@@ -1265,7 +1260,6 @@ validate-traces-fast: ## Optional diagnostic: no rebuild; validate trace familie
 	QDRANT_URL="$(or $(QDRANT_URL),http://localhost:6333)" \
 	BGE_M3_URL="$(or $(BGE_M3_URL),http://localhost:8000)" \
 	REDIS_URL="$(or $(REDIS_URL),redis://localhost:6379)" \
-	LLM_BASE_URL="$(or $(LLM_BASE_URL),http://localhost:4000)" \
 	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
 	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
 	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
@@ -1294,7 +1288,7 @@ validate-voice-traces: ## Optional diagnostic: voice trace validation (reads Lan
 k3s-core: ## Deploy core services (postgres, redis, qdrant) to k3s
 	kubectl apply -k k8s/overlays/core/ --load-restrictor=LoadRestrictionsNone
 
-k3s-bot: ## Deploy bot stack to k3s (core + ML + litellm + bot)
+k3s-bot: ## Deploy bot stack to k3s (core + ML + bot)
 	kubectl apply -k k8s/overlays/bot/ --load-restrictor=LoadRestrictionsNone
 
 k3s-ingest: ## Deploy ingestion stack to k3s (core + docling + bge-m3 + ingestion)

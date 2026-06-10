@@ -20,7 +20,8 @@ from typing import Any
 class GraphConfig:
     """Configuration for the RAG LangGraph pipeline."""
 
-    llm_base_url: str = "http://litellm:4000"
+    # Deprecated compatibility field; LiteLLM SDK routing no longer uses a proxy base URL.
+    llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.7
@@ -125,7 +126,6 @@ class GraphConfig:
     def from_env(cls) -> GraphConfig:
         """Create GraphConfig from environment variables."""
         return cls(
-            llm_base_url=os.getenv("LLM_BASE_URL", "http://litellm:4000"),
             llm_api_key=os.getenv(
                 "LLM_API_KEY", os.getenv("OPENAI_API_KEY", "")
             ),  # LLM_API_KEY preferred
@@ -176,28 +176,14 @@ class GraphConfig:
         )
 
     def create_llm(self, model_override: str | None = None, *, auto_trace: bool = True) -> Any:
-        """Create AsyncOpenAI client for graph nodes that call chat.completions.
+        """Create an OpenAI-shaped chat client backed by LiteLLM SDK routing."""
+        _ = auto_trace
+        from src.runtime.llm import create_litellm_chat_client
 
-        Args:
-            model_override: Optional model name override.
-            auto_trace: When True (default), returns the Langfuse-wrapped client
-                that auto-traces every completion call. When False, returns a plain
-                ``openai.AsyncOpenAI`` client so the caller can manage observations
-                explicitly via ``update_current_generation`` without creating orphan
-                root traces.
-        """
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(
-            api_key=self.llm_api_key or "no-key",
-            base_url=self.llm_base_url,
-            max_retries=2,
+        return create_litellm_chat_client(
+            model=model_override or self.llm_model,
             timeout=60.0,
         )
-        # DEPS-OBS2: core/runtime clients are plain OpenAI-compatible clients.
-        # Mark them so helpers skip Langfuse-specific kwargs safely.
-        object.__setattr__(client, "_langfuse_auto_trace", False)
-        return client
 
     def create_supervisor_llm(self, model_override: str | None = None) -> Any:
         """Create LangChain chat model for supervisor graph tool routing."""
@@ -207,7 +193,6 @@ class GraphConfig:
         return ChatOpenAI(
             model=model_override or self.llm_model,
             api_key=SecretStr(self.llm_api_key or "no-key"),
-            base_url=self.llm_base_url,
         )
 
     def create_embeddings(self) -> Any:
