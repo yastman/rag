@@ -37,6 +37,37 @@ def test_redis_container_override_behavior_preserved() -> None:
     )
 
 
+def test_polling_lock_key_default_matches_bot_contract() -> None:
+    """The manual unlock target must use the canonical bot polling lock key."""
+    text = _makefile_text()
+    match = re.search(r"^POLLING_LOCK_KEY\s+\?=\s*(.+)$", text, re.MULTILINE)
+    assert match, "POLLING_LOCK_KEY default not found in Makefile"
+    assert match.group(1).strip() == "telegram-bot:polling"
+
+
+def test_release_polling_lock_target_exists_and_uses_rediscli_auth() -> None:
+    """Operators need a safe local workaround for stale Redis polling locks."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^release-polling-lock:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "release-polling-lock target not found in Makefile"
+    block = block_match.group(0)
+    assert "POLLING_LOCK_KEY" in block
+    assert "REDISCLI_AUTH" in block, "target must not put Redis passwords on redis-cli -a argv"
+    assert " DEL '$$key'" in block
+    assert "make run-bot" in block
+
+
+def test_release_polling_lock_is_phony() -> None:
+    text = _makefile_text()
+    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
+    combined = " ".join(phony_blocks)
+    assert "release-polling-lock" in combined
+
+
 # --- #1282 Local services docling contract tests ---
 
 

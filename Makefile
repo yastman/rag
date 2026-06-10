@@ -11,6 +11,7 @@
 	test-contract \
 	preflight-bot \
 	preflight-qdrant \
+	release-polling-lock \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
 	remote-active-up remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
@@ -19,6 +20,7 @@
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev_redis_1
+POLLING_LOCK_KEY ?= telegram-bot:polling
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
 K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
@@ -752,7 +754,7 @@ qa: all-checks test ## Full quality assurance
 # Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 # =============================================================================
 
-.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate run-bot bot
+.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate release-polling-lock run-bot bot
 LOCAL_SERVICES := postgres redis qdrant bge-m3 litellm
 LOCAL_INGEST_SERVICES := docling
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
@@ -764,6 +766,33 @@ local-up:  ## Start local Docker services (bot runs via make run-bot)
 local-up-ingest:  ## Start local services + docling for ingestion workflows
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_ALL_SERVICES)
 	@echo "$(GREEN)✓ Local services + docling started$(NC)"
+
+release-polling-lock:  ## Delete the local Redis Telegram polling lock after confirming no bot is alive
+	@$(ENV_LOAD) \
+	container="$${REDIS_CONTAINER:-$(REDIS_CONTAINER)}"; \
+	key="$${POLLING_LOCK_KEY:-$(POLLING_LOCK_KEY)}"; \
+	if ! docker inspect "$$container" >/dev/null 2>&1; then \
+		container="$$(docker ps --filter name=redis -q | head -1)"; \
+	fi; \
+	if [ -z "$$container" ]; then \
+		echo "$(RED)No Redis container found. Start services with 'make local-up' first.$(NC)"; \
+		exit 1; \
+	fi; \
+	redis_cli='redis-cli'; \
+	if [ -n "$${REDIS_PASSWORD:-}" ]; then \
+		redis_cli='env REDISCLI_AUTH='"'$$REDIS_PASSWORD'"' redis-cli'; \
+	fi; \
+	owner="$$(docker exec "$$container" sh -c "$$redis_cli GET '$$key'")"; \
+	pttl="$$(docker exec "$$container" sh -c "$$redis_cli PTTL '$$key'")"; \
+	if [ -z "$$owner" ]; then \
+		echo "$(GREEN)Polling lock '$$key' is already free in Redis container '$$container'.$(NC)"; \
+		exit 0; \
+	fi; \
+	echo "$(YELLOW)Deleting polling lock '$$key' from Redis container '$$container'.$(NC)"; \
+	echo "$(YELLOW)Owner: $$owner$(NC)"; \
+	echo "$(YELLOW)PTTL ms: $$pttl$(NC)"; \
+	docker exec "$$container" sh -c "$$redis_cli DEL '$$key'" >/dev/null; \
+	echo "$(GREEN)✓ Polling lock released. Run 'make run-bot' again.$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
 	$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
