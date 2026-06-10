@@ -861,7 +861,7 @@ deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scri
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup langfuse-latest-trace-audit trace-audit-snapshot
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -923,16 +923,6 @@ e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=fil
 e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
-
-langfuse-latest-trace-audit: ## Optional diagnostic: sanitized post-E2E Langfuse latest-trace audit
-	@echo "$(BLUE)Running sanitized latest-trace audit...$(NC)"
-	uv run python scripts/e2e/langfuse_latest_trace_audit.py --limit 20
-	@echo "$(GREEN)✓ Latest-trace audit complete$(NC)"
-
-trace-audit-snapshot: ## One-command runtime trace-data audit -> docs/engineering/<date>-trace-audit-snapshot.md (#2221)
-	@echo "$(BLUE)Running trace-data audit snapshot...$(NC)"
-	uv run python -m scripts.audit.trace_audit_snapshot
-	@echo "$(GREEN)✓ Trace-audit snapshot written$(NC)"
 
 # =============================================================================
 # BASELINE & OBSERVABILITY
@@ -1237,52 +1227,6 @@ qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
 	@echo "           -d '{\"on_disk_payload\": true}'"
 	@echo "  • Monitor volume size: docker system df -v | grep qdrant"
 	@echo "$(GREEN)✓ Qdrant cleanup complete$(NC)"
-
-# =============================================================================
-# TRACE VALIDATION (#110)
-# =============================================================================
-
-.PHONY: validate-traces validate-traces-fast validate-voice-traces langfuse-latency-audit
-
-# Local host defaults for native trace validation (issue #1380).
-# Callers can override per-variable: make validate-traces-fast QDRANT_URL=http://custom:6333 REDIS_URL=redis://:x@custom:6379
-LANGFUSE_DEV_KEY_DASH ?= -
-TRACE_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)
-
-validate-traces: ## Optional diagnostic: full rebuild + trace validation + report
-	@echo "$(BLUE)Optional full rebuild + trace validation...$(NC)"
-	$(LOCAL_COMPOSE_CMD) build --no-cache bot litellm bge-m3
-	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
-	uv run python scripts/validate_traces.py --report
-	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
-
-validate-traces-fast: ## Optional diagnostic: no rebuild; validate trace families when requested
-	@echo "$(BLUE)Optional fast trace validation (no rebuild)...$(NC)"
-	uv run python scripts/validate_trace_runtime.py --env-file "$(TRACE_ENV_FILE)"
-	MINIO_API_PORT="$(or $(MINIO_API_PORT),0)" \
-	MINIO_CONSOLE_PORT="$(or $(MINIO_CONSOLE_PORT),0)" \
-	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
-	QDRANT_URL="$(or $(QDRANT_URL),http://localhost:6333)" \
-	BGE_M3_URL="$(or $(BGE_M3_URL),http://localhost:8000)" \
-	REDIS_URL="$(or $(REDIS_URL),redis://localhost:6379)" \
-	LLM_BASE_URL="$(or $(LLM_BASE_URL),http://localhost:4000)" \
-	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
-	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	uv run dotenv -f "$(TRACE_ENV_FILE)" run --no-override -- \
-		uv run python scripts/validate_traces.py --report
-	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
-
-langfuse-latency-audit: ## Optional diagnostic #2179: per-stage observation latencies from recent traces
-	@uv run python -m scripts.probe.langfuse_latency_audit --limit $${LANGFUSE_LATENCY_LIMIT:-50}
-
-validate-voice-traces: ## Optional diagnostic: voice trace validation (reads Langfuse)
-	@echo "$(BLUE)Optional voice trace validation...$(NC)"
-	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
-	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	uv run python scripts/validate_voice_traces.py
-	@echo "$(GREEN)Voice trace validation complete$(NC)"
 
 # =============================================================================
 # K3S DEPLOYMENT

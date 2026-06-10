@@ -193,7 +193,7 @@ function with the new keys.
 
 - [ ] **Telegram bot**: responds to `/start` and processes a test query.
 - [ ] **OpenAI API**: embedding generation and chat completion succeed (check
-      Langfuse traces or run `make validate-traces-fast`).
+      Langfuse traces or run core E2E plus JSON/product-log review (`make e2e-core-live`)).
 - [ ] **Anthropic API**: any pipeline step using Anthropic models completes
       without authentication errors.
 - [ ] **Groq API**: any pipeline step using Groq models completes without

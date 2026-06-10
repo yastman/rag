@@ -7,7 +7,7 @@ correlate back to the flow's trace. #2217/#2239 wired the identifiers into JSON
 logs; this is the validation that they actually show up for covered flows.
 
 Dependency-light (stdlib only) so it can be unit-tested without the heavy
-``scripts/validate_traces.py`` import graph; ``validate_traces.py`` imports and
+the removed trace validator import graph; the old validator imported and
 calls ``check_log_correlation(...)`` so it runs as part of the existing
 validator (and under ``make validate-traces-fast``).
 

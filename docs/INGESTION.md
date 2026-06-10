@@ -68,7 +68,7 @@ uv run python -m src.ingestion.unified.cli reprocess --errors
 Validate coverage together with API/voice traces:
 
 ```bash
-make validate-traces-fast
+make e2e-core-live
 ```
 
 ## Required Environment Variables
