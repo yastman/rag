@@ -117,27 +117,18 @@ class TestCmdMetrics:
     """Test cmd_metrics handler."""
 
     @pytest.mark.asyncio
-    async def test_calls_prometheus_generate_latest(self, mock_bot):
-        """cmd_metrics emits the Prometheus default-REGISTRY text format (#2058)."""
+    async def test_points_to_structured_json_logs(self, mock_bot):
+        """cmd_metrics points operators at JSON product logs after Prometheus removal."""
         message = _make_message()
-        payload = (
-            b"# HELP cmd_metrics_test_sentinel_total test sentinel\n"
-            b"# TYPE cmd_metrics_test_sentinel_total counter\n"
-            b"cmd_metrics_test_sentinel_total 7.0\n"
-        )
 
-        with patch("prometheus_client.generate_latest", return_value=payload):
-            await cmd_metrics(mock_bot, message)
+        await cmd_metrics(mock_bot, message)
 
         message.answer.assert_called_once()
         text = message.answer.call_args[0][0]
-        # Markdown code-block envelope preserved
-        assert text.startswith("```\n")
-        assert text.endswith("\n```")
-        # Prometheus exposition format markers + our sentinel
-        assert "# HELP" in text
-        assert "# TYPE" in text
-        assert "cmd_metrics_test_sentinel_total" in text
+        assert "structured JSON logs" in text
+        assert "event=pipeline_latency" in text
+        assert "event=pipeline_counter" in text
+        assert "Prometheus /metrics" in text
 
 
 class TestCmdStart:
