@@ -12,7 +12,6 @@ scripts/e2e
 - auth.py
 - claude_judge.py
 - config.py
-- langfuse_trace_validator.py
 - quick_test.py
 - report_generator.py
 - runner.py

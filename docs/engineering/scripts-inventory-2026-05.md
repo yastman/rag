@@ -45,7 +45,6 @@ formal CODEOWNERS assignment.
 | `check_test_tracking.py` | `tests/unit/scripts/test_check_test_tracking.py` (5 tests) | testing |
 | `check_unique_test_names.py` | `tests/contract/test_no_new_duplicate_test_names.py` + #1539 ratchet | testing |
 | `e2e/runner.py` | `Makefile` (test-e2e family, ~6 targets) | e2e |
-| `e2e/langfuse_latest_trace_audit.py` | `Makefile` (test-e2e-trace-audit) | e2e |
 | `eval/goldset_sync.py` | `Makefile` (eval-goldset-sync) | eval |
 | `eval/run_experiment.py` | `Makefile` (eval-run) | eval |
 | `generate_gold_set.py` | `Makefile` (gold-set, gold-set-dry-run) | eval |
@@ -58,10 +57,6 @@ formal CODEOWNERS assignment.
 | `run_legal_grounding_audit.py` | `scripts/README.md` (Validation table) | retrieval/eval |
 | `setup_ingestion_collection.py` | `Makefile` (qdrant-ensure) | ingestion |
 | `validate_done_json.py` | `.pre-commit-config.yaml` (DONE JSON schema check) | governance |
-| `validate_queries.py` | imported by `scripts/validate_traces.py` + 14 tests | observability |
-| `validate_traces.py` | no Makefile target after DEPS-14; pending observability script cleanup | observability |
-| `validate_trace_runtime.py` | no Makefile target after DEPS-14; pending observability script cleanup | observability |
-| `validate_voice_traces.py` | no Makefile target after DEPS-14; pending observability script cleanup | observability |
 
 ### `keep` — operationally important manual tools
 
@@ -73,14 +68,11 @@ owner / use case so a future audit does not flag them as dead.
 | Script | Use case | Owner |
 |--------|----------|-------|
 | `kommo_seed.py` | One-shot CRM bootstrap (create funnels, custom fields). Touches live Kommo CRM. | crm |
-| `langfuse_alert.py` / `langfuse_triage.py` | Operator-run trace triage & alerting helpers. | observability |
 | `qdrant_ensure_indexes.py` | Operator-run safety: ensure payload indexes exist on a target collection. | retrieval |
-| `setup_langfuse_dashboards.py` | Operator-run Langfuse dashboard provisioning. | observability |
 | `setup_score_configs.py` | Operator-run Langfuse score config bootstrap. | observability |
 | `update_advisor_prompts.py` | Operator-run Langfuse prompt sync for the AI advisor. | observability |
 | `index_contextual.py` / `index_contextual_api.py` / `index_local_docs.py` / `index_services.py` | Operator-run ingest helpers for legacy collections. | ingestion |
 | `setup_qdrant_collection.py` / `setup_binary_collection.py` / `setup_scalar_collection.py` | Operator-run Qdrant collection bootstrap variants. | infra |
-| `export_traces_to_dataset.py` | Operator-run Langfuse → eval dataset export. | eval |
 
 ### `delete_now` — proven dead, deleted in this slice
 

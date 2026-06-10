@@ -861,7 +861,7 @@ deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scri
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup langfuse-latest-trace-audit trace-audit-snapshot
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -923,16 +923,6 @@ e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=fil
 e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
-
-langfuse-latest-trace-audit: ## Optional diagnostic: sanitized post-E2E Langfuse latest-trace audit
-	@echo "$(BLUE)Running sanitized latest-trace audit...$(NC)"
-	uv run python scripts/e2e/langfuse_latest_trace_audit.py --limit 20
-	@echo "$(GREEN)✓ Latest-trace audit complete$(NC)"
-
-trace-audit-snapshot: ## One-command runtime trace-data audit -> docs/engineering/<date>-trace-audit-snapshot.md (#2221)
-	@echo "$(BLUE)Running trace-data audit snapshot...$(NC)"
-	uv run python -m scripts.audit.trace_audit_snapshot
-	@echo "$(GREEN)✓ Trace-audit snapshot written$(NC)"
 
 # =============================================================================
 # BASELINE & OBSERVABILITY
