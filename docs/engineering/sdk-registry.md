@@ -445,7 +445,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - **Activation:** call `activate_otel_instrumentations()` once at startup (idempotent; per-instrumentor try/except).
   - **Propagators:** declare `OTEL_PROPAGATORS=tracecontext,baggage` explicitly in compose (defense-in-depth).
   - **Log-to-trace correlation:** `LoggingInstrumentor` injects `otelTraceID`/`otelSpanID` into every `LogRecord`.
-  - **Test coverage:** `tests/contract/test_cross_service_trace_instrumentation_contract.py` (inbound FastAPI + outbound HTTPX + activation), `tests/contract/test_otel_propagators_contract.py` (compose OTEL_PROPAGATORS + .env.example doc).
+  - **Test coverage:** `tests/contract/test_cross_service_trace_instrumentation_contract.py` (inbound FastAPI + outbound HTTPX + activation), `the removed OTel propagators contract` (compose OTEL_PROPAGATORS + .env.example doc).
 - **gotchas:**
   - НЕ добавлять OTLP gRPC exporter — Langfuse v4 SDK handles OTLP export internally.
   - НЕ писать ручной propagation (`inject()`/`extract()`/`attach()`/`detach()`) поверх SDK-native FastAPIInstrumentor + HTTPXClientInstrumentor. Ручной propagation (#2229) удаляется в #2253/#2266 после runtime-доказательства cross-service continuity.
@@ -453,7 +453,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - `OTEL_PROPAGATORS` должен включать и `tracecontext`, и `baggage` — потеря baggage ломает Langfuse user/session/tags propagation через сервисные границы (#2226).
   - Double-instrumentation guard: `FastAPIInstrumentor.instrument_app` сам ставит флаг `_is_instrumented_by_opentelemetry`; в shared helper читаем его до вызова.
   - Отсутствующие `opentelemetry-instrumentation-*` пакеты пропускаются silently — это не ошибка, а graceful degradation.
-  - Contracts: `tests/contract/test_cross_service_trace_instrumentation_contract.py`, `tests/contract/test_otel_propagators_contract.py`, `tests/contract/test_end_to_end_trace_flow_contract.py`.
+  - Contracts: `tests/contract/test_cross_service_trace_instrumentation_contract.py`, `the removed OTel propagators contract`, `the removed end-to-end trace flow contract`.
 
 ## prometheus_client
 - **triggers:** prometheus, metrics, histogram, counter, /metrics, make_asgi_app, REGISTRY, scrape

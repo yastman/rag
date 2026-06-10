@@ -4,7 +4,7 @@ SDK baseline for how the voice path participates in the single distributed trace
 (#2244). Research-only decision record: it documents the supported approach and
 the current state, and defers the behavioural change (deprecating the manual
 `langfuse_trace_id`) to a follow-up implementation issue. Enforced by
-`tests/contract/test_voice_tracing_baseline_contract.py`.
+the retired voice tracing baseline contract.
 
 ## Question
 

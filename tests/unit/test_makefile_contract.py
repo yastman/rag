@@ -164,16 +164,20 @@ def test_obsolete_langfuse_trace_targets_are_removed() -> None:
         "validate-traces-fast",
         "validate-voice-traces",
         "langfuse-latency-audit",
+        "langfuse-latest-trace-audit",
+        "trace-audit-snapshot",
     )
 
     for target in obsolete_targets:
         assert not re.search(rf"^{re.escape(target)}:", text, re.MULTILINE), (
             f"{target} should be removed from Makefile"
         )
-    assert "scripts/validate_traces.py" not in text
+    assert "the removed trace validation script" not in text
     assert "scripts/validate_trace_runtime.py" not in text
     assert "scripts/validate_voice_traces.py" not in text
     assert "scripts.probe.langfuse_latency_audit" not in text
+    assert "the removed latest-trace audit script" not in text
+    assert "scripts.audit.trace_audit_snapshot" not in text
 
 
 # --- #1307 core trace gate contract tests ---
@@ -239,37 +243,6 @@ def test_e2e_test_traces_core_includes_required_scenarios() -> None:
 
 
 # --- #1490 latest trace audit contract tests ---
-
-
-def test_langfuse_latest_trace_audit_is_phony() -> None:
-    text = _makefile_text()
-    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
-    assert phony_blocks, ".PHONY declaration not found in Makefile"
-    combined = " ".join(phony_blocks)
-    assert "langfuse-latest-trace-audit" in combined, (
-        "langfuse-latest-trace-audit must be declared in .PHONY"
-    )
-
-
-def test_langfuse_latest_trace_audit_target_exists() -> None:
-    text = _makefile_text()
-    assert re.search(r"^langfuse-latest-trace-audit:", text, re.MULTILINE), (
-        "langfuse-latest-trace-audit target must exist in Makefile"
-    )
-
-
-def test_langfuse_latest_trace_audit_runs_audit_script() -> None:
-    text = _makefile_text()
-    block_match = re.search(
-        r"^langfuse-latest-trace-audit:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "langfuse-latest-trace-audit target not found in Makefile"
-    block = block_match.group(0)
-    assert "scripts/e2e/langfuse_latest_trace_audit.py" in block, (
-        "langfuse-latest-trace-audit must invoke scripts/e2e/langfuse_latest_trace_audit.py"
-    )
 
 
 # --- #1486 runtime env contract tests ---

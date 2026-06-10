@@ -11,7 +11,7 @@ disappear or drift from the code it describes:
   SDK-native via FastAPI auto-instrumentation — must remain true in code, so
   the "no backend change needed" decision is not built on a stale fact.
 
-This mirrors ``test_voice_tracing_baseline_contract.py`` (#2257): a documented
+This mirrors the removed voice tracing baseline contract (#2257): a documented
 decision, enforced.
 """
 

@@ -20,46 +20,6 @@ guardrail_standards:
     cross-file invariants.
 
 bug_classes:
-  - name: Langfuse/OTEL/contextvars loss
-    guardrail: >
-      Context propagation contract in
-      tests/contract/test_observability_contextvars_contract.py and ingestion
-      raw-thread coverage in tests/contract/test_ingestion_threadhop_contract.py;
-      CI gate via make test-contract.
-    canonical_issue: "#2251"
-    related_issues:
-      - "#2246"
-      - "#2301"
-    first_seen: "2025"
-    last_confirmed: "2026"
-
-  - name: Observability trace-coverage drift
-    guardrail: >
-      End-to-end trace flow contract in
-      tests/contract/test_end_to_end_trace_flow_contract.py; span metadata
-      coverage in tests/unit/test_observability_span_metadata.py; trace
-      continuity and log-correlation validation in scripts/validate_traces.py,
-      scripts/trace_continuity.py, and scripts/log_correlation.py; CI gate via
-      make test-contract.
-    canonical_issue: "#2215"
-    related_issues:
-      - "#2246"
-      - "#2272"
-      - "#2266"
-      - "#2256"
-      - "#2253"
-      - "#2223"
-      - "#2222"
-      - "#2221"
-      - "#2216"
-      - "#2215"
-      - "#2214"
-      - "#2166"
-      - "#2064"
-      - "#2301"
-    first_seen: "2025"
-    last_confirmed: "2026"
-
   - name: uv .venv mutation
     guardrail: >
       Review-safe gates use check-frozen / candidate-check: uv sync --frozen
