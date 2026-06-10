@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -26,6 +27,7 @@ ALLOWED_GOOGLEAPIS_PARENTS = {
     "opentelemetry-exporter-otlp-proto-http",
 }
 RUNTIME_DIRS = (ROOT / "src", ROOT / "telegram_bot")
+RUNTIME_GIT_PATTERNS = ("src/**/*.py", "telegram_bot/**/*.py")
 
 
 def _load_toml(path: Path) -> dict:
@@ -50,7 +52,26 @@ def _reverse_lock_dependencies(path: Path) -> dict[str, set[str]]:
 def _project_dependencies(path: Path) -> set[str]:
     data = _load_toml(path)
     deps = data["project"].get("dependencies", [])
-    return {dep.split("[", 1)[0].split("<", 1)[0].split(">", 1)[0].split("=", 1)[0].lower() for dep in deps}
+    return {
+        dep.split("[", 1)[0].split("<", 1)[0].split(">", 1)[0].split("=", 1)[0].lower()
+        for dep in deps
+    }
+
+
+def _tracked_runtime_python_files() -> list[Path]:
+    for runtime_dir in RUNTIME_DIRS:
+        assert runtime_dir.is_dir(), f"runtime scan root does not exist: {runtime_dir}"
+
+    result = subprocess.run(
+        ["git", "ls-files", *RUNTIME_GIT_PATTERNS],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+    files = [ROOT / line for line in result.stdout.splitlines() if line]
+    assert files, "runtime import contract did not find any tracked Python files"
+    return files
 
 
 def test_root_and_telegram_base_deps_do_not_include_boto_or_gcs_packages() -> None:
@@ -76,19 +97,22 @@ def test_googleapis_common_protos_is_only_transitive_from_otel_exporters_when_pr
 
 def test_runtime_code_does_not_import_boto_or_google_cloud_modules() -> None:
     violations: list[str] = []
-    for base in RUNTIME_DIRS:
-        for py_file in base.rglob("*.py"):
-            rel = py_file.relative_to(ROOT)
-            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(rel))
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        if alias.name in {"boto3", "botocore"} or alias.name.startswith(("google.cloud", "google.auth")):
-                            violations.append(f"{rel}:{node.lineno} imports {alias.name}")
-                elif isinstance(node, ast.ImportFrom):
-                    module = node.module or ""
-                    if module in {"boto3", "botocore"} or module.startswith(("google.cloud", "google.auth")):
-                        violations.append(f"{rel}:{node.lineno} imports from {module}")
+    for py_file in _tracked_runtime_python_files():
+        rel = py_file.relative_to(ROOT)
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(rel))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in {"boto3", "botocore"} or alias.name.startswith(
+                        ("google.cloud", "google.auth")
+                    ):
+                        violations.append(f"{rel}:{node.lineno} imports {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module in {"boto3", "botocore"} or module.startswith(
+                    ("google.cloud", "google.auth")
+                ):
+                    violations.append(f"{rel}:{node.lineno} imports from {module}")
     assert violations == []
 
 
