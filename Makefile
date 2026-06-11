@@ -478,6 +478,7 @@ docker-clean-orphan-worktree-volumes-apply: ## Delete Docker volumes from remove
 # Common compose command with --compatibility to enforce deploy.resources.limits
 COMPOSE_CMD := docker compose --compatibility
 LOCAL_COMPOSE_FILE := compose.yml:compose.dev.yml
+CORE_MIN_COMPOSE_FILE := compose.core.yml
 # Local dev env fallback: use .env if present, otherwise safe CI fixture values
 LOCAL_COMPOSE_CMD := COMPOSE_FILE=$(LOCAL_COMPOSE_FILE) $(COMPOSE_CMD) --env-file $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
 # Runtime env for E2E trace gates: allow worktrees to point at the main checkout .env
@@ -634,7 +635,14 @@ remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(YELLOW)container not found$(NC)"; fi; \
 	exit $$fail
 
-.PHONY: docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
+.PHONY: core-min-up core-up docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
+
+core-min-up: ## Start minimal core services only (qdrant + redis)
+	@echo "$(BLUE)Starting minimal core services (qdrant + redis)...$(NC)"
+	COMPOSE_FILE=$(CORE_MIN_COMPOSE_FILE) $(COMPOSE_CMD) up -d
+	@echo "$(GREEN)✓ Minimal core services started$(NC)"
+
+core-up: docker-core-up ## Start the full default local compose core
 
 docker-core-up: ## Start default local compose stack (unprofiled services)
 	@echo "$(BLUE)Starting core services...$(NC)"
