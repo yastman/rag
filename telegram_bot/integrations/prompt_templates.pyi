@@ -1,0 +1,13 @@
+from src.runtime.services.response_style_detector import ResponseStyle
+
+CONTRACT_PROMPTS: dict[ResponseStyle, str]
+TOKEN_LIMITS: dict[tuple[ResponseStyle, str], int]
+
+def get_token_limit(style: ResponseStyle, difficulty: str) -> int: ...
+def get_word_limit(style: ResponseStyle, difficulty: str) -> int: ...
+def build_system_prompt(style: ResponseStyle, difficulty: str, domain: str) -> str: ...
+def build_system_prompt_with_manager(
+    style: ResponseStyle,
+    difficulty: str,
+    domain: str,
+) -> str: ...
