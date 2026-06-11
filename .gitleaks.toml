@@ -11,6 +11,8 @@ title = "Gitleaks config"
     '''uv.lock''',
     '''package-lock\.json''',
     '''\.git/''',
+
+    # Test/example fixtures and docs may contain fake tokens.
     '''tests/''',
     '''scripts/''',
     '''docs/''',
