@@ -250,7 +250,6 @@ class DoclingClient:
             logger.warning(f"Health check failed: {e}")
             return False
 
-
     async def chunk_file(
         self,
         file_path: Path,

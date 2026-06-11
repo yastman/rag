@@ -130,7 +130,6 @@ def trace_search_with_decorator(
     return results, metrics
 
 
-
 if __name__ == "__main__":
     print("=" * 80)
     print("LANGFUSE V4 INTEGRATION - Examples")
