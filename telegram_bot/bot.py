@@ -2644,7 +2644,7 @@ class PropertyBot:
                     response_sent = False
                     history_reply_markup = None
 
-                ctx = DummyContext()
+                ctx: Any = DummyContext()
                 messages = []
             else:
                 # Build tools list via shared helper

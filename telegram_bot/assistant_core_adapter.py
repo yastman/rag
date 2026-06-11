@@ -14,8 +14,8 @@ from src.core import (
     AssistantResult,
     CoreDependencies,
     UserContext,
-    run_assistant_request,
 )
+from src.core.assistant import run_assistant_request
 
 
 CORE_ENTRYPOINT_ENV = "ASSISTANT_CORE_ENTRYPOINT_ENABLED"

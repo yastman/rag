@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import time
 from numbers import Real
-from typing import Any
+from typing import Any, cast
 
 from src.observability_payloads import build_safe_input_payload
 from src.retrieval.topic_classifier import get_query_topic_hint
@@ -391,7 +391,7 @@ async def run_client_pipeline(
         reranker=reranker,
         llm=llm,
         agent_role=role,
-        state_contract=state_contract,
+        state_contract=cast(dict[str, Any] | None, state_contract),
         pre_computed_embedding=pre_computed,
         pre_computed_sparse=pre_computed_sparse,
         pre_computed_colbert=pre_computed_colbert,

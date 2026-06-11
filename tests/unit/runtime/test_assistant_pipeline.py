@@ -58,6 +58,7 @@ async def test_run_assistant_pipeline_returns_assistant_result(monkeypatch) -> N
             embeddings=object(),
             sparse_embeddings=object(),
             qdrant=object(),
+            config=object(),
         ),
     )
 

@@ -692,7 +692,7 @@ async def _generate_streaming_response(
 
     try:
         llm = config.create_llm(auto_trace=False)
-        stream_kwargs = {}
+        stream_kwargs: dict[str, Any] = {}
         params = inspect.signature(generate_streaming).parameters
         if "request" in params:
             stream_kwargs["request"] = req
