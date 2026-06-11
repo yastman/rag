@@ -213,14 +213,6 @@ class GraphConfig:
             timeout=self.bge_m3_timeout,
         )
 
-    def create_hybrid_embeddings(self) -> Any:
-        """Create BGEM3HybridEmbeddings instance."""
-        from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings
-
-        return BGEM3HybridEmbeddings(
-            base_url=self.bge_m3_url,
-            timeout=self.bge_m3_timeout,
-        )
 
 
 __all__ = ["GraphConfig"]
