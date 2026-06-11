@@ -43,6 +43,8 @@ cascade into unrelated skills or workflows on your own.
   [`docs/engineering/test-writing-guide.md`](docs/engineering/test-writing-guide.md)
 - SDK/framework lookup:
   [`docs/engineering/sdk-registry.md`](docs/engineering/sdk-registry.md)
+- Codex Web worker prompt:
+  [`docs/engineering/codex-web-prompt.md`](docs/engineering/codex-web-prompt.md)
 - Docs navigation:
   [`docs/README.md`](docs/README.md), [`docs/indexes/`](docs/indexes/)
 - Operational runbooks:
@@ -93,3 +95,21 @@ Git hooks and push gates run lint/static guardrails only. Run tests explicitly a
 Use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and the nearest
 override for verification. Run focused checks for touched areas. State skipped
 checks.
+
+## Test Policy
+
+GitHub required CI = hygiene/static only (Secret Scan, Semgrep, Lint, Lockfile Check, Compose Config).
+Python tests = local/manual or workflow_dispatch-only.
+
+| Gate | Scope | When |
+|---|---|---|
+| `make test-core` | monolith core only (91 tests, ~8s) | core changes, preferred first |
+| `make test` | broad fast gate (unit + graph paths) | adapter/service changes |
+| `make test-contract` | static contract tests | contract changes |
+| `make test-full` | heavy full gate | manual pre-merge only |
+
+Core changes should prefer `make test-core` first.
+Adapter/service changes should run `make test-core` + `make test`.
+
+Git hooks and push gates run lint/static guardrails only. Run tests explicitly
+as local validation; see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
