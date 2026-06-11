@@ -39,7 +39,7 @@ def _build_kommo_client(*, redis_client: Any) -> Any | None:
     """Construct a ``KommoClient`` from environment, or ``None`` if Kommo
     is not configured.
 
-    Pre-#2212 ``mini_app/phone.py::get_kommo_client()`` called
+    Pre-#2212 Mini App phone submission constructed
     ``KommoClient()`` with no args — every Mini App phone submission
     raised ``TypeError`` because the SDK requires keyword-only
     ``subdomain`` and ``token_store``. This helper centralises the

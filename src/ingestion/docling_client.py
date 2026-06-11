@@ -250,51 +250,6 @@ class DoclingClient:
             logger.warning(f"Health check failed: {e}")
             return False
 
-    async def convert_file(self, file_path: Path) -> ConvertedDocument:
-        """Convert document file to text.
-
-        Args:
-            file_path: Path to document file
-
-        Returns:
-            ConvertedDocument with extracted text and metadata
-        """
-        async_path = anyio.Path(file_path)
-        if not await async_path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        suffix = file_path.suffix.lower()
-        if suffix not in self.SUPPORTED_FORMATS:
-            raise ValueError(f"Unsupported format: {suffix}")
-
-        # Prepare multipart form data - read file into memory to avoid
-        # async context issues with file handles
-        file_content = await async_path.read_bytes()
-        files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
-
-        response = await self.client.post(
-            "/v1/convert/file",
-            files=files,
-            data=self._build_convert_form_data(),
-        )
-
-        response.raise_for_status()
-        result = response.json()
-
-        # Extract converted content
-        documents = result.get("documents", [])
-        if not documents:
-            raise ValueError("No documents returned from conversion")
-
-        doc = documents[0]
-        return ConvertedDocument(
-            content=doc.get("md_content", doc.get("text", "")),
-            source=file_path.name,
-            source_type=suffix.lstrip("."),
-            page_count=doc.get("page_count", 0),
-            metadata=doc.get("metadata", {}),
-        )
-
     async def chunk_file(
         self,
         file_path: Path,

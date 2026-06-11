@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import time
 from typing import Any
 
@@ -31,10 +30,7 @@ async def run_assistant_pipeline(
     ctx = request.user_context or UserContext()
 
     try:
-        classify_query = importlib.import_module("src.runtime.graph.nodes.classify").classify_query
-        legacy_generate = importlib.import_module(
-            "telegram_bot.services.generate_response"
-        ).generate_response
+        from src.runtime.graph.nodes.classify import classify_query
 
         request_type = classify_query(request.query)
         state_contract: dict[str, Any] | None = {"filters": ctx.filters} if ctx.filters else None
@@ -93,7 +89,6 @@ async def run_assistant_pipeline(
                 grade_confidence=grade_confidence,
                 config=dependencies.config,
             ),
-            generate=legacy_generate,
         )
         generation_result = generation.payload
         usage = _as_usage_dict(generation_result.get("usage_details"))

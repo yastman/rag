@@ -1,4 +1,4 @@
-"""FastAPI RAG API — wrapper around LangGraph pipeline.
+"""FastAPI RAG API — wrapper around the assistant core.
 
 Exposes POST /query for synchronous RAG queries and GET /health for readiness.
 """
@@ -10,13 +10,13 @@ import os
 import re
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from langgraph.errors import GraphRecursionError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.schemas import QueryRequest, QueryResponse
@@ -33,16 +33,8 @@ _LANGFUSE_TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize and teardown pipeline services.
-
-    The pipeline factory is resolved through :mod:`src.runtime.graph.builder`
-    (env var ``RAG_GRAPH_FACTORY``, default ``telegram_bot.graph.graph:build_graph``).
-    The dynamic resolution is the seam introduced for #1948: it removes the
-    last static ``from telegram_bot ...`` import under ``src/`` so the API
-    can be shipped without ``telegram_bot/`` next to it, while production
-    behaviour stays unchanged.
-    """
-    from src.runtime.graph.builder import build_pipeline
+    """Initialize and teardown assistant-core services."""
+    from src.core import CoreDependencies
     from src.runtime.graph.config import GraphConfig
     from src.runtime.integrations.cache import CacheLayerManager
     from src.runtime.services.qdrant import QdrantService
@@ -76,17 +68,18 @@ async def lifespan(app: FastAPI):
 
     llm = cfg.create_llm()
 
-    graph = build_pipeline(
+    core_dependencies = CoreDependencies(
         cache=cache,
         embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
         reranker=None,
         llm=llm,
-        message=None,
+        config=cfg,
     )
 
-    app.state.graph = graph
+    app.state.core_dependencies = core_dependencies
+    app.state.collection_name = cfg.qdrant_collection
     app.state.cache = cache
     app.state.qdrant = qdrant
     app.state.embeddings = embeddings
@@ -316,7 +309,7 @@ def _normalize_langfuse_trace_id(trace_id: str | None) -> str | None:
 
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest) -> QueryResponse:
-    """Run a RAG query through the LangGraph pipeline."""
+    """Run a RAG query through the assistant core."""
     normalized_trace_id = _normalize_langfuse_trace_id(req.langfuse_trace_id)
     if normalized_trace_id:
         return await _query_with_explicit_trace(req, langfuse_trace_id=normalized_trace_id)
@@ -348,25 +341,20 @@ async def _query_with_explicit_trace(
 
 
 async def _execute_query(req: QueryRequest) -> QueryResponse:
-    """Run a RAG query through the LangGraph pipeline."""
+    """Run a RAG query through the assistant core."""
+    from src.core import UserContext
+    from src.core import run_assistant_request as core_run_assistant_request
     from src.observability import get_client, propagate_attributes
-    from src.runtime.graph.state import make_initial_state
     from src.scoring import write_langfuse_scores
 
     start = time.perf_counter()
-
     session_id = req.session_id or f"api-{req.user_id}"
-    state = make_initial_state(
-        user_id=req.user_id,
-        session_id=session_id,
-        query=req.query,
-    )
-    state["max_rewrite_attempts"] = int(getattr(app.state, "max_rewrite_attempts", 1))
+    request_id = uuid.uuid4().hex
 
     trace_kwargs: dict[str, Any] = {
         "session_id": session_id,
         "user_id": str(req.user_id),
-        "metadata": {"source": req.channel},
+        "metadata": {"source": req.channel, "request_id": request_id},
         "tags": ["api", "rag", req.channel],
         # Keep Langfuse request metadata attached to the top-level API
         # observation. DEPS-OBS1 removes monolith OTEL auto-propagation, so
@@ -376,51 +364,35 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
     }
 
     with propagate_attributes(**trace_kwargs):
-        try:
-            result = await app.state.graph.ainvoke(state)
-        except GraphRecursionError:
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            fallback_response = (
-                "Запрос слишком сложный — достигнут лимит обработки. Попробуйте упростить его."
-            )
-            lf = get_client()
-            if lf is not None:
-                lf.update_current_span(
-                    input=build_safe_input_payload(
-                        content_type="api", text=req.query, route="rag-api-query"
-                    ),
-                    output=build_safe_output_payload(
-                        answer_text=fallback_response,
-                        chunks_count=1,
-                        fallback_reason="recursion_limit",
-                    ),
-                    metadata={
-                        "source": req.channel,
-                        "query_type": "ERROR",
-                        "error_reason": "recursion_limit",
-                    },
-                )
-                fallback_result: dict[str, Any] = {
-                    "input_type": "api",
-                    "query_type": "ERROR",
-                    "pipeline_wall_ms": elapsed_ms,
-                    "e2e_latency_ms": elapsed_ms,
-                    "user_perceived_wall_ms": elapsed_ms,
-                    "cache_hit": False,
-                    "search_results_count": 0,
-                    "rerank_applied": False,
-                    "response": fallback_response,
-                }
-                write_langfuse_scores(lf, fallback_result)
-            return QueryResponse(
-                response=fallback_response,
-                query_type="ERROR",
-                cache_hit=False,
-                documents_count=0,
-                rerank_applied=False,
-                latency_ms=round(elapsed_ms, 1),
-                context=[],
-            )
+        run_assistant_request = cast(Callable[..., Awaitable[Any]], core_run_assistant_request)
+        assistant_result = await run_assistant_request(
+            req.query,
+            collection=str(getattr(app.state, "collection_name", "")),
+            user_context=UserContext(
+                user_id=str(req.user_id),
+                session_id=session_id,
+                role="client",
+            ),
+            request_id=request_id,
+            dependencies=app.state.core_dependencies,
+        )
+
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        result: dict[str, Any] = {
+            "input_type": "api",
+            "query_type": assistant_result.request_type,
+            "pipeline_wall_ms": elapsed_ms,
+            "e2e_latency_ms": elapsed_ms,
+            "user_perceived_wall_ms": elapsed_ms,
+            "cache_hit": assistant_result.cache_hit,
+            "search_results_count": assistant_result.documents_count,
+            "rerank_applied": assistant_result.rerank_applied,
+            "response": assistant_result.response_text,
+            "retrieved_context": assistant_result.retrieved_sources,
+            "llm_provider_model": assistant_result.llm_model,
+            "llm_call_count": assistant_result.llm_call_count,
+            "latency_stages": {},
+        }
 
         lf = get_client()
         if lf is not None:
@@ -429,31 +401,26 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
                     content_type="api", text=req.query, route="rag-api-query"
                 ),
                 output=build_safe_output_payload(
-                    answer_text=result.get("response", ""),
+                    answer_text=assistant_result.response_text,
                     chunks_count=1,
-                    sources_count=result.get("search_results_count", 0),
+                    sources_count=assistant_result.documents_count,
+                    fallback_reason=assistant_result.error_type,
                 ),
                 metadata={
                     "source": req.channel,
-                    "query_type": result.get("query_type", ""),
+                    "query_type": assistant_result.request_type,
+                    "route": assistant_result.route,
+                    "error_type": assistant_result.error_type,
                 },
             )
-        # Set wall-time fields so write_langfuse_scores reports real latency
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        result["pipeline_wall_ms"] = elapsed_ms
-        result["e2e_latency_ms"] = elapsed_ms
-        summarize_s = result.get("latency_stages", {}).get("summarize", 0)
-        result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
-
-        # Write Langfuse scores for observability parity with bot
-        write_langfuse_scores(lf, result)
+            write_langfuse_scores(lf, result)
 
     return QueryResponse(
-        response=result.get("response", ""),
-        query_type=result.get("query_type", ""),
-        cache_hit=result.get("cache_hit", False),
-        documents_count=result.get("search_results_count", 0),
-        rerank_applied=result.get("rerank_applied", False),
+        response=assistant_result.response_text,
+        query_type=assistant_result.request_type,
+        cache_hit=assistant_result.cache_hit,
+        documents_count=assistant_result.documents_count,
+        rerank_applied=assistant_result.rerank_applied,
         latency_ms=round(elapsed_ms, 1),
-        context=result.get("retrieved_context", []),
+        context=assistant_result.retrieved_sources,
     )
