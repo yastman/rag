@@ -3,8 +3,7 @@
 Closes the final layering offender for #1948: ``src/api/main.py`` previously
 hard-imported ``telegram_bot.graph.graph.build_graph`` inside its FastAPI
 ``lifespan``. The new builder resolves the factory dynamically through
-``RAG_GRAPH_FACTORY`` (default ``telegram_bot.graph.graph:build_graph``),
-which is a string spec — no static ``from telegram_bot ...`` import remains
+``RAG_GRAPH_FACTORY``. There is no adapter-owned default, so no static import remains
 under ``src/`` once ``src/api/main.py`` is rewired.
 
 Tests cover the resolver only. The actual ``build_graph`` implementation is
@@ -37,29 +36,21 @@ def _install_stub_module(name: str, factory: object) -> None:
     sys.modules[name] = module
 
 
-def test_resolve_pipeline_factory_uses_default_spec(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Default spec is ``telegram_bot.graph.graph:build_graph`` per the
-    canonical bot wiring; we install a stub at that location so the test
-    has no transitive ML imports.
-    """
+def test_resolve_pipeline_factory_default_requires_explicit_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default spec must not point back to an adapter-owned graph factory."""
     monkeypatch.delenv("RAG_GRAPH_FACTORY", raising=False)
-
-    def _fake_build_graph(*args: object, **kwargs: object) -> str:
-        return "fake-graph"
-
-    fake_module = types.ModuleType("telegram_bot.graph.graph")
-    fake_module.build_graph = _fake_build_graph  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "telegram_bot.graph.graph", fake_module)
 
     factory = builder.resolve_pipeline_factory()
 
-    assert factory is _fake_build_graph
-    assert factory() == "fake-graph"
+    with pytest.raises(builder.PipelineFactoryError, match="must be set"):
+        factory()
 
 
 def test_resolve_pipeline_factory_honours_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     """``RAG_GRAPH_FACTORY`` overrides the default; this is the seam that
-    lets ``src/api/main.py`` stay free of any static telegram_bot import.
+    lets legacy callers provide an explicit factory.
     """
 
     def _custom(*args: object, **kwargs: object) -> str:
