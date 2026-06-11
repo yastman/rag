@@ -39,19 +39,6 @@ class PhoneRequest(BaseModel):
         return normalized
 
 
-def get_kommo_client():
-    """Get Kommo client (lazy import).
-
-    Deprecated since #2212: kept for backward compat with callers that
-    haven't migrated to dependency injection. New callers must construct
-    a :class:`KommoClient` via ``mini_app.api._build_kommo_client(...)``
-    in the FastAPI ``lifespan`` and pass it explicitly to
-    :func:`submit_phone`.
-    """
-    from src.services.kommo_client import KommoClient  # type: ignore[import-untyped]
-
-    return KommoClient()
-
 
 @observe(name="miniapp-kommo-create-lead", capture_input=False, capture_output=False)
 async def submit_phone(request: PhoneRequest, *, client: Any | None = None) -> dict:

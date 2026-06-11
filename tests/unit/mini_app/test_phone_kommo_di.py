@@ -1,6 +1,6 @@
 """Mini App phone -> Kommo DI contract (#2212 / Epic C).
 
-Pre-#2212 ``mini_app/phone.py::get_kommo_client()`` constructed
+Pre-#2212 Mini App phone submission constructed
 ``KommoClient()`` with no args. ``KommoClient.__init__`` requires
 ``subdomain`` and ``token_store`` (kw-only), so every call raised
 ``TypeError``. The Mini App phone submission emitted a Langfuse span
