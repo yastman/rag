@@ -28,23 +28,6 @@ def _response_content(response) -> dict:
     return json.loads(response.body.decode("utf-8"))
 
 
-class _DummyGraph:
-    def __init__(self) -> None:
-        self.last_state: dict | None = None
-
-    async def ainvoke(self, state: dict) -> dict:
-        self.last_state = state
-        return {
-            "response": "ok",
-            "query_type": "GENERAL",
-            "cache_hit": False,
-            "search_results_count": 0,
-            "rerank_applied": False,
-        }
-
-
-
-
 def _set_core_state() -> object:
     deps = object()
     app.state.core_dependencies = deps
@@ -64,6 +47,7 @@ def _assistant_result(**overrides) -> AssistantResult:
     }
     data.update(overrides)
     return AssistantResult(**data)
+
 
 async def test_query_calls_assistant_core_with_api_context() -> None:
     deps = _set_core_state()
