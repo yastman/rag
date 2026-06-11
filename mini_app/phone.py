@@ -39,7 +39,6 @@ class PhoneRequest(BaseModel):
         return normalized
 
 
-
 @observe(name="miniapp-kommo-create-lead", capture_input=False, capture_output=False)
 async def submit_phone(request: PhoneRequest, *, client: Any | None = None) -> dict:
     """Submit phone to CRM.
