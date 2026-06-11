@@ -2051,7 +2051,6 @@ source = { editable = "." }
 dependencies = [
     { name = "aiogram" },
     { name = "aiogram-dialog" },
-    { name = "apscheduler" },
     { name = "asyncpg" },
     { name = "cachetools" },
     { name = "fluent-compiler" },
@@ -2061,7 +2060,6 @@ dependencies = [
     { name = "langchain" },
     { name = "langchain-core" },
     { name = "langchain-openai" },
-    { name = "langfuse" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-redis" },
     { name = "langmem" },
@@ -2072,14 +2070,23 @@ dependencies = [
     { name = "qdrant-client" },
     { name = "redis" },
     { name = "redisvl" },
-    { name = "sentry-sdk" },
     { name = "tenacity" },
     { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
 all = [
+    { name = "apscheduler" },
+    { name = "langfuse" },
+    { name = "sentry-sdk" },
     { name = "voyageai" },
+]
+observability = [
+    { name = "langfuse" },
+    { name = "sentry-sdk" },
+]
+scheduling = [
+    { name = "apscheduler" },
 ]
 voyage = [
     { name = "voyageai" },
@@ -2089,7 +2096,7 @@ voyage = [
 requires-dist = [
     { name = "aiogram", specifier = ">=3.15.0" },
     { name = "aiogram-dialog", specifier = ">=2.4.0" },
-    { name = "apscheduler", specifier = ">=3.11.2,<4.0" },
+    { name = "apscheduler", marker = "extra == 'scheduling'", specifier = ">=3.11.2,<4.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "cachetools", specifier = ">=5.3.0" },
     { name = "fluent-compiler", specifier = ">=1.1" },
@@ -2099,7 +2106,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=1.2" },
     { name = "langchain-core", specifier = ">=1.2" },
     { name = "langchain-openai", specifier = ">=0.3.0" },
-    { name = "langfuse", specifier = ">=4.0.0,<5.0" },
+    { name = "langfuse", marker = "extra == 'observability'", specifier = ">=4.0.0,<5.0" },
     { name = "langgraph", specifier = ">=1.1.6,<2.0" },
     { name = "langgraph-checkpoint-redis", specifier = ">=0.2.0" },
     { name = "langmem", specifier = ">=0.0.30" },
@@ -2108,15 +2115,15 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "qdrant-client", specifier = ">=1.14.0" },
-    { name = "rag-telegram-bot", extras = ["voyage"], marker = "extra == 'all'" },
+    { name = "rag-telegram-bot", extras = ["voyage", "observability", "scheduling"], marker = "extra == 'all'" },
     { name = "redis", specifier = ">=5.0.0" },
     { name = "redisvl", specifier = ">=0.3.0" },
-    { name = "sentry-sdk", specifier = ">=2.0,<3.0" },
+    { name = "sentry-sdk", marker = "extra == 'observability'", specifier = ">=2.0,<3.0" },
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "uvicorn", specifier = ">=0.30.0" },
     { name = "voyageai", marker = "extra == 'voyage'", specifier = ">=0.3.0" },
 ]
-provides-extras = ["voyage", "all"]
+provides-extras = ["voyage", "observability", "scheduling", "all"]
 
 [[package]]
 name = "redis"

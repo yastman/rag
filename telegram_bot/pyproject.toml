@@ -20,7 +20,6 @@ dependencies = [
     "tenacity>=8.2.0",
     "cachetools>=5.3.0",
     "python-dotenv>=1.0.0",
-    "langfuse>=4.0.0,<5.0",
     "openai>=1.10.0",
     "langchain>=1.2",  # create_agent, ToolRuntime, middleware
     "langchain-core>=1.2",
@@ -32,9 +31,7 @@ dependencies = [
     "fluentogram>=1.1.8",
     "fluent-compiler>=1.1",
     "asyncpg>=0.31.0",
-    "apscheduler>=3.11.2,<4.0",
     "phonenumbers>=9.0.25",
-    "sentry-sdk>=2.0,<3.0",
     "uvicorn>=0.30.0",
 ]
 
@@ -45,8 +42,15 @@ dependencies = [
 voyage = [
     "voyageai>=0.3.0",
 ]
+observability = [
+    "langfuse>=4.0.0,<5.0",
+    "sentry-sdk>=2.0,<3.0",
+]
+scheduling = [
+    "apscheduler>=3.11.2,<4.0",
+]
 all = [
-    "rag-telegram-bot[voyage]",
+    "rag-telegram-bot[voyage,observability,scheduling]",
 ]
 
 [tool.hatch.build.targets.wheel]

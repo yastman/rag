@@ -16,7 +16,6 @@ dependencies = [
     "aiohttp",
     "requests",
     "qdrant-client>=1.17.1",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
-    "langfuse>=4.0.0,<5.0",  # Native v4 observability migration
     # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
     # Install via `uv sync --extra voyage` only for legacy GDrive ingestion or
     # contextualized-embedding paths.
@@ -39,16 +38,7 @@ dependencies = [
     # CheckpointerKind config flag) only when the Postgres path is actually wired.
     "langgraph-checkpoint-redis>=0.3.6",  # Redis checkpointer for LangGraph (0.3.0 fixes HumanMessage serialization #128)
     "langmem>=0.0.30",                    # SummarizationNode for conversation compression
-    # Scheduled nurturing + analytics (#390)
-    "apscheduler>=3.11.2,<4.0",           # Async job scheduling (v3 API)
     "phonenumbers>=9.0.25",
-    # Observability (#2060 / umbrella #1417 — Sentry-compatible error tracking).
-    # sentry-sdk powers the optional Bugsink/Sentry-Cloud integration in
-    # src/observability_sentry.py. It silently no-ops when SENTRY_DSN is unset.
-    "sentry-sdk>=2.0,<3.0",
-    # Direct root constraints to fix Dependabot alerts #50, #52-#55, #60, #66-#69
-    "pillow>=12.2.0",
-    "gradio>=6.7.0",
     "litellm>=1.0.0",
 ]
 
@@ -71,6 +61,24 @@ docs = [
     "mkdocs>=1.6.0",         # Documentation generator
     "mkdocs-material>=9.5.0",# Material theme
     "mkdocstrings[python]>=0.25.0",  # Auto API docs
+]
+
+
+# Optional observability listeners and error tracking
+observability = [
+    "langfuse>=4.0.0,<5.0",
+    "sentry-sdk>=2.0,<3.0",
+]
+
+# Optional scheduled nurturing / analytics jobs
+scheduling = [
+    "apscheduler>=3.11.2,<4.0",
+]
+
+# Optional heavyweight UI/media dependencies
+ui = [
+    "pillow>=12.2.0",
+    "gradio>=6.7.0",
 ]
 
 # Mini App (Telegram Web App — FastAPI backend)
@@ -129,7 +137,7 @@ voyage = [
 
 # All optional dependencies
 all = [
-    "contextual-rag[docs,voice,eval,ingest,ml-local,voyage]",
+    "contextual-rag[docs,voice,eval,ingest,ml-local,voyage,observability,scheduling,ui]",
 ]
 
 # =============================================================================
@@ -155,6 +163,15 @@ dev = [
     "telethon>=1.42.0",
     "pytest-split>=0.11.0",
     "fakeredis>=2.26.0",
+    # Static-analysis support for optional surfaces moved out of base deps.
+    # These stay dev-only so `uv sync --no-dev` keeps the runtime dependency diet.
+    "langfuse>=4.0.0,<5.0",
+    "sentry-sdk>=2.0,<3.0",
+    "apscheduler>=3.11.2,<4.0",
+    "pillow>=12.2.0",
+    "gradio>=6.7.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
 ]
 
 # =============================================================================
