@@ -539,19 +539,23 @@ class TestRunAssistantRequestRuntime:
                 "query_type": "GENERAL",
             }
         )
+        from src.runtime.generation import GenerationResult
+
         gen = AsyncMock(
-            return_value={
-                "response": "Sunny Beach Studio is available for 110000 EUR.",
-                "llm_provider_model": "gpt-4o-mini",
-                "usage_details": {"input": 10, "output": 12},
-            }
+            return_value=GenerationResult(
+                payload={
+                    "response": "Sunny Beach Studio is available for 110000 EUR.",
+                    "llm_provider_model": "gpt-4o-mini",
+                    "usage_details": {"input": 10, "output": 12},
+                }
+            )
         )
         deps = self._deps()
 
         with (
             patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
-            patch("telegram_bot.services.generate_response.generate_response", gen),
+            patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
             result = await run_assistant_request(
                 "Найди студию у моря до 120000",
@@ -578,8 +582,9 @@ class TestRunAssistantRequestRuntime:
         assert rag_kwargs["state_contract"]["filters"] == {"city": "Sunny Beach"}
 
         gen.assert_awaited_once()
-        assert gen.await_args.kwargs["query"] == "Найди студию у моря до 120000"
-        assert gen.await_args.kwargs["documents"] == docs
+        generation_request = gen.await_args.args[0]
+        assert generation_request.query == "Найди студию у моря до 120000"
+        assert generation_request.documents == docs
 
         assert result.route == "rag_search"
         assert result.error_type is None
@@ -612,7 +617,7 @@ class TestRunAssistantRequestRuntime:
         with (
             patch("src.runtime.graph.nodes.classify.classify_query", return_value="FAQ"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
-            patch("telegram_bot.services.generate_response.generate_response", gen),
+            patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
             result = await run_assistant_request(
                 "Какие условия рассрочки?",
@@ -661,12 +666,14 @@ class TestRunAssistantRequestRuntime:
                 "query_type": "GENERAL",
             }
         )
-        gen = AsyncMock(return_value={"response": "answer", "llm_provider_model": "test-model"})
+        from src.runtime.generation import GenerationResult
+
+        gen = AsyncMock(return_value=GenerationResult(payload={"response": "answer", "llm_provider_model": "test-model"}))
 
         with (
             patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
-            patch("telegram_bot.services.generate_response.generate_response", gen),
+            patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
             caplog.at_level(logging.INFO, logger="src.utils.product_events"),
         ):
             await run_assistant_request(

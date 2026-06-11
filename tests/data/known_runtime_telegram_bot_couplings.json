@@ -2,9 +2,6 @@
   "src/runtime/graph/builder.py": [
     "telegram_bot.graph.graph:build_graph"
   ],
-  "src/runtime/pipeline/assistant_pipeline.py": [
-    "telegram_bot.services.generate_response"
-  ],
   "src/runtime/pipeline/rag.py": [
     "telegram_bot.graph.config",
     "telegram_bot.observability",

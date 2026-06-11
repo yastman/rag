@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 import types
 
+from src.runtime.generation import GenerationResult
+
 
 async def test_run_assistant_pipeline_returns_assistant_result(monkeypatch) -> None:
     from src.core import AssistantRequest, CoreDependencies, UserContext
@@ -27,23 +29,26 @@ async def test_run_assistant_pipeline_returns_assistant_result(monkeypatch) -> N
             "rerank_applied": True,
         }
 
-    async def fake_generate_response(**kwargs):
-        return {
-            "response": "answer",
-            "llm_provider_model": "fake-model",
-            "usage_details": {"input": 1, "output": 2},
-        }
+    async def fake_generate_answer(_request):
+        return GenerationResult(
+            payload={
+                "response": "answer",
+                "llm_provider_model": "fake-model",
+                "usage_details": {"input": 1, "output": 2},
+            }
+        )
 
     classify_mod = types.ModuleType("src.runtime.graph.nodes.classify")
     classify_mod.classify_query = lambda _: "GENERAL"
-    generate_mod = types.ModuleType("telegram_bot.services.generate_response")
-    generate_mod.generate_response = fake_generate_response
 
     monkeypatch.setitem(sys.modules, "src.runtime.graph.nodes.classify", classify_mod)
-    monkeypatch.setitem(sys.modules, "telegram_bot.services.generate_response", generate_mod)
     monkeypatch.setattr(
         "src.runtime.pipeline.assistant_pipeline.rag_pipeline",
         fake_rag_pipeline,
+    )
+    monkeypatch.setattr(
+        "src.runtime.pipeline.assistant_pipeline.generate_answer",
+        fake_generate_answer,
     )
 
     result = await run_assistant_pipeline(
