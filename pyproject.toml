@@ -4,45 +4,71 @@ version = "2.14.0"
 description = "Contextual RAG Pipeline with DBSF + ColBERT hybrid search"
 requires-python = ">=3.11"
 dependencies = [
-    "anthropic",
+    # Core assistant/runtime path. `uv sync --no-dev` intentionally installs
+    # only these lean dependencies; optional product surfaces live in extras.
     "openai",
-    "instructor>=1.7.0",  # Structured LLM extraction for apartment filters
-    "groq",
+    "qdrant-client>=1.17.1",  # Vector database client (weighted RRF, relevance feedback)
+    "redis>=7.1.0",
+    "redisvl>=0.16.0",
+    "pydantic-settings>=2.0.0",
+    "httpx>=0.27.0",
+    "tenacity>=8.2.0",        # Retry logic with exponential backoff
+    "pyyaml>=6.0.0",
+    "litellm>=1.0.0",
     "python-dotenv",
-    "pydantic-settings>=2.0.0",  # Required by telegram_bot/config.py (BotConfig)
-    "typing-extensions>=4.0.0",  # Explicit dependency for forward references and compat
-    "cachetools>=5.0.0",  # Required by telegram_bot/middlewares/throttling.py
+    "typing-extensions>=4.0.0",
     "numpy",
     "aiohttp",
     "requests",
-    "qdrant-client>=1.17.1",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
-    # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
-    # Install via `uv sync --extra voyage` only for legacy GDrive ingestion or
-    # contextualized-embedding paths.
-    "tenacity>=8.2.0",        # Retry logic with exponential backoff
-    "redis>=7.1.0",
-    "redisvl>=0.16.0",
-    "aiogram==3.28.2",
-    "aiogram-dialog==2.6.0",            # Dialog framework (menus, navigation, widgets)
-    "fluentogram>=1.2.0",               # i18n (Fluent .ftl files, stub generator)
-    "asyncpg>=0.31.0",
-    # Performance (2026-02-06)
-    "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
-    # LangGraph Pipeline (2026-02-09)
-    "langgraph>=1.0.3,<2.0",               # State graph for RAG pipeline
-    "langchain-core>=1.2",                # Core abstractions (Embeddings, etc.)
-    # Conversation memory (#154)
-    # NOTE (#1254): only the Redis checkpointer is wired (telegram_bot/integrations/memory.py
-    # uses AsyncRedisSaver / MemorySaver). The Postgres checkpointer was never instantiated,
-    # so langgraph-checkpoint-postgres is intentionally NOT a dependency. Re-add it (and a
-    # CheckpointerKind config flag) only when the Postgres path is actually wired.
-    "langgraph-checkpoint-redis>=0.3.6",  # Redis checkpointer for LangGraph (0.3.0 fixes HumanMessage serialization #128)
-    "langmem>=0.0.30",                    # SummarizationNode for conversation compression
+    "langgraph>=1.0.3,<2.0",  # State graph for the core RAG pipeline
+    "langchain-core>=1.2",
+    "langgraph-checkpoint-redis>=0.3.6",
+    "langmem>=0.0.30",
     "phonenumbers>=9.0.25",
-    "litellm>=1.0.0",
 ]
 
 [project.optional-dependencies]
+# Explicit core extra for CI/docs symmetry. The base install already contains
+# this same lean set so `uv sync` / `uv sync --no-dev` remain core-only.
+core = [
+    "openai",
+    "qdrant-client>=1.17.1",
+    "redis>=7.1.0",
+    "redisvl>=0.16.0",
+    "pydantic-settings>=2.0.0",
+    "httpx>=0.27.0",
+    "tenacity>=8.2.0",
+    "pyyaml>=6.0.0",
+    "litellm>=1.0.0",
+    "python-dotenv",
+    "typing-extensions>=4.0.0",
+    "numpy",
+    "aiohttp",
+    "requests",
+    "langgraph>=1.0.3,<2.0",
+    "langchain-core>=1.2",
+    "langgraph-checkpoint-redis>=0.3.6",
+    "langmem>=0.0.30",
+    "phonenumbers>=9.0.25",
+]
+
+# Telegram production adapter and bot-local runtime dependencies.
+telegram = [
+    "aiogram==3.28.2",
+    "aiogram-dialog==2.6.0",
+    "fluentogram>=1.2.0",
+    "cachetools>=5.0.0",
+    "asyncpg>=0.31.0",
+    "uvloop>=0.21.0",
+]
+
+# Optional non-OpenAI provider/contextualization adapters.
+providers = [
+    "anthropic",
+    "groq",
+    "instructor>=1.7.0",
+]
+
 # Local ML models (torch, FlagEmbedding, sentence-transformers)
 # Only needed when running local model inference (BGE-M3, cross-encoder, etc.)
 # Install: uv sync --extra ml-local
@@ -107,6 +133,15 @@ voice = [
 docling = []
 
 # Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
+ingestion = [
+    "pymupdf>=1.26.0",
+    "docling>=2.94.0",
+    "docling-core>=2.74.1",
+    "cocoindex>=0.3.28",
+    "fastembed>=0.7.4",
+]
+
+# Backward-compatible alias for existing make targets and docs.
 ingest = [
     "pymupdf>=1.26.0",
     "docling>=2.94.0",
@@ -137,7 +172,7 @@ voyage = [
 
 # All optional dependencies
 all = [
-    "contextual-rag[docs,voice,eval,ingest,ml-local,voyage,observability,scheduling,ui]",
+    "contextual-rag[core,telegram,providers,docs,voice,eval,ingest,ml-local,voyage,observability,scheduling,ui,mini-app]",
 ]
 
 # =============================================================================
