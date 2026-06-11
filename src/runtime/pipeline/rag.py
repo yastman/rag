@@ -25,6 +25,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
+from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
+from src.runtime.services.query_preprocessor import QueryPreprocessor, expand_short_query
+
 
 _T = TypeVar("_T")
 
@@ -108,23 +111,8 @@ def _record_pipeline_event(*args: Any, **kwargs: Any) -> Any:
     return record(*args, **kwargs)
 
 
-def _detect_filter_sensitive_query(*args: Any, **kwargs: Any) -> Any:
-    return _load_telegram_attr(
-        "telegram_bot.services.query_filter_signal",
-        "detect_filter_sensitive_query",
-    )(*args, **kwargs)
-
-
-def _expand_short_query(*args: Any, **kwargs: Any) -> Any:
-    return _load_telegram_attr("telegram_bot.services.query_preprocessor", "expand_short_query")(
-        *args,
-        **kwargs,
-    )
-
-
-def _new_query_preprocessor() -> Any:
-    cls = _load_telegram_attr("telegram_bot.services.query_preprocessor", "QueryPreprocessor")
-    return cls()
+def _new_query_preprocessor() -> QueryPreprocessor:
+    return QueryPreprocessor()
 
 
 observe = _load_observe()
@@ -181,8 +169,6 @@ def _cacheable_query_types() -> set[str]:
 
 
 record_pipeline_event = _record_pipeline_event
-detect_filter_sensitive_query = _detect_filter_sensitive_query
-expand_short_query = _expand_short_query
 
 
 logger = logging.getLogger(__name__)

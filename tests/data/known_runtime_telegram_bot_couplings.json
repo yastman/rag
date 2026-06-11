@@ -8,8 +8,6 @@
     "telegram_bot.services.bge_m3_query_bundle",
     "telegram_bot.services.cache_policy",
     "telegram_bot.services.metrics",
-    "telegram_bot.services.query_filter_signal",
-    "telegram_bot.services.query_preprocessor",
     "telegram_bot.services.rag_core",
     "telegram_bot.services.small_to_big"
   ]
