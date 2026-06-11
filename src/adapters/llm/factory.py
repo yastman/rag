@@ -19,8 +19,7 @@ def get_llm_provider(provider_name: str | None = None) -> LLMProvider:
     Raises:
         ValueError: If the provider name is unknown.
     """
-    name = provider_name or os.getenv("LLM_PROVIDER", "litellm")
-    name = name.strip().lower()
+    name: str = (provider_name or os.getenv("LLM_PROVIDER") or "litellm").strip().lower()
 
     if name == "litellm":
         return LiteLlmProvider()
