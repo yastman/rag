@@ -3,6 +3,17 @@ name: Trusted Heavy Checks
 on:
   pull_request:
     branches: [main, dev]
+    paths:
+      - 'src/**'
+      - 'telegram_bot/**'
+      - 'mini_app/**'
+      - 'services/**'
+      - 'tests/**'
+      - 'compose*.yml'
+      - 'Makefile'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 permissions:
