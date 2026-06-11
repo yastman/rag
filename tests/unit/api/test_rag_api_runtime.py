@@ -19,6 +19,7 @@ pytestmark = pytest.mark.requires_extras
 
 from src.api.main import app, generic_error_handler, lifespan, query
 from src.api.schemas import QueryRequest, QueryResponse
+from src.core import AssistantResult
 
 
 def _response_content(response) -> dict:
@@ -42,30 +43,52 @@ class _DummyGraph:
         }
 
 
-async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
-    graph = _DummyGraph()
-    app.state.graph = graph
-    app.state.max_rewrite_attempts = 3
 
+
+def _set_core_state() -> object:
+    deps = object()
+    app.state.core_dependencies = deps
+    app.state.collection_name = "test_collection"
+    return deps
+
+
+def _assistant_result(**overrides) -> AssistantResult:
+    data = {
+        "response_text": "ok",
+        "request_type": "GENERAL",
+        "documents_count": 0,
+        "cache_hit": False,
+        "rerank_applied": False,
+        "retrieved_sources": [],
+        "route": "rag_search",
+    }
+    data.update(overrides)
+    return AssistantResult(**data)
+
+async def test_query_calls_assistant_core_with_api_context() -> None:
+    deps = _set_core_state()
     lf = MagicMock()
     lf.update_current_span = MagicMock()
 
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=lf),
+        patch("src.core.run_assistant_request", new=AsyncMock(return_value=_assistant_result())) as mock_run,
     ):
-        await query(QueryRequest(query="test", user_id=1))
+        await query(QueryRequest(query="test", user_id=1, session_id="sess-1"))
 
-    assert graph.last_state is not None
-    assert graph.last_state["max_rewrite_attempts"] == 3
+    mock_run.assert_awaited_once()
+    call = mock_run.await_args
+    assert call.args == ("test",)
+    assert call.kwargs["collection"] == "test_collection"
+    assert call.kwargs["dependencies"] is deps
+    assert call.kwargs["user_context"].user_id == "1"
+    assert call.kwargs["user_context"].session_id == "sess-1"
 
 
 async def test_query_writes_langfuse_scores() -> None:
     """POST /query must call write_langfuse_scores for score parity with bot."""
-    graph = _DummyGraph()
-    app.state.graph = graph
-    app.state.max_rewrite_attempts = 1
-
+    _set_core_state()
     lf = MagicMock()
     lf.update_current_span = MagicMock()
     lf.score_current_trace = MagicMock()
@@ -73,23 +96,20 @@ async def test_query_writes_langfuse_scores() -> None:
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=lf),
+        patch("src.core.run_assistant_request", new=AsyncMock(return_value=_assistant_result())),
         patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         await query(QueryRequest(query="test", user_id=1))
 
-    # write_langfuse_scores must be called with (lf_client, result_state)
     mock_write_scores.assert_called_once()
     call_args = mock_write_scores.call_args
-    assert call_args[0][0] is lf  # first arg: langfuse client
-    assert isinstance(call_args[0][1], dict)  # second arg: result dict
+    assert call_args[0][0] is lf
+    assert isinstance(call_args[0][1], dict)
 
 
 async def test_query_updates_current_observation_and_propagates_api_attributes() -> None:
     """POST /query must propagate correlating attrs and update the active root observation."""
-    graph = _DummyGraph()
-    app.state.graph = graph
-    app.state.max_rewrite_attempts = 1
-
+    _set_core_state()
     lf = MagicMock()
     lf.update_current_span = MagicMock()
 
@@ -98,27 +118,26 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
             "src.observability.propagate_attributes", return_value=nullcontext()
         ) as mock_propagate,
         patch("src.observability.get_client", return_value=lf),
+        patch("src.core.run_assistant_request", new=AsyncMock(return_value=_assistant_result())),
     ):
         await query(QueryRequest(query="test", user_id=42, session_id="sess-1", channel="voice"))
 
-    mock_propagate.assert_called_once_with(
-        session_id="sess-1",
-        user_id="42",
-        metadata={"source": "voice"},
-        tags=["api", "rag", "voice"],
-        as_baggage=True,
-    )
+    call_kwargs = mock_propagate.call_args.kwargs
+    assert call_kwargs["session_id"] == "sess-1"
+    assert call_kwargs["user_id"] == "42"
+    assert call_kwargs["metadata"]["source"] == "voice"
+    assert "request_id" in call_kwargs["metadata"]
+    assert call_kwargs["tags"] == ["api", "rag", "voice"]
+    assert call_kwargs["as_baggage"] is True
     lf.update_current_span.assert_called_once()
     call_kwargs = lf.update_current_span.call_args.kwargs
-    # Safe input payload
     input_payload = call_kwargs["input"]
     assert isinstance(input_payload, dict)
     assert input_payload["content_type"] == "api"
     assert "query_preview" in input_payload
     assert "query_hash" in input_payload
     assert input_payload["query_len"] == 4
-    assert "test" not in input_payload  # raw text must not be present
-    # Safe output payload
+    assert "test" not in input_payload
     output_payload = call_kwargs["output"]
     assert isinstance(output_payload, dict)
     assert "answer_preview" in output_payload
@@ -126,8 +145,9 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
     assert output_payload["answer_len"] == 2
     assert output_payload["chunks_count"] == 1
     assert output_payload["delivery_status"] == "sent"
-    assert "ok" not in output_payload  # raw response must not be present
-    assert call_kwargs["metadata"] == {"source": "voice", "query_type": "GENERAL"}
+    assert "ok" not in output_payload
+    assert call_kwargs["metadata"]["source"] == "voice"
+    assert call_kwargs["metadata"]["query_type"] == "GENERAL"
 
 
 async def test_query_propagates_explicit_langfuse_trace_id() -> None:
@@ -179,20 +199,15 @@ async def test_lifespan_respects_rerank_provider_none() -> None:
 
     fake_cache = AsyncMock()
     fake_qdrant = AsyncMock()
-    fake_graph = MagicMock()
-
     with (
-        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
-        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
-        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
-        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
-        patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        patch("src.runtime.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("src.runtime.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("src.runtime.services.qdrant.QdrantService", return_value=fake_qdrant),
     ):
         async with lifespan(app):
             assert app.state.max_rewrite_attempts == 2
-
-    assert mock_build_graph.call_args.kwargs["reranker"] is None
-    mock_colbert.assert_not_called()
+            assert app.state.core_dependencies.reranker is None
+            assert app.state.collection_name == "test_collection"
 
 
 async def test_lifespan_keeps_colbert_runtime_server_side() -> None:
@@ -212,20 +227,15 @@ async def test_lifespan_keeps_colbert_runtime_server_side() -> None:
 
     fake_cache = AsyncMock()
     fake_qdrant = AsyncMock()
-    fake_graph = MagicMock()
-
     with (
-        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
-        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
-        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
-        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
-        patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        patch("src.runtime.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("src.runtime.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("src.runtime.services.qdrant.QdrantService", return_value=fake_qdrant),
     ):
         async with lifespan(app):
             assert app.state.max_rewrite_attempts == 2
-
-    assert mock_build_graph.call_args.kwargs["reranker"] is None
-    mock_colbert.assert_not_called()
+            assert app.state.core_dependencies.reranker is None
+            assert app.state.collection_name == "test_collection"
 
 
 async def test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings() -> None:
@@ -247,13 +257,10 @@ async def test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings() -> 
 
     fake_cache = AsyncMock()
     fake_qdrant = AsyncMock()
-    fake_graph = MagicMock()
-
     with (
-        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
-        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
-        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
-        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph),
+        patch("src.runtime.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("src.runtime.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("src.runtime.services.qdrant.QdrantService", return_value=fake_qdrant),
         patch("src.api.main.logger.warning") as mock_warning,
     ):
         async with lifespan(app):
@@ -301,103 +308,97 @@ async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> 
     )
 
 
-async def test_query_returns_fallback_on_graph_recursion_error() -> None:
-    """GraphRecursionError must return a valid QueryResponse fallback, not 500."""
-    from langgraph.errors import GraphRecursionError
-
-    class _FailingGraph:
-        async def ainvoke(self, state: dict) -> dict:
-            raise GraphRecursionError("recursion limit exceeded")
-
-    app.state.graph = _FailingGraph()
-    app.state.max_rewrite_attempts = 1
-
+async def test_query_returns_core_error_response() -> None:
+    """Core errors should return a valid QueryResponse fallback, not 500."""
+    _set_core_state()
     lf = MagicMock()
     lf.update_current_span = MagicMock()
+    core_error = _assistant_result(
+        response_text="Сервис временно недоступен.",
+        request_type="ERROR",
+        route="error",
+        error_type="dependency_failed",
+        documents_count=0,
+    )
 
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=lf),
+        patch("src.core.run_assistant_request", new=AsyncMock(return_value=core_error)),
         patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         response = await query(QueryRequest(query="test", user_id=1))
 
     assert isinstance(response, QueryResponse)
-    assert "лимит" in response.response.lower() or "limit" in response.response.lower()
     assert response.query_type == "ERROR"
     assert response.documents_count == 0
     assert response.latency_ms >= 0
-    # Observability: span should still be updated and scores written
+    assert response.response
     lf.update_current_span.assert_called_once()
     mock_write_scores.assert_called_once()
 
 
-async def test_query_graph_recursion_error_preserves_trace_context() -> None:
-    """GraphRecursionError fallback should preserve trace/span behavior."""
-    from langgraph.errors import GraphRecursionError
-
-    class _FailingGraph:
-        async def ainvoke(self, state: dict) -> dict:
-            raise GraphRecursionError("recursion limit exceeded")
-
-    app.state.graph = _FailingGraph()
-    app.state.max_rewrite_attempts = 1
-
+async def test_query_core_error_preserves_trace_context() -> None:
+    """Core error fallback should preserve trace/span behavior."""
+    _set_core_state()
     lf = MagicMock()
     lf.update_current_span = MagicMock()
+    core_error = _assistant_result(
+        response_text="Сервис временно недоступен.",
+        request_type="ERROR",
+        route="error",
+        error_type="dependency_failed",
+        documents_count=0,
+    )
 
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=lf),
+        patch("src.core.run_assistant_request", new=AsyncMock(return_value=core_error)),
     ):
         await query(QueryRequest(query="complex", user_id=42, session_id="sess-1"))
 
     call_kwargs = lf.update_current_span.call_args.kwargs
-    # Safe input payload
     input_payload = call_kwargs["input"]
     assert isinstance(input_payload, dict)
     assert input_payload["content_type"] == "api"
     assert "query_preview" in input_payload
     assert "query_hash" in input_payload
     assert input_payload["query_len"] == 7
-    assert "complex" not in input_payload  # raw text must not be present
-    # Safe output payload with fallback_reason
+    assert "complex" not in input_payload
     output_payload = call_kwargs["output"]
     assert isinstance(output_payload, dict)
     assert "answer_preview" in output_payload
     assert "answer_hash" in output_payload
-    assert output_payload["fallback_reason"] == "recursion_limit"
+    assert output_payload["fallback_reason"] == "dependency_failed"
     assert output_payload["chunks_count"] == 1
     assert call_kwargs["metadata"]["source"] == "api"
     assert call_kwargs["metadata"]["query_type"] == "ERROR"
 
 
-async def test_query_graph_recursion_error_works_when_langfuse_disabled() -> None:
-    """Regression for #1606: GraphRecursionError fallback must not crash with
-    UnboundLocalError when Langfuse is disabled (get_client() returns None)."""
-    from langgraph.errors import GraphRecursionError
-
-    class _FailingGraph:
-        async def ainvoke(self, state: dict) -> dict:
-            raise GraphRecursionError("recursion limit exceeded")
-
-    app.state.graph = _FailingGraph()
-    app.state.max_rewrite_attempts = 1
+async def test_query_core_error_works_when_langfuse_disabled() -> None:
+    """Core error fallback must not crash when Langfuse is disabled."""
+    _set_core_state()
+    core_error = _assistant_result(
+        response_text="Сервис временно недоступен.",
+        request_type="ERROR",
+        route="error",
+        error_type="dependency_failed",
+        documents_count=0,
+    )
 
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=None),
+        patch("src.core.run_assistant_request", new=AsyncMock(return_value=core_error)),
         patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         response = await query(QueryRequest(query="test", user_id=1))
 
-    # Must return a valid QueryResponse with the fallback message
     assert isinstance(response, QueryResponse)
     assert response.query_type == "ERROR"
     assert response.documents_count == 0
     assert response.cache_hit is False
     assert response.latency_ms >= 0
-    assert response.response  # non-empty fallback message
-    assert "лимит" in response.response.lower() or "limit" in response.response.lower()
-    # When Langfuse is disabled, scores must not be written
+    assert response.response
     mock_write_scores.assert_not_called()
