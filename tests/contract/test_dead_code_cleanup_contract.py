@@ -14,7 +14,18 @@ REMOVED_SYMBOLS = {
         "find_stale_worktrees",
         "fix_merged_branches",
     },
-    "src/observability_sentry.py": {"_resolve"},
+    "src/evaluation/langfuse_integration.py": {"trace_search_with_spans"},
+    "src/ingestion/docling_client.py": {"convert_file"},
+    "src/observability_sentry.py": {
+        "_resolve",
+        "error_boundary_breadcrumb",
+        "handler_breadcrumb",
+        "lifecycle_breadcrumb",
+        "message_receive_breadcrumb",
+        "rag_breadcrumb",
+        "session_breadcrumb",
+    },
+    "src/runtime/graph/config.py": {"create_hybrid_embeddings"},
     "src/models/contextualized_embedding.py": {"embed_queries_sync"},
 }
 
