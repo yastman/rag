@@ -15,7 +15,8 @@
 - [`yaroslav-simplification-workflow.md`](yaroslav-simplification-workflow.md)
 - ADR: [`../adr/0015-sdk-native-baseline.md`](../adr/0015-sdk-native-baseline.md),
   [`../adr/0010-voice-path-create-agent-migration-plan.md`](../adr/0010-voice-path-create-agent-migration-plan.md),
-  [`../adr/0012-langgraph-orchestration.md`](../adr/0012-langgraph-orchestration.md)
+  [`../adr/0012-langgraph-orchestration.md`](../adr/0012-langgraph-orchestration.md),
+  [`../adr/0019-core-text-path-procedural-runtime.md`](../adr/0019-core-text-path-procedural-runtime.md)
 
 ---
 
@@ -198,6 +199,11 @@ ingestion не должен быть обязательной runtime-стади
 Эта секция — добавление к исходному аудиту. Без неё план рискует закрепить
 кастомный код вместо движения к SDK-native архитектуре.
 
+**Примечание:** ADR-0019 (принят 2026-06-08) определил, что core text RAG path
+— процедурный runtime через `run_assistant_pipeline()`, а не `create_agent`.
+Создание `create_agent` остаётся SDK-native baseline для adapter/conversational
+shell surfaces (Telegram, voice). См. `docs/adr/0019-core-text-path-procedural-runtime.md`.
+
 ### 5.1. Что Уже SDK-native В Коде
 
 - **Текстовый путь уже на `langchain.agents.create_agent` v1** + `before_model`
@@ -221,18 +227,18 @@ ingestion не должен быть обязательной runtime-стади
    (#1535) и удалить его. До закрытия #1535 — держать как явный временный shim,
    а `DEFAULT_FACTORY_SPEC` развязать через runtime-нейтральный фабричный модуль.
 
-2. **`run_assistant_pipeline` не должен дублировать `create_agent`.** Каноническая
-   оркестрация текста по ADR 0015 — `create_agent` + middleware. Новый
-   `run_assistant_pipeline()` должен быть **тонкой обёрткой над агентным путём**
-   (или явно обоснован как justified custom в ADR 0015), а не третьей независимой
-   моделью оркестрации рядом с `create_agent` и легаси StateGraph.
+2. **`run_assistant_pipeline` — процедурный core, `create_agent` — adapter shell.**
+   ADR-0019 решил: канонический текстовый путь — procedural runtime через
+   `run_assistant_pipeline()`. `create_agent` остаётся для Telegram/voice adapter
+   flows (conversational behavior, tool loops, history trimming, streaming).
+   `run_assistant_pipeline()` не является обёрткой над `create_agent`; это
+   самостоятельный procedural pipeline, владеющий classify/retrieve/generate/
+   grounding/CRM proposal.
 
-3. **Определить канонический путь до Phase E/F.** `rag_pipeline()` /
-   `generate_response()` — код детерминированного `run_client_pipeline`. Нужно
-   решение: канонический текстовый путь — **agent (`create_agent` + tools +
-   middleware)** или **процедурный (`run_assistant_pipeline`)**. Без этого перенос
-   рискует закрепить процедурный путь поверх SDK-агентного. Это решение —
-   блокер для фаз E/F (см. раздел 11, решение №0).
+3. **Канонический путь определён (ADR-0019).** `rag_pipeline()` /
+   `generate_response()` — код детерминированного `run_client_pipeline`. Решение
+   принято: канонический текстовый путь — **процедурный (`run_assistant_pipeline`)**.
+   `create_agent` — adapter shell only. Фазы E/F могут продолжать без блокера.
 
 ### 5.3. Принципы Сверки (обязательны на каждом code-PR)
 
@@ -257,7 +263,7 @@ src/
     dependencies.py           # optional Protocols / dependency bundle
   runtime/
     pipeline/
-      assistant_pipeline.py   # тонкая обёртка над agent-путём (см. 5.2)
+      assistant_pipeline.py   # procedural core pipeline (ADR-0019)
       contracts.py
     retrieval/
       service.py              # wrapper над retrieval/qdrant/rerank/cache
@@ -334,8 +340,8 @@ focused tests.
 - **Phase E — Перенести RAG pipeline ownership.** `src/runtime/pipeline/rag.py`
   (+shim); `src.core.assistant` больше не импортит bot RAG. **Блокер:** решение
   №0 из раздела 11. Риск высокий.
-- **Phase F — Собрать `src.runtime.pipeline.assistant_pipeline`** как тонкую
-  обёртку над agent-путём (см. 5.2). `run_assistant_request()` — public wrapper;
+- **Phase F — Собрать `src.runtime.pipeline.assistant_pipeline`** как процедурный
+  core pipeline (ADR-0019). `run_assistant_request()` — public wrapper;
   `grounding_completed`; `proposed_crm_action` как данные. Риск средний.
 - **Phase G — Telegram как тонкий adapter.** text path → `run_assistant_request()`;
   dependency bundle на старте; legacy branch за feature flag
@@ -413,8 +419,8 @@ Langfuse/OTel optionalization сверх docs/contracts, live CRM writes.
   `generate_response()` — wrapper; prompts без изменений.
 - **CORE-005** — `rag_pipeline()` → `src.runtime` (mostly `git mv` + shim); core
   не импортит bot RAG; алгоритмы не менять. **Блокер: решение №0.**
-- **CORE-006** — `run_assistant_pipeline(request, deps)` как тонкая обёртка над
-  agent-путём; `run_assistant_request()` — public wrapper; product logs с
+- **CORE-006** — `run_assistant_pipeline(request, deps)` как procedural core
+  pipeline (ADR-0019); `run_assistant_request()` — public wrapper; product logs с
   `request_id`.
 - **CORE-007** — live E2E: synthetic docs → Qdrant → core → asserts (required/
   forbidden facts, missing-corpus, grounding fallback); artifacts.
@@ -464,15 +470,17 @@ Observability: каждый запрос реконструируется по `
 | Langfuse держит core non-optional | Medium | Не удалять сразу; wrap после стабильного E2E |
 | E2E flakiness от real LLM | Medium | Отдельный fake-LLM fast path + opt-in real |
 | Релокация `build_graph` закрепляет легаси | High | Не релоцировать; миграция #1535 (раздел 5.2) |
-| `run_assistant_pipeline` дублирует `create_agent` | High | Тонкая обёртка над agent-путём; обоснование в ADR |
+| `run_assistant_pipeline` дублирует `create_agent` | High | ADR-0019: procedural core — justified custom, не дубль. `create_agent` — adapter shell only. Обёртка не нужна. |
 | Большой `telegram_bot/bot.py` | High | Shadow mode + render-тесты + rollback flag |
 
 ---
 
 ## 11. Нужные Решения
 
-0. **(Новый блокер) Канонический текстовый путь — agent (`create_agent`) или
-   процедурный (`run_assistant_pipeline`)?** Блокирует фазы E/F.
+0. **(Решено в ADR-0019) Канонический текстовый путь — процедурный
+   (`run_assistant_pipeline`).** `create_agent` — адаптер/conversational shell,
+   не владелец core text RAG. См. `docs/adr/0019-core-text-path-procedural-runtime.md`.
+   Фазы E/F могут продолжать.
 1. Telegram переключать на core за feature flag или резать ветку сразу после
    зелёного E2E?
 2. `src/api` — поддерживаемый adapter или явно optional до реального потребителя?
@@ -489,8 +497,9 @@ Observability: каждый запрос реконструируется по `
   статических/динамических импортов `telegram_bot`.
 - `src.runtime` владеет classify/retrieval/generation/grounding/CRM proposal.
 - `telegram_bot` — production adapter (receive → call core → render → HITL).
-- `create_agent` остаётся канонической SDK-native оркестрацией; `build_graph`
-  мигрирован/удалён по #1535, не релоцирован.
+- `create_agent` остаётся SDK-native оркестрацией для adapter/conversational shell
+  (Telegram, voice); **не** владеет core text RAG path (решено в ADR-0019).
+  `build_graph` мигрирован/удалён по #1535, не релоцирован.
 - `make e2e-core-live` (или принятый эквивалент) доказывает core path против
   подготовленных документов и Qdrant.
 - Langfuse/OTel/voice/mini app/k8s — optional, не required proof.

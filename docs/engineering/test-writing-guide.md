@@ -48,12 +48,26 @@ E2E naming contract:
 
 ## CI And Local Gate Contracts
 
+### Monolith core gate
+
+`make test-core` is the preferred local/manual validation for core monolith PRs.
+It should cover only:
+- `tests/unit/core/`
+- `tests/unit/runtime/`
+- core architecture contracts
+- observability optionality contracts
+- runtime->telegram coupling ratchet
+
+Do not add Telegram, Mini App, voice, ingestion, eval, or legacy graph tests to `test-core`.
+
 ### Local fast lane
 - The local fast lane runs `tests/unit/` and critical graph-path integration via
   `make test` with `-m "not legacy_api and not requires_extras and not slow"`.
 - Keep new fast-lane tests free of `pytest.mark.slow`, `pytest.mark.requires_extras`,
   and any marker that would exclude them from that expression.
 - Fast tests must not require Docker or live services.
+- Core changes should prefer `make test-core` first.
+- Adapter/service changes should run their explicit lane in addition to `make test-core`.
 
 ### Contract tests
 - Contract tests live in `tests/contract/`.
