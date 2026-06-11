@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
-import importlib
 import inspect
 import logging
 import time
@@ -15,10 +14,23 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
+from src.observability import get_client
 from src.runtime.grounding.policy import (
     is_strict_grounding_safe,
     should_safe_fallback,
 )
+from src.runtime.integrations.prompt_manager import (
+    get_prompt,
+    get_prompt_with_config,
+    get_prompt_with_object,
+)
+from src.runtime.integrations.prompt_templates import (
+    build_system_prompt_with_manager,
+    get_token_limit,
+)
+from src.runtime.services.coverage_mode import detect_coverage_mode
+from src.runtime.services.metrics import PipelineMetrics
+from src.runtime.services.response_style_detector import ResponseStyleDetector
 
 from .context import _MAX_CONTEXT_DOCS, _format_context
 from .contracts import GenerationCallable, GenerationRequest, GenerationResult
@@ -120,31 +132,17 @@ async def _chat_create_with_optional_name(
 
 
 def _get_dynamic_modules(extra: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Retrieve dynamic modules to prevent static layering contract violations."""
+    """Retrieve overridable runtime dependencies for generation tests."""
     modules = {
-        "get_client": importlib.import_module("telegram_bot.observability").get_client,
-        "get_prompt": importlib.import_module(
-            "telegram_bot.integrations.prompt_manager"
-        ).get_prompt,
-        "get_prompt_with_config": importlib.import_module(
-            "telegram_bot.integrations.prompt_manager"
-        ).get_prompt_with_config,
-        "get_prompt_with_object": importlib.import_module(
-            "telegram_bot.integrations.prompt_manager"
-        ).get_prompt_with_object,
-        "build_system_prompt_with_manager": importlib.import_module(
-            "telegram_bot.integrations.prompt_templates"
-        ).build_system_prompt_with_manager,
-        "get_token_limit": importlib.import_module(
-            "telegram_bot.integrations.prompt_templates"
-        ).get_token_limit,
-        "ResponseStyleDetector": importlib.import_module(
-            "telegram_bot.services.response_style_detector"
-        ).ResponseStyleDetector,
-        "detect_coverage_mode": importlib.import_module(
-            "telegram_bot.services.coverage_mode"
-        ).detect_coverage_mode,
-        "PipelineMetrics": importlib.import_module("telegram_bot.services.metrics").PipelineMetrics,
+        "get_client": get_client,
+        "get_prompt": get_prompt,
+        "get_prompt_with_config": get_prompt_with_config,
+        "get_prompt_with_object": get_prompt_with_object,
+        "build_system_prompt_with_manager": build_system_prompt_with_manager,
+        "get_token_limit": get_token_limit,
+        "ResponseStyleDetector": ResponseStyleDetector,
+        "detect_coverage_mode": detect_coverage_mode,
+        "PipelineMetrics": PipelineMetrics,
     }
     if extra:
         for k in list(modules.keys()):

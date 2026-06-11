@@ -4,7 +4,6 @@ HyDEGenerator uses the plain OpenAI-compatible SDK. Langfuse is optional and
 attached outside the core runtime. QueryPreprocessor is rule-based (no LLM calls).
 """
 
-import importlib
 import logging
 import re
 from typing import Any
@@ -12,6 +11,7 @@ from typing import Any
 import openai
 
 from src.observability import get_client, observe
+from src.runtime.integrations.prompt_manager import get_prompt_with_object
 
 
 logger = logging.getLogger(__name__)
@@ -108,15 +108,7 @@ class HyDEGenerator:
         )
 
         try:
-            try:
-                prompt_mgr = importlib.import_module("telegram_bot.integrations.prompt_manager")
-                get_prompt_with_obj = prompt_mgr.get_prompt_with_object
-            except (ImportError, ModuleNotFoundError):
-
-                def get_prompt_with_obj(name: str, fallback: str) -> tuple[str, Any]:
-                    return fallback, None
-
-            system_prompt, prompt_obj = get_prompt_with_obj(
+            system_prompt, prompt_obj = get_prompt_with_object(
                 "hyde", fallback=self.HYDE_SYSTEM_PROMPT
             )
             create_kwargs: dict[str, Any] = {
