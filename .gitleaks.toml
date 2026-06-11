@@ -1,0 +1,20 @@
+# Gitleaks configuration
+# https://github.com/gitleaks/gitleaks
+
+title = "Gitleaks config"
+
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    '''\.venv/''',
+    '''node_modules/''',
+    '''uv.lock''',
+    '''package-lock\.json''',
+    '''\.git/''',
+
+    # Test/example fixtures and docs may contain fake tokens.
+    '''tests/''',
+    '''scripts/''',
+    '''docs/''',
+    '''\.env\.example''',
+  ]
