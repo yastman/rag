@@ -47,6 +47,23 @@ The reusable part is the core product path: assistant orchestration, retrieval, 
 | Education | Course search, student FAQ, onboarding flows |
 | Internal operations | Knowledge-base assistant, document search, approval workflows |
 
+## Local Runtime Profiles
+
+Use the minimal core stack when you want to run the Python assistant natively and only need local stateful services:
+
+```bash
+make core-min-up  # qdrant + redis only, from compose.core.yml
+```
+
+Use the default/full local compose core when you need the broader platform containers around the assistant:
+
+```bash
+make core-up      # compatibility alias for docker-core-up
+make docker-up    # existing alias for docker-core-up
+```
+
+Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, user-base, and ingestion remain behind their dedicated compose profiles or targets.
+
 ## Core Capabilities
 
 | Capability | What it means in this repo | Evidence |
