@@ -7,6 +7,7 @@ Task-oriented entrypoint for engineering process docs. Use this when the request
 - **Engineering folder index**: [`../engineering/README.md`](../engineering/README.md)
 - **Local setup and validation ladder**: [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md)
 - **Docs maintenance rules**: [`../engineering/docs-maintenance.md`](../engineering/docs-maintenance.md)
+- **Agent workflow modes**: [`../engineering/agent-workflow-modes.md`](../engineering/agent-workflow-modes.md)
 
 ## Common Tasks
 
@@ -14,6 +15,7 @@ Task-oriented entrypoint for engineering process docs. Use this when the request
 |---|---|---|
 | Bug-class lookup | [`.github/bug-classes.yml`](../../.github/bug-classes.yml), [`../engineering/bug-classes.md`](../engineering/bug-classes.md) | issue triage notes, contract test locks |
 | Testing and validation | [`../engineering/test-writing-guide.md`](../engineering/test-writing-guide.md) | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md), `Makefile`, `pyproject.toml` |
+| Agent mode selection | [`../engineering/agent-workflow-modes.md`](../engineering/agent-workflow-modes.md) | Current request: existing PR queue, accepted issue execution, or audit/roadmap planning |
 | Issue triage | [`../engineering/issue-triage.md`](../engineering/issue-triage.md) | Current issue, nearest folder `README.md`, nearest `AGENTS.override.md` |
 | SDK/framework lookup | [`../engineering/sdk-registry.md`](../engineering/sdk-registry.md) | Current code usage, Context7 or official docs for version-sensitive behavior |
 | Script/helper migration | [`../engineering/script-native-migration-matrix.md`](../engineering/script-native-migration-matrix.md) | `scripts/README.md`, `Makefile`, `.github/workflows/`, current script callsites |
@@ -24,7 +26,7 @@ Task-oriented entrypoint for engineering process docs. Use this when the request
 
 ```bash
 # Active engineering workflow docs
-rg -n "validation|test-writing|issue triage|SDK|dependency|docs maintenance|process" docs/engineering/ docs/indexes/
+rg -n "agent workflow|PR Coordinator|Issue Executor|Audit Planner|validation|test-writing|issue triage|SDK|dependency|docs maintenance|process" docs/engineering/ docs/indexes/
 
 # Current command and dependency surfaces
 rg -n "uv sync|uv lock|pytest|make check|make test|dependency|renovate" Makefile pyproject.toml .github docs/engineering/
@@ -35,6 +37,7 @@ rg -n "context7_id|triggers|gotchas|patterns" docs/engineering/sdk-registry.md
 
 ## Ownership Notes
 
+- Keep agent mode-selection rules in [`../engineering/agent-workflow-modes.md`](../engineering/agent-workflow-modes.md).
 - Keep command ladders in [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md).
 - Keep test-writing rules in [`../engineering/test-writing-guide.md`](../engineering/test-writing-guide.md).
 - Keep SDK/framework lookup rules in [`../engineering/sdk-registry.md`](../engineering/sdk-registry.md).

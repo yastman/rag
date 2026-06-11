@@ -6,6 +6,7 @@ Concise index for engineering process docs. These pages describe workflow, valid
 
 | Doc | Use When |
 |---|---|---|
+| [`agent-workflow-modes.md`](agent-workflow-modes.md) | Selecting PR Coordinator, Issue Executor, or Audit Planner mode so agents do not mix PR review, issue execution, and audit planning. |
 | [`bug-classes.md`](bug-classes.md) | Looking up known recurring bug classes and their permanent guardrails. |
 | [`test-writing-guide.md`](test-writing-guide.md) | Writing or changing tests, choosing markers, and selecting focused validation. |
 | [`issue-triage.md`](issue-triage.md) | Classifying issue scope, risk, SDK coverage, and execution lane. |

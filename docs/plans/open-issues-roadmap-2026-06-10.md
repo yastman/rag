@@ -29,6 +29,18 @@ Canonical repo guidance used for ordering:
 | Guardrails / CI enforcement / audit | #2324, #2319 | 2 | Plan needed, some owner-controlled settings |
 | Swarm skill maintenance | #2305 | 1 | Separate maintenance track |
 
+## Agent workflow boundary
+
+This roadmap is an Audit Planner artifact. Before executing it, agents must use
+[`../engineering/agent-workflow-modes.md`](../engineering/agent-workflow-modes.md)
+and select exactly one mode per assignment:
+
+- use PR Coordinator mode for existing open PR review, rebase, merge, close, or supersede decisions;
+- use Issue Executor mode for one accepted issue or approved issue cluster in an isolated worktree;
+- use Audit Planner mode only for refreshing this roadmap or producing backlog analysis.
+
+Do not mix PR queue cleanup with new issue execution in the same task.
+
 ## Recommended execution order
 
 ### Wave 0 — Normalize backlog and unblock decisions
