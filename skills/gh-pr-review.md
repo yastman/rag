@@ -1,186 +1,184 @@
 ---
 name: gh-pr-review
-description: Use when reviewing PRs, processing open PR queue, auto-fixing style, running tests, or merging to dev. Solo-dev workflow: analyze → auto-fix → test → classify failures → handoff → merge. Triggers on "review PR", "process PRs", "merge PR", "fix PR", "open PRs".
+description: Use when reviewing PRs, processing the open PR queue, auto-fixing safe PR issues, running focused validation, or merging to dev. Solo-dev workflow: inspect diff → classify risk → run focused checks → auto-fix if safe → update handoff → merge/block. Triggers on "review PR", "process PRs", "merge PR", "fix PR", "open PRs".
 ---
 
 # gh-pr-review — Solo Dev PR Workflow
 
 ## Purpose
 
-Review, fix, test, and merge PRs into `dev`. Works without chat context via PR handoff. Never blocks on offline self-hosted runners.
+Review, safely auto-fix, validate, and optionally merge PRs into `dev` without mixing PR coordination with new issue execution.
+
+This skill follows the current solo-dev policy:
+
+```text
+GitHub required CI = hygiene/static only
+Python tests = local/manual or workflow_dispatch-only
+Codex validation = focused tests based on changed files
+Heavy/full tests = explicit manual request only
+```
 
 ## Quick Flow
 
-```
-PR → fresh dev check → diff → risk → auto-fix → tests → classify fails → handoff → merge/fix/block
+```text
+PR → fresh dev check → diff → risk → focused validation → safe auto-fix → update handoff → merge/block
 ```
 
 ## Repo Rules
 
-- Base branch: `dev`
-- Merge strategy: merge commit
-- Never merge into `main` without explicit instruction
-- Never change branch protection
-- Never mark test as passed unless it actually passed on current PR head
-- If PR head changed after validation → validation is stale, rerun
+- Base branch: `dev`.
+- Merge strategy: merge commit.
+- Never merge into `main` without explicit instruction.
+- Never change branch protection.
+- Never mark a check as passed unless it actually passed on the current PR head.
+- If PR head changed after validation, validation is stale and must be rerun.
+- Do not create new feature/refactor PRs while operating in PR Coordinator mode.
+
+## Required GitHub Checks
+
+Only these checks are required for PR merge decisions:
+
+```text
+Secret Scan
+Semgrep
+Lint
+Lockfile Check
+Compose Config
+```
+
+Fast/Heavy Python test workflows, local runners, self-hosted runners, and workflow_dispatch checks are useful diagnostics but are not required merge blockers unless the user explicitly says so.
 
 ## Autopilot Mode
 
-When explicitly requested, the agent may review, auto-fix, validate, and merge a PR into `dev`.
+When explicitly requested, the agent may review, safe-auto-fix, validate, and merge a PR into `dev`.
 
 ### Allowed for autopilot
 
-- docs
-- style
-- test
-- normal code changes
+- docs-only changes;
+- style-only changes;
+- tests-only changes where the behavior is clearly preserved;
+- small local code fixes where focused tests cover the touched seam.
 
-### Restricted (fix + validate, but no merge if uncertain)
+### Restricted
 
-- runtime changes
-- Docker / Compose / env changes
-- LiteLLM / Qdrant / LangChain integration changes
-- dependency changes
-- security-sensitive changes
+Fix and validate, but do not merge automatically if uncertain:
 
-Runtime/security PR can be merged by autopilot only if:
-- make ci-local passed
-- required GitHub checks green
-- no env_failure related to changed subsystem
-- no security uncertainty
-- findings explicitly say clean
+- runtime behavior changes;
+- Docker / Compose / env changes;
+- LiteLLM / Qdrant / LangChain / LangGraph integration changes;
+- dependency or lockfile changes;
+- security-sensitive changes;
+- broad test-suite or CI policy changes.
 
-### Autopilot flow
+Runtime/security/dependency PRs may be merged by autopilot only when:
 
-1. Read the PR and current Agent Handoff.
-2. Verify that the PR targets `dev`.
+- required GitHub checks are green;
+- focused validation relevant to changed files passed;
+- `make test-core` passed when core/runtime/contracts/test-gate files changed;
+- no env_failure is related to the changed subsystem;
+- no security uncertainty remains;
+- findings explicitly say clean.
+
+## PR Coordinator Flow
+
+1. Read PR title, body, comments, labels, and changed files.
+2. Verify base branch is `dev`.
 3. Fetch latest `origin/dev`.
-4. Validate the PR branch against fresh `dev`.
-5. Classify risk.
-6. Run required validation:
-   - Ruff format
-   - Ruff lint
-   - make test
-   - make test-contract
-7. If tests fail, classify the failure:
-   - code_regression
-   - stale_test
-   - env_failure
-   - flaky_or_race
-8. Auto-fix only when safe.
-9. Commit fixes to the PR branch.
-10. Rerun full required validation.
+4. Compare current PR head with any `Validated commit` in the handoff.
+5. Inspect diff and classify risk.
+6. Select focused validation from the test policy below.
+7. If checks fail, classify failure before fixing.
+8. Auto-fix only if safe.
+9. Commit fixes to the PR branch when needed.
+10. Rerun only the checks made stale by the fix.
 11. Update PR body Agent Handoff.
 12. Add Agent Run comment.
-13. Merge into `dev` only if all merge conditions are satisfied.
+13. Merge only if merge conditions are satisfied and autopilot merge was explicitly requested.
 
-### Safe auto-fix allowed
+## Test Selection Policy
 
-- Ruff formatting
-- Ruff auto-fixable lint
-- import sorting
-- stale tests confirmed by current repository architecture
-- code regressions where the test is valid and the fix is local and clear
+Do not run the full test suite by default.
 
-### Auto-fix not allowed
+Before validation:
 
-- deleting tests
-- broad skip or xfail
-- weakening assertions
-- changing dependencies
-- changing branch protection
-- changing production logic only to satisfy a bad test
-- hiding env failures as passed
+1. Inspect changed files.
+2. Pick focused tests for those files.
+3. Run `make test-core` only when the PR touches:
+   - `src/core/`;
+   - `src/runtime/`;
+   - `tests/contract/`;
+   - `Makefile` test gates;
+   - architecture/coupling contracts or docs that define test policy.
+4. Run adapter/optional lanes only when that surface changed.
+5. Run `make test`, `make test-contract`, `make test-full`, or heavy workflows only if explicitly requested or if a broad runtime/dependency PR really needs them.
 
-### Test auto-fix rule
+### Validation by risk
 
-If failure class is `stale_test`, update the test to assert current behavior while preserving coverage.
-
-Example: Old LiteLLM Docker proxy expectations must be replaced with in-process LiteLLM router expectations.
-
-Do not delete the test.
-Do not skip the test.
-Do not weaken the assertion.
-
-### Merge conditions
-
-The agent may merge into `dev` only when ALL are true:
-
-- PR base is `dev`
-- current PR head equals `Validated commit`
-- working tree is clean
-- Ruff format passed
-- Ruff lint passed
-- make test passed
-- make test-contract passed
-- required GitHub checks are green
-- optional/self-hosted checks are ignored if not required
-- no unresolved findings
-- no security uncertainty
-- no related env_failure remains
-- no related flaky_or_race remains
-
-If a new commit is pushed after validation, validation is stale and must be rerun.
-
-If GitHub required checks are red, do not merge.
-
-If only optional/self-hosted checks are red or offline, do not block solo-dev merge.
-
-### After merge
-
-- update PR body status to `merged` if possible
-- add Agent Run comment with final validation
-- remove or update queue labels
-
-## Risk Classification
-
-| Risk | Examples | Verification |
+| Risk | Examples | Validation |
 |---|---|---|
-| docs | README, docs, comments | format/link sanity if relevant |
-| style | Ruff, formatting only | Ruff format + lint |
-| test | tests only | targeted pytest + make test |
-| code | production code, refactor | make ci-local |
-| runtime | LiteLLM, Qdrant, LangChain, Compose, Docker, env | make ci-local + subsystem checks |
-| security | auth, secrets, deps, tokens | make ci-local + manual review, no auto-merge if uncertain |
+| docs | README, docs, comments | `git diff --check`; markdown/link checks if available |
+| style | formatting, imports, lint-only | `make format-check`; `make lint` or focused Ruff command |
+| test | tests only | targeted pytest for changed tests; no full suite by default |
+| core | `src/core`, `src/runtime`, contracts | focused pytest + `make test-core` |
+| adapter | `telegram_bot`, `src/api`, voice, mini_app | focused adapter tests; `make test-core` only if core contract touched |
+| dependency | `pyproject.toml`, `uv.lock`, extras | lock/import checks + focused contract tests; broad tests only if requested |
+| runtime | Compose, Docker, LLM/Qdrant/Redis env | focused subsystem checks; no auto-merge if uncertain |
+| security | auth, secrets, tokens, dependency CVEs | required CI + manual review; no auto-merge if uncertain |
 
 ## Verification Commands
 
-If Makefile targets exist, use them. Otherwise run explicit commands:
+Use the smallest command set that matches the PR.
 
 ```bash
-# Fast (style + unit)
-uv run ruff format --check src/ telegram_bot/ mini_app/ services/ scripts/
-uv run ruff check src/ telegram_bot/ mini_app/ services/ scripts/
-make test
+# Docs-only
+git diff --check
 
-# Full local CI
+# Static / style
+make format-check
+make lint
+
+# Core/runtime
+uv run pytest tests/unit/runtime/<relevant_test>.py -q
+make test-core
+
+# Contracts only when touched or relevant
 make test-contract
 
-# Release gate
+# Broad local tests only on explicit request
+make test
+
+# Heavy/manual only on explicit request
 make test-full
 ```
 
-## Auto-fix Rules
+Do not use `make ci-local`; it is not the current canonical target in this repo.
+
+## Safe Auto-fix Rules
 
 Allowed without asking:
-- Ruff format
-- Ruff auto-fixable lint
-- import sorting
-- trailing whitespace
-- obvious test path/name updates after confirmed file move
+
+- Ruff formatting;
+- Ruff auto-fixable lint;
+- import sorting;
+- trailing whitespace;
+- obvious docs link/path updates;
+- obvious test path/name updates after confirmed file move.
 
 Allowed only after failure classification:
-- stale test updates
-- code regression fixes
-- env/config contract updates
+
+- stale test updates;
+- local code regression fixes;
+- env/config contract updates.
 
 Never do silently:
-- delete tests
-- broad skip/xfail
-- weaken assertions
-- change production logic just to satisfy tests
-- change dependencies
-- change branch protection
+
+- delete tests;
+- broad skip or xfail;
+- weaken assertions;
+- change production logic only to satisfy a bad test;
+- change dependencies;
+- change branch protection;
+- hide env failures as passed.
 
 ## Test Failure Classification
 
@@ -188,36 +186,44 @@ When tests fail, classify before fixing:
 
 | Class | Meaning | Action |
 |---|---|---|
-| code_regression | test is valid, changed code broke it | fix production code, keep/add regression coverage, rerun |
-| stale_test | test asserts removed old architecture | update assertions to current behavior, preserve coverage, rerun |
-| env_failure | missing Docker/services/API keys/env | non-blocking if optional; blocker if PR touches that subsystem |
-| flaky_or_race | nondeterministic/shared state/timing | stabilize if related to changed code; otherwise report as known |
-
-### LiteLLM Architecture Rule
-
-Current architecture: in-process LiteLLM router. Mandatory fast tests must NOT require removed Docker LiteLLM proxy/config.
-
-Stale references to update in mandatory tests:
-- `docker/litellm/config.yaml`
-- Kubernetes LiteLLM proxy image
-- old Docker proxy default config
-- required running LiteLLM HTTP proxy
-
-Replacement coverage should verify:
-- in-process router config
-- model routing
-- fallback behavior
-- env parsing
-- error handling
-- observability
+| code_regression | test is valid and changed code broke it | fix production code, keep/add regression coverage, rerun relevant checks |
+| stale_test | test asserts removed old architecture | update assertions to current behavior while preserving coverage |
+| env_failure | missing Docker/services/API keys/env | non-blocking if optional/unrelated; blocker if PR touches that subsystem |
+| flaky_or_race | nondeterministic/shared state/timing | stabilize if related to changed code; otherwise report as known/unrelated |
 
 ### Stale Test Rule
 
-`stale_test` does NOT mean delete the test. Do not skip, xfail, or weaken. Rewrite to cover new architecture.
+`stale_test` does not mean delete the test.
+
+Do not skip, xfail, or weaken. Rewrite it to cover the current architecture.
+
+Example: old Docker LiteLLM proxy expectations should become in-process LiteLLM router expectations.
+
+## Merge Conditions
+
+The agent may merge into `dev` only when all are true:
+
+- PR base is `dev`.
+- Current PR head equals `Validated commit` in Agent Handoff.
+- Working tree is clean.
+- Required GitHub checks are green.
+- Focused validation for the changed files passed.
+- `make test-core` passed if core/runtime/contracts/test-gate files changed.
+- Optional/self-hosted checks are ignored if not required.
+- No unresolved findings.
+- No security uncertainty.
+- No related env_failure remains.
+- No related flaky_or_race remains.
+
+If a new commit is pushed after validation, validation is stale and must be rerun.
+
+If required GitHub checks are red, do not merge.
+
+If only optional/self-hosted checks are red, queued, skipped, or offline, do not block solo-dev merge unless the user explicitly made them required for the PR.
 
 ## Agent Handoff
 
-Every PR must contain this section in PR body:
+Every PR processed by this skill should contain or receive this section:
 
 ```md
 ## Agent Handoff
@@ -226,15 +232,15 @@ Status: ready_for_review | fixing | blocked | clean | merged
 Base: dev
 Head: <branch>
 Validated commit: <sha or none>
-Risk: docs | style | test | code | runtime | security
+Risk: docs | style | test | core | adapter | dependency | runtime | security
 Failure class: none | code_regression | stale_test | env_failure | flaky_or_race
 
 ## Validation
 
-- [ ] Ruff format: not run
-- [ ] Ruff lint: not run
-- [ ] make test: not run
-- [ ] make test-contract: not run
+- [ ] Required GitHub checks: not checked
+- [ ] Focused validation: not run
+- [ ] make test-core: not required | passed | failed | not run
+- [ ] Optional/heavy checks: not required | passed | failed | skipped
 
 ## Findings
 
@@ -247,7 +253,7 @@ Failure class: none | code_regression | stale_test | env_failure | flaky_or_race
 
 ## Agent Run Comment
 
-After every meaningful worker run, add PR comment:
+After every meaningful worker run, add a PR comment:
 
 ```md
 ## Agent Run
@@ -258,34 +264,39 @@ Action: <review | auto-fix | validation | merge>
 Result: <clean | fixing | blocked | merged>
 
 Validation:
-- Ruff format: <passed | failed | not run>
-- Ruff lint: <passed | failed | not run>
-- make test: <passed | failed | not run>
-- make test-contract: <passed | failed | not run>
+- Required GitHub checks: <green | red | pending | not checked>
+- Focused validation: <passed | failed | skipped>
+- make test-core: <passed | failed | not required | skipped>
+- Optional/heavy checks: <passed | failed | not required | skipped>
 
 Next worker:
 - Re-check that PR head is still <sha>.
-- If head changed, rerun validation.
+- If head changed, rerun relevant validation.
 - If unchanged and required GitHub checks are green, continue with decision.
 ```
 
 ## Labels
 
 Queue:
+
 - `agent:ready-review`
 - `agent:fixing`
 - `agent:blocked`
 - `agent:clean`
 
 Risk:
+
 - `risk:docs`
 - `risk:style`
 - `risk:test`
-- `risk:code`
+- `risk:core`
+- `risk:adapter`
+- `risk:dependency`
 - `risk:runtime`
 - `risk:security`
 
 Failure:
+
 - `failure:stale-test`
 - `failure:code-regression`
 - `failure:env`
@@ -293,39 +304,38 @@ Failure:
 
 ## Freshness Check
 
-Before trusting Validation, compare PR body `Validated commit` with current PR head:
+Before trusting validation, compare PR body `Validated commit` with current PR head:
 
 ```bash
 VALIDATED=$(gh pr view <PR> --json body --jq '.body' | grep "Validated commit" | awk '{print $NF}')
 HEAD=$(gh pr view <PR> --json headRefOid --jq '.headRefOid')
 
 if [ "$VALIDATED" != "$HEAD" ]; then
-  echo "STALE: rerun validation"
+  echo "STALE: rerun focused validation"
 fi
 ```
 
 ## Merge Decision Tree
 
-```
+```text
 if current head != Validated commit:
-    rerun validation
+    rerun relevant validation
 
-if all required local verification green
-and required GitHub checks green
+if required GitHub checks green
+and focused validation green
+and make test-core green when required
 and no unresolved findings:
     update PR body Status: clean
-    merge into dev using merge commit
+    merge into dev using merge commit if autopilot merge was explicitly requested
 
 if stale_test:
     update tests while preserving coverage
-    rerun validation
-    merge only if green
+    rerun focused validation
 
 if code_regression:
     fix production code
     keep/add regression coverage
-    rerun validation
-    merge only if green
+    rerun focused validation
 
 if env_failure:
     if optional or unrelated to changed subsystem:
@@ -341,11 +351,9 @@ if flaky_or_race:
 
 if required GitHub checks are red:
     wait or fix required CI
-    optional/self-hosted red checks do not block dev merge
 
 if security uncertainty:
-    block
-    do not auto-merge
+    block and do not auto-merge
 ```
 
 ## Quick Commands
@@ -357,8 +365,8 @@ gh pr view <PR> --json number,title,body,headRefName,headRefOid,baseRefName,merg
 # See diff
 gh pr diff <PR>
 
-# Check status
-gh pr checks <PR>
+# Check required status checks
+gh pr checks <PR> --required
 
 # Update PR body
 gh pr edit <PR> --body-file /tmp/pr-body.md
@@ -366,142 +374,28 @@ gh pr edit <PR> --body-file /tmp/pr-body.md
 # Add comment
 gh pr comment <PR> --body-file /tmp/pr-comment.md
 
-# Merge
+# Merge only when allowed
 gh pr merge <PR> --merge
-
-# Filter by label
-gh pr list --base dev --label agent:ready-review
 ```
 
 ## Open PR Queue Processing
 
-When asked to "process open PRs", "handle PR queue", or "review all PRs":
+When asked to process open PRs:
 
-### Step 1: Get Current Queue
+1. List all open PRs targeting `dev`.
+2. Classify each PR by risk and changed files.
+3. Check Agent Handoff freshness.
+4. Run only relevant validation if stale/missing.
+5. Auto-fix only safe issues.
+6. Update PR body and add Agent Run comment.
+7. Merge only if user explicitly requested autopilot merge and merge conditions are met.
 
-```bash
-# List all open PRs targeting dev
-gh pr list --base dev --state open --json number,title,headRefName,headRefOid,baseRefName,mergeStateStatus,labels,createdAt --jq '.[] | "#\(.number): \(.title) | branch=\(.headRefName) | state=\(.mergeStateStatus)"'
+Priority order:
 
-# Or filter by label
-gh pr list --base dev --label agent:ready-review
-gh pr list --base dev --label agent:blocked
-```
+1. `agent:clean` — clean, just needs freshness + required checks.
+2. `agent:ready-review` — already validated, needs review/freshness.
+3. No labels — needs full PR Coordinator review.
+4. `agent:fixing` — in progress, check status.
+5. `agent:blocked` — report blocker.
 
-### Step 2: Classify Each PR
-
-For each PR, determine:
-
-1. **Risk level**: docs / style / test / code / runtime / security
-2. **Current status**: has Agent Handoff? is it stale?
-3. **GitHub checks**: green / red / pending
-4. **Merge conflicts**: yes / no
-
-### Step 3: Process Each PR
-
-For each PR in the queue:
-
-```bash
-# 1. Get full context
-gh pr view <PR> --json number,title,body,headRefName,headRefOid,baseRefName,mergeStateStatus,statusCheckRollup,labels
-
-# 2. Check freshness
-VALIDATED=$(gh pr view <PR> --json body --jq '.body' | grep "Validated commit" | awk '{print $NF}')
-HEAD=$(gh pr view <PR> --json headRefOid --jq '.headRefOid')
-
-# 3. If stale or no handoff, run full validation
-# 4. Auto-fix if safe
-# 5. Run tests
-# 6. Classify failures
-# 7. Update PR body with Agent Handoff
-# 8. Add Agent Run comment
-# 9. Set labels
-# 10. Merge if clean
-```
-
-### Step 4: Priority Order
-
-Process PRs in this order:
-
-1. `agent:ready-review` — already validated, just check freshness and merge
-2. `agent:clean` — clean, just needs merge
-3. No labels — fresh PR, needs full review
-4. `agent:fixing` — in progress, check status
-5. `agent:blocked` — blocked, report why
-
-### Step 5: Batch Processing Script
-
-```bash
-# Process all ready-review PRs
-for PR in $(gh pr list --base dev --label agent:ready-review --json number --jq '.[].number'); do
-  echo "Processing PR #$PR..."
-
-  # Check freshness
-  VALIDATED=$(gh pr view "$PR" --json body --jq '.body' | grep "Validated commit" | awk '{print $NF}')
-  HEAD=$(gh pr view "$PR" --json headRefOid --jq '.headRefOid')
-
-  if [ "$VALIDATED" = "$HEAD" ]; then
-    # Fresh, check REQUIRED GitHub checks only (ignore optional/self-hosted)
-    BLOCKING=$(gh pr checks "$PR" --required --json bucket,name,state \
-      --jq '.[] | select(.bucket != "pass" and .bucket != "skipping") | "\(.name): \(.bucket) \(.state)"' \
-      | head -1)
-    if [ -z "$BLOCKING" ]; then
-      echo "PR #$PR: required checks green, merging..."
-      gh pr merge "$PR" --merge
-    else
-      echo "PR #$PR: required checks not green: $BLOCKING"
-    fi
-  else
-    echo "PR #$PR: stale validation, needs rerun"
-  fi
-done
-```
-
-### Queue Processing Rule
-
-Open PR queue mode reviews and updates handoff by default. It may merge only if the user explicitly requested autopilot merge.
-
-### Step 6: Update Labels After Processing
-
-```bash
-# Set ready-review after validation passes
-gh pr edit <PR> --add-label "agent:ready-review"
-
-# Set fixing during work
-gh pr edit <PR> --add-label "agent:fixing" --remove-label "agent:ready-review"
-
-# Set blocked if cannot proceed
-gh pr edit <PR> --add-label "agent:blocked" --remove-label "agent:ready-review"
-
-# Set clean after all checks pass
-gh pr edit <PR> --add-label "agent:clean" --remove-label "agent:ready-review"
-```
-
-### Quick Start
-
-To start processing open PRs right now:
-
-```bash
-# 1. See what's open
-gh pr list --base dev --state open
-
-# 2. Pick first PR
-PR=<number>
-
-# 3. Checkout PR branch and merge fresh dev
-gh pr checkout "$PR"
-git fetch origin
-git merge --no-edit origin/dev || {
-  echo "BLOCKED: merge conflict with origin/dev"
-  exit 1
-}
-
-# 4. Run validation
-make ci-local
-
-# 5. Update handoff
-gh pr edit "$PR" --body-file /tmp/pr-body.md
-
-# 6. Merge if clean (only if autopilot explicitly requested)
-gh pr merge "$PR" --merge
-```
+Queue mode reviews and updates handoff by default. It may merge only if the user explicitly requested autopilot merge.
