@@ -203,6 +203,17 @@ test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
 
+test-core: ## Run monolith core-required tests only (local/manual)
+	@echo "$(BLUE)Running monolith core test gate...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest \
+	  tests/unit/core/ \
+	  tests/unit/runtime/ \
+	  tests/contract/test_runtime_no_telegram_bot_coupling_contract.py \
+	  tests/contract/test_layering_no_telegram_bot_imports_contract.py \
+	  tests/contract/test_langfuse_optional_core_contract.py \
+	  -q --timeout=30 -m "not requires_extras and not slow"
+	@echo "$(GREEN)✓ Monolith core test gate complete$(NC)"
+
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
 	uv sync --all-extras --all-groups
@@ -218,10 +229,10 @@ test-cov: ## Run tests with coverage
 	@echo "$(GREEN)✓ Tests with coverage complete$(NC)"
 	@echo "$(YELLOW)Open htmlcov/index.html to view coverage report$(NC)"
 
-test-unit: ## Run core unit tests locally in parallel (fast default gate)
-	@echo "$(BLUE)Running core unit tests...$(NC)"
+test-unit: ## Run broad unit test lane locally in parallel
+	@echo "$(BLUE)Running broad unit tests...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
-	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
+	@echo "$(GREEN)✓ Broad unit tests complete$(NC)"
 
 test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse locally)
 	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"

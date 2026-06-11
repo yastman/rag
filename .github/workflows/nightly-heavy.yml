@@ -1,8 +1,6 @@
 name: Nightly Heavy Tests
 
 on:
-  schedule:
-    - cron: "30 2 * * *"
   workflow_dispatch:
 
 permissions:

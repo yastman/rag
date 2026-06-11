@@ -541,26 +541,29 @@ make test-full = all extras/nightly/manual
 
 ## 8. New CI recommendation
 
-Current CI does not run pytest. Add a lightweight core test job:
+Current CI does not run pytest. Keep it that way for required checks.
+
+**Policy:**
+- GitHub required CI = hygiene/static only (Lint, Semgrep, Secret Scan, Lockfile, Compose Config)
+- Python tests = local/manual or workflow_dispatch-only
+- `make test-core` = local/manual monolith-core gate
+- Do NOT make pytest jobs required branch protection
+
+If a manual core-tests workflow is added later, it must use `workflow_dispatch` only:
 
 ```yaml
-core-tests:
-  runs-on: ubuntu-latest
-  steps:
-    - checkout
-    - setup uv
-    - uv sync --frozen --group dev
-    - make test-core
+on:
+  workflow_dispatch:
 ```
 
-Do not add full `make test` to CI yet; it is too broad.
+Do not add full `make test` to CI; it is too broad.
 
-Add optional scheduled jobs later:
+Optional scheduled jobs (all non-required):
 
 ```text
-nightly optional extras
-weekly full tests
-manual live e2e
+nightly optional extras (workflow_dispatch only)
+weekly full tests (workflow_dispatch only)
+manual live e2e (workflow_dispatch only)
 ```
 
 ---
@@ -572,17 +575,19 @@ manual live e2e
 Scope:
 
 ```text
-Add make test-core.
-Add CI job for test-core.
-Do not move/delete tests yet.
+Add make test-core as local/manual monolith-core gate.
+Do not make it required GitHub branch protection.
+Do not add it to required CI until explicitly approved later.
 ```
 
 Acceptance:
 
 ```text
-make test-core passes locally
-CI runs core-tests on PR
-lane includes core contracts and runtime unit tests only
+make test-core target exists
+make test-core is documented as local/manual
+Existing make test remains unchanged
+GitHub required CI remains hygiene/static only
+If a manual core-tests workflow is added, it uses workflow_dispatch only and is not required
 ```
 
 ### Create new issue: TEST-002 — Mark optional surface tests
@@ -655,8 +660,8 @@ optional observability tests run only in optional lane
 ### Phase A — No deletion, only lanes
 
 ```text
-Add test-core.
-Add CI core-tests.
+Add make test-core as local/manual gate.
+Do not add required CI pytest job.
 Keep existing make test as-is for one PR if needed.
 ```
 

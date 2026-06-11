@@ -229,13 +229,17 @@ guardrails, Ruff lint, Ruff format, and CodeQL. Python test gates are
 local/manual so failures can be debugged against the developer environment that
 owns the runtime state.
 
+GitHub CI does not run Python pytest lanes as required checks.
+Required GitHub checks are hygiene/static only.
+Python tests are local/manual validation.
+
 | Local Command | What It Covers |
 |---|---|
-| `make test` | unit + critical graph paths; no contract, no coverage |
-| `make test-contract` | contract trace tests only (static, no Docker) |
-| `make test` + `make test-contract` | local test-surface match for unit + contract + graph-path checks |
-| `make local-pr-ready` | `make check` (lint + types) then `make test-unit`; skips contract and graph-path integration tests |
-| `make check` + `make test` + `make test-contract` | recommended merge-readiness ladder on a powerful local machine |
+| `make test-core` | local/manual core monolith gate (core + runtime + contracts) |
+| `make test` | local/manual broad fast gate (unit + critical graph paths) |
+| `make test-contract` | local/manual static contract gate |
+| `make test-full` | local/manual heavy full gate |
+| `nightly-heavy workflow` | optional/manual/scheduled, not required |
 
 Run the same generic code-pattern guardrails as the `Semgrep` CI job:
 
