@@ -11,25 +11,10 @@ title = "Gitleaks config"
     '''uv.lock''',
     '''package-lock\.json''',
     '''\.git/''',
+
+    # Test/example fixtures and docs may contain fake tokens.
+    '''tests/''',
+    '''scripts/''',
+    '''docs/''',
+    '''\.env\.example''',
   ]
-
-[rules]
-  # Allow test/example secrets
-  [[rules.allowlist]]
-    description = "Test secrets"
-    paths = [
-      '''tests/''',
-      '''scripts/''',
-      '''docs/''',
-      '''\.env\.example''',
-    ]
-
-  # Allow Telegram bot token pattern in tests/docs
-  [[rules.allowlist]]
-    description = "Telegram bot token in tests"
-    regexTarget = "match"
-    regexes = [
-      '''123456789:ABC''',
-      '''test.*token''',
-      '''example.*token''',
-    ]
