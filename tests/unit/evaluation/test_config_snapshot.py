@@ -12,6 +12,9 @@ from src.evaluation.config_snapshot import (
 )
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 class TestGetConfigHash:
     def test_returns_12_char_hex_string(self):
         result = get_config_hash()

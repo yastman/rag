@@ -8,12 +8,17 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from src.voice.observability import (
     build_voice_trace_metadata,
     trace_voice_session,
     update_voice_trace,
     voice_session_id,
 )
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def test_voice_session_id_handles_missing_call_id() -> None:

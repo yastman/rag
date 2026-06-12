@@ -16,6 +16,10 @@ from unittest.mock import MagicMock
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 _TRACE_ID = "trace-resilience-001"
 
 _MINIMAL_RESULT: dict = {

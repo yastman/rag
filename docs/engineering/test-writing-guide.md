@@ -60,12 +60,18 @@ It should cover only:
 
 Do not add Telegram, Mini App, voice, ingestion, eval, or legacy graph tests to `test-core`.
 
-### Local fast lane
-- The local fast lane runs `tests/unit/` and critical graph-path integration via
-  `make test` with `-m "not legacy_api and not requires_extras and not slow"`.
-- Keep new fast-lane tests free of `pytest.mark.slow`, `pytest.mark.requires_extras`,
-  and any marker that would exclude them from that expression.
-- Fast tests must not require Docker or live services.
+### Deterministic core lane
+- `make test` is the PR/local deterministic core gate: it runs `make test-core`
+  plus the no-service graph-path integration check.
+- `make test` must not collect the broad `tests/unit/` tree, because that tree
+  includes optional Telegram, API, voice, ingestion, evaluation, observability,
+  and service-adapter tests.
+- Optional surfaces that need extras or adapter SDKs must be marked with
+  `pytest.mark.requires_extras` and run through their explicit Make targets.
+- Keep new core-lane tests free of `pytest.mark.slow`, `pytest.mark.requires_extras`,
+  and any marker that would exclude them from `-m "not legacy_api and not requires_extras and not slow"`.
+- Core-lane tests must not require Docker, live services, optional extras, or
+  adapter SDKs.
 - Core changes should prefer `make test-core` first.
 - Adapter/service changes should run their explicit lane in addition to `make test-core`.
 
@@ -100,9 +106,11 @@ Do not add Telegram, Mini App, voice, ingestion, eval, or legacy graph tests to 
 ## Minimal Verification For Test Changes
 - Focused run for touched files first:
   - `uv run pytest <path/to/test_file.py> -q`
-- Then run repository baseline:
-  - `make check`
-  - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
+- Then run the deterministic repository gate:
+  - `make test`
+- Run `make test-contract` when changing contract surfaces.
+- Run `make test-unit` or explicit optional-surface targets only when the touched
+  area requires that broader/local coverage.
 - If skipping a relevant check, document it explicitly in the report.
 
 ## References

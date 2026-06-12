@@ -14,6 +14,10 @@ import pytest
 from src.ingestion.unified.state_manager import UnifiedStateManager
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 @pytest.fixture
 def mock_pool() -> AsyncMock:
     pool = AsyncMock()

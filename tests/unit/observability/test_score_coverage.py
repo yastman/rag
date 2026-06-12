@@ -15,6 +15,10 @@ from unittest.mock import MagicMock
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 _TRACE_ID = "trace-coverage-001"
 
 _FULL_RESULT: dict = {

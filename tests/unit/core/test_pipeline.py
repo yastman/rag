@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
+pytestmark = pytest.mark.requires_extras
+
 # Stubs for pymupdf/docling are installed via conftest.py pytest_configure (#611).
 from src.core.pipeline import RAGPipeline, RAGResult
 

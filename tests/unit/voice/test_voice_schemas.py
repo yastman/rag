@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from src.voice.schemas import CallRequest, CallResponse, CallStatus, TranscriptEntry
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def test_call_request_defaults_lead_data_to_empty_dict() -> None:

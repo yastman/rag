@@ -3,7 +3,12 @@
 
 from pathlib import Path
 
+import pytest
+
 from src.ingestion.unified.config import UnifiedConfig
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 class TestManifestDir:

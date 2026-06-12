@@ -12,6 +12,10 @@ import pytest
 from src.ingestion.unified.state_manager import FileState, UnifiedStateManager
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 @pytest.fixture
 def mock_pool():
     """Create a mock asyncpg pool."""

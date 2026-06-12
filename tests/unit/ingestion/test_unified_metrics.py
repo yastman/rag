@@ -14,6 +14,9 @@ from src.ingestion.unified.metrics import (
 )
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 class TestIngestionMetrics:
     """Test IngestionMetrics dataclass."""
 

@@ -11,6 +11,9 @@ import pytest
 from src.evaluation.run_ab_test import convert_numpy, determine_conclusion, print_metrics
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 class TestConvertNumpy:
     """Tests for convert_numpy helper function."""
 

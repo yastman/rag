@@ -6,6 +6,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 def _make_flag_embedding_mock():
     """Return a sys.modules patch dict that provides FlagEmbedding.FlagReranker."""
     mock_reranker_cls = MagicMock()

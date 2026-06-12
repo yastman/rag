@@ -27,20 +27,25 @@ tests/
 ## Test Tiers
 
 ### Local-fast checks (no Docker required)
-These are the default gate for PRs and local development.
+`make test` is the deterministic default gate for PRs and local development.
+It runs the monolith core lane plus the critical no-service graph-path
+integration check. The full `tests/unit/` tree is a separate local/manual lane
+because it includes optional adapter and extra-dependency surfaces.
 
 | Tier | Location | What it proves | Typical duration |
 |------|----------|----------------|------------------|
-| Unit | `tests/unit/` | Isolated logic with mocks/fakes | Seconds |
+| Core unit | `tests/unit/core/`, `tests/unit/runtime/` | Core/runtime logic with mocks/fakes | Seconds |
+| Critical graph paths | `tests/integration/test_graph_paths.py` | No-service graph routing paths | Seconds |
 | Contract | `tests/contract/` | Trace/schema contracts via static analysis | Seconds |
 
 ### Tier to command / CI mapping
 
 | What | Scope | Coverage threshold |
 |------|-------|--------------------|
-| `make test` | unit + critical graph paths (`tests/unit/`, `tests/integration/test_graph_paths.py`) | none |
+| `make test` | deterministic core gate (`make test-core`, `tests/integration/test_graph_paths.py`) | none |
+| `make test-unit` | broad unit lane (`tests/unit/`) excluding optional markers/paths | none |
 | `make test-contract` | contract only (`tests/contract/`) | none |
-| Local PR readiness | `make check && make test && make test-contract` | coverage remains a separate `make test-cov` check |
+| Local PR readiness | focused checks + `make test`; run `make test-contract` when contract surfaces changed | coverage remains a separate `make test-cov` check |
 
 ### Heavy / runtime checks (services or credentials required)
 Run these selectively, not on every save.
@@ -67,14 +72,25 @@ Canonical E2E placement:
 make check
 ```
 
-### Fast test gate (unit + critical graph paths)
+### Deterministic core gate (core + critical graph paths)
 ```bash
 make test
 ```
 
-### Core unit tests (parallel, default local gate)
+### Broad unit lane (local/manual)
 ```bash
 PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
+```
+
+### Optional surface lanes (explicit opt-in)
+```bash
+make test-telegram-adapter
+make test-api-adapter
+make test-ingest-extra
+make test-voice-extra
+make test-eval-extra
+make test-observability-extra
+make test-optional-surfaces
 ```
 
 ### Focused run (preferred while developing)

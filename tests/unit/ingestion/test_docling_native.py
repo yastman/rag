@@ -27,6 +27,10 @@ import pytest
 from src.ingestion.docling_native import NativeDoclingAdapter
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 # ---------------------------------------------------------------------------
 # Test scaffolding
 # ---------------------------------------------------------------------------

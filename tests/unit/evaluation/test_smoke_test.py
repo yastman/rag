@@ -12,7 +12,12 @@ from __future__ import annotations
 
 import sys
 
+import pytest
+
 from src.evaluation.smoke_test import SLO_THRESHOLDS, SMOKE_QUERIES, run_smoke_test
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 class TestSmokeQueries:

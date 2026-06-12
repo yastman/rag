@@ -14,6 +14,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 # Mock heavy dependencies before importing the module under test
 _mock_modules = {
     "datasets": MagicMock(),

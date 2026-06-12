@@ -13,6 +13,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 # Mock heavy dependencies before importing
 # Note: We don't mock 'aiohttp' or 'requests' in sys.modules because they're used
 # by httpx internally and mocking them causes test pollution in other test modules.

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from src.voice.healthcheck import _cmdline_matches_voice_agent
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def test_cmdline_matches_voice_agent_start_process() -> None:

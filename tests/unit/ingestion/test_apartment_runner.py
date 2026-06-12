@@ -4,8 +4,13 @@ import csv
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from src.ingestion.apartments.runner import IncrementalApartmentIngester
 from src.services.bge_m3_client import HybridResult
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def _write_csv(rows: list[dict], path: Path) -> None:

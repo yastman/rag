@@ -7,6 +7,9 @@ import pytest
 from src.voice.rag_api_client import RagApiClient, RagApiClientError, RagQueryRequest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 def test_query_request_payload_includes_optional_trace_id():
     req = RagQueryRequest(
         query="test",

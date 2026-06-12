@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from scripts.eval.goldset_sync import load_ground_truth, sync_to_langfuse
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def test_load_ground_truth_returns_samples():

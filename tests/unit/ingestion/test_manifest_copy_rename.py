@@ -21,6 +21,9 @@ import pytest
 from src.ingestion.unified.manifest import GDriveManifest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 class TestCopyVsRenameDetection:
     """Verify that copies get distinct file_ids and renames reuse the old one."""
 
