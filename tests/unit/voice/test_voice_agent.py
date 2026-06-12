@@ -93,7 +93,7 @@ def test_setup_langfuse_calls_auth_check_when_client_is_initialized(monkeypatch)
 
     Without auth_check, an unreachable Langfuse host or rotated keys would
     silently degrade to no-op tracing and the operator would have no signal
-    in the voice-agent logs. ``mini_app/api.py:73-105`` is the canonical
+    in the voice-agent logs. the archived Mini App API was the canonical
     lifespan reference.
     """
     import src.voice.agent as mod

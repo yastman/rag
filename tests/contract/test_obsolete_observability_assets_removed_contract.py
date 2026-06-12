@@ -7,6 +7,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REMOVED_PATHS = {
+    "scripts/probe/observability_diagnostic.py",
+    "tests/unit/scripts/test_observability_diagnostic.py",
+    "docs/runbooks/OBSERVABILITY_DIAGNOSTIC.md",
     "scripts/validate_traces.py",
     "scripts/validate_trace_runtime.py",
     "scripts/validate_voice_traces.py",

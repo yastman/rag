@@ -52,12 +52,10 @@ def test_docker_core_help_describes_default_unprofiled_stack() -> None:
     )
 
 
-def test_docker_docs_default_stack_mentions_mini_app_services() -> None:
+def test_docker_docs_default_stack_omits_mini_app_services() -> None:
     text = DOCKER_DOC.read_text(encoding="utf-8")
-    assert "- `mini-app-api`" in text, "DOCKER.md must list mini-app-api in the default stack"
-    assert "- `mini-app-frontend`" in text, (
-        "DOCKER.md must list mini-app-frontend in the default stack"
-    )
+    assert "- `mini-app-api`" not in text
+    assert "- `mini-app-frontend`" not in text
 
 
 def test_local_compose_cmd_uses_env_file_fallback() -> None:

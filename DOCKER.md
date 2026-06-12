@@ -34,8 +34,6 @@ The script enumerates active worktrees via `git worktree list`, infers their Doc
 
 Default `up` (no profile) starts unprofiled services:
 - `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `docling`
-- `mini-app-api`
-- `mini-app-frontend`
 
 Optional profiles add scoped services:
 
@@ -53,7 +51,7 @@ Optional profiles add scoped services:
 `compose.yml:compose.vps.yml` starts only the RAG chatbot core by default:
 `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `litellm`, and `bot`.
 
-Mini app, Docling, ingestion, and self-hosted Langfuse are optional/profile
+Docling, ingestion, and self-hosted Langfuse are optional/profile
 runtime on VPS and must not be assumed to be resident services. To run the
 optional VPS profile locally, use:
 
@@ -111,8 +109,6 @@ still need to be throwaway/dev-only:
 | BGE-M3 API | `http://localhost:8000` |
 | User Base | `http://localhost:8003` |
 | Docling | `http://localhost:5001` |
-| Mini App API | `http://localhost:8090` |
-| Mini App Frontend | `http://localhost:8091` |
 | LiteLLM | `http://localhost:4000` |
 | Langfuse | `http://localhost:3001` |
 | MinIO API | `http://localhost:${MINIO_API_PORT:-9090}` |
@@ -170,7 +166,6 @@ Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in 
 | `bge-m3` | `bge-m3` |
 | `bot` | `telegram-bot` |
 | `user-base` | `user-base` |
-| `mini-app-api` | `mini-app-api` |
 | `ingestion` | `ingestion` |
 | `rag-api` | `rag-api` |
 | `voice-agent` | `voice-agent` |
@@ -459,4 +454,4 @@ curl -s http://localhost:6333/collections/gdrive_documents_bge | python3 -m json
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
 - Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development may still use the repo's `uv` environment (Python 3.11+).
 - The `voice` profile (LiveKit, SIP, voice agent) is intentionally not part of the current local bring-up. Bring it up separately only when explicitly needed.
-- `mini-app-frontend` runs nginx as `101:101` with `cap_drop: [ALL]` and `cap_add: [NET_BIND_SERVICE]`; nginx runtime PID/temp paths are kept under `/tmp` to avoid privileged `chown` startup paths.
+- The Mini App frontend/runtime is archived under `archive/mini_app/`; its nginx contract is preserved there for reference, but it is not a required runtime surface.

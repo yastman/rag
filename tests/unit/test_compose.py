@@ -73,8 +73,6 @@ def test_custom_build_services_have_stable_explicit_image_names():
         "user-base": "${COMPOSE_PROJECT_NAME:-dev}_user-base",
         "docling": "${COMPOSE_PROJECT_NAME:-dev}_docling",
         "bot": "${COMPOSE_PROJECT_NAME:-dev}_bot",
-        "mini-app-api": "${COMPOSE_PROJECT_NAME:-dev}_mini-app-api",
-        "mini-app-frontend": "${COMPOSE_PROJECT_NAME:-dev}_mini-app-frontend",
         "ingestion": "${COMPOSE_PROJECT_NAME:-dev}_ingestion",
     }
     for svc_name, image in expected.items():

@@ -16,7 +16,6 @@ NAIVE_UTC_RULE_PATHS = {
     "/scripts/**",
     "/src/**",
     "/telegram_bot/**",
-    "/mini_app/**",
     "/services/**",
 }
 
@@ -115,7 +114,6 @@ def test_ci_semgrep_job_uses_pinned_cli_and_project_rules() -> None:
     assert "--config .semgrep/project-guardrails.yml" in commands
     assert "--error" in commands
     assert "--metrics=off" in commands
-    assert "mini_app" in commands
     assert "services" in commands
 
 

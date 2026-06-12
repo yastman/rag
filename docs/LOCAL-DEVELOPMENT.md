@@ -420,7 +420,6 @@ Optional Telethon trace scenarios with Langfuse validation:
 make local-up
 make docker-ml-up
 make bot
-make e2e-test-traces-core
 ```
 
 Keep `make bot` running in another terminal while the E2E command executes. Use

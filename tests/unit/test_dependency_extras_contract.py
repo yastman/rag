@@ -90,7 +90,6 @@ def test_all_extra_includes_every_runtime_surface() -> None:
         "eval",
         "voice",
         "ui",
-        "mini-app",
     ]:
         assert name in all_extra
 

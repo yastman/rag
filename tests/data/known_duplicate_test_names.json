@@ -225,8 +225,6 @@
     "tests/unit/services/test_kommo_tokens.py"
   ],
   "test_health_endpoint": [
-    "tests/unit/mini_app/test_api_config.py",
-    "tests/unit/mini_app/test_chat.py"
   ],
   "test_hybrid_search_returns_results": [
     "tests/smoke/test_ingestion_health.py",

@@ -26,7 +26,7 @@ EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
 K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
 K3S_IMAGE_TAG ?= v$(PROJECT_VERSION)
-LINT_PATHS := src/ telegram_bot/ mini_app/ services/ scripts/
+LINT_PATHS := src/ telegram_bot/ services/ scripts/
 
 # Default target
 .DEFAULT_GOAL := help
@@ -61,7 +61,6 @@ PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/test_evaluator.py \
 	tests/unit/evaluation/test_ragas_evaluation.py \
 	tests/unit/api \
-	tests/unit/mini_app \
 	tests/unit/voice/test_sip_setup.py \
 	tests/unit/voice/test_voice_agent.py \
 	tests/unit/ingestion/test_cocoindex_init.py \
@@ -320,17 +319,11 @@ test-all: ## Run all tests with coverage threshold (CI mode)
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/ -v -n auto --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
 	@echo "$(GREEN)✓ All tests passed with 80%+ coverage$(NC)"
 
-.PHONY: test-frontend test-all-local
+.PHONY: test-all-local
 
-test-frontend: ## Run Mini App frontend tests (Vitest)
-	@echo "$(BLUE)Running Mini App frontend tests...$(NC)"
-	cd mini_app/frontend && npm test
-	@echo "$(GREEN)✓ Mini App frontend tests complete$(NC)"
-
-test-all-local: ## Run all local test suites (pytest all tiers + frontend)
+test-all-local: ## Run all local test suites (pytest all tiers)
 	@echo "$(BLUE)Running all local test suites...$(NC)"
 	make test-full
-	make test-frontend
 	@echo "$(GREEN)✓ All local test suites complete$(NC)"
 
 # =============================================================================
@@ -501,7 +494,7 @@ REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
-REMOTE_ACTIVE_SERVICES := mini-app-frontend mini-app-api bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
+REMOTE_ACTIVE_SERVICES := bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
 REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base bot
 
 remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
@@ -926,7 +919,7 @@ deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scri
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-group e2e-telegram-test e2e-setup
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -970,16 +963,6 @@ e2e-telegram-test: ## Run Telegram userbot E2E runner (Telethon + judge)
 	@echo "$(BLUE)Running Telegram E2E runner...$(NC)"
 	uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py
 	@echo "$(GREEN)✓ Telegram E2E runner complete$(NC)"
-
-e2e-test-traces: ## Optional diagnostic: run Telegram E2E tests + validate Langfuse traces
-	@echo "$(BLUE)Running optional E2E tests with Langfuse trace validation...$(NC)"
-	E2E_VALIDATE_LANGFUSE=1 uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py
-	@echo "$(GREEN)✓ Optional E2E trace validation complete$(NC)"
-
-e2e-test-traces-core: ## Optional diagnostic: run #1307 Telethon scenarios with Langfuse validation
-	@echo "$(BLUE)Running optional #1307 Telethon trace scenarios...$(NC)"
-	E2E_VALIDATE_LANGFUSE=1 uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py --no-judge --scenario 0.1 --scenario 6.3 --scenario 7.1 --scenario 8.1
-	@echo "$(GREEN)✓ Optional #1307 trace scenarios complete$(NC)"
 
 e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=filters)
 	uv run python scripts/e2e/runner.py --group $(GROUP)

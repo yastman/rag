@@ -183,7 +183,7 @@ curl -fsS -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" \
 ```
 
 and confirm `meta.totalItems > 0` after exercising the corresponding
-runtime path (`make run-bot`, voice dev dispatch, `mini-app-api` call,
+runtime path (`make run-bot`, voice dev dispatch, archived Mini App call,
 `make ingest-unified-status`).
 
 The runtime cells in the tables above are intentionally left blank;

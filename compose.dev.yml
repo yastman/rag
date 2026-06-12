@@ -196,15 +196,3 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-voice-agent}"
-
-  mini-app-api:
-    ports:
-      - "127.0.0.1:8090:8090"
-    environment:
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
-      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-mini-app-api}"
-
-  mini-app-frontend:
-    ports:
-      - "127.0.0.1:8091:80"

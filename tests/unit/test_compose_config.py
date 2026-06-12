@@ -21,7 +21,6 @@ BASE_COMPOSE = ROOT / "compose.yml"
 DEV_OVERRIDE = ROOT / "compose.dev.yml"
 VPS_OVERRIDE = ROOT / "compose.vps.yml"
 MAKEFILE = ROOT / "Makefile"
-MINI_APP_FRONTEND_DOCKERFILE = ROOT / "mini_app/frontend/Dockerfile"
 
 
 def _load_compose(path: Path) -> dict:
@@ -291,8 +290,6 @@ VPS_CORE_SERVICES = {
 
 VPS_NONCORE_SERVICES = {
     "docling",
-    "mini-app-api",
-    "mini-app-frontend",
     "ingestion",
     "clickhouse",
     "minio",
@@ -317,7 +314,7 @@ class TestVpsMinimalRuntime:
             f"{svc_name} must not start in default VPS runtime"
         )
 
-    @pytest.mark.parametrize("svc_name", ["mini-app-frontend", "langfuse"])
+    @pytest.mark.parametrize("svc_name", ["langfuse"])
     def test_vps_noncore_host_ports_removed(self, vps: dict, svc_name: str) -> None:
         assert not vps["services"][svc_name].get("ports"), (
             f"{svc_name} should not publish host ports in minimal VPS default"
@@ -328,37 +325,6 @@ class TestVpsMinimalRuntime:
         env = vps["services"][svc_name]["environment"]
         assert env.get("LANGFUSE_HOST") != "${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}"
         assert "http://langfuse:3000" not in str(env.get("LANGFUSE_HOST", ""))
-
-
-class TestMiniAppFrontendHealthcheck:
-    """Optional mini app frontend healthcheck must match nginx's IPv4-only loopback binding."""
-
-    _EXPECTED_PROBE = "wget -qO- http://127.0.0.1/health || exit 1"
-
-    def test_compose_uses_ipv4_loopback_healthcheck(self, vps: dict) -> None:
-        svc = vps["services"]["mini-app-frontend"]
-        assert svc["healthcheck"]["test"] == ["CMD-SHELL", self._EXPECTED_PROBE]
-
-    def test_frontend_dockerfile_uses_same_ipv4_loopback_healthcheck(self) -> None:
-        content = MINI_APP_FRONTEND_DOCKERFILE.read_text()
-        assert self._EXPECTED_PROBE in content
-
-
-class TestMiniAppFrontendSecurityContract:
-    """Frontend nginx must stay compatible with hardened capability settings (#1431)."""
-
-    def test_compose_runs_frontend_as_nginx_uid_gid(self, vps: dict) -> None:
-        svc = vps["services"]["mini-app-frontend"]
-        assert svc.get("user") == "101:101", (
-            "mini-app-frontend must run as nginx user to avoid root chown/setuid startup paths"
-        )
-
-    def test_compose_frontend_drops_all_and_readds_only_bind_capability(self, vps: dict) -> None:
-        svc = vps["services"]["mini-app-frontend"]
-        assert "ALL" in svc.get("cap_drop", []), "mini-app-frontend must keep cap_drop: [ALL]"
-        assert svc.get("cap_add") == ["NET_BIND_SERVICE"], (
-            "mini-app-frontend must only add NET_BIND_SERVICE to bind port 80 as non-root"
-        )
 
 
 class TestHandoffComposeContract:
@@ -381,7 +347,6 @@ class TestOtelServiceNameDefaults:
     _EXPECTED = {
         "bge-m3": "bge-m3",
         "bot": "telegram-bot",
-        "mini-app-api": "mini-app-api",
         "ingestion": "ingestion",
         "rag-api": "rag-api",
     }

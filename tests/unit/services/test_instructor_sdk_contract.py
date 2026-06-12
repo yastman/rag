@@ -9,7 +9,7 @@ These contracts pin the project decision to:
    not as a project Semgrep rule.
 
 2. Defer adoption of ``create_partial`` / ``create_iterable`` streaming
-   primitives until a real consumer (voice agent, Mini App live chat) ships.
+   primitives until a real consumer (voice agent live chat) ships.
    See ``docs/adr/0008-instructor-create-partial-deferred.md``.
 
 If a future PR legitimately needs to relax these rules, update the ADR,
@@ -28,7 +28,6 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 PROD_ROOTS = (
     REPO_ROOT / "telegram_bot",
     REPO_ROOT / "src",
-    REPO_ROOT / "mini_app",
 )
 
 

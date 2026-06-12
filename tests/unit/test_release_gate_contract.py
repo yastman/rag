@@ -10,22 +10,20 @@ RELEASE_SMOKE_SCRIPT = ROOT / "scripts" / "probe" / "release_health_vps.sh"
 VPS_NONCORE_SERVICES_LIB = ROOT / "scripts" / "lib" / "vps_noncore_services.sh"
 
 
-def test_release_smoke_script_does_not_allow_profile_mode() -> None:
-    """Release smoke must allow auto|true|false but not a profile downgrade."""
+def test_release_smoke_script_does_not_allow_profile_or_mini_app_mode() -> None:
+    """Release smoke must not support profile or archived Mini App downgrades."""
     script = RELEASE_SMOKE_SCRIPT.read_text()
-    assert "auto|true|false" in script
     assert "profile" not in script, (
         "scripts/probe/release_health_vps.sh still supports 'profile', "
         "which lets release-critical callers skip minimal-core parity."
     )
+    assert "REQUIRE_MINI_APP_ENDPOINT" not in script
 
 
 def test_release_smoke_asserts_removed_services_absent() -> None:
     script = RELEASE_SMOKE_SCRIPT.read_text()
     noncore_services = VPS_NONCORE_SERVICES_LIB.read_text()
     for service in [
-        "mini-app-api",
-        "mini-app-frontend",
         "docling",
         "ingestion",
         "langfuse",
@@ -50,7 +48,7 @@ def test_release_smoke_sources_noncore_lib_from_probe_dir() -> None:
 def test_public_ci_does_not_run_release_smoke() -> None:
     """Public CI must not run production release smoke checks."""
     workflow = CI_WORKFLOW.read_text()
-    assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/probe/release_health_vps.sh" not in workflow
+    assert "./scripts/probe/release_health_vps.sh" not in workflow
 
 
 def test_public_ci_does_not_run_prod_env_preflight() -> None:

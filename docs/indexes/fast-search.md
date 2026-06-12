@@ -79,17 +79,18 @@ uv run python -m src.ingestion.unified.cli --help
 
 See also: [`runtime-services.md`](runtime-services.md#ingestion)
 
-### "Understand mini app"
+### "Understand archived mini app"
 
 ```bash
-# Mini app index
-cat mini_app/README.md
+# Archived Mini App index
+cat archive/mini_app/README.md
 
-# Backend entrypoint and tests
-rg -n "mini_app" mini_app/ tests/unit/mini_app/
+# Archived source search (not required runtime path)
+rg -n "mini_app" archive/mini_app/
 ```
 
-See also: [`runtime-services.md`](runtime-services.md#mini-app)
+See also: [`runtime-services.md`](runtime-services.md#archived-mini-app)
+
 
 ### "Understand Telegram bot flow"
 

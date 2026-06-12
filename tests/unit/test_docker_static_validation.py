@@ -22,8 +22,6 @@ DOCKERFILES = [
     "services/user-base/Dockerfile",
     "services/docling/Dockerfile",
     "src/voice/Dockerfile",
-    "mini_app/Dockerfile",
-    "mini_app/frontend/Dockerfile",
 ]
 
 # Images that import telegram_bot.observability (which imports langfuse) must not
@@ -31,14 +29,11 @@ DOCKERFILES = [
 # that is incompatible with Python 3.14.
 _LANGFUSE_RUNTIME_DOCKERFILES = [
     "telegram_bot/Dockerfile",
-    "mini_app/Dockerfile",
     "src/api/Dockerfile",
     "Dockerfile.ingestion",
 ]
 
 COMPOSE_CI_ENV = Path("tests/fixtures/compose.ci.env")
-MINI_APP_FRONTEND_DOCKERFILE = Path("mini_app/frontend/Dockerfile")
-MINI_APP_FRONTEND_NGINX_CONF = Path("mini_app/frontend/nginx.conf")
 COMPOSE_FILE = Path("compose.yml")
 ENV_EXAMPLE = Path(".env.example")
 QDRANT_STACK_DOC = Path("docs/QDRANT_STACK.md")
@@ -181,7 +176,7 @@ def test_compose_dev_postgres_renders_with_dev_only_capabilities() -> None:
 def test_langfuse_dockerfile_does_not_use_python314(dockerfile: str) -> None:
     """Langfuse SDK uses Pydantic v1 compatibility that crashes under Python 3.14.
 
-    Regression test for #1307: bot and mini-app-api containers fail to start
+    Regression test for #1307: bot containers fail to start
     because `from langfuse import Langfuse` raises
     `pydantic.v1.errors.ConfigError` on Python 3.14.
     """
@@ -207,26 +202,6 @@ def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
     )
 
 
-def test_mini_app_frontend_dockerfile_runs_as_unprivileged_nginx_user() -> None:
-    text = MINI_APP_FRONTEND_DOCKERFILE.read_text()
-    assert "USER 101:101" in text, (
-        "mini_app/frontend/Dockerfile must run nginx as uid/gid 101 to avoid root-only startup paths"
-    )
-    assert "COPY nginx.conf /etc/nginx/nginx.conf" in text, (
-        "mini_app/frontend/Dockerfile must install the hardened main nginx.conf"
-    )
-    assert "mkdir -p /tmp/nginx" not in text and "/tmp/nginx/client_temp" not in text, (
-        "mini_app/frontend/Dockerfile must not pre-create legacy /tmp/nginx temp directories"
-    )
-
-
-def test_mini_app_frontend_nginx_runtime_paths_use_tmp() -> None:
-    text = MINI_APP_FRONTEND_NGINX_CONF.read_text()
-    assert "pid /tmp/nginx.pid;" in text
-    assert "client_body_temp_path /tmp/client_temp;" in text
-    assert "proxy_temp_path /tmp/proxy_temp;" in text
-
-
 def test_voice_agent_healthcheck_does_not_use_rag_api_port() -> None:
     """voice-agent healthcheck must not reference port 8080 to avoid confusion with rag-api (#1510)."""
     import yaml
@@ -250,16 +225,6 @@ def test_voice_agent_has_otel_service_name() -> None:
     assert "voice-agent" in env["OTEL_SERVICE_NAME"], (
         "voice-agent OTEL_SERVICE_NAME default must include 'voice-agent'"
     )
-
-
-def test_mini_app_api_depends_on_postgres() -> None:
-    """mini-app-api uses REALESTATE_DATABASE_URL and must declare a postgres dependency (#1510)."""
-    import yaml
-
-    compose = yaml.safe_load(COMPOSE_FILE.read_text())
-    mini = compose["services"]["mini-app-api"]
-    deps = mini.get("depends_on", {})
-    assert "postgres" in deps, "mini-app-api must depend_on postgres"
 
 
 def test_docling_read_only_has_explanatory_comment() -> None:

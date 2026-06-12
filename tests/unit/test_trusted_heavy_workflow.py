@@ -38,14 +38,10 @@ def test_trusted_heavy_self_hosted_jobs_have_timeout() -> None:
         assert timeout == 20, f"{job_key} must set timeout-minutes: 20, got {timeout!r}"
 
 
-def test_trusted_heavy_workflow_runs_for_all_prs() -> None:
-    """Workflow must create stable check contexts even for docs-only PRs."""
+def test_trusted_heavy_workflow_is_manual_only() -> None:
+    """Trusted-heavy is manual-only and must not create required PR checks."""
     data = _load_workflow()
-    pull_request = data["on"]["pull_request"]
-    assert "paths" not in pull_request, (
-        "trusted-heavy.yml must not use workflow-level path filters; required "
-        "checks would otherwise be missing on docs-only PRs."
-    )
+    assert data["on"] == {"workflow_dispatch": None}
 
 
 def test_trusted_heavy_has_github_hosted_path_filter() -> None:
@@ -70,7 +66,6 @@ def test_trusted_heavy_path_filter_covers_risk_paths() -> None:
     for token in (
         "src/*",
         "telegram_bot/*",
-        "mini_app/*",
         "services/*",
         "tests/*",
         "compose*.yml",

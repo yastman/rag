@@ -27,7 +27,6 @@ OPTIONAL_SURFACE_TOKENS = (
     "mini_app",
     "k8s",
     "langfuse",
-    "E2E_VALIDATE_LANGFUSE",
 )
 
 
@@ -67,13 +66,7 @@ def test_core_live_targets_do_not_require_optional_surfaces() -> None:
     for target in CORE_LIVE_TARGETS:
         body = _target_body(text, target)
         normalized = body.lower()
-        offenders = [
-            token
-            for token in OPTIONAL_SURFACE_TOKENS
-            if token.lower() in normalized and token != "E2E_VALIDATE_LANGFUSE"
-        ]
-        if "E2E_VALIDATE_LANGFUSE" in body:
-            offenders.append("E2E_VALIDATE_LANGFUSE")
+        offenders = [token for token in OPTIONAL_SURFACE_TOKENS if token.lower() in normalized]
         assert not offenders, (
             f"{target} must stay on the protected assistant-core path and not require "
             f"optional surfaces. Offending tokens: {offenders}"
