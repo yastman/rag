@@ -76,6 +76,18 @@ Before coding each issue in a worker pack:
 A PR must not be marked ready if static CI-equivalent checks fail locally.
 If checks cannot be run, keep the PR draft or document skipped checks and risk.
 
+## CI-equivalent static checks
+
+For static CI checks, workers must run the exact commands from `.github/workflows/ci.yml`, not approximate per-file variants.
+
+If a PR changes any file under `src/`, `telegram_bot/`, `mini_app/`, `services/`, or `scripts/`, run before Ready PR:
+
+```bash
+uvx ruff check src/ telegram_bot/ mini_app/ services/ scripts/ --output-format=github
+uvx ruff format --target-version py312 --check src/ telegram_bot/ mini_app/ services/ scripts/
+uv lock --locked
+```
+
 ## Test Failure Triage / Autofix Policy
 
 When validation fails, classify before fixing:
