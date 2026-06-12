@@ -79,9 +79,10 @@ def test_release_gate_script_contains_handoff_contract() -> None:
 
 def test_release_gate_script_core_required_vars_are_minimal() -> None:
     script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
-    for var in ["POSTGRES_PASSWORD", "REDIS_PASSWORD", "LITELLM_MASTER_KEY", "TELEGRAM_BOT_TOKEN"]:
+    for var in ["POSTGRES_PASSWORD", "REDIS_PASSWORD", "TELEGRAM_BOT_TOKEN"]:
         assert var in script
     core_section = script.split("optional_profile_vars", 1)[0]
+    assert "CEREBRAS_API_KEY" in script
     for var in ["CLICKHOUSE_PASSWORD", "MINIO_ROOT_PASSWORD", "LANGFUSE_REDIS_PASSWORD"]:
         assert var not in core_section
 

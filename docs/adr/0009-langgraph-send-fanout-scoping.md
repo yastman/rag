@@ -65,7 +65,7 @@ Recommended pilot when work resumes: **HyDE multi-document fan-out** behind a co
 
 ### Positive
 - Canonical SDK shape is documented; future contributors will not invent ad-hoc fan-out.
-- The `instructor` decision in [ADR-0008](0008-instructor-create-partial-deferred.md) and the streaming refactor in [#1671](https://github.com/yastman/rag/issues/1671) compose cleanly with `Send`-based fan-out: each worker can use `instructor.from_openai(...)` and emit `stream_mode="custom"` events independently.
+- The structured-output decision in [ADR-0008](0008-instructor-create-partial-deferred.md) and the streaming refactor in [#1671](https://github.com/yastman/rag/issues/1671) compose cleanly with `Send`-based fan-out: each worker can use the canonical LiteLLM SDK router and emit `stream_mode="custom"` events independently.
 
 ### Negative
 - No latency or recall improvement until a pilot ships.

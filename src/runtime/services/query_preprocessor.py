@@ -1,6 +1,6 @@
 """Query preprocessing for RAG pipeline optimization.
 
-HyDEGenerator uses the plain OpenAI-compatible SDK. Langfuse is optional and
+HyDEGenerator uses the in-process LiteLLM SDK router. Langfuse is optional and
 attached outside the core runtime. QueryPreprocessor is rule-based (no LLM calls).
 """
 
@@ -12,6 +12,7 @@ import openai
 
 from src.observability import get_client, observe
 from src.runtime.integrations.prompt_manager import get_prompt_with_object
+from src.runtime.llm import create_litellm_chat_client
 
 
 logger = logging.getLogger(__name__)
@@ -71,18 +72,14 @@ class HyDEGenerator:
     def __init__(
         self,
         api_key: str | None = None,
-        base_url: str = "http://localhost:4000",
+        base_url: str = "",
         model: str = "gpt-4o-mini",
     ):
         self.api_key = api_key or "not-needed"
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.client = openai.AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            max_retries=2,
-            timeout=30.0,
-        )
+        _ = self.api_key, self.base_url  # Compatibility fields; routing reads provider env.
+        self.client = create_litellm_chat_client(model=model, timeout=30.0)
 
     @observe(name="hyde-generate-document", capture_input=False, capture_output=False)
     async def generate_hypothetical_document(self, query: str) -> str:

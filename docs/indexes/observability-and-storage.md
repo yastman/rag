@@ -116,16 +116,15 @@ rg -n "redis|Redis" telegram_bot/integrations/ telegram_bot/services/
 
 ## LiteLLM Proxy
 
-Use this path for LLM connection failures or proxy errors.
+Use this path for LLM provider failures from the in-process LiteLLM SDK router.
 
 - **Runbook**: [`../runbooks/LITEllm_FAILURE.md`](../runbooks/LITEllm_FAILURE.md)
-- **Compose service**: `litellm` (profile `bot` and `voice`)
-- **Local URL**: http://localhost:4000
+- **Runtime**: Python LiteLLM router in `src/runtime/llm/router.py`
 
 Quick check:
 
 ```bash
-curl -fsS http://localhost:4000/health
+make test-bot-health
 ```
 
 ## Postgres

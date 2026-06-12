@@ -7,9 +7,6 @@ CREATE DATABASE langfuse;
 -- Grant permissions (using default postgres user)
 GRANT ALL PRIVILEGES ON DATABASE langfuse TO postgres;
 
--- Database for LiteLLM (LLM Gateway)
-CREATE DATABASE litellm;
-GRANT ALL PRIVILEGES ON DATABASE litellm TO postgres;
 
 -- Database for Real Estate CRM/Funnel
 CREATE DATABASE realestate;

@@ -521,7 +521,7 @@ async def _entrypoint_body(
         stt=elevenlabs.STT(model_id="scribe_v2_realtime"),
         # LiveKit's OpenAI plugin is still used for the realtime voice adapter.
         # Chat/RAG paths use the in-process LiteLLM SDK router; voice no longer
-        # depends on a Docker LiteLLM proxy URL.
+        # depends on provider credentials instead of an external proxy URL.
         llm=openai.LLM(
             model=os.getenv("VOICE_LLM_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini")),
             api_key=os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY", ""),

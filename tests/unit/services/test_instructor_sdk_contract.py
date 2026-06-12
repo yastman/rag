@@ -1,20 +1,4 @@
-"""SDK shape regression locks for ``instructor`` (closes #1672 / ADR-0008).
-
-These contracts pin the project decision to:
-
-1. Construct known ``instructor`` clients via
-   ``instructor.from_openai(openai.AsyncOpenAI(...))`` so runtime code owns the
-   OpenAI-compatible client and routing configuration. The generic
-   ``instructor.from_provider(...)`` denylist stays here as an AST contract,
-   not as a project Semgrep rule.
-
-2. Defer adoption of ``create_partial`` / ``create_iterable`` streaming
-   primitives until a real consumer (voice agent live chat) ships.
-   See ``docs/adr/0008-instructor-create-partial-deferred.md``.
-
-If a future PR legitimately needs to relax these rules, update the ADR,
-SDK registry entry, and these locks together — never silently.
-"""
+"""Contracts ensuring active structured-output paths do not use Instructor (#2429)."""
 
 from __future__ import annotations
 
@@ -31,13 +15,19 @@ PROD_ROOTS = (
 )
 
 
+ACTIVE_STRUCTURED_OUTPUT_PATHS = [
+    REPO_ROOT / "telegram_bot" / "services" / "apartment_llm_extractor.py",
+    REPO_ROOT / "telegram_bot" / "services" / "query_analyzer.py",
+    REPO_ROOT / "src" / "evaluation" / "generate_test_queries.py",
+]
+
+
 def _iter_python_files() -> list[Path]:
     files: list[Path] = []
     for root in PROD_ROOTS:
         if not root.exists():
             continue
         for path in root.rglob("*.py"):
-            # Exclude vendored / generated artefacts if any.
             if any(part in {".venv", "node_modules", "build", "dist"} for part in path.parts):
                 continue
             files.append(path)
@@ -48,25 +38,9 @@ def _calls_in(tree: ast.AST) -> list[ast.Call]:
     return [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
 
 
-def _is_attr_call(call: ast.Call, root: str, attr: str) -> bool:
-    """Return True if ``call`` is ``<...>.<attr>(...)`` and root token is ``root``."""
-    func = call.func
-    if not isinstance(func, ast.Attribute) or func.attr != attr:
-        return False
-    # Walk down to the leftmost Name token.
-    node: ast.AST = func.value
-    while isinstance(node, ast.Attribute):
-        node = node.value
-    return isinstance(node, ast.Name) and node.id == root
-
-
 @pytest.mark.parametrize("path", _iter_python_files(), ids=lambda p: str(p.relative_to(REPO_ROOT)))
 def test_no_instructor_streaming_primitives_in_production(path: Path) -> None:
-    """``create_partial`` / ``create_iterable`` are deferred per ADR-0008.
-
-    A future PR adopting these MUST update ADR-0008 first; this test is
-    intentionally a hard lock.
-    """
+    """No active production code should reintroduce Instructor streaming primitives."""
     source = path.read_text(encoding="utf-8")
     if "create_partial" not in source and "create_iterable" not in source:
         return
@@ -79,34 +53,25 @@ def test_no_instructor_streaming_primitives_in_production(path: Path) -> None:
         if isinstance(func, ast.Attribute) and func.attr in forbidden_attrs:
             offenders.append(f"line {call.lineno}: .{func.attr}(...)")
     assert not offenders, (
-        f"{path.relative_to(REPO_ROOT)}: deferred instructor streaming primitive(s) "
-        f"detected: {offenders}. Update docs/adr/0008-instructor-create-partial-deferred.md "
-        f"before introducing partial/iterable streaming."
+        f"{path.relative_to(REPO_ROOT)}: Instructor streaming primitive(s) detected: "
+        f"{offenders}. Structured output must use the LiteLLM SDK router JSON-schema path."
     )
 
 
-def test_known_instructor_call_sites_use_from_openai() -> None:
-    """The two known instructor consumers must use ``instructor.from_openai(...)``.
-
-    Drift here means a service reverted to a non-langfuse-aware construction
-    path. The negative ``from_provider`` denylist lives in Semgrep so simple
-    SDK pattern checks stay in the standard static-analysis layer.
-
-    NOTE: ``telegram_bot/services/llm.py`` was removed in #1541 (residual
-    slice). The remaining two consumers are still on this list.
-    """
-    expected = [
-        REPO_ROOT / "telegram_bot" / "services" / "apartment_llm_extractor.py",
-        REPO_ROOT / "telegram_bot" / "services" / "query_analyzer.py",
-    ]
-    for path in expected:
-        assert path.exists(), f"expected instructor consumer missing: {path}"
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        from_openai_calls = [
-            call for call in _calls_in(tree) if _is_attr_call(call, "instructor", "from_openai")
-        ]
-        assert from_openai_calls, (
-            f"{path.relative_to(REPO_ROOT)}: expected at least one "
-            f"`instructor.from_openai(...)` call; got none. "
-            f"See docs/adr/0008-instructor-create-partial-deferred.md."
-        )
+@pytest.mark.parametrize("path", ACTIVE_STRUCTURED_OUTPUT_PATHS, ids=lambda p: str(p.relative_to(REPO_ROOT)))
+def test_active_structured_output_paths_do_not_import_instructor(path: Path) -> None:
+    """Structured output call sites should use LiteLLM/OpenAI-compatible JSON schema."""
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            offenders.extend(alias.name for alias in node.names if alias.name == "instructor")
+        elif isinstance(node, ast.ImportFrom) and node.module == "instructor":
+            offenders.append(f"disallowed SDK import at line {node.lineno}")
+    assert not offenders, (
+        f"{path.relative_to(REPO_ROOT)} imports Instructor: {offenders}. "
+        "Use src.runtime.llm.create_litellm_chat_client(..., response_model=...) instead."
+    )
+    assert "instructor." + "from_openai" not in source
+    assert "instructor." + "from_provider" not in source

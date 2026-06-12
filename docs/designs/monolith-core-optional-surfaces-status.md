@@ -18,7 +18,7 @@
 | Loki / Promtail / Alertmanager | optional monitoring | not required for local core proof |
 | BGE-M3 API container | optional service boundary | core proof may use local/service embeddings by accepted gate |
 | Docling service | optional service boundary | ingestion can run batch/in-process |
-| LiteLLM proxy | optional service boundary | core may use direct SDK/client path |
+| LiteLLM SDK router | optional provider boundary | core may use direct SDK/client path |
 
 Primary proof remains:
 

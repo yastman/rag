@@ -92,9 +92,6 @@ check "bm42 health" "curl -sf http://localhost:8002/health | grep -q ok"
 # 6. user-base
 check "user-base health" "curl -sf http://localhost:8003/health | grep -q ok"
 
-# 7. litellm
-check "litellm health" "curl -sf http://localhost:4000/health/liveliness"
-
 # Summary
 [[ "$QUIET" != "--quiet" ]] && echo "=================="
 [[ "$QUIET" != "--quiet" ]] && echo -e "Passed: ${GREEN}$PASSED${NC}, Failed: ${RED}$FAILED${NC}"

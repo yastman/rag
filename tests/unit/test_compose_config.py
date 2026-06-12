@@ -171,7 +171,7 @@ class TestMakefileAiProfile:
 # =============================================================================
 
 # Services that have security defaults applied in dev compose (via <<: *security-defaults)
-_SECURITY_SERVICES = ["bge-m3", "user-base", "docling", "litellm", "bot"]
+_SECURITY_SERVICES = ["bge-m3", "user-base", "docling", "bot"]
 
 # Services that exist in both dev AND vps compose
 _VPS_SECURITY_SERVICES = [s for s in _SECURITY_SERVICES if s != "ingestion"]
@@ -284,7 +284,6 @@ VPS_CORE_SERVICES = {
     "qdrant",
     "bge-m3",
     "user-base",
-    "litellm",
     "bot",
 }
 
@@ -320,7 +319,7 @@ class TestVpsMinimalRuntime:
             f"{svc_name} should not publish host ports in minimal VPS default"
         )
 
-    @pytest.mark.parametrize("svc_name", ["bot", "litellm"])
+    @pytest.mark.parametrize("svc_name", ["bot"])
     def test_vps_core_does_not_default_to_internal_langfuse(self, vps: dict, svc_name: str) -> None:
         env = vps["services"][svc_name]["environment"]
         assert env.get("LANGFUSE_HOST") != "${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}"

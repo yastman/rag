@@ -66,18 +66,13 @@ async def test_bge_hybrid_health_contract():
     assert "lexical_weights" in payload
 
 
-@pytest.mark.asyncio
-@pytest.mark.skipif(not _is_port_open("localhost", 4000), reason="LiteLLM not running (4000)")
-async def test_litellm_models_health():
-    """LiteLLM proxy endpoint is reachable (200 or auth-required 401)."""
-    base_url = os.getenv("LITELLM_URL", "http://localhost:4000").rstrip("/")
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(f"{base_url}/models")
-    assert resp.status_code in {200, 401}
-    if resp.status_code == 200:
-        payload = resp.json()
-        assert "data" in payload
-        assert isinstance(payload["data"], list)
+def test_litellm_sdk_router_model_contract():
+    """LiteLLM SDK router exposes the default alias without a proxy service."""
+    from src.runtime.llm.router import DEFAULT_MODEL_ALIAS, build_model_list
+
+    aliases = {entry["model_name"] for entry in build_model_list()}
+    assert DEFAULT_MODEL_ALIAS in aliases
+    assert "gpt-4o-mini-openai" in aliases
 
 
 @pytest.mark.asyncio

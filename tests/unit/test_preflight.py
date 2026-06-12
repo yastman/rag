@@ -36,7 +36,7 @@ def _make_config(**overrides) -> MagicMock:
     cfg.get_collection_name = MagicMock(return_value=effective_collection)
     cfg.qdrant_timeout = overrides.get("qdrant_timeout", 30)
     cfg.bge_m3_url = overrides.get("bge_m3_url", "http://localhost:8000")
-    cfg.llm_base_url = overrides.get("llm_base_url", "http://localhost:4000")
+    cfg.llm_base_url = overrides.get("llm_base_url", "")
     cfg.realestate_database_url = overrides.get(
         "realestate_database_url", "postgresql://postgres:postgres@localhost:5432/realestate"
     )

@@ -379,7 +379,7 @@ def run_eval(
             answer, tool_calls = _mock_agent_run(ex)
         else:
             raise NotImplementedError(
-                "Live agent evaluation requires a running LiteLLM proxy. "
+                "Live agent evaluation requires configured LLM provider credentials. "
                 "Use --dry-run for offline testing."
             )
 

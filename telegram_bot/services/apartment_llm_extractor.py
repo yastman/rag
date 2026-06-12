@@ -1,14 +1,10 @@
-"""Instructor-based LLM extractor for apartment search filters."""
+"""LiteLLM JSON-schema extractor for apartment search filters."""
 
 from __future__ import annotations
 
 import contextlib
 import logging
-import warnings
 from typing import Any, cast
-
-import instructor
-from openai import AsyncOpenAI
 
 from telegram_bot.integrations.prompt_manager import get_prompt, get_prompt_with_object
 from telegram_bot.observability import get_client, observe
@@ -105,16 +101,10 @@ def merge_extraction_results(
 
 
 class ApartmentLlmExtractor:
-    """Instructor-based structured extraction from natural language queries."""
+    """Structured extraction from natural language queries via LiteLLM router."""
 
-    def __init__(self, llm: AsyncOpenAI, model: str = "gpt-4o-mini") -> None:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=("Client should be an instance of openai.OpenAI or openai.AsyncOpenAI.*"),
-                category=UserWarning,
-            )
-            self._client = instructor.from_openai(llm)
+    def __init__(self, llm: Any, model: str = "gpt-4o-mini") -> None:
+        self._client = llm
         self._model = model
 
     @observe(name="apartment-llm-extract", capture_input=False, capture_output=False)
@@ -133,10 +123,8 @@ class ApartmentLlmExtractor:
         source = "hybrid" if partial_filters else "llm"
 
         # Fetch the prompt + raw Prompt object so we can link the generation
-        # observation to Prompt Management (#1666). The underlying client is
-        # plain `openai.AsyncOpenAI` (not `langfuse.openai`) so the
-        # `langfuse_prompt=` kwarg path is not available; we use the
-        # `update_current_generation(prompt=...)` secondary path instead.
+        # observation to Prompt Management (#1666). LiteLLM routing is the only
+        # chat path; prompt linking remains best-effort observability metadata.
         system_prompt, prompt_obj = _get_system_prompt_with_object()
         if prompt_obj is not None:
             with contextlib.suppress(Exception):

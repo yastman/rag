@@ -19,8 +19,7 @@ For local development, the canonical environment file is `.env` in the repo root
 
 Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`
-- `LITELLM_MASTER_KEY`
-- at least one provider key: `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
+- at least one provider key for the in-process LiteLLM SDK router: `CEREBRAS_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, or legacy `LLM_API_KEY`
 - optional `QDRANT_COLLECTION` (defaults to `gdrive_documents_bge` from `compose.yml` if unset)
 
 Minimum env for Telegram E2E (Telethon userbot):
@@ -32,9 +31,8 @@ Minimum env for Telegram E2E (Telethon userbot):
 
 E2E judge routing defaults:
 - `E2E_JUDGE_PROVIDER=litellm` (default)
-- `E2E_JUDGE_BASE_URL=http://localhost:4000/v1` (default)
 - `E2E_JUDGE_MODEL=gpt-4o-mini` (default)
-- `E2E_JUDGE_API_KEY` (or `LLM_API_KEY` / `OPENAI_API_KEY` / `LITELLM_MASTER_KEY`)
+- `E2E_JUDGE_API_KEY` (or `LLM_API_KEY` / `OPENAI_API_KEY`)
 - direct Anthropic judge is opt-in only: `E2E_JUDGE_PROVIDER=anthropic-direct` + `ANTHROPIC_API_KEY`
 - for transport-only Telethon checks without LLM judge: run `uv run python scripts/e2e/runner.py --no-judge`
 
@@ -486,8 +484,7 @@ reports the status clearly without writing any files.
 ## 13. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`. Run `make preflight-bot` for a diagnostic report.
-- Bot crash-loops with `TokenValidationError`: `.env` is missing and the CI fallback `TELEGRAM_BOT_TOKEN=123456789:ABC...fghi` is not a valid Telegram token. `cp .env.example .env` then set real `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and a provider key.
-- `curl localhost:4000` Connection Refused: LiteLLM port not published on host. See [`../DOCKER.md`](../DOCKER.md) "LiteLLM port recovery" — most often caused by a stray compose file at `/tmp/compose.postgres-root.yml` overriding the dev port mapping.
+- Bot crash-loops with `TokenValidationError`: `.env` is missing and the CI fallback `TELEGRAM_BOT_TOKEN=123456789:ABC...fghi` is not a valid Telegram token. `cp .env.example .env` then set real `TELEGRAM_BOT_TOKEN` and a provider key.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.
 - Ingestion status empty: verify `GDRIVE_SYNC_DIR` and collection bootstrap.
 - Redis auth error (`WRONGPASS` / `NOAUTH`) after changing `.env` `REDIS_PASSWORD`: run `make local-redis-recreate`, then `make test-bot-health`.

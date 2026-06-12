@@ -3,12 +3,11 @@
 Read-only audit that aggregates ``type=GENERATION`` observations over a time
 window into per-model {calls, input_tokens, output_tokens, total_cost} and
 flags models with real token traffic but **zero reported cost** — the
-signature of a LiteLLM cost-map gap (model present in
-``docker/litellm/config.yaml`` but missing from the LiteLLM pricing map, so
-``cost_details.total`` stays 0 despite traffic).
+signature of a LiteLLM pricing-map gap (model routed by the SDK but missing
+from the LiteLLM pricing map, so ``cost_details.total`` stays 0 despite
+traffic).
 
-Cost is read from Langfuse v4 ``cost_details.total_cost`` / ``total_cost``
-(the LiteLLM proxy populates this via ``success_callback: ["langfuse"]``),
+Cost is read from Langfuse v4 ``cost_details.total_cost`` / ``total_cost``,
 with legacy fallbacks for older response shapes.
 
 Usage::

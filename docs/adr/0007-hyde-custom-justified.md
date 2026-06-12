@@ -70,7 +70,7 @@ The project embeds the hypothetical text separately (via Voyage AI). `Hypothetic
 
 ### 4. Cannot Integrate with LiteLLM Proxy
 
-The custom generator uses `AsyncOpenAI(base_url="http://localhost:4000")` to route through the LiteLLM proxy. `HypotheticalDocumentEmbedder` requires a LangChain `BaseLanguageModel`, which does not support arbitrary `base_url` routing through LiteLLM without additional adapter code.
+The custom generator now uses the in-process LiteLLM SDK router. `HypotheticalDocumentEmbedder` requires a LangChain `BaseLanguageModel`, so the project keeps a small custom generator adapter for SDK-based routing.
 
 ### 5. Cannot Integrate with Langfuse Observability
 
@@ -92,7 +92,7 @@ The custom generator calls `get_prompt_with_object("hyde", fallback=...)` to loa
 - No dependency on deprecated `langchain-classic` package
 - Full async-native performance (no executor thread overhead)
 - Full Langfuse observability (auto-tracing, prompt versioning, span metadata)
-- Clean LiteLLM proxy routing (model/key abstraction)
+- Clean SDK-router model/key abstraction
 - Dynamic prompt management via Langfuse
 
 ### Negative

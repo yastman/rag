@@ -12,7 +12,6 @@ SCRIPT = Path("scripts/probe/check_bot_runtime_env.py")
 CI_ENV_CONTENT = """\
 COMPOSE_PROJECT_NAME=dev
 TELEGRAM_BOT_TOKEN=123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi
-LITELLM_MASTER_KEY=test-litellm-master-key
 REDIS_PASSWORD=test-redis-password
 POSTGRES_PASSWORD=postgres
 """
@@ -20,7 +19,7 @@ POSTGRES_PASSWORD=postgres
 VALID_ENV_CONTENT = """\
 COMPOSE_PROJECT_NAME=dev
 TELEGRAM_BOT_TOKEN=1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl
-LITELLM_MASTER_KEY=sk-real-master-key
+CEREBRAS_API_KEY=sk-real-provider-key
 REDIS_PASSWORD=test-redis-password
 POSTGRES_PASSWORD=postgres
 """
@@ -146,12 +145,12 @@ def test_script_explains_token_validation_failure(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# LiteLLM port binding warnings
+# Optional runtime probe warnings
 # ---------------------------------------------------------------------------
 
 
-def test_script_skips_docker_check_when_requested(tmp_path: Path) -> None:
-    """When --skip-docker is passed, LiteLLM port check must be skipped."""
+def test_script_skips_runtime_probe_when_requested(tmp_path: Path) -> None:
+    """When --skip-docker is passed, optional runtime probes must be skipped."""
     env_file = tmp_path / "compose.ci.env"
     env_file.write_text(CI_ENV_CONTENT)
 
@@ -259,7 +258,7 @@ def test_script_does_not_print_secret_values(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
         "TELEGRAM_BOT_TOKEN=1234567890:REALsecretKEY1234567890abcdef\n"
-        "LITELLM_MASTER_KEY=sk-real-master-key-12345\n"
+        "CEREBRAS_API_KEY=sk-real-provider-key-12345\n"
         "REDIS_PASSWORD=supersecretredis123\n"
     )
 
@@ -267,7 +266,7 @@ def test_script_does_not_print_secret_values(tmp_path: Path) -> None:
 
     combined = cp.stdout + cp.stderr
     assert "REALsecretKEY" not in combined, "script must not print real TELEGRAM_BOT_TOKEN value"
-    assert "sk-real-master-key-12345" not in combined, (
-        "script must not print real LITELLM_MASTER_KEY value"
+    assert "sk-real-provider-key-12345" not in combined, (
+        "script must not print real provider key value"
     )
     assert "supersecretredis123" not in combined, "script must not print real REDIS_PASSWORD value"

@@ -80,54 +80,6 @@ groups:
           description: "Multiple Redis connection errors detected"
 
       # =============================================================================
-      # LITELLM
-      # =============================================================================
-
-      - alert: LiteLLMDown
-        expr: |
-          count_over_time({container="dev-litellm"} [5m]) == 0
-        for: 2m
-        labels:
-          severity: critical
-          service: litellm
-        annotations:
-          summary: "LiteLLM proxy is down"
-          description: "No logs from dev-litellm container for 5 minutes"
-
-      - alert: LiteLLMRateLimited
-        expr: |
-          count_over_time({container="dev-litellm"} |~ "(?i)rate.*limit|429|too.*many.*requests" [5m]) > 3
-        for: 3m
-        labels:
-          severity: warning
-          service: litellm
-        annotations:
-          summary: "LiteLLM rate limited"
-          description: "LLM API rate limiting detected"
-
-      - alert: LiteLLMProviderError
-        expr: |
-          count_over_time({container="dev-litellm"} |~ "(?i)provider.*error|api.*error|500" [5m]) > 5
-        for: 3m
-        labels:
-          severity: warning
-          service: litellm
-        annotations:
-          summary: "LiteLLM provider errors"
-          description: "Multiple LLM provider errors detected"
-
-      - alert: LiteLLMFallbackTriggered
-        expr: |
-          count_over_time({container="dev-litellm"} |~ "(?i)fallback|switching.*model" [5m]) > 3
-        for: 5m
-        labels:
-          severity: info
-          service: litellm
-        annotations:
-          summary: "LiteLLM fallback triggered"
-          description: "LiteLLM is using fallback models"
-
-      # =============================================================================
       # LANGFUSE
       # =============================================================================
 

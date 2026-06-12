@@ -31,16 +31,11 @@ class E2EConfig:
     judge_provider: str = field(default_factory=lambda: os.getenv("E2E_JUDGE_PROVIDER", "litellm"))
     judge_api_key: str = field(
         default_factory=lambda: os.getenv(
-            "E2E_JUDGE_API_KEY",
-            os.getenv(
-                "LLM_API_KEY", os.getenv("OPENAI_API_KEY", os.getenv("LITELLM_MASTER_KEY", ""))
-            ),
+            "E2E_JUDGE_API_KEY", os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
         )
     )
     judge_base_url: str = field(
-        default_factory=lambda: os.getenv(
-            "E2E_JUDGE_BASE_URL", os.getenv("LLM_BASE_URL", "http://localhost:4000/v1")
-        )
+        default_factory=lambda: os.getenv("E2E_JUDGE_BASE_URL", os.getenv("LLM_BASE_URL", ""))
     )
     anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
     judge_model: str = field(
@@ -95,11 +90,19 @@ class E2EConfig:
             return errors
 
         provider = (self.judge_provider or "").strip().lower()
-        if provider in {"", "litellm", "openai-compatible", "openai"}:
+        if provider in {"", "litellm"}:
+            if not any(
+                os.getenv(key)
+                for key in ("CEREBRAS_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "LLM_API_KEY")
+            ):
+                errors.append(
+                    "At least one LLM provider key is required for judge provider 'litellm'"
+                )
+        elif provider in {"openai-compatible", "openai"}:
             if not self.judge_api_key:
-                errors.append("E2E_JUDGE_API_KEY not set for judge provider 'litellm'")
+                errors.append("E2E_JUDGE_API_KEY not set for OpenAI-compatible judge provider")
             if not self.judge_base_url:
-                errors.append("E2E_JUDGE_BASE_URL not set for judge provider 'litellm'")
+                errors.append("E2E_JUDGE_BASE_URL not set for OpenAI-compatible judge provider")
         elif provider == "anthropic-direct":
             if not self.anthropic_api_key:
                 errors.append("ANTHROPIC_API_KEY not set for judge provider 'anthropic-direct'")

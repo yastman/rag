@@ -13,7 +13,7 @@ import yaml
 
 API_KEYS_REQUIRED = {
     "TELEGRAM_BOT_TOKEN",
-    "LITELLM_MASTER_KEY",
+    "CEREBRAS_API_KEY",
     "REDIS_PASSWORD",
     "LANGFUSE_PUBLIC_KEY",
     "LANGFUSE_SECRET_KEY",
@@ -127,17 +127,17 @@ def test_env_example_documents_postgres_password_for_db_credentials() -> None:
 
 def test_make_k3s_secrets_preserves_literal_postgres_password() -> None:
     result, api_keys, db_credentials = _run_make_k3s_secrets(
-        "LITELLM_MASTER_KEY=test-key\nPOSTGRES_PASSWORD=pa$$word\n"
+        "CEREBRAS_API_KEY=test-key\nPOSTGRES_PASSWORD=pa$$word\n"
     )
 
     assert result.returncode == 0, result.stderr
     assert "POSTGRES_PASSWORD=pa$$word" in db_credentials
     assert "POSTGRES_PASSWORD" not in api_keys
-    assert "LITELLM_MASTER_KEY=test-key" in api_keys
+    assert "CEREBRAS_API_KEY=test-key" in api_keys
 
 
 def test_make_k3s_secrets_requires_postgres_password() -> None:
-    result, _, _ = _run_make_k3s_secrets("LITELLM_MASTER_KEY=test-key\n")
+    result, _, _ = _run_make_k3s_secrets("CEREBRAS_API_KEY=test-key\n")
 
     assert result.returncode != 0
     assert "POSTGRES_PASSWORD is required" in result.stderr

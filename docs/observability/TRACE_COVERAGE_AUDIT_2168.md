@@ -152,7 +152,7 @@ records:
 | `claude-contextualize`, `groq-contextualize`, `openai-contextualize` (× sync/batch) | `src/contextualization/` | ✅ |
 | `service-generate-response`, `generate-answer`, `advisor-llm-call`, `detect-agent-intent`, `detect-response-style`, `hyde-generate-document` | `telegram_bot/services/`, `src/services/` | ✅ |
 | `transcribe`, `demo-transcribe-voice` | voice / demo helpers | ✅ |
-| `litellm-acompletion` | LiteLLM proxy callback (NOT app-instrumented) | n/a (proxy noise per runbook) |
+| `litellm-acompletion` | LiteLLM SDK callback (NOT app-instrumented) | n/a (SDK callback noise per runbook) |
 
 ## Static audit summary
 

@@ -621,7 +621,6 @@ remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	@fail=0; \
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:6333/readyz >/dev/null 2>&1"; then echo "  Qdrant: $(RED)FAIL$(NC)"; fail=1; else echo "  Qdrant: $(GREEN)OK$(NC)"; fi; \
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1"; then echo "  BGE-M3: $(RED)FAIL$(NC)"; fail=1; else echo "  BGE-M3: $(GREEN)OK$(NC)"; fi; \
-	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:4000/health/liveliness >/dev/null 2>&1"; then echo "  LiteLLM: $(RED)FAIL$(NC)"; fail=1; else echo "  LiteLLM: $(GREEN)OK$(NC)"; fi; \
 	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:3001/api/public/health >/dev/null 2>&1"; then echo "  Langfuse: $(GREEN)OK$(NC)"; else echo "  Langfuse: $(YELLOW)NOT READY$(NC)"; fi; \
 	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:5001/health >/dev/null 2>&1"; then echo "  Docling: $(GREEN)OK$(NC)"; else echo "  Docling: $(YELLOW)NOT READY$(NC)"; fi; \
 	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
@@ -765,7 +764,7 @@ qa: all-checks test ## Full quality assurance
 
 
 .PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate release-polling-lock run-bot bot
-LOCAL_SERVICES := postgres redis qdrant bge-m3 litellm
+LOCAL_SERVICES := postgres redis qdrant bge-m3
 
 LOCAL_INGEST_SERVICES := docling
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
@@ -1056,7 +1055,7 @@ baseline-check: baseline-compile baseline-smoke ## Quick baseline check (smoke +
 eval-rag: ## Run RAG evaluation with RAGAS metrics (faithfulness >= 0.8)
 	@echo "$(BLUE)Running RAG evaluation with RAGAS...$(NC)"
 	@echo "$(YELLOW)Dataset: tests/eval/ground_truth.json (55 samples)$(NC)"
-	@echo "$(YELLOW)LLM: $(EVAL_MODEL) via $(LITELLM_BASE_URL)$(NC)"
+	@echo "$(YELLOW)LLM: $(EVAL_MODEL) via LiteLLM SDK router$(NC)"
 	LANGFUSE_TRACING_ENABLED=true \
 	uv run python -m src.evaluation.ragas_evaluation
 	@echo "$(GREEN)✓ RAG evaluation complete$(NC)"

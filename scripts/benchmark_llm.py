@@ -1,11 +1,11 @@
-"""Benchmark LLM models via LiteLLM proxy and direct Cerebras API.
+"""Benchmark LLM models via the in-process LiteLLM SDK router and direct Cerebras API.
 
 Usage:
     source .env && uv run python scripts/benchmark_llm.py
 
 Env vars:
-    LITELLM_MASTER_KEY — LiteLLM proxy auth
-    CEREBRAS_API_KEY   — direct Cerebras API auth
+    CEREBRAS_API_KEY — provider key used by the SDK router and direct Cerebras API
+    OPENAI_API_KEY   — optional provider key for SDK-router OpenAI aliases
 """
 
 from __future__ import annotations
@@ -18,9 +18,8 @@ from pathlib import Path
 
 import httpx
 
+from src.runtime.llm import create_litellm_chat_client
 
-LITELLM_URL = "http://localhost:4000"
-LITELLM_KEY = os.getenv("LITELLM_MASTER_KEY", "")
 
 CEREBRAS_URL = "https://api.cerebras.ai/v1"
 CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
@@ -47,7 +46,49 @@ REWRITE_PROMPT = (
 )
 
 
-async def _call(
+async def _call_sdk_router(
+    *,
+    model: str,
+    query: str,
+    max_tokens: int,
+    system: str = SYSTEM_PROMPT,
+) -> dict:
+    """Single SDK-router LLM call with timing."""
+    client = create_litellm_chat_client(model=model, timeout=120.0)
+    t0 = time.perf_counter()
+    try:
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": query},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.7,
+        )
+    except TimeoutError:
+        return {"error": "TIMEOUT", "latency": time.perf_counter() - t0}
+    except Exception as exc:
+        return {"error": str(exc), "latency": time.perf_counter() - t0}
+
+    elapsed = time.perf_counter() - t0
+    usage = getattr(resp, "usage", None)
+    out_tok = getattr(usage, "completion_tokens", 0) or 0
+    prompt_tok = getattr(usage, "prompt_tokens", 0) or 0
+    choice = (getattr(resp, "choices", None) or [None])[0]
+    message = getattr(choice, "message", None) if choice is not None else None
+    content = getattr(message, "content", "") or ""
+    return {
+        "latency": round(elapsed, 3),
+        "output_tokens": out_tok,
+        "input_tokens": prompt_tok,
+        "tok_per_sec": round(out_tok / elapsed, 1) if elapsed > 0 else 0,
+        "content_len": len(content),
+        "content_preview": content[:80].replace("\n", " "),
+    }
+
+
+async def _call_http(
     client: httpx.AsyncClient,
     *,
     base_url: str,
@@ -56,9 +97,8 @@ async def _call(
     query: str,
     max_tokens: int,
     system: str = SYSTEM_PROMPT,
-    extra_body: dict | None = None,
 ) -> dict:
-    """Single LLM call with timing."""
+    """Single direct OpenAI-compatible HTTP call with timing."""
     body: dict = {
         "model": model,
         "messages": [
@@ -68,9 +108,6 @@ async def _call(
         "max_tokens": max_tokens,
         "temperature": 0.7,
     }
-    if extra_body:
-        body.update(extra_body)
-
     t0 = time.perf_counter()
     try:
         resp = await client.post(
@@ -84,7 +121,6 @@ async def _call(
 
     elapsed = time.perf_counter() - t0
     data = resp.json()
-
     if resp.status_code != 200:
         msg = data.get("error", {}).get("message", str(resp.status_code))
         return {"error": msg, "latency": elapsed}
@@ -92,7 +128,6 @@ async def _call(
     usage = data.get("usage", {})
     out_tok = usage.get("completion_tokens", 0)
     content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
-
     return {
         "latency": round(elapsed, 3),
         "output_tokens": out_tok,
@@ -107,16 +142,15 @@ async def run_benchmark() -> list[dict]:
     """Run all benchmarks and return results."""
     results: list[dict] = []
 
-    # Конфигурации для тестирования
     configs = [
-        ("proxy/gpt-4o-mini", LITELLM_URL, LITELLM_KEY, "gpt-4o-mini"),
-        ("proxy/gpt-oss-120b", LITELLM_URL, LITELLM_KEY, "gpt-oss-120b"),
+        ("sdk-router/gpt-4o-mini", "sdk", "", "gpt-4o-mini"),
+        ("sdk-router/gpt-oss-120b", "sdk", "", "gpt-oss-120b"),
         ("direct/gpt-oss-120b", CEREBRAS_URL, CEREBRAS_KEY, "gpt-oss-120b"),
     ]
 
     async with httpx.AsyncClient() as client:
         for label, base_url, api_key, model in configs:
-            if not api_key:
+            if base_url != "sdk" and not api_key:
                 print(f"  SKIP {label}: no API key")
                 continue
 
@@ -125,15 +159,23 @@ async def run_benchmark() -> list[dict]:
                 system = REWRITE_PROMPT if qtype == "rewrite" else SYSTEM_PROMPT
                 print(f"  [{qtype}] {query[:35]}...", end=" ", flush=True)
 
-                r = await _call(
-                    client,
-                    base_url=base_url,
-                    api_key=api_key,
-                    model=model,
-                    query=query,
-                    max_tokens=max_tok,
-                    system=system,
-                )
+                if base_url == "sdk":
+                    r = await _call_sdk_router(
+                        model=model,
+                        query=query,
+                        max_tokens=max_tok,
+                        system=system,
+                    )
+                else:
+                    r = await _call_http(
+                        client,
+                        base_url=base_url,
+                        api_key=api_key,
+                        model=model,
+                        query=query,
+                        max_tokens=max_tok,
+                        system=system,
+                    )
                 r["label"] = label
                 r["query"] = query[:40]
                 r["type"] = qtype
@@ -200,8 +242,8 @@ def save_results(results: list[dict]) -> str:
 
 
 def main() -> None:
-    print("LLM Benchmark: gpt-4o-mini (GLM 4.7) vs gpt-oss-120b (Cerebras)")
-    print(f"LiteLLM: {LITELLM_URL}")
+    print("LLM Benchmark: gpt-4o-mini (SDK router) vs gpt-oss-120b (Cerebras)")
+    print("LiteLLM SDK router: in-process")
     print(f"Direct:  {CEREBRAS_URL}")
     print(
         f"Queries: {len(TEST_QUERIES)} "

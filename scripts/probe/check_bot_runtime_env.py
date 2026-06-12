@@ -5,7 +5,7 @@ Detects and explains:
 
 * missing ``.env`` file (CI fallback is used instead)
 * invalid/placeholder ``TELEGRAM_BOT_TOKEN`` that will crash the bot
-* ``LiteLLM`` ``localhost:4000`` not published (common stray-compose-file issue)
+* missing LLM provider key for the in-process LiteLLM SDK router
 
 Usage::
 
@@ -21,7 +21,6 @@ Usage::
 Exit codes
     0  all clear, or ``--no-fail`` was given
     1  critical issues found — expect ``make bot`` / ``make docker-bot-up`` to fail
-    2  Docker not available (LiteLLM port check skipped, non-fatal)
 
 Related issues: `#2123 <https://github.com/yastman/rag/issues/2123>`_,
 `#2126 <https://github.com/yastman/rag/issues/2126>`_.
@@ -30,8 +29,6 @@ Related issues: `#2123 <https://github.com/yastman/rag/issues/2123>`_,
 from __future__ import annotations
 
 import argparse
-import shutil
-import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import NoReturn
@@ -170,71 +167,19 @@ def _check_polling_lock_probe(env_file: Path) -> list[str]:
     return issues
 
 
-def _check_litellm_port() -> list[str]:
-    """Check whether LiteLLM port 4000 is published on the Docker host.
-
-    This only runs when Docker is available.  A missing port binding is
-    most commonly caused by a stray third compose file
-    (e.g. ``/tmp/compose.postgres-root.yml``) that sets ``ports: []``,
-    overriding the ``compose.dev.yml`` ``"127.0.0.1:4000:4000"`` mapping.
-    """
-    issues: list[str] = []
-
-    if not shutil.which("docker"):
-        issues.append("  LiteLLM port: Docker not available (skipped)")
-        return issues
-
-    try:
-        # fixed docker subcommand with no shell expansion.
-        cp = subprocess.run(  # nosec B603 B607
-            [
-                "docker",
-                "inspect",
-                "dev-litellm-1",
-                "--format",
-                "{{json .HostConfig.PortBindings}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        issues.append("  LiteLLM port: Docker unreachable (skipped)")
-        return issues
-
-    if cp.returncode != 0:
-        issues.append("  LiteLLM port: container dev-litellm-1 not found (skipped)")
-        return issues
-
-    import json
-
-    try:
-        bindings = json.loads(cp.stdout.strip())
-    except json.JSONDecodeError:
-        issues.append("  LiteLLM port: could not parse Docker output (skipped)")
-        return issues
-
-    # When PortBindings is empty/null, no host ports are published.
-    if not bindings:
-        issues.append("  LiteLLM port 4000: NOT published on host  ✗")
-        issues.append("    dev-litellm-1 container is running but no host port mapping exists.")
-        issues.append(
-            "    Effect: LLM-dependent features (make bot, test-bot-health) "
-            "will fail with Connection Refused."
-        )
-        issues.append(
-            "    Common cause: a stray compose file (e.g. "
-            "/tmp/compose.postgres-root.yml) overrides the litellm port "
-            "binding from compose.dev.yml ('127.0.0.1:4000:4000')."
-        )
-        issues.append(
-            "    Remediation: remove any stray compose files overriding litellm "
-            "ports, then run: make docker-bot-up"
-        )
-    else:
-        issues.append("  LiteLLM port 4000: published  ✓")
-
-    return issues
+def _check_llm_provider_keys(env_file: Path) -> list[str]:
+    """Check whether the SDK router has at least one provider credential."""
+    provider_keys = ("CEREBRAS_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "LLM_API_KEY")
+    present = [key for key in provider_keys if _read_env_var(env_file, key)]
+    if present:
+        visible = ", ".join(present)
+        return [f"  LLM provider keys: present ({visible})  ✓"]
+    return [
+        "  LLM provider keys: MISSING  ✗",
+        "    The in-process LiteLLM SDK router needs at least one provider key.",
+        "    Remediation: set CEREBRAS_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, ",
+        "    or legacy LLM_API_KEY in .env.",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +229,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--skip-docker",
         action="store_true",
-        help="Skip Docker/LiteLLM port checks.",
+        help="Skip optional runtime probes that need local services.",
     )
     return p
 
@@ -320,11 +265,8 @@ def main(argv: list[str] | None = None) -> NoReturn:
 
     all_issues.append("")
 
-    # LiteLLM port (skip if requested or Docker not available)
-    if args.skip_docker:
-        all_issues.append("  LiteLLM port: skipped (--skip-docker)")
-    else:
-        all_issues.extend(_check_litellm_port())
+    # LLM provider credentials for the in-process SDK router.
+    all_issues.extend(_check_llm_provider_keys(env_file))
 
     all_issues.append("")
 

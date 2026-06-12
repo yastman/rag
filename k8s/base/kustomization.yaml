@@ -7,7 +7,6 @@ resources:
   - namespace.yaml
   # ConfigMaps
   - configmaps/postgres-init.yaml
-  - configmaps/litellm-config.yaml
   # Databases
   - postgres/pvc.yaml
   - postgres/deployment.yaml
@@ -29,8 +28,6 @@ resources:
   - user-base/deployment.yaml
   - user-base/service.yaml
   # Application
-  - litellm/deployment.yaml
-  - litellm/service.yaml
   - bot/deployment.yaml
   - ingestion/pvc.yaml
   - ingestion/deployment.yaml

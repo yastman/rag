@@ -335,12 +335,16 @@ def real_llm_config_errors(env: LiveE2EEnv) -> list[str]:
     errors: list[str] = []
     if not os.getenv("E2E_CORE_REAL_LLM"):
         errors.append("E2E_CORE_REAL_LLM=1 is required for real LLM mode")
-    if not os.getenv("LLM_BASE_URL"):
-        errors.append("LLM_BASE_URL is required for real LLM mode")
     if not os.getenv("LLM_MODEL"):
         errors.append("LLM_MODEL is required for real LLM mode")
-    if not (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")):
-        errors.append("LLM_API_KEY or OPENAI_API_KEY is required for real LLM mode")
+    provider_keys = (
+        os.getenv("CEREBRAS_API_KEY"),
+        os.getenv("GROQ_API_KEY"),
+        os.getenv("OPENAI_API_KEY"),
+        os.getenv("LLM_API_KEY"),
+    )
+    if not any(provider_keys):
+        errors.append("one of CEREBRAS_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, or LLM_API_KEY is required for real LLM mode")
     return errors
 
 

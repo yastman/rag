@@ -78,7 +78,7 @@ curl -fsS http://localhost:6333/readyz
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'
 
 # LiteLLM
-curl -fsS http://localhost:4000/health/liveliness
+uv run python scripts/probe/check_bot_runtime_env.py
 ```
 
 Fan-out to the dedicated runbook for whichever check fails: [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md), [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md), [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md).

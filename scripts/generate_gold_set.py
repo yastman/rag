@@ -305,11 +305,11 @@ def make_dataset_name(prefix: str = DEFAULT_DATASET_PREFIX) -> str:
 
 async def run_pipeline(args: argparse.Namespace) -> None:
     """Main pipeline: scroll → group → generate → validate → export."""
-    from openai import AsyncOpenAI
     from qdrant_client import AsyncQdrantClient
 
+    from src.runtime.llm import create_litellm_chat_client
+
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    llm_url = os.getenv("LITELLM_BASE_URL", "http://localhost:4000")
     llm_model = os.getenv("JUDGE_MODEL", "gpt-4o-mini")
 
     qdrant = AsyncQdrantClient(url=qdrant_url)
@@ -322,7 +322,7 @@ async def run_pipeline(args: argparse.Namespace) -> None:
     docs = group_by_document(points)
     logger.info("Found %d documents (%d chunks)", len(docs), len(points))
 
-    llm = AsyncOpenAI(api_key="not-needed", base_url=llm_url)
+    llm = create_litellm_chat_client(model=llm_model, timeout=60.0)
     all_items: list[dict[str, Any]] = []
 
     for doc in docs.values():

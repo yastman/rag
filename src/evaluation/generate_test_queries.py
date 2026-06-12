@@ -11,12 +11,11 @@ import asyncio
 import json
 import os
 
-import instructor
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient, models
 
 from src.config import Settings
+from src.runtime.llm import create_litellm_chat_client
 
 
 class GeneratedQueries(BaseModel):
@@ -37,7 +36,6 @@ QDRANT_URL = _settings.qdrant_url
 QDRANT_API_KEY = _settings.qdrant_api_key or ""
 
 # LLM configuration from environment
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 
 
@@ -96,13 +94,13 @@ def fetch_article_texts(collection_name: str, article_numbers: list[str]) -> dic
 
 
 async def generate_queries_for_article(
-    client: instructor.AsyncInstructor, model: str, article_num: str, article_text: str
+    client: object, model: str, article_num: str, article_text: str
 ) -> list[dict]:
     """
     Generate 3 types of queries for a single article.
 
     Args:
-        client: Instructor-patched AsyncOpenAI client
+        client: OpenAI-shaped LiteLLM router client
         model: Model name to use
         article_num: Article number string
         article_text: Full text of the article
@@ -179,8 +177,8 @@ async def generate_all_queries(
         article_texts: Dict mapping article_number (str) -> text
         model: LLM model to use
         max_concurrent: Max parallel requests
-        base_url: LLM API base URL (defaults to LLM_BASE_URL env var)
-        api_key: LLM API key (defaults to LLM_API_KEY env var)
+        base_url: Deprecated compatibility argument; ignored by LiteLLM router
+        api_key: Deprecated compatibility argument; provider keys are read from env
 
     Returns:
         List of all generated queries
@@ -189,12 +187,8 @@ async def generate_all_queries(
     print(f"   Max concurrent: {max_concurrent}")
     print(f"   Total articles: {len(article_texts)}\n")
 
-    resolved_base_url = base_url or LLM_BASE_URL
-    resolved_api_key = api_key or LLM_API_KEY
-
-    client = instructor.from_openai(
-        AsyncOpenAI(base_url=resolved_base_url, api_key=resolved_api_key)
-    )
+    _ = base_url, api_key or LLM_API_KEY
+    client = create_litellm_chat_client(model=model, timeout=60.0)
 
     semaphore = asyncio.Semaphore(max_concurrent)
     all_queries: list[dict] = []

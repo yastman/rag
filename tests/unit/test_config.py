@@ -28,10 +28,10 @@ def test_bot_config_defaults_use_in_process_litellm_router() -> None:
 def test_bot_config_env_overrides_still_apply() -> None:
     cfg = _bot_config(
         overrides={
-            "LLM_BASE_URL": "http://litellm:4000/v1",
+            "LLM_BASE_URL": "https://llm.example.test/v1",
             "LLM_MODEL": "custom-model",
         }
     )
 
-    assert cfg.llm_base_url == "http://litellm:4000/v1"
+    assert cfg.llm_base_url == "https://llm.example.test/v1"
     assert cfg.llm_model == "custom-model"

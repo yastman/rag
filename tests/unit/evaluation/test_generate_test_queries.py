@@ -125,7 +125,7 @@ class TestGenerateQueriesForArticle:
     """Tests for generate_queries_for_article function."""
 
     async def test_generate_queries_success(self, mock_imports):
-        """Test successful query generation for an article using instructor client."""
+        """Test successful query generation for an article using LiteLLM router client."""
         from src.evaluation.generate_test_queries import (
             GeneratedQueries,
             generate_queries_for_article,
@@ -200,14 +200,14 @@ class TestGenerateAllQueries:
     """Tests for generate_all_queries function."""
 
     async def test_generate_all_queries_success(self, mock_imports):
-        """Test generating queries for multiple articles with instructor client."""
+        """Test generating queries for multiple articles with LiteLLM router client."""
         from src.evaluation.generate_test_queries import (
             GeneratedQueries,
             generate_all_queries,
         )
 
-        mock_instructor_client = MagicMock()
-        mock_instructor_client.chat.completions.create = AsyncMock(
+        mock_router_client = MagicMock()
+        mock_router_client.chat.completions.create = AsyncMock(
             return_value=GeneratedQueries(
                 direct="прямой запрос",
                 semantic="семантический запрос",
@@ -220,8 +220,7 @@ class TestGenerateAllQueries:
             "121": "Injury text",
         }
 
-        with patch("src.evaluation.generate_test_queries.instructor") as mock_instructor_mod:
-            mock_instructor_mod.from_openai.return_value = mock_instructor_client
+        with patch("src.evaluation.generate_test_queries.create_litellm_chat_client", return_value=mock_router_client):
 
             result = await generate_all_queries(
                 article_texts,
@@ -257,8 +256,8 @@ class TestGenerateAllQueries:
                 paraphrased="перефразированный запрос",
             )
 
-        mock_instructor_client = MagicMock()
-        mock_instructor_client.chat.completions.create = AsyncMock(side_effect=_create_side_effect)
+        mock_router_client = MagicMock()
+        mock_router_client.chat.completions.create = AsyncMock(side_effect=_create_side_effect)
 
         article_texts = {
             "115": "Normal text",
@@ -266,8 +265,7 @@ class TestGenerateAllQueries:
             "121": "Normal text",
         }
 
-        with patch("src.evaluation.generate_test_queries.instructor") as mock_instructor_mod:
-            mock_instructor_mod.from_openai.return_value = mock_instructor_client
+        with patch("src.evaluation.generate_test_queries.create_litellm_chat_client", return_value=mock_router_client):
 
             result = await generate_all_queries(
                 article_texts,
@@ -467,10 +465,10 @@ class TestLLMClientConfiguration:
         assert max_concurrent == 5
 
     def test_llm_request_structure(self):
-        """Test instructor client is called with correct parameters."""
+        """Test LiteLLM router client is called with correct parameters."""
         from src.evaluation.generate_test_queries import GeneratedQueries
 
-        # Verify expected call parameters for instructor
+        # Verify expected call parameters for structured output
         expected_kwargs = {
             "model": "openai/gpt-oss-120b",
             "response_model": GeneratedQueries,
@@ -511,7 +509,7 @@ class TestErrorHandling:
 
 
 class TestStructuredOutputParsing:
-    """Regression tests for the instructor-based structured output refactor."""
+    """Regression tests for the LiteLLM-router structured output refactor."""
 
     def test_generated_queries_model_valid(self):
         """Test GeneratedQueries model with valid input succeeds."""
@@ -587,7 +585,7 @@ class TestStructuredOutputParsing:
         assert result[2]["query"] == "что будет за нанесение тяжких травм"
 
     async def test_invalid_model_output_raises(self, mock_imports):
-        """Test that exception from instructor propagates to caller."""
+        """Test that exception from structured output propagates to caller."""
         from src.evaluation.generate_test_queries import generate_queries_for_article
 
         mock_client = MagicMock()
@@ -600,15 +598,15 @@ class TestStructuredOutputParsing:
                 mock_client, "openai/gpt-oss-120b", "115", "Some article text"
             )
 
-    async def test_generate_all_queries_creates_instructor_client(self, mock_imports):
-        """Test that generate_all_queries creates instructor client with correct params."""
+    async def test_generate_all_queries_creates_litellm_router_client(self, mock_imports):
+        """Test that generate_all_queries creates LiteLLM router client with correct params."""
         from src.evaluation.generate_test_queries import (
             GeneratedQueries,
             generate_all_queries,
         )
 
-        mock_instructor_client = MagicMock()
-        mock_instructor_client.chat.completions.create = AsyncMock(
+        mock_router_client = MagicMock()
+        mock_router_client.chat.completions.create = AsyncMock(
             return_value=GeneratedQueries(
                 direct="direct query",
                 semantic="semantic query",
@@ -616,14 +614,10 @@ class TestStructuredOutputParsing:
             )
         )
 
-        with (
-            patch("src.evaluation.generate_test_queries.instructor") as mock_instructor_mod,
-            patch("src.evaluation.generate_test_queries.AsyncOpenAI") as mock_openai_cls,
-        ):
-            mock_instructor_mod.from_openai.return_value = mock_instructor_client
-            mock_openai_instance = MagicMock()
-            mock_openai_cls.return_value = mock_openai_instance
-
+        with patch(
+            "src.evaluation.generate_test_queries.create_litellm_chat_client",
+            return_value=mock_router_client,
+        ) as mock_router_factory:
             await generate_all_queries(
                 {"115": "Article text"},
                 model="openai/gpt-oss-120b",
@@ -631,13 +625,7 @@ class TestStructuredOutputParsing:
                 api_key="custom-key",
             )
 
-            # Verify AsyncOpenAI was created with correct params
-            mock_openai_cls.assert_called_once_with(
-                base_url="http://custom.api/v1", api_key="custom-key"
-            )
-
-            # Verify instructor.from_openai was called with the AsyncOpenAI instance
-            mock_instructor_mod.from_openai.assert_called_once_with(mock_openai_instance)
+            mock_router_factory.assert_called_once_with(model="openai/gpt-oss-120b", timeout=60.0)
 
     def test_generated_queries_model_extra_fields_ignored(self):
         """Test that extra fields do not break GeneratedQueries model."""

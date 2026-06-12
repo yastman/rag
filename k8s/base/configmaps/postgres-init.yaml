@@ -9,8 +9,6 @@ data:
     CREATE DATABASE mlflow;
     GRANT ALL PRIVILEGES ON DATABASE langfuse TO postgres;
     GRANT ALL PRIVILEGES ON DATABASE mlflow TO postgres;
-    CREATE DATABASE litellm;
-    GRANT ALL PRIVILEGES ON DATABASE litellm TO postgres;
     -- Real Estate CRM/Funnel database (required by 05-08 init scripts).
     -- Mirrors docker/postgres/init/00-init-databases.sql so K8s and Compose
     -- both have a `realestate` DB before 05+ run `\c realestate`.

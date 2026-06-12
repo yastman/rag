@@ -60,3 +60,68 @@ def test_graph_config_create_llm_returns_litellm_sdk_client() -> None:
 
     assert isinstance(client, LiteLLMChatClient)
     assert client.default_model == "gpt-4o-mini"
+
+from types import SimpleNamespace
+
+from pydantic import BaseModel
+
+
+class StructuredResult(BaseModel):
+    answer: str
+    score: int
+
+
+class ObjectResponseRouter:
+    def __init__(self, content: str) -> None:
+        message = SimpleNamespace(content=content)
+        choice = SimpleNamespace(message=message)
+        self.acompletion = AsyncMock(return_value=SimpleNamespace(choices=[choice]))
+
+
+@pytest.mark.asyncio
+async def test_chat_client_translates_response_model_to_json_schema_and_drops_wrapper_kwargs() -> None:
+    router = ObjectResponseRouter('{"answer":"ok","score":9}')
+    client = create_litellm_chat_client(model="gpt-4o-mini", router=router, timeout=12)
+
+    result = await client.chat.completions.create(
+        messages=[{"role": "user", "content": "hi"}],
+        response_model=StructuredResult,
+        max_retries=3,
+        name="query-analysis",
+        langfuse_prompt=object(),
+    )
+
+    assert result == StructuredResult(answer="ok", score=9)
+    kwargs = router.acompletion.await_args.kwargs
+    assert kwargs["response_format"]["type"] == "json_schema"
+    assert kwargs["response_format"]["json_schema"]["name"] == "StructuredResult"
+    assert kwargs["response_format"]["json_schema"]["strict"] is True
+    assert "response_model" not in kwargs
+    assert "max_retries" not in kwargs
+    assert "name" not in kwargs
+    assert "langfuse_prompt" not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_chat_client_parses_dict_response_content() -> None:
+    router = ObjectResponseRouter({"answer": "dict-ok", "score": 7})
+    client = create_litellm_chat_client(model="gpt-4o-mini", router=router, timeout=12)
+
+    result = await client.chat.completions.create(
+        messages=[{"role": "user", "content": "hi"}],
+        response_model=StructuredResult,
+    )
+
+    assert result == StructuredResult(answer="dict-ok", score=7)
+
+
+@pytest.mark.asyncio
+async def test_chat_client_propagates_invalid_structured_json() -> None:
+    router = ObjectResponseRouter("not-json")
+    client = create_litellm_chat_client(model="gpt-4o-mini", router=router, timeout=12)
+
+    with pytest.raises(ValueError):
+        await client.chat.completions.create(
+            messages=[{"role": "user", "content": "hi"}],
+            response_model=StructuredResult,
+        )

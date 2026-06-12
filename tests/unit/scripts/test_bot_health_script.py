@@ -20,10 +20,11 @@ def test_bot_health_uses_qdrant_client_and_botconfig_collection_contract() -> No
     assert "config.get_collection_name()" in text
 
 
-def test_bot_health_uses_litellm_readiness_probe() -> None:
-    """The LLM preflight should use the readiness endpoint check path."""
+def test_bot_health_uses_litellm_sdk_router_probe() -> None:
+    """The LLM preflight should validate the in-process SDK router path."""
     text = SCRIPT.read_text(encoding="utf-8")
-    assert "/health/readiness" in text
+    assert "from src.runtime.llm.router import DEFAULT_MODEL_ALIAS, build_model_list" in text
+    assert "CEREBRAS_API_KEY" in text
 
 
 def test_bot_health_reports_local_postgres_expectation() -> None:

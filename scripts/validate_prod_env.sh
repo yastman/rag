@@ -43,15 +43,18 @@ fi
 core_required_vars=(
   POSTGRES_PASSWORD
   REDIS_PASSWORD
-  LITELLM_MASTER_KEY
   TELEGRAM_BOT_TOKEN
 )
 
 core_password_vars=(
   POSTGRES_PASSWORD
   REDIS_PASSWORD
-  LITELLM_MASTER_KEY
 )
+
+if [ -z "${CEREBRAS_API_KEY:-}${GROQ_API_KEY:-}${OPENAI_API_KEY:-}${LLM_API_KEY:-}" ]; then
+  echo "At least one LLM provider key is required: CEREBRAS_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, or LLM_API_KEY" >&2
+  exit 1
+fi
 
 optional_profile_vars=()
 optional_password_vars=()
