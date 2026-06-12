@@ -3,6 +3,7 @@
 import os
 
 from src.adapters.embeddings.base import EmbeddingProvider
+from src.adapters.embeddings.bge_m3 import BgeM3EmbeddingProvider
 from src.adapters.embeddings.local_bge_m3 import LocalBgeM3Provider
 from src.adapters.embeddings.openai_embeddings import OpenAIEmbeddingProvider
 from src.adapters.embeddings.service_bge_m3 import ServiceBgeM3Provider
@@ -26,11 +27,11 @@ def get_embeddings_provider(provider_name: str | None = None) -> EmbeddingProvid
 
     if name == "local_bge_m3":
         return LocalBgeM3Provider()
-    if name == "service_bge_m3":
-        return ServiceBgeM3Provider()
+    if name in {"bge_m3", "service_bge_m3"}:
+        return BgeM3EmbeddingProvider() if name == "bge_m3" else ServiceBgeM3Provider()
     if name == "openai":
         return OpenAIEmbeddingProvider()
     raise ValueError(
         f"Unknown embeddings provider: '{name}'. Supported providers: "
-        "'local_bge_m3', 'service_bge_m3', 'openai'."
+        "'local_bge_m3', 'bge_m3', 'service_bge_m3', 'openai'."
     )

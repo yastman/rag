@@ -1,4 +1,10 @@
-"""Search engine implementations for retrieval."""
+"""Benchmark/evaluation search strategies for retrieval.
+
+Production runtime code should use ``src.runtime.services.qdrant.QdrantService``
+as the canonical Qdrant SDK gateway and compose it through
+``src.runtime.retrieval``.  These synchronous engines remain for evaluation,
+experiments, and strategy tests.
+"""
 
 from abc import abstractmethod
 from collections.abc import Callable
