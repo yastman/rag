@@ -15,6 +15,25 @@ Codex Web должен безопасно работать с репозитор
 - Не менять `.github/workflows/*`, если issue прямо этого не требует.
 - Если workflow-файл всё же нужен, сначала проверить, что токен имеет `workflow` scope.
 
+## 0.1 Worker Pack / Batch Mode
+
+A worker may receive a pack of 2-5 related issues for context locality and reduced ramp-up time.
+
+Important:
+- A worker pack is a queue, not a PR scope.
+- Default rule remains: one issue = one branch = one PR.
+- Process issues in the pack sequentially unless explicitly instructed otherwise.
+- Do not combine multiple issues into one PR unless:
+  1. the user explicitly requests one PR,
+  2. all issues are part of the same atomic change,
+  3. there is no existing open PR for any included issue,
+  4. the PR body explains why the issues are inseparable.
+- If issue B depends on issue A, create a stacked PR:
+  issue A -> branch A -> PR A
+  issue B -> branch B based on branch A -> PR B
+- If an open PR already exists for an issue, do not create a duplicate PR.
+  Switch to PR Coordinator mode for that issue and report the existing PR.
+
 ## 1. Issue Executor
 - Прочитать body issue и актуальные audit docs перед изменениями.
 - Создать ветку от актуального `dev`.
@@ -29,6 +48,33 @@ Codex Web должен безопасно работать с репозитор
   - изменённые файлы
   - выполненные тесты
   - skipped tests с причиной
+
+### Preflight checklist (before coding each issue in a worker pack)
+
+Before coding each issue in a worker pack:
+- Search open PRs for `Fixes #ISSUE`, `Closes #ISSUE`, issue number, and title keywords.
+- If an open PR exists, stop this issue and report:
+  - existing PR number
+  - overlap
+  - whether to review, rebase, or close duplicate work
+- Confirm the target branch:
+  - normal PR base = dev
+  - stacked PR base = previous open PR branch, with reason in PR body
+
+## Required Validation Matrix
+
+| Changed area | Required local validation before ready PR |
+|---|---|
+| Any Python code | `make pre-push` or `uv run ruff check <changed files>` + format check |
+| `src/core/**` | `make test-core` |
+| `src/runtime/**` | `make test-core` + targeted runtime tests |
+| `tests/contract/**` or architecture rules | `make test-contract` |
+| `telegram_bot/**` | nearest override applies: `make check` and `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`, or document why skipped |
+| observability/logging | targeted product event / observability tests |
+| docs only | markdown/link checks if available; otherwise state docs-only validation |
+
+A PR must not be marked ready if static CI-equivalent checks fail locally.
+If checks cannot be run, keep the PR draft or document skipped checks and risk.
 
 ## 2. PR Coordinator
 - Используется только для ревью существующих PR и подготовки к merge.

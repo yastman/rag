@@ -48,3 +48,23 @@ def test_repo_hygiene_runbook_documents_worktree_start_rule() -> None:
     assert "Before Starting New Work" in text
     assert "make git-hygiene" in text
     assert "git worktree add .worktrees/<branch>" in text
+
+
+def test_codex_web_prompt_defines_worker_pack_as_queue() -> None:
+    text = Path("docs/engineering/codex-web-prompt.md").read_text(encoding="utf-8")
+    assert "Worker Pack" in text
+    assert "queue, not a PR scope" in text
+    assert "one issue = one branch = one PR" in text
+
+
+def test_codex_web_prompt_requires_duplicate_pr_preflight() -> None:
+    text = Path("docs/engineering/codex-web-prompt.md").read_text(encoding="utf-8")
+    assert "Search open PRs" in text
+    assert "do not create a duplicate PR" in text
+
+
+def test_codex_web_prompt_requires_validation_matrix() -> None:
+    text = Path("docs/engineering/codex-web-prompt.md").read_text(encoding="utf-8")
+    assert "Required Validation Matrix" in text
+    assert "make test-core" in text
+    assert "make test-contract" in text
