@@ -24,6 +24,30 @@ Was this a code bug, a validation gap, a PR process failure, or a prompt failure
 
 If the root cause is process/prompt-related, propose a concrete update to the relevant prompt, skill, PR template, or contract test.
 
+## Self-Updating Skill Loop
+
+When the orchestrator finds a new recurring bug, it must turn that bug into a durable rule and open a separate process PR to update the right skill file.
+
+Route the rule by ownership:
+
+```text
+orchestrator coordination bug -> docs/engineering/orchestrator-playbook.md
+worker execution bug -> docs/engineering/codex-web-prompt.md
+PR review / gatekeeper bug -> docs/engineering/gh-pr-review.md
+PR body / handoff bug -> .github/pull_request_template.md or reviewer skill
+must-never-repeat invariant -> tests/unit/test_agents_contract.py
+```
+
+Rules:
+
+```text
+- Do not bury process fixes inside unrelated runtime PRs.
+- If a worker bug is found during review, keep the feature PR focused and create a separate process PR.
+- If multiple orchestrators are active, each may create a process PR; the human merges the chosen one into dev.
+- The process PR must describe the original failure, the new rule, and which skill owns it.
+- If the rule should never regress, add or request an agent contract test.
+```
+
 ---
 
 ## Role Separation
@@ -378,8 +402,9 @@ When a process mistake happens:
 
 ```text
 - identify root cause
-- write prompt improvement
-- decide whether to update worker prompt, reviewer skill, PR template, or contract tests
+- choose the owning skill: orchestrator, worker, PR reviewer, PR template, or contract test
+- create or request a separate process PR updating that skill
+- keep runtime feature PRs free of unrelated process edits
 ```
 
 ---
