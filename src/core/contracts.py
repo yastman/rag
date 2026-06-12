@@ -36,27 +36,25 @@ class AssistantRequest:
 class CacheProvider(Protocol):
     """Semantic cache dependency used by the runtime RAG path."""
 
-    async def check_semantic(self, *args: Any, **kwargs: Any) -> dict[str, Any] | None: ...
-
-    async def store(self, *args: Any, **kwargs: Any) -> Any: ...
+    async def check_semantic(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 class EmbeddingProvider(Protocol):
     """Dense embedding dependency used by core/runtime."""
 
-    async def embed_texts(self, texts: list[str]) -> list[list[float]]: ...
+    async def aembed_query(self, text: str) -> list[float]: ...
 
 
 class SparseEmbeddingProvider(Protocol):
     """Sparse embedding dependency used by core/runtime."""
 
-    async def embed_sparse(self, texts: list[str]) -> list[dict[str, Any]]: ...
+    async def aembed_query(self, text: str) -> dict[str, Any]: ...
 
 
 class QdrantClientProtocol(Protocol):
     """Vector search dependency used by core/runtime."""
 
-    async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]: ...
+    async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 class RerankerProvider(Protocol):

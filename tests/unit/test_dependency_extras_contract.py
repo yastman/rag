@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 
 PYPROJECT = Path("pyproject.toml")
@@ -69,9 +68,7 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     """Optional extras should make each non-core surface explicit."""
     extras = _project()["project"]["optional-dependencies"]
 
-    assert {"aiogram", "aiogram-dialog", "fluentogram"}.issubset(
-        _dep_names(extras["telegram"])
-    )
+    assert {"aiogram", "aiogram-dialog", "fluentogram"}.issubset(_dep_names(extras["telegram"]))
     assert {"anthropic", "groq", "instructor"}.issubset(_dep_names(extras["providers"]))
     assert {"docling", "cocoindex", "pymupdf", "fastembed"}.issubset(
         _dep_names(extras["ingestion"])

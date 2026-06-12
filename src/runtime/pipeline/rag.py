@@ -23,7 +23,7 @@ import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from src.observability import get_client, observe
 from src.runtime.graph.config import GraphConfig
@@ -1185,10 +1185,17 @@ async def rag_pipeline(
         )
     semantic_cache_already_checked = semantic_cache_prechecked
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
-    cache_embedding = cast(list[float] | None, cache_result.get("query_embedding"))
+    cache_embedding_value = cache_result.get("query_embedding")
+    cache_embedding: list[float] | None = (
+        cache_embedding_value if isinstance(cache_embedding_value, list) else None
+    )
     cache_sparse: Any = cache_result.get("sparse_embedding")
-    latency_stages = cast(dict[str, float], cache_result["latency_stages"])
-    colbert_query = cast(list[list[float]] | None, cache_result.get("colbert_query"))
+    latency_stages_value = cache_result.get("latency_stages")
+    latency_stages = latency_stages_value if isinstance(latency_stages_value, dict) else {}
+    colbert_query_value = cache_result.get("colbert_query")
+    colbert_query: list[list[float]] | None = (
+        colbert_query_value if isinstance(colbert_query_value, list) else None
+    )
     embeddings_cache_hit = bool(cache_result.get("embeddings_cache_hit", False))
 
     if cache_result.get("embedding_error"):

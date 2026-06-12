@@ -668,7 +668,11 @@ class TestRunAssistantRequestRuntime:
         )
         from src.runtime.generation import GenerationResult
 
-        gen = AsyncMock(return_value=GenerationResult(payload={"response": "answer", "llm_provider_model": "test-model"}))
+        gen = AsyncMock(
+            return_value=GenerationResult(
+                payload={"response": "answer", "llm_provider_model": "test-model"}
+            )
+        )
 
         with (
             patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),

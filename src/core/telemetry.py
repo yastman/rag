@@ -5,24 +5,32 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.utils.product_events import log_event as _product_log_event
 
-_LOGGER = logging.getLogger("src.core.telemetry")
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def emit_product_event(telemetry: object | None, event: str, **fields: Any) -> None:
-    """Emit a product event via an injected listener or standard logging.
+    """Emit a product event via an injected listener or safe JSON-log fallback.
 
-    The SDK core no longer imports the repository-level ``log_event`` helper
-    directly. Host applications can pass ``CoreDependencies.telemetry`` with a
-    ``log_event(event, **fields)`` method; otherwise events are emitted through
-    Python's standard logging with sanitized structured extras.
+    Host applications can pass ``CoreDependencies.telemetry`` with a
+    ``log_event(event, **fields)`` method. Listener failures are fail-open: the
+    assistant request path must continue, and the event falls back to the
+    existing product log helper so allowlist-based PII/secret filtering remains
+    in force.
     """
 
     if telemetry is not None:
-        log_event = getattr(telemetry, "log_event", None)
-        if callable(log_event):
-            log_event(event, **fields)
-            return
+        telemetry_log_event = getattr(telemetry, "log_event", None)
+        if callable(telemetry_log_event):
+            try:
+                telemetry_log_event(event, **fields)
+                return
+            except Exception:
+                _LOGGER.warning(
+                    "Telemetry listener failed; falling back to product event log",
+                    exc_info=True,
+                )
 
-    extra = {"event": event, **fields}
-    _LOGGER.info(event, extra=extra)
+    _product_log_event(event, **fields)

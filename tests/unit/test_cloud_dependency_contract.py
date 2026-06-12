@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 
 PYPROJECT = Path("pyproject.toml")
@@ -76,11 +75,8 @@ def test_runtime_code_does_not_import_cloud_storage_sdks() -> None:
                 elif isinstance(node, ast.ImportFrom) and node.module:
                     imported = {node.module}
                 if any(
-                    name == "boto3"
-                    or name == "botocore"
-                    or name == "google.cloud"
-                    or name.startswith("google.cloud.")
-                    or name.startswith("google.auth")
+                    name in {"boto3", "botocore", "google.cloud"}
+                    or name.startswith(("google.cloud.", "google.auth"))
                     for name in imported
                 ):
                     offenders.append(f"{path}:{node.lineno}")

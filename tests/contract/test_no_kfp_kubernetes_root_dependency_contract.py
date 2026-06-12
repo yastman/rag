@@ -34,7 +34,14 @@ def _package_names_from_lock(path: Path) -> set[str]:
 
 
 def _package_name(requirement: str) -> str:
-    return requirement.split("[", 1)[0].split("<", 1)[0].split(">", 1)[0].split("=", 1)[0].strip().lower()
+    return (
+        requirement.split("[", 1)[0]
+        .split("<", 1)[0]
+        .split(">", 1)[0]
+        .split("=", 1)[0]
+        .strip()
+        .lower()
+    )
 
 
 def test_root_lock_does_not_include_kfp_or_kubernetes_packages() -> None:

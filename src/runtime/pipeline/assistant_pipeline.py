@@ -11,11 +11,11 @@ from src.core.contracts import (
     CoreDependencies,
     UserContext,
 )
+from src.core.telemetry import emit_product_event
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.generation import GenerationRequest, generate_answer
 from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.rag import rag_pipeline
-from src.core.telemetry import emit_product_event
 
 
 async def run_assistant_pipeline(
