@@ -106,9 +106,11 @@ Do not add Telegram, Mini App, voice, ingestion, eval, or legacy graph tests to 
 ## Minimal Verification For Test Changes
 - Focused run for touched files first:
   - `uv run pytest <path/to/test_file.py> -q`
-- Then run repository baseline:
-  - `make check`
-  - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
+- Then run the deterministic repository gate:
+  - `make test`
+- Run `make test-contract` when changing contract surfaces.
+- Run `make test-unit` or explicit optional-surface targets only when the touched
+  area requires that broader/local coverage.
 - If skipping a relevant check, document it explicitly in the report.
 
 ## References
