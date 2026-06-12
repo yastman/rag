@@ -15,7 +15,7 @@ from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.generation import GenerationRequest, generate_answer
 from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.rag import rag_pipeline
-from src.utils.product_events import log_event
+from src.core.telemetry import emit_product_event
 
 
 async def run_assistant_pipeline(
@@ -53,7 +53,8 @@ async def run_assistant_pipeline(
 
         documents = _as_document_list(rag_result.get("documents"))
         retrieved_doc_ids = _extract_doc_ids(documents)
-        log_event(
+        emit_product_event(
+            dependencies.telemetry,
             "search_completed",
             request_id=rid,
             route="cache_hit" if rag_result.get("cache_hit") else "rag_search",
@@ -94,7 +95,8 @@ async def run_assistant_pipeline(
         usage = _as_usage_dict(generation_result.get("usage_details"))
         llm_model = _extract_llm_model(generation_result)
 
-        log_event(
+        emit_product_event(
+            dependencies.telemetry,
             "llm_completed",
             request_id=rid,
             route="rag_search",
@@ -132,7 +134,8 @@ async def run_assistant_pipeline(
             error_message=str(exc),
             request_id=rid,
         )
-        log_event(
+        emit_product_event(
+            dependencies.telemetry,
             "dependency_failed",
             request_id=rid,
             route=result.route,

@@ -45,9 +45,13 @@ src.retrieval ✗ telegram_bot
 providers     ✗ src.runtime
 ```
 
-### Current violations (being resolved)
+### Current migration debt
 
-See `tests/data/known_runtime_telegram_bot_couplings.json`.
+`tests/data/known_runtime_telegram_bot_couplings.json` is now the target state
+`{}`: `src.core` and `src.runtime` must not contain dynamic `telegram_bot.*`
+string coupling. Existing adapter-to-runtime imports are tracked separately as
+incremental migration debt; new adapter behavior should enter through
+`src.core`.
 Track: #2478, #2486, #2489.
 
 ---
@@ -108,12 +112,22 @@ These are implementation details. They must not call back into `src.runtime`.
 2. **Core generation does not accept Telegram `message`.** Generation returns
    data; the adapter sends messages.
 3. **Observability is optional.** Product JSON logs are required. Langfuse,
-   OTel, Sentry, Prometheus are optional diagnostic layers.
+   OTel, Sentry, Prometheus are optional diagnostic layers. Core/runtime code
+   emits telemetry through an injected `CoreDependencies.telemetry` listener or
+   standard Python logging fallback, not through adapter-global loggers.
 4. **`create_agent` is adapter-only.** Per ADR-0019, `create_agent` is not the
    owner of the core text RAG path. It remains useful for Telegram/voice
    adapter conversational shell behavior.
 5. **No dynamic `telegram_bot.*` imports in `src.core` or `src.runtime`.**
    Track: `tests/data/known_runtime_telegram_bot_couplings.json`.
+6. **Runtime graph defaults stay runtime-owned.** Adapter-specific graph assembly
+   must be selected explicitly with `RAG_GRAPH_FACTORY=module:attribute`;
+   `src.runtime.graph.builder.DEFAULT_FACTORY_SPEC` must not point at
+   `telegram_bot`.
+7. **Core dependencies are protocol typed.** `CoreDependencies` fields describe
+   cache, embedding, Qdrant, reranker, LLM, CRM, and telemetry contracts via
+   structural protocols so adapters do not leak concrete client ownership into
+   the SDK boundary.
 
 ---
 
@@ -126,6 +140,7 @@ tests/contract/test_runtime_no_telegram_bot_coupling_contract.py
 tests/contract/test_layering_no_telegram_bot_imports_contract.py
 tests/contract/test_langfuse_optional_core_contract.py
 tests/contract/test_service_dependency_markers_contract.py
+tests/contract/test_architecture_layer_law_contract.py
 ```
 
 ### Target
