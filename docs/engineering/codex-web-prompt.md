@@ -109,14 +109,17 @@ If checks cannot be run, keep the PR draft or document skipped checks and risk.
 
 ## 5. Политика тестов
 - GitHub required CI = hygiene/static only:
-  - Secret Scan
-  - Semgrep
-  - Ruff lint/format
-  - uv lock
-  - Compose config
+  - `ci.yml`: Secret Scan, Semgrep, Ruff lint/format, uv lock, Compose config
+  - `codeql.yml`: security analysis
+- Manual-only workflows (must not block PRs):
+  - `core-tests.yml`
+  - `trusted-heavy.yml`
+  - `nightly-heavy.yml`
 - Python tests = local/manual или workflow_dispatch.
 - `make test-core` = локальная core-проверка без heavy lanes.
 - Heavy / nightly tests = только manual.
+- Workers must not wait for manual workflows unless explicitly asked.
+- Workers must still document local tests / skipped tests in PR body.
 
 ## 6. Режимы запуска Codex Web
 - Focused tests: по diff-файлам PR/issue.
