@@ -75,32 +75,12 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - setup_dialogs(dp) вызывается ПОСЛЕДНИМ после всех include_router
   - **Документированное исключение (#1232 / #2055):** `telegram_bot/handlers/phone_collector.py` остаётся на raw aiogram Router + FSMContext. Причина: lead capture использует `KeyboardButton(request_contact=True)` через `ReplyKeyboardMarkup`, а aiogram-dialog не предоставляет эквивалентного widget'а для one-tap contact share. Принудительный переход на inline `Select`/`Button` ухудшит UX (ручной ввод вместо одного тапа) и снизит opt-in rate. CRM quick actions и demo handler мигрируют (см. #2053, #2054), phone collector остаётся exception'ом до тех пор, пока продукт не примет более слабый UX или aiogram-dialog не добавит contact-share widget.
 
-## langgraph
-- **triggers:** graph, pipeline, node, edge, state, checkpoint, memory, agent, tool, RAG pipeline, voice
-- **context7_id:** /langchain-ai/langgraph
-- **как_у_нас:**
-  - `telegram_bot/graph/graph.py` — voice RAG pipeline (11 nodes, StateGraph)
-  - `telegram_bot/graph/state.py` — RAGState (TypedDict, ~50 fields)
-  - `telegram_bot/graph/context.py` — GraphContext (TypedDict, DI container)
-  - `telegram_bot/graph/nodes/` — retrieve, rerank, cache, guard, classify, rewrite
-  - `telegram_bot/agents/history_graph/graph.py` — history search sub-graph (5 nodes)
-  - `telegram_bot/agents/hitl.py` — interrupt() для HITL
-  - `telegram_bot/integrations/memory.py` — AsyncRedisSaver / MemorySaver
-- **паттерны:**
-  - State = TypedDict (не Pydantic). Reducer: `Annotated[list, add_messages]`
-  - DI через context_schema=GraphContext + Runtime[GraphContext] в нодах
-  - Альтернативный DI: functools.partial (history sub-graph)
-  - Conditional edges: route functions возвращают имя следующего node
-  - Checkpointing: AsyncRedisSaver (prod) / MemorySaver (dev)
-  - HITL: interrupt() в CRM tools → Command(resume=) в handler
-- **gotchas:**
-  - Text RAG path НЕ использует LangGraph — plain async functions в pipelines/client.py
-  - НЕ использовать Pydantic для state — только TypedDict
-  - compile() без checkpointer = без summarize node
-  - recursion_limit=15 при compile().with_config()
-  - Bot Docker image dependencies come from `telegram_bot/uv.lock`, not root `uv.lock`; check the bot-local frozen lock after LangChain/LangGraph changes.
-  - `langchain.agents.create_agent` imports `langgraph.prebuilt`; keep `langchain`, `langgraph`, and `langgraph-prebuilt` compatible as one bundle and verify with `uv --directory telegram_bot run --frozen python -c 'from langchain.agents import create_agent'`.
-  - Параллельный fan-out внутри графа = `langgraph.types.Send` (per [ADR-0009](../adr/0009-langgraph-send-fanout-scoping.md)). НЕ заменять `Send` на `asyncio.gather` в graph node — теряется checkpointer context и parent Langfuse span. `asyncio.gather` остаётся правильным выбором вне графа.
+## imperative assistant pipeline
+- **triggers:** pipeline, orchestration, RAG, voice, agent, tool
+- **context7_id:** none; repo-native runtime
+- **как_у_нас:** `src/runtime/pipeline/assistant_pipeline.py` owns orchestration; legacy graph factories are compatibility facades only.
+- **паттерны:** prefer plain async functions, typed request/result contracts, and explicit dependency injection via `CoreDependencies`.
+- **gotchas:** do not add LangChain/LangGraph/LangMem back to runtime dependencies for orchestration.
 
 ## qdrant-client
 - **triggers:** vector, search, qdrant, collection, embedding, hybrid, RRF, ColBERT, prefetch, filter, points
@@ -211,19 +191,6 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - capture_input/output=False на тяжёлых нодах (payload bloat prevention)
   - НЕ писать custom HTTP-клиент для observations. Langfuse Cloud: `api.observations.get_many(...)`; self-hosted OSS v4 может отвечать, что v2 observations доступны только Cloud, тогда fallback — SDK `trace.get(..., fields="...,observations,...")`.
   - Для полной локальной диагностики в Langfuse v3 лучше `langfuse api traces get <id> --fields core,io,scores,observations,metrics --json`; `traces list` иногда хватает, а `observations list` может быть 404
-
-## langmem
-- **triggers:** summarization, conversation memory, сжатие, summary, compress messages
-- **context7_id:** /langchain-ai/langmem
-- **как_у_нас:**
-  - `telegram_bot/graph/graph.py:136-171` — SummarizationNode (lazy import)
-- **паттерны:**
-  - SummarizationNode(max_tokens=512, max_tokens_before_summary=1024, max_summary_tokens=256)
-  - input_messages_key="messages", output_messages_key="messages" (in-place)
-  - Обёрнут в async wrapper с @observe + exception fallback
-- **gotchas:**
-  - Только с checkpointer (без checkpointer — node не добавляется в граф)
-  - Lazy import внутри build_graph()
 
 ## apscheduler
 - **triggers:** scheduler, cron, interval, job, periodic, nurturing, расписание
@@ -340,12 +307,23 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - Для Kommo canonical path = current first-party `KommoClient`, не сторонний SDK
   - Reuse or close long-lived clients explicitly; не плодить client-per-request без причины
 
-## tma.js (archived Mini App)
-- **status:** archived under `archive/mini_app`; not a required runtime or CI surface.
-- **trigger:** use only if explicitly unarchiving the Mini App.
+## tma.js
+- **triggers:** telegram mini app, tma, webapp, initData, themeParams, viewport, swipe behavior
 - **context7_id:** /telegram-mini-apps/tma.js
-- **archived paths:** `archive/mini_app/frontend/src/bootstrap.ts`, `archive/mini_app/frontend/src/pages/QuestionSheet.tsx`, `archive/mini_app/frontend/src/pages/ExpertSheet.tsx`, `archive/mini_app/frontend/src/test-setup.ts`.
-- **rule:** do not re-add frontend SDK dependencies, Compose services, or required tests without a new product decision.
+- **как_у_нас:**
+  - `mini_app/frontend/src/bootstrap.ts` — `init()`, `initData.restore()`, `themeParams`, `viewport`, `swipeBehavior`
+  - `mini_app/frontend/src/pages/QuestionSheet.tsx` — `miniApp`, `sendData`
+  - `mini_app/frontend/src/pages/ExpertSheet.tsx` — `initData.user()`, query bootstrap
+  - `mini_app/frontend/src/test-setup.ts` — package mocking for tests
+- **паттерны:**
+  - SDK init централизован в `bootstrap.ts`, не размазан по страницам
+  - Runtime detection через `isTMA("complete")`; в dev path допустим mock env
+  - Theme/viewport CSS vars и swipe behavior монтируются через SDK primitives
+  - Telegram-specific data брать через `initData`, не через ручной `window.Telegram` parsing
+- **gotchas:**
+  - НЕ дублировать SDK init в page components
+  - Dev/browser fallback path и Telegram runtime path должны оставаться разделенными
+  - Mini App routing использует `HashRouter`; не переводить на browser history без отдельного Telegram deployment решения
 
 ## openai (Python SDK)
 - **triggers:** LLM, генерация, completion, chat, AsyncOpenAI, OpenAI, модель, generate, structured output
@@ -381,28 +359,6 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - НЕ расширять Groq в основной bot/runtime LLM path без отдельного решения
   - Прямой Groq API path обходит LiteLLM/Langfuse main-runtime conventions
   - Keep model choice and retry policy local to contextualization path
-
-## voyageai
-- **status:** **OPTIONAL EXTRA** (#1773). Not used by the default bot/retrieval runtime (BGE-M3 + Qdrant). Install via `uv sync --extra voyage`.
-- **triggers:** rerank, embedding, voyage, ColBERT, contextualized embedding
-- **context7_id:** /voyage-ai/voyageai-python
-- **install:** `uv sync --extra voyage`
-- **runtime rule:** keep `voyageai` out of default import paths; import lazily inside Voyage-only services.
-- **как_у_нас:**
-  - `telegram_bot/services/voyage.py` — reranking service (legacy/optional)
-  - `src/models/contextualized_embedding.py` — contextualized late-interaction embeddings (`USE_CONTEXTUALIZED_EMBEDDINGS=true` only)
-  - `src/ingestion/unified/qdrant_writer.py` — optional dense provider when `use_local_embeddings=False`
-- **паттерны:**
-  - `voyageai.Client()` для sync, lazy import (тяжёлые deps: pandas, scipy)
-  - Rerank: `client.rerank(query, documents, model="rerank-2")`
-  - Lazy import ОБЯЗАТЕЛЬНО (#1773): `import voyageai` / `from telegram_bot.services import VoyageService` only inside the function/method that needs it.
-- **gotchas:**
-  - Voyage is an optional extra (`uv sync --extra voyage`); not installed by default.
-  - `voyageai` is lazy-loaded inside services; default imports do not require it.
-  - On Python ≥3.14 the `voyageai` SDK may trip Pydantic-v1 issues (tracked separately).
-  - Тяжёлый import (pandas, scipy.stats) — lazy import ОБЯЗАТЕЛЬНО
-  - НЕ импортировать на top-level в модулях бота (замедляет старт + ломает Python 3.14 base test collection из-за Pydantic V1 моделей)
-  - Voyage-зависимые тесты помечены `pytest.importorskip("voyageai") + @pytest.mark.requires_extras` и пропускаются в core tier.
 
 ## anthropic
 - **triggers:** Claude, Anthropic, contextualization, claude judge

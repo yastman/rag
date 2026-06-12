@@ -1,6 +1,6 @@
 """ClassifyMiddleware — SDK-native ``before_agent`` hook for query classification.
 
-This is the ``create_agent``-compatible counterpart of
+This is the ``imperative adapter``-compatible counterpart of
 :func:`telegram_bot.graph.nodes.classify.classify_node`. Slice 2.5 of the
 voice-path migration plan in ADR-0010 (parent #1535 / #2051).
 
@@ -23,18 +23,14 @@ Runs once at the start of an agent invocation:
 
 The middleware is intentionally tiny — it owns no embeddings, no Redis,
 no LLM. It exists purely to lift the legacy classify routing into the
-``create_agent`` lifecycle.
+``imperative adapter`` lifecycle.
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from typing import Any, NotRequired
-
-from langchain.agents.middleware import AgentMiddleware, AgentState, hook_config
-from langchain.messages import AIMessage
-from langgraph.runtime import Runtime
+from typing import Any, NotRequired, TypedDict
 
 from telegram_bot.graph.nodes.classify import (
     CHITCHAT,
@@ -48,12 +44,28 @@ from telegram_bot.observability import get_client
 logger = logging.getLogger(__name__)
 
 
-def _latency_stages(state: AgentState[Any]) -> dict[str, float]:
+def hook_config(*args: Any, **kwargs: Any):
+    """No-op replacement for local middleware hook metadata."""
+
+    def decorate(func: Any) -> Any:
+        return func
+
+    return decorate
+
+
+class AIMessage:
+    """Minimal message object used by legacy middleware tests."""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+def _latency_stages(state: dict[str, Any]) -> dict[str, float]:
     value = state.get("latency_stages")
     return value if isinstance(value, dict) else {}
 
 
-class _ClassifyAwareState(AgentState):
+class _ClassifyAwareState(TypedDict, total=False):
     """Adds the classification slot to the agent state."""
 
     query_type: NotRequired[str]
@@ -61,7 +73,7 @@ class _ClassifyAwareState(AgentState):
     latency_stages: NotRequired[dict[str, float]]
 
 
-def _extract_query_text(state: AgentState | dict[str, Any]) -> str:
+def _extract_query_text(state: dict[str, Any] | dict[str, Any]) -> str:
     messages = state.get("messages") or []
     if not messages:
         return ""
@@ -87,7 +99,7 @@ def _canned_response(query: str, query_type: str) -> str:
     return ""
 
 
-class ClassifyMiddleware(AgentMiddleware):
+class ClassifyMiddleware:
     """Classify the user query and short-circuit on CHITCHAT/OFF_TOPIC.
 
     Reuses ``classify_query`` (regex-only, ~0 ms) so detection is byte-for-byte
@@ -110,8 +122,8 @@ class ClassifyMiddleware(AgentMiddleware):
     @hook_config(can_jump_to=["end"])
     def before_agent(
         self,
-        state: AgentState[Any],
-        runtime: Runtime[Any],
+        state: dict[str, Any],
+        runtime: Any,
     ) -> dict[str, Any] | None:
         query = _extract_query_text(state)
         if not query:

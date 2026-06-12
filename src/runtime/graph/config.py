@@ -1,4 +1,4 @@
-"""GraphConfig — configuration for LangGraph RAG pipeline (canonical home, #2045).
+"""GraphConfig — configuration for the imperative RAG runtime.
 
 Moved from ``telegram_bot/graph/config.py`` as the second slice of the
 reverse-layering fix tracked under #1948 / #2045 / #2049. The legacy
@@ -18,7 +18,7 @@ from typing import Any
 
 @dataclass
 class GraphConfig:
-    """Configuration for the RAG LangGraph pipeline."""
+    """Configuration for the imperative RAG runtime."""
 
     # Deprecated compatibility field; LiteLLM SDK routing no longer uses a proxy base URL.
     llm_base_url: str = ""
@@ -186,14 +186,8 @@ class GraphConfig:
         )
 
     def create_supervisor_llm(self, model_override: str | None = None) -> Any:
-        """Create LangChain chat model for supervisor graph tool routing."""
-        from langchain_openai import ChatOpenAI
-        from pydantic import SecretStr
-
-        return ChatOpenAI(
-            model=model_override or self.llm_model,
-            api_key=SecretStr(self.llm_api_key or "no-key"),
-        )
+        """Create an OpenAI-shaped supervisor client without LangChain wrappers."""
+        return self.create_llm(model_override=model_override)
 
     def create_embeddings(self) -> Any:
         """Create BGEM3Embeddings instance."""

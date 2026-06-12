@@ -20,10 +20,6 @@ dependencies = [
     "numpy",
     "aiohttp",
     "requests",
-    "langgraph>=1.0.3,<2.0",  # State graph for the core RAG pipeline
-    "langchain-core>=1.2",
-    "langgraph-checkpoint-redis>=0.3.6",
-    "langmem>=0.0.30",
     "phonenumbers>=9.0.25",
 ]
 
@@ -45,10 +41,6 @@ core = [
     "numpy",
     "aiohttp",
     "requests",
-    "langgraph>=1.0.3,<2.0",
-    "langchain-core>=1.2",
-    "langgraph-checkpoint-redis>=0.3.6",
-    "langmem>=0.0.30",
     "phonenumbers>=9.0.25",
 ]
 
@@ -107,8 +99,12 @@ ui = [
     "gradio>=6.7.0",
 ]
 
-# Archived Mini App code is preserved under archive/mini_app and is not part of
-# the required dependency surface.
+# Mini App (Telegram Web App — FastAPI backend)
+mini-app = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
+]
 
 # Voice bot (LiveKit Agents + RAG API)
 voice = [
@@ -146,29 +142,15 @@ ingest = [
     "fastembed>=0.7.4",
 ]
 
-# Evaluation tools (RAGAS, dataset generation)
-# SECURITY NOTE: ragas is eval-only, not installed in production containers
-# (make install, Dockerfile.ingestion). CVE-2026-6587 (SSRF, low) is in an
-# unused multimodal module. diskcache CVE-2025-69872 (pickle, medium) is a
-# ragas transitive dep; neither is exploitable in the current configuration.
-# Monitoring for upstream patches. See docs/security/no-patch-dependency-alerts.md.
+# Evaluation tools that do not pull the removed LangChain stack.
 eval = [
-    "ragas>=0.4.3",
     "datasets>=3.0.0",
     "pandas>=2.0.0",
 ]
 
-# Voyage AI (#1773) — optional. Not used by the default BGE-M3 + Qdrant
-# runtime. Required only for legacy GDrive ingestion, contextualized
-# embeddings, or the optional Voyage path in
-# `src/ingestion/unified/qdrant_writer.py` (`use_local_embeddings=False`).
-voyage = [
-    "voyageai>=0.3.0",
-]
-
 # All optional dependencies
 all = [
-    "contextual-rag[core,telegram,providers,docs,voice,eval,ingest,ml-local,voyage,observability,scheduling,ui]",
+    "contextual-rag[core,telegram,providers,docs,voice,eval,ingest,ml-local,observability,scheduling,ui,mini-app]",
 ]
 
 # =============================================================================
@@ -472,7 +454,7 @@ markers = [
     "e2e: End-to-end pipeline tests (require live services)",
     "smoke: Smoke tests (requires running services)",
     "benchmark: Benchmark tests (parser/reranker comparisons)",
-    "legacy_api: tests for pre-LangGraph API (may need rewrite)",
+    "legacy_api: tests for pre-imperative API (may need rewrite)",
     "requires_extras: Tests needing optional deps (voice/ingest/eval); skipped in core tier",
     "kommo: Live Kommo CRM API tests (requires KOMMO_ACCESS_TOKEN)",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
@@ -484,9 +466,6 @@ markers = [
     "requires_services: Tests that require Docker, service fixtures, network ports, or live-service guards",
 ]
 filterwarnings = [
-    # trustcall 0.0.39 imports Send from deprecated langgraph.constants;
-    # no upstream fix available yet (tracked in #306)
-    "ignore:Importing Send from langgraph:DeprecationWarning",
 ]
 
 # =============================================================================
@@ -511,7 +490,6 @@ omit = [
     "src/evaluation/run_ab_test.py",
     "src/evaluation/smoke_test.py",
     "src/evaluation/search_engines_rerank.py",
-    "src/evaluation/ragas_evaluation.py",
     "src/evaluation/langfuse_integration.py",
     # One-off setup scripts
     "telegram_bot/setup_qdrant_indexes.py",

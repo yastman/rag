@@ -1,21 +1,20 @@
 """GuardMiddleware — SDK-native ``before_model`` hook for prompt-injection guard.
 
-This is the create_agent-compatible counterpart of
+This is the imperative adapter-compatible counterpart of
 :func:`telegram_bot.graph.nodes.guard.guard_node` (#2052, parent #1535).
 
 The middleware reuses :func:`~telegram_bot.graph.nodes.guard.detect_injection`
 and the canonical constants (``_BLOCKED_RESPONSE``, ``_INJECTION_THRESHOLD``,
-``INJECTION_PATTERNS``) so the legacy StateGraph guard and the new
+``INJECTION_PATTERNS``) so the legacy legacy graph guard and the new
 middleware stay byte-for-byte aligned on detection semantics until the
-migration finishes (#2050 nodes -> tools, #2051 handler -> create_agent).
+migration finishes (#2050 nodes -> tools, #2051 handler -> imperative adapter).
 
 Behavior
 --------
 
 * ``hard`` mode + injection detected: emit the blocked
-  :class:`~langchain.messages.AIMessage` and jump to ``end`` — the
-  documented short-circuit shape from LangChain ``create_agent``
-  middleware (verified via Context7).
+  a local ``AIMessage`` compatibility object and jump to ``end`` — the
+  short-circuit shape consumed by the imperative adapter middleware.
 * ``soft`` / ``log`` modes: detection is logged via Langfuse but no jump
   occurs; the agent proceeds normally.
 * No injection detected: returns ``None`` (no state change, no jump).
@@ -26,10 +25,6 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any
-
-from langchain.agents.middleware import AgentMiddleware, AgentState, hook_config
-from langchain.messages import AIMessage
-from langgraph.runtime import Runtime
 
 from telegram_bot.graph.nodes.guard import (
     _BLOCKED_RESPONSE,
@@ -42,7 +37,23 @@ from telegram_bot.observability import get_client
 logger = logging.getLogger(__name__)
 
 
-def _extract_query(state: AgentState | dict[str, Any]) -> str:
+def hook_config(*args: Any, **kwargs: Any):
+    """No-op replacement for local middleware hook metadata."""
+
+    def decorate(func: Any) -> Any:
+        return func
+
+    return decorate
+
+
+class AIMessage:
+    """Minimal message object used by legacy middleware tests."""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+def _extract_query(state: dict[str, Any] | dict[str, Any]) -> str:
     """Return the latest human message text, robust to dict/object messages."""
     messages = state.get("messages") or []
     if not messages:
@@ -54,7 +65,7 @@ def _extract_query(state: AgentState | dict[str, Any]) -> str:
     return content or ""
 
 
-class GuardMiddleware(AgentMiddleware):
+class GuardMiddleware:
     """Block prompt-injection attempts before the model runs.
 
     Args:
@@ -70,8 +81,8 @@ class GuardMiddleware(AgentMiddleware):
     @hook_config(can_jump_to=["end"])
     def before_model(
         self,
-        state: AgentState,
-        runtime: Runtime,
+        state: dict[str, Any],
+        runtime: Any,
     ) -> dict[str, Any] | None:
         """Run regex injection detection; short-circuit in hard mode."""
         t0 = time.perf_counter()

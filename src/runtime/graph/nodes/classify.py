@@ -16,10 +16,7 @@ import time
 from secrets import choice
 from typing import Any
 
-from langgraph.runtime import Runtime
-
 from src.observability import get_client, observe
-from src.runtime.graph.context import GraphContext
 
 
 logger = logging.getLogger(__name__)
@@ -278,16 +275,16 @@ def classify_query(query: str) -> str:
 @observe(name="node-classify")
 async def classify_node(
     state: dict[str, Any],
-    runtime: Runtime[GraphContext],
+    runtime: Any,
 ) -> dict[str, Any]:
-    """LangGraph node: classify the user query.
+    """Pipeline helper: classify the user query.
 
     Reads the last user message, classifies it, and optionally sets
     a canned response for CHITCHAT/OFF_TOPIC queries.
 
     Args:
         state: Current graph state.
-        runtime: LangGraph Runtime with GraphContext (classifier).
+        runtime: object with an optional context mapping (classifier).
 
     Returns partial state update with query_type, response (if canned),
     and latency_stages["classify"].

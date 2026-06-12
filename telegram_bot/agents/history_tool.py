@@ -16,11 +16,9 @@ import asyncio
 import logging
 from typing import Any
 
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
-
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.history_graph.graph import build_history_graph
+from telegram_bot.agents.tooling import RunnableConfig, tool
 from telegram_bot.observability import get_client, observe
 
 

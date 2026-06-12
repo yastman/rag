@@ -13,9 +13,6 @@ import logging
 import time
 from typing import Any
 
-from langgraph.runtime import Runtime
-
-from src.runtime.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.coverage_mode import cap_results_per_doc, detect_coverage_mode
 from telegram_bot.services.metrics import PipelineMetrics
@@ -59,7 +56,7 @@ def _distinct_doc_count(results: list[dict[str, Any]]) -> int:
 @observe(name="node-retrieve", capture_input=False, capture_output=False)
 async def retrieve_node(
     state: dict[str, Any],
-    runtime: Runtime[GraphContext],
+    runtime: Any,
     top_k: int = 20,
 ) -> dict[str, Any]:
     """Retrieve documents via hybrid RRF search with caching.

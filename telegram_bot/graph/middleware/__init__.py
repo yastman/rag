@@ -1,13 +1,6 @@
-"""SDK-native middleware for the LangChain ``create_agent`` pipeline.
+"""Legacy middleware compatibility helpers.
 
-Companion to ``telegram_bot.graph.nodes.*`` while the voice and text paths
-migrate from the bespoke StateGraph to ``create_agent`` (umbrella #1535).
-The legacy node modules stay in place; new code lives here.
+The assistant runtime no longer wires LangChain create_agent middleware.  The
+modules in this package are retained only for narrow tests/import compatibility
+while graph orchestration is handled by the imperative pipeline.
 """
-
-from telegram_bot.graph.middleware.cache import SemanticCacheMiddleware
-from telegram_bot.graph.middleware.classify import ClassifyMiddleware
-from telegram_bot.graph.middleware.guard import GuardMiddleware
-
-
-__all__ = ["ClassifyMiddleware", "GuardMiddleware", "SemanticCacheMiddleware"]

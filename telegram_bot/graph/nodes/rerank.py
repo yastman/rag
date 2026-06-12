@@ -10,9 +10,6 @@ import logging
 import time
 from typing import Any
 
-from langgraph.runtime import Runtime
-
-from src.runtime.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.metrics import PipelineMetrics
 from telegram_bot.services.rag_core import perform_rerank
@@ -26,7 +23,7 @@ _DEFAULT_TOP_K = 5
 @observe(name="node-rerank")
 async def rerank_node(
     state: dict[str, Any],
-    runtime: Runtime[GraphContext],
+    runtime: Any,
     top_k: int = _DEFAULT_TOP_K,
 ) -> dict[str, Any]:
     """LangGraph node: rerank documents using ColBERT or score-based fallback.

@@ -1,21 +1,12 @@
-"""Agent factory — creates the bot agent via create_agent SDK (#413).
-
-Replaces build_supervisor_graph() from supervisor.py.
-"""
+"""Imperative bot agent facade for Telegram supervisor flows."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import AgentState, before_model
-from langchain_core.messages import BaseMessage, RemoveMessage
-from langchain_core.messages.utils import trim_messages
-from langchain_openai import ChatOpenAI
-from langgraph.graph.message import REMOVE_ALL_MESSAGES
-
-from telegram_bot.agents.context import BotContext
+from src.core import CoreDependencies
+from telegram_bot.assistant_core_adapter import build_user_context, run_core_text_request
 from telegram_bot.integrations.prompt_manager import get_prompt
 
 
@@ -29,86 +20,100 @@ LOCALE_TO_LANGUAGE: dict[str, str] = {
 }
 
 
-def _count_message_count(messages: list[BaseMessage]) -> int:
-    """Token-counter adapter that returns the message count rather than tokens.
+class AgentMessage:
+    """Minimal message object compatible with existing bot result handling."""
 
-    Used as ``token_counter`` for :func:`trim_messages` to switch its behaviour
-    from token-budget trimming to message-count trimming. This is the
-    documented ``trim_messages`` pattern in langchain-core: when
-    ``token_counter=len`` is supplied, ``max_tokens`` is interpreted as the
-    maximum number of messages allowed in the window.
-
-    See: ``langchain_core.messages.utils.trim_messages`` reference docs,
-    "Token Counting Strategies" / "Using Message Count" sections.
-
-    The bare ``len`` works equally well, but a named adapter makes the intent
-    explicit at the call site and prevents an accidental future swap to a real
-    token counter without re-calibrating ``max_tokens`` from a message budget
-    to a token budget.
-    """
-
-    return len(messages)
+    def __init__(self, content: str) -> None:
+        self.content = content
 
 
-def _create_history_trimmer(max_messages: int) -> Any:
-    """Return a before_model middleware that enforces a sliding-window history.
+def _extract_user_text(payload: Any) -> str:
+    if isinstance(payload, dict):
+        messages = payload.get("messages") or []
+        if messages:
+            last = messages[-1]
+            if isinstance(last, dict):
+                return str(last.get("content", ""))
+            return cast(str, str(getattr(last, "content", last)))
+    return ""
 
-    Removes oldest messages from checkpointed state so the LLM never sees more
-    than *max_messages* turns.  Uses RemoveMessage so the add_messages reducer
-    actually deletes them (not just hides them).  trim_messages with
-    start_on="human" ensures the remaining window starts on a clean turn
-    boundary (no orphaned ToolMessages).
 
-    Implementation note (#1257): we use the documented langchain-core pattern
-    where ``token_counter`` returns a message count instead of tokens, so
-    ``max_tokens`` is interpreted as a message-count limit. The named adapter
-    :func:`_count_message_count` makes this intent explicit and prevents a
-    silent future regression where someone replaces the counter with a real
-    token counter without also rescaling ``max_tokens``.
+def _extract_config(config: Any) -> dict[str, Any]:
+    return config if isinstance(config, dict) else {}
 
-    Args:
-        max_messages: Maximum number of messages kept in state.
 
-    Returns:
-        A before_model middleware callable.
-    """
+def _extract_bot_context(config: dict[str, Any]) -> Any | None:
+    configurable = config.get("configurable")
+    if isinstance(configurable, dict):
+        return configurable.get("bot_context")
+    return None
 
-    @before_model
-    def _trim_history(state: AgentState, runtime: Any) -> dict[str, Any] | None:
-        messages = state.get("messages", [])
-        if len(messages) <= max_messages:
-            return None
 
-        to_keep = trim_messages(
-            messages,
-            strategy="last",
-            # Documented pattern: with token_counter=_count_message_count
-            # (i.e. message count), max_tokens is interpreted as the
-            # max number of messages, not tokens. See _count_message_count.
-            max_tokens=max_messages,
-            token_counter=_count_message_count,
-            start_on="human",
+class ImperativeBotAgent:
+    """Async facade that preserves ``ainvoke`` / ``astream`` without LangChain."""
+
+    def __init__(self, *, tools: list[Any], prompt: str, model: str, role: str) -> None:
+        self.tools = tools
+        self.prompt = prompt
+        self.model = model
+        self.role = role
+
+    async def ainvoke(self, payload: Any, config: Any | None = None) -> dict[str, Any]:
+        user_text = _extract_user_text(payload)
+        cfg = _extract_config(config)
+        response = await self._run_core_or_tool(user_text, cfg)
+        return {"messages": [AgentMessage(response)], "response": response}
+
+    async def astream(self, payload: Any, config: Any | None = None, **_: Any):
+        result = await self.ainvoke(payload, config=config)
+        message = result["messages"][-1]
+        yield {"type": "messages", "data": (message, {"langgraph_node": "model"})}
+        yield {"type": "values", "data": result}
+
+    async def _run_core_or_tool(self, query: str, config: dict[str, Any]) -> str:
+        ctx = _extract_bot_context(config)
+        if ctx is not None:
+            dependencies = CoreDependencies(
+                cache=cast(Any, getattr(ctx, "cache", None)),
+                embeddings=cast(Any, getattr(ctx, "embeddings", None)),
+                sparse_embeddings=cast(Any, getattr(ctx, "sparse_embeddings", None)),
+                qdrant=cast(Any, getattr(ctx, "qdrant", None)),
+                reranker=getattr(ctx, "reranker", None),
+                llm=getattr(ctx, "llm", None),
+                config=getattr(ctx, "config", None),
+            )
+            user_context = build_user_context(
+                user_id=getattr(ctx, "telegram_user_id", None),
+                session_id=getattr(ctx, "session_id", None),
+                role=getattr(ctx, "role", self.role),
+                language=getattr(ctx, "language", "ru"),
+            )
+            collection = getattr(getattr(ctx, "config", None), "qdrant_collection", "")
+            result = await run_core_text_request(
+                query=query,
+                collection=collection,
+                user_context=user_context,
+                dependencies=dependencies,
+            )
+            return result.response_text
+
+        if not self.tools:
+            return "Не нашёл подходящий инструмент для обработки запроса."
+        tool = next(
+            (
+                candidate
+                for candidate in self.tools
+                if getattr(candidate, "name", getattr(candidate, "__name__", "")) == "rag_search"
+            ),
+            self.tools[0],
         )
-
-        # Guard: if trim_messages returns nothing (e.g. no HumanMessage fits the
-        # window), skip the trim entirely rather than wiping the whole history.
-        if not to_keep:
-            return None
-
-        # No-op when trim result is effectively the same as input.
-        if len(to_keep) == len(messages):
-            return None
-
-        logger.debug(
-            "history_trimmer: trimmed history (kept %d of %d, max=%d)",
-            len(to_keep),
-            len(messages),
-            max_messages,
-        )
-        # Reset message list and re-add only the kept window.
-        return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *to_keep]}
-
-    return _trim_history
+        try:
+            result = tool(query, config)
+        except TypeError:
+            result = tool(query)
+        if hasattr(result, "__await__"):
+            result = await result
+        return str(result or "")
 
 
 CLIENT_SYSTEM_PROMPT = """Ты — AI-ассистент агентства недвижимости в Болгарии.
@@ -283,24 +288,7 @@ def create_bot_agent(
     max_history_messages: int = 15,
     max_tokens: int | None = None,
 ) -> Any:
-    """Create the bot agent using langchain create_agent SDK.
-
-    Args:
-        model: LLM model name (e.g. "openai/gpt-oss-120b").
-        tools: List of @tool decorated functions.
-        checkpointer: AsyncRedisSaver or None.
-        system_prompt: Override default system prompt.
-        language: Response language.
-        base_url: OpenAI-compatible API base URL (e.g. LiteLLM proxy).
-        api_key: API key for the LLM provider.
-        role: User role — "client" (default) or "manager".
-        max_history_messages: Sliding-window cap on checkpointed message count.
-            Old messages beyond this limit are removed from state via
-            RemoveMessage before each LLM call (#519).
-
-    Returns:
-        Compiled agent graph ready for .ainvoke() / .astream().
-    """
+    """Create the bot agent facade without LangChain/LangGraph."""
     if system_prompt is not None:
         prompt = system_prompt
     else:
@@ -317,45 +305,10 @@ def create_bot_agent(
             variables={"language": language, "role_context": role_context},
         )
 
-    # Build a ChatOpenAI instance routed through LiteLLM proxy (#420).
-    # Passing a string model name to create_agent triggers init_chat_model()
-    # which defaults to OpenAI and requires OPENAI_API_KEY.
-    model_kwargs: dict[str, Any] = {"model": model}
-    if base_url:
-        model_kwargs["base_url"] = base_url
-    if api_key:
-        model_kwargs["api_key"] = api_key
-    else:
-        # Dummy key — LiteLLM proxy doesn't need a real OpenAI key
-        model_kwargs["api_key"] = "sk-not-needed"
-    if max_tokens:
-        model_kwargs["max_tokens"] = max_tokens
-
-    llm = ChatOpenAI(**model_kwargs)
-
-    # Only install the trimmer when a checkpointer is active; without one the
-    # agent starts each invoke with a single message (no accumulated history).
-    middleware: list[Any] = []
-    if checkpointer is not None:
-        middleware.append(_create_history_trimmer(max_history_messages))
-
-    agent = create_agent(
-        model=llm,
-        tools=tools,
-        system_prompt=prompt,
-        context_schema=BotContext,
-        checkpointer=checkpointer,
-        middleware=middleware,
-    )
-
-    logger.info(
-        "Created bot agent: model=%s, role=%s, base_url=%s, tools=%d, checkpointer=%s, max_history=%d",
-        model,
-        role,
-        base_url or "default",
-        len(tools),
-        type(checkpointer).__name__ if checkpointer else "None",
-        max_history_messages,
-    )
-
+    _ = (checkpointer, base_url, api_key, max_history_messages, max_tokens)
+    agent = ImperativeBotAgent(tools=tools, prompt=prompt, model=model, role=role)
+    logger.info("Created imperative bot agent: model=%s role=%s tools=%d", model, role, len(tools))
     return agent
+
+
+__all__ = ["LOCALE_TO_LANGUAGE", "AgentMessage", "ImperativeBotAgent", "create_bot_agent"]
