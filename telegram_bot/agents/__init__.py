@@ -1,1 +1,1 @@
-"""Agent tools and context for create_agent SDK (#413)."""
+"""Agent tools and context for imperative adapter SDK (#413)."""

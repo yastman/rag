@@ -1,4 +1,4 @@
-"""``rerank_documents`` tool factory for ``create_agent`` (#2050)."""
+"""``rerank_documents`` tool factory for the imperative adapter."""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
+
+from telegram_bot.agents.tooling import BaseTool, tool
 
 
 logger = logging.getLogger(__name__)

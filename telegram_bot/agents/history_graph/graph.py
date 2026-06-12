@@ -1,14 +1,8 @@
-"""History sub-graph assembly — retrieve → grade → rewrite → summarize (#408).
-
-Builds and compiles a LangGraph StateGraph for agentic history search.
-"""
+"""Imperative history search pipeline compatibility facade."""
 
 from __future__ import annotations
 
-import functools
-from typing import Any, cast
-
-from langgraph.graph import END, START, StateGraph
+from typing import Any
 
 from telegram_bot.agents.history_graph.nodes import (
     history_grade_node,
@@ -19,7 +13,44 @@ from telegram_bot.agents.history_graph.nodes import (
     route_history_grade,
     route_history_guard,
 )
-from telegram_bot.agents.history_graph.state import HistoryState
+
+
+class ImperativeHistoryGraph:
+    """Small ``ainvoke`` facade that runs the history nodes sequentially."""
+
+    def __init__(
+        self,
+        *,
+        history_service: Any,
+        llm: Any | None,
+        guard_mode: str,
+        content_filter_enabled: bool,
+        relevance_threshold: float,
+    ) -> None:
+        self.history_service = history_service
+        self.llm = llm
+        self.guard_mode = guard_mode
+        self.content_filter_enabled = content_filter_enabled
+        self.relevance_threshold = relevance_threshold
+
+    async def ainvoke(
+        self, state: dict[str, Any], config: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        _ = config
+        current = dict(state)
+        if self.content_filter_enabled:
+            current.update(await history_guard_node(current, guard_mode=self.guard_mode))
+            if route_history_guard(current) == "blocked":
+                return current
+        current.update(await history_retrieve_node(current, history_service=self.history_service))
+        current.update(await history_grade_node(current, threshold=self.relevance_threshold))
+        if route_history_grade(current) == "rewrite":
+            current.update(await history_rewrite_node(current, llm=self.llm))
+            current.update(
+                await history_retrieve_node(current, history_service=self.history_service)
+            )
+        current.update(await history_summarize_node(current, llm=self.llm))
+        return current
 
 
 def build_history_graph(
@@ -30,58 +61,14 @@ def build_history_graph(
     content_filter_enabled: bool = True,
     relevance_threshold: float = 0.7,
 ) -> Any:
-    """Build and compile the history search sub-graph.
-
-    Args:
-        history_service: HistoryService instance (Qdrant + BGE-M3).
-        llm: LLM instance (langfuse.openai.AsyncOpenAI). Falls back to GraphConfig.create_llm().
-        guard_mode: Content filter mode — "hard" (block), "soft" (flag), "log" (log only).
-        content_filter_enabled: If False, skip guard node entirely (#432).
-        relevance_threshold: Min similarity score to consider a result relevant (default 0.7; #433).
-
-    Returns:
-        Compiled StateGraph ready for .ainvoke().
-    """
-    workflow = StateGraph(HistoryState)
-
-    # Bind dependencies via functools.partial
-    retrieve = functools.partial(history_retrieve_node, history_service=history_service)
-    grade = functools.partial(history_grade_node, threshold=relevance_threshold)
-    rewrite = functools.partial(history_rewrite_node, llm=llm)
-    summarize = functools.partial(history_summarize_node, llm=llm)
-
-    workflow.add_node("retrieve", cast(Any, retrieve))
-    workflow.add_node("grade", cast(Any, grade))
-    workflow.add_node("rewrite", cast(Any, rewrite))
-    workflow.add_node("summarize", cast(Any, summarize))
-
-    # Guard node: injection/toxicity filtering (#432)
-    if content_filter_enabled:
-        guard = functools.partial(history_guard_node, guard_mode=guard_mode)
-        workflow.add_node("guard", cast(Any, guard))
-        workflow.add_edge(START, "guard")
-        workflow.add_conditional_edges(
-            "guard",
-            route_history_guard,
-            {
-                "retrieve": "retrieve",
-                "__end__": END,
-            },
-        )
-    else:
-        workflow.add_edge(START, "retrieve")
-
-    # Edges
-    workflow.add_edge("retrieve", "grade")
-    workflow.add_conditional_edges(
-        "grade",
-        route_history_grade,
-        {
-            "summarize": "summarize",
-            "rewrite": "rewrite",
-        },
+    """Build the imperative history search facade."""
+    return ImperativeHistoryGraph(
+        history_service=history_service,
+        llm=llm,
+        guard_mode=guard_mode,
+        content_filter_enabled=content_filter_enabled,
+        relevance_threshold=relevance_threshold,
     )
-    workflow.add_edge("rewrite", "retrieve")  # rewrite → retrieve loop
-    workflow.add_edge("summarize", END)
 
-    return workflow.compile()
+
+__all__ = ["ImperativeHistoryGraph", "build_history_graph"]

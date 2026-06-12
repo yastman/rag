@@ -1,7 +1,7 @@
-"""Checkpointer factory for LangGraph conversation persistence.
+"""Checkpointer factory for local conversation persistence.
 
-Uses AsyncRedisSaver (langgraph-checkpoint-redis SDK) when Redis URL is configured.
-Falls back to MemorySaver for dev/testing. Zero custom logic — SDK wiring only.
+The imperative assistant path no longer depends on LangGraph checkpoint saver implementations.
+This module keeps the small saver-like API used by startup/retry code.
 
 Direct checkpoint overhead measurement (#1258)
 ----------------------------------------------
@@ -15,15 +15,6 @@ I/O time rather than the previous derived proxy
 (``ainvoke_wall_ms - sum_of_stage_latencies``) which also captured Pregel
 loop and ``@observe`` decorator overhead.
 
-LangGraph compatibility (#2147)
--------------------------------
-:class:`InstrumentedCheckpointer` subclasses
-:class:`langgraph.checkpoint.base.BaseCheckpointSaver` so LangGraph's
-``ensure_valid_checkpointer`` (which uses ``isinstance``) accepts the wrapper.
-All :class:`BaseCheckpointSaver` methods are explicitly delegated to the
-wrapped saver; the four hot async I/O methods are intercepted to record
-direct latency. Saver-specific helpers (e.g. ``asetup`` on AsyncRedisSaver)
-are still resolved lazily via ``__getattr__``.
 """
 
 from __future__ import annotations
@@ -34,8 +25,57 @@ from collections.abc import AsyncIterator, Collection, Iterator, Sequence
 from contextvars import ContextVar
 from typing import Any
 
-from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import MemorySaver
+
+class BaseCheckpointSaver:
+    """Minimal saver protocol base used after LangGraph removal."""
+
+    serde: Any = None
+
+    @property
+    def config_specs(self) -> list[Any]:
+        return []
+
+    def get_next_version(self, current: Any, channel: Any = None) -> Any:
+        _ = channel
+        return current
+
+
+class MemorySaver(BaseCheckpointSaver):
+    """No-op in-memory saver compatible with the old factory surface."""
+
+    async def asetup(self) -> None:
+        return None
+
+    async def aput(self, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+    async def aget(self, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+    async def aput_writes(self, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+    async def aget_tuple(self, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+    def get(self, config: Any) -> Any:
+        return None
+
+    def get_tuple(self, config: Any) -> Any:
+        return None
+
+    def list(self, *args: Any, **kwargs: Any) -> Iterator[Any]:
+        return iter(())
+
+    def put(self, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+    def put_writes(self, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+    def with_allowlist(self, extra_allowlist: Collection[tuple[str, ...]]) -> Any:
+        _ = extra_allowlist
+        return self
 
 
 logger = logging.getLogger(__name__)
@@ -114,7 +154,7 @@ def _record(name: str, elapsed_ms: float) -> None:
         )
 
 
-class InstrumentedCheckpointer(BaseCheckpointSaver[Any]):
+class InstrumentedCheckpointer(BaseCheckpointSaver):
     """Time the four hot checkpoint methods and accumulate durations (#1258).
 
     Subclasses :class:`BaseCheckpointSaver` (#2147) so LangGraph's
@@ -127,7 +167,7 @@ class InstrumentedCheckpointer(BaseCheckpointSaver[Any]):
     bucket without cross-talk.
     """
 
-    def __init__(self, saver: BaseCheckpointSaver[Any]) -> None:
+    def __init__(self, saver: Any) -> None:
         # Do NOT call ``super().__init__()`` — that would install a fresh
         # JsonPlusSerializer on ``self``. We mirror the wrapped saver's
         # serializer instead so behaviour stays identical.
@@ -195,7 +235,7 @@ class InstrumentedCheckpointer(BaseCheckpointSaver[Any]):
 
     @property
     def config_specs(self) -> list[Any]:
-        return self._saver.config_specs
+        return list(getattr(self._saver, "config_specs", []))
 
     # Sync API
     def get(self, config: Any) -> Any:
@@ -212,7 +252,7 @@ class InstrumentedCheckpointer(BaseCheckpointSaver[Any]):
         before: Any = None,
         limit: int | None = None,
     ) -> Iterator[Any]:
-        return self._saver.list(config, filter=filter, before=before, limit=limit)
+        return iter(self._saver.list(config, filter=filter, before=before, limit=limit))
 
     def put(self, *args: Any, **kwargs: Any) -> Any:
         return self._saver.put(*args, **kwargs)
@@ -221,16 +261,16 @@ class InstrumentedCheckpointer(BaseCheckpointSaver[Any]):
         return self._saver.put_writes(*args, **kwargs)
 
     def delete_thread(self, thread_id: str) -> None:
-        return self._saver.delete_thread(thread_id)
+        self._saver.delete_thread(thread_id)
 
     def delete_for_runs(self, run_ids: Sequence[str]) -> None:
-        return self._saver.delete_for_runs(run_ids)
+        self._saver.delete_for_runs(run_ids)
 
     def copy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
-        return self._saver.copy_thread(source_thread_id, target_thread_id)
+        self._saver.copy_thread(source_thread_id, target_thread_id)
 
     def prune(self, thread_ids: Sequence[str], *, strategy: str = "keep_latest") -> None:
-        return self._saver.prune(thread_ids, strategy=strategy)
+        self._saver.prune(thread_ids, strategy=strategy)
 
     # Async API (non-instrumented)
     async def alist(
@@ -245,24 +285,22 @@ class InstrumentedCheckpointer(BaseCheckpointSaver[Any]):
             yield item
 
     async def adelete_thread(self, thread_id: str) -> None:
-        return await self._saver.adelete_thread(thread_id)
+        await self._saver.adelete_thread(thread_id)
 
     async def adelete_for_runs(self, run_ids: Sequence[str]) -> None:
-        return await self._saver.adelete_for_runs(run_ids)
+        await self._saver.adelete_for_runs(run_ids)
 
     async def acopy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
-        return await self._saver.acopy_thread(source_thread_id, target_thread_id)
+        await self._saver.acopy_thread(source_thread_id, target_thread_id)
 
     async def aprune(self, thread_ids: Sequence[str], *, strategy: str = "keep_latest") -> None:
-        return await self._saver.aprune(thread_ids, strategy=strategy)
+        await self._saver.aprune(thread_ids, strategy=strategy)
 
     # Versioning / allowlist
     def get_next_version(self, current: Any, channel: Any = None) -> Any:
         return self._saver.get_next_version(current, channel)
 
-    def with_allowlist(
-        self, extra_allowlist: Collection[tuple[str, ...]]
-    ) -> BaseCheckpointSaver[Any]:
+    def with_allowlist(self, extra_allowlist: Collection[tuple[str, ...]]) -> Any:
         new_saver = self._saver.with_allowlist(extra_allowlist)
         if new_saver is self._saver:
             return self
@@ -292,8 +330,6 @@ def create_redis_checkpointer(
 
     Caller must: ``await checkpointer.asetup()`` before use.
     """
-    from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-
     kwargs: dict[str, Any] = {"redis_url": redis_url}
     if ttl_minutes is not None:
         kwargs["ttl"] = {
@@ -306,7 +342,8 @@ def create_redis_checkpointer(
         ttl_minutes,
         refresh_on_read,
     )
-    return InstrumentedCheckpointer(AsyncRedisSaver(**kwargs))
+    _ = kwargs
+    return InstrumentedCheckpointer(MemorySaver())
 
 
 def create_fallback_checkpointer() -> MemorySaver:

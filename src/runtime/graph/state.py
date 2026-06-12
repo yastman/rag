@@ -1,4 +1,4 @@
-"""RAGState schema for LangGraph pipeline (canonical home, #2045 slice 1).
+"""RAGState schema for the legacy dict-based RAG pipeline.
 
 Moved from ``telegram_bot/graph/state.py`` as the first slice of the
 ``src/api`` reverse-layering fix (issue #2049, parent #1948). The legacy
@@ -12,16 +12,21 @@ factory.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, TypedDict
+from dataclasses import dataclass
+from typing import Any, TypedDict
 
-from langchain_core.messages import HumanMessage
-from langgraph.graph.message import add_messages
+
+@dataclass(slots=True)
+class Message:
+    """Minimal message object used by legacy state helpers without LangChain."""
+
+    content: str
 
 
 class RAGState(TypedDict):
-    """State schema for the RAG LangGraph pipeline."""
+    """State schema for the dict-based RAG pipeline."""
 
-    messages: Annotated[list, add_messages]
+    messages: list[Message | dict[str, Any]]
     user_id: int
     session_id: str
     query_type: str
@@ -108,7 +113,7 @@ class RAGState(TypedDict):
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
     """Create initial state for a new RAG pipeline invocation."""
     return {
-        "messages": [HumanMessage(content=query)],
+        "messages": [Message(content=query)],
         "user_id": user_id,
         "session_id": session_id,
         "query_type": "",
@@ -193,4 +198,4 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
     }
 
 
-__all__ = ["RAGState", "make_initial_state"]
+__all__ = ["Message", "RAGState", "make_initial_state"]

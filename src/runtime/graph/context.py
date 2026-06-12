@@ -1,6 +1,6 @@
-"""GraphContext — run-scoped dependency container for LangGraph Runtime.
+"""GraphContext — run-scoped dependency container for legacy graph Runtime.
 
-Passed via ``context_schema=GraphContext`` to ``StateGraph`` and injected
+Passed via ``context_schema=GraphContext`` to ``legacy graph`` and injected
 into nodes as ``runtime: Runtime[GraphContext]``.
 
 Canonical home moved from ``telegram_bot/graph/context.py`` as part of the
@@ -15,7 +15,7 @@ from typing_extensions import TypedDict
 
 
 class GraphContext(TypedDict, total=False):
-    """Dependencies injected into RAG pipeline nodes via LangGraph Runtime.
+    """Dependencies injected into RAG pipeline nodes via legacy graph Runtime.
 
     All fields are optional at the TypedDict level; build_graph always provides
     the required ones (cache, embeddings, sparse_embeddings, qdrant).

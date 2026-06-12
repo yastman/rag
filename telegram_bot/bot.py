@@ -1,4 +1,4 @@
-"""Main Telegram bot logic — LangGraph pipeline.
+"""Main Telegram bot logic — legacy graph pipeline.
 
 Module-level helpers were extracted to focused submodules in slice 1 of
 the ``PropertyBot`` decomposition (issue #1265 / #2046). The thin
@@ -65,7 +65,6 @@ from aiogram.types import (
 )
 from aiogram.utils.chat_action import ChatActionSender
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from langgraph.errors import GraphRecursionError
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
@@ -131,6 +130,10 @@ from .services.query_filter_signal import detect_filter_sensitive_query
 from .services.redis_monitor import RedisHealthMonitor
 from .services.topic_service import TopicService
 from .startup_status import StartupReport, StartupSeverity, StartupSignal
+
+
+class GraphRecursionError(RuntimeError):
+    """Compatibility exception after legacy graph removal."""
 
 
 if TYPE_CHECKING:
@@ -392,7 +395,7 @@ class PropertyBot:
             domain_language=config.domain_language,
         )
 
-        # Initialize LangGraph service dependencies
+        # Initialize legacy graph service dependencies
         from .integrations.cache import CacheLayerManager
         from .integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
         from .services.qdrant import QdrantService
@@ -2217,7 +2220,7 @@ class PropertyBot:
         expert_id: str | None = None,
         dialog_manager: Any = None,
     ) -> str:
-        """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
+        """Handle query via imperative adapter SDK (#413 — replaces build_supervisor_graph)."""
 
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.context import BotContext
@@ -2699,6 +2702,7 @@ class PropertyBot:
                     manager_ids=list(self.config.manager_ids),
                     apartments_service=self._apartments_service,
                     search_event_store=self._search_event_store,
+                    config=self.config,
                 )
 
                 # Initialize handler inside propagation context so it inherits session/user/tags.
@@ -3296,7 +3300,7 @@ class PropertyBot:
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
-        """Handle voice message via Whisper STT + LangGraph RAG pipeline."""
+        """Handle voice message via Whisper STT + imperative RAG pipeline."""
         from .graph.state import make_initial_state
 
         pipeline_start = time.perf_counter()
@@ -3645,6 +3649,7 @@ class PropertyBot:
             manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
             apartments_service=self._apartments_service,
             search_event_store=self._search_event_store,
+            config=self.config,
         )
 
         with propagate_attributes(
@@ -3653,13 +3658,11 @@ class PropertyBot:
             tags=["telegram", "hitl", "resume"],
             metadata=_resume_trace_metadata,
         ):
-            from langgraph.types import Command
-
             langfuse_handler = create_callback_handler()
             callbacks = [langfuse_handler] if langfuse_handler else []
 
             result = await agent.ainvoke(
-                Command(resume={"action": action}),
+                {"resume": {"action": action}},
                 config={
                     "callbacks": callbacks,
                     "configurable": {
@@ -3845,6 +3848,7 @@ class PropertyBot:
             manager_ids=list(self.config.manager_ids),
             apartments_service=self._apartments_service,
             search_event_store=self._search_event_store,
+            config=self.config,
         )
 
         rag_result_store: dict[str, Any] = {}
@@ -4219,7 +4223,7 @@ class PropertyBot:
                     idle_timeout_min=self.config.session_idle_timeout_min,
                     poll_interval_sec=self.config.session_summary_poll_sec,
                     summary_model=self.config.session_summary_model,
-                    # Real history retrieval (e.g. LangGraph checkpointer) is
+                    # Real history retrieval (e.g. legacy graph checkpointer) is
                     # not yet wired (#1599). Pass None explicitly so the worker
                     # logs a startup warning instead of silently no-op'ing.
                     history_source=None,

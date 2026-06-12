@@ -18,10 +18,7 @@ import re
 import time
 from typing import Any
 
-from langgraph.runtime import Runtime
-
 from src.observability import get_client, observe
-from src.runtime.graph.context import GraphContext
 
 
 logger = logging.getLogger(__name__)
@@ -146,9 +143,9 @@ def detect_injection(text: str) -> tuple[bool, float, str | None]:
 @observe(name="node-guard", as_type="guardrail")
 async def guard_node(
     state: dict[str, Any],
-    runtime: Runtime[GraphContext],
+    runtime: Any,
 ) -> dict[str, Any]:
-    """LangGraph node: detect prompt injection attempts.
+    """Pipeline helper: detect prompt injection attempts.
 
     Regex heuristics (<1ms, 21 patterns, EN+RU).
 

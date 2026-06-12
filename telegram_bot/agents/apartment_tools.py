@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
-
 from telegram_bot.agents.context import get_bot_context
+from telegram_bot.agents.tooling import RunnableConfig, tool
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.apartment_formatter import format_apartment_text
 

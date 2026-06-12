@@ -1,321 +1,109 @@
-"""RAG LangGraph pipeline — graph assembly.
+"""Legacy graph entrypoint backed by the imperative assistant pipeline.
 
-Builds the full StateGraph with all nodes and conditional edges.
+``build_graph`` is retained as a compatibility factory for callers that still
+expect an object with ``ainvoke``.  It no longer builds a LangGraph
+``StateGraph`` and imports no LangChain/LangGraph/LangMem packages.
 """
 
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, cast
 
-from langgraph.graph import END, START, StateGraph
-
-from src.runtime.graph.context import GraphContext
-from src.runtime.graph.edges import (
-    route_after_guard,
-    route_by_query_type,
-    route_cache,
-    route_grade,
-    route_start,
-)
-from telegram_bot.graph.state import RAGState
-from telegram_bot.observability import get_client
+from src.core.contracts import AssistantRequest, CoreDependencies, UserContext
+from src.runtime.graph.nodes.transcribe import make_transcribe_node
+from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
 
 
 logger = logging.getLogger(__name__)
 
 
-def _route_by_query_type_no_guard(
-    state: dict[str, Any],
-) -> str:
-    """Route without guard: CHITCHAT/OFF_TOPIC → respond, else → cache_check."""
-    query_type = state.get("query_type", "GENERAL")
-    if query_type in ("CHITCHAT", "OFF_TOPIC"):
-        return "respond"
-    return "cache_check"
+class ImperativeGraph:
+    """Compatibility object with the old compiled-graph ``ainvoke`` method."""
 
+    def __init__(self, **dependencies: Any) -> None:
+        self.dependencies = dependencies
 
-def build_graph(
-    *,
-    cache: Any,
-    embeddings: Any,
-    sparse_embeddings: Any,
-    qdrant: Any,
-    reranker: Any | None = None,
-    llm: Any | None = None,
-    message: Any | None = None,
-    checkpointer: Any | None = None,
-    event_stream: Any | None = None,
-    show_transcription: bool = True,
-    voice_language: str = "ru",
-    stt_model: str = "whisper",
-    content_filter_enabled: bool = True,
-    guard_mode: str = "hard",
-    classifier: Any | None = None,
-) -> Any:
-    """Build and compile the RAG StateGraph.
+    def with_config(self, **_: Any) -> ImperativeGraph:
+        """Match the compiled graph fluent API used by tests/callers."""
+        return self
 
-    Args:
-        cache: CacheLayerManager instance
-        embeddings: BGEM3Embeddings instance
-        sparse_embeddings: BGEM3SparseEmbeddings instance
-        qdrant: QdrantService instance
-        reranker: Optional ColbertRerankerService
-        llm: Optional LLM instance (defaults via GraphConfig)
-        message: Optional aiogram Message for streaming generate + respond_node
-        checkpointer: Optional checkpointer for conversation persistence
-        event_stream: Optional PipelineEventStream for observability logging
-        show_transcription: Send transcription preview to user
-        voice_language: ISO language code for Whisper hint
-        stt_model: Model name in LiteLLM config
-        content_filter_enabled: Whether to include guard node
-        guard_mode: Guard mode ('hard' | 'soft' | 'log')
+    async def ainvoke(
+        self, state: dict[str, Any], config: dict[str, Any] | None = None, **_: Any
+    ) -> dict[str, Any]:
+        """Run the imperative assistant pipeline and return graph-shaped state."""
+        working = dict(state)
+        if working.get("input_type") == "voice" or working.get("voice_audio") is not None:
+            transcribe = make_transcribe_node(
+                llm=self.dependencies.get("llm"),
+                voice_language=str(self.dependencies.get("voice_language") or "ru"),
+                stt_model=str(self.dependencies.get("stt_model") or "whisper"),
+                show_transcription=bool(self.dependencies.get("show_transcription", True)),
+                message=self.dependencies.get("message"),
+            )
+            working.update(await transcribe(working))
 
-    Returns:
-        Compiled StateGraph ready for .ainvoke() — context pre-bound.
-    """
-    from src.runtime.graph.nodes.classify import classify_node
-    from src.runtime.graph.nodes.guard import guard_node
-    from src.runtime.graph.nodes.transcribe import make_transcribe_node
-    from telegram_bot.graph.nodes.cache import cache_check_node, cache_store_node
-    from telegram_bot.graph.nodes.grade import grade_node
-    from telegram_bot.graph.nodes.rerank import rerank_node
-    from telegram_bot.graph.nodes.retrieve import retrieve_node
-    from telegram_bot.graph.nodes.rewrite import rewrite_node
-
-    # Build run-scoped dependency context — injected into nodes via Runtime.
-    ctx: GraphContext = {
-        "cache": cache,
-        "embeddings": embeddings,
-        "sparse_embeddings": sparse_embeddings,
-        "qdrant": qdrant,
-        "reranker": reranker,
-        "llm": llm,
-        "event_stream": event_stream,
-        "guard_mode": guard_mode,
-        "classifier": classifier,
-    }
-
-    workflow = StateGraph(RAGState, context_schema=GraphContext)
-
-    # Add nodes — Runtime[GraphContext] is injected automatically by LangGraph.
-    workflow.add_node("classify", classify_node)  # type: ignore[call-overload]
-
-    workflow.add_node(
-        "transcribe",
-        make_transcribe_node(
-            llm=llm,
-            voice_language=voice_language,
-            stt_model=stt_model,
-            show_transcription=show_transcription,
-            message=message,
-        ),
-    )
-
-    if content_filter_enabled:
-        workflow.add_node("guard", guard_node)  # type: ignore[call-overload]
-
-    workflow.add_node("cache_check", cache_check_node)  # type: ignore[call-overload]
-    workflow.add_node("retrieve", retrieve_node)  # type: ignore[call-overload]
-    workflow.add_node("grade", grade_node)  # type: ignore[call-overload]
-    workflow.add_node("rerank", rerank_node)  # type: ignore[call-overload]
-
-    workflow.add_node(
-        "generate",
-        _make_generate_node(message),
-    )
-
-    workflow.add_node("rewrite", rewrite_node)  # type: ignore[call-overload]
-    workflow.add_node("cache_store", cache_store_node)  # type: ignore[call-overload]
-
-    workflow.add_node(
-        "respond",
-        _make_respond_node(message),
-    )
-
-    # Conversation memory: SDK summarization (langmem) — only when checkpointer is active
-    if checkpointer is not None:
-        from langchain_core.messages.utils import count_tokens_approximately
-        from langmem.short_term import SummarizationNode
-
-        from telegram_bot.graph.config import GraphConfig
-        from telegram_bot.observability import observe
-
-        config = GraphConfig.from_env()
-        summarize_model = _create_summarize_model(config)
-        summarize = SummarizationNode(
-            model=summarize_model,
-            max_tokens=512,
-            max_tokens_before_summary=1024,
-            max_summary_tokens=256,
-            token_counter=count_tokens_approximately,
-            input_messages_key="messages",
-            output_messages_key="messages",
+        query = _extract_query(working)
+        request = AssistantRequest(
+            query=query,
+            collection=str(self.dependencies.get("collection", "")),
+            user_context=UserContext(
+                user_id=str(working.get("user_id", "")),
+                session_id=str(working.get("session_id", "")),
+                filters=working.get("filters"),
+            ),
+            request_id=str((config or {}).get("request_id") or working.get("trace_id") or ""),
         )
+        deps = CoreDependencies(
+            cache=cast(Any, self.dependencies.get("cache")),
+            embeddings=cast(Any, self.dependencies.get("embeddings")),
+            sparse_embeddings=cast(Any, self.dependencies.get("sparse_embeddings")),
+            qdrant=cast(Any, self.dependencies.get("qdrant")),
+            reranker=self.dependencies.get("reranker"),
+            llm=self.dependencies.get("llm"),
+            config=self.dependencies.get("config"),
+            telemetry=self.dependencies.get("telemetry"),
+        )
+        result = await run_assistant_pipeline(request, dependencies=deps)
 
-        @observe(name="node-summarize", capture_input=False, capture_output=False)
-        async def summarize_wrapper(state: RAGState) -> RAGState:
-            import contextlib
+        message = self.dependencies.get("message")
+        if message is not None and result.response_text:
+            await message.answer(result.response_text)
 
-            t0 = time.perf_counter()
-            result: RAGState
-            try:
-                result = cast(RAGState, await summarize.ainvoke(state))
-            except Exception:
-                logger.warning(
-                    "Summarization failed; preserving response without summary", exc_info=True
-                )
-                result = state.copy()
-            else:
-                # Best-effort Langfuse generation observation — must not fail the pipeline
-                with contextlib.suppress(Exception):
-                    lf = get_client()
-                    if lf is not None:
-                        with lf.start_as_current_observation(
-                            name="summarize-llm",
-                            as_type="generation",
-                            model=config.llm_model,
-                        ) as gen_obs:
-                            gen_obs.update(output={"summary_applied": True})
-            elapsed = time.perf_counter() - t0
-            result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
-            return cast(RAGState, result)
-
-        workflow.add_node("summarize", summarize_wrapper)  # type: ignore[call-overload]
-
-    # Edges
-    workflow.add_conditional_edges(
-        START,
-        route_start,
-        {
-            "transcribe": "transcribe",
-            "classify": "classify",
-        },
-    )
-    workflow.add_edge("transcribe", "classify")
-
-    if content_filter_enabled:
-        workflow.add_conditional_edges(
-            "classify",
-            route_by_query_type,
-            {
-                "respond": "respond",
-                "guard": "guard",
+        return {
+            **working,
+            "response": result.response_text,
+            "query_type": result.request_type,
+            "cache_hit": result.cache_hit,
+            "documents": [],
+            "sources_count": result.documents_count,
+            "search_results_count": result.documents_count,
+            "latency_stages": {
+                **working.get("latency_stages", {}),
+                "imperative": result.latency_ms / 1000,
             },
-        )
-        workflow.add_conditional_edges(
-            "guard",
-            route_after_guard,
-            {
-                "respond": "respond",
-                "cache_check": "cache_check",
-            },
-        )
-    else:
-        workflow.add_conditional_edges(
-            "classify",
-            _route_by_query_type_no_guard,
-            {
-                "respond": "respond",
-                "cache_check": "cache_check",
-            },
-        )
-
-    workflow.add_conditional_edges(
-        "cache_check",
-        route_cache,
-        {
-            "respond": "respond",
-            "retrieve": "retrieve",
-        },
-    )
-
-    workflow.add_edge("retrieve", "grade")
-
-    workflow.add_conditional_edges(
-        "grade",
-        route_grade,
-        {
-            "rerank": "rerank",
-            "rewrite": "rewrite",
-            "generate": "generate",
-        },
-    )
-
-    workflow.add_edge("rerank", "generate")
-    workflow.add_edge("rewrite", "retrieve")
-    workflow.add_edge("generate", "cache_store")
-    workflow.add_edge("cache_store", "respond")
-
-    if checkpointer is not None:
-        workflow.add_edge("respond", "summarize")
-        workflow.add_edge("summarize", END)
-    else:
-        workflow.add_edge("respond", END)
-
-    compiled = workflow.compile(checkpointer=checkpointer)
-    configured = compiled.with_config(recursion_limit=15)
-
-    # Pre-bind the run-scoped context so callers use the existing API:
-    #   graph = build_graph(cache=..., ...)
-    #   result = await graph.ainvoke(state, config=config)
-    orig_ainvoke = configured.ainvoke
-
-    async def _ainvoke_with_ctx(input_: Any, config: Any = None, **kwargs: Any) -> Any:
-        # Preserve default build_graph context but allow per-call overrides via
-        # graph.ainvoke(..., context={...}) without passing duplicate kwargs.
-        call_context = kwargs.pop("context", None)
-        if call_context is None:
-            merged_context: Any = dict(ctx)
-        elif isinstance(call_context, dict):
-            merged_context = {**ctx, **call_context}
-        else:
-            merged_context = call_context
-        return await orig_ainvoke(input_, config=config, context=merged_context, **kwargs)
-
-    configured.ainvoke = _ainvoke_with_ctx  # type: ignore[assignment]
-    return configured
+            "rerank_applied": result.rerank_applied,
+            "retrieval_error_type": result.error_type,
+            "input_type": working.get("input_type", "text"),
+        }
 
 
-def _create_summarize_model(config: Any) -> Any:
-    """Create a LangChain chat model for SummarizationNode.
-
-    Chat generation now uses the in-process LiteLLM SDK router. Summarization
-    keeps LangChain's provider-neutral factory but no longer points at the
-    removed Docker LiteLLM proxy.
-    """
-    from langchain.chat_models import init_chat_model
-
-    return init_chat_model(
-        model=config.llm_model,
-        model_provider="openai",
-        api_key=config.llm_api_key or "no-key",
-    )
+def _extract_query(state: dict[str, Any]) -> str:
+    if isinstance(state.get("stt_text"), str) and state["stt_text"]:
+        return str(state["stt_text"])
+    messages = state.get("messages") or []
+    if messages:
+        last = messages[-1]
+        if isinstance(last, dict):
+            return str(last.get("content", ""))
+        return cast(str, str(getattr(last, "content", last)))
+    return str(state.get("query", ""))
 
 
-def _make_generate_node(message: Any | None):
-    """Create generate_node with message injected for streaming delivery."""
-    from telegram_bot.graph.nodes.generate import generate_node
-
-    if message is None:
-        return generate_node
-
-    async def generate_with_message(state: RAGState) -> dict[str, Any]:
-        return await generate_node(state, message=message)
-
-    return generate_with_message
+def build_graph(**kwargs: Any) -> ImperativeGraph:
+    """Return an imperative graph-compatible facade."""
+    logger.info("Using imperative graph compatibility facade")
+    return ImperativeGraph(**kwargs)
 
 
-def _make_respond_node(message: Any | None):
-    """Create respond_node with message injected into state."""
-    from telegram_bot.graph.nodes.respond import respond_node
-
-    if message is None:
-        return respond_node
-
-    async def respond_with_message(state: dict[str, Any]) -> dict[str, Any]:
-        state_with_msg = {**state, "message": message}
-        return await respond_node(state_with_msg)
-
-    return respond_with_message
+__all__ = ["ImperativeGraph", "build_graph"]

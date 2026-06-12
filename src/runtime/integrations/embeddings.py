@@ -1,4 +1,4 @@
-"""LangChain Embeddings wrappers for BGE-M3 API (canonical home, #2045).
+"""BGE-M3 embedding wrappers for the runtime API.
 
 Moved from ``telegram_bot/integrations/embeddings.py`` as the second slice
 of the reverse-layering fix tracked under #1948 / #2045 / #2049. The
@@ -8,7 +8,7 @@ internals, and external consumers continue to work without churn.
 
 Provides BGEM3Embeddings (dense), BGEM3SparseEmbeddings (sparse), and
 BGEM3HybridEmbeddings (dense + sparse + optional ColBERT) that wrap the
-local BGE-M3 REST API for use in LangGraph pipelines.
+local BGE-M3 REST API for use in the imperative assistant pipeline.
 
 All HTTP communication delegates to BGEM3Client (unified SDK layer).
 """
@@ -20,7 +20,6 @@ import logging
 from typing import Any
 
 import httpx
-from langchain_core.embeddings import Embeddings
 
 from src.observability import observe
 from src.services.bge_m3_client import BGEM3Client
@@ -29,8 +28,8 @@ from src.services.bge_m3_client import BGEM3Client
 logger = logging.getLogger(__name__)
 
 
-class BGEM3Embeddings(Embeddings):
-    """LangChain Embeddings wrapper for BGE-M3 /encode/dense endpoint."""
+class BGEM3Embeddings:
+    """Embeddings wrapper for BGE-M3 /encode/dense endpoint."""
 
     def __init__(
         self,
@@ -100,7 +99,7 @@ class BGEM3SparseEmbeddings:
         return result.weights
 
 
-class BGEM3HybridEmbeddings(Embeddings):
+class BGEM3HybridEmbeddings:
     """Combined dense+sparse(+ColBERT) embedding via BGE-M3 /encode/hybrid.
 
     Single HTTP call returns dense and sparse vectors, and may also return

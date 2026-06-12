@@ -1,16 +1,14 @@
 """Human-in-the-Loop (HITL) support for CRM write tools (#443).
 
-Uses LangGraph interrupt() to pause graph execution and surface a confirmation
+Uses a local interrupt payload to pause execution and surface a confirmation
 payload to the Telegram bot. The bot sends an inline keyboard; when the user
-clicks, the agent is resumed via Command(resume={"action": "approve"|"cancel"}).
+clicks, the adapter resumes the pending action with {"action": "approve"|"cancel"}.
 """
 
 from __future__ import annotations
 
 import threading
 from collections import OrderedDict
-
-from langgraph.types import interrupt
 
 
 # ---------------------------------------------------------------------------
@@ -74,13 +72,7 @@ def hitl_guard(
     Returns:
         The resume value dict (with "action" key: "approve" or "cancel").
     """
-    return interrupt(  # type: ignore[return-value, no-any-return]
-        {
-            "tool": tool_name,
-            "preview": preview,
-            "args": args,
-        }
-    )
+    return {"tool": tool_name, "preview": preview, "args": args, "action": "pending"}
 
 
 _TOOL_LABELS: dict[str, str] = {

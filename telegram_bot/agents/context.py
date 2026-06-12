@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from langchain_core.runnables import RunnableConfig
+from telegram_bot.agents.tooling import RunnableConfig
 
 
 @dataclass
@@ -47,6 +47,7 @@ class BotContext:
     manager_ids: list[int] | None = None  # Telegram IDs of managers (for handoff, #445)
     apartments_service: Any | None = None  # ApartmentsService (#629)
     search_event_store: Any | None = None  # SearchEventStore
+    config: Any | None = None  # BotConfig
     apartment_pipeline: Any | None = None  # ApartmentExtractionPipeline
 
 
@@ -56,7 +57,7 @@ def get_bot_context(
 ) -> Any | None:
     """Resolve the runtime :class:`BotContext` from a tool runtime or RunnableConfig.
 
-    SDK-native pattern (langchain v1.0+ / langgraph v1.0+ ``context_schema``):
+    Imperative-runtime pattern (formerly backed by graph context schemas):
     the agent is invoked with ``context=BotContext(...)`` and tools receive a
     typed ``runtime: Runtime[BotContext]`` parameter. ``runtime.context`` is
     then the canonical place to read the context from.

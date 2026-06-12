@@ -1,6 +1,6 @@
 """SemanticCacheMiddleware — SDK-native cache_check + cache_store hooks.
 
-This is the ``create_agent``-compatible counterpart of the legacy graph
+This is the ``imperative adapter``-compatible counterpart of the legacy graph
 nodes :func:`telegram_bot.graph.nodes.cache.cache_check_node` and
 :func:`telegram_bot.graph.nodes.cache.cache_store_node`. Slice 2 of the
 voice-path migration plan in ADR-0010 (parent #1535 / #2051).
@@ -44,13 +44,10 @@ middleware-shaped equivalent decouples the two so the class is unit
 testable in isolation. Slice 3's ``create_voice_agent`` factory wires
 the dependencies in at construction time.
 
-Module-scope imports are constrained by
-``tests/contract/test_voice_cache_middleware_contract.py``: stdlib +
-``langchain.agents.middleware`` + ``langchain.messages`` +
-``langgraph.runtime``. Heavy services
-(``telegram_bot.services.rag_core`` etc.) are imported at module scope
-because they are pure Python with no aiogram / qdrant_client / fastapi
-imports themselves.
+Module-scope imports stay lightweight: stdlib plus local Telegram bot
+services only. Heavy external graph/agent frameworks are intentionally not
+imported here; the local ``hook_config`` and ``AIMessage`` helpers preserve the
+small compatibility surface needed by existing middleware tests.
 """
 
 from __future__ import annotations
@@ -58,11 +55,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
-from typing import Any, NotRequired
-
-from langchain.agents.middleware import AgentMiddleware, AgentState, hook_config
-from langchain.messages import AIMessage
-from langgraph.runtime import Runtime
+from typing import Any, NotRequired, TypedDict
 
 from telegram_bot.observability import get_client
 from telegram_bot.services.cache_policy import (
@@ -82,17 +75,34 @@ from telegram_bot.services.rag_core import (
 
 logger = logging.getLogger(__name__)
 
+
+def hook_config(*args: Any, **kwargs: Any):
+    """No-op replacement for local middleware hook metadata."""
+
+    def decorate(func: Any) -> Any:
+        return func
+
+    return decorate
+
+
+class AIMessage:
+    """Minimal message object used by legacy middleware tests."""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
 # Default query type when the agent state has not been classified yet. Mirrors
 # the fallback in cache_check_node so HIT/MISS semantics are identical.
 _DEFAULT_QUERY_TYPE = "GENERAL"
 
 
-class _CacheAwareState(AgentState):
-    """``AgentState`` extension covering the cache fields the hooks read/write.
+class _CacheAwareState(TypedDict, total=False):
+    """``dict[str, Any]`` extension covering the cache fields the hooks read/write.
 
     All fields are :class:`typing_extensions.NotRequired` so old
     checkpoints that pre-date the cache middleware still validate. The
-    schema is intentionally narrower than the eventual ``VoiceAgentState``
+    schema is intentionally narrower than the eventual ``Voicedict[str, Any]``
     (Slice 3) — Slice 2 only ships what the cache middleware itself
     exchanges with downstream middleware/tools.
     """
@@ -115,7 +125,7 @@ class _CacheAwareState(AgentState):
     latency_stages: NotRequired[dict[str, float]]
 
 
-def _extract_query_text(state: AgentState | dict[str, Any]) -> str:
+def _extract_query_text(state: dict[str, Any] | dict[str, Any]) -> str:
     """Return the latest human message content; tolerant of dict/AIMessage."""
     messages = state.get("messages") or []
     if not messages:
@@ -128,7 +138,7 @@ def _extract_query_text(state: AgentState | dict[str, Any]) -> str:
 
 
 def _resolve_filter_signature(
-    state: dict[str, Any] | AgentState[Any], query: str
+    state: dict[str, Any] | dict[str, Any], query: str
 ) -> tuple[bool, str | None]:
     """Mirror ``_resolve_graph_filter_signature`` from the legacy node."""
     filter_sensitive = detect_filter_sensitive_query(query).is_filter_sensitive
@@ -143,31 +153,31 @@ def _resolve_filter_signature(
     return filter_sensitive, filter_signature
 
 
-def _state_str(state: AgentState[Any], key: str, default: str = "") -> str:
+def _state_str(state: dict[str, Any], key: str, default: str = "") -> str:
     value = state.get(key)
     return value if isinstance(value, str) else default
 
 
-def _latency_stages(state: AgentState[Any]) -> dict[str, float]:
+def _latency_stages(state: dict[str, Any]) -> dict[str, float]:
     value = state.get("latency_stages")
     return value if isinstance(value, dict) else {}
 
 
-def _query_embedding(state: AgentState[Any]) -> list[float] | None:
+def _query_embedding(state: dict[str, Any]) -> list[float] | None:
     value = state.get("query_embedding")
     if not isinstance(value, list):
         return None
     return [float(item) for item in value]
 
 
-def _documents(state: AgentState[Any]) -> list[dict[str, Any]]:
+def _documents(state: dict[str, Any]) -> list[dict[str, Any]]:
     value = state.get("documents")
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
 
 
-def _state_float(state: AgentState[Any], key: str, default: float = 0.0) -> float:
+def _state_float(state: dict[str, Any], key: str, default: float = 0.0) -> float:
     value = state.get(key)
     if isinstance(value, int | float | str):
         try:
@@ -177,7 +187,7 @@ def _state_float(state: AgentState[Any], key: str, default: float = 0.0) -> floa
     return default
 
 
-def _final_response_text(state: AgentState[Any] | dict[str, Any]) -> str:
+def _final_response_text(state: dict[str, Any] | dict[str, Any]) -> str:
     """Return the latest assistant message content, falling back to ``response``."""
     messages = state.get("messages") or []
     for message in reversed(messages):
@@ -196,7 +206,7 @@ def _final_response_text(state: AgentState[Any] | dict[str, Any]) -> str:
     return fallback if isinstance(fallback, str) else ""
 
 
-class SemanticCacheMiddleware(AgentMiddleware):
+class SemanticCacheMiddleware:
     """Skip the agent loop on semantic-cache HIT and persist on MISS.
 
     Args:
@@ -228,8 +238,8 @@ class SemanticCacheMiddleware(AgentMiddleware):
     @hook_config(can_jump_to=["end"])
     async def abefore_agent(
         self,
-        state: AgentState[Any],
-        runtime: Runtime[Any],
+        state: dict[str, Any],
+        runtime: Any,
     ) -> dict[str, Any] | None:
         """Cache-check hook; short-circuits the agent loop on HIT."""
         query = _extract_query_text(state)
@@ -388,8 +398,8 @@ class SemanticCacheMiddleware(AgentMiddleware):
 
     async def aafter_agent(
         self,
-        state: AgentState[Any],
-        runtime: Runtime[Any],
+        state: dict[str, Any],
+        runtime: Any,
     ) -> dict[str, Any] | None:
         """Persist the agent's final response into the semantic cache."""
         # Cache HITs already routed through abefore_agent's jump_to=end and

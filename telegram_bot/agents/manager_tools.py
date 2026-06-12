@@ -5,10 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
-
 from telegram_bot.agents.context import get_bot_context
+from telegram_bot.agents.tooling import RunnableConfig, tool
 from telegram_bot.observability import observe
 from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
 

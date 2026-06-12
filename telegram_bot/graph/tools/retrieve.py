@@ -1,4 +1,4 @@
-"""``retrieve_documents`` tool factory for ``create_agent`` (#2050).
+"""``retrieve_documents`` tool factory for the imperative adapter.
 
 Wraps the project's hybrid RRF + ColBERT retrieval into a thin SDK tool.
 The tool itself does NOT own the embedder or the Qdrant connection —
@@ -12,8 +12,9 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field, create_model
+
+from telegram_bot.agents.tooling import BaseTool, tool
 
 
 logger = logging.getLogger(__name__)

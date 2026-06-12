@@ -1,12 +1,13 @@
-"""``rewrite_query`` tool factory for ``create_agent`` (#2050)."""
+"""``rewrite_query`` tool factory for the imperative adapter."""
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
 
-from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
+
+from telegram_bot.agents.tooling import BaseTool, tool
 
 
 logger = logging.getLogger(__name__)

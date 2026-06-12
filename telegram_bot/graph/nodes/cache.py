@@ -12,9 +12,6 @@ import logging
 import time
 from typing import Any
 
-from langgraph.runtime import Runtime
-
-from src.runtime.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
@@ -47,7 +44,7 @@ def _resolve_graph_filter_signature(state: dict[str, Any], query: str) -> tuple[
 @observe(name="node-cache-check", capture_input=False, capture_output=False)
 async def cache_check_node(
     state: dict[str, Any],
-    runtime: Runtime[GraphContext],
+    runtime: Any,
 ) -> dict[str, Any]:
     """Check semantic cache. Compute embedding if not cached.
 
@@ -194,7 +191,7 @@ async def cache_check_node(
 @observe(name="node-cache-store", capture_input=False, capture_output=False)
 async def cache_store_node(
     state: dict[str, Any],
-    runtime: Runtime[GraphContext],
+    runtime: Any,
 ) -> dict[str, Any]:
     """Store response in semantic cache (allowlisted types only).
 

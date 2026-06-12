@@ -12,16 +12,14 @@ from __future__ import annotations
 
 import logging
 import time
+from types import SimpleNamespace
 from typing import Any, cast
-
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
-from langgraph.runtime import Runtime
 
 from src.runtime.graph.nodes.classify import classify_query
 from src.runtime.graph.nodes.guard import guard_node
 from src.runtime.pipeline.rag import rag_pipeline
 from telegram_bot.agents.context import get_bot_context
+from telegram_bot.agents.tooling import RunnableConfig, tool
 from telegram_bot.observability import get_client, observe
 from telegram_bot.pipelines.state_contract import PreAgentStateContract
 from telegram_bot.scoring import write_langfuse_scores
@@ -98,7 +96,7 @@ async def rag_search(
             original_text = ctx.original_user_query if ctx and ctx.original_user_query else query
             guard_result = await guard_node(
                 {"messages": [{"content": original_text}], "latency_stages": {}},
-                Runtime(context={"guard_mode": guard_mode}),
+                SimpleNamespace(context={"guard_mode": guard_mode}),
             )
             if guard_result.get("guard_blocked"):
                 pipeline_wall_ms = 0.0
