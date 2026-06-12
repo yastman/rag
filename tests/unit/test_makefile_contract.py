@@ -229,66 +229,14 @@ def test_obsolete_langfuse_trace_targets_are_removed() -> None:
     assert "scripts.audit.trace_audit_snapshot" not in text
 
 
-# --- #1307 core trace gate contract tests ---
+# --- Legacy trace validation targets removed ---
 
 
-def test_e2e_test_traces_core_is_phony() -> None:
+def test_removed_e2e_trace_validation_targets_stay_removed() -> None:
     text = _makefile_text()
-    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
-    assert phony_blocks, ".PHONY declaration not found in Makefile"
-    combined = " ".join(phony_blocks)
-    assert "e2e-test-traces-core" in combined, "e2e-test-traces-core must be declared in .PHONY"
-
-
-def test_e2e_test_traces_core_target_exists() -> None:
-    text = _makefile_text()
-    assert re.search(r"^e2e-test-traces-core:", text, re.MULTILINE), (
-        "e2e-test-traces-core target must exist in Makefile"
-    )
-
-
-def test_e2e_test_traces_core_uses_langfuse_validation() -> None:
-    text = _makefile_text()
-    block_match = re.search(
-        r"^e2e-test-traces-core:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "e2e-test-traces-core target not found in Makefile"
-    block = block_match.group(0)
-    assert "E2E_VALIDATE_LANGFUSE=1" in block, (
-        "e2e-test-traces-core must set E2E_VALIDATE_LANGFUSE=1"
-    )
-
-
-def test_e2e_test_traces_core_uses_no_judge() -> None:
-    text = _makefile_text()
-    block_match = re.search(
-        r"^e2e-test-traces-core:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "e2e-test-traces-core target not found in Makefile"
-    block = block_match.group(0)
-    assert "--no-judge" in block, (
-        "e2e-test-traces-core must use --no-judge to skip LLM judge during core trace gate"
-    )
-
-
-def test_e2e_test_traces_core_includes_required_scenarios() -> None:
-    text = _makefile_text()
-    block_match = re.search(
-        r"^e2e-test-traces-core:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "e2e-test-traces-core target not found in Makefile"
-    block = block_match.group(0)
-    required = ("0.1", "6.3", "7.1", "8.1")
-    missing = [s for s in required if f"--scenario {s}" not in block]
-    assert not missing, (
-        f"e2e-test-traces-core must include all required #1307 scenarios; missing: {missing}"
-    )
+    assert "e2e-test-traces:" not in text
+    assert "e2e-test-traces-core:" not in text
+    assert "E2E_VALIDATE_LANGFUSE" not in text
 
 
 # --- #1490 latest trace audit contract tests ---
@@ -300,7 +248,7 @@ def test_e2e_test_traces_core_includes_required_scenarios() -> None:
 def test_e2e_trace_targets_use_runtime_env_file() -> None:
     """E2E trace targets must load runtime env explicitly so worktrees without .env still work."""
     text = _makefile_text()
-    for target in ("e2e-telegram-test", "e2e-test-traces", "e2e-test-traces-core"):
+    for target in ("e2e-telegram-test",):
         block_match = re.search(
             rf"^{re.escape(target)}:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
             text,
@@ -431,22 +379,15 @@ def test_bot_preserves_pipeline_failure_exit_code() -> None:
     assert "exit $$status" in block
 
 
-def test_frontend_test_target_runs_vitest() -> None:
-    """The local test inventory includes Vitest tests outside pytest's testpaths."""
+def test_frontend_test_target_removed_from_required_path() -> None:
+    """Archived Mini App frontend tests must not be part of the required local gate."""
     text = _makefile_text()
-    block_match = re.search(
-        r"^test-frontend:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "test-frontend target not found in Makefile"
-    block = block_match.group(0)
-    assert "mini_app/frontend" in block
-    assert "npm test" in block
+    assert "test-frontend:" not in text
+    assert "mini_app/frontend" not in text
 
 
-def test_all_local_target_runs_pytest_full_and_frontend() -> None:
-    """The explicit all-local gate must include both Python and frontend suites."""
+def test_all_local_target_runs_pytest_full_only() -> None:
+    """The explicit all-local gate follows the Python required path only."""
     text = _makefile_text()
     block_match = re.search(
         r"^test-all-local:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
@@ -456,14 +397,14 @@ def test_all_local_target_runs_pytest_full_and_frontend() -> None:
     assert block_match, "test-all-local target not found in Makefile"
     block = block_match.group(0)
     assert "make test-full" in block
-    assert "make test-frontend" in block
+    assert "make test-frontend" not in block
 
 
-def test_local_all_test_targets_are_phony() -> None:
+def test_local_all_test_target_is_phony() -> None:
     text = _makefile_text()
     phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
     combined = " ".join(phony_blocks)
-    assert "test-frontend" in combined
+    assert "test-frontend" not in combined
     assert "test-all-local" in combined
 
 

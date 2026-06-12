@@ -12,7 +12,6 @@ rules:
         - /scripts/**
         - /src/**
         - /telegram_bot/**
-        - /mini_app/**
         - /services/**
 
   - id: python.no-qdrant-client-search

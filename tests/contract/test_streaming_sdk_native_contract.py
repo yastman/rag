@@ -127,8 +127,8 @@ def test_legacy_draft_streamer_module_is_absent() -> None:
 def test_no_draft_streamer_class_anywhere_in_production() -> None:
     """No production module may declare ``class DraftStreamer``.
 
-    Searches the entire production tree (``src/`` + ``telegram_bot/`` +
-    ``mini_app/``) for a class definition matching the legacy abstraction.
+    Searches the production tree (``src/`` + ``telegram_bot/``) for a class
+    definition matching the legacy abstraction.
     Tests are excluded — a fixture or a snapshot helper is allowed to use
     the name.
     """
@@ -136,7 +136,6 @@ def test_no_draft_streamer_class_anywhere_in_production() -> None:
     production_roots = [
         REPO_ROOT / "src",
         REPO_ROOT / "telegram_bot",
-        REPO_ROOT / "mini_app",
     ]
     excluded_parts = {".venv", "__pycache__", "node_modules", ".mypy_cache"}
 

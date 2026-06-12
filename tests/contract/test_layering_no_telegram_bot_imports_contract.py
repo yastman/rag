@@ -1,14 +1,12 @@
-"""Contract: ratchet allowlist for ``src/`` and ``mini_app/`` imports of ``telegram_bot`` (#1948).
+"""Contract: ratchet allowlist for ``src/`` imports of ``telegram_bot`` (#1948).
 
 Project layout intent (`README`, `pyproject.toml`):
 
 * ``src/*`` — reusable RAG library, **must not import** ``telegram_bot``.
-* ``mini_app/*`` — Telegram Mini App backend (separate Docker image), **must
-  not import** ``telegram_bot``.
 * ``telegram_bot/*`` — the bot application, **may** import from ``src/*``.
 
-Reality (issue #1948): ``src/api/main.py`` and ``mini_app/{api,phone}.py``
-import from ``telegram_bot.*`` and the Dockerfiles for both services copy
+Reality (issue #1948): ``src/api/main.py``
+import from ``telegram_bot.*`` and the Dockerfiles for that service copies
 ``telegram_bot/`` into the image to make the imports resolve.
 
 The full migration is multi-PR (each shared module has to be relocated and
@@ -38,7 +36,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST_PATH = REPO_ROOT / "tests" / "data" / "known_layering_violations.json"
 
 # Subtrees that must not depend on telegram_bot.
-GUARDED_ROOTS = ("src", "mini_app")
+GUARDED_ROOTS = ("src",)
 
 
 def _collect_violations() -> dict[str, list[str]]:
@@ -76,12 +74,12 @@ def _load_allowlist() -> dict[str, list[str]]:
     return {k: sorted(v) for k, v in payload.items()}
 
 
-def test_no_new_files_import_telegram_bot_under_src_or_mini_app() -> None:
+def test_no_new_files_import_telegram_bot_under_src() -> None:
     current = _collect_violations()
     allowlist = _load_allowlist()
     new_files = sorted(set(current) - set(allowlist))
     assert not new_files, (
-        "#1948: new file(s) under src/ or mini_app/ import from telegram_bot. The "
+        "#1948: new file(s) under src/ import from telegram_bot. The "
         "package boundary forbids reverse layering. Fix the import (move the shared "
         "module under src/ or factor the surface) before merging. New files: "
         f"{new_files}"
@@ -101,7 +99,7 @@ def test_existing_violation_files_do_not_grow() -> None:
         if added:
             grown[path] = added
     assert not grown, (
-        "#1948: existing file(s) under src/ or mini_app/ added a NEW telegram_bot "
+        "#1948: existing file(s) under src/ added a NEW telegram_bot "
         "import that is not in the allowlist. Either remove the new import or, if "
         "the migration legitimately requires it, document why and update the JSON "
         f"explicitly. Grown: {grown}"

@@ -18,8 +18,6 @@
 
 # shellcheck disable=SC2034  # consumed by sourcing scripts
 VPS_NONCORE_SERVICES=(
-  mini-app-api
-  mini-app-frontend
   docling
   ingestion
   langfuse

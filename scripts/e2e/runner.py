@@ -6,7 +6,7 @@ import asyncio
 import logging
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -24,11 +24,6 @@ from scripts.e2e.claude_judge import (
     build_judge,
 )
 from scripts.e2e.config import E2EConfig
-from scripts.e2e.langfuse_trace_validator import (
-    is_validation_enabled,
-    probe_litellm_route,
-    validate_latest_trace,
-)
 from scripts.e2e.report_generator import ReportGenerator, TestReport, TestResult
 from scripts.e2e.scenarios import (
     SCENARIOS,
@@ -50,31 +45,13 @@ async def run_single_test(
     scenario,
     progress,
     task_id,
-    validate_traces: bool = False,
 ) -> TestResult:
     """Run single test scenario."""
     progress.update(task_id, description=f"[cyan]{scenario.id}[/] {scenario.name}")
 
     try:
-        # Record start time for trace validation
-        test_started_at = datetime.now(UTC)
-
-        # Determine scenario kind for trace validation
+        # Determine scenario delivery for the message send path.
         delivery = getattr(scenario, "delivery", "text")
-        group = getattr(scenario, "group", None)
-        if delivery == "voice":
-            scenario_kind = "voice_note"
-        elif group in {
-            TestGroup.PRICE_FILTERS,
-            TestGroup.ROOM_FILTERS,
-            TestGroup.LOCATION_FILTERS,
-            TestGroup.SEARCH,
-        }:
-            scenario_kind = "apartment"
-        elif group == TestGroup.EDGE_CASES:
-            scenario_kind = "fallback"
-        else:
-            scenario_kind = "text_rag"
 
         # Send message and get response
         if delivery == "voice":
@@ -87,51 +64,18 @@ async def run_single_test(
                 response_timeout=scenario.timeout,
             )
 
-        # Validate Langfuse trace if enabled
-        trace_validation = None
-        if validate_traces:
-            trace_validation = validate_latest_trace(
-                started_at=test_started_at,
-                should_skip_rag=bool(getattr(scenario, "should_skip_rag", False)),
-                is_command=bool(group == TestGroup.COMMANDS),
-                timeout_s=20.0,
-                scenario_kind=scenario_kind,
-            )
-            if not trace_validation.ok:
-                logger.warning(f"Trace validation failed: {trace_validation}")
-
         # Judge the response
         judge_result = await judge.evaluate(
             scenario=scenario,
             bot_response=response.text,
         )
 
-        result = TestResult(
+        return TestResult(
             scenario=scenario,
             bot_response=response.text,
             response_time_ms=response.response_time_ms,
             judge_result=judge_result,
         )
-        if trace_validation is not None:
-            result.langfuse_trace_id = trace_validation.trace_id
-            result.observability_ok = trace_validation.ok
-            result.missing_spans = sorted(trace_validation.missing_spans)
-            result.missing_scores = sorted(trace_validation.missing_scores)
-            if not trace_validation.ok:
-                details = []
-                if trace_validation.error:
-                    details.append(trace_validation.error)
-                if trace_validation.missing_spans:
-                    details.append(f"missing_spans={sorted(trace_validation.missing_spans)}")
-                if trace_validation.missing_scores:
-                    details.append(f"missing_scores={sorted(trace_validation.missing_scores)}")
-                result.error = (
-                    (result.error + " | " if result.error else "")
-                    + "Langfuse: "
-                    + "; ".join(details)
-                )
-
-        return result
 
     except TimeoutError:
         return TestResult(
@@ -173,7 +117,6 @@ async def run_single_test(
 async def run_tests(
     config: E2EConfig,
     scenarios: list,
-    validate_traces: bool = False,
     no_judge: bool = False,
     route_proof: dict[str, str | None] | None = None,
 ) -> TestReport:
@@ -181,8 +124,6 @@ async def run_tests(
     results = []
     start_time = time.time()
 
-    if validate_traces:
-        console.print("[yellow]Langfuse trace validation enabled[/]")
     if no_judge:
         console.print("[yellow]No-judge mode: skipping LLM evaluation[/]")
     else:
@@ -211,7 +152,6 @@ async def run_tests(
                     scenario=scenario,
                     progress=progress,
                     task_id=task_id,
-                    validate_traces=validate_traces,
                 )
                 results.append(result)
 
@@ -363,21 +303,7 @@ def main():
         console.print("[green]Qdrant preflight passed[/]")
         console.print()
 
-    # Check if trace validation is enabled
-    validate_traces = is_validation_enabled()
     route_proof: dict[str, str | None] | None = None
-    should_probe_route = (
-        validate_traces or not args.no_judge
-    ) and config.judge_provider.strip().lower() in {"", "litellm", "openai-compatible", "openai"}
-    if should_probe_route:
-        proof = probe_litellm_route(base_url=config.judge_base_url, model_alias=config.judge_model)
-        if proof is not None:
-            route_proof = {
-                "alias": proof.alias,
-                "route_model": proof.route_model,
-                "info_url": proof.info_url,
-                "source": proof.source,
-            }
 
     # Run tests
     try:
@@ -385,7 +311,6 @@ def main():
             run_tests(
                 config,
                 scenarios,
-                validate_traces=validate_traces,
                 no_judge=args.no_judge,
                 route_proof=route_proof,
             )

@@ -90,9 +90,7 @@ class TestEnvExampleCompleteness:
         "INGESTION_DATABASE_URL",
     ]
 
-    REQUIRED_RUNTIME_VARS = [
-        "BOT_USERNAME",
-    ]
+    REQUIRED_RUNTIME_VARS: list[str] = []
 
     @pytest.mark.parametrize("var", REQUIRED_CRM_VARS)
     def test_crm_var_in_env_example(self, var: str):

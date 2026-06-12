@@ -340,23 +340,12 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - Для Kommo canonical path = current first-party `KommoClient`, не сторонний SDK
   - Reuse or close long-lived clients explicitly; не плодить client-per-request без причины
 
-## tma.js
-- **triggers:** telegram mini app, tma, webapp, initData, themeParams, viewport, swipe behavior
+## tma.js (archived Mini App)
+- **status:** archived under `archive/mini_app`; not a required runtime or CI surface.
+- **trigger:** use only if explicitly unarchiving the Mini App.
 - **context7_id:** /telegram-mini-apps/tma.js
-- **как_у_нас:**
-  - `mini_app/frontend/src/bootstrap.ts` — `init()`, `initData.restore()`, `themeParams`, `viewport`, `swipeBehavior`
-  - `mini_app/frontend/src/pages/QuestionSheet.tsx` — `miniApp`, `sendData`
-  - `mini_app/frontend/src/pages/ExpertSheet.tsx` — `initData.user()`, query bootstrap
-  - `mini_app/frontend/src/test-setup.ts` — package mocking for tests
-- **паттерны:**
-  - SDK init централизован в `bootstrap.ts`, не размазан по страницам
-  - Runtime detection через `isTMA("complete")`; в dev path допустим mock env
-  - Theme/viewport CSS vars и swipe behavior монтируются через SDK primitives
-  - Telegram-specific data брать через `initData`, не через ручной `window.Telegram` parsing
-- **gotchas:**
-  - НЕ дублировать SDK init в page components
-  - Dev/browser fallback path и Telegram runtime path должны оставаться разделенными
-  - Mini App routing использует `HashRouter`; не переводить на browser history без отдельного Telegram deployment решения
+- **archived paths:** `archive/mini_app/frontend/src/bootstrap.ts`, `archive/mini_app/frontend/src/pages/QuestionSheet.tsx`, `archive/mini_app/frontend/src/pages/ExpertSheet.tsx`, `archive/mini_app/frontend/src/test-setup.ts`.
+- **rule:** do not re-add frontend SDK dependencies, Compose services, or required tests without a new product decision.
 
 ## openai (Python SDK)
 - **triggers:** LLM, генерация, completion, chat, AsyncOpenAI, OpenAI, модель, generate, structured output

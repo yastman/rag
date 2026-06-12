@@ -9,9 +9,6 @@ different angles:
 
 * ``tests/unit/test_docker_static_validation.py`` — checked Python 3.14
   is absent and Python 3.13 is present in Langfuse-importing app images.
-* ``tests/unit/mini_app/test_frontend_runtime_contract.py`` — checked the
-  Mini App frontend Node builder pins ``node:20.20.2-slim``.
-
 When Renovate updates (#1776, #1783) bumped Python and Node base images
 without updating either test, the two contracts silently drifted out of
 agreement with reality. This contract consolidates **the policy itself** in
@@ -26,12 +23,6 @@ Policy
     compatible with Python 3.14 or greater`` on import (#1381) and crashes
     with ``pydantic.v1.errors.ConfigError`` at runtime under 3.14 (#1307).
     All Langfuse-importing Docker runtimes therefore pin Python 3.13.
-
-``MINI_APP_NODE_FLOOR = "20.20.2"``
-    Aligns with ``mini_app/frontend/package.json`` ``engines.node`` upper
-    floor of ``^20.19.0`` (and lock file). Renovate bumped to Node 24
-    without revalidating the React 19 / Vite 8 toolchain matrix (#1783),
-    so we stay on the supported floor until that revalidation lands.
 
 Digest pinning
 --------------
@@ -56,23 +47,16 @@ LANGFUSE_PY_FLOOR: str = "3.13"
 LANGFUSE_PY_FORBIDDEN: tuple[str, ...] = ("3.14",)
 """Python minor versions that MUST NOT appear in Langfuse-importing runtimes."""
 
-MINI_APP_NODE_FLOOR: str = "20.20.2"
-"""Required Node version for the Mini App frontend builder stage."""
-
-
 # ── Subjects under contract ──────────────────────────────────────────────────
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 
 LANGFUSE_RUNTIME_DOCKERFILES: tuple[str, ...] = (
     "telegram_bot/Dockerfile",
-    "mini_app/Dockerfile",
     "src/api/Dockerfile",
     "Dockerfile.ingestion",
 )
 """Dockerfiles whose runtime imports ``telegram_bot.observability`` (Langfuse)."""
-
-MINI_APP_FRONTEND_DOCKERFILE: str = "mini_app/frontend/Dockerfile"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,34 +122,6 @@ def test_langfuse_runtime_preserves_digest_pinning(dockerfile: str) -> None:
         )
 
 
-# ── Mini App frontend Node policy ────────────────────────────────────────────
-
-
-def test_mini_app_frontend_builder_uses_node_floor() -> None:
-    """The Mini App frontend builder must pin ``node:<floor>-slim``."""
-    text = _read(MINI_APP_FRONTEND_DOCKERFILE)
-    pattern = re.compile(
-        rf"FROM node:{re.escape(MINI_APP_NODE_FLOOR)}-slim(?:@sha256:[a-f0-9]{{64}})? AS builder"
-    )
-    assert pattern.search(text), (
-        f"{MINI_APP_FRONTEND_DOCKERFILE} must pin "
-        f"node:{MINI_APP_NODE_FLOOR}-slim AS builder per Mini App Node policy "
-        f"(#1814). Found FROM lines: {_from_lines(text)}"
-    )
-
-
-def test_mini_app_frontend_builder_preserves_digest_pinning() -> None:
-    """The Mini App frontend builder Node image must keep an ``@sha256:`` pin."""
-    text = _read(MINI_APP_FRONTEND_DOCKERFILE)
-    builder_lines = [line for line in _from_lines(text) if "node:" in line]
-    assert builder_lines, f"{MINI_APP_FRONTEND_DOCKERFILE}: no Node FROM line found"
-    for line in builder_lines:
-        assert _DIGEST_RE.search(line), (
-            f"{MINI_APP_FRONTEND_DOCKERFILE}: Node FROM line missing "
-            f"@sha256 digest pin (policy #1814): {line!r}"
-        )
-
-
 # ── Cross-suite consistency: this contract drives the existing unit tests ────
 
 
@@ -173,11 +129,10 @@ def test_policy_matches_legacy_unit_test_constants() -> None:
     """Sanity: legacy unit tests must encode the same policy as this contract.
 
     Guards against silent drift where one suite is updated and the other
-    is forgotten. The legacy ``_LANGFUSE_RUNTIME_DOCKERFILES`` list and the
-    Mini App Node floor regex must continue to match this contract.
+    is forgotten. The legacy ``_LANGFUSE_RUNTIME_DOCKERFILES`` list must
+    continue to match this contract.
     """
     docker_static = _read("tests/unit/test_docker_static_validation.py")
-    frontend_unit = _read("tests/unit/mini_app/test_frontend_runtime_contract.py")
 
     # Legacy suite must enforce the same Python floor.
     assert f'"python3.{LANGFUSE_PY_FLOOR.split(".")[1]}"' in docker_static or (
@@ -193,9 +148,3 @@ def test_policy_matches_legacy_unit_test_constants() -> None:
             f"tests/unit/test_docker_static_validation.py "
             f"_LANGFUSE_RUNTIME_DOCKERFILES must include {dockerfile}"
         )
-
-    # Frontend unit test must reference the same Node floor.
-    assert MINI_APP_NODE_FLOOR.replace(".", r"\.") in frontend_unit, (
-        "tests/unit/mini_app/test_frontend_runtime_contract.py must reference "
-        f"Node floor {MINI_APP_NODE_FLOOR}; if the policy changes, update both files."
-    )

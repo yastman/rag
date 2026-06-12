@@ -955,12 +955,6 @@ ingestion = [
     { name = "fastembed" },
     { name = "pymupdf" },
 ]
-mini-app = [
-    { name = "fastapi", version = "0.129.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
-    { name = "fastapi", version = "0.136.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
-    { name = "httpx" },
-    { name = "uvicorn" },
-]
 ml-local = [
     { name = "flagembedding" },
     { name = "scipy" },
@@ -1052,13 +1046,12 @@ requires-dist = [
     { name = "cachetools", marker = "extra == 'telegram'", specifier = ">=5.0.0" },
     { name = "cocoindex", marker = "extra == 'ingest'", specifier = ">=0.3.28" },
     { name = "cocoindex", marker = "extra == 'ingestion'", specifier = ">=0.3.28" },
-    { name = "contextual-rag", extras = ["core", "telegram", "providers", "docs", "voice", "eval", "ingest", "ml-local", "voyage", "observability", "scheduling", "ui", "mini-app"], marker = "extra == 'all'" },
+    { name = "contextual-rag", extras = ["core", "telegram", "providers", "docs", "voice", "eval", "ingest", "ml-local", "voyage", "observability", "scheduling", "ui"], marker = "extra == 'all'" },
     { name = "datasets", marker = "extra == 'eval'", specifier = ">=3.0.0" },
     { name = "docling", marker = "extra == 'ingest'", specifier = ">=2.94.0" },
     { name = "docling", marker = "extra == 'ingestion'", specifier = ">=2.94.0" },
     { name = "docling-core", marker = "extra == 'ingest'", specifier = ">=2.74.1" },
     { name = "docling-core", marker = "extra == 'ingestion'", specifier = ">=2.74.1" },
-    { name = "fastapi", marker = "extra == 'mini-app'", specifier = ">=0.115.0" },
     { name = "fastapi", marker = "extra == 'voice'", specifier = ">=0.115.0" },
     { name = "fastembed", marker = "extra == 'ingest'", specifier = ">=0.7.4" },
     { name = "fastembed", marker = "extra == 'ingestion'", specifier = ">=0.7.4" },
@@ -1068,7 +1061,6 @@ requires-dist = [
     { name = "groq", marker = "extra == 'providers'" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'core'", specifier = ">=0.27.0" },
-    { name = "httpx", marker = "extra == 'mini-app'", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'voice'", specifier = ">=0.27.0" },
     { name = "instructor", marker = "extra == 'providers'", specifier = ">=1.7.0" },
     { name = "langchain-core", specifier = ">=1.2" },
@@ -1126,12 +1118,11 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'ml-local'", specifier = ">=4.30.0" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "typing-extensions", marker = "extra == 'core'", specifier = ">=4.0.0" },
-    { name = "uvicorn", marker = "extra == 'mini-app'", specifier = ">=0.30.0" },
     { name = "uvicorn", marker = "extra == 'voice'", specifier = ">=0.30.0" },
     { name = "uvloop", marker = "extra == 'telegram'", specifier = ">=0.21.0" },
     { name = "voyageai", marker = "extra == 'voyage'", specifier = ">=0.3.0" },
 ]
-provides-extras = ["core", "telegram", "providers", "ml-local", "docs", "observability", "scheduling", "ui", "mini-app", "voice", "docling", "ingestion", "ingest", "eval", "voyage", "all"]
+provides-extras = ["core", "telegram", "providers", "ml-local", "docs", "observability", "scheduling", "ui", "voice", "docling", "ingestion", "ingest", "eval", "voyage", "all"]
 
 [package.metadata.requires-dev]
 dev = [

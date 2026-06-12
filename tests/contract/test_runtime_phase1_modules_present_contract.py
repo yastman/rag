@@ -2,7 +2,7 @@
 
 Issue #2045 (parent #1948) required moving five "low-risk" shared
 modules out of ``telegram_bot/`` into the runtime kernel under ``src/``
-so that ``src/api`` and ``mini_app`` can use them without reaching back
+so that optional adapters can use them without reaching back
 into the bot package. The migration was delivered across multiple PRs
 between 2026-04 and 2026-05 (#2096, #2099, plus earlier scoring /
 observability / phone_utils / content_loader migrations).

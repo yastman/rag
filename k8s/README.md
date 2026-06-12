@@ -10,7 +10,7 @@ This directory contains Kubernetes manifests for a **partial** k3s deployment pa
 ## Honest Scope
 
 - **What works**: Core databases, ML services, bot, and ingestion can run on a single-node k3s cluster.
-- **What is missing**: Some optional profiles (observability, voice SIP, Mini App frontend) may not be fully represented or tested under k3s.
+- **What is missing**: Some optional profiles (observability and voice SIP) may not be fully represented or tested under k3s.
 - **Image policy**: k3s uses versioned GitHub Container Registry images (`ghcr.io/yastman/rag-*`) instead of local `rag/*:latest` tags. See [`../DOCKER.md`](../DOCKER.md) for image names and the publish workflow.
 
 ## Boundaries

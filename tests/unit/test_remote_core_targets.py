@@ -12,7 +12,7 @@ def test_remote_core_services_are_minimal() -> None:
     assert "REMOTE_CORE_SERVICES" in text
     for service in ["postgres", "redis", "qdrant", "bge-m3", "user-base", "bot"]:
         assert service in text
-    for service in ["mini-app-api", "mini-app-frontend", "clickhouse", "minio", "langfuse"]:
+    for service in ["clickhouse", "minio", "langfuse"]:
         core_line = next(
             line for line in text.splitlines() if line.startswith("REMOTE_CORE_SERVICES")
         )

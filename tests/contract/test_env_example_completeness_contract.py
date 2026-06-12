@@ -11,7 +11,7 @@ that fails on drift in either direction:
    credentials).
 
 This contract scans the production tree (``src/``, ``telegram_bot/``,
-``mini_app/``, ``services/``, ``scripts/``) for:
+``services/``, ``scripts/``) for:
 
 - ``os.getenv("KEY"[, ...])``
 - ``os.environ["KEY"]`` / ``os.environ.get("KEY"[, ...])``
@@ -50,7 +50,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCAN_ROOTS: tuple[Path, ...] = (
     REPO_ROOT / "src",
     REPO_ROOT / "telegram_bot",
-    REPO_ROOT / "mini_app",
     REPO_ROOT / "services",
     REPO_ROOT / "scripts",
 )
@@ -121,7 +120,6 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "E2E_QDRANT_DOC_VECTORS": "E2E preflight check fixture",
     "E2E_QDRANT_MIN_APARTMENT_POINTS": "E2E preflight check fixture",
     "E2E_QDRANT_MIN_DOC_POINTS": "E2E preflight check fixture",
-    "E2E_VALIDATE_LANGFUSE": "E2E preflight Langfuse-trace check toggle",
     "EVAL_MODEL": "tests/eval LLM model override; eval-suite only",
     "EVAL_SAMPLE_SIZE": "tests/eval sampling knob; eval-suite only",
     "JUDGE_MODEL": "LLM-judge runtime override; eval-suite only",

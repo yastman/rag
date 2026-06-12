@@ -9,7 +9,7 @@ Preferred replacements (verified via Context7 /python/cpython):
 - Move blocking sync work off the loop: use `asyncio.to_thread(...)`.
 - Sync-async bridge with multiple awaits: use `asyncio.Runner()` (3.11+).
 
-This test scans production paths (src/, scripts/, telegram_bot/, mini_app/,
+This test scans production paths (src/, scripts/, telegram_bot//,
 services/) for `asyncio.get_event_loop(` calls and reports every offender,
 EXCEPT a small allowlist of legacy LangChain sync-bridge wrappers tracked
 under #1639 follow-up. The allowlist must shrink, never grow.
@@ -29,7 +29,6 @@ SCAN_DIRS = [
     REPO_ROOT / "src",
     REPO_ROOT / "scripts",
     REPO_ROOT / "telegram_bot",
-    REPO_ROOT / "mini_app",
     REPO_ROOT / "services",
 ]
 

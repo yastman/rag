@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 
 
-LINT_PATHS = ("src/", "telegram_bot/", "mini_app/", "services/", "scripts/")
+LINT_PATHS = ("src/", "telegram_bot/", "services/", "scripts/")
 
 
 def test_workflow_name_is_ci() -> None:

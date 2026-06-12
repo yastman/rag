@@ -33,7 +33,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCAN_DIRS = (
     REPO_ROOT / "telegram_bot",
     REPO_ROOT / "src",
-    REPO_ROOT / "mini_app",
     REPO_ROOT / "services",
 )
 

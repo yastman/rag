@@ -1,6 +1,6 @@
 # Runtime Services Index
 
-Quick orientation for Docker services, ingestion, the mini app, and the Telegram bot. Links to canonical docs instead of duplicating service tables or env rules.
+Quick orientation for Docker services, ingestion, archived Mini App notes, and the Telegram bot. Links to canonical docs instead of duplicating service tables or env rules.
 
 ## Docker Services
 
@@ -10,14 +10,14 @@ The canonical source of truth for Compose files, profiles, service names, ports,
 
 | Profile | When You Need It |
 |---|---|
-| (default, no profile) | **Dev**: Postgres, Redis, Qdrant, BGE-M3, Docling, user-base, mini-app. **VPS**: Postgres, Redis, Qdrant, BGE-M3, user-base, litellm, bot — the minimal RAG chatbot core. |
+| (default, no profile) | **Dev**: Postgres, Redis, Qdrant, BGE-M3, Docling, user-base. **VPS**: Postgres, Redis, Qdrant, BGE-M3, user-base, litellm, bot — the minimal RAG chatbot core. |
 | `bot` | Telegram bot + LiteLLM proxy (dev only; VPS includes both in the default) |
 | `ingest` | Unified ingestion service |
 | `ml` | Langfuse + ClickHouse + MinIO |
 | `obs` | Loki + Promtail + Alertmanager |
 | `voice` | LiveKit + SIP + voice agent (off by default) |
 
-> On VPS (`compose.yml:compose.vps.yml`), Docling, mini app, ingestion, and the
+> On VPS (`compose.yml:compose.vps.yml`), Docling, ingestion, and the
 > ML platform (Langfuse/ClickHouse/MinIO) are gated behind the `vps-noncore`
 > profile. See [DOCKER.md](../../DOCKER.md) for the full VPS runtime contract.
 
@@ -69,27 +69,13 @@ Key concepts:
 
 See also: [`../QDRANT_STACK.md`](../QDRANT_STACK.md) for collection schema and bootstrap details.
 
-## Mini App
+## Archived Mini App
 
-Telegram Mini App backend (FastAPI) and frontend (React + Vite).
-
-- **Backend entrypoint**: `mini_app/api.py`
-- **Service name**: `mini-app-api`
-- **Local port**: `8090`
-- **Canonical doc**: [`../../mini_app/README.md`](../../mini_app/README.md)
-
-Quick start:
-
-```bash
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d mini-app-api
-curl -fsS http://localhost:8090/health
-```
-
-API surface:
-- `GET /api/config` — UI questions + experts list
-- `POST /api/start-expert` — Store deep-link payload
-- `POST /api/phone` — Collect phone and create CRM lead
-- `GET /health` — Service health
+The Telegram Mini App backend/frontend has been archived under
+[`../../archive/mini_app/`](../../archive/mini_app/) and is no longer a Docker
+service or required validation surface. Do not add `mini-app-api` or
+`mini-app-frontend` back to default Compose, CI lint paths, or required tests
+without a new product decision.
 
 ## Telegram Bot
 

@@ -13,8 +13,7 @@ this contract enforces a directional rule:
 * ``record_counter_metric`` may only be **defined** in
   ``telegram_bot/services/metrics.py``.
 * ``record_counter_metric`` may not be **imported** or **called** from
-  any first-party module under ``telegram_bot/``, ``src/``, ``mini_app/``,
-  or ``services/``.
+  any first-party module under ``telegram_bot/``, ``src/``, or ``services/``.
 * All event-counter call-sites must use ``record_pipeline_event``.
 """
 
@@ -27,7 +26,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 METRICS_OWNER = REPO / "src" / "runtime" / "services" / "metrics.py"
 
-FIRST_PARTY_ROOTS = ("src", "telegram_bot", "mini_app", "services")
+FIRST_PARTY_ROOTS = ("src", "telegram_bot", "services")
 
 IMPORT_RE = re.compile(
     r"^\s*from\s+(telegram_bot|src\.runtime)\.services\.metrics\s+import\s+[^#\n]*\brecord_counter_metric\b",

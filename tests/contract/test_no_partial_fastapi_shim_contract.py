@@ -8,9 +8,8 @@ could import ``src.api.main`` without the optional FastAPI dependency.
 Two ways the shim caused trouble:
 
 * If the import after the shim install raised, the cleanup pop never ran
-  and the partial module leaked into the rest of the worker, turning
-  ``pytest.importorskip("fastapi")`` calls in Mini App tests into
-  ``ImportError: cannot import name 'Depends' from 'fastapi'``.
+  and the partial module leaked into the rest of the worker, turning later
+  FastAPI imports into ``ImportError`` failures.
 * Even when cleanup ran, the bound classes inside ``src.api.main`` kept
   references to the shim, so any test that re-imported the module later
   in the same worker saw a chimera.
@@ -33,7 +32,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Guard scope: any test that touches FastAPI lives in one of these subtrees.
 SCAN_ROOTS = (
     REPO_ROOT / "tests" / "unit" / "api",
-    REPO_ROOT / "tests" / "unit" / "mini_app",
     REPO_ROOT / "tests" / "contract",
 )
 

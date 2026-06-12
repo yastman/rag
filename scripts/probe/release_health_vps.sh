@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REQUIRE_MINI_APP_ENDPOINT="${REQUIRE_MINI_APP_ENDPOINT:-auto}" # auto|true|false
-MINI_APP_FRONTEND_URL="${MINI_APP_FRONTEND_URL:-http://127.0.0.1:8091/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-vps}"
 export COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.vps.yml}"
 
@@ -25,13 +23,6 @@ fi
 if ! command -v make >/dev/null 2>&1; then
   fail "make is required"
 fi
-
-case "$REQUIRE_MINI_APP_ENDPOINT" in
-  auto|true|false) ;;
-  *)
-    fail "REQUIRE_MINI_APP_ENDPOINT must be one of: auto,true,false"
-    ;;
-esac
 
 log "Docker Compose status snapshot"
 docker compose ps
@@ -108,38 +99,7 @@ if failed:
     sys.exit(1)
 PY
 
-mini_running="$(docker compose ps mini-app-api mini-app-frontend --status running --services 2>/dev/null || true)"
-mini_expected=false
-if [ "$REQUIRE_MINI_APP_ENDPOINT" = "true" ]; then
-  mini_expected=true
-elif [ "$REQUIRE_MINI_APP_ENDPOINT" = "auto" ] && [ -n "$mini_running" ]; then
-  mini_expected=true
-fi
-
-if [ "$mini_expected" = "true" ]; then
-  log "Mini app release smoke"
-  if ! printf '%s\n' "$mini_running" | grep -Eq '^mini-app-frontend$'; then
-    fail "mini-app-frontend is not running"
-  fi
-
-  if ! printf '%s\n' "$mini_running" | grep -Eq '^mini-app-api$'; then
-    fail "mini-app-api is not running"
-  fi
-
-  docker compose exec -T mini-app-frontend wget -qO- http://127.0.0.1/health >/dev/null \
-    || fail "mini-app-frontend internal /health failed"
-  docker compose exec -T mini-app-api python - <<'PY'
-import urllib.request
-urllib.request.urlopen("http://localhost:8090/health", timeout=10)
-print("  ok: mini-app-api internal /health")
-PY
-
-  curl -fsS "$MINI_APP_FRONTEND_URL" >/dev/null \
-    || fail "mini-app frontend host endpoint failed: $MINI_APP_FRONTEND_URL"
-  log "Mini app endpoint OK: $MINI_APP_FRONTEND_URL"
-else
-  warn "mini app endpoint check skipped (REQUIRE_MINI_APP_ENDPOINT=${REQUIRE_MINI_APP_ENDPOINT})"
-fi
+log "Mini app release smoke skipped (archived optional surface)"
 
 handoff_runtime_env="$(
   docker compose exec -T bot python - <<'PY'

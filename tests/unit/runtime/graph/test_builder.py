@@ -139,7 +139,7 @@ def test_module_does_not_statically_import_telegram_bot() -> None:
     """Source-level guard: ``src/runtime/graph/builder.py`` is the seam that
     lets us delete the last ``telegram_bot`` static import from ``src/``.
     The seam itself must therefore not statically import ``telegram_bot``;
-    the layering contract test (#1948) covers ``src/`` and ``mini_app/``
+    the layering contract test (#1948) covers ``src/``
     transitively, but a direct check here keeps the regression message
     pointed at the right file.
     """
