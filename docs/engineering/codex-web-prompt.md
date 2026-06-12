@@ -116,6 +116,20 @@ Before opening or marking a PR ready:
 7. Exception: if CI visibility is needed, open a Draft PR only and mark it ready after checks are green.
 8. Baseline/unrelated failures must be documented in PR body and tracked by follow-up issue, not fixed inside the feature PR.
 
+## Post-PR-Created Verification
+
+After creating a PR, the worker must verify with:
+
+```bash
+gh pr view <PR> --repo yastman/rag --json url,state,baseRefName,headRefName,headRefOid
+```
+
+And report:
+- PR URL
+- head branch
+- head SHA
+- base = dev
+
 ## 2. PR Coordinator
 - Используется только для ревью существующих PR и подготовки к merge.
 - Проверить PR diff, body, changed files, base branch и mergeability.
