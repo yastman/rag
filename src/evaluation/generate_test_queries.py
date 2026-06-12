@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient, models
 
 from src.config import Settings
-from src.runtime.llm import create_litellm_chat_client
+from src.runtime.llm import LiteLLMChatClient, create_litellm_chat_client
 
 
 class GeneratedQueries(BaseModel):
@@ -94,7 +94,7 @@ def fetch_article_texts(collection_name: str, article_numbers: list[str]) -> dic
 
 
 async def generate_queries_for_article(
-    client: object, model: str, article_num: str, article_text: str
+    client: LiteLLMChatClient, model: str, article_num: str, article_text: str
 ) -> list[dict]:
     """
     Generate 3 types of queries for a single article.
