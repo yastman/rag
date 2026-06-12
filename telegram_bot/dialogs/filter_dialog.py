@@ -133,7 +133,7 @@ def _callback_intent_id(callback_data: str | None) -> str | None:
         return None
     with contextlib.suppress(Exception):
         intent_id, _ = remove_intent_id(callback_data)
-        return intent_id
+        return intent_id if isinstance(intent_id, str) else None
     return None
 
 

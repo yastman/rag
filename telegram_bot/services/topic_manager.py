@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ class TopicManager:
         await self._redis.set(fwd, tid, ex=_TOPIC_TTL)
         await self._redis.set(self._rev_key(chat_id, tid), expert_id, ex=_TOPIC_TTL)
         logger.info("Created topic %d for expert=%s chat=%d", tid, expert_id, chat_id)
-        return tid
+        return cast(int, tid)
 
     async def get_expert_for_topic(self, chat_id: int, topic_id: int) -> str | None:
         """Reverse lookup: topic_id → expert_id."""

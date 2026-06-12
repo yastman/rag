@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from typing import cast
 
 from aiogram import Bot
 
@@ -31,7 +32,7 @@ class ForumBridge:
         raw_name = f"{client_name} — {goal}"
         name = _truncate_topic_name(raw_name)
         topic = await self._bot.create_forum_topic(chat_id=self._group_id, name=name)
-        return topic.message_thread_id
+        return cast(int, topic.message_thread_id)
 
     async def post_context_pack(
         self,
