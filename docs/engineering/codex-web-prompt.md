@@ -91,6 +91,19 @@ When validation fails, classify before fixing:
 
 Never expand a PR just to make a broad suite green unless the user explicitly asks for a baseline cleanup PR.
 
+## Pre-PR Validation Loop
+
+Before opening or marking a PR ready:
+
+1. Run the required local validation matrix for touched files.
+2. Wait for every command to finish.
+3. If a required local check fails, classify it using Test Failure Triage / Autofix Policy.
+4. Fix PR-caused and static CI-equivalent failures in the current branch.
+5. Re-run the failed command after each fix.
+6. Do not open/mark a ready PR until required local checks are green.
+7. Exception: if CI visibility is needed, open a Draft PR only and mark it ready after checks are green.
+8. Baseline/unrelated failures must be documented in PR body and tracked by follow-up issue, not fixed inside the feature PR.
+
 ## 2. PR Coordinator
 - Используется только для ревью существующих PR и подготовки к merge.
 - Проверить PR diff, body, changed files, base branch и mergeability.
