@@ -33,7 +33,6 @@ Reusable base manifests. These are environment-agnostic and should not contain h
 - **`docling/`** — PVC, Deployment, Service.
 - **`bge-m3/`** — PVC, Deployment, Service.
 - **`user-base/`** — PVC, Deployment, Service.
-- **`litellm/`** — Deployment, Service.
 - **`bot/`** — Deployment.
 - **`ingestion/`** — Deployment.
 - **`kustomization.yaml`** — Aggregates all base resources.

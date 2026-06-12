@@ -92,22 +92,26 @@ async def test_lazy_load_and_reuse_model():
         mock_model_cls.assert_called_once()
 
 
-# 8 LiteLlmProvider calls litellm.completion
+# 8 LiteLlmProvider calls the canonical LiteLLM router client
 @pytest.mark.asyncio
-async def test_litellm_provider_calls_completion():
-    """Verify that LiteLlmProvider.generate calls litellm.acompletion correctly."""
+async def test_litellm_provider_calls_router_client():
+    """Verify that LiteLlmProvider.generate uses the shared LiteLLM router path."""
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "LiteLLM response content"
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-    with patch("litellm.acompletion", return_value=mock_response) as mock_acompletion:
+    with patch(
+        "src.runtime.llm.create_litellm_chat_client", return_value=mock_client
+    ) as mock_create_client:
         provider = LiteLlmProvider(default_model="gpt-4o-mini")
         res = await provider.generate([{"role": "user", "content": "hello"}])
         assert res == "LiteLLM response content"
-        mock_acompletion.assert_called_once()
-        kwargs = mock_acompletion.call_args[1]
-        assert kwargs["model"] == "gpt-4o-mini"
-        assert kwargs["messages"] == [{"role": "user", "content": "hello"}]
+        mock_create_client.assert_called_once_with(model="gpt-4o-mini", timeout=60.0)
+        mock_client.chat.completions.create.assert_awaited_once_with(
+            messages=[{"role": "user", "content": "hello"}]
+        )
 
 
 # 9 LiteLLM errors normalized
@@ -116,29 +120,40 @@ async def test_litellm_errors_normalized():
     """Verify that LiteLLM errors are normalized to the unified exception classes."""
     provider = LiteLlmProvider()
 
+    def _client_with_error(exc: Exception) -> MagicMock:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=exc)
+        return mock_client
+
     # Auth error
     with patch(
-        "litellm.acompletion",
-        side_effect=AuthenticationError("auth failed", "openai", "gpt"),
+        "src.runtime.llm.create_litellm_chat_client",
+        return_value=_client_with_error(AuthenticationError("auth failed", "openai", "gpt")),
     ):
         with pytest.raises(LLMAuthenticationError):
             await provider.generate([{"role": "user", "content": "hi"}])
 
     # Rate limit error
     with patch(
-        "litellm.acompletion",
-        side_effect=RateLimitError("rate limited", "openai", "gpt"),
+        "src.runtime.llm.create_litellm_chat_client",
+        return_value=_client_with_error(RateLimitError("rate limited", "openai", "gpt")),
     ):
         with pytest.raises(LLMRateLimitError):
             await provider.generate([{"role": "user", "content": "hi"}])
 
     # Timeout error
-    with patch("litellm.acompletion", side_effect=Timeout("timeout error", "gpt", "openai")):
+    with patch(
+        "src.runtime.llm.create_litellm_chat_client",
+        return_value=_client_with_error(Timeout("timeout error", "gpt", "openai")),
+    ):
         with pytest.raises(LLMTimeoutError):
             await provider.generate([{"role": "user", "content": "hi"}])
 
     # Generic error
-    with patch("litellm.acompletion", side_effect=Exception("api failure")):
+    with patch(
+        "src.runtime.llm.create_litellm_chat_client",
+        return_value=_client_with_error(Exception("api failure")),
+    ):
         with pytest.raises(LLMError) as exc_info:
             await provider.generate([{"role": "user", "content": "hi"}])
         assert exc_info.value.error_type == "api_error"

@@ -4,10 +4,6 @@ from typing import Any
 
 from src._compat import load_deprecated_package_export
 
-from .claude import ClaudeContextualizer
-from .groq import GroqContextualizer
-from .openai import OpenAIContextualizer
-
 
 __all__ = [
     "ClaudeContextualizer",
@@ -17,6 +13,21 @@ __all__ = [
 
 
 _DEPRECATED_EXPORTS = {
+    "ClaudeContextualizer": (
+        "src.contextualization.claude",
+        "ClaudeContextualizer",
+        "from src.contextualization.claude import ClaudeContextualizer",
+    ),
+    "GroqContextualizer": (
+        "src.contextualization.groq",
+        "GroqContextualizer",
+        "from src.contextualization.groq import GroqContextualizer",
+    ),
+    "OpenAIContextualizer": (
+        "src.contextualization.openai",
+        "OpenAIContextualizer",
+        "from src.contextualization.openai import OpenAIContextualizer",
+    ),
     "ContextualizeProvider": (
         "src.contextualization.base",
         "ContextualizeProvider",

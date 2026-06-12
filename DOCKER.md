@@ -109,7 +109,8 @@ still need to be throwaway/dev-only:
 | BGE-M3 API | `http://localhost:8000` |
 | User Base | `http://localhost:8003` |
 | Docling | `http://localhost:5001` |
-| LiteLLM | `http://localhost:4000` |
+| Mini App API | `http://localhost:8090` |
+| Mini App Frontend | `http://localhost:8091` |
 | Langfuse | `http://localhost:3001` |
 | MinIO API | `http://localhost:${MINIO_API_PORT:-9090}` |
 | MinIO Console | `http://localhost:${MINIO_CONSOLE_PORT:-9091}` |
@@ -133,8 +134,7 @@ still need to be throwaway/dev-only:
 ### Bot path (`make docker-bot-up`)
 
 - `TELEGRAM_BOT_TOKEN`
-- `LITELLM_MASTER_KEY`
-- At least one provider key for LiteLLM routing:
+- At least one provider key for the in-process LiteLLM SDK router:
   - `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
 
 `telegram_bot/Dockerfile` installs Python dependencies from
@@ -233,7 +233,6 @@ make docker-ps
 curl -fsS http://localhost:6333/readyz
 curl -fsS http://localhost:8000/health
 curl -fsS http://localhost:5001/health
-curl -fsS http://localhost:4000/health/liveliness
 curl -fsS http://localhost:3100/ready
 curl -fsS http://localhost:9093/-/healthy
 
@@ -264,10 +263,9 @@ This target runs `scripts/probe/check_bot_runtime_env.py` and checks:
   real bot operation).
 * `TELEGRAM_BOT_TOKEN` is not the CI fallback value `123456789:ABC...fghi`.
   Bot startup with this value will crash-loop with `TokenValidationError`.
-* LiteLLM port `4000` is published on the Docker host (if Docker is available).
-  A missing port binding is most often caused by a **stray third compose file**
-  that sets `litellm: {ports: []}`, overriding the `compose.dev.yml` mapping
-  of `"127.0.0.1:4000:4000"`.
+* At least one provider key is present for the in-process LiteLLM SDK router
+  (`CEREBRAS_API_KEY`, `GROQ_API_KEY`, or `OPENAI_API_KEY`). The bot no longer
+  depends on an external LLM proxy port.
 
 If issues are found `preflight-bot` exits non-zero, which blocks the
 `docker-bot-up` and `bot` targets. To run checks without blocking (e.g. in CI):
@@ -278,38 +276,27 @@ PREFLIGHT_BOT_FLAGS='--no-fail' make preflight-bot
 
 The preflight is a **guardrail** — it explains what is wrong and how to fix
 it, but it cannot supply real credentials. You must provide a valid
-`TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and at least one provider key
-in `.env`.
+`TELEGRAM_BOT_TOKEN` and at least one provider key in `.env`.
 
 ### Common `make bot` and `make docker-bot-up` failures
 
 | Symptom                                         | Likely cause                                    | Fix                                                                              |
 |-------------------------------------------------|-------------------------------------------------|----------------------------------------------------------------------------------|
-| Bot crash-loop, `TokenValidationError`          | `.env` is missing and CI fallback token is used | `cp .env.example .env` then set `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and a provider key |
-| `curl localhost:4000` Connection Refused        | LiteLLM port not published; stray compose file  | Remove any stray compose files (e.g. `/tmp/compose.postgres-root.yml`) that override `litellm` ports, then `make docker-bot-up` |
+| Bot crash-loop, `TokenValidationError`          | `.env` is missing and CI fallback token is used | `cp .env.example .env` then set `TELEGRAM_BOT_TOKEN` and a provider key |
 | Redis auth `WRONGPASS` / `NOAUTH` after `.env` change | `REDIS_PASSWORD` differs between `.env` and running container | `make local-redis-recreate` then `make test-bot-health` |
 | `make docker-bot-up` exits before starting      | `preflight-bot` detected issues (see #2123, #2126) | `make preflight-bot` for details, or `PREFLIGHT_BOT_FLAGS='--no-fail' make docker-bot-up` to bypass |
 | `make bot` exits before starting                | `preflight-bot` detected issues (see #2123, #2126) | `make preflight-bot` for details, or `PREFLIGHT_BOT_FLAGS='--no-fail' make bot` to bypass |
 
-### LiteLLM port recovery (stray compose file)
+### LLM provider key recovery
 
-A stray Compose file at `/tmp/compose.postgres-root.yml` was observed to clear
-`litellm` host ports (`ports: []`), overriding the `compose.dev.yml` mapping.
-This blocks LLM-dependent commands (`make bot`, `make test-bot-health`).
-
-Recovery:
+The bot uses the in-process LiteLLM SDK router, so LLM-dependent commands no
+longer require a `litellm` container or a host port on `4000`. If generation
+fails at startup, verify that at least one provider key is present in the env
+file used by the bot:
 
 ```bash
-# 1. Remove the stray compose file
-rm /tmp/compose.postgres-root.yml
-
-# 2. Restart litellm without the stray file
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility \
-  --env-file tests/fixtures/compose.ci.env \
-  --profile bot up -d --force-recreate litellm
-
-# 3. Verify the port
-curl -fsS http://localhost:4000/health/liveliness
+rg "^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY|LLM_API_KEY)=" .env
+make preflight-bot
 ```
 
 ## Local Release Gate

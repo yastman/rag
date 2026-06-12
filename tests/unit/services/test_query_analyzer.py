@@ -1,4 +1,4 @@
-"""Unit tests for QueryAnalyzer service (Instructor SDK)."""
+"""Unit tests for QueryAnalyzer service (Structured output SDK)."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -41,11 +41,11 @@ class TestQueryAnalyzerInit:
         )
         assert analyzer.model == "gpt-4o"
 
-    def test_init_creates_openai_client(self):
-        from openai import AsyncOpenAI
+    def test_init_creates_litellm_router_client(self):
+        from src.runtime.llm.router import LiteLLMChatClient
 
         analyzer = QueryAnalyzer(api_key="test-api-key", base_url="http://localhost:8000")
-        assert isinstance(analyzer.client, AsyncOpenAI)
+        assert isinstance(analyzer.client, LiteLLMChatClient)
 
     def test_init_with_different_models(self):
         test_models = ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "glm-4"]
@@ -66,15 +66,15 @@ class TestQueryAnalyzerAnalyze:
 
     @pytest.fixture
     def analyzer(self):
-        """Create QueryAnalyzer with mocked Instructor client."""
+        """Create QueryAnalyzer with mocked Structured output client."""
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
         )
-        analyzer._instructor_client = AsyncMock()
+        analyzer._structured_client = AsyncMock()
         return analyzer
 
     async def test_analyze_returns_filters_and_semantic_query(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(
                 filters={"price": {"lt": 100000}, "city": "Несебр"},
                 semantic_query="уютная квартира с хорошим ремонтом",
@@ -88,62 +88,62 @@ class TestQueryAnalyzerAnalyze:
         assert result["filters"] == {"price": {"lt": 100000}, "city": "Несебр"}
         assert result["semantic_query"] == "уютная квартира с хорошим ремонтом"
 
-    async def test_analyze_calls_instructor_sdk(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+    async def test_analyze_calls_structured_client(self, analyzer):
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={}, semantic_query="test query")
         )
 
         await analyzer.analyze("test query")
 
-        analyzer._instructor_client.chat.completions.create.assert_called_once()
+        analyzer._structured_client.chat.completions.create.assert_called_once()
 
-    async def test_analyze_uses_instructor_response_model(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+    async def test_analyze_uses_structured_output_response_model(self, analyzer):
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         await analyzer.analyze("test query")
 
-        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._structured_client.chat.completions.create.call_args[1]
         assert call_kwargs["response_model"] is QueryAnalysisResult
         assert call_kwargs["max_retries"] == 2
 
     async def test_analyze_uses_zero_temperature(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         await analyzer.analyze("test query")
 
-        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._structured_client.chat.completions.create.call_args[1]
         assert call_kwargs["temperature"] == 0.0
 
     async def test_analyze_sends_query_in_user_message(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         test_query = "квартира в Солнечном берегу до 50000 евро"
         await analyzer.analyze(test_query)
 
-        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._structured_client.chat.completions.create.call_args[1]
         messages = call_kwargs["messages"]
         user_message = next(m for m in messages if m["role"] == "user")
         assert test_query in user_message["content"]
 
     async def test_analyze_uses_specified_model(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         await analyzer.analyze("test query")
 
-        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._structured_client.chat.completions.create.call_args[1]
         assert call_kwargs["model"] == "gpt-4o-mini"
 
-    async def test_analyze_fallback_on_instructor_error(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
-            side_effect=Exception("Instructor validation failed")
+    async def test_analyze_fallback_on_structured_output_error(self, analyzer):
+        analyzer._structured_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Structured output validation failed")
         )
 
         original_query = "квартира в Бургасе"
@@ -153,7 +153,7 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == original_query
 
     async def test_analyze_fallback_on_api_connection_error(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             side_effect=openai.APIConnectionError(request=MagicMock())
         )
 
@@ -167,7 +167,7 @@ class TestQueryAnalyzerAnalyze:
         mock_resp = MagicMock()
         mock_resp.status_code = 429
         mock_resp.headers = {}
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             side_effect=openai.RateLimitError(
                 message="Rate limited",
                 response=mock_resp,
@@ -182,7 +182,7 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == original_query
 
     async def test_analyze_fallback_on_timeout_error(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             side_effect=openai.APITimeoutError(request=MagicMock())
         )
 
@@ -193,7 +193,7 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == original_query
 
     async def test_analyze_returns_empty_filters_when_none_found(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={}, semantic_query="красивая квартира у моря")
         )
 
@@ -203,7 +203,7 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == "красивая квартира у моря"
 
     async def test_analyze_handles_missing_semantic_query_in_response(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={"price": {"lt": 50000}}, semantic_query="")
         )
 
@@ -214,7 +214,7 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == original_query
 
     async def test_analyze_handles_missing_filters_in_response(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(semantic_query="уютная квартира")
         )
 
@@ -224,7 +224,7 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == "уютная квартира"
 
     async def test_analyze_with_complex_filters(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(
                 filters={
                     "price": {"lt": 100000, "gt": 50000},
@@ -246,17 +246,17 @@ class TestQueryAnalyzerAnalyze:
         assert result["filters"]["city"] == "Солнечный берег"
 
     async def test_analyze_sets_max_tokens(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         await analyzer.analyze("test query")
 
-        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._structured_client.chat.completions.create.call_args[1]
         assert call_kwargs["max_tokens"] == 1000
 
     async def test_analyze_with_unicode_query(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(
                 filters={"city": "Варна"}, semantic_query="квартира с мебелью"
             )
@@ -267,9 +267,9 @@ class TestQueryAnalyzerAnalyze:
         assert result["filters"]["city"] == "Варна"
         assert result["semantic_query"] == "квартира с мебелью"
 
-    async def test_analyze_handles_instructor_failure(self, analyzer):
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
-            side_effect=Exception("Instructor failed")
+    async def test_analyze_handles_structured_output_failure(self, analyzer):
+        analyzer._structured_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Structured output failed")
         )
 
         result = await analyzer.analyze("test query")
@@ -308,8 +308,8 @@ class TestQueryAnalyzerFlow:
             api_key="test-key", base_url="http://localhost:8000", model="gpt-4o"
         )
 
-        analyzer._instructor_client = AsyncMock()
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client = AsyncMock()
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(
                 filters={"price": {"lt": 75000}}, semantic_query="квартира у моря"
             )
@@ -329,14 +329,14 @@ class TestQueryAnalyzerFlow:
 
     async def test_multiple_queries(self):
         analyzer = QueryAnalyzer(api_key="test-key", base_url="http://localhost:8000")
-        analyzer._instructor_client = AsyncMock()
+        analyzer._structured_client = AsyncMock()
 
         responses = [
             QueryAnalysisResult(filters={"city": "Несебр"}, semantic_query="студия"),
             QueryAnalysisResult(filters={"rooms": 2}, semantic_query="квартира"),
             QueryAnalysisResult(filters={}, semantic_query="апартамент у моря"),
         ]
-        analyzer._instructor_client.chat.completions.create = AsyncMock(side_effect=responses)
+        analyzer._structured_client.chat.completions.create = AsyncMock(side_effect=responses)
 
         result1 = await analyzer.analyze("студия в Несебре")
         result2 = await analyzer.analyze("двухкомнатная квартира")
@@ -345,13 +345,13 @@ class TestQueryAnalyzerFlow:
         assert result1["filters"] == {"city": "Несебр"}
         assert result2["filters"] == {"rooms": 2}
         assert result3["filters"] == {}
-        assert analyzer._instructor_client.chat.completions.create.call_count == 3
+        assert analyzer._structured_client.chat.completions.create.call_count == 3
 
     async def test_error_recovery(self):
         analyzer = QueryAnalyzer(api_key="test-key", base_url="http://localhost:8000")
-        analyzer._instructor_client = AsyncMock()
+        analyzer._structured_client = AsyncMock()
 
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             side_effect=[
                 openai.APIConnectionError(request=MagicMock()),
                 QueryAnalysisResult(filters={"city": "Бургас"}, semantic_query="квартира"),
@@ -368,64 +368,22 @@ class TestQueryAnalyzerFlow:
 
 
 # =============================================================================
-# TestQueryAnalyzerInstructorLangfuseCompat (#1659 STEP 0 PREFLIGHT)
+# TestQueryAnalyzerStructuredOutputCompat
 # =============================================================================
 
 
-class TestQueryAnalyzerInstructorLangfuseCompat:
-    """Preflight: confirm `instructor.from_openai(langfuse.openai.AsyncOpenAI(...))`
-    preserves langfuse auto-tracing on the underlying client.
+class TestQueryAnalyzerStructuredOutputCompat:
+    """Preflight: query analyzer no longer imports Structured output.
 
-    Rationale (audit comment on #1659): if instructor patched
-    ``chat.completions.create`` at the wrong layer it would strip the
-    ``langfuse.openai`` wrap, and then a plain ``@observe`` wrapper around
-    ``QueryAnalyzer.analyze`` would NOT contain a nested generation
-    observation — we'd need ``with langfuse.start_as_current_observation
-    (as_type='generation', ...)`` instead.
-
-    What this test asserts: the AsyncInstructor instance retains a reference
-    to the original langfuse-wrapped client (``ic.client is c``) and that
-    client's ``chat.completions.create`` still carries the langfuse wrapt
-    marker (``_self_wrapper.__module__`` starts with ``"langfuse.openai"``).
-    instructor's ``AsyncInstructor.create`` ultimately delegates to
-    ``self.client.chat.completions.create`` via ``self.create_fn`` so the
-    langfuse generation is created at call time. Pass ⇒ simple ``@observe``
-    is the correct implementation strategy for #1659.
+    Structured output is requested through the LiteLLM router compatibility shim
+    using ``response_model=QueryAnalysisResult``.
     """
 
-    def test_chat_completions_create_remains_langfuse_wrapped(self):
-        """instructor must not strip the langfuse trace wrap on the client."""
-        import instructor
-        from langfuse.openai import AsyncOpenAI
+    def test_module_does_not_import_instructor(self):
+        import telegram_bot.services.query_analyzer as qa_mod
 
-        c = AsyncOpenAI(api_key="x", base_url="http://x")
-        ic = instructor.from_openai(c)
+        assert not hasattr(qa_mod, "instructor")
 
-        # instructor stores the original client as ic.client
-        assert ic.client is c, (
-            "instructor.from_openai must retain the original langfuse-wrapped "
-            "client; otherwise the langfuse trace wrap is lost"
-        )
-
-        underlying_create = ic.client.chat.completions.create
-        # langfuse uses wrapt to monkey-patch the OpenAI SDK call site, leaving
-        # a BoundFunctionWrapper whose `_self_wrapper` points back at langfuse.
-        assert hasattr(underlying_create, "__wrapped__"), (
-            "Expected `__wrapped__` marker from wrapt on langfuse.openai's "
-            "patched chat.completions.create"
-        )
-        wrapper = getattr(underlying_create, "_self_wrapper", None)
-        assert wrapper is not None, (
-            "Expected wrapt `_self_wrapper` attribute on langfuse-patched create"
-        )
-        wrapper_module = getattr(wrapper, "__module__", "") or ""
-        assert wrapper_module.startswith("langfuse.openai"), (
-            f"langfuse trace wrap stripped after instructor.from_openai — "
-            f"_self_wrapper module is {wrapper_module!r}; "
-            f"#1659 implementation must switch to "
-            f"`with langfuse.start_as_current_observation(as_type='generation', "
-            f"name='query-analyzer-llm', model=self.model) as gen: ...`"
-        )
 
 
 # =============================================================================
@@ -441,9 +399,8 @@ class TestQueryAnalyzerObserveInstrumentation:
         @observe(name="query-analyzer",
                  capture_input=False, capture_output=False)
 
-    so the auto-traced generation produced by ``langfuse.openai.AsyncOpenAI``
-    (preserved through ``instructor.from_openai``, see preflight test)
-    becomes a child of a named ``query-analyzer`` span instead of an orphan
+    so the SDK-router generation span becomes a child of a named
+    ``query-analyzer`` span instead of an orphan
     top-level trace when the analyzer is invoked outside a request-scoped
     trace.
 
@@ -548,11 +505,9 @@ class TestQueryAnalyzerObserveInstrumentation:
     def test_query_analyzer_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
         """``analyze`` is decorated with the audit's exact kwargs.
 
-        CRITICAL: ``as_type`` MUST NOT be present — preflight confirmed
-        ``langfuse.openai`` wrap survives ``instructor.from_openai`` (the
-        underlying client's chat.completions.create still carries
-        ``_self_wrapper.__module__ == "langfuse.openai"``), so the wrapper
-        is a plain span and the nested generation is owned by langfuse.openai.
+        CRITICAL: ``as_type`` MUST NOT be present — the wrapper is a plain
+        span around the SDK-router generation call, avoiding duplicate
+        generation observations.
         """
         captured = self._record_observe_calls(monkeypatch)
 
@@ -599,8 +554,8 @@ class TestQueryAnalyzerObserveInstrumentation:
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
         )
-        analyzer._instructor_client = AsyncMock()
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client = AsyncMock()
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={}, semantic_query="quartira")
         )
 
@@ -652,8 +607,8 @@ class TestQueryAnalyzerObserveInstrumentation:
         )
         secret_city = "СекретныйГородКоторыйНеДолженПопастьВspan"
         secret_semantic = "очень-чувствительный-семантический-запрос-пользователя"
-        analyzer._instructor_client = AsyncMock()
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client = AsyncMock()
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(
                 filters={
                     "price": {"lt": 100000},
@@ -705,8 +660,8 @@ class TestQueryAnalyzerObserveInstrumentation:
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
         )
-        analyzer._instructor_client = AsyncMock()
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client = AsyncMock()
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             return_value=QueryAnalysisResult(filters={"city": "Бургас"}, semantic_query="квартира")
         )
 
@@ -733,9 +688,9 @@ class TestQueryAnalyzerObserveInstrumentation:
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
         )
-        analyzer._instructor_client = AsyncMock()
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
-            side_effect=RuntimeError("Instructor exploded mid-analyze")
+        analyzer._structured_client = AsyncMock()
+        analyzer._structured_client.chat.completions.create = AsyncMock(
+            side_effect=RuntimeError("Structured output exploded mid-analyze")
         )
 
         original_query = "квартира в Бургасе"
@@ -754,7 +709,7 @@ class TestQueryAnalyzerObserveInstrumentation:
             "QueryAnalyzer.analyze (#1659 plan)"
         )
         status = error_calls[0].get("status_message", "")
-        assert "Instructor exploded mid-analyze" in status
+        assert "Structured output exploded mid-analyze" in status
         assert len(status) <= 220
 
     async def test_exception_path_for_openai_api_errors_records_error_level(self, monkeypatch):
@@ -772,8 +727,8 @@ class TestQueryAnalyzerObserveInstrumentation:
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
         )
-        analyzer._instructor_client = AsyncMock()
-        analyzer._instructor_client.chat.completions.create = AsyncMock(
+        analyzer._structured_client = AsyncMock()
+        analyzer._structured_client.chat.completions.create = AsyncMock(
             side_effect=openai.APITimeoutError(request=MagicMock())
         )
 

@@ -2663,7 +2663,7 @@ class PropertyBot:
                     kommo_client=getattr(self, "_kommo_client", None),
                 )
 
-                # Create agent via SDK — route through LiteLLM proxy (#420)
+                # Create agent via SDK — route through the in-process LiteLLM router (#420)
                 agent = create_bot_agent(
                     model=self.config.supervisor_model,
                     tools=tools,

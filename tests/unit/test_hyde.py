@@ -86,12 +86,12 @@ class TestQueryPreprocessorHyDE:
 
 
 class TestHyDEGenerator:
-    """Tests for HyDEGenerator class (OpenAI SDK)."""
+    """Tests for HyDEGenerator class (LiteLLM SDK router)."""
 
     def test_init_defaults(self):
         hyde = HyDEGenerator()
         assert hyde.api_key == "not-needed"
-        assert hyde.base_url == "http://localhost:4000"
+        assert hyde.base_url == ""
         assert hyde.model == "gpt-4o-mini"
 
     def test_init_custom_params(self):
@@ -104,11 +104,11 @@ class TestHyDEGenerator:
         assert hyde.base_url == "http://custom:5000"
         assert hyde.model == "gpt-4o"
 
-    def test_init_creates_openai_client(self):
-        from openai import AsyncOpenAI
+    def test_init_creates_litellm_router_client(self):
+        from src.runtime.llm.router import LiteLLMChatClient
 
         hyde = HyDEGenerator()
-        assert isinstance(hyde.client, AsyncOpenAI)
+        assert isinstance(hyde.client, LiteLLMChatClient)
 
     async def test_generate_hypothetical_document_success(self):
         hyde = HyDEGenerator()

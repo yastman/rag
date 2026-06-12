@@ -1,17 +1,12 @@
-"""Query analyzer service using LLM to extract filters.
-
-Uses OpenAI SDK via Langfuse drop-in replacement for auto-tracing.
-"""
+"""Query analyzer service using LiteLLM JSON-schema structured output."""
 
 import logging
-import warnings
 from typing import Any
 
-import instructor
 import openai
-from langfuse.openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
+from src.runtime.llm import create_litellm_chat_client
 from telegram_bot.integrations.prompt_manager import get_prompt_with_object
 from telegram_bot.observability import get_client, observe
 
@@ -51,7 +46,7 @@ SYSTEM_PROMPT = """Ты QueryAnalyzer для системы поиска нед�
 
 
 class QueryAnalysisResult(BaseModel):
-    """Pydantic model for query analysis extraction via Instructor."""
+    """Pydantic model for query analysis extraction via JSON-schema output."""
 
     filters: dict[str, Any] = Field(
         default_factory=dict,
@@ -70,19 +65,8 @@ class QueryAnalyzer:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=self.base_url,
-            max_retries=2,
-            timeout=30.0,
-        )
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=("Client should be an instance of openai.OpenAI or openai.AsyncOpenAI.*"),
-                category=UserWarning,
-            )
-            self._instructor_client = instructor.from_openai(self.client)
+        self.client = create_litellm_chat_client(model=model, timeout=30.0)
+        self._structured_client = self.client
 
     @observe(
         name="query-analyzer",
@@ -92,21 +76,9 @@ class QueryAnalyzer:
     async def analyze(self, query: str) -> dict[str, Any]:
         """Analyze query and extract filters + semantic query.
 
-        Wrapped in ``@observe`` (#1659) so the auto-traced generation
-        produced by ``langfuse.openai`` (preserved through
-        ``instructor.from_openai`` — the underlying client's
-        ``chat.completions.create`` retains the wrapt langfuse marker, see
-        the preflight test ``TestQueryAnalyzerInstructorLangfuseCompat``)
-        becomes a child of a named ``query-analyzer`` span instead of an
-        orphan top-level trace when the analyzer is invoked outside a
-        request-scoped trace.
-
-        Per the audit comment on #1659 the wrapper is a *plain span*, not
-        ``as_type="generation"``: ``langfuse.openai`` already emits a
-        generation observation for each ``chat.completions.create`` call
-        and an outer generation would produce duplicate observations.
-
-        Curated ``update_current_span`` payloads avoid leaking the full
+        Wrapped in ``@observe`` (#1659) so the analyzer remains a named span
+        around the LiteLLM SDK-router structured-output call. Curated
+        ``update_current_span`` payloads avoid leaking the full
         query or the full LLM response into Langfuse:
 
         * input: ``{"query_preview": query[:120], "model": self.model}``
@@ -147,16 +119,13 @@ class QueryAnalyzer:
                 "max_retries": 2,
                 "temperature": 0.0,
                 "max_tokens": 1000,
-                "name": "query-analysis",  # langfuse kwarg
+                "name": "query-analysis",
             }
             if prompt_obj is not None:
-                # Link generation observation to its Langfuse Prompt entry (#1666).
-                # Instructor preserves the langfuse.openai wrap, so the kwarg is
-                # forwarded to the underlying create() call (verified in #1681 preflight).
+                # Kept as metadata for clients that know how to link Langfuse prompts;
+                # the LiteLLM router drops it before calling the provider.
                 create_kwargs["langfuse_prompt"] = prompt_obj
-            result = await self._instructor_client.chat.completions.create(  # type: ignore[call-overload]
-                **create_kwargs,
-            )
+            result = await self._structured_client.chat.completions.create(**create_kwargs)
 
             filters = result.filters
             semantic_query = result.semantic_query or query
@@ -185,5 +154,7 @@ class QueryAnalyzer:
             return {"filters": {}, "semantic_query": query}
 
     async def close(self):
-        """Close the OpenAI client."""
-        await self.client.close()
+        """Close the underlying client when it exposes an async close hook."""
+        close = getattr(self.client, "close", None)
+        if close is not None:
+            await close()

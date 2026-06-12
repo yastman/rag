@@ -5,15 +5,31 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.config import APIProvider, Settings
-from src.contextualization import (
-    ClaudeContextualizer,
-    GroqContextualizer,
-    OpenAIContextualizer,
-)
 from src.ingestion import DocumentChunker, DocumentIndexer, UniversalDocumentParser
 from src.models import get_sentence_transformer
 from src.observability import observe
 from src.retrieval import create_search_engine
+
+
+def ClaudeContextualizer(settings: Settings) -> Any:
+    """Create optional Claude contextualizer lazily to keep core deps lean."""
+    from src.contextualization.claude import ClaudeContextualizer as _ClaudeContextualizer
+
+    return _ClaudeContextualizer(settings)
+
+
+def GroqContextualizer(settings: Settings) -> Any:
+    """Create optional Groq contextualizer lazily to keep core deps lean."""
+    from src.contextualization.groq import GroqContextualizer as _GroqContextualizer
+
+    return _GroqContextualizer(settings)
+
+
+def OpenAIContextualizer(settings: Settings) -> Any:
+    """Create OpenAI contextualizer lazily."""
+    from src.contextualization.openai import OpenAIContextualizer as _OpenAIContextualizer
+
+    return _OpenAIContextualizer(settings)
 
 
 @dataclass

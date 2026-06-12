@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LLM_BASE_URL=${LLM_BASE_URL:-${LITELLM_BASE_URL:-http://localhost:4000}}
-
 fail() {
   echo "FAIL: $1" >&2
   exit 1
@@ -25,10 +23,6 @@ elif [ -f tests/fixtures/compose.ci.env ]; then
   # shellcheck disable=SC1091
   . tests/fixtures/compose.ci.env
   set +a
-fi
-
-if ! command -v curl >/dev/null 2>&1; then
-  fail "curl is required"
 fi
 
 if ! command -v uv >/dev/null 2>&1; then
@@ -119,18 +113,24 @@ finally:
     client.close()
 PY
 
-# LiteLLM/LLM connectivity
-normalized_llm_base_url="$(strip_trailing_slash "$LLM_BASE_URL")"
-health_base_url="${normalized_llm_base_url%/v1}"
-models_url="$normalized_llm_base_url/models"
-health_url="$health_base_url/health/readiness"
+# LiteLLM SDK router: verify provider credentials and model aliases without a proxy service.
+uv run --no-sync python - <<'PY' || fail "LLM SDK router is not configured"
+import os
 
-if curl -fsS "$health_url" >/dev/null; then
-  echo "✓ LiteLLM readiness OK: $health_url"
-else
-  # Fallback for OpenAI-compatible endpoints.
-  curl -fsS "$models_url" >/dev/null || fail "LLM endpoint not responding at $LLM_BASE_URL"
-  echo "✓ LLM models OK: $models_url"
-fi
+from src.runtime.llm.router import DEFAULT_MODEL_ALIAS, build_model_list
+
+provider_keys = ("CEREBRAS_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "LLM_API_KEY")
+present = [key for key in provider_keys if os.getenv(key)]
+if not present:
+    raise RuntimeError(
+        "Set at least one provider key: CEREBRAS_API_KEY, GROQ_API_KEY, "
+        "OPENAI_API_KEY, or legacy LLM_API_KEY"
+    )
+
+aliases = {entry["model_name"] for entry in build_model_list()}
+if DEFAULT_MODEL_ALIAS not in aliases:
+    raise RuntimeError(f"missing default LLM alias: {DEFAULT_MODEL_ALIAS}")
+print(f"✓ LiteLLM SDK router configured: {DEFAULT_MODEL_ALIAS} ({', '.join(present)})")
+PY
 
 exit 0

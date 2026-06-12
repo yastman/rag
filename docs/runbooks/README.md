@@ -11,7 +11,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Recent Langfuse traces (Russian: "изучи последние трейсы") | core E2E plus JSON/product-log review (`make e2e-core-live`) → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
 | Qdrant health / query / index issues (Russian: "изучи последние qdrant запросы") | `curl -fsS http://localhost:6333/readyz` → [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Redis / cache degradation (Russian: "сломался redis") | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
-| LiteLLM / provider failure (Russian: "сломался litellm") | `curl -s http://localhost:4000/health` → [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
+| LiteLLM / provider failure (Russian: "сломался litellm") | `uv run python scripts/probe/check_bot_runtime_env.py` → [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
 | Compose service health | `make docker-ps` → [`DOCKER.md`](../../DOCKER.md) |
 | `docker compose ls` shows mixed sources / `/tmp/compose.*.yml` overrides | `docker compose ls --format json` → [`COMPOSE_SOURCE_CLEANUP.md`](COMPOSE_SOURCE_CLEANUP.md) |
 | Self-hosted runner offline / nightly-heavy queued | `scripts/check_self_hosted_runner.sh` → [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md) |

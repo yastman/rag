@@ -109,21 +109,21 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
     создаёт лишнюю работу резолверу/сборке в PR-проверках. Контракт:
     `tests/contract/test_grpcio_dependency_audit_contract.py`.
 
-## instructor
+## LiteLLM structured output
 - **triggers:** structured extraction, LLM parsing, response_model, Pydantic extraction, фильтры квартир
-- **context7_id:** /instructor-ai/instructor
+- **context7_id:** /BerriAI/litellm
 - **как_у_нас:**
-  - `telegram_bot/services/apartment_llm_extractor.py` — apartment filter extraction (single non-streaming call)
-  - `telegram_bot/services/query_analyzer.py` — query intent / language classification (single non-streaming call)
-  - (historical: `telegram_bot/services/llm.py` was the third instructor site for confidence scoring; removed in favour of `telegram_bot/scoring.py` which derives confidence from graph state, see ADR 0008)
+  - `src/runtime/llm/router.py` — canonical in-process LiteLLM SDK router and OpenAI-shaped chat client.
+  - `telegram_bot/services/apartment_llm_extractor.py` — apartment filter extraction (single non-streaming call).
+  - `telegram_bot/services/query_analyzer.py` — query intent / language classification (single non-streaming call).
 - **паттерны:**
-  - REQUIRED shape: `instructor.from_openai(openai.AsyncOpenAI(...))` — keep one explicit async OpenAI-compatible client instead of letting `instructor.from_provider(...)` construct hidden clients. Preflight: `tests/unit/services/test_query_analyzer.py::TestQueryAnalyzerInstructorCompat`.
-  - `chat.completions.create(response_model=PydanticModel, max_retries=2)` для retry на validation error.
+  - REQUIRED shape: `create_litellm_chat_client(...).chat.completions.create(response_model=PydanticModel, ...)`.
+  - The router converts `response_model` into OpenAI-compatible `response_format={"type": "json_schema", ...}` and parses the returned JSON into the Pydantic model.
+  - Retry/fallback is owned by LiteLLM routing; wrapper-only kwargs such as `max_retries` remain compatibility shims.
   - Результат extraction merge с regex (regex wins на числовых полях).
 - **gotchas:**
-  - НЕ писать кастомный JSON parsing из LLM — использовать instructor + Pydantic model.
-  - НЕ использовать `instructor.from_provider("openai/...", async_client=True)` — это строит свой скрытый client и усложняет единый LLM-routing path. Positive shape remains locked by `tests/unit/services/test_instructor_sdk_contract.py`.
-  - Streaming primitives `client.create_partial` / `client.create_iterable` сейчас **отключены** проектным решением — см. [ADR-0008](../adr/0008-instructor-create-partial-deferred.md). Не вводить без обновления ADR.
+  - НЕ добавлять второй structured-output SDK для активных путей — используйте `src.runtime.llm`.
+  - НЕ строить скрытые OpenAI clients внутри feature-кода; runtime owns provider routing.
   - response_model = Pydantic v2 модель с `Field(description=)` для каждого поля.
 
 ## redisvl
@@ -329,23 +329,23 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
 - **triggers:** LLM, генерация, completion, chat, AsyncOpenAI, OpenAI, модель, generate, structured output
 - **context7_id:** /openai/openai-python
 - **как_у_нас:**
-  - `telegram_bot/graph/config.py::GraphConfig.create_llm()` — canonical async LLM-client factory through `langfuse.openai.AsyncOpenAI` (auto-trace) or plain `openai.AsyncOpenAI`
+  - `src/runtime/graph/config.py::GraphConfig.create_llm()` — canonical async LLM-client factory through the in-process LiteLLM SDK router (`src.runtime.llm.router`)
   - `telegram_bot/services/query_preprocessor.py` — query classification
   - `telegram_bot/services/query_analyzer.py` — intent analysis
   - `telegram_bot/services/apartment_llm_extractor.py` — structured extraction (OpenAI direct)
   - `src/contextualization/openai.py` — chunk contextualization
 - **паттерны:**
-  - Основной bot/query/runtime path: `langfuse.openai.AsyncOpenAI` + `LLM_BASE_URL` → LiteLLM proxy
+  - Основной bot/query/runtime chat path: `GraphConfig.create_llm()` → in-process LiteLLM SDK router; no Docker proxy/base URL
   - Структурированный output: `response_format=` / Instructor-compatible контракты в основном runtime
   - OpenAI SDK-native chat kwargs остаются top-level (`reasoning_effort`); provider-specific OpenAI-compatible controls (`disable_reasoning`, `reasoning_format`) идут через `extra_body={...}`. `disable_reasoning` взаимоисключает `reasoning_effort` / `reasoning_format`.
   - Raw `openai.AsyncOpenAI` / `OpenAI` допустим только в изолированных совместимых/compatibility paths (например, instructor-экстракшн/оценка)
 - **gotchas:**
-  - Для основного runtime path НЕ импортировать raw `openai.AsyncOpenAI`; использовать Langfuse wrapper
+  - Для основного runtime chat path НЕ импортировать raw `openai.AsyncOpenAI`; использовать `GraphConfig.create_llm()` / `src.runtime.llm.router`
   - Direct OpenAI SDK не является основным runtime path; использовать только в изолированных contextualization/eval/Instructor-compatibility paths
   - НЕ прокидывать нестандартные provider kwargs (`disable_reasoning`, `reasoning_format`) напрямую в `chat.completions.create(...)`; OpenAI SDK отвергнет их как unexpected keyword arguments.
   - НЕ отправлять `disable_reasoning` вместе с `reasoning_effort`/`reasoning_format`; LiteLLM/Cerebras отвергает такой запрос.
   - НЕ хардкодить runtime model name — брать из config/env (`LLM_MODEL`)
-  - `LLM_BASE_URL` обязателен для unified routing там, где path идет через LiteLLM
+  - `LLM_BASE_URL` не нужен для unified chat routing; provider keys are read directly by the LiteLLM SDK router
 
 ## groq
 - **triggers:** groq, llama3, groq api, fast contextualization, groq contextualizer

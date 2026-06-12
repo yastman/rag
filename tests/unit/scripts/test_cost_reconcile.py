@@ -1,12 +1,12 @@
 """Unit tests for scripts/audit/cost_reconcile.py (#2223 / Epic N).
 
-We track cost via usage_details / cost_details on every generation, and the
-LiteLLM proxy emits success_callback: ["langfuse"]. But we have no routine
-check that the cost Langfuse reports actually reflects real provider spend.
+We track cost via usage_details / cost_details on every generation, but we
+have no routine check that the cost Langfuse reports actually reflects real
+provider spend.
 
 Failure modes this audit catches:
-* a model in docker/litellm/config.yaml NOT in the LiteLLM cost map ->
-  silent zero-cost (cost_details.total_cost == 0 despite real token traffic);
+* a routed model missing from the LiteLLM cost map -> silent zero-cost
+  (cost_details.total_cost == 0 despite real token traffic);
 * a typo'd / renamed model that stops accumulating cost.
 
 The script aggregates type=GENERATION observations over a window into

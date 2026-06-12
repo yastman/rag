@@ -33,8 +33,8 @@ def test_handle_query_supervisor_imports_available():
     from telegram_bot.observability import create_callback_handler
 
     assert callable(create_bot_agent)
-    assert hasattr(rag_search, "ainvoke")
-    assert hasattr(history_search, "ainvoke")
+    assert callable(rag_search)
+    assert callable(history_search)
     assert callable(get_crm_tools)
     assert callable(create_callback_handler)
     assert BotContext is not None
@@ -95,8 +95,8 @@ def test_bot_local_lock_imports_create_agent_sdk():
     assert "ok" in result.stdout
 
 
-def test_bot_local_lock_imports_instructor_sdk():
-    """Regression: bot-local frozen env can import instructor and ApartmentLlmExtractor."""
+def test_bot_local_lock_imports_router_structured_output_service():
+    """Regression: bot-local frozen env can import the router-backed extractor."""
     repo_root = str(pathlib.Path(__file__).resolve().parents[3])
     cmd = [
         "uv",

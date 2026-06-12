@@ -1,10 +1,12 @@
-# Runbook: LiteLLM Failure and Fallback Behavior
+# Runbook: LiteLLM SDK Router and Provider Failure
 
-- **Owner:** LLM Proxy / On-call
-- **Last verified:** 2026-05-07
-- **Verification command:** `curl -s http://localhost:4000/health`
+- **Owner:** LLM runtime / On-call
+- **Last verified:** 2026-06-12
+- **Verification command:** `uv run python scripts/probe/check_bot_runtime_env.py`
 
-Use this runbook when LiteLLM provider has outages or LLM calls are failing.
+Use this runbook when LiteLLM provider routing has outages or LLM calls are failing.
+The bot uses the in-process SDK router in `src/runtime/llm/router.py`; there is
+no separate local gateway container in the default runtime.
 
 ## Symptoms
 
@@ -13,275 +15,86 @@ Use this runbook when LiteLLM provider has outages or LLM calls are failing.
 - Extremely high latency on all LLM calls
 - No responses from bot despite successful retrieval
 - Traces show `LLM failed: Connection error` while Langfuse ingestion appears healthy
-- LiteLLM container exits with code `137` (`OOMKilled`)
 
 ## Diagnosis
 
-### Verify Current Primary / Fallback Routing (read-only)
-
-Before restarting or editing config, confirm the active routing from the repo config files:
+### 1. Verify runtime environment
 
 ```bash
-# Primary model for the gpt-4o-mini group (read-only)
-grep -A8 'model_name: gpt-4o-mini' docker/litellm/config.yaml
-
-# Fallback chain
-grep -A5 'fallbacks:' docker/litellm/config.yaml
-
-# Kubernetes equivalent
-grep -A8 'model_name: gpt-4o-mini' k8s/base/configmaps/litellm-config.yaml
-grep -A5 'fallbacks:' k8s/base/configmaps/litellm-config.yaml
+uv run python scripts/probe/check_bot_runtime_env.py
 ```
 
-Expected state (do **not** change without product decision):
+The check should confirm at least one provider key is configured:
 
-| Routing group | Role |
-|---|---|
-| Primary alias | Low-latency default model for bot responses |
-| Fallback 1 | Reasoning-capable backup model |
-| Fallback 2 | Low-latency backup model |
-| Fallback 3 | Hosted compatibility backup model |
+- `CEREBRAS_API_KEY`
+- `GROQ_API_KEY`
+- `OPENAI_API_KEY`
+- `LLM_API_KEY` (legacy OpenAI-compatible fallback)
 
-- **Do not change the primary model family without a product decision.**
-  High-capacity aliases are reserved for benchmarking and fallback.
-- The bot sends requests to alias `gpt-4o-mini` (see
-  `telegram_bot/graph/config.py`). Native defaults are defined in
-  `telegram_bot/config.py` for operation without the proxy.
-
-### 1. Check LiteLLM Container State
+### 2. Verify SDK-router aliases
 
 ```bash
-# Check if LiteLLM container is running
-docker compose ps litellm
-
-# View bounded LiteLLM logs
-docker compose logs litellm --tail=100
+uv run python - <<'PY'
+from src.runtime.llm.router import build_model_list
+for entry in build_model_list():
+    print(entry["model_name"], "->", entry["litellm_params"]["model"])
+PY
 ```
 
-### 2. Test LiteLLM Connectivity
+Expected state: the bot sends requests to the canonical alias `gpt-4o-mini`,
+with fallback entries owned by `src/runtime/llm/router.py`.
+
+### 3. Check bot logs for LLM errors
 
 ```bash
-# Health check
-curl -s http://localhost:4000/health | jq
-
-# Or your configured LiteLLM URL
-curl -s ${LITELLM_URL}/health | jq
+docker compose logs telegram-bot --tail=200 | grep -Ei 'llm|litellm|openai|cerebras|groq|timeout|rate'
 ```
 
-### 3. Check Model Availability
+Classify the error:
+
+| Error | Likely cause | Action |
+|---|---|---|
+| `AuthenticationError` / `401` | Missing or invalid provider key | Refresh the relevant provider key secret. |
+| `RateLimitError` / `429` | Provider rate limit | Wait, lower traffic, or temporarily switch primary alias in router config. |
+| `NotFoundError` / `404` | Alias or upstream model typo | Compare the alias in `src/runtime/llm/router.py` with provider docs. |
+| `TimeoutError` | Provider latency or network issue | Check provider status and retry with fallback alias. |
+
+### 4. Run a local SDK-router smoke call
 
 ```bash
-# List available models via LiteLLM proxy
-curl -s http://localhost:4000/v1/models | jq
+uv run python - <<'PY'
+import asyncio
+from src.runtime.llm import create_litellm_chat_client
+
+async def main():
+    client = create_litellm_chat_client(model="gpt-4o-mini", timeout=30.0)
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Reply with OK"}],
+        max_tokens=5,
+    )
+    print(response.choices[0].message.content)
+
+asyncio.run(main())
+PY
 ```
 
-### 4. Check Bot Logs for LLM Errors
+## Safe recovery
 
-```bash
-docker compose logs bot 2>&1 | grep -i "llm\|openai\|timeout" | tail -50
-```
+1. Verify secrets are present in the target environment.
+2. Restart only the bot process after secret changes:
 
-### 5. OOM / Exit 137 Diagnosis
-
-If the LiteLLM container is restarting or missing:
-
-```bash
-# Inspect exit status and OOM flag
-docker inspect <litellm-container> --format '
-  Name={{.Name}}
-  OOMKilled={{.State.OOMKilled}}
-  ExitCode={{.State.ExitCode}}
-  Status={{.State.Status}}
-'
-
-# Bounded recent logs around the crash
-docker compose logs litellm --tail=200 | grep -i "killed\|oom\|memory\|137"
-```
-
-**Interpretation:**
-- `OOMKilled=true` or `ExitCode=137` → LiteLLM was killed by the kernel due to memory exhaustion.
-- `Status=restarting` with `OOMKilled=false` → Likely a configuration or upstream provider error; inspect logs for `ZodError`, `P1000`, or connection refused messages.
-- If health endpoint returns `200` but models list is empty → LiteLLM is alive but cannot reach upstream providers.
-
-### 6. Verify Environment Variables (Presence Only)
-
-```bash
-# Check that required variables are present (do not print values)
-for v in LLM_BASE_URL LITELLM_URL LITELLM_MASTER_KEY; do
-  grep -q "^${v}=" .env && echo "${v}: present" || echo "${v}: MISSING"
-done
-
-# Should be:
-# LLM_BASE_URL=http://litellm:4000
-# Not pointing directly to an upstream provider
-```
-
-### 7. Distinguish Langfuse Healthy vs LLM Unhealthy
-
-Langfuse ingestion can be **fully healthy** while traces show `LLM failed: Connection error`.
-
-**Why:** Langfuse traces capture the *attempt* to call the LLM. If LiteLLM or the upstream provider is unreachable, the trace still ingests, but the LLM span records a connection failure. The ingestion pipeline itself is independent of the LLM proxy's availability.
-
-**Fast path to confirm:**
-1. Check Langfuse health: `curl -s ${LANGFUSE_HOST}/api/public/health` → expect `{"status": "ok"}`
-2. Check LiteLLM health: `curl -s http://localhost:4000/health` → expect `true` or a healthy body
-3. If Langfuse is OK but LiteLLM health fails → root cause is LiteLLM or upstream provider, not Langfuse
-
-## Common Error Patterns
-
-### WSL / Docker Desktop Stale Bind-Mount (`Exited 127`)
-
-**When:** Docker Desktop on WSL restarts, resumes from sleep, or updates; the host path for `./docker/litellm/config.yaml` becomes stale inside the VM.
-
-**Symptom chain:**
-
-1. Bot logs show `generate_response: LLM call failed, using fallback`.
-2. Stack trace contains `httpx.ConnectError: All connection attempts failed` or `openai.APIConnectionError`.
-3. `docker compose ps -a litellm` shows `dev-litellm-1 Exited (127)`.
-4. `docker inspect dev-litellm-1` may include a bind-mount error for `/app/config.yaml`:
-   ```
-   not a directory: Are you trying to mount a directory onto a file (or vice-versa)?
-   ```
-5. The host file `./docker/litellm/config.yaml` is still a regular file.
-
-**Diagnosis:**
-
-```bash
-# Verify exit code and bind-mount error
-docker compose ps -a litellm
-docker inspect dev-litellm-1 --format '
-  Name={{.Name}}
-  ExitCode={{.State.ExitCode}}
-  Status={{.State.Status}}
-  Error={{.State.Error}}
-'
-```
-
-**Remediation (safe):**
-
-> Do not restart Docker Desktop or the full stack. Recreate only the LiteLLM container so the bind-mount is re-evaluated.
-
-```bash
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --profile bot up -d --force-recreate litellm
-```
-
-**Validation:**
-
-```bash
-# 1. Container is running
-docker compose ps litellm
-
-# 2. Liveliness returns 200
-curl -sS -m 5 -i http://127.0.0.1:4000/health/liveliness
-
-# 3. Local smoke test (redacted — do not print secrets)
-curl -sS -m 10 http://127.0.0.1:4000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}' \
-  -o /dev/null -w "HTTP_STATUS=%{http_code}\n"
-```
-
-### "Model gpt-4o-mini not found" (404)
-
-**Cause:** `LLM_BASE_URL` points directly to Cerebras instead of LiteLLM proxy.
-
-**Fix:**
-```bash
-# Check LITELLM configuration (presence only)
-grep -q "^LLM_BASE_URL=" .env && echo "LLM_BASE_URL: present" || echo "LLM_BASE_URL: MISSING"
-grep -q "^LITELLM" .env && echo "LITELLM vars: present" || echo "LITELLM vars: MISSING"
-
-# Should be:
-# LLM_BASE_URL=http://litellm:4000
-# Not pointing directly to an upstream provider
-```
-
-### Timeout Errors
-
-**Cause:** LiteLLM proxy can't reach upstream LLM provider.
-
-**Fix:**
-1. Check upstream provider status
-2. Increase timeout in LiteLLM config
-3. Enable fallback models
-
-## Fallback Behavior
-
-The bot has graceful degradation for LLM failures:
-
-1. **Streaming fallback** — If streaming fails, falls back to non-streaming
-2. **Safe fallback response** — If LLM completely unavailable, returns pre-defined safe response
-3. **Cache fallback** — If LLM is slow, cached responses may be served
-
-## Remediation
-
-> **Caution:** Mutating commands below. Run only after confirming the diagnosis above.
-
-### Restart LiteLLM
-
-```bash
-docker compose restart litellm
-```
-
-### Increase LiteLLM Memory Limit
-
-If OOM is confirmed, raise the memory limit and recreate:
-
-- **Dev:** edit `compose.dev.yml` (default: 1G for litellm).
-- **Base config:** edit `compose.yml` (default: 512M).
-
-After changing the limit, recreate the container:
-
-```bash
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --profile bot up -d --force-recreate litellm
-```
-
-### Switch LLM Provider
-
-If using multiple providers:
-
-1. Update `LLM_BASE_URL` to new provider in `.env` (do not commit)
-2. Restart bot:
    ```bash
-   docker compose restart bot
+   docker compose restart telegram-bot
    ```
 
-### Configure Fallback Models
+3. Re-run the runtime env probe and a single SDK-router smoke call.
+4. Watch logs for the next user request.
 
-> **Caution:** Do not switch the primary model family or fallback order without
-> a product decision. High-capacity models are reserved for benchmarking and
-> fallback, and the primary route is optimized for low time-to-first-token.
+## Escalation
 
-The canonical routing is defined in `docker/litellm/config.yaml` (Docker) and `k8s/base/configmaps/litellm-config.yaml` (K8s). Verify before editing:
+Escalate to the runtime owner if:
 
-```bash
-grep -A8 'model_name: gpt-4o-mini' docker/litellm/config.yaml
-grep -A5 'fallbacks:' docker/litellm/config.yaml
-```
-
-If you must adjust fallback ordering, edit the config file and restart:
-
-```bash
-docker compose restart litellm
-```
-
-## Impact on RAG Quality
-
-When LLM fallback occurs:
-- Responses may be less contextual
-- No streaming (slower perceived response)
-- Safe fallback responses are generic
-
-## Prevention
-
-- Monitor LiteLLM uptime
-- Set up alerts for LLM timeout rates
-- Regular health checks: `curl -s ${LLM_BASE_URL}/health`
-- Watch for `OOMKilled` in container state after deploys or traffic spikes
-
-## See Also
-
-- [Langfuse Tracing Gaps](LANGFUSE_TRACING_GAPS.md)
-- [Docker Services Reference](../../DOCKER.md)
-- [Local Development Guide](../LOCAL-DEVELOPMENT.md)
+- all configured providers return authentication failures after secret refresh;
+- the SDK-router alias map no longer includes `gpt-4o-mini`;
+- retries produce repeated provider-side 5xx errors across all fallback models.

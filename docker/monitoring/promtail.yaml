@@ -48,7 +48,7 @@ scrape_configs:
     pipeline_stages:
       # Parse JSON logs (common for Python apps)
       - match:
-          selector: '{service=~"bot|litellm|langfuse.*"}'
+          selector: '{service=~"bot|langfuse.*"}'
           stages:
             - json:
                 expressions:

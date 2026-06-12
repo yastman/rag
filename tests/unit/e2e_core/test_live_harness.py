@@ -81,20 +81,20 @@ def test_real_llm_preflight_requires_opt_in_and_provider_env() -> None:
 
     assert errors == [
         "E2E_CORE_REAL_LLM=1 is required for real LLM mode",
-        "LLM_BASE_URL is required for real LLM mode",
         "LLM_MODEL is required for real LLM mode",
-        "LLM_API_KEY or OPENAI_API_KEY is required for real LLM mode",
+        "one of CEREBRAS_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, or LLM_API_KEY is required for real LLM mode",
     ]
 
     provider_env = {
         "E2E_CORE_REAL_LLM": "1",
-        "LLM_BASE_URL": "http://localhost:4000/v1",
         "LLM_MODEL": "gpt-test",
     }
     with mock.patch.dict(os.environ, provider_env, clear=True):
         errors = real_llm_config_errors(env)
 
-    assert errors == ["LLM_API_KEY or OPENAI_API_KEY is required for real LLM mode"]
+    assert errors == [
+        "one of CEREBRAS_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, or LLM_API_KEY is required for real LLM mode"
+    ]
 
 
 def test_build_live_core_harness_uses_graph_config_for_real_llm() -> None:

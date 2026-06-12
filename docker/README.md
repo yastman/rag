@@ -4,12 +4,6 @@ This directory contains configuration files, scripts, and initialization assets 
 
 ## Layout
 
-### `litellm/`
-
-LiteLLM Proxy configuration that defines the model routing, fallbacks, and provider aliases used by the bot and voice agent.
-
-- **`config.yaml`** — Model list (Cerebras, Groq, OpenAI), fallback chains, rate limits, and key management. Referenced as a Compose ConfigMap/volume mount.
-
 ### `livekit/`
 
 LiveKit server configuration for the voice-agent path.

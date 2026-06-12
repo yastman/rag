@@ -142,9 +142,9 @@ Issues:
 Execution plan:
 
 1. First complete the API shape from #2429: all core LLM calls should go through one internal LLM facade, even if it still talks to the current proxy temporarily.
-2. Add `src/runtime/llm/router.py` for the in-process LiteLLM router and migrate fallback configuration from `docker/litellm/config.yaml` into Python/config.
-3. Replace current `AsyncOpenAI(base_url="http://litellm:4000")` call sites in runtime graph config, contextualization, voice, and handoff summary.
-4. Remove Docker proxy surfaces: compose service, `docker/litellm/`, preflight health checks, `LITELLM_MASTER_KEY`, and `LLM_BASE_URL` assumptions.
+2. Use `src/runtime/llm/router.py` as the in-process LiteLLM router and keep fallback configuration in Python/config.
+3. Replace direct external-proxy call sites in runtime graph config, contextualization, voice, and handoff summary.
+4. Remove external proxy surfaces: compose service, preflight health checks, and proxy-specific env assumptions.
 5. Remove redundant provider SDKs and `instructor` only after the router path is fully covered.
 
 Validation focus:

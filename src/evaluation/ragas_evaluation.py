@@ -62,8 +62,7 @@ def _maybe_build_metric(metric_factory, llm):
     return metric_factory(llm=llm)
 
 
-# Default LiteLLM configuration
-DEFAULT_LITELLM_BASE_URL = "http://localhost:4000"
+# Default evaluator configuration
 DEFAULT_EVAL_MODEL = "cerebras/llama-3.3-70b"  # Fast, accurate model for evaluation
 
 
@@ -90,23 +89,24 @@ def _metric_mean(result: EvaluationResult, metric_name: str) -> float:
 
 
 def _get_evaluator_llm():
-    """
-    Get LLM for RAGAS evaluation via LiteLLM proxy.
+    """Get LLM for RAGAS evaluation via provider credentials or an explicit endpoint.
 
-    Uses LITELLM_BASE_URL env var or defaults to localhost:4000.
-    Uses EVAL_MODEL env var or defaults to cerebras/llama-3.3-70b.
+    Uses EVAL_MODEL env var or defaults to cerebras/llama-3.3-70b. Set
+    EVAL_LLM_BASE_URL only when evaluating against a custom OpenAI-compatible
+    endpoint; otherwise the OpenAI client uses the provider SDK defaults.
     """
-    base_url = os.getenv("LITELLM_BASE_URL", DEFAULT_LITELLM_BASE_URL)
+    base_url = os.getenv("EVAL_LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL")
     model = os.getenv("EVAL_MODEL", DEFAULT_EVAL_MODEL)
+    api_key = os.getenv("EVAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "not-needed"
 
     try:
-        client = OpenAI(
-            api_key="not-needed",  # LiteLLM handles auth
-            base_url=base_url,
-        )
-        # Use litellm adapter for compatibility with any model
+        client_kwargs: dict[str, str] = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        client = OpenAI(**client_kwargs)
         llm = llm_factory(model, client=client, adapter="litellm")
-        print(f"   RAGAS evaluator LLM: {model} via {base_url}")
+        route = base_url or "provider SDK defaults"
+        print(f"   RAGAS evaluator LLM: {model} via {route}")
         return llm
     except Exception as e:
         print(f"   Failed to create evaluator LLM: {e}")

@@ -68,17 +68,6 @@ services:
     ports:
       - "127.0.0.1:5001:5001"
 
-  litellm:
-    profiles: ["bot", "voice", "full"]
-    ports:
-      - "127.0.0.1:4000:4000"
-    environment:
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
-    deploy:
-      resources:
-        limits:
-          memory: 1G
 
   bot:
     profiles: ["bot", "full"]

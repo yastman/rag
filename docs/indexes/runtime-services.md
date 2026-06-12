@@ -10,8 +10,8 @@ The canonical source of truth for Compose files, profiles, service names, ports,
 
 | Profile | When You Need It |
 |---|---|
-| (default, no profile) | **Dev**: Postgres, Redis, Qdrant, BGE-M3, Docling, user-base. **VPS**: Postgres, Redis, Qdrant, BGE-M3, user-base, litellm, bot — the minimal RAG chatbot core. |
-| `bot` | Telegram bot + LiteLLM proxy (dev only; VPS includes both in the default) |
+| (default, no profile) | **Dev**: Postgres, Redis, Qdrant, BGE-M3, Docling, user-base, mini-app. **VPS**: Postgres, Redis, Qdrant, BGE-M3, user-base, bot — the minimal RAG chatbot core. |
+| `bot` | Telegram bot runtime using the in-process LiteLLM SDK router |
 | `ingest` | Unified ingestion service |
 | `ml` | Langfuse + ClickHouse + MinIO |
 | `obs` | Loki + Promtail + Alertmanager |
@@ -91,7 +91,7 @@ Key flows:
 2. **Query classification** → pipeline selection
 3. **Cache check** → Redis semantic cache
 4. **Retrieval** → hybrid search in Qdrant (dense + sparse + optional ColBERT rerank)
-5. **Generation** → LiteLLM proxy
+5. **Generation** → in-process LiteLLM SDK router
 6. **Response** → Telegram message with citations
 
 Subsystems:

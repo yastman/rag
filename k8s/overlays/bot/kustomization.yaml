@@ -6,7 +6,6 @@ namespace: rag
 resources:
   - ../../base/namespace.yaml
   - ../../base/configmaps/postgres-init.yaml
-  - ../../base/configmaps/litellm-config.yaml
   # Databases
   - ../../base/postgres/pvc.yaml
   - ../../base/postgres/deployment.yaml
@@ -23,8 +22,6 @@ resources:
   - ../../base/user-base/deployment.yaml
   - ../../base/user-base/service.yaml
   # Application
-  - ../../base/litellm/deployment.yaml
-  - ../../base/litellm/service.yaml
   - ../../base/bot/deployment.yaml
 
 labels:

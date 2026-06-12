@@ -1,7 +1,7 @@
-"""transcribe_node — voice-to-text via Whisper API (LiteLLM proxy).
+"""transcribe_node — voice-to-text via the configured Whisper-compatible API.
 
-Receives voice audio bytes from RAGState, calls OpenAI Whisper API
-through the existing AsyncOpenAI client (LiteLLM proxy), returns
+Receives voice audio bytes from RAGState, calls the configured
+OpenAI-compatible transcription client, returns
 transcribed text that feeds into the classify → ... pipeline.
 
 Canonical home moved from ``telegram_bot/graph/nodes/transcribe.py``

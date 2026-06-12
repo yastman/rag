@@ -1,4 +1,4 @@
-"""LiteLLM adapter for text generation."""
+"""Compatibility LLM adapter backed by the canonical LiteLLM SDK router."""
 
 import logging
 import os
@@ -17,7 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 class LiteLlmProvider(LLMProvider):
-    """LiteLLM adapter using litellm Python package."""
+    """LLM adapter using the process-local LiteLLM router.
+
+    This class remains for older adapter/factory call sites, but it no longer
+    opens a second LiteLLM path via ``litellm.acompletion``. All chat text
+    generation goes through :mod:`src.runtime.llm.router`, the same
+    OpenAI-shaped client used by ``GraphConfig.create_llm()``.
+    """
 
     def __init__(self, default_model: str = "gpt-4o-mini") -> None:
         self.default_model = default_model
@@ -32,16 +38,20 @@ class LiteLlmProvider(LLMProvider):
         model: str | None = None,
         **kwargs: Any,
     ) -> str:
-        """Generate a response using litellm.acompletion."""
-        import litellm
+        """Generate a response through the canonical LiteLLM router client."""
         from litellm.exceptions import AuthenticationError, RateLimitError, Timeout
+
+        from src.runtime.llm import create_litellm_chat_client
 
         target_model = model or self.default_model
         kwargs.setdefault("timeout", self.timeout_seconds)
 
         try:
-            response = await litellm.acompletion(
+            client = create_litellm_chat_client(
                 model=target_model,
+                timeout=float(kwargs.pop("timeout")),
+            )
+            response = await client.chat.completions.create(
                 messages=messages,
                 **kwargs,
             )
@@ -54,5 +64,5 @@ class LiteLlmProvider(LLMProvider):
             raise LLMTimeoutError(str(exc), raw_error=exc) from exc
         except Exception as exc:
             raise LLMError(
-                f"LiteLLM call failed: {exc}", error_type="api_error", raw_error=exc
+                f"LiteLLM router call failed: {exc}", error_type="api_error", raw_error=exc
             ) from exc

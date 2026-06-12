@@ -18,7 +18,7 @@ def _cfg_from_env(
         return E2EConfig()
 
 
-def test_defaults_prefer_litellm_proxy_and_alias() -> None:
+def test_defaults_prefer_litellm_router_and_alias() -> None:
     cfg = _cfg_from_env(
         drop={
             "E2E_JUDGE_PROVIDER",
@@ -30,7 +30,7 @@ def test_defaults_prefer_litellm_proxy_and_alias() -> None:
     )
 
     assert cfg.judge_provider == "litellm"
-    assert cfg.judge_base_url == "http://localhost:4000/v1"
+    assert cfg.judge_base_url == ""
     assert cfg.judge_model == "gpt-4o-mini"
 
 
@@ -41,10 +41,10 @@ def test_validate_requires_openai_compatible_judge_api_key() -> None:
             "TELEGRAM_API_HASH": "hash",
             "E2E_JUDGE_PROVIDER": "litellm",
         },
-        drop={"E2E_JUDGE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "LITELLM_MASTER_KEY"},
+        drop={"E2E_JUDGE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "CEREBRAS_API_KEY", "GROQ_API_KEY"},
     )
 
-    assert "E2E_JUDGE_API_KEY not set for judge provider 'litellm'" in cfg.validate()
+    assert "At least one LLM provider key is required for judge provider 'litellm'" in cfg.validate()
 
 
 def test_validate_allows_no_judge_mode_without_judge_credentials() -> None:
@@ -53,7 +53,7 @@ def test_validate_allows_no_judge_mode_without_judge_credentials() -> None:
             "TELEGRAM_API_ID": "1",
             "TELEGRAM_API_HASH": "hash",
         },
-        drop={"E2E_JUDGE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "LITELLM_MASTER_KEY"},
+        drop={"E2E_JUDGE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "CEREBRAS_API_KEY", "GROQ_API_KEY"},
     )
 
     errors = cfg.validate(judge_required=False)

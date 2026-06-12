@@ -44,13 +44,6 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-        - name: wait-for-litellm
-          image: busybox:1.37@sha256:1487d0af5f52b4ba31c7e465126ee2123fe3f2305d638e7827681e7cf6c83d5e
-          command: ['sh', '-c', 'until nc -z litellm 4000; do echo "waiting for litellm..."; sleep 3; done']
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
       containers:
         - name: bot
           image: ghcr.io/yastman/rag-bot:v2.14.0
@@ -94,13 +87,23 @@ spec:
               value: http://qdrant:6333
             - name: QDRANT_COLLECTION
               value: gdrive_documents_bge
-            - name: LLM_API_KEY
+            - name: CEREBRAS_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: api-keys
-                  key: LITELLM_MASTER_KEY
-            - name: LLM_BASE_URL
-              value: http://litellm:4000
+                  key: CEREBRAS_API_KEY
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: GROQ_API_KEY
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: OPENAI_API_KEY
+                  optional: true
             - name: LLM_MODEL
               value: gpt-4o-mini
             - name: LANGFUSE_PUBLIC_KEY

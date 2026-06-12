@@ -1,18 +1,20 @@
 """LiteLLM Python SDK router for chat completions.
 
-The repository no longer runs a Docker LiteLLM proxy. Runtime code calls this
+The repository uses this in-process LiteLLM SDK router. Runtime code calls this
 in-process router instead, preserving the OpenAI chat-completions response shape
 that graph nodes already consume while keeping the previous fallback chain.
 """
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
 from litellm import Router
+from pydantic import BaseModel
 
 
 DEFAULT_MODEL_ALIAS = "gpt-4o-mini"
@@ -30,7 +32,7 @@ def _optional_api_key(name: str, fallback: str = "") -> str | None:
 
 
 def build_model_list() -> list[dict[str, Any]]:
-    """Build the LiteLLM model list migrated from docker/litellm/config.yaml."""
+    """Build the canonical LiteLLM SDK-router model list."""
     cerebras_key = _optional_api_key("CEREBRAS_API_KEY", _env("LLM_API_KEY"))
     groq_key = _optional_api_key("GROQ_API_KEY")
     openai_key = _optional_api_key("OPENAI_API_KEY")
@@ -108,6 +110,42 @@ def get_litellm_router() -> Router:
     )
 
 
+def _json_schema_response_format(response_model: type[BaseModel]) -> dict[str, Any]:
+    """Return LiteLLM/OpenAI JSON-schema response_format for a Pydantic model."""
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": response_model.__name__,
+            "schema": response_model.model_json_schema(),
+            "strict": True,
+        },
+    }
+
+
+def _completion_message_content(response: Any) -> Any:
+    """Extract first chat-completion message content from object or dict responses."""
+    if isinstance(response, dict):
+        return response.get("choices", [{}])[0].get("message", {}).get("content", "")
+    return response.choices[0].message.content
+
+
+def _parse_structured_response(response: Any, response_model: type[BaseModel]) -> BaseModel:
+    """Parse a LiteLLM chat completion into ``response_model``."""
+    if isinstance(response, response_model):
+        return response
+    content = _completion_message_content(response)
+    if isinstance(content, response_model):
+        return content
+    if isinstance(content, dict):
+        return response_model.model_validate(content)
+    if not isinstance(content, str):
+        return response_model.model_validate(content)
+    try:
+        return response_model.model_validate_json(content)
+    except ValueError:
+        return response_model.model_validate(json.loads(content))
+
+
 @dataclass(slots=True)
 class _ChatCompletions:
     router: Router
@@ -115,12 +153,26 @@ class _ChatCompletions:
     timeout: float
 
     async def create(self, **kwargs: Any) -> Any:
-        """Call ``Router.acompletion`` with OpenAI-compatible kwargs."""
+        """Call ``Router.acompletion`` with OpenAI-compatible kwargs.
+
+        ``response_model`` is an Instructor-compatibility shim used during the
+        LiteLLM consolidation: it is translated to OpenAI JSON-schema
+        ``response_format`` and parsed locally, so callers keep one SDK-router
+        path without importing Instructor.
+        """
         request = dict(kwargs)
+        response_model = request.pop("response_model", None)
+        request.pop("max_retries", None)
+        request.pop("name", None)  # OpenAI wrapper-only metadata; LiteLLM drops unsupported params.
+        request.pop("langfuse_prompt", None)
         request.setdefault("model", self.default_model)
         request.setdefault("timeout", self.timeout)
-        request.pop("name", None)  # OpenAI wrapper-only metadata; LiteLLM drops unsupported params.
-        return await self.router.acompletion(**request)
+        if response_model is not None and "response_format" not in request:
+            request["response_format"] = _json_schema_response_format(response_model)
+        response = await self.router.acompletion(**request)
+        if response_model is None:
+            return response
+        return _parse_structured_response(response, response_model)
 
 
 @dataclass(slots=True)

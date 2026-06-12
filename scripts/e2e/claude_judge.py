@@ -169,7 +169,17 @@ class _BaseLLMJudge:
 
 
 class LiteLLMJudge(_BaseLLMJudge):
-    """OpenAI-compatible judge routed through LiteLLM or another proxy."""
+    """Judge routed through the in-process LiteLLM SDK router."""
+
+    def __init__(self, config: E2EConfig):
+        super().__init__(config)
+        from src.runtime.llm import create_litellm_chat_client
+
+        self._client = create_litellm_chat_client(model=config.judge_model, timeout=60.0)
+
+
+class OpenAICompatibleJudge(_BaseLLMJudge):
+    """Judge routed through an explicitly configured OpenAI-compatible endpoint."""
 
     def __init__(self, config: E2EConfig):
         super().__init__(config)
@@ -225,11 +235,13 @@ class ClaudeJudge(_BaseLLMJudge):
         return self._parse_judge_response(response_text)
 
 
-def build_judge(config: E2EConfig) -> LiteLLMJudge | ClaudeJudge:
+def build_judge(config: E2EConfig) -> LiteLLMJudge | OpenAICompatibleJudge | ClaudeJudge:
     """Build judge instance for configured provider."""
     provider = (config.judge_provider or "").strip().lower()
-    if provider in {"", "litellm", "openai-compatible", "openai"}:
+    if provider in {"", "litellm"}:
         return LiteLLMJudge(config)
+    if provider in {"openai-compatible", "openai"}:
+        return OpenAICompatibleJudge(config)
     if provider == "anthropic-direct":
         return ClaudeJudge(config)
     raise ValueError(

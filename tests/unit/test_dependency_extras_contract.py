@@ -69,11 +69,13 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     extras = _project()["project"]["optional-dependencies"]
 
     assert {"aiogram", "aiogram-dialog", "fluentogram"}.issubset(_dep_names(extras["telegram"]))
-    assert {"anthropic", "groq", "instructor"}.issubset(_dep_names(extras["providers"]))
+    assert {"anthropic", "groq"}.issubset(_dep_names(extras["providers"]))
+    assert "instructor" not in _dep_names(extras["providers"])
     assert {"docling", "cocoindex", "pymupdf", "fastembed"}.issubset(
         _dep_names(extras["ingestion"])
     )
-    assert {"ragas", "datasets", "pandas"}.issubset(_dep_names(extras["eval"]))
+    assert {"datasets", "pandas"}.issubset(_dep_names(extras["eval"]))
+    assert "ragas" not in _dep_names(extras["eval"])
     assert any(dep.startswith("livekit-agents") for dep in extras["voice"])
 
 

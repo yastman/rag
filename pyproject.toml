@@ -58,7 +58,6 @@ telegram = [
 providers = [
     "anthropic",
     "groq",
-    "instructor>=1.7.0",
 ]
 
 # Local ML models (torch, FlagEmbedding, sentence-transformers)

@@ -41,7 +41,7 @@ At minimum set:
 | Variable | Purpose |
 |----------|---------|
 | `TELEGRAM_BOT_TOKEN` | Bot functionality |
-| `LITELLM_MASTER_KEY` | LLM proxy auth |
+| `CEREBRAS_API_KEY` / `GROQ_API_KEY` / `OPENAI_API_KEY` | LLM provider key for the in-process LiteLLM SDK router |
 | One of `OPENAI_API_KEY` / `CEREBRAS_API_KEY` / `GROQ_API_KEY` | LLM provider |
 
 `.env.example` is the canonical reference for all available variables. See [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) for minimum env sets per Compose profile.
@@ -150,7 +150,7 @@ Requires additional env vars: `ELEVENLABS_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_
 | Redis connection refused | `docker compose up -d redis` or `docker compose restart redis` |
 | Qdrant collection not found | Run `make ingest-unified-bootstrap` |
 | Qdrant timeout | Set `QDRANT_TIMEOUT=30` in `.env` |
-| Token/auth errors | Verify `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and at least one provider key are set |
+| Token/auth errors | Verify `TELEGRAM_BOT_TOKEN` and at least one provider key are set |
 | MyPy errors | Run `make check` to identify issues |
 | Import errors | Run `uv sync` to ensure dependencies installed |
 

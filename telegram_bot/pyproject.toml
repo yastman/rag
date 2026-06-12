@@ -7,7 +7,6 @@ dependencies = [
     "aiogram>=3.15.0",
     "aiogram-dialog>=2.4.0",
     "httpx>=0.28.0",
-    "instructor>=1.7.0",  # Structured LLM extraction for apartment filters
     "qdrant-client>=1.14.0",  # v1.14+ for FormulaQuery score boosting
     # grpcio is intentionally NOT declared directly (#2241). qdrant-client
     # pins grpcio>=1.41.0 as a hard dependency, so the Qdrant gRPC transport
@@ -21,6 +20,7 @@ dependencies = [
     "cachetools>=5.3.0",
     "python-dotenv>=1.0.0",
     "openai>=1.10.0",
+    "litellm>=1.0.0",
     "pydantic-settings>=2.12.0",
     "fluentogram>=1.1.8",
     "fluent-compiler>=1.1",
