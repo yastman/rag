@@ -1,4 +1,4 @@
-"""Qdrant service with Query API, Score Boosting, and MMR (canonical home, #2047).
+"""Canonical runtime Qdrant SDK gateway with Query API, Score Boosting, and MMR.
 
 Moved from ``telegram_bot/services/qdrant.py`` as part of the
 reverse-layering fix tracked under #1948 / #2047 / #2049. The legacy
@@ -29,7 +29,7 @@ SearchReturn = SearchResults | tuple[SearchResults, dict[str, Any]]
 
 
 class QdrantService:
-    """Smart Gateway for Qdrant with advanced search features.
+    """Canonical runtime Qdrant SDK gateway with advanced search features.
 
     Provides:
     - Hybrid search with RRF fusion (dense + sparse)

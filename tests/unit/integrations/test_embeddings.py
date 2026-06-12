@@ -1,6 +1,6 @@
-"""Tests for BGE-M3 LangChain embedding wrappers.
+"""Tests for BGE-M3 runtime embedding compatibility shims.
 
-Wrappers delegate to BGEM3Client; tests mock at the httpx level.
+Wrappers delegate through BgeM3EmbeddingProvider; tests mock at the httpx level.
 """
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-from langchain_core.embeddings import Embeddings
 
+from src.adapters.embeddings.bge_m3 import BgeM3EmbeddingProvider
 from telegram_bot.integrations.embeddings import (
     BGEM3Embeddings,
     BGEM3HybridEmbeddings,
@@ -19,9 +19,9 @@ from telegram_bot.integrations.embeddings import (
 
 
 class TestBGEM3Embeddings:
-    def test_inherits_from_embeddings(self):
+    def test_uses_provider_backed_shim(self):
         emb = BGEM3Embeddings(base_url="http://fake:8000")
-        assert isinstance(emb, Embeddings)
+        assert isinstance(emb._provider, BgeM3EmbeddingProvider)
 
     async def test_aembed_query(self):
         mock_response = httpx.Response(
@@ -187,10 +187,14 @@ class TestBGEM3HybridEmbeddings:
         )
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
             emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            provider = emb._provider
+            client = provider._client
             await emb.aembed_hybrid("test1")
             await emb.aembed_hybrid("test2")
-            # Same BGEM3Client instance used
-            assert emb._client is not None
+            # Same provider and BGEM3Client instances are reused.
+            assert isinstance(provider, BgeM3EmbeddingProvider)
+            assert emb._provider is provider
+            assert emb._provider._client is client
 
     async def test_aembed_query_delegates_to_hybrid(self):
         """aembed_query returns only dense part from hybrid call."""
@@ -362,7 +366,7 @@ class TestBGEM3HybridTimeout:
     async def test_timeout_configuration(self, kwargs, expected_read, expected_connect):
         """Timeout is configured correctly (default granular or custom override)."""
         emb = BGEM3HybridEmbeddings(base_url="http://fake:8000", **kwargs)
-        # Access internal BGEM3Client's httpx client
-        client = await emb._client._get_client()
+        # Access internal BGEM3Client through the provider-backed shim.
+        client = await emb._provider._client._get_client()
         assert client.timeout.read == expected_read
         assert client.timeout.connect == expected_connect

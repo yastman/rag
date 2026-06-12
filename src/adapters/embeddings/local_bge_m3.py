@@ -80,14 +80,15 @@ class LocalBgeM3Provider(EmbeddingProvider):
 
             logger.info("Initializing local BGE-M3 model (singleton): %s", self.model_name)
 
-            def _load():
-                return BGEM3FlagModel(self.model_name, use_fp16=self.use_fp16)
-
             # asyncio.to_thread copies the current contextvars into the worker
             # thread (Langfuse/OTEL span context), unlike a bare
             # loop.run_in_executor(None, ...). See observability contextvars
             # contract.
-            _MODEL_INSTANCE = await asyncio.to_thread(_load)
+            _MODEL_INSTANCE = await asyncio.to_thread(
+                BGEM3FlagModel,
+                self.model_name,
+                use_fp16=self.use_fp16,
+            )
             logger.info("Local BGE-M3 model initialized successfully.")
             return _MODEL_INSTANCE
 
@@ -107,18 +108,15 @@ class LocalBgeM3Provider(EmbeddingProvider):
         sem = self._get_semaphore()
 
         async with sem:
-
-            def _encode():
-                # Encode returns dict with 'dense_vecs', 'lexical_weights', etc.
-                result = model.encode(
-                    list(texts),
-                    batch_size=self.batch_size,
-                    max_length=self.max_length,
-                )
-                dense_vecs = result["dense_vecs"]
-                # Convert list/numpy arrays to list of float lists
-                return [vec.tolist() if hasattr(vec, "tolist") else list(vec) for vec in dense_vecs]
-
+            # Encode returns dict with 'dense_vecs', 'lexical_weights', etc.
             # asyncio.to_thread propagates contextvars to the worker thread
             # (observability contextvars contract).
-            return await asyncio.to_thread(_encode)
+            result = await asyncio.to_thread(
+                model.encode,
+                list(texts),
+                batch_size=self.batch_size,
+                max_length=self.max_length,
+            )
+            dense_vecs = result["dense_vecs"]
+            # Convert list/numpy arrays to list of float lists.
+            return [vec.tolist() if hasattr(vec, "tolist") else list(vec) for vec in dense_vecs]

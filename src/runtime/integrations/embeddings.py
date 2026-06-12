@@ -1,35 +1,25 @@
-"""BGE-M3 embedding wrappers for the runtime API.
+"""Runtime compatibility wrappers for embedding providers.
 
-Moved from ``telegram_bot/integrations/embeddings.py`` as the second slice
-of the reverse-layering fix tracked under #1948 / #2045 / #2049. The
-legacy ``telegram_bot.integrations.embeddings`` module is kept as a thin
-re-export so existing imports across the test suite, ``telegram_bot/``
-internals, and external consumers continue to work without churn.
-
-Provides BGEM3Embeddings (dense), BGEM3SparseEmbeddings (sparse), and
-BGEM3HybridEmbeddings (dense + sparse + optional ColBERT) that wrap the
-local BGE-M3 REST API for use in the imperative assistant pipeline.
-
-All HTTP communication delegates to BGEM3Client (unified SDK layer).
+The canonical embedding adapter layer is ``src.adapters.embeddings``. This
+module keeps the historical runtime class names used by legacy imports, but all
+BGE-M3 endpoint work is delegated to ``BgeM3EmbeddingProvider``.
+``BGEM3Client`` remains the low-level HTTP SDK.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
 import httpx
 
+from src.adapters.embeddings.bge_m3 import BgeM3EmbeddingProvider
 from src.observability import observe
 from src.services.bge_m3_client import BGEM3Client
 
 
-logger = logging.getLogger(__name__)
-
-
 class BGEM3Embeddings:
-    """Embeddings wrapper for BGE-M3 /encode/dense endpoint."""
+    """Dense-embedding compatibility shim over the canonical BGE-M3 provider."""
 
     def __init__(
         self,
@@ -39,10 +29,12 @@ class BGEM3Embeddings:
         max_length: int = 512,
         *,
         client: BGEM3Client | None = None,
+        provider: BgeM3EmbeddingProvider | None = None,
     ) -> None:
         self.base_url = base_url
         self.timeout = timeout
-        self._client = client or BGEM3Client(
+        self._provider = provider or BgeM3EmbeddingProvider(
+            client=client,
             base_url=base_url,
             timeout=timeout,
             max_length=max_length,
@@ -51,14 +43,10 @@ class BGEM3Embeddings:
 
     @observe(name="bge-m3-dense-embed", capture_input=False, capture_output=False)
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
-        if not texts:
-            return []
-        result = await self._client.encode_dense(texts)
-        return result.vectors
+        return await self._provider.aembed_documents(texts)
 
     async def aembed_query(self, text: str) -> list[float]:
-        result = await self._client.encode_dense([text])
-        return result.vectors[0]
+        return await self._provider.aembed_query(text)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return asyncio.get_event_loop().run_until_complete(self.aembed_documents(texts))
@@ -66,9 +54,12 @@ class BGEM3Embeddings:
     def embed_query(self, text: str) -> list[float]:
         return asyncio.get_event_loop().run_until_complete(self.aembed_query(text))
 
+    async def aclose(self) -> None:
+        await self._provider.aclose()
+
 
 class BGEM3SparseEmbeddings:
-    """Sparse embeddings wrapper for BGE-M3 /encode/sparse endpoint."""
+    """Sparse-embedding compatibility shim over the canonical BGE-M3 provider."""
 
     def __init__(
         self,
@@ -77,10 +68,12 @@ class BGEM3SparseEmbeddings:
         max_length: int = 512,
         *,
         client: BGEM3Client | None = None,
+        provider: BgeM3EmbeddingProvider | None = None,
     ) -> None:
         self.base_url = base_url
         self.timeout = timeout
-        self._client = client or BGEM3Client(
+        self._provider = provider or BgeM3EmbeddingProvider(
+            client=client,
             base_url=base_url,
             timeout=timeout,
             max_length=max_length,
@@ -88,24 +81,18 @@ class BGEM3SparseEmbeddings:
 
     @observe(name="bge-m3-sparse-embed", capture_input=False, capture_output=False)
     async def aembed_query(self, text: str) -> dict[str, Any]:
-        result = await self._client.encode_sparse([text])
-        return result.weights[0]
+        return await self._provider.aembed_sparse_query(text)
 
     @observe(name="bge-m3-sparse-embed-batch", capture_input=False, capture_output=False)
     async def aembed_documents(self, texts: list[str]) -> list[dict[str, Any]]:
-        if not texts:
-            return []
-        result = await self._client.encode_sparse(texts)
-        return result.weights
+        return await self._provider.aembed_sparse_documents(texts)
+
+    async def aclose(self) -> None:
+        await self._provider.aclose()
 
 
 class BGEM3HybridEmbeddings:
-    """Combined dense+sparse(+ColBERT) embedding via BGE-M3 /encode/hybrid.
-
-    Single HTTP call returns dense and sparse vectors, and may also return
-    ColBERT token vectors when the endpoint supports it.
-    Uses shared httpx.AsyncClient for connection pooling.
-    """
+    """Hybrid/ColBERT compatibility shim over the canonical BGE-M3 provider."""
 
     def __init__(
         self,
@@ -114,8 +101,10 @@ class BGEM3HybridEmbeddings:
         max_length: int = 512,
         *,
         client: BGEM3Client | None = None,
+        provider: BgeM3EmbeddingProvider | None = None,
     ) -> None:
-        self._client = client or BGEM3Client(
+        self._provider = provider or BgeM3EmbeddingProvider(
+            client=client,
             base_url=base_url,
             timeout=timeout,
             max_length=max_length,
@@ -123,60 +112,38 @@ class BGEM3HybridEmbeddings:
 
     @observe(name="bge-m3-dense-query-embed", capture_input=False, capture_output=False)
     async def aembed_dense_query(self, text: str) -> tuple[list[float], float | None]:
-        """Embed query text via /encode/dense, returning (dense_vector, processing_time)."""
-        result = await self._client.encode_dense([text])
-        return result.vectors[0], result.processing_time
+        """Embed query text via BGE-M3, returning ``(dense_vector, processing_time)``."""
+        return await self._provider.aembed_dense_query(text)
 
     @observe(name="bge-m3-hybrid-embed", capture_input=False, capture_output=False)
     async def aembed_hybrid(self, text: str) -> tuple[list[float], dict[str, Any]]:
-        """Embed text via /encode/hybrid, returning (dense, sparse)."""
-        result = await self._client.encode_hybrid([text])
-        return result.dense_vecs[0], result.lexical_weights[0]
+        """Embed text, returning ``(dense, sparse)``."""
+        return await self._provider.aembed_hybrid(text)
 
     @observe(name="bge-m3-hybrid-colbert-embed", capture_input=False, capture_output=False)
     async def aembed_hybrid_with_colbert(
         self, text: str
     ) -> tuple[list[float], dict[str, Any], list[list[float]]]:
-        """Embed text returning (dense, sparse, colbert_query_vectors).
-
-        Tries to get all three from /encode/hybrid in one call.
-        Falls back to separate /encode/colbert if hybrid doesn't return colbert_vecs.
-        """
-        result = await self._client.encode_hybrid([text])
-        dense = result.dense_vecs[0]
-        sparse = result.lexical_weights[0]
-
-        if result.colbert_vecs:
-            colbert = result.colbert_vecs[0]
-        else:
-            colbert_result = await self._client.encode_colbert([text])
-            colbert = colbert_result.colbert_vecs[0]
-
-        return dense, sparse, colbert
+        """Embed text, returning ``(dense, sparse, colbert_query_vectors)``."""
+        return await self._provider.aembed_hybrid_with_colbert(text)
 
     @observe(name="bge-m3-colbert-query-embed", capture_input=False, capture_output=False)
     async def aembed_colbert_query(self, text: str) -> list[list[float]]:
-        """Embed text via /encode/colbert, returning query token vectors only."""
-        result = await self._client.encode_colbert([text])
-        return result.colbert_vecs[0]
+        """Embed text, returning ColBERT query token vectors only."""
+        return await self._provider.aembed_colbert_query(text)
 
     @observe(name="bge-m3-hybrid-embed-batch", capture_input=False, capture_output=False)
     async def aembed_hybrid_batch(
         self, texts: list[str]
     ) -> tuple[list[list[float]], list[dict[str, Any]]]:
-        """Batch embed via /encode/hybrid."""
-        if not texts:
-            return [], []
-        result = await self._client.encode_hybrid(texts)
-        return result.dense_vecs, result.lexical_weights
+        """Batch embed dense and sparse vectors."""
+        return await self._provider.aembed_hybrid_batch(texts)
 
     async def aembed_query(self, text: str) -> list[float]:
         dense, _ = await self.aembed_hybrid(text)
         return dense
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
-        if not texts:
-            return []
         dense_vecs, _ = await self.aembed_hybrid_batch(texts)
         return dense_vecs
 
@@ -187,7 +154,7 @@ class BGEM3HybridEmbeddings:
         return asyncio.get_event_loop().run_until_complete(self.aembed_query(text))
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        await self._provider.aclose()
 
 
 __all__ = [
