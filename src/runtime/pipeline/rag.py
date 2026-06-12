@@ -27,6 +27,7 @@ from typing import Any, TypeVar
 
 from src.observability import get_client, observe
 from src.runtime.graph.config import GraphConfig
+from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
 from src.runtime.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
@@ -99,6 +100,7 @@ def _cacheable_query_types() -> set[str]:
 
 logger = logging.getLogger(__name__)
 
+
 # top_k=7 for reranking. Standard in literature; balances latency vs recall for
 # reranking candidate pool. 3 was too restrictive — comprehensive queries
 # (e.g. list all ВНЖ types) were losing chunks.
@@ -148,8 +150,10 @@ async def _execute_qdrant_retrieval(
     sparse_weight: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
     has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
-    if colbert_query and has_colbert_search:
-        result = await qdrant.hybrid_search_rrf_colbert(
+    colbert_used = bool(colbert_query and has_colbert_search)
+    retrieval = RetrievalService(qdrant=qdrant)
+    result = await retrieval.retrieve_vectors(
+        VectorRetrievalRequest(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             colbert_query=colbert_query,
@@ -159,18 +163,7 @@ async def _execute_qdrant_retrieval(
             top_k=top_k,
             return_meta=True,
         )
-        colbert_used = True
-    else:
-        result = await qdrant.hybrid_search_rrf(
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            filters=filters,
-            dense_weight=dense_weight,
-            sparse_weight=sparse_weight,
-            top_k=top_k,
-            return_meta=True,
-        )
-        colbert_used = False
+    )
 
     if isinstance(result, tuple) and len(result) == 2:
         results, search_meta = result

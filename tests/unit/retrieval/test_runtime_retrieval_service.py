@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from src.adapters.embeddings.base import EmbeddingProvider
-from src.runtime.retrieval import RetrievalRequest, RetrievalService
+from src.runtime.retrieval import RetrievalRequest, RetrievalService, VectorRetrievalRequest
 
 
 class HybridColbertEmbeddings(EmbeddingProvider):
@@ -128,4 +128,48 @@ async def test_retrieve_does_not_swallow_qdrant_not_implemented_errors() -> None
     )
 
     with pytest.raises(NotImplementedError, match="qdrant colbert path"):
+        await service.retrieve(RetrievalRequest(query="hello"))
+
+
+@pytest.mark.asyncio
+async def test_retrieve_vectors_routes_precomputed_colbert_without_generation() -> None:
+    qdrant = RecordingQdrant()
+    service = RetrievalService(qdrant=qdrant)  # type: ignore[arg-type]
+
+    result = await service.retrieve_vectors(
+        VectorRetrievalRequest(
+            dense_vector=[0.9],
+            sparse_vector={"indices": [9], "values": [0.9]},
+            colbert_query=[[0.8]],
+            filters={"city": "Sunny Beach"},
+            top_k=7,
+            return_meta=True,
+            dense_weight=0.4,
+            sparse_weight=0.6,
+        )
+    )
+
+    assert result == [{"id": "colbert"}]
+    assert qdrant.calls == [
+        (
+            "colbert",
+            {
+                "dense_vector": [0.9],
+                "sparse_vector": {"indices": [9], "values": [0.9]},
+                "filters": {"city": "Sunny Beach"},
+                "top_k": 7,
+                "return_meta": True,
+                "dense_weight": 0.4,
+                "sparse_weight": 0.6,
+                "colbert_query": [[0.8]],
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_retrieve_requires_embeddings_for_query_vectorization() -> None:
+    service = RetrievalService(qdrant=RecordingQdrant())  # type: ignore[arg-type]
+
+    with pytest.raises(RuntimeError, match="requires an embedding provider"):
         await service.retrieve(RetrievalRequest(query="hello"))
