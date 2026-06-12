@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+
+pytestmark = pytest.mark.requires_extras
+
 
 def test_build_rag_task_returns_callable():
     from scripts.eval.run_experiment import build_rag_task

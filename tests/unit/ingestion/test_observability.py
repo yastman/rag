@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.ingestion.unified.observability import update_ingestion_trace
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def test_update_ingestion_trace_uses_observation_updates() -> None:

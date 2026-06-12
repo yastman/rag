@@ -31,6 +31,10 @@ from pathlib import Path
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # Modules that issue Qdrant queries against the canonical collection

@@ -3,7 +3,12 @@
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from src.voice.schemas import CallRequest, CallResponse, CallStatus, TranscriptEntry
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def test_call_request_schema():

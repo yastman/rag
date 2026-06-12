@@ -18,6 +18,10 @@ from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 from src.services.bge_m3_client import HybridResult
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

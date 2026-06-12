@@ -67,14 +67,24 @@ Canonical E2E placement:
 make check
 ```
 
-### Fast test gate (unit + critical graph paths)
+### Deterministic core gate (core + critical graph paths)
 ```bash
 make test
 ```
 
-### Core unit tests (parallel, default local gate)
+### Broad unit lane (local/manual)
 ```bash
 PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
+```
+
+### Optional surface lanes (explicit opt-in)
+```bash
+make test-api-adapter
+make test-ingest-extra
+make test-voice-extra
+make test-eval-extra
+make test-observability-extra
+make test-optional-surfaces
 ```
 
 ### Focused run (preferred while developing)

@@ -3,6 +3,11 @@
 
 from unittest.mock import MagicMock, mock_open, patch
 
+import pytest
+
+
+pytestmark = pytest.mark.requires_extras
+
 
 class TestExtractArticles:
     """Tests for extract_articles function."""

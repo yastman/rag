@@ -5,6 +5,11 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+
+pytestmark = pytest.mark.requires_extras
+
 
 def _run_and_capture() -> dict:
     """Run create_golden_test_set with a mocked open and return the written JSON."""

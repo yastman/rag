@@ -16,6 +16,9 @@ from src.retrieval.search_engine_shared import (
 from src.utils.serialization import convert_to_python_types as shared_convert
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 class TestConvertToPythonTypes:
     """Tests for convert_to_python_types helper function."""
 

@@ -1,4 +1,8 @@
 """Tests for Docling-serve HTTP client helpers."""
+import pytest
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def test_build_chunking_form_data_omits_invalid_tokenizer_word():

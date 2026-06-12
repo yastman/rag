@@ -3,7 +3,12 @@
 import csv
 from pathlib import Path
 
+import pytest
+
 from src.ingestion.apartments.source import parse_apartment_row, row_change_key
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def _write_csv(rows: list[dict], path: Path) -> None:

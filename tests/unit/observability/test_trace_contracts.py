@@ -15,6 +15,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
+
 _TRACE_ID = "trace-contract-abc"
 
 # Minimal state dict that exercises all 13 core RAG scores.

@@ -1,5 +1,7 @@
 """Integration tests for Contextual Retrieval pipeline."""
 
+import pytest
+
 from src.ingestion import (
     ContextualChunk,
     ContextualDocument,
@@ -7,6 +9,9 @@ from src.ingestion import (
     load_contextual_json,
 )
 from src.ingestion.chunker import Chunk
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 class TestContextualPipeline:

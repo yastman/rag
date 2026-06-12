@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from telegram_bot.tracing_context import classify_action, make_session_id
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 class TestMakeSessionId:

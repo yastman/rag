@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from telegram_bot.observability_payloads import (
     build_safe_input_payload,
     build_safe_output_payload,
 )
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 def test_build_safe_input_payload_masks_and_hashes_text() -> None:

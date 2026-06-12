@@ -1,5 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
+	test-telegram-adapter test-api-adapter test-ingest-extra test-voice-extra test-eval-extra test-observability-extra test-optional-surfaces \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	ingest-dir ingest-status ingest-services \
@@ -59,18 +60,13 @@ CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH) -v --tb=shor
 PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/test_document_parser.py \
 	tests/unit/test_evaluator.py \
-	tests/unit/evaluation/test_ragas_evaluation.py \
+	tests/unit/test_ragas_evaluation.py \
 	tests/unit/api \
-	tests/unit/voice/test_sip_setup.py \
-	tests/unit/voice/test_voice_agent.py \
-	tests/unit/ingestion/test_cocoindex_init.py \
-	tests/unit/ingestion/test_qdrant_hybrid_target.py \
-	tests/unit/ingestion/test_qdrant_hybrid_target_helpers.py \
-	tests/unit/ingestion/test_qdrant_hybrid_target_state_paths.py \
-	tests/unit/ingestion/test_target_sync_execution.py \
-	tests/unit/ingestion/test_unified_cli.py \
-	tests/unit/ingestion/test_unified_flow.py \
-	tests/unit/ingestion/test_unified_flow_wiring.py)
+	tests/unit/evaluation \
+	tests/unit/ingestion \
+	tests/unit/observability \
+	tests/unit/voice)
+
 
 help: ## Show this help message
 	@echo "$(BLUE)Contextual RAG v$(PROJECT_VERSION) - Development Commands$(NC)"
@@ -197,10 +193,11 @@ all-checks: lint type-check security ## Run all code quality checks
 # TESTING
 # =============================================================================
 
-test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
-	@echo "$(BLUE)Running fast test gate (unit + graph_paths)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
-	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
+test: ## Run deterministic core PR/local gate (core + graph paths)
+	@echo "$(BLUE)Running deterministic core gate (test-core + graph_paths)...$(NC)"
+	$(MAKE) test-core
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/integration/test_graph_paths.py -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	@echo "$(GREEN)✓ Deterministic core gate complete$(NC)"
 
 test-core: ## Run monolith core-required tests only (local/manual)
 	@echo "$(BLUE)Running monolith core test gate...$(NC)"
@@ -210,8 +207,47 @@ test-core: ## Run monolith core-required tests only (local/manual)
 	  tests/contract/test_runtime_no_telegram_bot_coupling_contract.py \
 	  tests/contract/test_layering_no_telegram_bot_imports_contract.py \
 	  tests/contract/test_langfuse_optional_core_contract.py \
+	  --ignore=tests/unit/core/test_pipeline.py \
 	  -q --timeout=30 -m "not requires_extras and not slow"
 	@echo "$(GREEN)✓ Monolith core test gate complete$(NC)"
+
+test-telegram-adapter: ## Run Telegram adapter unit tests explicitly
+	@echo "$(BLUE)Running Telegram adapter tests...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/agents/ tests/unit/dialogs/ tests/unit/handlers/ tests/unit/middlewares/ tests/unit/pipelines/ tests/unit/test_bot*.py tests/unit/test_main.py tests/unit/test_middlewares_impl.py -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	@echo "$(GREEN)✓ Telegram adapter tests complete$(NC)"
+
+test-api-adapter: ## Run API adapter unit tests explicitly
+	@echo "$(BLUE)Running API adapter tests...$(NC)"
+	uv sync --extra mini-app --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/api/ -q --timeout=30
+	@echo "$(GREEN)✓ API adapter tests complete$(NC)"
+
+test-ingest-extra: ## Run optional ingestion-extra tests explicitly
+	@echo "$(BLUE)Running ingestion-extra tests...$(NC)"
+	uv sync --extra ingest --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
+	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
+
+test-voice-extra: ## Run optional voice-extra tests explicitly
+	@echo "$(BLUE)Running voice-extra tests...$(NC)"
+	uv sync --extra voice --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/voice/ -q --timeout=30
+	@echo "$(GREEN)✓ Voice-extra tests complete$(NC)"
+
+test-eval-extra: ## Run optional evaluation-extra tests explicitly
+	@echo "$(BLUE)Running evaluation-extra tests...$(NC)"
+	uv sync --extra eval --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/evaluation/ -q --timeout=30
+	@echo "$(GREEN)✓ Evaluation-extra tests complete$(NC)"
+
+test-observability-extra: ## Run optional observability-extra tests explicitly
+	@echo "$(BLUE)Running observability-extra tests...$(NC)"
+	uv sync --extra observability --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/observability/ -q --timeout=30
+	@echo "$(GREEN)✓ Observability-extra tests complete$(NC)"
+
+test-optional-surfaces: test-api-adapter test-ingest-extra test-voice-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
+	@echo "$(GREEN)✓ Optional surface lanes complete$(NC)"
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"

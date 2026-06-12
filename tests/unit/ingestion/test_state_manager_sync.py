@@ -3,6 +3,11 @@
 
 import asyncio
 
+import pytest
+
+
+pytestmark = pytest.mark.requires_extras
+
 
 class TestStateManagerSyncMethods:
     """Verify sync methods exist and are not coroutines."""

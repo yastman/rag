@@ -25,6 +25,10 @@ from __future__ import annotations
 import inspect
 
 import langfuse.openai
+import pytest
+
+
+pytestmark = pytest.mark.requires_extras
 
 
 class TestLangfuseOpenAISourceCodeContract:
