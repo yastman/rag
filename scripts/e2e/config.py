@@ -84,7 +84,6 @@ class E2EConfig:
     # Voice note fixture path for voice delivery scenarios
     voice_note_path: str = field(default_factory=lambda: os.getenv("E2E_VOICE_NOTE_PATH", ""))
 
-
     def validate(self, *, judge_required: bool = True) -> list[str]:
         """Validate configuration, return list of errors."""
         errors = []
