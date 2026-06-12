@@ -45,6 +45,10 @@ cascade into unrelated skills or workflows on your own.
   [`docs/engineering/sdk-registry.md`](docs/engineering/sdk-registry.md)
 - Codex Web worker prompt:
   [`docs/engineering/codex-web-prompt.md`](docs/engineering/codex-web-prompt.md)
+- PR review / gatekeeper:
+  [`docs/engineering/gh-pr-review.md`](docs/engineering/gh-pr-review.md)
+- Orchestrator playbook:
+  [`docs/engineering/orchestrator-playbook.md`](docs/engineering/orchestrator-playbook.md)
 - Docs navigation:
   [`docs/README.md`](docs/README.md), [`docs/indexes/`](docs/indexes/)
 - Operational runbooks:
