@@ -48,6 +48,75 @@ Compose Config
 
 Fast/Heavy Python test workflows, local runners, self-hosted runners, and workflow_dispatch checks are useful diagnostics but are not required merge blockers unless the user explicitly says so.
 
+## Required Check Existence Guard
+
+After PR creation/update, reviewer must verify statusCheckRollup.
+- If statusCheckRollup is empty and the PR is not draft, the PR is not ready.
+- Report blocker: "CI did not start".
+- Do not merge or mark clean until required GitHub checks are visible and green.
+- If checks are pending, wait/recheck; if absent, investigate branch/ref/workflow trigger.
+
+## Scope Contamination Guard
+
+Feature/runtime PRs must not include process/control-plane files unless the issue explicitly requires them.
+
+Control-plane files include:
+- `docs/engineering/codex-web-prompt.md`
+- `skills/gh-pr-review.md`
+- `.github/pull_request_template.md`
+- `.github/workflows/*`
+- `AGENTS.md`
+- `tests/unit/test_agents_contract.py`
+
+If such files appear in a feature PR without explicit scope:
+- block the PR;
+- request removal/cherry-pick cleanup;
+- do not treat as safe autofix;
+- suggest separate process PR.
+
+## Exact CI Command Guard
+
+Static CI validation must use the exact commands from `.github/workflows/ci.yml`, not approximate per-file commands.
+
+For PRs touching Python paths under `src/`, `telegram_bot/`, `mini_app/`, `services/`, or `scripts/`, final ready validation must include:
+
+```bash
+uvx ruff check src/ telegram_bot/ mini_app/ services/ scripts/ --output-format=github
+uvx ruff format --target-version py312 --check src/ telegram_bot/ mini_app/ services/ scripts/
+uv lock --locked
+```
+
+Partial ruff checks are allowed during development but not sufficient for final ready/clean status.
+
+## PR Body / Template Guard
+
+Reviewer must verify PR body includes:
+- Issue / Mode
+- Changed files / scope
+- Duplicate PR preflight
+- Validation
+- Skipped checks + reason
+- Failed checks triage
+- Risk / rollback
+- Follow-up issues if baseline failures exist
+
+If missing, reviewer may autofix PR body only; do not mark clean until body is complete.
+
+## Agent Handoff Enforcement
+
+Every reviewed PR must contain or receive Agent Handoff with:
+- Status
+- Base
+- Head
+- Validated commit
+- Risk
+- Failure class
+- Validation checklist
+- Findings
+- Next action
+
+If current PR head differs from Validated commit, validation is stale and must be rerun.
+
 ## Autopilot Mode
 
 When explicitly requested, the agent may review, safe-auto-fix, validate, and merge a PR into `dev`.
@@ -180,6 +249,13 @@ Never do silently:
 - change branch protection;
 - hide env failures as passed.
 
+Reviewer must not autofix silently:
+- workflow/prompt/template/process files inside feature PRs;
+- broad dependency changes;
+- unrelated baseline failures;
+- weakening/removing tests;
+- production logic just to satisfy stale tests.
+
 ## Test Failure Classification
 
 When tests fail, classify before fixing:
@@ -204,9 +280,12 @@ Example: old Docker LiteLLM proxy expectations should become in-process LiteLLM 
 The agent may merge into `dev` only when all are true:
 
 - PR base is `dev`.
-- Current PR head equals `Validated commit` in Agent Handoff.
+- statusCheckRollup is non-empty.
+- required GitHub checks are green on current head.
+- PR body/template is complete.
+- no scope contamination remains.
+- current head equals `Validated commit` in Agent Handoff.
 - Working tree is clean.
-- Required GitHub checks are green.
 - Focused validation for the changed files passed.
 - `make test-core` passed if core/runtime/contracts/test-gate files changed.
 - Optional/self-hosted checks are ignored if not required.
@@ -377,6 +456,21 @@ gh pr comment <PR> --body-file /tmp/pr-comment.md
 # Merge only when allowed
 gh pr merge <PR> --merge
 ```
+
+## PR Creation Sanity Check
+
+```bash
+gh pr view <PR> --repo yastman/rag \
+  --json url,state,isDraft,baseRefName,headRefName,headRefOid,mergeable,statusCheckRollup \
+  --jq '{url,state,isDraft,base:.baseRefName,head:.headRefName,oid:.headRefOid,mergeable,checks:[.statusCheckRollup[]? | {name:.name,status:.status,conclusion:.conclusion}]}'
+```
+
+Expected:
+- base = dev
+- state = OPEN
+- statusCheckRollup not empty or pending
+- required checks visible
+- if ready/clean: required checks green
 
 ## Open PR Queue Processing
 
