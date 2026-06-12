@@ -100,3 +100,44 @@ A PR touched by a reviewer or worker must not be reported as ready unless the PR
 - Agent Handoff with `Validated commit` equal to current head.
 
 If the head changes after validation, validation is stale and must be rerun.
+
+---
+
+## 6. Broad-suite failure audit
+
+When a broad suite such as `make test` fails but focused validation passes, workers and reviewers must not summarize the failure as one vague baseline sentence.
+
+Required triage:
+
+1. Capture the total result counts.
+2. Group the first representative failures by root cause.
+3. Classify each group as `code_regression`, `stale_test`, `env_failure`, `flaky_or_race`, or `optional_lane`.
+4. Decide whether each group is PR-caused or unrelated baseline.
+5. Link an existing issue or create/update a TEST-INFRA issue for unrelated broad-lane failures.
+6. Do not autofix unrelated broad-suite failures inside a focused runtime PR.
+
+Minimum handoff wording:
+
+```text
+Broad suite: failed, non-blocking for this PR.
+Counts: <N failed>, <N errors>, <N skipped>, <N passed>.
+Representative groups:
+- <group>: <classification>, <PR-caused? yes/no>, <issue link or follow-up needed>
+Decision: <autofix in current PR | separate TEST-INFRA issue | block PR>.
+```
+
+Autofix only when the broad-suite failure is clearly caused by the current PR and is inside the touched subsystem. Otherwise keep the feature PR focused and track the broad-suite cleanup separately.
+
+---
+
+## 7. One-piece worker prompts
+
+When the orchestrator writes a prompt for a Codex Web worker, the output must be one complete copy-paste prompt block.
+
+Rules:
+
+1. Do not send a short prompt plus separate tails, addenda, or follow-up fragments.
+2. If new information arrives after a prompt was drafted, rewrite and re-emit the full prompt from the top.
+3. If there are independent tasks, provide separate complete prompt blocks, one per worker/task.
+4. Each prompt must include mode/skill, context, source of truth, scope, non-scope, tasks, validation, and handoff.
+5. The worker should not need to reconstruct instructions from earlier chat fragments.

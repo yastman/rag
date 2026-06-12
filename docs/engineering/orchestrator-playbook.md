@@ -52,6 +52,8 @@ Rules:
 
 The orchestrator writes task prompts for Codex Web workers. A new orchestrator should be able to read this playbook and produce a complete copy-paste prompt without needing hidden context.
 
+Worker prompts must be emitted as one complete, self-contained copy-paste block. Do not send a partial prompt plus separate tails, addenda, or follow-up fragments; if context changes, rewrite and re-emit the full prompt from the top.
+
 Choose the mode and skill first:
 
 ```text
