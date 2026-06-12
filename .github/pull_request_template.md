@@ -30,3 +30,12 @@ Reason for skipped checks:
 
 ## Risk / rollback
 -
+
+## Failed checks triage
+PR-caused failures fixed:
+-
+
+Known baseline / unrelated failures:
+-
+
+Follow-up issues needed:

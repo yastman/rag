@@ -76,6 +76,21 @@ Before coding each issue in a worker pack:
 A PR must not be marked ready if static CI-equivalent checks fail locally.
 If checks cannot be run, keep the PR draft or document skipped checks and risk.
 
+## Test Failure Triage / Autofix Policy
+
+When validation fails, classify before fixing:
+
+| Failure type | Action |
+|---|---|
+| PR-caused failure in changed files or changed behavior | Fix in the current PR |
+| Static CI-equivalent failure: Ruff, format, lockfile, Semgrep, Compose | Fix in the current PR before marking ready |
+| Existing baseline failure outside PR scope | Do not fix in this PR; document as known baseline and create/follow a separate issue |
+| Missing optional dependency in broad suite | Do not vendor/install blindly; classify as optional lane/dependency hygiene and create/follow a separate issue |
+| Legacy typing failure outside touched files | Do not fix in this PR; document and create/follow TYPE-BASELINE issue |
+| Unclear ownership | Stop, report blocker, include failing command and first relevant error |
+
+Never expand a PR just to make a broad suite green unless the user explicitly asks for a baseline cleanup PR.
+
 ## 2. PR Coordinator
 - Используется только для ревью существующих PR и подготовки к merge.
 - Проверить PR diff, body, changed files, base branch и mergeability.
