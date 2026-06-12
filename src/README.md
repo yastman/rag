@@ -34,11 +34,24 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 | `utils/` | Shared helpers |
 | `voice/` | LiveKit voice agent and SIP setup (deferred by default) |
 
-## Boundaries
+## Architecture Law
 
-- **Shared/domain `src/` modules should stay Telegram-agnostic.** `src/api/` is an explicit adapter exception: it reuses the Telegram LangGraph pipeline (graph, state, observability, scoring) until that pipeline is extracted into a shared location.
+`src/` follows the repository architecture law documented in [`../ARCHITECTURE.md`](../ARCHITECTURE.md):
+
+```text
+External adapters -> src.core -> src.runtime -> providers / clients
+providers / clients -X-> src.runtime
+src.runtime -X-> telegram_bot
+CRM writes -> HITL confirmation required
+```
+
+Practical rules for this tree:
+
+- **`src.core/` owns the public SDK boundary.** Adapters pass request context, config, and typed `CoreDependencies` into core entrypoints instead of wiring low-level runtime dependencies themselves.
+- **`src.runtime/` owns assistant orchestration and must stay adapter-agnostic.** It may call neutral `src.services` clients and provider protocols, but it must not import or dynamically resolve `telegram_bot.*`.
+- **Providers and clients do not call runtime orchestration.** Shared clients under `src/services/` and provider wrappers stay reusable below runtime.
 - **Ingestion determinism and resumability** are owned by `src/ingestion/` and `src/ingestion/unified/`. Do not change manifest identity, hashing, or collection semantics without careful review.
-- **LangGraph state contracts** are defined in `telegram_bot/graph/state.py`; `src/api/` reuses the same pipeline but does not redefine state shapes.
+- **CRM writes require HITL.** Core/runtime may propose CRM actions, but adapters must require explicit confirmation before side effects.
 
 ## Related Runtime Services
 
@@ -59,6 +72,7 @@ pytest src/retrieval/ src/ingestion/unified/ src/api/
 
 ## See Also
 
+- [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — Layer dependency rules
 - [`../telegram_bot/README.md`](../telegram_bot/README.md) — Telegram transport layer
 - [`../DOCKER.md`](../DOCKER.md) — Docker orchestration and service dependencies
 - [`../docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder

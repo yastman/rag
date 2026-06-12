@@ -57,7 +57,9 @@ async def test_query_calls_assistant_core_with_api_context() -> None:
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=lf),
-        patch("src.core.run_assistant_request", new=AsyncMock(return_value=_assistant_result())) as mock_run,
+        patch(
+            "src.core.run_assistant_request", new=AsyncMock(return_value=_assistant_result())
+        ) as mock_run,
     ):
         await query(QueryRequest(query="test", user_id=1, session_id="sess-1"))
 

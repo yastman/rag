@@ -6,9 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 
 class TestTranscribeVoiceOpenAIRouting:
-    async def test_transcribe_voice_default_client_uses_openai_api_key(
-        self, monkeypatch
-    ) -> None:
+    async def test_transcribe_voice_default_client_uses_openai_api_key(self, monkeypatch) -> None:
         import openai
 
         from telegram_bot.handlers.demo_handler import transcribe_voice
@@ -37,9 +35,7 @@ class TestTranscribeVoiceOpenAIRouting:
         assert result == "привет"
         assert created.get("kwargs", {}).get("api_key") == "test-key"
 
-    async def test_transcribe_voice_default_client_falls_back_to_dev_key(
-        self, monkeypatch
-    ) -> None:
+    async def test_transcribe_voice_default_client_falls_back_to_dev_key(self, monkeypatch) -> None:
         import openai
 
         from telegram_bot.handlers.demo_handler import transcribe_voice

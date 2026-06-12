@@ -15,7 +15,7 @@ from src.core import (
     CoreDependencies,
     UserContext,
 )
-from src.core.assistant import run_assistant_request
+from src.core.app import AssistantApp
 
 
 CORE_ENTRYPOINT_ENV = "ASSISTANT_CORE_ENTRYPOINT_ENABLED"
@@ -56,12 +56,12 @@ async def run_core_text_request(
 ) -> AssistantResult:
     """Call the assistant core from Telegram adapter code."""
 
-    return await run_assistant_request(
+    app = AssistantApp.from_dependencies(dependencies)
+    return await app.run_text(
         query,
         collection=collection,
         user_context=user_context,
         request_id=request_id,
-        dependencies=dependencies,
     )
 
 

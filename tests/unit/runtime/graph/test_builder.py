@@ -3,9 +3,8 @@
 Closes the final layering offender for #1948: ``src/api/main.py`` previously
 hard-imported ``telegram_bot.graph.graph.build_graph`` inside its FastAPI
 ``lifespan``. The new builder resolves the factory dynamically through
-``RAG_GRAPH_FACTORY`` (default ``telegram_bot.graph.graph:build_graph``),
-which is a string spec — no static ``from telegram_bot ...`` import remains
-under ``src/`` once ``src/api/main.py`` is rewired.
+``RAG_GRAPH_FACTORY`` (default ``src.runtime.graph.graph:build_graph``),
+which keeps the runtime default owned by ``src.runtime``.
 
 Tests cover the resolver only. The actual ``build_graph`` implementation is
 exercised by the existing graph-level tests; here we use a tiny stub module
@@ -38,23 +37,14 @@ def _install_stub_module(name: str, factory: object) -> None:
 
 
 def test_resolve_pipeline_factory_uses_default_spec(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Default spec is ``telegram_bot.graph.graph:build_graph`` per the
-    canonical bot wiring; we install a stub at that location so the test
-    has no transitive ML imports.
-    """
+    """Default spec resolves to the runtime-owned graph factory."""
     monkeypatch.delenv("RAG_GRAPH_FACTORY", raising=False)
 
-    def _fake_build_graph(*args: object, **kwargs: object) -> str:
-        return "fake-graph"
-
-    fake_module = types.ModuleType("telegram_bot.graph.graph")
-    fake_module.build_graph = _fake_build_graph  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "telegram_bot.graph.graph", fake_module)
+    from src.runtime.graph.graph import build_graph
 
     factory = builder.resolve_pipeline_factory()
 
-    assert factory is _fake_build_graph
-    assert factory() == "fake-graph"
+    assert factory is build_graph
 
 
 def test_resolve_pipeline_factory_honours_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -78,8 +68,8 @@ def test_resolve_pipeline_factory_resolves_each_call(monkeypatch: pytest.MonkeyP
     """The resolver does NOT cache: a re-``patch`` of the target attribute
     must be observed on the next ``resolve_pipeline_factory`` call. This
     is the behaviour ``tests/unit/api/test_rag_api_runtime.py`` relies on
-    when it ``patch``-es ``telegram_bot.graph.graph.build_graph`` from a
-    fresh test that runs after this module has already resolved once.
+    when it patches a configured graph factory from a fresh test that runs
+    after this module has already resolved once.
     """
     fake_module = types.ModuleType("tests._fake_pipeline_recheck")
 

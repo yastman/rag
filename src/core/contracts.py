@@ -9,7 +9,7 @@ them in lightweight tests and tooling.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 
 @dataclass
@@ -33,17 +33,67 @@ class AssistantRequest:
     request_id: str = ""
 
 
+class CacheProvider(Protocol):
+    """Semantic cache dependency used by the runtime RAG path."""
+
+    async def check_semantic(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+class EmbeddingProvider(Protocol):
+    """Dense embedding dependency used by core/runtime."""
+
+    async def aembed_query(self, text: str) -> list[float]: ...
+
+
+class SparseEmbeddingProvider(Protocol):
+    """Sparse embedding dependency used by core/runtime."""
+
+    async def aembed_query(self, text: str) -> dict[str, Any]: ...
+
+
+class QdrantClientProtocol(Protocol):
+    """Vector search dependency used by core/runtime."""
+
+    async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+class RerankerProvider(Protocol):
+    """Optional reranking dependency used by core/runtime."""
+
+    async def rerank(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+class LLMProvider(Protocol):
+    """Optional language-model dependency used by core/runtime."""
+
+    async def generate(self, *args: Any, **kwargs: Any) -> str: ...
+
+
+class CrmClientProtocol(Protocol):
+    """Optional CRM dependency; implementations must keep writes behind HITL."""
+
+    async def propose_action(self, *args: Any, **kwargs: Any) -> CrmAction | None: ...
+
+
+class TelemetryLogger(Protocol):
+    """SDK-friendly telemetry callback surface for product events."""
+
+    def log_event(self, event: str, **fields: Any) -> None: ...
+
+
 @dataclass
 class CoreDependencies:
     """Runtime collaborators required to execute the existing RAG path."""
 
-    cache: Any
-    embeddings: Any
-    sparse_embeddings: Any
-    qdrant: Any
-    reranker: Any | None = None
-    llm: Any | None = None
-    config: Any | None = None
+    cache: CacheProvider
+    embeddings: EmbeddingProvider
+    sparse_embeddings: SparseEmbeddingProvider
+    qdrant: QdrantClientProtocol
+    reranker: RerankerProvider | None = None
+    llm: LLMProvider | None = None
+    config: object | None = None
+    crm: CrmClientProtocol | None = None
+    telemetry: TelemetryLogger | None = None
 
 
 @dataclass
@@ -88,7 +138,15 @@ __all__ = [
     "AssistantError",
     "AssistantRequest",
     "AssistantResult",
+    "CacheProvider",
     "CoreDependencies",
     "CrmAction",
+    "CrmClientProtocol",
+    "EmbeddingProvider",
+    "LLMProvider",
+    "QdrantClientProtocol",
+    "RerankerProvider",
+    "SparseEmbeddingProvider",
+    "TelemetryLogger",
     "UserContext",
 ]

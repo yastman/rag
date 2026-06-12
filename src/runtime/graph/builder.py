@@ -1,30 +1,9 @@
 """Pipeline factory resolver — the seam that closes #1948.
 
 Before this module, ``src/api/main.py`` opened its FastAPI ``lifespan``
-with::
-
-    from telegram_bot.graph.graph import build_graph
-
-That static import was the last entry in
-``tests/data/known_layering_violations.json`` and the last reason
-``src/`` could not be shipped without ``telegram_bot/`` mounted next to
-it.
-
-This module replaces that static import with a string-based resolution:
-
-* ``RAG_GRAPH_FACTORY`` (default ``telegram_bot.graph.graph:build_graph``)
-  points at a ``module:attribute`` callable.
-* :func:`resolve_pipeline_factory` imports the module via
-  :func:`importlib.import_module` (a string call, not an ``import``
-  statement) and returns the attribute.
-* The layering contract test (#1948) scans the AST for
-  ``ast.Import`` / ``ast.ImportFrom`` nodes only, so the dynamic resolve
-  does not register as a violation.
-
-The default still points at the bot's existing ``build_graph`` so
-production behaviour is unchanged. Tests and alternative deployments
-override the env var to inject their own factory without touching
-``src/api/``.
+with a direct adapter import. This resolver keeps API/runtime code on a
+runtime-owned default factory while still allowing adapters to override the
+factory with ``RAG_GRAPH_FACTORY=some.module:factory``.
 """
 
 from __future__ import annotations
@@ -39,12 +18,11 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_FACTORY_SPEC = "telegram_bot.graph.graph:build_graph"
+DEFAULT_FACTORY_SPEC = "src.runtime.graph.graph:build_graph"
 """Default ``module:attribute`` factory spec.
 
-The bot's ``build_graph`` is the canonical pipeline factory; ``src/api``
-and ``mini_app`` consume it via this seam so they remain free of any
-static ``from telegram_bot ...`` import.
+Runtime-owned default pipeline factory. Adapters may override this with
+their own ``module:attribute`` spec at process startup.
 """
 
 ENV_VAR = "RAG_GRAPH_FACTORY"

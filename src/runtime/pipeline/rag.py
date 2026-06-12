@@ -23,19 +23,33 @@ import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
+from src.observability import get_client, observe
+from src.runtime.graph.config import GraphConfig
+from src.runtime.services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    is_contextual_query,
+    maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
+)
+from src.runtime.services.metrics import record_pipeline_event
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
 from src.runtime.services.query_preprocessor import QueryPreprocessor, expand_short_query
+from src.runtime.services.rag_core import (
+    CACHEABLE_QUERY_TYPES,
+    build_retrieved_context,
+    check_semantic_cache,
+    compute_query_embedding,
+    perform_rerank,
+    rewrite_query_via_llm,
+)
+from src.runtime.services.small_to_big import SmallToBigMode, SmallToBigService
+from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
 
 _T = TypeVar("_T")
-
-
-def _load_telegram_attr(module_name: str, attr_name: str) -> Any:
-    import importlib
-
-    return getattr(importlib.import_module(module_name), attr_name)
 
 
 def _load_topic_classifier_attr(attr_name: str) -> Any:
@@ -63,112 +77,24 @@ def _identity_observe(*args: Any, **kwargs: Any) -> Callable[[_T], _T]:
     return decorator
 
 
-def _load_observe() -> Callable[..., Callable[[_T], _T]]:
-    try:
-        return cast(
-            Callable[..., Callable[[_T], _T]],
-            _load_telegram_attr("telegram_bot.observability", "observe"),
-        )
-    except Exception:  # pragma: no cover - import-safety fallback for lightweight tooling
-        return _identity_observe
-
-
-def _get_client() -> Any:
-    # ``telegram_bot.observability.get_client`` is the Langfuse ``get_client``
-    # factory; it must be *called* to obtain the client instance that exposes
-    # ``update_current_span``. Returning the factory itself caused
-    # ``AttributeError: 'function' object has no attribute 'update_current_span'``
-    # whenever the runtime pipeline recorded a span (e.g. miniapp path).
-    return _load_telegram_attr("telegram_bot.observability", "get_client")()
-
-
-def _cache_policy_attr(name: str) -> Any:
-    return _load_telegram_attr("telegram_bot.services.cache_policy", name)
-
-
 def _graph_config_from_env() -> Any:
-    graph_config = _load_telegram_attr("telegram_bot.graph.config", "GraphConfig")
-    return graph_config.from_env()
+    return GraphConfig.from_env()
 
 
 def _bge_m3_query_bundle_cls() -> Any:
-    return _load_telegram_attr(
-        "telegram_bot.services.bge_m3_query_bundle",
-        "BgeM3QueryVectorBundle",
-    )
-
-
-def _small_to_big_attr(name: str) -> Any:
-    return _load_telegram_attr("telegram_bot.services.small_to_big", name)
-
-
-def _rag_core_attr(name: str) -> Any:
-    return _load_telegram_attr("telegram_bot.services.rag_core", name)
-
-
-def _record_pipeline_event(*args: Any, **kwargs: Any) -> Any:
-    record = _load_telegram_attr("telegram_bot.services.metrics", "record_pipeline_event")
-    return record(*args, **kwargs)
+    return BgeM3QueryVectorBundle
 
 
 def _new_query_preprocessor() -> QueryPreprocessor:
     return QueryPreprocessor()
 
 
-observe = _load_observe()
-
-
-def get_client() -> Any:
-    # ``_get_client()`` already returns the Langfuse client instance (it calls
-    # the ``telegram_bot.observability.get_client`` factory), so this wrapper
-    # must NOT call the result again.
-    return _get_client()
-
-
-SEMANTIC_CACHE_SCHEMA_VERSION = "v8"
-
-
-def build_cacheability_decision(*args: Any, **kwargs: Any) -> Any:
-    return _cache_policy_attr("build_cacheability_decision")(*args, **kwargs)
-
-
-def is_contextual_query(*args: Any, **kwargs: Any) -> Any:
-    return _cache_policy_attr("is_contextual_query")(*args, **kwargs)
-
-
-def maybe_store_semantic_response(*args: Any, **kwargs: Any) -> Any:
-    return _cache_policy_attr("maybe_store_semantic_response")(*args, **kwargs)
-
-
-def resolve_semantic_cache_signature(*args: Any, **kwargs: Any) -> Any:
-    return _cache_policy_attr("resolve_semantic_cache_signature")(*args, **kwargs)
-
-
-def check_semantic_cache(*args: Any, **kwargs: Any) -> Any:
-    return _rag_core_attr("check_semantic_cache")(*args, **kwargs)
-
-
-def compute_query_embedding(*args: Any, **kwargs: Any) -> Any:
-    return _rag_core_attr("compute_query_embedding")(*args, **kwargs)
-
-
-def perform_rerank(*args: Any, **kwargs: Any) -> Any:
-    return _rag_core_attr("perform_rerank")(*args, **kwargs)
-
-
-def rewrite_query_via_llm(*args: Any, **kwargs: Any) -> Any:
-    return _rag_core_attr("rewrite_query_via_llm")(*args, **kwargs)
-
-
 def _build_retrieved_context(*args: Any, **kwargs: Any) -> Any:
-    return _rag_core_attr("build_retrieved_context")(*args, **kwargs)
+    return build_retrieved_context(*args, **kwargs)
 
 
 def _cacheable_query_types() -> set[str]:
-    return set(_rag_core_attr("CACHEABLE_QUERY_TYPES"))
-
-
-record_pipeline_event = _record_pipeline_event
+    return set(CACHEABLE_QUERY_TYPES)
 
 
 logger = logging.getLogger(__name__)
@@ -1259,10 +1185,17 @@ async def rag_pipeline(
         )
     semantic_cache_already_checked = semantic_cache_prechecked
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
-    cache_embedding = cast(list[float] | None, cache_result.get("query_embedding"))
+    cache_embedding_value = cache_result.get("query_embedding")
+    cache_embedding: list[float] | None = (
+        cache_embedding_value if isinstance(cache_embedding_value, list) else None
+    )
     cache_sparse: Any = cache_result.get("sparse_embedding")
-    latency_stages = cast(dict[str, float], cache_result["latency_stages"])
-    colbert_query = cast(list[list[float]] | None, cache_result.get("colbert_query"))
+    latency_stages_value = cache_result.get("latency_stages")
+    latency_stages = latency_stages_value if isinstance(latency_stages_value, dict) else {}
+    colbert_query_value = cache_result.get("colbert_query")
+    colbert_query: list[list[float]] | None = (
+        colbert_query_value if isinstance(colbert_query_value, list) else None
+    )
     embeddings_cache_hit = bool(cache_result.get("embeddings_cache_hit", False))
 
     if cache_result.get("embedding_error"):
@@ -1544,13 +1477,10 @@ async def _expand_small_to_big(
     Qdrant document, replaces each doc's ``text`` with expanded context.
     Failures are logged but never crash the pipeline.
     """
-    small_to_big_mode = _small_to_big_attr("SmallToBigMode")
-    small_to_big_service = _small_to_big_attr("SmallToBigService")
-
-    if config.small_to_big_mode == small_to_big_mode.OFF or not final_docs:
+    if config.small_to_big_mode == SmallToBigMode.OFF or not final_docs:
         return
     try:
-        stb = small_to_big_service(
+        stb = SmallToBigService(
             client=qdrant.client,
             collection_name=qdrant.collection_name,
             max_expanded_chunks=config.max_expanded_chunks,

@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langgraph.runtime import Runtime
+
 from telegram_bot.graph.nodes.cache import cache_check_node
 from telegram_bot.graph.nodes.generate import generate_node
 from telegram_bot.graph.nodes.rerank import rerank_node

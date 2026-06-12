@@ -761,7 +761,6 @@ class TestDisableOtelExporter:
         _disable_otel_exporter(shutdown=True)
 
 
-
 class TestInitializeLangfuseCallsDisableOtel:
     """Tests verifying _disable_otel_exporter() is called in all early-return paths."""
 
