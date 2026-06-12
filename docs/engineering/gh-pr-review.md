@@ -181,6 +181,20 @@ Before validation:
 4. Run adapter/optional lanes only when that surface changed.
 5. Run `make test`, `make test-contract`, `make test-full`, or heavy workflows only if explicitly requested or if a broad runtime/dependency PR really needs them.
 
+### Adjacent stale-test guard
+
+When a PR changes a runtime/adapter compatibility contract, the reviewer must inspect adjacent tests for stale assertions against the old contract before marking the PR clean.
+
+Common signals:
+- removed framework inheritance, such as `langchain_core.embeddings.Embeddings`;
+- direct `_client` ownership replaced by provider delegation such as `_provider`;
+- endpoint/client behavior moved behind a canonical provider;
+- import compatibility shims kept while the implementation owner changed.
+
+If adjacent tests assert the old contract, classify the finding as `stale_test` related to the changed architecture and auto-fix the tests in the same PR. Do not delete, skip, xfail, or weaken them. Retarget assertions to the new contract while preserving endpoint, retry, timeout, and fallback coverage.
+
+Focused validation must include the retargeted adjacent test file. The PR body `Changed files / scope`, `Validation`, and Agent Handoff must also include the retargeted test file before status can become `clean`.
+
 ### Validation by risk
 
 | Risk | Examples | Validation |
@@ -235,7 +249,7 @@ Allowed without asking:
 
 Allowed only after failure classification:
 
-- stale test updates;
+- stale test updates, including adjacent tests made stale by a changed runtime/adapter contract;
 - local code regression fixes;
 - env/config contract updates.
 
@@ -273,7 +287,9 @@ When tests fail, classify before fixing:
 
 Do not skip, xfail, or weaken. Rewrite it to cover the current architecture.
 
-Example: old Docker LiteLLM proxy expectations should become in-process LiteLLM router expectations.
+Examples:
+- old Docker LiteLLM proxy expectations should become in-process LiteLLM router expectations;
+- old direct embedding wrapper assertions such as `isinstance(emb, Embeddings)` or `emb._client` should become provider-backed shim assertions such as `emb._provider` and `emb._provider._client` when the PR intentionally moved ownership to a canonical provider.
 
 ## Merge Conditions
 
