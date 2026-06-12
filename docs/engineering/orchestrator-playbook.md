@@ -61,12 +61,14 @@ process/skill update -> process PR -> this playbook + skill-maintenance-guardrai
 audit only / planning -> Audit Planner -> this playbook
 ```
 
+A worker prompt must name exactly one primary skill/doc. Do not list multiple skills as equal authorities. If supporting docs are useful, mention them only under context/source-of-truth and keep the primary skill singular.
+
 A worker prompt must include:
 
 ```text
 Mode / skill:
 - Which mode to use.
-- Which skill/doc to follow.
+- Which single primary skill/doc to follow.
 - Whether to create a new PR, update an existing PR, or only audit.
 
 Context:
@@ -121,7 +123,7 @@ Copyable default worker prompt shape:
 
 Mode / skill:
 - Use <Issue Executor | PR Coordinator | Audit Planner>.
-- Follow `<skill/doc path>`.
+- Follow exactly one primary skill/doc: `<skill/doc path>`.
 - Base branch is `dev`.
 - Do not merge unless explicitly instructed.
 
@@ -187,7 +189,7 @@ Example PR Coordinator prompt:
 
 Mode / skill:
 - Use PR Coordinator mode.
-- Follow `docs/engineering/gh-pr-review.md`.
+- Follow exactly one primary skill/doc: `docs/engineering/gh-pr-review.md`.
 - Update existing PR #<number>; do not create a duplicate PR.
 - Do not merge unless explicitly instructed.
 
