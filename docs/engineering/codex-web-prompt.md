@@ -121,14 +121,20 @@ Before opening or marking a PR ready:
 After creating a PR, the worker must verify with:
 
 ```bash
-gh pr view <PR> --repo yastman/rag --json url,state,baseRefName,headRefName,headRefOid
+gh pr view <PR> --repo yastman/rag --json url,state,baseRefName,headRefName,headRefOid,mergeable,statusCheckRollup,body,files
 ```
 
 And report:
 - PR URL
-- head branch
-- head SHA
 - base = dev
+- head branch / head SHA
+- mergeable is not false
+- statusCheckRollup is not empty or CI is explicitly pending
+- PR body matches template
+- no unrelated workflow/process files changed
+
+If workflow runs are empty after PR creation, do not report PR as ready.
+Report blocker: "CI did not start".
 
 ## 2. PR Coordinator
 - Используется только для ревью существующих PR и подготовки к merge.
