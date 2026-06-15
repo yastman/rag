@@ -45,6 +45,16 @@ OPTIONAL_TARGETS = (
     "test-observability-extra",
     "test-optional-surfaces",
 )
+OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS = (
+    "baseline-smoke",
+    "baseline-load",
+    "baseline-check",
+)
+REQUIRED_GATE_TARGETS = (
+    "test",
+    "test-core",
+    "test-contract",
+)
 
 
 def _makefile_text() -> str:
@@ -96,3 +106,23 @@ def test_optional_surface_targets_are_explicit() -> None:
     for target in OPTIONAL_TARGETS:
         body = _target_body(text, target)
         assert "pytest" in body or target == "test-optional-surfaces"
+
+
+def test_langfuse_baseline_diagnostics_are_not_required_gate_dependencies() -> None:
+    """Langfuse-backed baseline checks remain explicit optional diagnostics."""
+
+    text = _makefile_text()
+
+    for target in OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS:
+        assert re.search(rf"^{re.escape(target)}:", text, re.MULTILINE), (
+            f"Makefile must keep {target!r} as an explicit opt-in diagnostic target."
+        )
+
+    for target in REQUIRED_GATE_TARGETS:
+        body = _target_body(text, target)
+        offenders = [
+            optional for optional in OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS if optional in body
+        ]
+        assert offenders == [], (
+            f"{target!r} must not depend on optional Langfuse diagnostics: {offenders}"
+        )
