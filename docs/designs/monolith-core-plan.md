@@ -194,10 +194,11 @@ ingestion не должен быть обязательной runtime-стади
 
 ---
 
-## 5. Сверка С SDK-native Baseline (ADR 0015) — Ключевая Поправка
+## 5. Сверка С SDK-native Baseline (ADR 0015) И ADR-0019 — Ключевая Поправка
 
-Эта секция — добавление к исходному аудиту. Без неё план рискует закрепить
-кастомный код вместо движения к SDK-native архитектуре.
+Эта секция — добавление к исходному аудиту. Без неё план рискует либо закрепить
+кастомный legacy-код вместо движения к SDK-native adapter surfaces, либо ошибочно
+перенести ownership core text RAG path в `create_agent`, что ADR-0019 уже отклонил.
 
 **Примечание:** ADR-0019 (принят 2026-06-08) определил, что core text RAG path
 — процедурный runtime через `run_assistant_pipeline()`, а не `create_agent`.
@@ -206,9 +207,11 @@ shell surfaces (Telegram, voice). См. `docs/adr/0019-core-text-path-procedural
 
 ### 5.1. Что Уже SDK-native В Коде
 
-- **Текстовый путь уже на `langchain.agents.create_agent` v1** + `before_model`
-  middleware (`telegram_bot/agents/agent.py`, `telegram_bot/bot.py` —
-  `_handle_query_supervisor`, «#413 — replaces build_supervisor_graph»).
+- **Telegram adapter text shell уже на `langchain.agents.create_agent` v1** +
+  `before_model` middleware (`telegram_bot/agents/agent.py`,
+  `telegram_bot/bot.py` — `_handle_query_supervisor`, «#413 — replaces
+  build_supervisor_graph»). Это не меняет ADR-0019: canonical core text RAG
+  path остаётся procedural runtime.
 - Существует SDK-native middleware-слой
   `telegram_bot/graph/middleware/{cache,classify,guard}.py` — create_agent-совместимые
   замены легаси StateGraph-нод (зонтик #1535).
@@ -246,7 +249,9 @@ shell surfaces (Telegram, voice). См. `docs/adr/0019-core-text-path-procedural
 - Перенос модуля не «легализует» легаси: если модуль — migration target (#1535),
   его переносят только как временный shim с привязкой к закрывающей issue.
 - Middleware (`telegram_bot/graph/middleware/*`) — каноническая SDK-native замена
-  StateGraph-нод; новые узлы добавлять как middleware/tools, не как StateGraph.
+  StateGraph-нод для adapter/conversational shells; новые adapter-shell узлы
+  добавлять как middleware/tools, не как StateGraph. Core text RAG behavior при
+  этом остаётся за `run_assistant_pipeline()` по ADR-0019.
 
 ---
 
@@ -282,7 +287,7 @@ src/
 
 telegram_bot/
   bot.py / handlers / dialogs / keyboards / middlewares
-  agents/ graph/middleware/   # SDK-native create_agent + middleware (canonical)
+  agents/ graph/middleware/   # SDK-native create_agent + middleware (adapter shell only)
   services/*                  # adapter-only helpers + временные shims
   pipelines/*                 # временные wrappers на время миграции
 ```
@@ -338,8 +343,9 @@ focused tests.
 - **Phase D — Выделить runtime generation core.** `src/runtime/generation/*`;
   `generate_response()` → thin wrapper; убрать `message` из core. Риск высокий.
 - **Phase E — Перенести RAG pipeline ownership.** `src/runtime/pipeline/rag.py`
-  (+shim); `src.core.assistant` больше не импортит bot RAG. **Блокер:** решение
-  №0 из раздела 11. Риск высокий.
+  (+shim); `src.core.assistant` больше не импортит bot RAG. ADR-0019 уже снял
+  прежний blocker №0: ownership идёт в procedural runtime, не в `create_agent`.
+  Риск высокий.
 - **Phase F — Собрать `src.runtime.pipeline.assistant_pipeline`** как процедурный
   core pipeline (ADR-0019). `run_assistant_request()` — public wrapper;
   `grounding_completed`; `proposed_crm_action` как данные. Риск средний.
@@ -368,7 +374,7 @@ focused tests.
 | J* | `CORE-003` | Runtime coupling ratchets | Plan needed | Низкий |
 | D | `CORE-004` | Split generation core from Telegram rendering | Plan needed | Высокий |
 | E | `CORE-005` | Move RAG pipeline ownership to runtime | Plan needed | Высокий |
-| F | `CORE-006` | Build runtime assistant pipeline (agent-обёртка) | Plan needed | Средний |
+| F | `CORE-006` | Build procedural runtime assistant pipeline | Plan needed | Средний |
 | H | `CORE-007` | Core E2E golden path | Plan needed | Средний |
 | G | `CORE-008` | Telegram thin adapter rollout | Plan needed | Высокий |
 | I | `CORE-009` | Optional surfaces status cleanup | Design first | Средний |
@@ -382,8 +388,9 @@ focused tests.
 Milestone: Stabilize Core Monolith
 Описание: Make the assistant core the only product owner for text RAG requests:
 contracts first, then grounding/generation/RAG ownership, then Telegram as a thin
-adapter, then one core E2E proof. SDK-native (create_agent) stays canonical;
-optional platform surfaces stay optional until core reliability is proven.
+adapter, then one core E2E proof. Procedural runtime is canonical for core text
+RAG; SDK-native `create_agent` stays adapter/conversational-shell only; optional
+platform surfaces stay optional until core reliability is proven.
 ```
 
 ### 8.3. Правила Выполнения

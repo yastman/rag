@@ -6,15 +6,23 @@ without reading every file. It complements the portfolio summary in
 
 ## What This Project Is
 
-Conversational AI automation platform with:
+Domain Knowledge Assistant focused on one core product path: user intent enters
+the assistant core, the core retrieves grounded context, generates an answer,
+and prepares CRM/workflow actions only behind human confirmation. Telegram is
+the production adapter; voice, API, Mini App, Langfuse, trace validation, k8s,
+and monitoring are optional surfaces around that core proof.
 
-- Telegram bot workflows for clients and managers
+Key capabilities:
+
+- procedural assistant core entrypoint via `run_assistant_request()` /
+  `run_assistant_pipeline()` for canonical text RAG behavior
+- Telegram bot workflows for clients and managers as the production adapter
 - contextual RAG over private/domain knowledge
 - natural-language domain catalog search
-- Kommo CRM automation and lead scoring
-- Telegram voice input and LiveKit voice-agent path
+- Kommo CRM automation and lead scoring with HITL confirmation before writes
+- optional Telegram voice input and LiveKit voice-agent path
 - unified document ingestion into Qdrant
-- Langfuse tracing, scoring, prompt management, and evaluation tooling
+- optional Langfuse tracing, scoring, prompt management, and evaluation tooling
 - Docker Compose based local/VPS runtime
 
 ## Recommended Reading Path
