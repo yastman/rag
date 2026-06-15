@@ -320,3 +320,287 @@ class TestGraphConfig:
             f"skip_rerank_threshold={config.skip_rerank_threshold} must be > "
             f"single-query top-1 RRF={single_query_top1_rrf:.5f}"
         )
+
+
+class TestFocusedConfigClasses:
+    """Tests for focused sub-config classes introduced in #2482."""
+
+    def test_llm_config_defaults(self):
+        from src.runtime.graph.config import LlmConfig
+
+        cfg = LlmConfig()
+        assert cfg.llm_model == "gpt-4o-mini"
+        assert cfg.llm_base_url == ""
+        assert cfg.llm_api_key == ""
+        assert cfg.llm_temperature == 0.7
+        assert cfg.llm_max_tokens == 4096
+        assert cfg.generate_max_tokens == 1024
+        assert cfg.rewrite_model == "gpt-4o-mini"
+        assert cfg.rewrite_max_tokens == 64
+        assert cfg.reasoning_effort is None
+        assert cfg.reasoning_format is None
+        assert cfg.disable_reasoning is None
+
+    def test_llm_config_get_reasoning_kwargs(self):
+        from src.runtime.graph.config import LlmConfig
+
+        assert LlmConfig().get_reasoning_kwargs() == {}
+        assert LlmConfig(reasoning_effort="low").get_reasoning_kwargs() == {
+            "reasoning_effort": "low"
+        }
+        assert LlmConfig(disable_reasoning=True).get_reasoning_kwargs() == {
+            "extra_body": {"disable_reasoning": True}
+        }
+        assert LlmConfig(
+            reasoning_effort="high", reasoning_format="hidden"
+        ).get_reasoning_kwargs() == {
+            "reasoning_effort": "high",
+            "extra_body": {"reasoning_format": "hidden"},
+        }
+
+    def test_retrieval_config_defaults(self):
+        from src.runtime.graph.config import RetrievalConfig
+
+        cfg = RetrievalConfig()
+        assert cfg.bge_m3_url == "http://bge-m3:8000"
+        assert cfg.bge_m3_timeout == 120.0
+        assert cfg.qdrant_url == "http://qdrant:6333"
+        assert cfg.qdrant_collection == "gdrive_documents_bge"
+        assert cfg.search_top_k == 40
+        assert cfg.rerank_top_k == 7
+        assert cfg.redis_url == "redis://redis:6379"
+        assert cfg.rerank_provider == "colbert"
+        assert cfg.small_to_big_mode == "on"
+
+    def test_cache_config_defaults(self):
+        from src.runtime.graph.config import CacheConfig
+
+        cfg = CacheConfig()
+        assert cfg.cache_thresholds["FAQ"] == 0.12
+        assert cfg.cache_thresholds["ENTITY"] == 0.10
+        assert cfg.cache_ttl["FAQ"] == 86400
+        assert cfg.cache_ttl["ENTITY"] == 3600
+
+    def test_domain_config_defaults(self):
+        from src.runtime.graph.config import DomainConfig
+
+        cfg = DomainConfig()
+        assert cfg.domain == "недвижимость"
+        assert cfg.domain_language == "ru"
+
+    def test_response_config_defaults(self):
+        from src.runtime.graph.config import ResponseConfig
+
+        cfg = ResponseConfig()
+        assert cfg.response_style_enabled is False
+        assert cfg.response_style_shadow_mode is False
+        assert cfg.show_sources is False
+        assert cfg.streaming_enabled is True
+        assert cfg.classifier_mode == "regex"
+
+    def test_voice_config_defaults(self):
+        from src.runtime.graph.config import VoiceConfig
+
+        cfg = VoiceConfig()
+        assert cfg.show_transcription is True
+        assert cfg.voice_language == "ru"
+        assert cfg.stt_model == "whisper"
+
+    def test_security_config_defaults(self):
+        from src.runtime.graph.config import SecurityConfig
+
+        cfg = SecurityConfig()
+        assert cfg.guard_mode == "hard"
+        assert cfg.content_filter_enabled is True
+
+    def test_graph_config_composition(self):
+        """GraphConfig exposes sub-configs as attributes."""
+        from src.runtime.graph.config import (
+            CacheConfig,
+            DomainConfig,
+            GraphConfig,
+            LlmConfig,
+            ResponseConfig,
+            RetrievalConfig,
+            SecurityConfig,
+            VoiceConfig,
+        )
+
+        cfg = GraphConfig()
+        assert isinstance(cfg.llm, LlmConfig)
+        assert isinstance(cfg.retrieval, RetrievalConfig)
+        assert isinstance(cfg.cache, CacheConfig)
+        assert isinstance(cfg.domain_cfg, DomainConfig)
+        assert isinstance(cfg.response, ResponseConfig)
+        assert isinstance(cfg.voice, VoiceConfig)
+        assert isinstance(cfg.security, SecurityConfig)
+
+    def test_graph_config_flat_kwargs_constructor(self):
+        """Legacy flat kwargs to GraphConfig() still work."""
+        from src.runtime.graph.config import GraphConfig
+
+        cfg = GraphConfig(llm_model="custom-model", search_top_k=20, guard_mode="soft")
+        assert cfg.llm_model == "custom-model"
+        assert cfg.search_top_k == 20
+        assert cfg.guard_mode == "soft"
+
+    def test_graph_config_flat_properties_delegate_to_sub_configs(self):
+        """Flat property reads delegate to the sub-config objects."""
+        from src.runtime.graph.config import GraphConfig, LlmConfig
+
+        cfg = GraphConfig(llm=LlmConfig(llm_model="delegated"))
+        assert cfg.llm_model == "delegated"
+        assert cfg.llm.llm_model == "delegated"
+
+    def test_graph_config_flat_property_setters(self):
+        """Flat property writes propagate to the sub-config objects."""
+        from src.runtime.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        cfg.llm_model = "updated"
+        cfg.domain = "new-domain"
+        assert cfg.llm.llm_model == "updated"
+        assert cfg.domain_cfg.domain == "new-domain"
+
+    def test_graph_config_sub_configs_independently_testable(self):
+        """Sub-configs can be constructed and tested in isolation."""
+        from src.runtime.graph.config import LlmConfig, SecurityConfig, VoiceConfig
+
+        llm = LlmConfig(llm_model="isolated", llm_temperature=0.1)
+        voice = VoiceConfig(voice_language="en")
+        security = SecurityConfig(guard_mode="log")
+
+        assert llm.llm_model == "isolated"
+        assert llm.llm_temperature == 0.1
+        assert voice.voice_language == "en"
+        assert security.guard_mode == "log"
+
+    def test_all_sub_configs_exported(self):
+        """All focused config classes are exported from the module."""
+        from src.runtime.graph import config as cfg_module
+
+        for name in [
+            "GraphConfig",
+            "LlmConfig",
+            "RetrievalConfig",
+            "CacheConfig",
+            "DomainConfig",
+            "ResponseConfig",
+            "VoiceConfig",
+            "SecurityConfig",
+        ]:
+            assert hasattr(cfg_module, name), f"{name} not exported"
+            assert name in cfg_module.__all__, f"{name} not in __all__"
+
+
+class TestGraphConfigFlatCompatContract:
+    """Full backward-compatibility contract for the legacy flat field set (#2482).
+
+    Covers every entry in _FLAT_KWARGS:
+    - each field can be passed as a flat kwarg to GraphConfig(**kwargs)
+    - each field can be read via flat property access
+    - each field can be written via flat property setter and read back
+    - unknown kwargs raise TypeError
+    """
+
+    # (field_name, sentinel_value)
+    # Sentinel must differ from the default so we can detect a real write.
+    _FIELDS: list[tuple[str, object]] = [
+        # LLM
+        ("llm_base_url", "http://sentinel:9999"),
+        ("llm_api_key", "sk-sentinel"),
+        ("llm_model", "sentinel-model"),
+        ("llm_temperature", 0.1),
+        ("llm_max_tokens", 111),
+        ("generate_max_tokens", 222),
+        ("reasoning_effort", "low"),
+        ("reasoning_format", "hidden"),
+        ("disable_reasoning", True),
+        ("rewrite_model", "rewrite-sentinel"),
+        ("rewrite_max_tokens", 33),
+        # Retrieval
+        ("bge_m3_url", "http://bge-sentinel:8000"),
+        ("bge_m3_timeout", 9.0),
+        ("qdrant_url", "http://qdrant-sentinel:6333"),
+        ("qdrant_collection", "sentinel_col"),
+        ("search_top_k", 99),
+        ("rerank_top_k", 3),
+        ("redis_url", "redis://sentinel:6379"),
+        ("max_rewrite_attempts", 5),
+        ("skip_rerank_threshold", 0.999),
+        ("relevance_threshold_rrf", 0.001),
+        ("score_improvement_delta", 0.002),
+        ("rerank_provider", "sentinel_ranker"),
+        ("small_to_big_mode", "off"),
+        ("small_to_big_window_before", 7),
+        ("small_to_big_window_after", 7),
+        ("max_expanded_chunks", 99),
+        ("max_context_tokens", 1234),
+        # Cache
+        ("cache_thresholds", {"FAQ": 0.99}),
+        ("cache_ttl", {"FAQ": 1}),
+        # Domain
+        ("domain", "sentinel-domain"),
+        ("domain_language", "en"),
+        # Response
+        ("response_style_enabled", True),
+        ("response_style_shadow_mode", True),
+        ("show_sources", True),
+        ("streaming_enabled", False),
+        ("ttft_drift_warn_ms", 999),
+        ("classifier_mode", "semantic"),
+        # Voice
+        ("show_transcription", False),
+        ("voice_language", "en"),
+        ("stt_model", "sentinel-stt"),
+        # Security
+        ("guard_mode", "soft"),
+        ("content_filter_enabled", False),
+    ]
+
+    def test_all_flat_kwargs_accepted_by_constructor(self):
+        """Every legacy flat kwarg must be accepted by GraphConfig(...)."""
+        from src.runtime.graph.config import GraphConfig
+
+        for field, sentinel in self._FIELDS:
+            cfg = GraphConfig(**{field: sentinel})
+            actual = getattr(cfg, field)
+            assert actual == sentinel, f"GraphConfig({field}={sentinel!r}): read back {actual!r}"
+
+    def test_all_flat_properties_readable(self):
+        """Every legacy flat property must be readable after constructor default."""
+        from src.runtime.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        for field, _ in self._FIELDS:
+            assert hasattr(cfg, field), f"GraphConfig has no attribute {field!r}"
+            _ = getattr(cfg, field)  # must not raise
+
+    def test_all_flat_property_setters_work(self):
+        """Every legacy flat property setter must propagate the value."""
+        from src.runtime.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        for field, sentinel in self._FIELDS:
+            setattr(cfg, field, sentinel)
+            actual = getattr(cfg, field)
+            assert actual == sentinel, f"setter cfg.{field} = {sentinel!r}: read back {actual!r}"
+
+    def test_unknown_kwarg_raises_type_error(self):
+        """Unknown flat kwargs must raise TypeError, not silently drop."""
+        import pytest
+
+        from src.runtime.graph.config import GraphConfig
+
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            GraphConfig(nonexistent_field_xyz=42)
+
+    def test_flat_kwargs_cover_entire_flat_kwargs_map(self):
+        """_FIELDS sentinel table must cover every key in _FLAT_KWARGS (no gaps)."""
+        from src.runtime.graph.config import _FLAT_KWARGS
+
+        covered = {f for f, _ in self._FIELDS}
+        missing = set(_FLAT_KWARGS.keys()) - covered
+        extra = covered - set(_FLAT_KWARGS.keys())
+        assert not missing, f"_FIELDS missing entries for: {sorted(missing)}"
+        assert not extra, f"_FIELDS has entries not in _FLAT_KWARGS: {sorted(extra)}"
