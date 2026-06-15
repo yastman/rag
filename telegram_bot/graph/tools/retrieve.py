@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, create_model
 
+from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
 from telegram_bot.agents.tooling import BaseTool, tool
 
 
@@ -74,9 +75,8 @@ def make_retrieve_tool(
     """Return a ``BaseTool`` wrapping hybrid retrieval.
 
     Args:
-        qdrant: Object exposing ``hybrid_search_rrf_colbert(dense_query=,
-            sparse_query=, colbert_query=, k=)`` — typically the production
-            ``src.runtime.services.qdrant.QdrantService`` instance.
+        qdrant: Object exposing the ``src.runtime.services.qdrant.QdrantService``
+            hybrid retrieval methods used by ``src.runtime.retrieval.RetrievalService``.
         embed_query: Async callable that returns an object with ``dense``,
             ``sparse`` and ``colbert`` attributes (the unified query
             embeddings bundle used by the rest of the runtime).
@@ -101,11 +101,14 @@ def make_retrieve_tool(
             return []
 
         try:
-            response = await qdrant.hybrid_search_rrf_colbert(
-                dense_query=getattr(embeddings, "dense", None),
-                sparse_query=getattr(embeddings, "sparse", None),
-                colbert_query=getattr(embeddings, "colbert", None),
-                k=k,
+            retrieval = RetrievalService(qdrant=qdrant)
+            response = await retrieval.retrieve_vectors(
+                VectorRetrievalRequest(
+                    dense_vector=getattr(embeddings, "dense", None) or [],
+                    sparse_vector=getattr(embeddings, "sparse", None),
+                    colbert_query=getattr(embeddings, "colbert", None),
+                    top_k=k,
+                )
             )
         except Exception:
             logger.warning("retrieve_documents: qdrant search failed", exc_info=True)

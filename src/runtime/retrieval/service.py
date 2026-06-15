@@ -31,6 +31,9 @@ class VectorRetrievalRequest:
     return_meta: bool = False
     dense_weight: float | None = None
     sparse_weight: float | None = None
+    prefetch_multiplier: int | None = None
+    group_by: str | None = None
+    group_size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +74,12 @@ class RetrievalService:
             search_kwargs["dense_weight"] = request.dense_weight
         if request.sparse_weight is not None:
             search_kwargs["sparse_weight"] = request.sparse_weight
+        if request.prefetch_multiplier is not None:
+            search_kwargs["prefetch_multiplier"] = request.prefetch_multiplier
+        if request.group_by is not None:
+            search_kwargs["group_by"] = request.group_by
+        if request.group_size is not None:
+            search_kwargs["group_size"] = request.group_size
 
         has_colbert_search = callable(getattr(self._qdrant, "hybrid_search_rrf_colbert", None))
         if request.colbert_query and has_colbert_search:
