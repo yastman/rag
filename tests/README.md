@@ -140,10 +140,14 @@ make eval-rag-quick          # 10-sample subset
 make eval-rag-full           # RAGAS + DeepEval
 ```
 
-### Baseline / observability
+### Optional baseline / observability
+These Langfuse-backed diagnostics are explicit operator lanes. They are not part
+of `make test`, `make test-core`, or the required static gates, and they should
+only be run when the optional observability stack is available.
+
 ```bash
-make baseline-smoke          # smoke with Langfuse tracing
-make baseline-compare        # compare against a baseline tag
+make baseline-smoke          # optional smoke with Langfuse tracing
+make baseline-compare        # optional compare against a baseline tag
 ```
 
 ### Compose validation (for runtime-impacting changes)

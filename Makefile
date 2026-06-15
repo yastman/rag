@@ -286,10 +286,10 @@ test-unit-extras: ## Run optional-extra unit tests only
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "requires_extras"
 	@echo "$(GREEN)✓ Optional-extra unit tests complete$(NC)"
 
-test-contract: ## Run trace contract tests (static analysis, no Docker)
-	@echo "$(BLUE)Running trace contract tests...$(NC)"
+test-contract: ## Run static contract tests (no Docker; optional SDK lanes excluded by markers)
+	@echo "$(BLUE)Running static contract tests...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
-	@echo "$(GREEN)Trace contract tests complete$(NC)"
+	@echo "$(GREEN)Static contract tests complete$(NC)"
 
 test-benchmark: ## Run benchmark suite with the live ColBERT gate enabled (#1618)
 	@echo "$(BLUE)Running benchmark suite with RUN_BENCHMARK_TESTS=1...$(NC)"
@@ -1078,7 +1078,7 @@ endif
 		--output=reports/baseline-$(shell date +%Y%m%d-%H%M%S).html
 	@echo "$(GREEN)Report saved to reports/$(NC)"
 
-baseline-check: baseline-compile baseline-smoke ## Quick baseline check (smoke + compare with main)
+baseline-check: baseline-compile baseline-smoke ## Optional Langfuse baseline check (smoke + compare with main)
 	@echo "$(BLUE)Comparing with main baseline...$(NC)"
 	make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=$(BASELINE_SESSION)
 
