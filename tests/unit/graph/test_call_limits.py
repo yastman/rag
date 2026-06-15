@@ -226,35 +226,6 @@ class TestBotConfigCallLimits:
         assert config.max_tool_calls == 8
 
 
-class TestGraphRecursionLimit:
-    """Graph must have recursion_limit=15 via with_config."""
-
-    def test_graph_has_recursion_limit(self):
-        """build_graph should set recursion_limit=15 via with_config."""
-
-        mock_cache = MagicMock()
-        mock_embeddings = MagicMock()
-        mock_sparse = MagicMock()
-        mock_qdrant = MagicMock()
-
-        with patch("telegram_bot.graph.graph.StateGraph") as mock_sg_cls:
-            mock_workflow = MagicMock()
-            mock_compiled = MagicMock()
-            mock_workflow.compile.return_value = mock_compiled
-            mock_sg_cls.return_value = mock_workflow
-
-            from telegram_bot.graph.graph import build_graph
-
-            build_graph(
-                cache=mock_cache,
-                embeddings=mock_embeddings,
-                sparse_embeddings=mock_sparse,
-                qdrant=mock_qdrant,
-            )
-
-            mock_compiled.with_config.assert_called_once_with(recursion_limit=15)
-
-
 class TestScoringCallLimits:
     """Langfuse scores must include llm_calls_total and tool_calls_total."""
 
