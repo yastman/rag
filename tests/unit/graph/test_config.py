@@ -491,3 +491,116 @@ class TestFocusedConfigClasses:
         ]:
             assert hasattr(cfg_module, name), f"{name} not exported"
             assert name in cfg_module.__all__, f"{name} not in __all__"
+
+
+class TestGraphConfigFlatCompatContract:
+    """Full backward-compatibility contract for the legacy flat field set (#2482).
+
+    Covers every entry in _FLAT_KWARGS:
+    - each field can be passed as a flat kwarg to GraphConfig(**kwargs)
+    - each field can be read via flat property access
+    - each field can be written via flat property setter and read back
+    - unknown kwargs raise TypeError
+    """
+
+    # (field_name, sentinel_value)
+    # Sentinel must differ from the default so we can detect a real write.
+    _FIELDS: list[tuple[str, object]] = [
+        # LLM
+        ("llm_base_url", "http://sentinel:9999"),
+        ("llm_api_key", "sk-sentinel"),
+        ("llm_model", "sentinel-model"),
+        ("llm_temperature", 0.1),
+        ("llm_max_tokens", 111),
+        ("generate_max_tokens", 222),
+        ("reasoning_effort", "low"),
+        ("reasoning_format", "hidden"),
+        ("disable_reasoning", True),
+        ("rewrite_model", "rewrite-sentinel"),
+        ("rewrite_max_tokens", 33),
+        # Retrieval
+        ("bge_m3_url", "http://bge-sentinel:8000"),
+        ("bge_m3_timeout", 9.0),
+        ("qdrant_url", "http://qdrant-sentinel:6333"),
+        ("qdrant_collection", "sentinel_col"),
+        ("search_top_k", 99),
+        ("rerank_top_k", 3),
+        ("redis_url", "redis://sentinel:6379"),
+        ("max_rewrite_attempts", 5),
+        ("skip_rerank_threshold", 0.999),
+        ("relevance_threshold_rrf", 0.001),
+        ("score_improvement_delta", 0.002),
+        ("rerank_provider", "sentinel_ranker"),
+        ("small_to_big_mode", "off"),
+        ("small_to_big_window_before", 7),
+        ("small_to_big_window_after", 7),
+        ("max_expanded_chunks", 99),
+        ("max_context_tokens", 1234),
+        # Cache
+        ("cache_thresholds", {"FAQ": 0.99}),
+        ("cache_ttl", {"FAQ": 1}),
+        # Domain
+        ("domain", "sentinel-domain"),
+        ("domain_language", "en"),
+        # Response
+        ("response_style_enabled", True),
+        ("response_style_shadow_mode", True),
+        ("show_sources", True),
+        ("streaming_enabled", False),
+        ("ttft_drift_warn_ms", 999),
+        ("classifier_mode", "semantic"),
+        # Voice
+        ("show_transcription", False),
+        ("voice_language", "en"),
+        ("stt_model", "sentinel-stt"),
+        # Security
+        ("guard_mode", "soft"),
+        ("content_filter_enabled", False),
+    ]
+
+    def test_all_flat_kwargs_accepted_by_constructor(self):
+        """Every legacy flat kwarg must be accepted by GraphConfig(...)."""
+        from src.runtime.graph.config import GraphConfig
+
+        for field, sentinel in self._FIELDS:
+            cfg = GraphConfig(**{field: sentinel})
+            actual = getattr(cfg, field)
+            assert actual == sentinel, f"GraphConfig({field}={sentinel!r}): read back {actual!r}"
+
+    def test_all_flat_properties_readable(self):
+        """Every legacy flat property must be readable after constructor default."""
+        from src.runtime.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        for field, _ in self._FIELDS:
+            assert hasattr(cfg, field), f"GraphConfig has no attribute {field!r}"
+            _ = getattr(cfg, field)  # must not raise
+
+    def test_all_flat_property_setters_work(self):
+        """Every legacy flat property setter must propagate the value."""
+        from src.runtime.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        for field, sentinel in self._FIELDS:
+            setattr(cfg, field, sentinel)
+            actual = getattr(cfg, field)
+            assert actual == sentinel, f"setter cfg.{field} = {sentinel!r}: read back {actual!r}"
+
+    def test_unknown_kwarg_raises_type_error(self):
+        """Unknown flat kwargs must raise TypeError, not silently drop."""
+        import pytest
+
+        from src.runtime.graph.config import GraphConfig
+
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            GraphConfig(nonexistent_field_xyz=42)
+
+    def test_flat_kwargs_cover_entire_flat_kwargs_map(self):
+        """_FIELDS sentinel table must cover every key in _FLAT_KWARGS (no gaps)."""
+        from src.runtime.graph.config import _FLAT_KWARGS
+
+        covered = {f for f, _ in self._FIELDS}
+        missing = set(_FLAT_KWARGS.keys()) - covered
+        extra = covered - set(_FLAT_KWARGS.keys())
+        assert not missing, f"_FIELDS missing entries for: {sorted(missing)}"
+        assert not extra, f"_FIELDS has entries not in _FLAT_KWARGS: {sorted(extra)}"
