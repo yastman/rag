@@ -1,8 +1,8 @@
 """Retrieve node for RAG LangGraph pipeline.
 
-Performs hybrid RRF search via QdrantService with search cache integration.
-Uses direct Qdrant SDK (NOT langchain_qdrant) for full control over
-prefetch, FusionQuery, and ColBERT reranking.
+Performs hybrid RRF search through the runtime RetrievalService seam with
+search cache integration. The underlying Qdrant gateway still owns prefetch,
+FusionQuery, and ColBERT reranking details.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import logging
 import time
 from typing import Any
 
+from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.coverage_mode import cap_results_per_doc, detect_coverage_mode
 from telegram_bot.services.metrics import PipelineMetrics
@@ -64,7 +65,7 @@ async def retrieve_node(
     Flow:
       1. Check search cache (by embedding prefix + filters)
       2. If miss: get sparse embedding (cached or compute)
-      3. Call qdrant.hybrid_search_rrf()
+      3. Call RetrievalService.retrieve_vectors()
       4. Cache results
 
     Args:
@@ -254,38 +255,45 @@ async def retrieve_node(
             sparse_vector = await sparse_embeddings.aembed_query(query)
             await cache.store_sparse_embedding(query, sparse_vector)
 
-    # Step 3: Hybrid search via Qdrant SDK
+    # Step 3: Hybrid search via the shared runtime retrieval seam
+    retrieval = RetrievalService(qdrant=qdrant)
     if needs_coverage:
-        qdrant_result = await qdrant.hybrid_search_rrf(
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            filters=retrieval_filters,
-            top_k=10,
-            prefetch_multiplier=7,
-            group_by="metadata.doc_id",
-            group_size=2,
-            return_meta=True,
+        qdrant_result = await retrieval.retrieve_vectors(
+            VectorRetrievalRequest(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=retrieval_filters,
+                top_k=10,
+                prefetch_multiplier=7,
+                group_by="metadata.doc_id",
+                group_size=2,
+                return_meta=True,
+            )
         )
         rerank_applied = False
     elif colbert_query and _has_colbert_search:
         # 3-stage: dense+sparse -> RRF -> ColBERT MaxSim (server-side)
-        qdrant_result = await qdrant.hybrid_search_rrf_colbert(
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            colbert_query=colbert_query,
-            filters=retrieval_filters,
-            top_k=top_k,
-            return_meta=True,
+        qdrant_result = await retrieval.retrieve_vectors(
+            VectorRetrievalRequest(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                colbert_query=colbert_query,
+                filters=retrieval_filters,
+                top_k=top_k,
+                return_meta=True,
+            )
         )
         rerank_applied = True
     else:
         # 2-stage fallback: dense+sparse -> RRF
-        qdrant_result = await qdrant.hybrid_search_rrf(
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            filters=retrieval_filters,
-            top_k=top_k,
-            return_meta=True,
+        qdrant_result = await retrieval.retrieve_vectors(
+            VectorRetrievalRequest(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=retrieval_filters,
+                top_k=top_k,
+                return_meta=True,
+            )
         )
         rerank_applied = False
     if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:

@@ -168,6 +168,40 @@ async def test_retrieve_vectors_routes_precomputed_colbert_without_generation() 
 
 
 @pytest.mark.asyncio
+async def test_retrieve_vectors_forwards_rrf_grouping_options() -> None:
+    qdrant = RecordingQdrant()
+    service = RetrievalService(qdrant=qdrant)  # type: ignore[arg-type]
+
+    await service.retrieve_vectors(
+        VectorRetrievalRequest(
+            dense_vector=[0.1],
+            sparse_vector={"indices": [1], "values": [0.2]},
+            top_k=10,
+            return_meta=True,
+            prefetch_multiplier=7,
+            group_by="metadata.doc_id",
+            group_size=2,
+        )
+    )
+
+    assert qdrant.calls == [
+        (
+            "rrf",
+            {
+                "dense_vector": [0.1],
+                "sparse_vector": {"indices": [1], "values": [0.2]},
+                "filters": None,
+                "top_k": 10,
+                "return_meta": True,
+                "prefetch_multiplier": 7,
+                "group_by": "metadata.doc_id",
+                "group_size": 2,
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
 async def test_retrieve_requires_embeddings_for_query_vectorization() -> None:
     service = RetrievalService(qdrant=RecordingQdrant())  # type: ignore[arg-type]
 

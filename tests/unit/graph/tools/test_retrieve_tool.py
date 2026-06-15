@@ -171,3 +171,67 @@ class TestRetrieveToolFailure:
         t = _make_tool(qdrant_raises=True)
         result = await t(query="test", k=5)
         assert result == []
+
+
+class TestRetrieveToolRetrievalServiceSeam:
+    @pytest.mark.asyncio
+    async def test_routes_through_retrieval_service_and_preserves_normalization(self):
+        class _ScoredPoint:
+            id = "pt1"
+            score = 0.8
+            payload = {"text": "doc content"}
+
+        async def embed(query: str):
+            emb = MagicMock()
+            emb.dense = [0.1, 0.2]
+            emb.sparse = {"indices": [1], "values": [0.5]}
+            emb.colbert = [[0.3, 0.4]]
+            return emb
+
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=([_ScoredPoint()], {"total": 1}))
+        qdrant = MagicMock()
+
+        from telegram_bot.graph.tools import retrieve as retrieve_module
+
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                retrieve_module,
+                "RetrievalService",
+                MagicMock(return_value=service),
+            )
+            tool = make_retrieve_tool(qdrant=qdrant, embed_query=embed)
+            result = await tool(query="test", k=3)
+
+        service.retrieve_vectors.assert_awaited_once()
+        request = service.retrieve_vectors.await_args.args[0]
+        assert request.dense_vector == [0.1, 0.2]
+        assert request.sparse_vector == {"indices": [1], "values": [0.5]}
+        assert request.colbert_query == [[0.3, 0.4]]
+        assert request.top_k == 3
+        assert result == [{"id": "pt1", "score": 0.8, "text": "doc content"}]
+
+    @pytest.mark.asyncio
+    async def test_retrieval_service_failure_returns_empty_list(self):
+        async def embed(query: str):
+            emb = MagicMock()
+            emb.dense = [0.1]
+            emb.sparse = None
+            emb.colbert = None
+            return emb
+
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(side_effect=RuntimeError("qdrant failure"))
+
+        from telegram_bot.graph.tools import retrieve as retrieve_module
+
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                retrieve_module,
+                "RetrievalService",
+                MagicMock(return_value=service),
+            )
+            tool = make_retrieve_tool(qdrant=MagicMock(), embed_query=embed)
+            result = await tool(query="test", k=5)
+
+        assert result == []

@@ -3,22 +3,21 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langgraph.runtime import Runtime
 
 from telegram_bot.graph.nodes.retrieve import retrieve_node
 from telegram_bot.graph.state import make_initial_state
 
 
-def _make_runtime(cache=None, sparse_embeddings=None, qdrant=None, embeddings=None) -> Runtime:
-    """Create a Runtime with GraphContext for retrieve_node tests."""
-    return Runtime(
-        context={
-            "cache": cache,
-            "sparse_embeddings": sparse_embeddings,
-            "qdrant": qdrant,
-            "embeddings": embeddings,
-        }
-    )
+def _make_runtime(cache=None, sparse_embeddings=None, qdrant=None, embeddings=None):
+    """Create a minimal runtime context for retrieve_node tests."""
+    runtime = MagicMock()
+    runtime.context = {
+        "cache": cache,
+        "sparse_embeddings": sparse_embeddings,
+        "qdrant": qdrant,
+        "embeddings": embeddings,
+    }
+    return runtime
 
 
 _OK_META = {"backend_error": False, "error_type": None, "error_message": None}
@@ -957,3 +956,106 @@ class TestRetrieveNodeBundle:
         store_call = cache.store_search_results.await_args
         profile = store_call.kwargs.get("filters") or store_call.args[1]
         assert profile["mode"] == "colbert"
+
+
+class TestRetrieveNodeRetrievalServiceSeam:
+    """Focused seam tests for #2406 Telegram retrieval routing."""
+
+    async def test_rrf_path_calls_retrieval_service_retrieve_vectors(self) -> None:
+        state = make_initial_state(user_id=1, session_id="s1", query="ordinary query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+        state["filters"] = {"city": "Sofia"}
+        sparse = {"indices": [1], "values": [0.5]}
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=sparse)
+        cache.store_search_results = AsyncMock()
+        qdrant = MagicMock()
+
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=(_make_docs(2), _OK_META))
+        with patch("telegram_bot.graph.nodes.retrieve.RetrievalService", return_value=service):
+            result = await retrieve_node(
+                state,
+                _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+                top_k=7,
+            )
+
+        service.retrieve_vectors.assert_awaited_once()
+        request = service.retrieve_vectors.await_args.args[0]
+        assert request.dense_vector == state["query_embedding"]
+        assert request.sparse_vector == sparse
+        assert request.filters == state["filters"]
+        assert request.top_k == 7
+        assert request.return_meta is True
+        assert request.colbert_query is None
+        assert result["rerank_applied"] is False
+
+    async def test_colbert_path_calls_retrieval_service_retrieve_vectors(self) -> None:
+        colbert_query = [[0.2, 0.3]]
+        state = make_initial_state(user_id=1, session_id="s1", query="semantic query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+        state["colbert_query"] = colbert_query
+        sparse = {"indices": [2], "values": [0.7]}
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=sparse)
+        cache.store_search_results = AsyncMock()
+        qdrant = MagicMock()
+        qdrant.hybrid_search_rrf_colbert = AsyncMock()
+
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=(_make_docs(1), _OK_META))
+        with patch("telegram_bot.graph.nodes.retrieve.RetrievalService", return_value=service):
+            result = await retrieve_node(
+                state,
+                _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+                top_k=9,
+            )
+
+        service.retrieve_vectors.assert_awaited_once()
+        request = service.retrieve_vectors.await_args.args[0]
+        assert request.dense_vector == state["query_embedding"]
+        assert request.sparse_vector == sparse
+        assert request.colbert_query == colbert_query
+        assert request.top_k == 9
+        assert request.return_meta is True
+        assert result["rerank_applied"] is True
+
+    async def test_coverage_path_calls_retrieval_service_with_grouped_rrf(self) -> None:
+        state = make_initial_state(user_id=1, session_id="s1", query="перечисли все основания")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+        state["colbert_query"] = [[0.2, 0.3]]
+        sparse = {"indices": [3], "values": [0.9]}
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=sparse)
+        cache.store_search_results = AsyncMock()
+        qdrant = MagicMock()
+        qdrant.hybrid_search_rrf_colbert = AsyncMock()
+
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=(_make_docs(3), _OK_META))
+        with patch("telegram_bot.graph.nodes.retrieve.RetrievalService", return_value=service):
+            result = await retrieve_node(
+                state,
+                _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+                top_k=20,
+            )
+
+        service.retrieve_vectors.assert_awaited_once()
+        request = service.retrieve_vectors.await_args.args[0]
+        assert request.top_k == 10
+        assert request.prefetch_multiplier == 7
+        assert request.group_by == "metadata.doc_id"
+        assert request.group_size == 2
+        assert request.return_meta is True
+        assert request.colbert_query is None
+        assert result["needs_coverage"] is True
+        assert result["rerank_applied"] is False
