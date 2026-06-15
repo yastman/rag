@@ -70,15 +70,15 @@ Issues:
 Execution plan:
 
 1. Finish the accepted “honest signal” split from #2324: `no_services` vs `requires_services`, fast-lane tests, nightly service checks, and non-silent nightly notifications.
-2. Make PR guardrails fail-closed for empty diffs and label-driven bugfix detection.
-3. Add or strengthen contextvars contracts around `asyncio.run` / `run_until_complete` with an explicit CLI allowlist.
+2. Treat the old `validate_pr_guardrails.py` / PR Guardrails fail-open plan as stale on current `dev`: CORE-011 removed that brittle custom check, so do not recreate it without a new native-first design.
+3. Keep observability/contextvars follow-up design-first: current `dev` has targeted ingestion thread-hop coverage, while broader `asyncio.run` / `run_until_complete` scanning is runtime-adjacent and needs an explicit allowlist before implementation.
 4. Implement branch-protection/required-check verification only after repository-owner approval, because that setting is outside the normal code patch path.
-5. Add dedup or recurrence detection only after the bug-class registry contract is stable.
+5. Add dedup or recurrence automation only after the bug-class registry and native issue-triage workflow are stable; do not add a custom nightly/BGE-M3 detector as a quick Worker P slice.
 
 Validation focus:
 
-- Fast local unit/static checks for guardrail scripts.
-- Contract tests for marker coverage and fail-closed behavior.
+- Fast local unit/static checks for any retained guardrail scripts; no new custom script should be introduced without `Native/tooling alternative considered:`.
+- Contract tests for marker coverage and any approved fail-closed behavior.
 - A documented manual verification step for GitHub branch protection.
 
 ### Wave 2 — Core architecture decisions and SDK boundaries
@@ -275,7 +275,8 @@ flowchart TD
 
 1. **PR 1: Backlog/guardrail normalization**
    - Update issue comments/labels for blockers and lanes.
-   - Add/adjust marker-contract tests and fail-closed PR guardrails from #2319/#2324.
+   - Add/adjust marker-contract tests from #2324.
+   - Do not reintroduce removed PR Guardrails from #2319 unless a new native-first design explicitly rejects GitHub-native/tooling alternatives.
    - Do not touch runtime simplification yet.
 
 2. **PR 2: SDK-friendly logging seam**
