@@ -49,6 +49,8 @@ cascade into unrelated skills or workflows on your own.
   [`docs/engineering/gh-pr-review.md`](docs/engineering/gh-pr-review.md)
 - Orchestrator playbook:
   [`docs/engineering/orchestrator-playbook.md`](docs/engineering/orchestrator-playbook.md)
+- Orchestrator finish, merge, and cleanup protocol:
+  [`docs/engineering/orchestrator-finish-protocol.md`](docs/engineering/orchestrator-finish-protocol.md)
 - Docs navigation:
   [`docs/README.md`](docs/README.md), [`docs/indexes/`](docs/indexes/)
 - Operational runbooks:
