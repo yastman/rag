@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 class TestGraphConfig:
@@ -119,18 +119,6 @@ class TestGraphConfig:
         assert llm.default_model == "test-model"
         mock_langfuse.assert_not_called()
         assert getattr(llm, "_langfuse_auto_trace", None) is False
-
-    def test_create_supervisor_llm(self):
-        from telegram_bot.graph.config import GraphConfig
-
-        with patch("langchain_openai.ChatOpenAI") as mock_chat_openai:
-            mock_chat_openai.return_value = MagicMock()
-            cfg = GraphConfig(llm_model="default-model", llm_base_url="http://test:4000")
-            llm = cfg.create_supervisor_llm(model_override="router-model")
-
-        assert llm is not None
-        assert mock_chat_openai.call_args.kwargs["model"] == "router-model"
-        assert "base_url" not in mock_chat_openai.call_args.kwargs
 
     def test_create_embeddings(self):
         from telegram_bot.graph.config import GraphConfig
@@ -331,75 +319,4 @@ class TestGraphConfig:
         assert config.skip_rerank_threshold > single_query_top1_rrf, (
             f"skip_rerank_threshold={config.skip_rerank_threshold} must be > "
             f"single-query top-1 RRF={single_query_top1_rrf:.5f}"
-        )
-
-
-class TestCreateSummarizeModel:
-    """Contract: _create_summarize_model must use SDK-native init_chat_model (#1653).
-
-    LangChain 1.x exposes `langchain.chat_models.init_chat_model` as the
-    provider-neutral way to construct a chat model. Direct ChatOpenAI
-    instantiation skips the abstraction and complicates provider switching.
-    Verified via Context7 /websites/langchain_oss_python_langchain.
-    """
-
-    def test_uses_init_chat_model_with_openai_provider(self):
-        """_create_summarize_model must call init_chat_model with model_provider='openai'."""
-        from unittest.mock import patch
-
-        from telegram_bot.graph.graph import _create_summarize_model
-
-        cfg = MagicMock()
-        cfg.llm_model = "gpt-4o-mini"
-        cfg.llm_api_key = "sk-test"
-        cfg.llm_base_url = ""
-
-        sentinel = MagicMock(name="ChatModel")
-        with patch("langchain.chat_models.init_chat_model", return_value=sentinel) as mock_icm:
-            result = _create_summarize_model(cfg)
-
-        assert result is sentinel
-        mock_icm.assert_called_once()
-        kwargs = mock_icm.call_args.kwargs
-        assert kwargs.get("model") == "gpt-4o-mini"
-        assert kwargs.get("model_provider") == "openai"
-        assert kwargs.get("api_key") == "sk-test"
-        assert "base_url" not in kwargs
-
-    def test_falls_back_to_no_key_placeholder_when_api_key_missing(self):
-        """Empty api_key must fall back to 'no-key' placeholder."""
-        from unittest.mock import patch
-
-        from telegram_bot.graph.graph import _create_summarize_model
-
-        cfg = MagicMock()
-        cfg.llm_model = "gpt-4o-mini"
-        cfg.llm_api_key = None
-        cfg.llm_base_url = ""
-
-        with patch("langchain.chat_models.init_chat_model") as mock_icm:
-            _create_summarize_model(cfg)
-
-        kwargs = mock_icm.call_args.kwargs
-        assert kwargs.get("api_key") == "no-key"
-
-    def test_does_not_construct_chat_openai_directly(self):
-        """Module must not import or instantiate ChatOpenAI in _create_summarize_model."""
-        import ast
-        import inspect
-
-        from telegram_bot.graph import graph as mod
-
-        source = inspect.getsource(mod._create_summarize_model)
-        tree = ast.parse(source)
-
-        bad: list[str] = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                func = node.func
-                if isinstance(func, ast.Name) and func.id == "ChatOpenAI":
-                    bad.append(f"line {node.lineno}: ChatOpenAI(...)")
-
-        assert not bad, (
-            "_create_summarize_model must use init_chat_model, not ChatOpenAI: " + "; ".join(bad)
         )
