@@ -1059,3 +1059,75 @@ class TestRetrieveNodeRetrievalServiceSeam:
         assert request.colbert_query is None
         assert result["needs_coverage"] is True
         assert result["rerank_applied"] is False
+
+
+class TestArrayLikeEmbeddingRegression:
+    """Regression tests for #2574 — array-like dense_vector must not fall back to [].
+
+    A numpy-array-like object whose __bool__ raises (or returns False for a
+    non-empty array) must NOT be replaced by [] by the retrieve_node.
+    """
+
+    async def test_array_like_dense_vector_not_discarded(self):
+        """Array-like query_embedding with falsy __bool__ is forwarded, not replaced."""
+
+        class _BoolRaising:
+            """Mimics a numpy array: __bool__ raises for non-scalar arrays."""
+
+            def __bool__(self) -> bool:
+                raise ValueError("The truth value of an array is ambiguous")
+
+        array_like = _BoolRaising()
+
+        state = make_initial_state(user_id=1, session_id="s1", query="test")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = array_like
+
+        mock_docs = _make_docs(2)
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_search_results = AsyncMock()
+        qdrant = MagicMock()
+
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=(mock_docs, _OK_META))
+        with patch("telegram_bot.graph.nodes.retrieve.RetrievalService", return_value=service):
+            result = await retrieve_node(
+                state,
+                _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+            )
+
+        service.retrieve_vectors.assert_awaited_once()
+        request = service.retrieve_vectors.await_args.args[0]
+        assert request.dense_vector is array_like, (
+            "array-like dense_vector must not be discarded by truthiness check"
+        )
+        assert result["documents"] == mock_docs
+
+    async def test_none_dense_vector_falls_back_to_empty_list(self):
+        """Explicit None query_embedding still correctly falls back to []."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = None  # explicit None — should become []
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_search_results = AsyncMock()
+        qdrant = MagicMock()
+
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=([], _OK_META))
+        with patch("telegram_bot.graph.nodes.retrieve.RetrievalService", return_value=service):
+            await retrieve_node(
+                state,
+                _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+            )
+
+        service.retrieve_vectors.assert_awaited_once()
+        request = service.retrieve_vectors.await_args.args[0]
+        assert request.dense_vector == [], (
+            "None dense_vector must fall back to [] (explicit None check)"
+        )
