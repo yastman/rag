@@ -43,7 +43,7 @@ because it includes optional adapter and extra-dependency surfaces.
 | What | Scope | Coverage threshold |
 |------|-------|--------------------|
 | `make test` | deterministic core gate (`make test-core`, `tests/integration/test_graph_paths.py`) | none |
-| `make test-unit` | broad unit lane (`tests/unit/`) excluding optional markers/paths | none |
+| `make test-unit` | broad unit lane (`tests/unit/`) excluding optional markers and explicit optional adapter/provider paths | none |
 | `make test-contract` | contract only (`tests/contract/`) | none |
 | Local PR readiness | focused checks + `make test`; run `make test-contract` when contract surfaces changed | coverage remains a separate `make test-cov` check |
 
@@ -86,12 +86,23 @@ PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 ```bash
 make test-telegram-adapter
 make test-api-adapter
+make test-providers-extra
+make test-legacy-graph-extra
 make test-ingest-extra
 make test-voice-extra
 make test-eval-extra
 make test-observability-extra
 make test-optional-surfaces
 ```
+
+Broad-unit exclusions are not silent coverage drops:
+
+| Owner lane | Excluded from `make test-unit` | Why |
+|---|---|---|
+| `make test-telegram-adapter` | Telegram adapter directories and root Telegram adapter test selectors | Requires the optional `telegram` extra (`aiogram`, `aiogram-dialog`, `asyncpg`) or Telegram bot import surface. |
+| `make test-providers-extra` | `tests/unit/contextualization/` and root contextualization provider tests | Requires optional provider SDKs (`anthropic`, `groq`). |
+| `make test-legacy-graph-extra` | `tests/unit/graph/`, `tests/unit/integrations/`, and root LangGraph runtime tests | Temporary #2526 partition for stale legacy graph/LangGraph coverage; this is not the #2495 graph/API rewrite. |
+
 
 ### Focused run (preferred while developing)
 ```bash

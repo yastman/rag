@@ -27,9 +27,13 @@ OPTIONAL_SURFACE_TOKENS = (
     "tests/unit/ingestion",
     "tests/unit/evaluation",
     "tests/unit/observability",
+    "tests/unit/contextualization",
+    "tests/unit/graph",
     "tests/unit/mini_app",
     "test-telegram-adapter",
     "test-api-adapter",
+    "test-providers-extra",
+    "test-legacy-graph-extra",
     "test-ingest-extra",
     "test-voice-extra",
     "test-eval-extra",
@@ -39,6 +43,8 @@ OPTIONAL_SURFACE_TOKENS = (
 OPTIONAL_TARGETS = (
     "test-telegram-adapter",
     "test-api-adapter",
+    "test-providers-extra",
+    "test-legacy-graph-extra",
     "test-ingest-extra",
     "test-voice-extra",
     "test-eval-extra",
@@ -126,3 +132,32 @@ def test_langfuse_baseline_diagnostics_are_not_required_gate_dependencies() -> N
         assert offenders == [], (
             f"{target!r} must not depend on optional Langfuse diagnostics: {offenders}"
         )
+
+
+def test_broad_unit_exclusions_are_owned_by_explicit_lanes() -> None:
+    text = _makefile_text()
+
+    owner_vars = {
+        "PYTEST_TELEGRAM_ADAPTER_PATHS": "test-telegram-adapter",
+        "PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS": "test-telegram-adapter",
+        "PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS": "test-providers-extra",
+        "PYTEST_LEGACY_GRAPH_PATHS": "test-legacy-graph-extra",
+    }
+    broad_body = _target_body(text, "test-unit")
+
+    for var_name, owner_target in owner_vars.items():
+        var_ref = f"$({var_name})"
+        assert var_ref in text, f"{var_name} must remain defined in Makefile"
+        assert var_ref in _target_body(text, owner_target), (
+            f"{var_name} must be assigned to explicit owner lane {owner_target}"
+        )
+
+    telegram_body = _target_body(text, "test-telegram-adapter")
+    assert "--ignore" not in telegram_body
+    assert "$(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)" not in telegram_body
+
+    assert "$(PYTEST_OPTIONAL_ADAPTER_IGNORE)" in broad_body
+    assert "$(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB)" in broad_body
+    assert "$(PYTEST_OPTIONAL_PROVIDER_IGNORE)" in broad_body
+    assert "$(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)" in text
+    assert "$(PYTEST_LEGACY_GRAPH_PATHS)" in _target_body(text, "test-legacy-graph-extra")

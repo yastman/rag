@@ -1,6 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-api-adapter test-ingest-extra test-voice-extra test-eval-extra test-observability-extra test-optional-surfaces \
+	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra test-optional-surfaces \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	ingest-dir ingest-status ingest-services \
@@ -66,6 +66,59 @@ PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/ingestion \
 	tests/unit/observability \
 	tests/unit/voice)
+# Explicit owner lanes for tests excluded from the lean broad unit lane.
+# Keep these variables in sync with the matching opt-in targets below.
+PYTEST_TELEGRAM_ADAPTER_PATHS := \
+	tests/unit/agents \
+	tests/unit/dialogs \
+	tests/unit/handlers \
+	tests/unit/keyboards \
+	tests/unit/middlewares \
+	tests/unit/pipelines \
+	tests/unit/services/test_catalog_rendering.py \
+	tests/unit/services/test_catalog_session.py \
+	tests/unit/services/test_draft_streamer_removed.py \
+	tests/unit/services/test_favorites_service.py \
+	tests/unit/services/test_kommo_models.py
+PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
+	tests/unit/test_*bot*.py \
+	tests/unit/test_bot*.py \
+	tests/unit/test_*callback*.py \
+	tests/unit/test_*catalog*.py \
+	tests/unit/test_*feedback*.py \
+	tests/unit/test_*handoff*.py \
+	tests/unit/test_*i18n*.py \
+	tests/unit/test_*menu*.py \
+	tests/unit/test_*preflight*.py \
+	tests/unit/test_*middlewares*.py \
+	tests/unit/test_agent_streaming.py \
+	tests/unit/test_card_context.py \
+	tests/unit/test_cmd_call.py \
+	tests/unit/test_docker_static_validation*.py \
+	tests/unit/test_error_handler.py \
+	tests/unit/test_feedback.py \
+	tests/unit/test_kommo_token_seed.py \
+	tests/unit/test_main.py \
+	tests/unit/test_perf_fixes.py \
+	tests/unit/test_results_pagination_bugs.py \
+	tests/unit/test_send_property_card.py \
+	tests/unit/test_thread_routing.py \
+	tests/unit/test_topic_service_init.py
+PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB := $(addprefix --ignore-glob=,$(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS))
+PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS := \
+	tests/unit/contextualization \
+	tests/unit/test_claude_contextualizer.py \
+	tests/unit/test_contextualization_batch.py
+# Temporary #2526 partition only: these legacy graph/langgraph tests are owned
+# by the explicit lane below until the #2495 graph/API rewrite retargets them.
+PYTEST_LEGACY_GRAPH_PATHS := \
+	tests/unit/graph \
+	tests/unit/integrations \
+	tests/unit/test_latency_units.py
+PYTEST_OPTIONAL_ADAPTER_IGNORE := $(addprefix --ignore=,$(PYTEST_TELEGRAM_ADAPTER_PATHS))
+PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB := $(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)
+PYTEST_OPTIONAL_PROVIDER_IGNORE := $(addprefix --ignore=,$(PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS) $(PYTEST_LEGACY_GRAPH_PATHS))
+
 
 
 help: ## Show this help message
@@ -213,7 +266,8 @@ test-core: ## Run monolith core-required tests only (local/manual)
 
 test-telegram-adapter: ## Run Telegram adapter unit tests explicitly
 	@echo "$(BLUE)Running Telegram adapter tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/agents/ tests/unit/dialogs/ tests/unit/handlers/ tests/unit/middlewares/ tests/unit/pipelines/ tests/unit/test_bot*.py tests/unit/test_main.py tests/unit/test_middlewares_impl.py -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	uv sync --extra telegram --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_TELEGRAM_ADAPTER_PATHS) $(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Telegram adapter tests complete$(NC)"
 
 test-api-adapter: ## Run API adapter unit tests explicitly
@@ -221,6 +275,18 @@ test-api-adapter: ## Run API adapter unit tests explicitly
 	uv sync --extra mini-app --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/api/ -q --timeout=30
 	@echo "$(GREEN)✓ API adapter tests complete$(NC)"
+
+test-providers-extra: ## Run optional provider/contextualization tests explicitly
+	@echo "$(BLUE)Running providers-extra tests...$(NC)"
+	uv sync --extra providers --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS) -q --timeout=30 -m "not legacy_api and not slow"
+	@echo "$(GREEN)✓ Providers-extra tests complete$(NC)"
+
+test-legacy-graph-extra: ## Run temporary legacy graph/langgraph lane (#2495 follow-up) explicitly
+	@echo "$(BLUE)Running legacy graph-extra tests...$(NC)"
+	uv sync --extra providers --extra telegram --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_LEGACY_GRAPH_PATHS) -q --timeout=30 -m "not legacy_api and not slow"
+	@echo "$(GREEN)✓ Legacy graph-extra tests complete$(NC)"
 
 test-ingest-extra: ## Run optional ingestion-extra tests explicitly
 	@echo "$(BLUE)Running ingestion-extra tests...$(NC)"
@@ -246,7 +312,7 @@ test-observability-extra: ## Run optional observability-extra tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/observability/ -q --timeout=30
 	@echo "$(GREEN)✓ Observability-extra tests complete$(NC)"
 
-test-optional-surfaces: test-api-adapter test-ingest-extra test-voice-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
+test-optional-surfaces: test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
 	@echo "$(GREEN)✓ Optional surface lanes complete$(NC)"
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
@@ -266,12 +332,12 @@ test-cov: ## Run tests with coverage
 
 test-unit: ## Run broad unit test lane locally in parallel
 	@echo "$(BLUE)Running broad unit tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Broad unit tests complete$(NC)"
 
 test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse locally)
 	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Unit tests (loadscope) complete$(NC)"
 
 test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main)
@@ -298,12 +364,12 @@ test-benchmark: ## Run benchmark suite with the live ColBERT gate enabled (#1618
 
 test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
 test-all-fast: ## Run unit tests + critical graph-path integration tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
 	@echo "$(BLUE)Running unit + critical graph-path integration tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ All fast tests complete$(NC)"
 
 test-lf: ## Run only last failed tests (parallel)
@@ -318,7 +384,7 @@ test-ff: ## Run failed first, then rest
 
 test-profile: ## Profile slowest tests (find bottlenecks) — measures the same lane as test-unit
 	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) --durations=20 --durations-min=0.5 -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) $(PYTEST_PARALLEL_ARGS) --durations=20 --durations-min=0.5 -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Profile complete$(NC)"
 
 test-integration: ## Run graph path integration tests (no Docker, ~5s)
