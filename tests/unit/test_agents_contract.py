@@ -68,3 +68,39 @@ def test_codex_web_prompt_requires_validation_matrix() -> None:
     assert "Required Validation Matrix" in text
     assert "make test-core" in text
     assert "make test-contract" in text
+
+
+def test_test_deletion_requires_coverage_preservation_map() -> None:
+    worker = Path("docs/engineering/codex-web-prompt.md").read_text(encoding="utf-8")
+    reviewer = Path("docs/engineering/gh-pr-review.md").read_text(encoding="utf-8")
+    template = Path(".github/pull_request_template.md").read_text(encoding="utf-8")
+
+    combined_guidance = "\n".join([worker, reviewer, template])
+
+    assert "coverage-preservation map" in worker
+    assert "coverage-preservation map" in reviewer
+    assert "coverage-preservation map" in template
+
+    for action in ("deleting", "moving", "skipping", "xfail-ing", "retargeting", "weakening"):
+        assert action in combined_guidance
+
+    for required_field in (
+        "deleted test path",
+        "old assertion / behavior / contract",
+        "whether behavior still exists on current `dev`",
+        "current adjacent surfaces checked",
+        "replacement or preserved coverage",
+        "focused validation command",
+        "follow-up issue if coverage is intentionally deferred",
+    ):
+        assert required_field in template
+
+    for owner in (
+        "worker prompt",
+        "TDD/focused tests",
+        "PR body",
+        "reviewer",
+        "no-code closeout",
+        "orchestrator close decision",
+    ):
+        assert owner in combined_guidance
