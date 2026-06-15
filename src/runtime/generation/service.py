@@ -583,6 +583,77 @@ async def generate_answer(
     )
 
 
+def _apply_stream_safe_fallback(
+    *,
+    request: GenerationRequest,
+    metadata_out: dict[str, Any],
+    docs: list[dict[str, Any]],
+    style_info: Any,
+    lf_client: Any | None,
+    dyn: dict[str, Any],
+    extra: dict[str, Any],
+    t0: float,
+    needs_coverage: bool,
+    coverage_reason: str | None,
+) -> str:
+    """Apply the pre-stream strict-grounding safe fallback branch."""
+    elapsed = time.monotonic() - t0
+    with contextlib.suppress(Exception):
+        dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
+    answer = extra.get("build_fallback_response", _build_fallback_response)(docs)
+    current_latency = request.latency_stages or {}
+    _update_current_span(
+        lf_client,
+        output={
+            "response_length": len(answer),
+            "llm_provider_model": "safe_fallback",
+            "fallback_used": False,
+            "safe_fallback_used": True,
+            "grounded": False,
+            "response_sent": False,
+            "needs_coverage": needs_coverage,
+            "coverage_mode": "exhaustive_list" if needs_coverage else "default",
+            "coverage_reason": coverage_reason,
+        },
+    )
+    metadata_out.update(
+        _ensure_generation_signal_defaults(
+            {
+                "response": answer,
+                "response_sent": False,
+                "sent_message": None,
+                "llm_provider_model": "safe_fallback",
+                "llm_ttft_ms": 0.0,
+                "llm_response_duration_ms": elapsed * 1000,
+                "llm_stream_only_ttft_ms": None,
+                "llm_ttft_drift_ms": None,
+                "llm_call_count": max(0, int(request.llm_call_count)),
+                "latency_stages": {**current_latency, "generate": elapsed},
+                "llm_decode_ms": None,
+                "llm_tps": None,
+                "llm_queue_ms": None,
+                "llm_timeout": False,
+                "llm_stream_recovery": False,
+                "streaming_enabled": True,
+                "response_style": style_info.style,
+                "response_difficulty": style_info.difficulty,
+                "response_style_reasoning": style_info.reasoning,
+                "answer_words": len(answer.split()),
+                "answer_chars": len(answer),
+                "answer_to_question_ratio": len(answer.split()) / max(style_info.word_count, 1),
+                "response_policy_mode": "safe_fallback",
+                "grounding_mode": request.grounding_mode,
+                "safe_fallback_used": True,
+                "grounded": False,
+                "legal_answer_safe": False,
+                "semantic_cache_safe_reuse": False,
+                "needs_coverage": needs_coverage,
+            }
+        )
+    )
+    return answer
+
+
 async def generate_answer_stream(
     request: GenerationRequest,
     metadata_out: dict[str, Any],
@@ -653,59 +724,17 @@ async def generate_answer_stream(
         grade_confidence=request.grade_confidence,
         legal_answer_safe=legal_answer_safe,
     ):
-        elapsed = time.monotonic() - t0
-        with contextlib.suppress(Exception):
-            dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
-        answer = extra.get("build_fallback_response", _build_fallback_response)(docs)
-        current_latency = request.latency_stages or {}
-        _update_current_span(
-            lf_client,
-            output={
-                "response_length": len(answer),
-                "llm_provider_model": "safe_fallback",
-                "fallback_used": False,
-                "safe_fallback_used": True,
-                "grounded": False,
-                "response_sent": False,
-                "needs_coverage": needs_coverage,
-                "coverage_mode": "exhaustive_list" if needs_coverage else "default",
-                "coverage_reason": coverage_reason,
-            },
-        )
-        metadata_out.update(
-            _ensure_generation_signal_defaults(
-                {
-                    "response": answer,
-                    "response_sent": False,
-                    "sent_message": None,
-                    "llm_provider_model": "safe_fallback",
-                    "llm_ttft_ms": 0.0,
-                    "llm_response_duration_ms": elapsed * 1000,
-                    "llm_stream_only_ttft_ms": None,
-                    "llm_ttft_drift_ms": None,
-                    "llm_call_count": max(0, int(request.llm_call_count)),
-                    "latency_stages": {**current_latency, "generate": elapsed},
-                    "llm_decode_ms": None,
-                    "llm_tps": None,
-                    "llm_queue_ms": None,
-                    "llm_timeout": False,
-                    "llm_stream_recovery": False,
-                    "streaming_enabled": True,
-                    "response_style": style_info.style,
-                    "response_difficulty": style_info.difficulty,
-                    "response_style_reasoning": style_info.reasoning,
-                    "answer_words": len(answer.split()),
-                    "answer_chars": len(answer),
-                    "answer_to_question_ratio": len(answer.split()) / max(style_info.word_count, 1),
-                    "response_policy_mode": "safe_fallback",
-                    "grounding_mode": request.grounding_mode,
-                    "safe_fallback_used": True,
-                    "grounded": False,
-                    "legal_answer_safe": False,
-                    "semantic_cache_safe_reuse": False,
-                    "needs_coverage": needs_coverage,
-                }
-            )
+        answer = _apply_stream_safe_fallback(
+            request=request,
+            metadata_out=metadata_out,
+            docs=docs,
+            style_info=style_info,
+            lf_client=lf_client,
+            dyn=dyn,
+            extra=extra,
+            t0=t0,
+            needs_coverage=needs_coverage,
+            coverage_reason=coverage_reason,
         )
         yield answer
         return
