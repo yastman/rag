@@ -193,7 +193,7 @@ Execution plan:
 
 1. Run #2451 after LangChain/optional dependency removals, because boto/google packages may disappear as transitive dependencies once the heavy stack is removed.
 2. For #2300, inventory all Dockerfiles/images, decide per-service Python 3.14 readiness, and keep Node 24 separate from core Python migration.
-3. Keep #2043 open until upstream patches exist or explicit risk acceptance is recorded; meanwhile audit actual usage of `diskcache` and `ragas` and add local mitigations if exposure exists.
+3. Reconcile #2043 against current dependency state: `ragas` and `diskcache` should remain absent from dependency/lockfile surfaces unless maintainers explicitly accept restoring that exposure.
 4. Use #11 as the Renovate coordination board: recreate closed runtime-upgrade PRs only after #2300 has compatibility decisions.
 
 Validation focus:
