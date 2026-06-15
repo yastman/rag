@@ -103,6 +103,35 @@ When validation fails, classify before fixing:
 
 Never expand a PR just to make a broad suite green unless the user explicitly asks for a baseline cleanup PR.
 
+## Test Coverage Preservation Guard
+
+Before deleting, moving, skipping, xfail-ing, retargeting, or weakening any
+test, the worker prompt owner must require a coverage-preservation map in the PR
+body. The map must prove whether the old assertion / behavior / contract still
+exists on current `dev`, which current adjacent surfaces were checked, and
+which replacement or preserved coverage keeps the behavior tested.
+
+Loop-break ownership:
+- worker prompt: require the coverage-preservation map before test deletion or
+  weakening work starts;
+- TDD/focused tests: prove replacement coverage with a focused validation
+  command, or keep the PR blocked;
+- PR body: record the map fields and any intentionally deferred coverage;
+- reviewer: reject missing or vague maps before approving;
+- no-code closeout: may close only when the map proves no code/test change is
+  needed;
+- orchestrator close decision: may close the issue only after merge or accepted
+  no-code evidence references the map.
+
+Required map fields:
+- deleted test path;
+- old assertion / behavior / contract;
+- whether behavior still exists on current `dev`;
+- current adjacent surfaces checked;
+- replacement or preserved coverage;
+- focused validation command;
+- follow-up issue if coverage is intentionally deferred.
+
 ## Pre-PR Validation Loop
 
 Before opening or marking a PR ready:

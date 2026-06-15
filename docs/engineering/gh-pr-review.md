@@ -195,6 +195,26 @@ If adjacent tests assert the old contract, classify the finding as `stale_test` 
 
 Focused validation must include the retargeted adjacent test file. The PR body `Changed files / scope`, `Validation`, and Agent Handoff must also include the retargeted test file before status can become `clean`.
 
+### Coverage-preservation map guard
+
+Before approving any PR that is deleting, moving, skipping, xfail-ing,
+retargeting, or weakening tests, the reviewer must require a
+coverage-preservation map in the PR
+body. The map must include: deleted test path; old assertion / behavior /
+contract; whether behavior still exists on current `dev`; current adjacent
+surfaces checked; replacement or preserved coverage; focused validation command;
+and follow-up issue if coverage is intentionally deferred.
+
+Loop-break ownership:
+- worker prompt: tells the worker to prepare the map before test deletion or
+  weakening;
+- TDD/focused tests: demonstrates replacement coverage with focused validation;
+- PR body: stores the coverage-preservation map evidence;
+- reviewer: blocks vague, incomplete, or missing maps;
+- no-code closeout: needs explicit evidence that no test/code change is needed;
+- orchestrator close decision: can close only after merge or accepted no-code
+  map evidence.
+
 ### Validation by risk
 
 | Risk | Examples | Validation |
