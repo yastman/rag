@@ -320,3 +320,174 @@ class TestGraphConfig:
             f"skip_rerank_threshold={config.skip_rerank_threshold} must be > "
             f"single-query top-1 RRF={single_query_top1_rrf:.5f}"
         )
+
+
+class TestFocusedConfigClasses:
+    """Tests for focused sub-config classes introduced in #2482."""
+
+    def test_llm_config_defaults(self):
+        from src.runtime.graph.config import LlmConfig
+
+        cfg = LlmConfig()
+        assert cfg.llm_model == "gpt-4o-mini"
+        assert cfg.llm_base_url == ""
+        assert cfg.llm_api_key == ""
+        assert cfg.llm_temperature == 0.7
+        assert cfg.llm_max_tokens == 4096
+        assert cfg.generate_max_tokens == 1024
+        assert cfg.rewrite_model == "gpt-4o-mini"
+        assert cfg.rewrite_max_tokens == 64
+        assert cfg.reasoning_effort is None
+        assert cfg.reasoning_format is None
+        assert cfg.disable_reasoning is None
+
+    def test_llm_config_get_reasoning_kwargs(self):
+        from src.runtime.graph.config import LlmConfig
+
+        assert LlmConfig().get_reasoning_kwargs() == {}
+        assert LlmConfig(reasoning_effort="low").get_reasoning_kwargs() == {
+            "reasoning_effort": "low"
+        }
+        assert LlmConfig(disable_reasoning=True).get_reasoning_kwargs() == {
+            "extra_body": {"disable_reasoning": True}
+        }
+        assert LlmConfig(
+            reasoning_effort="high", reasoning_format="hidden"
+        ).get_reasoning_kwargs() == {
+            "reasoning_effort": "high",
+            "extra_body": {"reasoning_format": "hidden"},
+        }
+
+    def test_retrieval_config_defaults(self):
+        from src.runtime.graph.config import RetrievalConfig
+
+        cfg = RetrievalConfig()
+        assert cfg.bge_m3_url == "http://bge-m3:8000"
+        assert cfg.bge_m3_timeout == 120.0
+        assert cfg.qdrant_url == "http://qdrant:6333"
+        assert cfg.qdrant_collection == "gdrive_documents_bge"
+        assert cfg.search_top_k == 40
+        assert cfg.rerank_top_k == 7
+        assert cfg.redis_url == "redis://redis:6379"
+        assert cfg.rerank_provider == "colbert"
+        assert cfg.small_to_big_mode == "on"
+
+    def test_cache_config_defaults(self):
+        from src.runtime.graph.config import CacheConfig
+
+        cfg = CacheConfig()
+        assert cfg.cache_thresholds["FAQ"] == 0.12
+        assert cfg.cache_thresholds["ENTITY"] == 0.10
+        assert cfg.cache_ttl["FAQ"] == 86400
+        assert cfg.cache_ttl["ENTITY"] == 3600
+
+    def test_domain_config_defaults(self):
+        from src.runtime.graph.config import DomainConfig
+
+        cfg = DomainConfig()
+        assert cfg.domain == "недвижимость"
+        assert cfg.domain_language == "ru"
+
+    def test_response_config_defaults(self):
+        from src.runtime.graph.config import ResponseConfig
+
+        cfg = ResponseConfig()
+        assert cfg.response_style_enabled is False
+        assert cfg.response_style_shadow_mode is False
+        assert cfg.show_sources is False
+        assert cfg.streaming_enabled is True
+        assert cfg.classifier_mode == "regex"
+
+    def test_voice_config_defaults(self):
+        from src.runtime.graph.config import VoiceConfig
+
+        cfg = VoiceConfig()
+        assert cfg.show_transcription is True
+        assert cfg.voice_language == "ru"
+        assert cfg.stt_model == "whisper"
+
+    def test_security_config_defaults(self):
+        from src.runtime.graph.config import SecurityConfig
+
+        cfg = SecurityConfig()
+        assert cfg.guard_mode == "hard"
+        assert cfg.content_filter_enabled is True
+
+    def test_graph_config_composition(self):
+        """GraphConfig exposes sub-configs as attributes."""
+        from src.runtime.graph.config import (
+            CacheConfig,
+            DomainConfig,
+            GraphConfig,
+            LlmConfig,
+            ResponseConfig,
+            RetrievalConfig,
+            SecurityConfig,
+            VoiceConfig,
+        )
+
+        cfg = GraphConfig()
+        assert isinstance(cfg.llm, LlmConfig)
+        assert isinstance(cfg.retrieval, RetrievalConfig)
+        assert isinstance(cfg.cache, CacheConfig)
+        assert isinstance(cfg.domain_cfg, DomainConfig)
+        assert isinstance(cfg.response, ResponseConfig)
+        assert isinstance(cfg.voice, VoiceConfig)
+        assert isinstance(cfg.security, SecurityConfig)
+
+    def test_graph_config_flat_kwargs_constructor(self):
+        """Legacy flat kwargs to GraphConfig() still work."""
+        from src.runtime.graph.config import GraphConfig
+
+        cfg = GraphConfig(llm_model="custom-model", search_top_k=20, guard_mode="soft")
+        assert cfg.llm_model == "custom-model"
+        assert cfg.search_top_k == 20
+        assert cfg.guard_mode == "soft"
+
+    def test_graph_config_flat_properties_delegate_to_sub_configs(self):
+        """Flat property reads delegate to the sub-config objects."""
+        from src.runtime.graph.config import GraphConfig, LlmConfig
+
+        cfg = GraphConfig(llm=LlmConfig(llm_model="delegated"))
+        assert cfg.llm_model == "delegated"
+        assert cfg.llm.llm_model == "delegated"
+
+    def test_graph_config_flat_property_setters(self):
+        """Flat property writes propagate to the sub-config objects."""
+        from src.runtime.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        cfg.llm_model = "updated"
+        cfg.domain = "new-domain"
+        assert cfg.llm.llm_model == "updated"
+        assert cfg.domain_cfg.domain == "new-domain"
+
+    def test_graph_config_sub_configs_independently_testable(self):
+        """Sub-configs can be constructed and tested in isolation."""
+        from src.runtime.graph.config import LlmConfig, SecurityConfig, VoiceConfig
+
+        llm = LlmConfig(llm_model="isolated", llm_temperature=0.1)
+        voice = VoiceConfig(voice_language="en")
+        security = SecurityConfig(guard_mode="log")
+
+        assert llm.llm_model == "isolated"
+        assert llm.llm_temperature == 0.1
+        assert voice.voice_language == "en"
+        assert security.guard_mode == "log"
+
+    def test_all_sub_configs_exported(self):
+        """All focused config classes are exported from the module."""
+        from src.runtime.graph import config as cfg_module
+
+        for name in [
+            "GraphConfig",
+            "LlmConfig",
+            "RetrievalConfig",
+            "CacheConfig",
+            "DomainConfig",
+            "ResponseConfig",
+            "VoiceConfig",
+            "SecurityConfig",
+        ]:
+            assert hasattr(cfg_module, name), f"{name} not exported"
+            assert name in cfg_module.__all__, f"{name} not in __all__"
