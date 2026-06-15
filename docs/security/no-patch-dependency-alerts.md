@@ -1,142 +1,83 @@
-# No-patch dependency alerts — exposure assessment
+# No-patch dependency alerts — current closeout assessment
 
-**Last reviewed:** 2026-05-29
-**Source artifacts:**
-`logs/NO-PATCH-DEPENDENCY-MITIGATION.audit.md`,
-`logs/SECURITY-ISSUE-POSTMERGE.audit.md`,
-GitHub issue [#2043](https://github.com/yastman/rag/issues/2043)
+**Last reviewed:** 2026-06-15
+**Tracking issue:** [#2043](https://github.com/yastman/rag/issues/2043)
 
-Two open Dependabot alerts have no upstream patched version. This note records
-the project's assessment and monitoring criteria so future maintainers can
-understand why these alerts are open and what would change the verdict.
+This note records the current state of the former no-patch Dependabot alerts for
+`diskcache` and `ragas`. Earlier audits tracked two alerts with no upstream
+patched version. The current repository state no longer includes either package
+in the root dependency or lockfile surfaces.
 
 ---
 
-## Current alert matrix
+## Current state
 
-| Alert # | Package | CVE | Severity | Current | Patched | Dep type |
-|---------|---------|-----|----------|---------|---------|----------|
-| 51 | diskcache | CVE-2025-69872 | medium | 5.6.3 | none | transitive (via ragas) |
-| 65 | ragas | CVE-2026-6587 | low | 0.4.3 | none | direct, optional `eval` extra |
+| Package | Previous alert | Current repo state | Current exposure |
+|---------|----------------|--------------------|------------------|
+| `diskcache` | CVE-2025-69872, medium, vulnerable `<=5.6.3`, no patched version at original audit time | Not declared in `pyproject.toml`; no package record/string match in `uv.lock`; no first-party imports | No current dependency/lockfile exposure found |
+| `ragas` | CVE-2026-6587, low, vulnerable `>=0.2.3, <=0.4.3`, no patched version at original audit time | Not declared in `pyproject.toml`; no package record/string match in `uv.lock`; the old evaluation module is now a disabled compatibility shim | No current dependency/lockfile exposure found |
 
-**All other Dependabot alerts resolved** as of 2026-05-22 (including Dependabot
-PRs #2031, #2035, #2037).
-
----
-
-## Why these are not production-exposed today
-
-### ragas — eval-only optional dependency
-
-- ragas is declared in the `[project.optional-dependencies]` → `eval` group in
-  `pyproject.toml`. It is **not** in core `[project.dependencies]`.
-- The `eval` extra is **not** installed by:
-  - `make install` (production install, `uv sync --no-dev`)
-  - `Dockerfile.ingestion`
-  - Any published Docker image build workflow
-- The `eval` extra **is** installed by:
-  - `make sync` / `make install-all` (developer local convenience targets)
-  - `.github/workflows/nightly-heavy.yml` (`uv sync --frozen --extra all`)
-- The vulnerable code path — `multi_modal_faithfulness` in
-  `ragas/metrics/collections/multi_modal_faithfulness/util.py` — is **never
-  imported** in any project source file. The project uses only four ragas
-  metrics (`Faithfulness`, `ContextPrecision`, `ContextRecall`, `AnswerRelevancy`),
-  none of which touch multimodal paths.
-- Evaluation input is local, version-controlled test data
-  (`tests/eval/ground_truth.json`); no untrusted URLs or user-supplied content
-  flow into any ragas call path.
-
-### diskcache — transitive-only
-
-- diskcache is **not** a direct dependency; it appears in `uv.lock` only as a
-  transitive dependency of ragas.
-- **Zero direct imports** of diskcache in any project source file under `src/`,
-  `tests/`, `telegram_bot/`, `scripts/`, or `services/`.
-- The CVE (unsafe pickle deserialization) requires an attacker with write access
-  to the cache directory. In this project:
-  - The ragas cache directory exists only inside the evaluation execution
-    environment (CI container / developer machine).
-  - No external, network-accessible service writes to or reads from this
-    directory.
-  - A filesystem compromise would be a higher-severity incident regardless of
-    this CVE.
+`ragas` must not be restored to the `eval` optional extra, base dependencies, or
+lockfile without a fresh #2043 risk review and maintainer acceptance. `diskcache`
+must not be added directly or indirectly as part of this tracking issue without
+the same review.
 
 ---
 
-## What would invalidate this assessment
+## Verification commands
 
-The following changes would require reassessment:
+Use these commands when rechecking the current state:
 
-| Change | Affected CVE | Action |
-|--------|-------------|--------|
-| Project adds multimodal RAG evaluation (image/video) | CVE-2026-6587 | Reassess SSRF reachability |
-| ragas is promoted from `eval` extra to core dependencies | Both | Full risk review |
-| Evaluation pipeline accepts untrusted external input | CVE-2026-6587 | Reassess SSRF reachability |
-| ragas cache directory is exposed as a network-writable service | CVE-2025-69872 | Reassess pickle deserialization |
-| Production Docker images include the `eval` extra | Both | Full risk review |
+```bash
+rg -n '^name = "(ragas|diskcache)"|ragas|diskcache' uv.lock
+rg -n 'ragas|diskcache|\[project.optional-dependencies\]|eval\s*=|dependencies\s*=' pyproject.toml
+rg -n --hidden --glob '!uv.lock' --glob '!*.pyc' --glob '!node_modules/**' --glob '!vendor/**' '\bragas\b|from ragas|import ragas' .
+rg -n --hidden --glob '!uv.lock' --glob '!*.pyc' --glob '!node_modules/**' --glob '!vendor/**' '\bdiskcache\b|from diskcache|import diskcache' .
+uv lock --locked
+```
 
----
+Expected current result:
 
-## Monitoring and upgrade criteria
-
-**Monitoring:**
-- Watch [ragas releases](https://github.com/explodinggradients/ragas/releases)
-  for a version that patches CVE-2026-6587 and/or removes the diskcache
-  dependency.
-- Watch [diskcache releases](https://github.com/grantjenks/python-diskcache/releases)
-  for a version that addresses CVE-2025-69872 (e.g., non-pickle serialization
-  option).
-- The open `ragas>=0.4.3` constraint in `pyproject.toml` means that when
-  upstream ships a fix, adopting it requires only a standard dependency upgrade
-  workflow — no changes to `pyproject.toml` constraints.
-
-**Upgrade criteria:**
-- When a patched ragas version is released, follow the standard dependency
-  upgrade workflow (see `dependency-upgrade` skill / dep-upgrade workflow).
-- When a patched diskcache version is released, bump it through ragas or
-  constrain it directly in `pyproject.toml` if ragas has not yet adopted it.
+- `uv.lock` has no `ragas` or `diskcache` package records.
+- `pyproject.toml` has no `ragas` or `diskcache` dependency declarations.
+- `diskcache` appears only in documentation/status references.
+- `ragas` appears in documentation, dependency contracts, disabled compatibility
+  tests, and `src/evaluation/ragas_evaluation.py`, which now raises an explicit
+  unavailable-lane error instead of importing the undeclared package.
 
 ---
 
-## Dependabot dismissal note
+## Historical context
 
-Dismissing these alerts manually through the GitHub Security tab requires
-explicit risk acceptance. Dismissal options:
+Earlier #2043 audits described this older state:
 
-- **Risk accepted** — documented in this file; two reviewers have reviewed the
-  assessment.
-- **Not exploitable** — the vulnerable code paths are unreachable in the
-  current project configuration.
+- `ragas` was a direct optional `eval` dependency.
+- `diskcache` was present transitively through `ragas`.
+- The active mitigation was isolation of the evaluation lane while waiting for
+  upstream patched versions or explicit risk acceptance.
 
-Dismissal does **not** mean the vulnerability is harmless in all contexts. It
-means the project's current configuration renders it not practically
-exploitable.
-
-**Do not add Dependabot ignore rules** to `.github/dependabot.yml` for these
-alerts. The intent is to keep them visible as a monitoring signal — when a
-patched version ships, Dependabot will clear the alert automatically, serving
-as a prompt to upgrade.
+That older assessment is retained here only as history. It is not the current
+repo state after the dependency surface was removed.
 
 ---
 
-## Monitoring log
+## Reassessment triggers
 
-Periodic upstream checks for a patched release (issue #2043 — "Monitor upstream
-for patched releases"). Each entry records the latest version available on PyPI
-at check time and whether it clears the vulnerable range.
+Reopen the full risk assessment before any of these changes:
 
-| Date | diskcache (vuln `<=5.6.3`) | ragas (vuln `>=0.2.3,<=0.4.3`) | Verdict |
-|------|----------------------------|-------------------------------|---------|
-| 2026-05-22 | 5.6.3 — no patch | 0.4.3 — no patch | Isolation stance holds |
-| 2026-05-29 | 5.6.3 (latest on PyPI) — no patch | 0.4.3 (latest on PyPI) — no patch | No upstream fix; isolation stance holds |
-
-No upstream patch is available for either package as of the latest check, so the
-isolation mitigation above remains the active stance. When Dependabot clears
-either alert (a patched version ships), follow the upgrade criteria above.
+| Change | Required action |
+|--------|-----------------|
+| `ragas` is added back to any dependency group or optional extra | Full #2043 risk review and maintainer acceptance |
+| `diskcache` appears in `uv.lock` or any dependency file | Determine whether it is direct/transitive and reassess CVE-2025-69872 exposure |
+| The disabled RAGAS shim is replaced with active evaluation code | Review dependency, network, input, and cache exposure before merge |
+| Dependabot reports fresh root-lock alerts for either package | Re-run the verification commands and reconcile GitHub Security-tab state |
 
 ---
 
-## Related issues
+## Closeout recommendation
 
-- [#2043](https://github.com/yastman/rag/issues/2043) — Tracking issue for
-  no-patch Dependabot alerts.
+For #2043, the code/dependency closeout recommendation is: close after
+maintainers confirm the GitHub Dependabot UI no longer reports active root
+`uv.lock` alerts for `ragas` or `diskcache`. If the UI still shows historical
+alerts while the packages are absent from `uv.lock`, handle that as an admin
+Security-tab reconciliation item rather than a dependency-change PR.
