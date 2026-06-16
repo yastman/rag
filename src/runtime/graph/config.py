@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 @dataclass
@@ -246,6 +246,60 @@ class GraphConfig:
     response: ResponseConfig
     voice: VoiceConfig
     security: SecurityConfig
+
+    if TYPE_CHECKING:
+        # mypy stubs for flat compat accessors generated at runtime from _FLAT_KWARGS.
+        # At runtime these properties are injected via setattr() after class creation.
+        # LLM
+        llm_base_url: str
+        llm_api_key: str
+        llm_model: str
+        llm_temperature: float
+        llm_max_tokens: int
+        generate_max_tokens: int
+        reasoning_effort: str | None
+        reasoning_format: str | None
+        disable_reasoning: bool | None
+        rewrite_model: str
+        rewrite_max_tokens: int
+        # Retrieval
+        bge_m3_url: str
+        bge_m3_timeout: float
+        qdrant_url: str
+        qdrant_collection: str
+        search_top_k: int
+        rerank_top_k: int
+        redis_url: str
+        max_rewrite_attempts: int
+        skip_rerank_threshold: float
+        relevance_threshold_rrf: float
+        score_improvement_delta: float
+        rerank_provider: str
+        small_to_big_mode: str
+        small_to_big_window_before: int
+        small_to_big_window_after: int
+        max_expanded_chunks: int
+        max_context_tokens: int
+        # Cache
+        cache_thresholds: dict[str, float]
+        cache_ttl: dict[str, int]
+        # Domain
+        domain: str
+        domain_language: str
+        # Response
+        response_style_enabled: bool
+        response_style_shadow_mode: bool
+        show_sources: bool
+        streaming_enabled: bool
+        ttft_drift_warn_ms: int
+        classifier_mode: str
+        # Voice
+        show_transcription: bool
+        voice_language: str
+        stt_model: str
+        # Security
+        guard_mode: str
+        content_filter_enabled: bool
 
     def __init__(
         self,
