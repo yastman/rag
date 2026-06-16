@@ -195,7 +195,7 @@ async def retrieve_node(
 
                     dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
 
-    if not dense_vector:
+    if dense_vector is None:
         dense_vector = []
 
     # Build search cache profile AFTER re-embed so colbert_query is accurate (#1493)
