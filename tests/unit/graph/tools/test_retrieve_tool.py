@@ -235,3 +235,90 @@ class TestRetrieveToolRetrievalServiceSeam:
             result = await tool(query="test", k=5)
 
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Regression: array-bool-coercion (#2574)
+# ---------------------------------------------------------------------------
+
+
+class TestArrayBoolCoercionRegression:
+    """dense_vector must never be coerced via bool() — raises for array-likes."""
+
+    @pytest.mark.asyncio
+    async def test_array_like_dense_not_silently_dropped(self):
+        """An array-like dense whose __bool__ raises must NOT silently return []."""
+
+        class _ArrayLike:
+            """Minimal array-like that raises on bool() — reproduces the bug."""
+
+            def __bool__(self):
+                raise ValueError("truth value of an array is ambiguous")
+
+            def __iter__(self):
+                return iter([0.1, 0.2])
+
+        dense_value = _ArrayLike()
+
+        async def embed(q: str):
+            emb = MagicMock()
+            emb.dense = dense_value
+            emb.sparse = None
+            emb.colbert = None
+            return emb
+
+        docs = [{"id": "1", "text": "doc", "score": 0.9}]
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=(docs, {}))
+
+        from telegram_bot.graph.tools import retrieve as retrieve_module
+
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                retrieve_module,
+                "RetrievalService",
+                MagicMock(return_value=service),
+            )
+            tool = make_retrieve_tool(qdrant=MagicMock(), embed_query=embed)
+            result = await tool(query="test", k=1)
+
+        # Must NOT silently return [] — the dense value was valid
+        assert result != [], "array-like dense was dropped (bool coercion bug)"
+        service.retrieve_vectors.assert_awaited_once()
+        request = service.retrieve_vectors.await_args.args[0]
+        # dense_vector forwarded as-is (identity check)
+        assert request.dense_vector is dense_value
+
+    @pytest.mark.asyncio
+    async def test_numpy_array_dense_not_silently_dropped(self):
+        """Real numpy array dense must be forwarded as-is (not coerced via bool)."""
+        pytest.importorskip("numpy")
+        import numpy as np
+
+        dense_value = np.array([0.1, 0.2, 0.3])
+
+        async def embed(q: str):
+            emb = MagicMock()
+            emb.dense = dense_value
+            emb.sparse = None
+            emb.colbert = None
+            return emb
+
+        docs = [{"id": "2", "text": "numpy doc", "score": 0.8}]
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=(docs, {}))
+
+        from telegram_bot.graph.tools import retrieve as retrieve_module
+
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                retrieve_module,
+                "RetrievalService",
+                MagicMock(return_value=service),
+            )
+            tool = make_retrieve_tool(qdrant=MagicMock(), embed_query=embed)
+            result = await tool(query="test", k=1)
+
+        assert result != [], "numpy array dense was dropped (bool coercion bug)"
+        request = service.retrieve_vectors.await_args.args[0]
+        assert request.dense_vector is dense_value
