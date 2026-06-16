@@ -72,6 +72,7 @@ ENV_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 # operators should never set in their local .env.
 ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     # --- Standard library / Python runtime -----------------------------------
+    "KIRO_STRICT_REPORT": "Dev-only swarm flag (#2305): gates legacy strict_json worker-report validators; not an app runtime setting",
     "PATH": "OS PATH; never an operator-set bot variable",
     "HOME": "OS HOME; never an operator-set bot variable",
     "USER": "OS USER; never an operator-set bot variable",

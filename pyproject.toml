@@ -321,6 +321,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "evaluation/*.py" = ["T201"]      # Allow print() in evaluation scripts
 "test_*.py" = ["E402", "T201", "SIM117"]  # Allow late imports, print(), nested with in tests
 "tests/**/*.py" = ["E402", "T201", "SIM117"]  # Same for tests/ directory
+"scripts/*.py" = ["E402", "SIM102", "SIM108", "PERF402", "C416"]  # Allow late imports and style in standalone scripts
 # Per-file ASYNC240 ignores for src/ingestion/docling_client.py and
 # src/ingestion/service.py removed in #1532: ASYNC240 is already in the
 # global ignore list above, so the per-file entries were redundant. The
@@ -389,7 +390,13 @@ disallow_untyped_defs = true
 
 [tool.bandit]
 exclude_dirs = [".venv", "tests", "evaluation", "scripts/archive", "__pycache__"]
-skips = ["B101"]  # Skip assert_used (common in tests)
+skips = [
+    "B101",  # assert_used (common in tests)
+    "B404",  # import-subprocess (expected in operational scripts)
+    "B603",  # subprocess-without-shell (expected in operational scripts)
+    "B607",  # start-process-with-partial-path (tmux/system tools in scripts)
+    "B105",  # hardcoded-password-string (false positive: CLI flag strings like "-n")
+]
 
 # =============================================================================
 # PYLINT CONFIGURATION (Comprehensive Linting)
