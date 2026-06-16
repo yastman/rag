@@ -9,10 +9,10 @@ external consumers continue to work without churn.
 Provides service factories for LLM, embeddings, and cache thresholds.
 
 #2482: GraphConfig is now a composition of focused config classes.
-Flat attribute access (e.g. ``config.llm_model``) is preserved via
-``@property`` for full backward compatibility with existing callers.
-The constructor also accepts legacy flat kwargs so existing call-sites
-like ``GraphConfig(llm_model="x", bge_m3_url="y")`` continue to work.
+#2577: Flat @property accessors are generated automatically from _FLAT_KWARGS,
+removing the duplicated manual getter/setter pairs. The constructor still
+accepts legacy flat kwargs so existing call-sites like
+``GraphConfig(llm_model="x", bge_m3_url="y")`` continue to work.
 """
 
 from __future__ import annotations
@@ -152,7 +152,8 @@ class SecurityConfig:
     content_filter_enabled: bool = True
 
 
-# Mapping from legacy flat kwarg name -> (sub_config_attr, sub_config_field)
+# Mapping from legacy flat kwarg name -> (sub_config_attr, sub_config_field).
+# This is the single source of truth for backward-compatible flat access (#2577).
 _FLAT_KWARGS: dict[str, tuple[str, str]] = {
     # LLM
     "llm_base_url": ("llm", "llm_base_url"),
@@ -207,13 +208,26 @@ _FLAT_KWARGS: dict[str, tuple[str, str]] = {
 }
 
 
+def _make_flat_property(flat_name: str, sub_attr: str, sub_field: str) -> property:
+    """Build a getter+setter property that routes through a sub-config attribute."""
+
+    def _get(self: Any) -> Any:
+        return getattr(getattr(self, sub_attr), sub_field)
+
+    def _set(self: Any, v: Any) -> None:
+        setattr(getattr(self, sub_attr), sub_field, v)
+
+    return property(_get, _set)
+
+
 @dataclass(init=False)
 class GraphConfig:
     """Configuration for the imperative RAG runtime.
 
     Composed from focused sub-config classes (#2482). Flat attribute
     access (e.g. ``config.llm_model``, ``config.domain``) is preserved
-    via ``@property`` for backward compatibility with all existing callers.
+    via auto-generated properties from ``_FLAT_KWARGS`` (#2577) for
+    backward compatibility with all existing callers.
     The constructor also accepts legacy flat kwargs (e.g.
     ``GraphConfig(llm_model="x")``) so existing call-sites continue to work.
 
@@ -263,384 +277,6 @@ class GraphConfig:
             sub_attr, sub_field = _FLAT_KWARGS[key]
             setattr(getattr(self, sub_attr), sub_field, value)
 
-    # ------------------------------------------------------------------ #
-    # Backward-compatible flat property access — LLM                      #
-    # ------------------------------------------------------------------ #
-
-    @property
-    def llm_base_url(self) -> str:
-        return self.llm.llm_base_url
-
-    @llm_base_url.setter
-    def llm_base_url(self, v: str) -> None:
-        self.llm.llm_base_url = v
-
-    @property
-    def llm_api_key(self) -> str:
-        return self.llm.llm_api_key
-
-    @llm_api_key.setter
-    def llm_api_key(self, v: str) -> None:
-        self.llm.llm_api_key = v
-
-    @property
-    def llm_model(self) -> str:
-        return self.llm.llm_model
-
-    @llm_model.setter
-    def llm_model(self, v: str) -> None:
-        self.llm.llm_model = v
-
-    @property
-    def llm_temperature(self) -> float:
-        return self.llm.llm_temperature
-
-    @llm_temperature.setter
-    def llm_temperature(self, v: float) -> None:
-        self.llm.llm_temperature = v
-
-    @property
-    def llm_max_tokens(self) -> int:
-        return self.llm.llm_max_tokens
-
-    @llm_max_tokens.setter
-    def llm_max_tokens(self, v: int) -> None:
-        self.llm.llm_max_tokens = v
-
-    @property
-    def generate_max_tokens(self) -> int:
-        return self.llm.generate_max_tokens
-
-    @generate_max_tokens.setter
-    def generate_max_tokens(self, v: int) -> None:
-        self.llm.generate_max_tokens = v
-
-    @property
-    def reasoning_effort(self) -> str | None:
-        return self.llm.reasoning_effort
-
-    @reasoning_effort.setter
-    def reasoning_effort(self, v: str | None) -> None:
-        self.llm.reasoning_effort = v
-
-    @property
-    def reasoning_format(self) -> str | None:
-        return self.llm.reasoning_format
-
-    @reasoning_format.setter
-    def reasoning_format(self, v: str | None) -> None:
-        self.llm.reasoning_format = v
-
-    @property
-    def disable_reasoning(self) -> bool | None:
-        return self.llm.disable_reasoning
-
-    @disable_reasoning.setter
-    def disable_reasoning(self, v: bool | None) -> None:
-        self.llm.disable_reasoning = v
-
-    @property
-    def rewrite_model(self) -> str:
-        return self.llm.rewrite_model
-
-    @rewrite_model.setter
-    def rewrite_model(self, v: str) -> None:
-        self.llm.rewrite_model = v
-
-    @property
-    def rewrite_max_tokens(self) -> int:
-        return self.llm.rewrite_max_tokens
-
-    @rewrite_max_tokens.setter
-    def rewrite_max_tokens(self, v: int) -> None:
-        self.llm.rewrite_max_tokens = v
-
-    # ------------------------------------------------------------------ #
-    # Backward-compatible flat property access — Retrieval                #
-    # ------------------------------------------------------------------ #
-
-    @property
-    def bge_m3_url(self) -> str:
-        return self.retrieval.bge_m3_url
-
-    @bge_m3_url.setter
-    def bge_m3_url(self, v: str) -> None:
-        self.retrieval.bge_m3_url = v
-
-    @property
-    def bge_m3_timeout(self) -> float:
-        return self.retrieval.bge_m3_timeout
-
-    @bge_m3_timeout.setter
-    def bge_m3_timeout(self, v: float) -> None:
-        self.retrieval.bge_m3_timeout = v
-
-    @property
-    def qdrant_url(self) -> str:
-        return self.retrieval.qdrant_url
-
-    @qdrant_url.setter
-    def qdrant_url(self, v: str) -> None:
-        self.retrieval.qdrant_url = v
-
-    @property
-    def qdrant_collection(self) -> str:
-        return self.retrieval.qdrant_collection
-
-    @qdrant_collection.setter
-    def qdrant_collection(self, v: str) -> None:
-        self.retrieval.qdrant_collection = v
-
-    @property
-    def search_top_k(self) -> int:
-        return self.retrieval.search_top_k
-
-    @search_top_k.setter
-    def search_top_k(self, v: int) -> None:
-        self.retrieval.search_top_k = v
-
-    @property
-    def rerank_top_k(self) -> int:
-        return self.retrieval.rerank_top_k
-
-    @rerank_top_k.setter
-    def rerank_top_k(self, v: int) -> None:
-        self.retrieval.rerank_top_k = v
-
-    @property
-    def redis_url(self) -> str:
-        return self.retrieval.redis_url
-
-    @redis_url.setter
-    def redis_url(self, v: str) -> None:
-        self.retrieval.redis_url = v
-
-    @property
-    def max_rewrite_attempts(self) -> int:
-        return self.retrieval.max_rewrite_attempts
-
-    @max_rewrite_attempts.setter
-    def max_rewrite_attempts(self, v: int) -> None:
-        self.retrieval.max_rewrite_attempts = v
-
-    @property
-    def skip_rerank_threshold(self) -> float:
-        return self.retrieval.skip_rerank_threshold
-
-    @skip_rerank_threshold.setter
-    def skip_rerank_threshold(self, v: float) -> None:
-        self.retrieval.skip_rerank_threshold = v
-
-    @property
-    def relevance_threshold_rrf(self) -> float:
-        return self.retrieval.relevance_threshold_rrf
-
-    @relevance_threshold_rrf.setter
-    def relevance_threshold_rrf(self, v: float) -> None:
-        self.retrieval.relevance_threshold_rrf = v
-
-    @property
-    def score_improvement_delta(self) -> float:
-        return self.retrieval.score_improvement_delta
-
-    @score_improvement_delta.setter
-    def score_improvement_delta(self, v: float) -> None:
-        self.retrieval.score_improvement_delta = v
-
-    @property
-    def rerank_provider(self) -> str:
-        return self.retrieval.rerank_provider
-
-    @rerank_provider.setter
-    def rerank_provider(self, v: str) -> None:
-        self.retrieval.rerank_provider = v
-
-    @property
-    def small_to_big_mode(self) -> str:
-        return self.retrieval.small_to_big_mode
-
-    @small_to_big_mode.setter
-    def small_to_big_mode(self, v: str) -> None:
-        self.retrieval.small_to_big_mode = v
-
-    @property
-    def small_to_big_window_before(self) -> int:
-        return self.retrieval.small_to_big_window_before
-
-    @small_to_big_window_before.setter
-    def small_to_big_window_before(self, v: int) -> None:
-        self.retrieval.small_to_big_window_before = v
-
-    @property
-    def small_to_big_window_after(self) -> int:
-        return self.retrieval.small_to_big_window_after
-
-    @small_to_big_window_after.setter
-    def small_to_big_window_after(self, v: int) -> None:
-        self.retrieval.small_to_big_window_after = v
-
-    @property
-    def max_expanded_chunks(self) -> int:
-        return self.retrieval.max_expanded_chunks
-
-    @max_expanded_chunks.setter
-    def max_expanded_chunks(self, v: int) -> None:
-        self.retrieval.max_expanded_chunks = v
-
-    @property
-    def max_context_tokens(self) -> int:
-        return self.retrieval.max_context_tokens
-
-    @max_context_tokens.setter
-    def max_context_tokens(self, v: int) -> None:
-        self.retrieval.max_context_tokens = v
-
-    # ------------------------------------------------------------------ #
-    # Backward-compatible flat property access — Cache                    #
-    # ------------------------------------------------------------------ #
-
-    @property
-    def cache_thresholds(self) -> dict[str, float]:
-        return self.cache.cache_thresholds
-
-    @cache_thresholds.setter
-    def cache_thresholds(self, v: dict[str, float]) -> None:
-        self.cache.cache_thresholds = v
-
-    @property
-    def cache_ttl(self) -> dict[str, int]:
-        return self.cache.cache_ttl
-
-    @cache_ttl.setter
-    def cache_ttl(self, v: dict[str, int]) -> None:
-        self.cache.cache_ttl = v
-
-    # ------------------------------------------------------------------ #
-    # Backward-compatible flat property access — Domain                   #
-    # ------------------------------------------------------------------ #
-    # ``domain_cfg`` holds the DomainConfig object.  Callers expect
-    # ``config.domain`` to be a string; the property below provides that.
-
-    @property
-    def domain(self) -> str:
-        return self.domain_cfg.domain
-
-    @domain.setter
-    def domain(self, v: str) -> None:
-        self.domain_cfg.domain = v
-
-    @property
-    def domain_language(self) -> str:
-        return self.domain_cfg.domain_language
-
-    @domain_language.setter
-    def domain_language(self, v: str) -> None:
-        self.domain_cfg.domain_language = v
-
-    # ------------------------------------------------------------------ #
-    # Backward-compatible flat property access — Response                 #
-    # ------------------------------------------------------------------ #
-
-    @property
-    def response_style_enabled(self) -> bool:
-        return self.response.response_style_enabled
-
-    @response_style_enabled.setter
-    def response_style_enabled(self, v: bool) -> None:
-        self.response.response_style_enabled = v
-
-    @property
-    def response_style_shadow_mode(self) -> bool:
-        return self.response.response_style_shadow_mode
-
-    @response_style_shadow_mode.setter
-    def response_style_shadow_mode(self, v: bool) -> None:
-        self.response.response_style_shadow_mode = v
-
-    @property
-    def show_sources(self) -> bool:
-        return self.response.show_sources
-
-    @show_sources.setter
-    def show_sources(self, v: bool) -> None:
-        self.response.show_sources = v
-
-    @property
-    def streaming_enabled(self) -> bool:
-        return self.response.streaming_enabled
-
-    @streaming_enabled.setter
-    def streaming_enabled(self, v: bool) -> None:
-        self.response.streaming_enabled = v
-
-    @property
-    def ttft_drift_warn_ms(self) -> int:
-        return self.response.ttft_drift_warn_ms
-
-    @ttft_drift_warn_ms.setter
-    def ttft_drift_warn_ms(self, v: int) -> None:
-        self.response.ttft_drift_warn_ms = v
-
-    @property
-    def classifier_mode(self) -> str:
-        return self.response.classifier_mode
-
-    @classifier_mode.setter
-    def classifier_mode(self, v: str) -> None:
-        self.response.classifier_mode = v
-
-    # ------------------------------------------------------------------ #
-    # Backward-compatible flat property access — Voice                    #
-    # ------------------------------------------------------------------ #
-
-    @property
-    def show_transcription(self) -> bool:
-        return self.voice.show_transcription
-
-    @show_transcription.setter
-    def show_transcription(self, v: bool) -> None:
-        self.voice.show_transcription = v
-
-    @property
-    def voice_language(self) -> str:
-        return self.voice.voice_language
-
-    @voice_language.setter
-    def voice_language(self, v: str) -> None:
-        self.voice.voice_language = v
-
-    @property
-    def stt_model(self) -> str:
-        return self.voice.stt_model
-
-    @stt_model.setter
-    def stt_model(self, v: str) -> None:
-        self.voice.stt_model = v
-
-    # ------------------------------------------------------------------ #
-    # Backward-compatible flat property access — Security                 #
-    # ------------------------------------------------------------------ #
-
-    @property
-    def guard_mode(self) -> str:
-        return self.security.guard_mode
-
-    @guard_mode.setter
-    def guard_mode(self, v: str) -> None:
-        self.security.guard_mode = v
-
-    @property
-    def content_filter_enabled(self) -> bool:
-        return self.security.content_filter_enabled
-
-    @content_filter_enabled.setter
-    def content_filter_enabled(self, v: bool) -> None:
-        self.security.content_filter_enabled = v
-
-    # ------------------------------------------------------------------ #
-    # Reasoning helper                                                     #
-    # ------------------------------------------------------------------ #
-
     def get_reasoning_kwargs(self) -> dict[str, Any]:
         """Return SDK-shaped reasoning params for chat.completions.create().
 
@@ -650,10 +286,6 @@ class GraphConfig:
         unexpected top-level kwargs.
         """
         return self.llm.get_reasoning_kwargs()
-
-    # ------------------------------------------------------------------ #
-    # from_env classmethod                                                 #
-    # ------------------------------------------------------------------ #
 
     @classmethod
     def from_env(cls) -> GraphConfig:
@@ -698,11 +330,11 @@ class GraphConfig:
             domain_language=os.getenv("BOT_LANGUAGE", "ru"),
         )
         response = ResponseConfig(
-            streaming_enabled=os.getenv("STREAMING_ENABLED", "true").lower() == "true",
             response_style_enabled=os.getenv("RESPONSE_STYLE_ENABLED", "false").lower() == "true",
             response_style_shadow_mode=os.getenv("RESPONSE_STYLE_SHADOW_MODE", "false").lower()
             == "true",
             show_sources=os.getenv("SHOW_SOURCES", "false").lower() == "true",
+            streaming_enabled=os.getenv("STREAMING_ENABLED", "true").lower() == "true",
             ttft_drift_warn_ms=int(os.getenv("TTFT_DRIFT_WARN_MS", "500")),
             classifier_mode=os.getenv("CLASSIFIER_MODE", "regex"),
         )
@@ -718,16 +350,11 @@ class GraphConfig:
         return cls(
             llm=llm,
             retrieval=retrieval,
-            cache=CacheConfig(),
             domain_cfg=domain_cfg,
             response=response,
             voice=voice,
             security=security,
         )
-
-    # ------------------------------------------------------------------ #
-    # Service factories                                                    #
-    # ------------------------------------------------------------------ #
 
     def create_llm(self, model_override: str | None = None, *, auto_trace: bool = True) -> Any:
         """Create an OpenAI-shaped chat client backed by LiteLLM SDK routing."""
@@ -762,7 +389,14 @@ class GraphConfig:
         )
 
 
+# Auto-generate flat @property accessors from _FLAT_KWARGS.
+# This replaces hundreds of manually written getter/setter pairs (#2577).
+for _flat_name, (_sub_attr, _sub_field) in _FLAT_KWARGS.items():
+    setattr(GraphConfig, _flat_name, _make_flat_property(_flat_name, _sub_attr, _sub_field))
+
+
 __all__ = [
+    "_FLAT_KWARGS",
     "CacheConfig",
     "DomainConfig",
     "GraphConfig",
