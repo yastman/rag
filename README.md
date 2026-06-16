@@ -32,7 +32,7 @@ Most business bots stop at scripted replies. Most AI demos stop at a prompt. Thi
 | Convert conversations into action | CRM/workflow tools, lead scoring, tasks, notes, and manager handoff |
 | Let users search naturally | Domain-specific extraction plus hybrid vector/search pipelines |
 | Support the production channel | Telegram text adapter over the assistant core |
-| Keep AI behavior inspectable | Structured product logs, LangGraph state flow, optional Langfuse traces, quality scores, and runbooks |
+| Keep AI behavior inspectable | Structured product logs, imperative pipeline state flow, optional Langfuse traces, quality scores, and runbooks |
 | Control latency and cost | Redis-backed semantic, embedding, search, rerank, and extraction caches |
 
 ## Adapt It To Your Domain
@@ -68,8 +68,8 @@ Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, user-base,
 
 | Capability | What it means in this repo | Evidence |
 |---|---|---|
-| Stateful AI orchestration | LangGraph routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization | [`telegram_bot/graph/`](telegram_bot/graph/) |
-| Typed workflow state | One state contract tracks query, routing, retrieval, filters, cache, scoring, policy, latency, and response metadata | [`telegram_bot/graph/state.py`](telegram_bot/graph/state.py) |
+| Stateful AI orchestration | Repo-native imperative assistant pipeline routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization; legacy `telegram_bot/graph/` factories are compatibility facades | [`src/runtime/pipeline/assistant_pipeline.py`](src/runtime/pipeline/assistant_pipeline.py) |
+| Typed workflow state | One state contract tracks query, routing, retrieval, filters, cache, scoring, policy, latency, and response metadata | [`src/core/contracts.py`](src/core/contracts.py) |
 | Assistant core entrypoint | Direct Python calls use `run_assistant_request()` and return `AssistantResult` for E2E and adapters | [`src/core/assistant.py`](src/core/assistant.py) |
 | Optional runtime adapters | Telegram is the production adapter; voice, API, and Mini App surfaces are optional around the core proof | [`telegram_bot/`](telegram_bot/), [`src/voice/`](src/voice/), [`src/api/`](src/api/), [`archive/mini_app/`](archive/mini_app/) |
 | Self-hosted retrieval | BGE-M3 + Qdrant support dense, sparse, and ColBERT-style retrieval paths | [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) |
@@ -83,7 +83,7 @@ Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, user-base,
 
 A simple chatbot receives a message and calls an LLM. This repository treats the assistant as an operating system for business workflows:
 
-- The graph can decide whether to answer, retrieve, rewrite, rerank, call tools, ask for approval, or hand off.
+- The pipeline can decide whether to answer, retrieve, rewrite, rerank, call tools, ask for approval, or hand off.
 - Retrieval is not a single vector query; it includes dense/sparse search, optional reranking, cache policy, grading, and fallbacks.
 - Domain behavior lives behind tools and prompts, so catalog/search/CRM logic can be replaced without rewriting the runtime.
 - Runtime behavior is observable through traces, logs, health checks, validation commands, and documented runbooks.
@@ -102,7 +102,7 @@ graph TB
 
     subgraph "AI Workflow Core"
         ROUTER["Classifier / Router"]
-        GRAPH["LangGraph Workflow"]
+        GRAPH["Imperative Assistant Pipeline"]
         HITL["Human Approval"]
         TOOLS["Domain + CRM Tools"]
     end
@@ -156,7 +156,7 @@ If you are evaluating the project for collaboration, hiring, or client work, rea
 
 1. [`docs/portfolio/resume-case-study.md`](docs/portfolio/resume-case-study.md) - concise narrative, feature cards, trade-offs, and limitations.
 2. [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) - folder map and high-signal files.
-3. [`telegram_bot/graph/`](telegram_bot/graph/) - LangGraph orchestration and state flow.
+3. [`telegram_bot/graph/`](telegram_bot/graph/) - compatibility adapter facades over the imperative assistant pipeline.
 4. [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) - tools, business logic, cache, search, CRM, scoring, handoff.
 5. [`src/ingestion/unified/`](src/ingestion/unified/) - deterministic ingestion and Qdrant writes.
 6. [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), and [`DOCKER.md`](DOCKER.md) - runtime architecture.
@@ -169,7 +169,7 @@ Safe review notes:
 
 ## Proof Of Engineering
 
-- Workflow architecture: LangGraph graph, typed state, conditional edges, tool boundaries, and HITL confirmation.
+- Workflow architecture: imperative assistant pipeline, typed state contracts, conditional routing, tool boundaries, and HITL confirmation.
 - Retrieval infrastructure: BGE-M3, Qdrant dense/sparse/ColBERT vectors, aliases, strict mode, and reranking path.
 - Ingestion reliability: stable file identity, Docling parsing, chunking, Qdrant upsert/delete, PostgreSQL state, retries, and DLQ.
 - Runtime discipline: Compose profiles, pinned images, health checks, preflight checks, remote Docker helpers, and operational docs.
@@ -238,7 +238,9 @@ High-level entry points:
 | Area | Path |
 |---|---|
 | Telegram assistant runtime | [`telegram_bot/`](telegram_bot/) |
-| LangGraph workflow | [`telegram_bot/graph/`](telegram_bot/graph/) |
+| Imperative assistant pipeline | [`src/runtime/pipeline/`](src/runtime/pipeline/) |
+| Assistant core entrypoint | [`src/core/assistant.py`](src/core/assistant.py) |
+| Telegram adapter / graph compat facades | [`telegram_bot/graph/`](telegram_bot/graph/) |
 | Business/domain tools | [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) |
 | RAG API and voice | [`src/api/`](src/api/) and [`src/voice/`](src/voice/) |
 | Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
