@@ -317,10 +317,6 @@
     "tests/unit/test_bge_m3_endpoints.py",
     "tests/unit/test_small_to_big.py"
   ],
-  "test_setup_registers_middleware": [
-    "tests/unit/test_middlewares.py",
-    "tests/unit/test_middlewares_impl.py"
-  ],
   "test_sources_defaults_to_empty_list": [
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
