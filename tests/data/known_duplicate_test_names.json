@@ -289,10 +289,6 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_retrieval_module_reexports_shared_helper": [
-    "tests/unit/retrieval/test_search_engines.py",
-    "tests/unit/test_search_engines.py"
-  ],
   "test_returns_16_char_hex": [
     "tests/unit/ingestion/test_qdrant_hybrid_target.py",
     "tests/unit/ingestion/test_unified_manifest.py"
