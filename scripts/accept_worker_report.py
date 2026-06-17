@@ -34,7 +34,7 @@ import argparse
 import importlib.util
 import os
 import re
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -128,7 +128,7 @@ def forbidden_files_touched(text: str) -> list[str]:
 
 def close_window(worker_name: str) -> None:
     closer = Path(__file__).with_name("close_markdown_worker_window.py")
-    subprocess.run([sys.executable, str(closer), "--worker", worker_name], check=False)
+    subprocess.run([sys.executable, str(closer), "--worker", worker_name], check=False)  # nosec B603
 
 
 def main() -> int:
