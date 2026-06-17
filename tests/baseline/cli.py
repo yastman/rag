@@ -40,8 +40,6 @@ def _metrics_to_snapshot(
         llm_tokens_input=metrics.llm_tokens_input,
         llm_tokens_output=metrics.llm_tokens_output,
         llm_calls=metrics.llm_calls,
-        voyage_embed_calls=0,
-        voyage_rerank_calls=0,
         cache_hit_rate=metrics.cache_hit_rate,
         cache_hits=metrics.cache_hits,
         cache_misses=metrics.cache_misses,
