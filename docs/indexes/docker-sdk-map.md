@@ -46,7 +46,11 @@ local SDK docs, runbooks, and Context7 refresh targets agents should use.
 | `promtail` | [`runtime-services.md`](runtime-services.md), [`../ALERTING.md`](../ALERTING.md) | Runtime service; no app SDK owner | Official Promtail/Grafana Agent docs | Log shipping, scrape, or label rules |
 | `alertmanager` | [`runtime-services.md`](runtime-services.md), [`../ALERTING.md`](../ALERTING.md) | Runtime service; no app SDK owner | Official Alertmanager docs | Routing, receiver, or silence rules |
 | `rag-api` | [`runtime-services.md`](runtime-services.md), [`../RAG_API.md`](../RAG_API.md), [`../../src/api/README.md`](../../src/api/README.md) | `fastapi`, `openai`, `langfuse`, `qdrant-client`, `redis-py` | `/fastapi/fastapi`, `/openai/openai-python`, `/langfuse/langfuse-python`, `/qdrant/qdrant-client`, `/redis/redis-py` | Route, client, tracing, retrieval, or cache rules |
->>>>>>> 52382d8fb1 (ARCH-10: docs archive + rewrite for the monolith (#2606))
+=======
+=======
+| `rag-api` | [`runtime-services.md`](runtime-services.md), [`../archive/RAG_API.md`](../archive/RAG_API.md), [`../../src/api/README.md`](../../src/api/README.md) | `fastapi`, `openai`, `langfuse`, `qdrant-client`, `redis-py` | `/fastapi/fastapi`, `/openai/openai-python`, `/langfuse/langfuse-python`, `/qdrant/qdrant-client`, `/redis/redis-py` | Route, client, tracing, retrieval, or cache rules |
+>>>>>>> 38d39e1942 (fix(review): fix broken links in ARCH-10 docs archive [2656-B2/B3/B4/B5])
+>>>>>>> 6be38576f1 (fix(review): fix broken links in ARCH-10 docs archive [2656-B2/B3/B4/B5])
 | `livekit-server` | [`runtime-services.md`](runtime-services.md), [`../../src/voice/README.md`](../../src/voice/README.md) | LiveKit runtime backing `livekit-agents` | `/livekit/agents`; official LiveKit server docs | Room, token, WebRTC, or server config rules |
 | `livekit-sip` | [`runtime-services.md`](runtime-services.md), [`../../src/voice/README.md`](../../src/voice/README.md) | LiveKit SIP runtime backing voice path | `/livekit/agents`; official LiveKit SIP docs | Trunk, dispatch, SIP URI, or media routing rules |
 | `voice-agent` | [`runtime-services.md`](runtime-services.md), [`../../src/voice/README.md`](../../src/voice/README.md) | `livekit-agents`, `openai`, `langfuse` | `/livekit/agents`, `/openai/openai-python`, `/langfuse/langfuse-python` | Agent session, STT/TTS, tool, RAG API, or tracing rules |
