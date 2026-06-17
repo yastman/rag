@@ -15,9 +15,8 @@ import time
 from types import SimpleNamespace
 from typing import Any, cast
 
-from src.runtime.graph.nodes.classify import classify_query
-from src.runtime.graph.nodes.guard import guard_node
 from src.runtime.pipeline.rag import rag_pipeline
+from src.runtime.services.query_services import classify_query, guard_node
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
 from telegram_bot.observability import get_client, observe
