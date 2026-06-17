@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 
 class TestSummarizationNodeIntegration:
     def test_summarize_node_is_runnable(self):
@@ -19,7 +21,11 @@ class TestSummarizationNodeIntegration:
 
     def test_summarize_node_accepts_token_counter(self):
         """SummarizationNode accepts count_tokens_approximately."""
-        from langchain_core.messages.utils import count_tokens_approximately
+        langchain_core_utils = pytest.importorskip(
+            "langchain_core.messages.utils",
+            reason="langchain_core optional; skip if absent",
+        )
+        count_tokens_approximately = langchain_core_utils.count_tokens_approximately
         from langmem.short_term import SummarizationNode
 
         node = SummarizationNode(

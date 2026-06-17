@@ -5,7 +5,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.runnables import RunnableConfig
+
+from telegram_bot.agents.tooling import RunnableConfig
 
 
 @pytest.fixture

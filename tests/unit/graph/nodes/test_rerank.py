@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
+from src.runtime.graph.state import Message
 from telegram_bot.graph.nodes.rerank import rerank_node
 from telegram_bot.graph.state import make_initial_state
 
@@ -34,7 +34,7 @@ def _make_docs(scores: list[float]) -> list[dict]:
 def _state_with_query(query: str = "test query") -> dict:
     """Create a minimal state with a human message."""
     state = make_initial_state(user_id=1, session_id="s1", query=query)
-    state["messages"] = [HumanMessage(content=query)]
+    state["messages"] = [Message(content=query)]
     return state
 
 

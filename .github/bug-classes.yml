@@ -39,3 +39,8 @@ bug_classes:
     description: apscheduler imported at module level without scheduling extra causing ImportError at startup — resolved by archiving nurturing_scheduler/session_summary_worker and dropping apscheduler dep (#2602)
     canonical_issue: "#2617"
     guardrail: tests/unit/services/test_redis_monitor_asyncio.py, tests/unit/test_bot_polling_lock_asyncio.py
+
+  - id: test-debt/langchain-core-import
+    description: Kept tests imported langchain / langchain_core directly after the runtime migration off LangChain, coupling the test environment to an undeclared package
+    canonical_issue: "#2619"
+    guardrail: tests/contract/test_no_langchain_import_outside_archive_contract.py

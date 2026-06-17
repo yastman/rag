@@ -19,9 +19,10 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from langchain.messages import AIMessage, HumanMessage
 
+from src.runtime.graph.state import Message as HumanMessage
 from telegram_bot.graph.middleware.cache import (
+    AIMessage,
     SemanticCacheMiddleware,
     _CacheAwareState,
 )

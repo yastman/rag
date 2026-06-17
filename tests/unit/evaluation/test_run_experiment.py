@@ -19,12 +19,11 @@ def test_build_rag_task_returns_callable():
 
 
 def test_build_eval_state_contains_required_rag_fields():
-    from langchain_core.messages import HumanMessage
-
     from scripts.eval.run_experiment import _build_eval_state
+    from src.runtime.graph.state import Message
 
     state = _build_eval_state("What is X?")
-    assert isinstance(state["messages"][-1], HumanMessage)
+    assert isinstance(state["messages"][-1], Message)
     assert state["messages"][-1].content == "What is X?"
     assert state["user_id"] == 0
     assert state["session_id"].startswith("eval-")
