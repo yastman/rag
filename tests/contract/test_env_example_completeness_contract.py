@@ -54,7 +54,7 @@ SCAN_ROOTS: tuple[Path, ...] = (
     REPO_ROOT / "scripts",
 )
 EXCLUDE_PARTS: frozenset[str] = frozenset(
-    {".venv", "node_modules", "build", "dist", "__pycache__", "frontend"}
+    {".venv", "node_modules", "build", "dist", "__pycache__", "frontend", "archive"}
 )
 
 ENV_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
@@ -234,6 +234,8 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "EVAL_LLM_API_KEY": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
     "EVAL_LLM_BASE_URL": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
     "OPENAI_BASE_URL": "OpenAI SDK base URL override; consumed by SDK at import time, not directly by Python code in this repo",
+    "REDIS_HOST": "Read by redis-langfuse / langfuse / langfuse-worker compose services; not consumed by Python code in this repo",
+    "REDIS_PORT": "Read by redis-langfuse / langfuse / langfuse-worker compose services; not consumed by Python code in this repo",
 }
 
 

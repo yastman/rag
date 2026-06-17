@@ -354,6 +354,10 @@ ignore_missing_imports = true
 module = "src.retrieval.topic_classifier"
 disallow_untyped_defs = true
 
+[[tool.mypy.overrides]]
+module = "scripts.archive.*"
+ignore_errors = true
+
 # =============================================================================
 # BANDIT CONFIGURATION (Security Linting)
 # =============================================================================
