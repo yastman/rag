@@ -1,4 +1,4 @@
-"""Contract: DEPS-7 keeps heavy/observability packages out of base deps."""
+"""Contract: DEPS-7 keeps heavy/observability packages out of base and dev deps (#2640)."""
 
 from __future__ import annotations
 
@@ -9,10 +9,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ROOT_PYPROJECT = ROOT / "pyproject.toml"
 TELEGRAM_PYPROJECT = ROOT / "telegram_bot" / "pyproject.toml"
-OPTIONAL_PACKAGES = {
+# Archived packages: must NOT be in base deps, dev group, or telegram base deps (#2640)
+ARCHIVED_PACKAGES = {
     "gradio",
     "pillow",
     "langfuse",
+    "fastapi",
+    "uvicorn",
 }
 
 
@@ -31,23 +34,31 @@ def _package_name(requirement: str) -> str:
     )
 
 
-def test_root_base_dependencies_exclude_optional_heavy_packages() -> None:
+def test_root_base_dependencies_exclude_archived_packages() -> None:
     deps = {_package_name(dep) for dep in _load(ROOT_PYPROJECT)["project"]["dependencies"]}
-    assert deps.isdisjoint(OPTIONAL_PACKAGES)
+    assert deps.isdisjoint(ARCHIVED_PACKAGES)
 
 
-def test_telegram_base_dependencies_exclude_optional_heavy_packages() -> None:
+def test_telegram_base_dependencies_exclude_archived_packages() -> None:
     deps = {_package_name(dep) for dep in _load(TELEGRAM_PYPROJECT)["project"]["dependencies"]}
-    assert deps.isdisjoint(OPTIONAL_PACKAGES)
+    assert deps.isdisjoint(ARCHIVED_PACKAGES)
 
 
-def test_root_extras_keep_optional_dependency_targets() -> None:
+def test_root_dev_group_excludes_archived_packages() -> None:
+    """Dev group must not pull archived-surface packages into the dev install (#2640)."""
+    dev_deps = _load(ROOT_PYPROJECT).get("dependency-groups", {}).get("dev", [])
+    dev_names = {_package_name(d) for d in dev_deps if isinstance(d, str)}
+    still_present = ARCHIVED_PACKAGES & dev_names
+    assert not still_present, (
+        f"Archived packages still in [dependency-groups.dev]: {sorted(still_present)}"
+    )
+
+
+def test_root_extras_do_not_contain_archived_packages() -> None:
+    """Archived surface extras must be removed from pyproject.toml (#2640)."""
     optional = _load(ROOT_PYPROJECT)["project"].get("optional-dependencies", {})
     flattened = {_package_name(dep) for deps in optional.values() for dep in deps}
-    assert flattened >= OPTIONAL_PACKAGES
-
-
-def test_telegram_extras_keep_observability_targets() -> None:
-    optional = _load(TELEGRAM_PYPROJECT)["project"].get("optional-dependencies", {})
-    flattened = {_package_name(dep) for deps in optional.values() for dep in deps}
-    assert {"langfuse"} <= flattened
+    still_present = ARCHIVED_PACKAGES & flattened
+    assert not still_present, (
+        f"Archived packages still referenced in optional extras: {sorted(still_present)}"
+    )

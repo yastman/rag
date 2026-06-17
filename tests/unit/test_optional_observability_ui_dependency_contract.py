@@ -1,4 +1,4 @@
-"""Contracts for optional observability/heavy UI dependencies (#2431)."""
+"""Contracts for archived observability/heavy UI dependencies (#2431, #2640)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ import yaml
 
 PYPROJECT = Path("pyproject.toml")
 COMPOSE_DEV = Path("compose.dev.yml")
-HEAVY_OPTIONAL = {"gradio", "pillow", "langfuse"}
+# These packages must NOT appear in base deps or dev group after archival (#2640)
+ARCHIVED_PACKAGES = {"gradio", "pillow", "langfuse"}
 
 
 def _dep_names(deps: list[str]) -> set[str]:
@@ -30,15 +31,18 @@ def _project() -> dict:
 def test_observability_and_heavy_ui_are_not_base_dependencies() -> None:
     base = _dep_names(_project()["project"]["dependencies"])
 
-    assert base.isdisjoint(HEAVY_OPTIONAL)
+    assert base.isdisjoint(ARCHIVED_PACKAGES)
 
 
-def test_observability_scheduling_and_ui_extras_own_heavy_deps() -> None:
-    extras = _project()["project"]["optional-dependencies"]
-
-    assert {"langfuse"}.issubset(_dep_names(extras["observability"]))
-    assert {"pillow", "gradio"}.issubset(_dep_names(extras["ui"]))
-    # apscheduler/scheduling extra removed in #2602
+def test_archived_packages_not_in_dev_group() -> None:
+    """langfuse, gradio, pillow must be removed from dev group after archival (#2640)."""
+    dev_deps = _project().get("dependency-groups", {}).get("dev", [])
+    dev_dep_names = _dep_names([d for d in dev_deps if isinstance(d, str)])
+    still_present = ARCHIVED_PACKAGES & dev_dep_names
+    assert not still_present, (
+        f"Archived packages still in [dependency-groups.dev]: {sorted(still_present)}. "
+        "Remove them as part of #2640."
+    )
 
 
 def test_langfuse_self_host_services_stay_profile_gated() -> None:
