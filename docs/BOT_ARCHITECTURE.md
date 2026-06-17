@@ -23,7 +23,8 @@ Main bot orchestrator. Initializes:
 - `Bot` instance with configured token
 - `Dispatcher` with FSM storage (Redis or memory)
 - All service layers (cache, embeddings, LLM, Qdrant)
-- Graph pipeline via `build_graph()`
+- Voice path via `build_graph()` (StateGraph, migration to `create_agent` tracked in #2405)
+- Text path via `create_agent` which calls `run_assistant_request()` for core RAG
 
 Navigation:
 
@@ -96,7 +97,9 @@ Defined in `telegram_bot/handlers/handoff.py`:
 
 ## Graph Integration
 
-`PropertyBot` builds the LangGraph pipeline via `build_graph()`:
+**Voice path:** `PropertyBot` builds a LangGraph pipeline via `build_graph()` (StateGraph). This is a migration target — tracked in #2405 / ADR-0010.
+
+**Text path:** uses `create_agent` for conversational shell behavior, calling `run_assistant_request()` for core RAG (ADR-0019).
 
 ```
 START → transcribe? → classify

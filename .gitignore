@@ -324,3 +324,15 @@ scripts/qdrant_restore.sh
 **/coverage/
 **/.nyc_output/
 **/.vite/
+
+# Local agent/dev scaffolding (skills, agents, steering) — not part of the repo
+
+# Windows Zone.Identifier streams (created when downloading files on Windows)
+*:Zone.Identifier
+
+# Local one-off audit/research artifacts
+SWARM_AUDIT_REPORT.md
+rockfresh-autoresearch-summary-and-implementation-prompt.md
+
+# codeindexer local config
+.indexer.toml

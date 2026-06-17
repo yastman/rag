@@ -212,6 +212,51 @@ class TestRetrieveToolRetrievalServiceSeam:
         assert result == [{"id": "pt1", "score": 0.8, "text": "doc content"}]
 
     @pytest.mark.asyncio
+    async def test_array_like_dense_does_not_raise(self):
+        """Array-like dense vector must not trigger __bool__ (numpy ValueError fix, #2574)."""
+
+        class _ArrayLike:
+            """Minimal array-like that raises on bool() like numpy arrays do."""
+
+            def __init__(self, data: list):
+                self._data = data
+
+            def __bool__(self):
+                raise ValueError("The truth value of an array is ambiguous")
+
+            def __iter__(self):
+                return iter(self._data)
+
+            def __len__(self):
+                return len(self._data)
+
+        async def embed(query: str):
+            emb = MagicMock()
+            emb.dense = _ArrayLike([0.1, 0.2, 0.3])
+            emb.sparse = None
+            emb.colbert = None
+            return emb
+
+        service = MagicMock()
+        service.retrieve_vectors = AsyncMock(return_value=[{"id": "1", "score": 0.9}])
+
+        from telegram_bot.graph.tools import retrieve as retrieve_module
+
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                retrieve_module,
+                "RetrievalService",
+                MagicMock(return_value=service),
+            )
+            tool = make_retrieve_tool(qdrant=MagicMock(), embed_query=embed)
+            # Must not raise ValueError
+            result = await tool(query="test", k=5)
+
+        assert result == [{"id": "1", "score": 0.9}]
+        request = service.retrieve_vectors.await_args.args[0]
+        assert request.dense_vector != []  # passed through as-is, not replaced with []
+
+    @pytest.mark.asyncio
     async def test_retrieval_service_failure_returns_empty_list(self):
         async def embed(query: str):
             emb = MagicMock()
