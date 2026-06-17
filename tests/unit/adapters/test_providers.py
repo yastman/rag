@@ -8,9 +8,9 @@ import pytest
 from litellm.exceptions import AuthenticationError, RateLimitError, Timeout
 
 from src.adapters.embeddings import (
+    BgeM3EmbeddingProvider,
     LocalBgeM3Provider,
     OpenAIEmbeddingProvider,
-    ServiceBgeM3Provider,
     get_embeddings_provider,
 )
 from src.adapters.llm import (
@@ -173,13 +173,13 @@ def test_llm_factory():
 # Service and OpenAI provider basic unit tests
 @pytest.mark.asyncio
 async def test_service_bge_m3_provider():
-    """Verify that ServiceBgeM3Provider forwards call to BGEM3Client."""
+    """Verify that BgeM3EmbeddingProvider forwards call to BGEM3Client (service_bge_m3 factory name)."""
     mock_client = MagicMock()
     mock_result = MagicMock()
     mock_result.vectors = [[0.9, 0.8]]
     mock_client.encode_dense = AsyncMock(return_value=mock_result)
 
-    provider = ServiceBgeM3Provider(client=mock_client)
+    provider = BgeM3EmbeddingProvider(client=mock_client)
     res = await provider.embed_texts(["test"])
     assert res == [[0.9, 0.8]]
     mock_client.encode_dense.assert_awaited_once_with(["test"])
