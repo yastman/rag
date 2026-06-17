@@ -122,7 +122,6 @@ async def run_assistant_pipeline(
             llm_model=llm_model,
             llm_call_count=1,
             rerank_applied=bool(rag_result.get("rerank_applied", False)),
-            proposed_crm_action=generation_result.get("proposed_crm_action"),
         )
     except Exception as exc:
         result = AssistantResult(

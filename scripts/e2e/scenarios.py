@@ -295,15 +295,6 @@ SCENARIOS: list[TestScenario] = [
         expected_keywords=["квартир", "мор", "120"],
     ),
     TestScenario(
-        id="8.2",
-        name="Voice transcription + CRM lookup",
-        query="(voice) покажи мои сделки в crm",
-        group=TestGroup.VOICE_TRANSCRIPTION,
-        delivery="voice",
-        description="Voice message should transcribe and route to CRM tool path.",
-        expected_keywords=["сделк", "crm", "ID"],
-    ),
-    TestScenario(
         id="8.3",
         name="Voice transcription timeout handling",
         query="(voice) [simulate timeout]",

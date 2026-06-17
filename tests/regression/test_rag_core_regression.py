@@ -9,7 +9,6 @@ test-core tier.  They guard against regressions in:
   - cache-hit routing returning the cached response
   - error fallback shape (safe error text, error_type set)
   - latency_ms budget (field is populated and > 0)
-  - CRM / HITL action surfaces in proposed_crm_action
 
 Add this suite to make test-core by including tests/regression/ in that target.
 """
@@ -25,7 +24,6 @@ from unittest.mock import AsyncMock, patch
 
 from src.core.contracts import (
     CoreDependencies,
-    CrmAction,
 )
 from src.runtime.generation import GenerationResult
 
@@ -77,14 +75,13 @@ def _rag_mock(docs: list[dict], *, cache_hit: bool = False, response: str = "") 
     )
 
 
-def _gen_mock(text: str, crm_action: CrmAction | None = None) -> AsyncMock:
+def _gen_mock(text: str) -> AsyncMock:
     return AsyncMock(
         return_value=GenerationResult(
             payload={
                 "response": text,
                 "llm_provider_model": "test-model",
                 "usage_details": {"input": 5, "output": 10},
-                "proposed_crm_action": crm_action,
             }
         )
     )
@@ -354,59 +351,6 @@ class TestLatencyBudget:
         assert result.latency_ms < 500, (
             f"Mock pipeline latency {result.latency_ms}ms exceeds 500ms budget"
         )
-
-
-class TestCrmHitlSurfacing:
-    """CRM / HITL: proposed CRM action surfaces in AssistantResult."""
-
-    @pytest.mark.asyncio
-    async def test_proposed_crm_action_surfaced_from_generation(self) -> None:
-        """proposed_crm_action from generation must appear in AssistantResult."""
-        from src.core.assistant import run_assistant_request
-
-        crm_action = CrmAction(
-            action_type="schedule_viewing",
-            payload={"property_id": "sunny_beach_studio"},
-            summary="Запланировать просмотр студии в Sunny Beach",
-        )
-        rag = _rag_mock([_DOC_BEACH_STUDIO])
-        gen = _gen_mock("Для записи на просмотр требуется подтверждение.", crm_action=crm_action)
-
-        with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="CRM"),
-            patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
-            patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
-        ):
-            result = await run_assistant_request(
-                "Хочу записаться на просмотр",
-                collection="test_collection",
-                dependencies=_fake_deps(),
-            )
-
-        assert result.proposed_crm_action is not None
-        assert result.proposed_crm_action.action_type == "schedule_viewing"
-        assert "sunny_beach_studio" in result.proposed_crm_action.payload.get("property_id", "")
-
-    @pytest.mark.asyncio
-    async def test_no_crm_action_when_generation_returns_none(self) -> None:
-        """proposed_crm_action must be None when generation does not produce one."""
-        from src.core.assistant import run_assistant_request
-
-        rag = _rag_mock([_DOC_SERVICES])
-        gen = _gen_mock("Уборка стоит 25 EUR.", crm_action=None)
-
-        with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
-            patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
-            patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
-        ):
-            result = await run_assistant_request(
-                "Сколько стоит уборка?",
-                collection="test_collection",
-                dependencies=_fake_deps(),
-            )
-
-        assert result.proposed_crm_action is None
 
 
 class TestMultipleDocRetrieval:

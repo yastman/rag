@@ -74,6 +74,8 @@ def build_agent_tools(
     base_tools: list[Any] = [rag_search, apartment_search]
 
     if role == "manager":
+        from .manager_tools import build_tools_for_role
+
         manager_tools: list[Any] = []
 
         if history_service is not None:

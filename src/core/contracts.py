@@ -69,12 +69,6 @@ class LLMProvider(Protocol):
     async def generate(self, *args: Any, **kwargs: Any) -> str: ...
 
 
-class CrmClientProtocol(Protocol):
-    """Optional CRM dependency; implementations must keep writes behind HITL."""
-
-    async def propose_action(self, *args: Any, **kwargs: Any) -> CrmAction | None: ...
-
-
 class TelemetryLogger(Protocol):
     """SDK-friendly telemetry callback surface for product events."""
 
@@ -92,17 +86,7 @@ class CoreDependencies:
     reranker: RerankerProvider | None = None
     llm: LLMProvider | None = None
     config: object | None = None
-    crm: CrmClientProtocol | None = None
     telemetry: TelemetryLogger | None = None
-
-
-@dataclass
-class CrmAction:
-    """Intent for a proposed CRM action, awaiting explicit confirmation."""
-
-    action_type: str
-    payload: dict[str, Any]
-    summary: str
 
 
 @dataclass
@@ -118,7 +102,6 @@ class AssistantResult:
     latency_ms: float = 0.0
     error_type: str | None = None
     error_message: str | None = None
-    proposed_crm_action: CrmAction | None = None
     request_id: str = ""
     cache_hit: bool = False
     llm_model: str | None = None
@@ -140,8 +123,6 @@ __all__ = [
     "AssistantResult",
     "CacheProvider",
     "CoreDependencies",
-    "CrmAction",
-    "CrmClientProtocol",
     "EmbeddingProvider",
     "LLMProvider",
     "QdrantClientProtocol",

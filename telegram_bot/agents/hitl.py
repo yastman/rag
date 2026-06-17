@@ -1,4 +1,4 @@
-"""Human-in-the-Loop (HITL) support for CRM write tools (#443).
+"""Human-in-the-Loop (HITL) support for tool confirmation (#443).
 
 Uses a local interrupt payload to pause execution and surface a confirmation
 payload to the Telegram bot. The bot sends an inline keyboard; when the user
@@ -75,12 +75,7 @@ def hitl_guard(
     return {"tool": tool_name, "preview": preview, "args": args, "action": "pending"}
 
 
-_TOOL_LABELS: dict[str, str] = {
-    "crm_create_lead": "Создать сделку",
-    "crm_update_lead": "Обновить сделку",
-    "crm_upsert_contact": "Создать/обновить контакт",
-    "crm_update_contact": "Обновить контакт",
-}
+_TOOL_LABELS: dict[str, str] = {}
 
 
 def format_hitl_preview(tool_name: str, args: dict) -> str:

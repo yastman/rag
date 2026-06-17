@@ -16,7 +16,6 @@ from __future__ import annotations
 from src.scoring import (
     compute_checkpointer_overhead_proxy_ms,
     score,
-    write_crm_scores,
     write_history_scores,
     write_langfuse_scores,
 )
@@ -25,7 +24,6 @@ from src.scoring import (
 __all__ = [
     "compute_checkpointer_overhead_proxy_ms",
     "score",
-    "write_crm_scores",
     "write_history_scores",
     "write_langfuse_scores",
 ]

@@ -22,7 +22,6 @@ class BotContext:
     telegram_user_id: int
     session_id: str
     language: str
-    kommo_client: Any | None  # KommoClient (lazy import to avoid circular)
     history_service: Any  # HistoryService
     embeddings: Any  # BGEM3HybridEmbeddings
     sparse_embeddings: Any  # BGEM3SparseEmbeddings
@@ -33,7 +32,6 @@ class BotContext:
     content_filter_enabled: bool = True
     guard_mode: str = "hard"
     role: str = "client"
-    manager_id: int | None = None  # Kommo responsible_user_id — CRM residue, remove with #2625
     # Set to True by tools that deliver response directly (e.g. streaming) to prevent
     # bot.py from sending the message a second time (#428).
     response_sent: bool = False

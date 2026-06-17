@@ -14,17 +14,10 @@ if TYPE_CHECKING:
     from .bge_m3_client import BGEM3Client, BGEM3SyncClient
     from .colbert_reranker import ColbertRerankerService
     from .history_service import HistoryService
-    from .lead_scoring_store import LeadScoringStore
     from .metrics import PipelineMetrics
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
     from .query_preprocessor import HyDEGenerator, QueryPreprocessor
-    from .session_summary import (
-        SessionSummary,
-        check_responses_parse_compat,
-        format_summary_as_note,
-        generate_summary,
-    )
     from .small_to_big import ExpandedChunk, SmallToBigService
     from .vectorizers import BgeM3CacheVectorizer
     from .voyage import VoyageService
@@ -37,21 +30,15 @@ __all__ = [
     "ExpandedChunk",
     "HistoryService",
     "HyDEGenerator",
-    "LeadScoringStore",
     "PipelineMetrics",
     "QdrantService",
     "QueryAnalyzer",
     "QueryPreprocessor",
-    "SessionSummary",
     "SmallToBigService",
     "VoyageService",
-    "check_responses_parse_compat",
-    "format_summary_as_note",
     "generate_response",
-    "generate_summary",
 ]
 
-# Lazy import mapping
 _IMPORT_MAP = {
     "BGEM3Client": ".bge_m3_client",
     "BGEM3SyncClient": ".bge_m3_client",
@@ -59,17 +46,12 @@ _IMPORT_MAP = {
     "ExpandedChunk": ".small_to_big",
     "HistoryService": ".history_service",
     "HyDEGenerator": ".query_preprocessor",
-    "LeadScoringStore": ".lead_scoring_store",
-    "SessionSummary": ".session_summary",
-    "check_responses_parse_compat": ".session_summary",
     "PipelineMetrics": ".metrics",
     "QdrantService": ".qdrant",
     "QueryAnalyzer": ".query_analyzer",
     "QueryPreprocessor": ".query_preprocessor",
     "SmallToBigService": ".small_to_big",
     "VoyageService": ".voyage",
-    "format_summary_as_note": ".session_summary",
-    "generate_summary": ".session_summary",
 }
 
 

@@ -10,7 +10,6 @@ from src.core.contracts import (
     AssistantRequest,
     AssistantResult,
     CoreDependencies,
-    CrmAction,
     UserContext,
 )
 from src.core.telemetry import emit_product_event
@@ -85,7 +84,6 @@ __all__ = [
     "AssistantRequest",
     "AssistantResult",
     "CoreDependencies",
-    "CrmAction",
     "UserContext",
     "run_assistant_request",
 ]

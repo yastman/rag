@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import logging
 import operator
@@ -252,24 +251,6 @@ def build_funnel_filters(
 
 
 logger = logging.getLogger(__name__)
-_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
-
-
-async def _persist_funnel_lead_score_safe(**kwargs: Any) -> None:
-    """Persist/sync funnel score without breaking callback flow."""
-    try:
-        from telegram_bot.services.funnel_lead_scoring import persist_and_sync_funnel_lead_score
-
-        await persist_and_sync_funnel_lead_score(**kwargs)
-    except Exception:
-        logger.exception("Failed to persist/sync funnel lead score")
-
-
-def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
-    """Run heavy side effects in the background to keep callback responsive."""
-    task = asyncio.create_task(_persist_funnel_lead_score_safe(**kwargs))
-    _BACKGROUND_TASKS.add(task)
-    task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 # --- Getters (provide data to windows) ---
@@ -824,28 +805,6 @@ async def on_summary_search(
     data.pop("scroll_start_from", None)
     data.pop("scroll_seen_ids", None)
     data["scroll_page"] = 1
-
-    # Persist lead score (fire-and-forget)
-    try:
-        from telegram_bot.bot import make_session_id
-
-        if callback.from_user is not None:
-            _spawn_persist_funnel_lead_score(
-                telegram_user_id=callback.from_user.id,
-                session_id=make_session_id("chat", callback.message.chat.id)
-                if callback.message is not None
-                else make_session_id("chat", callback.from_user.id),
-                property_type=data.get("property_type"),
-                budget=data.get("budget"),
-                timeline=None,
-                user_service=manager.middleware_data.get("user_service"),
-                pg_pool=manager.middleware_data.get("pg_pool"),
-                lead_scoring_store=manager.middleware_data.get("lead_scoring_store"),
-                kommo_client=manager.middleware_data.get("kommo_client"),
-                config=manager.middleware_data.get("bot_config"),
-            )
-    except Exception:
-        logger.exception("Failed to schedule funnel lead score persistence")
 
     # Grab the current dialog message before closing the dialog context.
     msg = callback.message

@@ -291,25 +291,6 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
             value=float(result["checkpointer_op_count"]),
         )
 
-    # --- Nurturing + funnel analytics (#390) ---
-    if "nurturing_batch_size" in result:
-        score(
-            lf, trace_id, name="nurturing_batch_size", value=float(result["nurturing_batch_size"])
-        )
-    if "nurturing_sent_count" in result:
-        score(
-            lf, trace_id, name="nurturing_sent_count", value=float(result["nurturing_sent_count"])
-        )
-    if "funnel_conversion_rate" in result:
-        score(
-            lf,
-            trace_id,
-            name="funnel_conversion_rate",
-            value=float(result["funnel_conversion_rate"]),
-        )
-    if "funnel_dropoff_rate" in result:
-        score(lf, trace_id, name="funnel_dropoff_rate", value=float(result["funnel_dropoff_rate"]))
-
     # --- Source attribution (#225) ---
     sources_count = int(result.get("sources_count", 0) or 0)
     score(
@@ -348,55 +329,3 @@ def write_history_scores(
     empty = 1.0 if count == 0 else 0.0
     score(lf, trace_id, name="history_search_empty", value=empty, data_type="NUMERIC")
     score(lf, trace_id, name="history_backend", value=backend, data_type="CATEGORICAL")
-
-
-def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
-    """Write CRM tool usage scores from agent result messages (#440).
-
-    Inspects ToolMessage objects for CRM tool calls (name starts with ``crm_``),
-    counts successes vs errors, and writes 4 Langfuse scores.
-
-    Args:
-        lf: Langfuse client.
-        messages: Agent result message list (HumanMessage, AIMessage, ToolMessage, ...).
-        trace_id: Explicit trace ID for score isolation.
-    """
-    if not trace_id:
-        return
-
-    crm_total = 0
-    crm_success = 0
-    crm_error = 0
-
-    for msg in messages:
-        if getattr(msg, "type", None) != "tool":
-            continue
-        name = getattr(msg, "name", "") or ""
-        if not name.startswith("crm_"):
-            continue
-
-        crm_total += 1
-        status = str(getattr(msg, "status", "") or "").lower()
-        if status == "error":
-            crm_error += 1
-            continue
-        if status == "success":
-            crm_success += 1
-            continue
-
-        # Fallback for legacy/adapter messages where status is absent.
-        content = getattr(msg, "content", "") or ""
-        content_text = content if isinstance(content, str) else str(content)
-        if (
-            content_text.startswith("Ошибка")
-            or "Ошибка при" in content_text
-            or content_text == "CRM недоступен. Обратитесь к администратору."
-        ):
-            crm_error += 1
-        else:
-            crm_success += 1
-
-    score(lf, trace_id, name="crm_tool_used", value=1 if crm_total > 0 else 0, data_type="BOOLEAN")
-    score(lf, trace_id, name="crm_tools_count", value=float(crm_total))
-    score(lf, trace_id, name="crm_tools_success", value=float(crm_success))
-    score(lf, trace_id, name="crm_tools_error", value=float(crm_error))
