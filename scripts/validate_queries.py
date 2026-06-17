@@ -79,7 +79,7 @@ PROPERTY_QUERIES: list[ValidationQuery] = [
     ),
 ]
 
-# Criminal Code queries (subset from src/evaluation/smoke_test.py)
+# Criminal Code queries (subset from archive/evaluation/smoke_test.py)
 LEGAL_QUERIES: list[ValidationQuery] = [
     # HARD (5)
     ValidationQuery(

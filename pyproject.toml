@@ -125,15 +125,9 @@ ingest = [
     "fastembed>=0.7.4",
 ]
 
-# Evaluation tools that do not pull the removed LangChain stack.
-eval = [
-    "datasets>=3.0.0",
-    "pandas>=2.0.0",
-]
-
 # All optional dependencies
 all = [
-    "contextual-rag[core,telegram,providers,docs,voice,eval,ingest,ml-local,observability,ui,mini-app]",
+    "contextual-rag[core,telegram,providers,docs,voice,ingest,ml-local,observability,ui,mini-app]",
 ]
 
 # =============================================================================
@@ -298,7 +292,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Per-file ignores
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "E402"]  # Allow unused imports and late imports
-"evaluation/*.py" = ["T201"]      # Allow print() in evaluation scripts
 "test_*.py" = ["E402", "T201", "SIM117"]  # Allow late imports, print(), nested with in tests
 "tests/**/*.py" = ["E402", "T201", "SIM117"]  # Same for tests/ directory
 # Per-file ASYNC240 ignores for src/ingestion/docling_client.py and
@@ -312,7 +305,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 # Import sorting configuration (isort replacement)
 [tool.ruff.lint.isort]
-known-first-party = ["config", "evaluation", "src", "telegram_bot"]
+known-first-party = ["config", "src", "telegram_bot"]
 force-single-line = false
 lines-after-imports = 2
 
@@ -368,7 +361,7 @@ disallow_untyped_defs = true
 # Run: bandit -r . -c pyproject.toml
 
 [tool.bandit]
-exclude_dirs = [".venv", "tests", "evaluation", "scripts/archive", "__pycache__"]
+exclude_dirs = [".venv", "tests", "archive", "scripts/archive", "__pycache__"]
 skips = ["B101"]  # Skip assert_used (common in tests)
 
 # =============================================================================
@@ -463,13 +456,13 @@ omit = [
     # Scripts directory (not production code)
     "scripts/*",
     "scripts/**/*",
-    # Evaluation scripts (not production code)
-    "src/evaluation/create_golden_set.py",
-    "src/evaluation/generate_test_queries.py",
-    "src/evaluation/run_ab_test.py",
-    "src/evaluation/smoke_test.py",
-    "src/evaluation/search_engines_rerank.py",
-    "src/evaluation/langfuse_integration.py",
+    # Evaluation scripts (archived, not production code)
+    "archive/evaluation/create_golden_set.py",
+    "archive/evaluation/generate_test_queries.py",
+    "archive/evaluation/run_ab_test.py",
+    "archive/evaluation/smoke_test.py",
+    "archive/evaluation/search_engines_rerank.py",
+    "archive/evaluation/langfuse_integration.py",
     # One-off setup scripts
     "telegram_bot/setup_qdrant_indexes.py",
     # Test/debug scripts in wrong location
