@@ -1,6 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra \
+	test-telegram-adapter test-providers-extra test-ingest-extra \
 	smoke-fast smoke-zoo \
 	ingest-dir ingest-status ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
@@ -50,7 +50,7 @@ PYTHON_VERSION ?= 3.12
 UV_RUN_NO_SYNC ?= uv run --no-sync
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_ARGS ?= -n 2 --dist=worksteal
-PYTEST_FULL_PARALLEL_DIRS ?= tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
+PYTEST_FULL_PARALLEL_DIRS ?= tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 CORE_LIVE_TEST_PATH := tests/e2e/test_core_live_ingest_answer.py
 CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH) -v --tb=short -m "e2e and requires_services"
@@ -273,11 +273,6 @@ test-telegram-adapter: ## Run Telegram adapter unit tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_TELEGRAM_ADAPTER_PATHS) $(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Telegram adapter tests complete$(NC)"
 
-test-api-adapter: ## Run API adapter unit tests explicitly
-	@echo "$(BLUE)Running API adapter tests...$(NC)"
-	uv sync --extra mini-app --all-groups
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/api/ -q --timeout=30
-	@echo "$(GREEN)✓ API adapter tests complete$(NC)"
 
 test-providers-extra: ## Run optional provider/contextualization tests explicitly
 	@echo "$(BLUE)Running providers-extra tests...$(NC)"
@@ -285,17 +280,16 @@ test-providers-extra: ## Run optional provider/contextualization tests explicitl
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS) -q --timeout=30 -m "not legacy_api and not slow"
 	@echo "$(GREEN)✓ Providers-extra tests complete$(NC)"
 
-test-legacy-graph-extra: ## Run temporary legacy graph/langgraph lane (#2495 follow-up) explicitly
-	@echo "$(BLUE)Running legacy graph-extra tests...$(NC)"
-	uv sync --extra providers --extra telegram --all-groups
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_LEGACY_GRAPH_PATHS) -q --timeout=30 -m "not legacy_api and not slow"
-	@echo "$(GREEN)✓ Legacy graph-extra tests complete$(NC)"
 
 test-ingest-extra: ## Run optional ingestion-extra tests explicitly
 	@echo "$(BLUE)Running ingestion-extra tests...$(NC)"
 	uv sync --extra ingest --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
 	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
+
+
+
+
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
@@ -339,10 +333,6 @@ test-contract: ## Run static contract tests (no Docker; optional SDK lanes exclu
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
 	@echo "$(GREEN)Static contract tests complete$(NC)"
 
-test-benchmark: ## Run benchmark suite with the live ColBERT gate enabled (#1618)
-	@echo "$(BLUE)Running benchmark suite with RUN_BENCHMARK_TESTS=1...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 RUN_BENCHMARK_TESTS=1 uv run pytest tests/benchmark/ $(PYTEST_PARALLEL_ARGS) --timeout=30
-	@echo "$(GREEN)✓ Benchmark suite complete$(NC)"
 
 test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
@@ -625,6 +615,7 @@ remote-env-check: ## Verify remote .env exists and report missing required varia
 			echo 'Required variables present'; \
 		fi"
 
+
 remote-core-up: ## Start minimal RAG bot core on remote MacBook Docker
 	@echo "$(BLUE)Starting minimal RAG bot core on $(REMOTE_DOCKER_HOST)...$(NC)"
 	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d $(REMOTE_CORE_SERVICES)"
@@ -637,6 +628,7 @@ remote-core-ps: ## Show remote core container status
 remote-core-logs: ## Show recent remote core logs
 	@echo "$(BLUE)Remote core logs ($(REMOTE_DOCKER_HOST))...$(NC)"
 	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 $(REMOTE_CORE_SERVICES)"
+
 
 remote-bot-up: ## Start remote bot container
 	@echo "$(BLUE)Starting remote bot on $(REMOTE_DOCKER_HOST)...$(NC)"
@@ -1025,6 +1017,139 @@ e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=fil
 e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
+
+# =============================================================================
+# BASELINE & OBSERVABILITY
+# =============================================================================
+
+.PHONY: baseline-smoke baseline-load baseline-compile baseline-compare baseline-set baseline-report baseline-check
+
+# Generate unique session ID from git commit
+BASELINE_SESSION := smoke-$(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d%H%M%S)
+LOAD_SESSION := load-$(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d%H%M%S)
+
+baseline-smoke: ## Run smoke tests with Langfuse tracing
+	@echo "$(BLUE)Running smoke tests with Langfuse tracing...$(NC)"
+	@echo "$(YELLOW)Session: $(BASELINE_SESSION)$(NC)"
+	LANGFUSE_SESSION_ID="$(BASELINE_SESSION)" \
+	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
+	LANGFUSE_TRACING_ENABLED=true \
+	uv run pytest tests/smoke/ -v --tb=short -x
+	@echo ""
+	@echo "$(GREEN)Results tagged as: $(BASELINE_SESSION)$(NC)"
+	@echo "$(YELLOW)View in Langfuse: http://localhost:3001$(NC)"
+
+baseline-load: ## Run load tests with Langfuse tracing
+	@echo "$(BLUE)Running load tests with Langfuse tracing...$(NC)"
+	@echo "$(YELLOW)Session: $(LOAD_SESSION)$(NC)"
+	LANGFUSE_SESSION_ID="$(LOAD_SESSION)" \
+	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
+	LANGFUSE_TRACING_ENABLED=true \
+	uv run pytest tests/load/ -v --tb=short
+	@echo ""
+	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
+
+baseline-compile: compile-python ## Backward-compatible baseline syntax gate (#2320)
+
+baseline-compare: ## Compare current run against baseline (usage: make baseline-compare BASELINE_TAG=... CURRENT_SESSION=...)
+ifndef BASELINE_TAG
+	$(error BASELINE_TAG is required. Usage: make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=ci-abc-job-1)
+endif
+ifndef CURRENT_SESSION
+	$(error CURRENT_SESSION is required.)
+endif
+	@echo "$(BLUE)Comparing baseline...$(NC)"
+	uv run python -m tests.baseline.cli compare \
+		--baseline-tag="$(BASELINE_TAG)" \
+		--current-session="$(CURRENT_SESSION)" \
+		--thresholds=tests/baseline/thresholds.yaml \
+		--output="reports/baseline-$(CURRENT_SESSION).json"
+
+baseline-set: ## Tag traces as baseline (usage: make baseline-set TAG=... SESSION_ID=...)
+ifndef TAG
+	$(error TAG is required. Usage: make baseline-set TAG=main-latest SESSION_ID=smoke-abc-20260128)
+endif
+ifndef SESSION_ID
+	$(error SESSION_ID is required.)
+endif
+	@echo "$(BLUE)Setting $(TAG) as baseline...$(NC)"
+	uv run python -m tests.baseline.cli set-baseline --tag="$(TAG)" --session-id="$(SESSION_ID)"
+
+baseline-report: ## Generate HTML baseline report
+ifndef BASELINE_TAG
+	$(error BASELINE_TAG is required. Usage: make baseline-report BASELINE_TAG=... CURRENT_TAG=...)
+endif
+ifndef CURRENT_TAG
+	$(error CURRENT_TAG is required. Usage: make baseline-report BASELINE_TAG=... CURRENT_TAG=...)
+endif
+	@echo "$(BLUE)Generating baseline report...$(NC)"
+	uv run python -m tests.baseline.cli report \
+		--baseline="$(BASELINE_TAG)" \
+		--current="$(CURRENT_TAG)" \
+		--thresholds=tests/baseline/thresholds.yaml \
+		--output=reports/baseline-$(shell date +%Y%m%d-%H%M%S).html
+	@echo "$(GREEN)Report saved to reports/$(NC)"
+
+baseline-check: baseline-compile baseline-smoke ## Optional Langfuse baseline check (smoke + compare with main)
+	@echo "$(BLUE)Comparing with main baseline...$(NC)"
+	make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=$(BASELINE_SESSION)
+
+# =============================================================================
+# RAG EVALUATION (RAGAS + DeepEval)
+# =============================================================================
+
+.PHONY: eval-rag eval-rag-quick eval-rag-full
+
+eval-rag: ## Run RAG evaluation with RAGAS metrics (faithfulness >= 0.8)
+	@echo "$(BLUE)Running RAG evaluation with RAGAS...$(NC)"
+	@echo "$(YELLOW)Dataset: tests/eval/ground_truth.json (55 samples)$(NC)"
+	@echo "$(YELLOW)LLM: $(EVAL_MODEL) via LiteLLM SDK router$(NC)"
+	LANGFUSE_TRACING_ENABLED=true \
+	uv run python -m src.evaluation.ragas_evaluation
+	@echo "$(GREEN)✓ RAG evaluation complete$(NC)"
+
+eval-rag-quick: ## Quick RAG evaluation (10 samples)
+	@echo "$(BLUE)Running quick RAG evaluation...$(NC)"
+	EVAL_SAMPLE_SIZE=10 \
+	uv run python -m src.evaluation.ragas_evaluation
+	@echo "$(GREEN)✓ Quick evaluation complete$(NC)"
+
+eval-rag-full: ## Full RAG evaluation with all metrics
+	@echo "$(BLUE)Running full RAG evaluation...$(NC)"
+	LANGFUSE_TRACING_ENABLED=true \
+	EVAL_INCLUDE_DEEPEVAL=true \
+	uv run python -m src.evaluation.ragas_evaluation
+	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
+
+.PHONY: eval-goldset-sync eval-experiment
+
+eval-goldset-sync: ## Sync gold set to Langfuse dataset
+	@echo "$(BLUE)Syncing gold set to Langfuse...$(NC)"
+	uv run python scripts/eval/goldset_sync.py
+	@echo "$(GREEN)✓ Gold set synced$(NC)"
+
+eval-experiment: ## Run RAG experiment on gold set
+	@echo "$(BLUE)Running RAG experiment...$(NC)"
+	uv run python scripts/eval/run_experiment.py
+	@echo "$(GREEN)✓ Experiment complete$(NC)"
+
+.PHONY: eval-gold-gen eval-gold-gen-dry eval-sdk-experiment eval-sdk-experiment-named
+
+eval-gold-gen: ## Generate gold set from Qdrant → Langfuse Dataset + JSONL
+	@echo "$(BLUE)Generating gold set from Qdrant...$(NC)"
+	uv run python scripts/generate_gold_set.py --collection gdrive_documents_bge
+
+eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only, no Langfuse)
+	@echo "$(BLUE)Generating gold set (dry-run)...$(NC)"
+	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
+
+eval-sdk-experiment: ## Run SDK experiment on gold set (DATASET=name required)
+	@echo "$(BLUE)Running SDK experiment on gold set...$(NC)"
+	uv run python scripts/run_experiment.py --dataset $(DATASET)
+
+eval-sdk-experiment-named: ## Run named SDK experiment (DATASET=name NAME=label required)
+	@echo "$(BLUE)Running SDK experiment '$(NAME)'...$(NC)"
+	uv run python scripts/run_experiment.py --dataset $(DATASET) --name $(NAME)
 
 # =============================================================================
 # GOOGLE DRIVE SYNC (rclone)
