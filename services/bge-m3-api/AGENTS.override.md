@@ -7,7 +7,7 @@
 ## Local Rules
 - Preserve the `/health`, `/encode`, and `/rerank` endpoint contracts and Prometheus metric names.
 - Keep model loading, warmup, and inference lifecycle in `app.py`; configuration in `config.py`.
-- Pin model weights and runtime deps via `pyproject.toml` / `requirements.txt` / `uv.lock` — do not drift between them.
+- Pin model weights and runtime deps via `pyproject.toml` / `uv.lock` — do not drift between them.
 
 ## Required Validation
 - Sync deps locally: `uv sync` (in `services/bge-m3-api/`).
