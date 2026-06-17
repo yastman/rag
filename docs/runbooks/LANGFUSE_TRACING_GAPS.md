@@ -106,7 +106,7 @@ curl -s ${LANGFUSE_HOST}/api/public/health | jq
 ```
 
 If `LANGFUSE_HOST` points to local Langfuse (for example `http://localhost:3001`) and health check fails, either:
-- start the local ML/Langfuse stack (`make docker-core-up`), or
+- start the local ML/Langfuse stack (`# archived — Langfuse stack removed (ARCH-08)`, or
 - disable Langfuse tracing for native local run (`unset LANGFUSE_HOST` or `LANGFUSE_TRACING_ENABLED=false`).
 
 Langfuse is part of the `ml` profile with ClickHouse, MinIO, and
