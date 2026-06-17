@@ -173,7 +173,7 @@ If `observations list` returns 404 in your deployment, continue with `traces get
 > the high-value families. The complete static census of every
 > `@observe(name=...)` declaration that ships with the codebase
 > (~190 named spans across 11 surface areas) is recorded in
-> [`docs/observability/TRACE_COVERAGE_AUDIT_2168.md`](../observability/TRACE_COVERAGE_AUDIT_2168.md)
+> [`docs/observability/TRACE_COVERAGE_AUDIT_2168.md`](../../observability/TRACE_COVERAGE_AUDIT_2168.md)
 > and re-computable from `git grep '@observe(\s*name='`. When extending
 > the matrix, prefer adding rows for families that have observed runtime
 > failure modes; the audit document is the source of truth for "what

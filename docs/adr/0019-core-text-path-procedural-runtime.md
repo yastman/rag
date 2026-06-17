@@ -6,7 +6,7 @@
 
 **Closes:** [#2403](https://github.com/yastman/rag/issues/2403) (`CORE-018`)
 
-**Related:** [#2386](https://github.com/yastman/rag/issues/2386) (`CORE-005`), [#2389](https://github.com/yastman/rag/issues/2389) (`CORE-008`), [ADR-0015](0015-sdk-native-baseline.md), [ADR-0010](0010-voice-path-create-agent-migration-plan.md)
+**Related:** [#2386](https://github.com/yastman/rag/issues/2386) (`CORE-005`), [#2389](https://github.com/yastman/rag/issues/2389) (`CORE-008`), [ADR-0015](0015-sdk-native-baseline.md), [ADR-0010](../archive/adr/0010-voice-path-create-agent-migration-plan.md)
 
 ## Context
 

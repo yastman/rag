@@ -153,5 +153,5 @@ All queries are traced in Langfuse with:
 ## Related Documentation
 
 - [RAG API Contract](RAG_API.md)
-- [Pipeline Overview](PIPELINE_OVERVIEW.md)
-- [Bot Architecture](BOT_ARCHITECTURE.md)
+- [Pipeline Overview](../PIPELINE_OVERVIEW.md)
+- [Bot Architecture](../BOT_ARCHITECTURE.md)

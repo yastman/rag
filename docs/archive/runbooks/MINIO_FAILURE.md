@@ -13,11 +13,11 @@ Use this runbook when MinIO alerts fire from `docker/monitoring/rules/extended-s
 
 | Alert | Severity | Source |
 |---|---|---|
-| `MinioDown` | critical | [`extended-services.yaml`](../../docker/monitoring/rules/extended-services.yaml) |
-| `MinioDiskFull` | critical | [`extended-services.yaml`](../../docker/monitoring/rules/extended-services.yaml) |
-| `MinioCorruption` | critical | [`extended-services.yaml`](../../docker/monitoring/rules/extended-services.yaml) |
-| `MinioHealingFailed` | warning | [`extended-services.yaml`](../../docker/monitoring/rules/extended-services.yaml) |
-| `MinioError` | warning | [`extended-services.yaml`](../../docker/monitoring/rules/extended-services.yaml) |
+| `MinioDown` | critical | [`extended-services.yaml`](../../../docker/monitoring/rules/extended-services.yaml) |
+| `MinioDiskFull` | critical | [`extended-services.yaml`](../../../docker/monitoring/rules/extended-services.yaml) |
+| `MinioCorruption` | critical | [`extended-services.yaml`](../../../docker/monitoring/rules/extended-services.yaml) |
+| `MinioHealingFailed` | warning | [`extended-services.yaml`](../../../docker/monitoring/rules/extended-services.yaml) |
+| `MinioError` | warning | [`extended-services.yaml`](../../../docker/monitoring/rules/extended-services.yaml) |
 
 ## Service / Container Map
 
@@ -25,7 +25,7 @@ Use this runbook when MinIO alerts fire from `docker/monitoring/rules/extended-s
 |---|---|
 | `minio` | `dev-minio-1`, `dev_minio_1` |
 
-> Endpoints, ports, profiles: [`DOCKER.md`](../../DOCKER.md). Local dev: [`docs/LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md).
+> Endpoints, ports, profiles: [`DOCKER.md`](../../../DOCKER.md). Local dev: [`docs/LOCAL-DEVELOPMENT.md`](../../LOCAL-DEVELOPMENT.md).
 
 ## Fast-Path Diagnosis (read-only)
 
@@ -97,9 +97,9 @@ If MinIO is healthy from the host but unreachable from inside the network, treat
 
 | Component | Path |
 |---|---|
-| Compose definitions | [`compose.yml`](../../compose.yml), [`compose.dev.yml`](../../compose.dev.yml) |
-| Alert rules | [`docker/monitoring/rules/extended-services.yaml`](../../docker/monitoring/rules/extended-services.yaml) |
-| Langfuse storage env contract | env vars `LANGFUSE_S3_*` (see [`compose.dev.yml`](../../compose.dev.yml); never echo values) |
+| Compose definitions | [`compose.yml`](../../../compose.yml), [`compose.dev.yml`](../../../compose.dev.yml) |
+| Alert rules | [`docker/monitoring/rules/extended-services.yaml`](../../../docker/monitoring/rules/extended-services.yaml) |
+| Langfuse storage env contract | env vars `LANGFUSE_S3_*` (see [`compose.dev.yml`](../../../compose.dev.yml); never echo values) |
 | Langfuse runbook for downstream effects | [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
 
 ## Logs and Artifacts
@@ -158,4 +158,4 @@ If MinIO is healthy from the host but unreachable from inside the network, treat
 
 - [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md)
 - [`POSTGRESQL_WAL_RECOVERY.md`](POSTGRESQL_WAL_RECOVERY.md)
-- [`DOCKER.md`](../../DOCKER.md)
+- [`DOCKER.md`](../../../DOCKER.md)

@@ -74,7 +74,7 @@ optional.
 PII scrubbing is enforced in code (`send_default_pii=False` plus a project
 `before_send` hook that runs `PIIRedactor.mask` over event payloads). It is
 not configurable via env on purpose — see
-[`docs/RAG_QUALITY_SCORES.md`](../RAG_QUALITY_SCORES.md) and the umbrella
+[`docs/RAG_QUALITY_SCORES.md`](../../RAG_QUALITY_SCORES.md) and the umbrella
 issue for the safety contract.
 
 ## Local / test setup
@@ -164,5 +164,5 @@ project) are recommended so events from staging do not bleed into production.
 * Runtime tags / trace context: [#2061](https://github.com/yastman/rag/issues/2061)
 * Breadcrumbs: [#2062](https://github.com/yastman/rag/issues/2062)
 * End-to-end verification: [#2064](https://github.com/yastman/rag/issues/2064)
-* PII redaction utility: [`src/security/pii_redaction.py`](../../src/security/pii_redaction.py)
-* Existing observability runbooks: [`docs/runbooks/README.md`](../runbooks/README.md)
+* PII redaction utility: [`src/security/pii_redaction.py`](../../../src/security/pii_redaction.py)
+* Existing observability runbooks: [`docs/runbooks/README.md`](../../runbooks/README.md)

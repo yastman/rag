@@ -1,6 +1,6 @@
 # Archived Mini App browser tracing decision (#2273, #2430)
 
-The Telegram Mini App has been archived under [`../../archive/mini_app/`](../../archive/mini_app/) and is no longer part of the required runtime, Compose, CI, or observability path.
+The Telegram Mini App has been archived under [`../../../archive/mini_app/`](../../../archive/mini_app/) and is no longer part of the required runtime, Compose, CI, or observability path.
 
 ## Current decision
 
