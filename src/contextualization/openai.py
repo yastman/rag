@@ -1,9 +1,9 @@
 """OpenAI-based contextualization provider."""
 
-from langfuse import observe
-from langfuse.openai import AsyncOpenAI, OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from src.config import Settings
+from src.observability import observe
 
 from .base import ContextualizedChunk, ContextualizeProvider
 
