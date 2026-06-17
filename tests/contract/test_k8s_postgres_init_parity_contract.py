@@ -6,7 +6,7 @@ Closes #1402.
 Problem reproduced: ``docker/postgres/init/`` contains eight SQL bootstrap
 scripts (00, 02, 03, 04, 05, 06, 07, 08) that the Compose stack mounts into
 ``/docker-entrypoint-initdb.d/`` for first-boot Postgres initialization. The
-K8s ConfigMap at ``k8s/base/configmaps/postgres-init.yaml`` previously
+K8s ConfigMap at ``archive/k8s/base/configmaps/postgres-init.yaml`` previously
 embedded only 00, 02, 03 — leaving voice transcripts (04), real-estate CRM
 (05), lead scoring (06), nurturing analytics (07) and user favorites (08)
 schemas uncreated on K8s-deployed Postgres pods.
@@ -37,7 +37,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKER_INIT_DIR = REPO_ROOT / "docker" / "postgres" / "init"
-K8S_CONFIGMAP = REPO_ROOT / "k8s" / "base" / "configmaps" / "postgres-init.yaml"
+K8S_CONFIGMAP = REPO_ROOT / "archive" / "k8s" / "base" / "configmaps" / "postgres-init.yaml"
 
 # Scripts explicitly synchronized by issue #1402. Their ConfigMap value
 # must be byte-identical to the docker source.
@@ -102,7 +102,7 @@ def test_synced_script_content_matches_docker(script_name: str) -> None:
     data = _load_configmap()["data"]
     assert script_name in data, (
         f"{script_name} not found in ConfigMap data — sync the docker "
-        f"init script into k8s/base/configmaps/postgres-init.yaml"
+        f"init script into archive/k8s/base/configmaps/postgres-init.yaml"
     )
     k8s_content = data[script_name]
 

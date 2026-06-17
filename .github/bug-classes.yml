@@ -18,4 +18,4 @@ bug_classes:
   - id: tech-debt/archival
     description: Non-core surfaces moved to archive/ to reduce active repo footprint
     canonical_issue: "#2596"
-    guardrail: "no k8s/ at repo root; archive/k8s/ holds the manifests"
+    guardrail: "no langchain import under src/; mini_app only under archive/; no k8s/ at repo root"

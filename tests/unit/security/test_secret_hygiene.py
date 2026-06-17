@@ -173,7 +173,7 @@ def test_k8s_bot_redis_password_declared_before_redis_url():
     from pathlib import Path
 
     project_root = Path(__file__).parent.parent.parent.parent
-    deployment_file = project_root / "k8s" / "base" / "bot" / "deployment.yaml"
+    deployment_file = project_root / "archive" / "k8s" / "base" / "bot" / "deployment.yaml"
 
     if not deployment_file.exists():
         return
@@ -182,8 +182,10 @@ def test_k8s_bot_redis_password_declared_before_redis_url():
     redis_url_pos = content.find("- name: REDIS_URL")
     redis_password_pos = content.find("- name: REDIS_PASSWORD")
 
-    assert redis_url_pos != -1, "k8s/base/bot/deployment.yaml missing REDIS_URL env var"
-    assert redis_password_pos != -1, "k8s/base/bot/deployment.yaml missing REDIS_PASSWORD env var"
+    assert redis_url_pos != -1, "archive/k8s/base/bot/deployment.yaml missing REDIS_URL env var"
+    assert redis_password_pos != -1, (
+        "archive/k8s/base/bot/deployment.yaml missing REDIS_PASSWORD env var"
+    )
     assert redis_password_pos < redis_url_pos, (
         "REDIS_PASSWORD must be declared before REDIS_URL because Kubernetes "
         "expands $(REDIS_PASSWORD) only from previously defined env vars."
