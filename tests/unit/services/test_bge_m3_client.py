@@ -471,6 +471,77 @@ class TestBGEM3SyncClient:
         assert len(result.colbert_vecs) == 3
 
 
+class TestSharedParseHelpers:
+    """Tests for module-level _build_payload and _parse_* helpers."""
+
+    def test_build_payload_includes_all_fields(self):
+        from src.services.bge_m3_client import _build_payload
+
+        payload = _build_payload(["a", "b"], batch_size=8, max_length=256)
+        assert payload == {"texts": ["a", "b"], "batch_size": 8, "max_length": 256}
+
+    def test_parse_dense_response(self):
+        from src.services.bge_m3_client import DenseResult, _parse_dense_response
+
+        data = {"dense_vecs": [[0.1] * 1024, [0.2] * 1024], "processing_time": 0.05}
+        result = _parse_dense_response(data)
+        assert isinstance(result, DenseResult)
+        assert len(result.vectors) == 2
+        assert result.processing_time == 0.05
+
+    def test_parse_dense_response_missing_processing_time(self):
+        from src.services.bge_m3_client import _parse_dense_response
+
+        result = _parse_dense_response({"dense_vecs": [[0.1] * 1024]})
+        assert result.processing_time is None
+
+    def test_parse_sparse_response(self):
+        from src.services.bge_m3_client import SparseResult, _parse_sparse_response
+
+        data = {"lexical_weights": [{"indices": [1, 2], "values": [0.5, 0.3]}]}
+        result = _parse_sparse_response(data)
+        assert isinstance(result, SparseResult)
+        assert len(result.weights) == 1
+        assert result.weights[0]["indices"] == [1, 2]
+
+    def test_parse_colbert_response(self):
+        from src.services.bge_m3_client import ColbertResult, _parse_colbert_response
+
+        data = {"colbert_vecs": [[[0.1] * 1024] * 3], "processing_time": 0.07}
+        result = _parse_colbert_response(data)
+        assert isinstance(result, ColbertResult)
+        assert len(result.colbert_vecs) == 1
+        assert len(result.colbert_vecs[0]) == 3
+        assert result.processing_time == 0.07
+
+    def test_parse_hybrid_response_with_colbert(self):
+        from src.services.bge_m3_client import HybridResult, _parse_hybrid_response
+
+        data = {
+            "dense_vecs": [[0.1] * 1024],
+            "lexical_weights": [{"indices": [1], "values": [0.5]}],
+            "colbert_vecs": [[[0.2] * 1024] * 4],
+            "processing_time": 0.1,
+        }
+        result = _parse_hybrid_response(data)
+        assert isinstance(result, HybridResult)
+        assert len(result.dense_vecs) == 1
+        assert len(result.lexical_weights) == 1
+        assert result.colbert_vecs is not None
+        assert len(result.colbert_vecs[0]) == 4
+        assert result.processing_time == 0.1
+
+    def test_parse_hybrid_response_without_colbert(self):
+        from src.services.bge_m3_client import _parse_hybrid_response
+
+        data = {
+            "dense_vecs": [[0.1] * 1024],
+            "lexical_weights": [{"indices": [1], "values": [0.5]}],
+        }
+        result = _parse_hybrid_response(data)
+        assert result.colbert_vecs is None
+
+
 class TestBGEM3ClientReconnectRace:
     """Reconnect race-condition contract for _get_client (#1641).
 

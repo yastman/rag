@@ -487,3 +487,89 @@ class TestOnnxSparseToQdrant:
         # cls=0 and eos=1 are special → filtered
         # duplicate token 10 → max(0.3, 0.7) = 0.7
         assert result == [{"indices": [10], "values": [0.699999988079071]}]
+
+
+# ── Unit tests for _run_encode shared helper ──
+
+
+class TestRunEncode:
+    """Tests for the shared ``_run_encode`` helper that backs all encode endpoints."""
+
+    async def test_dense_only_returns_dense_vecs(self, bge_app):
+        """_run_encode with return_dense=True returns dense_vecs in first slot."""
+        from app import EncodeRequest, _run_encode
+
+        req = EncodeRequest(texts=["hello", "world"])
+        (dense, sparse, colbert), pt, failures = await _run_encode(
+            req,
+            encode_type="dense",
+            return_dense=True,
+            return_sparse=False,
+            return_colbert_vecs=False,
+        )
+        assert len(dense) == 2
+        assert sparse == []
+        assert colbert == []
+        assert failures == []
+        assert pt >= 0
+
+    async def test_sparse_only_returns_lexical_weights(self, bge_app):
+        """_run_encode with return_sparse=True returns lexical_weights in second slot."""
+        from app import EncodeRequest, _run_encode
+
+        req = EncodeRequest(texts=["hello"])
+        (dense, sparse, colbert), _pt, _failures = await _run_encode(
+            req,
+            encode_type="sparse",
+            return_dense=False,
+            return_sparse=True,
+            return_colbert_vecs=False,
+        )
+        assert dense == []
+        assert len(sparse) == 1
+        assert "indices" in sparse[0]
+        assert colbert == []
+
+    async def test_all_invalid_fills_sentinels(self, bge_app):
+        """When all texts are invalid, returns sentinel values for every slot."""
+        from app import EncodeRequest, _run_encode
+
+        req = EncodeRequest(texts=["", "   "])
+        (dense, sparse, colbert), _pt, failures = await _run_encode(
+            req,
+            encode_type="hybrid",
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=True,
+        )
+        assert len(failures) == 2
+        # Dense: zero-vector sentinels
+        assert len(dense) == 2
+        assert all(v == 0.0 for v in dense[0])
+        assert all(v == 0.0 for v in dense[1])
+        # Sparse: empty sentinel
+        assert sparse[0] == {"indices": [], "values": []}
+        # ColBERT: single-token zero sentinel
+        assert len(colbert[0]) == 1
+        assert all(v == 0.0 for v in colbert[0][0])
+
+    async def test_mixed_batch_partial_failure(self, bge_app):
+        """Mixed valid+invalid batch: sentinel at invalid index, real vector at valid index."""
+        from app import EncodeRequest, _run_encode
+
+        req = EncodeRequest(texts=["hello", "", "world"])
+        (dense, _, _), _pt, failures = await _run_encode(
+            req,
+            encode_type="dense",
+            return_dense=True,
+            return_sparse=False,
+            return_colbert_vecs=False,
+        )
+        assert len(failures) == 1
+        assert failures[0].index == 1
+        # Index 1 gets zero sentinel
+        assert all(v == 0.0 for v in dense[1])
+        assert len(dense[1]) == 1024
+        # Valid indices have real vectors
+        assert any(v != 0.0 for v in dense[0])
+        assert any(v != 0.0 for v in dense[2])
