@@ -23,6 +23,10 @@ from src.ingestion.chunker import Chunk
 logger = logging.getLogger(__name__)
 
 
+class FileTooLargeError(ValueError):
+    """Raised when a file exceeds the configured max_file_size_bytes limit."""
+
+
 # ---------------------------------------------------------------------------
 # Profile presets for docling-serve conversion
 # ---------------------------------------------------------------------------
@@ -105,6 +109,9 @@ class DoclingConfig:
     pdf_backend: str = "dlparse_v4"  # Best table parsing (2026)
     table_mode: str = "accurate"  # accurate | fast
     do_ocr: bool = False  # Enable for scanned documents
+
+    # Max file size before upload (bytes). 0 = unlimited.
+    max_file_size_bytes: int = 0
 
     # Profile-based settings (from DOCLING_PROFILE env, default "speed")
     profile: str = field(default_factory=lambda: os.getenv("DOCLING_PROFILE", "speed"))
@@ -272,17 +279,25 @@ class DoclingClient:
         if suffix not in self.SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported format: {suffix}")
 
-        # Prepare multipart form data - read file into memory to avoid
-        # async context issues with file handles
-        file_content = await async_path.read_bytes()
-        files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
+        # Preflight: reject oversized files before touching the network.
+        if self.config.max_file_size_bytes > 0:
+            stat = await async_path.stat()
+            if stat.st_size > self.config.max_file_size_bytes:
+                raise FileTooLargeError(
+                    f"{file_path.name} is {stat.st_size} bytes, "
+                    f"exceeds max_file_size_bytes={self.config.max_file_size_bytes}"
+                )
 
+        # Stream file via open handle — avoids loading the whole file into memory.
+        mime = self._get_mime_type(suffix)
         data = self._build_chunking_form_data()
-        response = await self.client.post(
-            "/v1/chunk/hybrid/file",
-            files=files,
-            data=data,
-        )
+        with file_path.open("rb") as fh:
+            files = {"files": (file_path.name, fh, mime)}
+            response = await self.client.post(
+                "/v1/chunk/hybrid/file",
+                files=files,
+                data=data,
+            )
 
         response.raise_for_status()
         result = response.json()
@@ -345,16 +360,26 @@ class DoclingClient:
         if suffix not in self.SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported format: {suffix}")
 
+        # Preflight: reject oversized files before touching the network.
+        if self.config.max_file_size_bytes > 0:
+            size = file_path.stat().st_size
+            if size > self.config.max_file_size_bytes:
+                raise FileTooLargeError(
+                    f"{file_path.name} is {size} bytes, "
+                    f"exceeds max_file_size_bytes={self.config.max_file_size_bytes}"
+                )
+
         # Use sync httpx client (NOT self._client which is async)
+        mime = self._get_mime_type(suffix)
+        data = self._build_chunking_form_data()
         with httpx.Client(
             base_url=self.config.base_url,
             timeout=self.config.timeout,
         ) as client:
-            file_content = file_path.read_bytes()
-            files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
-            data = self._build_chunking_form_data()
-
-            response = client.post("/v1/chunk/hybrid/file", files=files, data=data)
+            # Stream file via open handle — avoids loading the whole file into memory.
+            with file_path.open("rb") as fh:
+                files = {"files": (file_path.name, fh, mime)}
+                response = client.post("/v1/chunk/hybrid/file", files=files, data=data)
             response.raise_for_status()
             result = response.json()
 
