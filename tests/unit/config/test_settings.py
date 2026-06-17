@@ -393,8 +393,6 @@ class TestSettingsToDict:
             "acorn_enabled_selectivity_threshold",
             "use_hyde",
             "hyde_min_words",
-            "use_contextualized_embeddings",
-            "contextualized_embedding_dim",
             "env",
             "debug",
         }

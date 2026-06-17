@@ -12,6 +12,8 @@ REMOVED_FILES = {
     "src/observability_sentry.py",
     "telegram_bot/observability_sentry.py",
     "telegram_bot/metrics_server.py",
+    "src/models/contextualized_embedding.py",
+    "src/utils/structure_parser.py",
 }
 
 REMOVED_SYMBOLS = {
@@ -28,7 +30,6 @@ REMOVED_SYMBOLS = {
         "_detect_filter_sensitive_query",
         "_expand_short_query",
     },
-    "src/models/contextualized_embedding.py": {"embed_queries_sync"},
 }
 
 
