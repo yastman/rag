@@ -56,6 +56,45 @@ def _langfuse_trace_context_headers() -> dict[str, str]:
     return headers
 
 
+def _build_payload(
+    texts: list[str],
+    batch_size: int,
+    max_length: int,
+) -> dict[str, Any]:
+    """Build the standard encode request payload shared by all encode endpoints."""
+    return {"texts": texts, "batch_size": batch_size, "max_length": max_length}
+
+
+def _parse_dense_response(data: dict[str, Any]) -> DenseResult:
+    """Parse /encode/dense response JSON into DenseResult."""
+    return DenseResult(vectors=data["dense_vecs"], processing_time=data.get("processing_time"))
+
+
+def _parse_sparse_response(data: dict[str, Any]) -> SparseResult:
+    """Parse /encode/sparse response JSON into SparseResult."""
+    return SparseResult(
+        weights=data["lexical_weights"], processing_time=data.get("processing_time")
+    )
+
+
+def _parse_colbert_response(data: dict[str, Any]) -> ColbertResult:
+    """Parse /encode/colbert response JSON into ColbertResult."""
+    return ColbertResult(
+        colbert_vecs=data["colbert_vecs"],
+        processing_time=data.get("processing_time"),
+    )
+
+
+def _parse_hybrid_response(data: dict[str, Any]) -> HybridResult:
+    """Parse /encode/hybrid response JSON into HybridResult."""
+    return HybridResult(
+        dense_vecs=data["dense_vecs"],
+        lexical_weights=data["lexical_weights"],
+        colbert_vecs=data.get("colbert_vecs"),
+        processing_time=data.get("processing_time"),
+    )
+
+
 @dataclass
 class DenseResult:
     """Result from /encode/dense."""
@@ -191,22 +230,20 @@ class BGEM3Client:
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/dense",
-            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            json=_build_payload(texts, self.batch_size, self.max_length),
             headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        data = resp.json()
-        all_vecs = data["dense_vecs"]
-        processing_time = data.get("processing_time")
+        result = _parse_dense_response(resp.json())
         lf.update_current_span(
             output={
-                "vectors_count": len(all_vecs),
-                "vector_dim": len(all_vecs[0]) if all_vecs else 0,
-                "processing_time": processing_time,
+                "vectors_count": len(result.vectors),
+                "vector_dim": len(result.vectors[0]) if result.vectors else 0,
+                "processing_time": result.processing_time,
             },
             metadata={"model": BGE_M3_MODEL_NAME},
         )
-        return DenseResult(vectors=all_vecs, processing_time=processing_time)
+        return result
 
     @observe(
         name="bge-m3-encode-sparse", as_type="embedding", capture_input=False, capture_output=False
@@ -232,18 +269,19 @@ class BGEM3Client:
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/sparse",
-            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            json=_build_payload(texts, self.batch_size, self.max_length),
             headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        data = resp.json()
-        all_weights = data["lexical_weights"]
-        processing_time = data.get("processing_time")
+        result = _parse_sparse_response(resp.json())
         lf.update_current_span(
-            output={"weights_count": len(all_weights), "processing_time": processing_time},
+            output={
+                "weights_count": len(result.weights),
+                "processing_time": result.processing_time,
+            },
             metadata={"model": BGE_M3_MODEL_NAME},
         )
-        return SparseResult(weights=all_weights, processing_time=processing_time)
+        return result
 
     @observe(
         name="bge-m3-encode-hybrid", as_type="embedding", capture_input=False, capture_output=False
@@ -268,17 +306,11 @@ class BGEM3Client:
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/hybrid",
-            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            json=_build_payload(texts, self.batch_size, self.max_length),
             headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        data = resp.json()
-        result = HybridResult(
-            dense_vecs=data["dense_vecs"],
-            lexical_weights=data["lexical_weights"],
-            colbert_vecs=data.get("colbert_vecs"),
-            processing_time=data.get("processing_time"),
-        )
+        result = _parse_hybrid_response(resp.json())
         lf.update_current_span(
             output={
                 "dense_count": len(result.dense_vecs),
@@ -361,15 +393,11 @@ class BGEM3Client:
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/colbert",
-            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            json=_build_payload(texts, self.batch_size, self.max_length),
             headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        data = resp.json()
-        result = ColbertResult(
-            colbert_vecs=data["colbert_vecs"],
-            processing_time=data.get("processing_time"),
-        )
+        result = _parse_colbert_response(resp.json())
         lf.update_current_span(
             output={
                 "colbert_count": len(result.colbert_vecs),
@@ -417,12 +445,11 @@ class BGEM3SyncClient:
             return DenseResult(vectors=[])
         resp = self._client.post(
             f"{self.base_url}/encode/dense",
-            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            json=_build_payload(texts, self.batch_size, self.max_length),
             headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        data = resp.json()
-        return DenseResult(vectors=data["dense_vecs"], processing_time=data.get("processing_time"))
+        return _parse_dense_response(resp.json())
 
     def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors (sync)."""
@@ -430,14 +457,11 @@ class BGEM3SyncClient:
             return SparseResult(weights=[])
         resp = self._client.post(
             f"{self.base_url}/encode/sparse",
-            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            json=_build_payload(texts, self.batch_size, self.max_length),
             headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        data = resp.json()
-        return SparseResult(
-            weights=data["lexical_weights"], processing_time=data.get("processing_time")
-        )
+        return _parse_sparse_response(resp.json())
 
     def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors (sync)."""
@@ -445,15 +469,11 @@ class BGEM3SyncClient:
             return ColbertResult(colbert_vecs=[])
         resp = self._client.post(
             f"{self.base_url}/encode/colbert",
-            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            json=_build_payload(texts, self.batch_size, self.max_length),
             headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        data = resp.json()
-        return ColbertResult(
-            colbert_vecs=data["colbert_vecs"],
-            processing_time=data.get("processing_time"),
-        )
+        return _parse_colbert_response(resp.json())
 
     def encode_hybrid(self, texts: list[str]) -> HybridResult:
         """Encode texts to dense + sparse + colbert in a single /encode/hybrid call.
@@ -465,17 +485,11 @@ class BGEM3SyncClient:
             return HybridResult(dense_vecs=[], lexical_weights=[])
         resp = self._client.post(
             f"{self.base_url}/encode/hybrid",
-            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            json=_build_payload(texts, self.batch_size, self.max_length),
             headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        data = resp.json()
-        return HybridResult(
-            dense_vecs=data["dense_vecs"],
-            lexical_weights=data["lexical_weights"],
-            colbert_vecs=data.get("colbert_vecs"),
-            processing_time=data.get("processing_time"),
-        )
+        return _parse_hybrid_response(resp.json())
 
     def close(self) -> None:
         """Close the underlying httpx client."""

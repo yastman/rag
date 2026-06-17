@@ -414,6 +414,114 @@ def _lexical_weights_to_qdrant_sparse(
     return converted
 
 
+# ── Shared encode helper ──
+
+
+async def _run_encode(
+    request: EncodeRequest,
+    *,
+    encode_type: str,
+    return_dense: bool,
+    return_sparse: bool,
+    return_colbert_vecs: bool,
+) -> tuple[
+    tuple[list[list[float]], list[dict[str, Any]], list[list[list[float]]]],
+    float,
+    list["PartialFailure"],
+]:
+    """Shared encode pipeline: validate → encode → reconstruct full-cardinality response.
+
+    Returns (results_tuple, processing_time, partial_failures) where results_tuple
+    contains only the vectors/weights lists that were requested, in order:
+    dense_vecs, lexical_weights, colbert_vecs (each included only when the
+    corresponding return_* flag is True).
+
+    Callers unpack the tuple according to which flags they set.
+    """
+    encode_requests_total.labels(encode_type=encode_type).inc()
+    encode_batch_size.observe(len(request.texts))
+    _update_current_bge_span(
+        input={
+            "texts_count": len(request.texts),
+            "batch_size": request.batch_size,
+            "max_length": request.max_length,
+        },
+        encode_type=encode_type,
+    )
+
+    valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
+    partial_failures = [
+        PartialFailure(index=idx, error=msg)
+        for idx, msg in zip(invalid_indices, error_messages, strict=True)
+    ]
+    if invalid_indices:
+        encode_partial_failures_total.labels(encode_type=encode_type).inc(len(invalid_indices))
+
+    model = get_model()
+    start_time = time.time()
+
+    n = len(request.texts)
+    dense_sentinel = [0.0] * 1024
+    sparse_sentinel: dict[str, list[Any]] = {"indices": [], "values": []}
+    colbert_sentinel = [[0.0] * 1024]
+
+    # Prepare output slots
+    dense_vecs: list[list[float]] = [[]] * n if return_dense else []
+    lexical_weights: list[dict[str, Any]] = [{}] * n if return_sparse else []
+    colbert_vecs: list[list[list[float]]] = [[]] * n if return_colbert_vecs else []
+
+    if valid_indices:
+        valid_texts = [request.texts[i] for i in valid_indices]
+        embeddings = model.encode(
+            valid_texts,
+            batch_size=request.batch_size,
+            max_length=request.max_length,
+            return_dense=return_dense,
+            return_sparse=return_sparse,
+            return_colbert_vecs=return_colbert_vecs,
+        )
+
+        if return_dense:
+            valid_dense = embeddings["dense_vecs"].tolist()
+            dense_iter = iter(valid_dense)
+            for i in valid_indices:
+                dense_vecs[i] = next(dense_iter)
+            for i in invalid_indices:
+                dense_vecs[i] = dense_sentinel.copy()
+
+        if return_sparse:
+            valid_sparse = _lexical_weights_to_qdrant_sparse(embeddings["lexical_weights"])
+            sparse_iter = iter(valid_sparse)
+            for i in valid_indices:
+                lexical_weights[i] = next(sparse_iter)
+            for i in invalid_indices:
+                lexical_weights[i] = sparse_sentinel.copy()
+
+        if return_colbert_vecs:
+            valid_colbert = [vec.tolist() for vec in embeddings["colbert_vecs"]]
+            colbert_iter = iter(valid_colbert)
+            for i in valid_indices:
+                colbert_vecs[i] = next(colbert_iter)
+            for i in invalid_indices:
+                colbert_vecs[i] = [row[:] for row in colbert_sentinel]
+    else:
+        # All invalid — fill sentinels
+        if return_dense:
+            for i in invalid_indices:
+                dense_vecs[i] = dense_sentinel.copy()
+        if return_sparse:
+            for i in invalid_indices:
+                lexical_weights[i] = sparse_sentinel.copy()
+        if return_colbert_vecs:
+            for i in invalid_indices:
+                colbert_vecs[i] = [row[:] for row in colbert_sentinel]
+
+    processing_time = time.time() - start_time
+    encode_duration.labels(encode_type=encode_type).observe(processing_time)
+
+    return (dense_vecs, lexical_weights, colbert_vecs), processing_time, partial_failures
+
+
 # ── Endpoints ──
 
 
@@ -440,55 +548,14 @@ async def encode_dense(
 
     For semantic similarity search
     """
-    encode_requests_total.labels(encode_type="dense").inc()
-    encode_batch_size.observe(len(request.texts))
-    _update_current_bge_span(
-        input={
-            "texts_count": len(request.texts),
-            "batch_size": request.batch_size,
-            "max_length": request.max_length,
-        },
-        encode_type="dense",
-    )
-
     try:
-        valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
-        partial_failures = [
-            PartialFailure(index=idx, error=msg)
-            for idx, msg in zip(invalid_indices, error_messages, strict=True)
-        ]
-        if invalid_indices:
-            encode_partial_failures_total.labels(encode_type="dense").inc(len(invalid_indices))
-
-        model = get_model()
-        start_time = time.time()
-
-        if valid_indices:
-            valid_texts = [request.texts[i] for i in valid_indices]
-            embeddings = model.encode(
-                valid_texts,
-                batch_size=request.batch_size,
-                max_length=request.max_length,
-                return_dense=True,
-                return_sparse=False,
-                return_colbert_vecs=False,
-            )
-            valid_vecs = embeddings["dense_vecs"].tolist()
-        else:
-            valid_vecs = []
-
-        processing_time = time.time() - start_time
-        encode_duration.labels(encode_type="dense").observe(processing_time)
-
-        # Reconstruct full-cardinality response
-        dense_sentinel = [0.0] * 1024
-        dense_vecs: list[list[float]] = [[]] * len(request.texts)
-        valid_iter = iter(valid_vecs)
-        for i in valid_indices:
-            dense_vecs[i] = next(valid_iter)
-        for i in invalid_indices:
-            dense_vecs[i] = dense_sentinel.copy()
-
+        (dense_vecs, _, _), processing_time, partial_failures = await _run_encode(
+            request,
+            encode_type="dense",
+            return_dense=True,
+            return_sparse=False,
+            return_colbert_vecs=False,
+        )
         _update_current_bge_span(
             output={
                 "vectors_count": len(dense_vecs),
@@ -503,7 +570,6 @@ async def encode_dense(
             processing_time=processing_time,
             partial_failures=partial_failures,
         )
-
     except Exception as e:
         logger.error(f"Dense encoding error: {e!s}")
         raise HTTPException(500, f"Encoding failed: {e!s}")
@@ -526,56 +592,14 @@ async def encode_sparse(
 
     For keyword matching
     """
-    encode_requests_total.labels(encode_type="sparse").inc()
-    encode_batch_size.observe(len(request.texts))
-    _update_current_bge_span(
-        input={
-            "texts_count": len(request.texts),
-            "batch_size": request.batch_size,
-            "max_length": request.max_length,
-        },
-        encode_type="sparse",
-    )
-
     try:
-        valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
-        partial_failures = [
-            PartialFailure(index=idx, error=msg)
-            for idx, msg in zip(invalid_indices, error_messages, strict=True)
-        ]
-        if invalid_indices:
-            encode_partial_failures_total.labels(encode_type="sparse").inc(len(invalid_indices))
-
-        model = get_model()
-        start_time = time.time()
-
-        if valid_indices:
-            valid_texts = [request.texts[i] for i in valid_indices]
-            embeddings = model.encode(
-                valid_texts,
-                batch_size=request.batch_size,
-                max_length=request.max_length,
-                return_dense=False,
-                return_sparse=True,
-                return_colbert_vecs=False,
-            )
-            # ONNX already returns Qdrant sparse format
-            valid_weights = _lexical_weights_to_qdrant_sparse(embeddings["lexical_weights"])
-        else:
-            valid_weights = []
-
-        processing_time = time.time() - start_time
-        encode_duration.labels(encode_type="sparse").observe(processing_time)
-
-        # Reconstruct full-cardinality response
-        sparse_sentinel: dict[str, list[Any]] = {"indices": [], "values": []}
-        lexical_weights: list[dict[str, Any]] = [{}] * len(request.texts)
-        valid_iter = iter(valid_weights)
-        for i in valid_indices:
-            lexical_weights[i] = next(valid_iter)
-        for i in invalid_indices:
-            lexical_weights[i] = sparse_sentinel.copy()
-
+        (_, lexical_weights, _), processing_time, partial_failures = await _run_encode(
+            request,
+            encode_type="sparse",
+            return_dense=False,
+            return_sparse=True,
+            return_colbert_vecs=False,
+        )
         _update_current_bge_span(
             output={
                 "weights_count": len(lexical_weights),
@@ -589,7 +613,6 @@ async def encode_sparse(
             processing_time=processing_time,
             partial_failures=partial_failures,
         )
-
     except Exception as e:
         logger.error(f"Sparse encoding error: {e!s}")
         raise HTTPException(500, f"Encoding failed: {e!s}")
@@ -612,55 +635,14 @@ async def encode_colbert(
 
     For late-interaction reranking (MaxSim)
     """
-    encode_requests_total.labels(encode_type="colbert").inc()
-    encode_batch_size.observe(len(request.texts))
-    _update_current_bge_span(
-        input={
-            "texts_count": len(request.texts),
-            "batch_size": request.batch_size,
-            "max_length": request.max_length,
-        },
-        encode_type="colbert",
-    )
-
     try:
-        valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
-        partial_failures = [
-            PartialFailure(index=idx, error=msg)
-            for idx, msg in zip(invalid_indices, error_messages, strict=True)
-        ]
-        if invalid_indices:
-            encode_partial_failures_total.labels(encode_type="colbert").inc(len(invalid_indices))
-
-        model = get_model()
-        start_time = time.time()
-
-        if valid_indices:
-            valid_texts = [request.texts[i] for i in valid_indices]
-            embeddings = model.encode(
-                valid_texts,
-                batch_size=request.batch_size,
-                max_length=request.max_length,
-                return_dense=False,
-                return_sparse=False,
-                return_colbert_vecs=True,
-            )
-            valid_vecs = [vec.tolist() for vec in embeddings["colbert_vecs"]]
-        else:
-            valid_vecs = []
-
-        processing_time = time.time() - start_time
-        encode_duration.labels(encode_type="colbert").observe(processing_time)
-
-        # Reconstruct full-cardinality response
-        colbert_sentinel = [[0.0] * 1024]
-        colbert_vecs: list[list[list[float]]] = [[]] * len(request.texts)
-        valid_iter = iter(valid_vecs)
-        for i in valid_indices:
-            colbert_vecs[i] = next(valid_iter)
-        for i in invalid_indices:
-            colbert_vecs[i] = [row[:] for row in colbert_sentinel]
-
+        (_, _, colbert_vecs), processing_time, partial_failures = await _run_encode(
+            request,
+            encode_type="colbert",
+            return_dense=False,
+            return_sparse=False,
+            return_colbert_vecs=True,
+        )
         _update_current_bge_span(
             output={
                 "colbert_count": len(colbert_vecs),
@@ -675,7 +657,6 @@ async def encode_colbert(
             processing_time=processing_time,
             partial_failures=partial_failures,
         )
-
     except Exception as e:
         logger.error(f"ColBERT encoding error: {e!s}")
         raise HTTPException(500, f"Encoding failed: {e!s}")
@@ -699,71 +680,18 @@ async def encode_hybrid(
     Returns: dense + sparse + colbert
     Most efficient for RAG pipeline
     """
-    encode_requests_total.labels(encode_type="hybrid").inc()
-    encode_batch_size.observe(len(request.texts))
-    _update_current_bge_span(
-        input={
-            "texts_count": len(request.texts),
-            "batch_size": request.batch_size,
-            "max_length": request.max_length,
-        },
-        encode_type="hybrid",
-    )
-
     try:
-        valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
-        partial_failures = [
-            PartialFailure(index=idx, error=msg)
-            for idx, msg in zip(invalid_indices, error_messages, strict=True)
-        ]
-        if invalid_indices:
-            encode_partial_failures_total.labels(encode_type="hybrid").inc(len(invalid_indices))
-
-        model = get_model()
-        start_time = time.time()
-
-        if valid_indices:
-            valid_texts = [request.texts[i] for i in valid_indices]
-            embeddings = model.encode(
-                valid_texts,
-                batch_size=request.batch_size,
-                max_length=request.max_length,
-                return_dense=True,
-                return_sparse=True,
-                return_colbert_vecs=True,
-            )
-            valid_dense = embeddings["dense_vecs"].tolist()
-            valid_sparse = _lexical_weights_to_qdrant_sparse(embeddings["lexical_weights"])
-            valid_colbert = [vec.tolist() for vec in embeddings["colbert_vecs"]]
-        else:
-            valid_dense = []
-            valid_sparse = []
-            valid_colbert = []
-
-        processing_time = time.time() - start_time
-        encode_duration.labels(encode_type="hybrid").observe(processing_time)
-
-        # Reconstruct full-cardinality responses
-        dense_sentinel = [0.0] * 1024
-        sparse_sentinel: dict[str, list[Any]] = {"indices": [], "values": []}
-        colbert_sentinel = [[0.0] * 1024]
-
-        dense_vecs: list[list[float]] = [[]] * len(request.texts)
-        lexical_weights: list[dict[str, Any]] = [{}] * len(request.texts)
-        colbert_vecs: list[list[list[float]]] = [[]] * len(request.texts)
-
-        dense_iter = iter(valid_dense)
-        sparse_iter = iter(valid_sparse)
-        colbert_iter = iter(valid_colbert)
-        for i in valid_indices:
-            dense_vecs[i] = next(dense_iter)
-            lexical_weights[i] = next(sparse_iter)
-            colbert_vecs[i] = next(colbert_iter)
-        for i in invalid_indices:
-            dense_vecs[i] = dense_sentinel.copy()
-            lexical_weights[i] = sparse_sentinel.copy()
-            colbert_vecs[i] = [row[:] for row in colbert_sentinel]
-
+        (
+            (dense_vecs, lexical_weights, colbert_vecs),
+            processing_time,
+            partial_failures,
+        ) = await _run_encode(
+            request,
+            encode_type="hybrid",
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=True,
+        )
         _update_current_bge_span(
             output={
                 "dense_count": len(dense_vecs),
@@ -781,7 +709,6 @@ async def encode_hybrid(
             processing_time=processing_time,
             partial_failures=partial_failures,
         )
-
     except Exception as e:
         logger.error(f"Hybrid encoding error: {e!s}")
         raise HTTPException(500, f"Encoding failed: {e!s}")
