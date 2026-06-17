@@ -24,3 +24,8 @@ bug_classes:
     description: Search-results cache key omitted retrieval config (top_k, collection, mode), causing different configs to collide on the same cached entry
     canonical_issue: "#2618"
     guardrail: "tests/unit/integrations/test_cache_layers.py::TestSearchCacheKeyRetrieval"
+
+  - id: perf/docling-full-file-read
+    description: DoclingClient read_bytes() loads entire document into memory before multipart upload
+    canonical_issue: "#2622"
+    guardrail: "tests/unit/ingestion/test_docling_client_streaming.py"
