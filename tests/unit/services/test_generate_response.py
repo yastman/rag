@@ -1199,6 +1199,7 @@ class _FakePrompt:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Langfuse prompt linking removed in ARCH-14 #2628")
 async def test_generate_response_forwards_langfuse_prompt_kwarg_when_prompt_object_available() -> (
     None
 ):
@@ -1248,6 +1249,7 @@ async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Langfuse prompt linking removed in ARCH-14 #2628")
 async def test_generate_response_links_prompt_via_update_current_generation() -> None:
     """When a Prompt object is available, ``update_current_generation`` is called with it (#1666).
 
