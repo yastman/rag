@@ -45,6 +45,7 @@ Optional profiles add scoped services:
 | `obs` | `loki`, `promtail`, `alertmanager` | Optional log monitoring |
 | `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
 | `full` | all profile-gated services | |
+>>>>>>> 52382d8fb1 (ARCH-10: docs archive + rewrite for the monolith (#2606))
 
 ### VPS default runtime
 
