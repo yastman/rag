@@ -23,7 +23,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from route_constants import RECOMMENDED_ROUTE_MODELS, SECRETARY_AGENT_MODELS
+from route_constants import RECOMMENDED_ROUTE_MODELS, SECRETARY_AGENT_MODELS  # noqa: E402
 
 
 STATUSES = {"done", "failed", "blocked"}
@@ -476,12 +476,12 @@ def validate_prompt_sdk_baseline(
             isinstance(expected_sdk_check, str)
             and expected_sdk_check
             and "|" not in expected_sdk_check
+            and sdk_check != expected_sdk_check
         ):
-            if sdk_check != expected_sdk_check:
-                fail(
-                    errors,
-                    f"sdk_native_check must match prompt done_json_expectation:{expected_sdk_check}",
-                )
+            fail(
+                errors,
+                f"sdk_native_check must match prompt done_json_expectation:{expected_sdk_check}",
+            )
         if baseline.get("docs_used") and not data.get("sdk_docs_evidence"):
             fail(errors, "Context7/official docs baseline requires sdk_docs_evidence")
     if classification == "not_applicable":
@@ -746,13 +746,11 @@ def validate_role(role: str, data: dict[str, Any], errors: list[str]) -> None:
         if data.get("autofix_commits") not in ([], None):
             fail(errors, "autofix_commits must be empty for read-only PR review")
 
-    if role in {"artifact-check", "local-verification"}:
-        if data.get("pushed") is not False:
-            fail(errors, "pushed must be false for artifact-check/local-verification")
+    if role in {"artifact-check", "local-verification"} and data.get("pushed") is not False:
+        fail(errors, "pushed must be false for artifact-check/local-verification")
 
-    if role == "review-fix" and data.get("status") == "done":
-        if data.get("review_decision") == "clean":
-            fail(errors, "review-fix done cannot use review_decision clean")
+    if role == "review-fix" and data.get("status") == "done" and data.get("review_decision") == "clean":
+        fail(errors, "review-fix done cannot use review_decision clean")
 
 
 def signal_path_matches_registry(signal_path: Path, registry: dict[str, Any]) -> bool:

@@ -13,7 +13,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from route_constants import CANONICAL_WORKER_ROUTES, SECRETARY_AGENT_MODELS
+from route_constants import CANONICAL_WORKER_ROUTES, SECRETARY_AGENT_MODELS  # noqa: E402
 
 
 HARD_CODED_PANE_PATTERNS = (
@@ -319,10 +319,7 @@ def _find_task_section_range(text: str) -> tuple[int, int] | None:
         r"ANTI-REGRESSION CONTRACT)"
     )
     terminator_match = terminator_pattern.search(remaining)
-    if terminator_match:
-        end = start + terminator_match.start()
-    else:
-        end = len(text)
+    end = start + terminator_match.start() if terminator_match else len(text)
 
     return (start, end)
 
@@ -568,8 +565,7 @@ def validate(text: str, *, contract: str) -> list[str]:
 
     # Content-safety: only fires when a ## Task section exists.
     # Warnings are informational; the prompt is not blocked.
-    for warning in validate_content_safety(text):
-        errors.append(warning)
+    errors.extend(validate_content_safety(text))
 
     return errors
 
