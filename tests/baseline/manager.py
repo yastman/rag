@@ -31,8 +31,6 @@ class BaselineSnapshot:
 
     # Call counts
     llm_calls: int
-    voyage_embed_calls: int
-    voyage_rerank_calls: int
 
     # Cache effectiveness
     cache_hit_rate: float
@@ -90,8 +88,6 @@ class BaselineManager:
             llm_tokens_input=session.llm_tokens_input,
             llm_tokens_output=session.llm_tokens_output,
             llm_calls=session.llm_calls,
-            voyage_embed_calls=0,
-            voyage_rerank_calls=0,
             cache_hit_rate=session.cache_hit_rate,
             cache_hits=session.cache_hits,
             cache_misses=session.cache_misses,

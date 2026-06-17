@@ -19,8 +19,6 @@ cache:
 
 calls:
   llm_factor: 1.15            # 15% — was 1.05, widened per #168
-  voyage_embed_factor: 1.10
-  voyage_rerank_factor: 1.10
 
 infrastructure:
   redis_memory_factor: 1.50   # 50% tolerance
