@@ -103,7 +103,7 @@ class BotConfig(BaseSettings):
         default="gpt-4o-mini", validation_alias=AliasChoices("llm_model", "LLM_MODEL")
     )
 
-    # Langfuse observability
+    # Langfuse observability (optional-profile: ml; kept because main.py reads these)
     langfuse_public_key: str = Field(
         default="",
         validation_alias=AliasChoices("langfuse_public_key", "LANGFUSE_PUBLIC_KEY"),
@@ -259,7 +259,7 @@ class BotConfig(BaseSettings):
         default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
     )
 
-    # Mini App (Telegram Web App)
+    # Mini App (Telegram Web App) (optional-profile: mini_app; kept because bot.py reads these)
     mini_app_url: str = Field(
         default="",
         validation_alias=AliasChoices("mini_app_url", "MINI_APP_URL"),
@@ -269,7 +269,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("expert_topics_enabled", "EXPERT_TOPICS_ENABLED"),
     )
 
-    # LiveKit (voice calls)
+    # LiveKit (voice calls) (optional-profile: voice; kept because command_handlers.py reads these)
     livekit_url: str = Field(
         default="", validation_alias=AliasChoices("LIVEKIT_URL", "livekit_url")
     )
@@ -283,7 +283,7 @@ class BotConfig(BaseSettings):
         default="", validation_alias=AliasChoices("SIP_TRUNK_ID", "sip_trunk_id")
     )
 
-    # Voice transcription
+    # Voice transcription (optional-profile: voice; kept because bot.py reads these)
     show_transcription: bool = Field(
         default=True,
         validation_alias=AliasChoices("show_transcription", "SHOW_TRANSCRIPTION"),
@@ -464,10 +464,6 @@ class BotConfig(BaseSettings):
     business_hours_tz: str = Field(
         default="Europe/Sofia",
         validation_alias=AliasChoices("business_hours_tz", "BUSINESS_HOURS_TZ"),
-    )
-    handoff_wait_timeout_min: int = Field(
-        default=15,
-        validation_alias=AliasChoices("handoff_wait_timeout_min", "HANDOFF_WAIT_TIMEOUT_MIN"),
     )
 
     @field_validator("manager_ids", mode="before")
