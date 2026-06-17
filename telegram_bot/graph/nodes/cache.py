@@ -1,5 +1,22 @@
 """Cache check and store nodes for RAG LangGraph pipeline.
 
+.. warning:: ARCHIVED — dead production code.
+
+    These nodes are **not invoked** in any production code path.
+    ``telegram_bot/graph/graph.py:ImperativeGraph.ainvoke()`` delegates
+    entirely to ``run_assistant_pipeline()`` in
+    ``src/runtime/pipeline/assistant_pipeline.py``, which owns cache
+    check/store via its own ``_cache_check`` and ``_cache_store`` steps.
+
+    The LangGraph node path was superseded by the imperative pipeline
+    (ARCH-16, #2697).  This module is retained only because
+    ``tests/unit/graph/test_cache_nodes.py`` and related legacy-graph tests
+    exercise the node logic and live under the ``PYTEST_LEGACY_GRAPH_PATHS``
+    exclusion group.
+
+    Do not add new callers.  New cache work belongs in
+    ``src/runtime/pipeline/rag.py``.
+
 cache_check_node: compute embedding, check semantic cache, return cache_hit.
 cache_store_node: store response in semantic cache (allowlisted types only).
 """

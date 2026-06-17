@@ -8,17 +8,20 @@ telegram_bot/graph/nodes
 
 
 ## Contents
-- __init__.py
-- cache.py
-- classify.py
-- generate.py
-- grade.py
-- guard.py
-- rerank.py
-- respond.py
-- retrieve.py
-- rewrite.py
-- transcribe.py
+
+| File | Status | Notes |
+|---|---|---|
+| `__init__.py` | active | package marker |
+| `cache.py` | **ARCHIVED — dead code** | `cache_check_node` / `cache_store_node` are never called in production; all cache logic runs inside `src/runtime/pipeline/rag.py`. Retained for `PYTEST_LEGACY_GRAPH_PATHS` tests only. See #2744. |
+| `classify.py` | active | classification node |
+| `generate.py` | active | generation node |
+| `grade.py` | active | grading node |
+| `guard.py` | active | guard node |
+| `rerank.py` | active | rerank node |
+| `respond.py` | active | respond node |
+| `retrieve.py` | active | retrieval node |
+| `rewrite.py` | active | rewrite node |
+| `transcribe.py` | active | transcription node |
 
 ## Parent
 - [..](..)
