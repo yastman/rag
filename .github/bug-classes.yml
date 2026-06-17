@@ -36,6 +36,6 @@ bug_classes:
     guardrail: tests/contract/test_no_dynamic_import_in_runtime_hotpath_contract.py
 
   - id: apscheduler-missing-extra
-    description: apscheduler imported at module level without scheduling extra causing ImportError at startup
+    description: apscheduler imported at module level without scheduling extra causing ImportError at startup — resolved by archiving nurturing_scheduler/session_summary_worker and dropping apscheduler dep (#2602)
     canonical_issue: "#2617"
-    guardrail: tests/unit/services/test_redis_monitor_asyncio.py, tests/unit/services/test_session_summary_worker_asyncio.py, tests/unit/test_bot_polling_lock_asyncio.py
+    guardrail: tests/unit/services/test_redis_monitor_asyncio.py, tests/unit/test_bot_polling_lock_asyncio.py

@@ -401,11 +401,7 @@ class BotConfig(BaseSettings):
         ),
     )
 
-    # Session summary + CRM (#305)
-    session_summary_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("session_summary_enabled", "SESSION_SUMMARY_ENABLED"),
-    )
+    # Session CRM (#305)
     session_timeout_minutes: int = Field(
         default=30,
         validation_alias=AliasChoices("session_timeout_minutes", "SESSION_TIMEOUT_MINUTES"),
@@ -479,48 +475,6 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices(
             "kommo_telegram_username_field_id", "KOMMO_TELEGRAM_USERNAME_FIELD_ID"
         ),
-    )
-
-    # Nurturing + funnel analytics (#390)
-    nurturing_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("nurturing_enabled", "NURTURING_ENABLED"),
-    )
-    nurturing_interval_minutes: int = Field(
-        default=60,
-        validation_alias=AliasChoices("nurturing_interval_minutes", "NURTURING_INTERVAL_MINUTES"),
-    )
-    funnel_rollup_cron: str = Field(
-        default="15 * * * *",
-        validation_alias=AliasChoices("funnel_rollup_cron", "FUNNEL_ROLLUP_CRON"),
-    )
-
-    # NurturingDispatch worker (#445)
-    nurturing_dispatch_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("nurturing_dispatch_enabled", "NURTURING_DISPATCH_ENABLED"),
-    )
-    nurturing_dispatch_batch: int = Field(
-        default=20,
-        validation_alias=AliasChoices("nurturing_dispatch_batch", "NURTURING_DISPATCH_BATCH"),
-    )
-    nurturing_dispatch_cron: str = Field(
-        default="0 10 * * *",
-        validation_alias=AliasChoices("nurturing_dispatch_cron", "NURTURING_DISPATCH_CRON"),
-    )
-
-    # SessionSummaryWorker (#445)
-    session_idle_timeout_min: int = Field(
-        default=30,
-        validation_alias=AliasChoices("session_idle_timeout_min", "SESSION_IDLE_TIMEOUT_MIN"),
-    )
-    session_summary_poll_sec: int = Field(
-        default=300,
-        validation_alias=AliasChoices("session_summary_poll_sec", "SESSION_SUMMARY_POLL_SEC"),
-    )
-    session_summary_model: str = Field(
-        default="claude-haiku-4-5",
-        validation_alias=AliasChoices("session_summary_model", "SESSION_SUMMARY_MODEL"),
     )
 
     # Call limits (#374)

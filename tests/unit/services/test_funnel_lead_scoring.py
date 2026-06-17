@@ -23,24 +23,8 @@ async def test_persist_and_sync_calls_hot_lead_notifier_for_hot_score():
 
     lead_scoring_store = AsyncMock()
     lead_scoring_store.upsert_score = AsyncMock()
-    lead_scoring_store.list_pending_sync = AsyncMock(
-        return_value=[
-            SimpleNamespace(
-                lead_id=11,
-                user_id=7,
-                session_id="chat-1",
-                score_value=70,
-                score_band="hot",
-                reason_codes=["timeline_asap"],
-                kommo_lead_id=5001,
-            )
-        ]
-    )
-    lead_scoring_store.mark_synced = AsyncMock()
-    lead_scoring_store.mark_failed = AsyncMock()
 
     kommo_client = AsyncMock()
-    kommo_client.update_lead_score = AsyncMock(return_value={"id": 5001})
 
     hot_lead_notifier = AsyncMock()
     hot_lead_notifier.notify_if_hot = AsyncMock(return_value=True)
@@ -68,7 +52,6 @@ async def test_persist_and_sync_calls_hot_lead_notifier_for_hot_score():
     assert result["persisted"] is True
     assert result["score_band"] == "hot"
     lead_scoring_store.upsert_score.assert_called_once()
-    kommo_client.update_lead_score.assert_called_once()
     hot_lead_notifier.notify_if_hot.assert_called_once()
 
 

@@ -11,7 +11,7 @@ import yaml
 
 PYPROJECT = Path("pyproject.toml")
 COMPOSE_DEV = Path("compose.dev.yml")
-HEAVY_OPTIONAL = {"gradio", "pillow", "apscheduler", "sentry-sdk", "langfuse"}
+HEAVY_OPTIONAL = {"gradio", "pillow", "sentry-sdk", "langfuse"}
 
 
 def _dep_names(deps: list[str]) -> set[str]:
@@ -37,8 +37,8 @@ def test_observability_scheduling_and_ui_extras_own_heavy_deps() -> None:
     extras = _project()["project"]["optional-dependencies"]
 
     assert {"langfuse", "sentry-sdk"}.issubset(_dep_names(extras["observability"]))
-    assert {"apscheduler"}.issubset(_dep_names(extras["scheduling"]))
     assert {"pillow", "gradio"}.issubset(_dep_names(extras["ui"]))
+    # apscheduler/scheduling extra removed in #2602
 
 
 def test_langfuse_self_host_services_stay_profile_gated() -> None:

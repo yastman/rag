@@ -29,7 +29,7 @@ CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 class RedisHealthMonitor:
     """Monitors Redis health metrics on a periodic schedule."""
 
-    INITIAL_CHECK_DELAY_SECONDS = 10  # Parity with old APScheduler first-check timing
+    INITIAL_CHECK_DELAY_SECONDS = 10  # Short initial delay before first health check
 
     def __init__(
         self,
@@ -54,8 +54,7 @@ class RedisHealthMonitor:
 
     async def _run_periodic(self) -> None:
         """Asyncio-native periodic loop: short initial delay then steady-state ticks."""
-        # Fire first check promptly (~10s) to match old APScheduler behaviour,
-        # then settle into the steady-state interval.
+        # Fire first check promptly (~10s) then settle into the steady-state interval.
         await asyncio.sleep(self.initial_check_delay)
         try:
             await self._check_health()
