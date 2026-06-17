@@ -81,7 +81,11 @@ def test_no_partial_fastapi_shim_in_sys_modules(test_path: Path) -> None:
 
 def test_rag_api_runtime_uses_importorskip() -> None:
     target = REPO_ROOT / "tests" / "unit" / "api" / "test_rag_api_runtime.py"
-    assert target.exists(), "expected tests/unit/api/test_rag_api_runtime.py to exist"
+    if not target.exists():
+        # File removed as part of ARCH-18 #2632 endpoint inventory cleanup:
+        # src/api was archived to archive/api/ in #2598; the dead-reference test
+        # file was pruned. Contract is trivially satisfied when the file is absent.
+        return
     text = target.read_text(encoding="utf-8")
     assert 'pytest.importorskip("fastapi"' in text or "pytest.importorskip('fastapi'" in text, (
         "#2009: tests/unit/api/test_rag_api_runtime.py must use pytest.importorskip('fastapi') "

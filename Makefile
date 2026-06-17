@@ -1,6 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-eval-extra test-observability-extra test-optional-surfaces \
+	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-eval-extra test-observability-extra test-voice-extra test-optional-surfaces \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	ingest-dir ingest-status ingest-services \
@@ -311,6 +311,11 @@ test-observability-extra: ## Run optional observability-extra tests explicitly
 	uv sync --extra observability --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/observability/ -q --timeout=30
 	@echo "$(GREEN)✓ Observability-extra tests complete$(NC)"
+
+test-voice-extra: ## Run optional voice-extra tests explicitly (requires livekit extra)
+	@echo "$(BLUE)Running voice-extra tests...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/voice/ -q --timeout=30 -m "requires_extras"
+	@echo "$(GREEN)✓ Voice-extra tests complete$(NC)"
 
 test-optional-surfaces: test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
 	@echo "$(GREEN)✓ Optional surface lanes complete$(NC)"
