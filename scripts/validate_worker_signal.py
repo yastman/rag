@@ -313,13 +313,13 @@ def is_broad_command(command: str) -> bool:
     if re.search(r"(?i)(^|[;&|]\s*)(?:uv\s+run\s+)?pytest(?:\s+-q)?\s*$", command):
         return True
     for index, token in enumerate(tokens):
-        if token == "-n" and index + 1 < len(tokens) and tokens[index + 1] == "auto":
+        if token == "-n" and index + 1 < len(tokens) and tokens[index + 1] == "auto":  # nosec B105
             return True
-        if token == "-n=auto":
+        if token == "-n=auto":  # nosec B105
             return True
-        if token == "--dist=worksteal":
+        if token == "--dist=worksteal":  # nosec B105
             return True
-        if token == "--dist" and index + 1 < len(tokens) and tokens[index + 1] == "worksteal":
+        if token == "--dist" and index + 1 < len(tokens) and tokens[index + 1] == "worksteal":  # nosec B105
             return True
     return command_has_pytest(command) and not command_has_focused_pytest_target(command)
 
