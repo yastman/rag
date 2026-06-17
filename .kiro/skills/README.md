@@ -26,18 +26,29 @@ These are used **inside** subagent workers, not by the orchestrator directly.
 | `swarm-bug-reporting` | Report confirmed bugs as compact Markdown findings |
 | `swarm-sdk-baseline` | Read-only preflight before implementation when SDK/API/runtime uncertainty exists |
 
-## Key Differences from Upstream Skills
+## Execution Model
 
-These skills are adapted for Kiro CLI:
+The swarm pipeline uses **tmux** as its coordination layer (enforced by
+`scripts/validate_worker_prompt.py` and contract tests):
 
-- **No tmux** — completion signals are output as final message text, not `tmux send-keys`
-- **No `launch_kiro_worker.sh`** — use Kiro's `subagent` tool instead
-- **No `ORCH_TARGET`/`SWARM_CONTRACT`** — orchestration via `subagent` tool stages
-- **Same report formats** — Markdown-first, same field schemas as the originals
+- Workers are launched via `scripts/launch_kiro_worker.sh`
+- Wake-up signals use `tmux send-keys -t "$ORCH_TARGET" -l ... C-m`
+- `ORCH_TARGET` is a named window set by `set_orchestrator_window.sh`
+
+The skills in this directory are **worker-side** adaptations: they define what
+a worker does _inside_ a tmux session. Orchestrator skills (`swarm-orchestrator`,
+`swarm-launch`, `swarm-plan`, etc.) live in `~/.kiro/skills/` and manage the
+tmux coordination layer.
+
+The "subagent" tool (Kiro native) is an alternative model for purely in-process
+parallelism (`dispatching-parallel-agents`, `subagent-driven-development`). It
+does not replace tmux for the full swarm pipeline — migrating to it would
+require retiring `validate_worker_prompt.py`'s tmux enforcement and the
+`launch_kiro_worker.sh` launcher. That migration is tracked as an architecture
+decision (card_4fe2c6504aca, card_9284e850fec6).
 
 ## Sources
 
 Adapted from:
 - `~/.kiro/skills/swarm-*/` (Kiro swarm skills)
-- `~/.kiro/skills/swarm-*/` (Kiro swarm skills, more complete)
 - `~/.kiro/skills/` (dispatching + subagent-driven)

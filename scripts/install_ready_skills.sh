@@ -19,12 +19,15 @@ ACTIVE_MATT=(
 )
 
 ACTIVE_OBRA=(
+  # Orchestrator/planner skills (forbidden in worker Required Superpowers per
+  # validate_worker_prompt.py FORBIDDEN_WORKER_SUPERPOWERS; valid for orchestrator use).
   "skills/writing-plans"
-  "skills/test-driven-development"
   "skills/using-git-worktrees"
+  "skills/finishing-a-development-branch"
+  # Worker superpowers (allowed in worker Required Superpowers).
+  "skills/test-driven-development"
   "skills/requesting-code-review"
   "skills/receiving-code-review"
-  "skills/finishing-a-development-branch"
 )
 
 REFERENCE_OBRA=(

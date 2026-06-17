@@ -404,6 +404,32 @@ def test_launch_kiro_worker_sh_has_orch_target_logic() -> None:
     assert "_watchdog" in text
 
 
+def test_launch_kiro_worker_sh_enforces_worker_worktree() -> None:
+    """launch_kiro_worker.sh must be fail-closed for code-changing workers.
+
+    Pins card_8a861fa16080 (E): WORKER_WORKTREE must be REQUIRED for code-changing
+    worker roles (implementation/plan-execution/quick/review-fix) — omitting it
+    must produce a hard error, not a silent fallback to REPO_ROOT.
+    """
+    text = (SCRIPTS_DIR / "launch_kiro_worker.sh").read_text(encoding="utf-8")
+    assert "WORKER_WORKTREE" in text, "launcher must accept WORKER_WORKTREE env var"
+    assert "WORKER_CWD" in text, "launcher must resolve WORKER_CWD from WORKER_WORKTREE"
+    assert 'cd "$WORKER_CWD"' in text, "wrapper must cd into WORKER_CWD"
+    # Must reject a non-existent WORKER_WORKTREE path.
+    assert "! -d" in text, "launcher must validate WORKER_WORKTREE is a real directory"
+    # Fail-closed: code-changing workers must require WORKER_WORKTREE.
+    assert "WORKER_WORKTREE_BYPASS" in text, (
+        "launcher must have a WORKER_WORKTREE_BYPASS escape hatch so the fail-closed "
+        "guard can be tested and overridden in exceptional cases"
+    )
+    assert "implementation" in text and "review-fix" in text, (
+        "fail-closed guard must name code-changing roles"
+    )
+    assert "ERROR: WORKER_WORKTREE is required" in text, (
+        "fail-closed guard must emit a clear error when WORKER_WORKTREE is missing"
+    )
+
+
 def test_set_orchestrator_window_sh_creates_unique_name() -> None:
     """set_orchestrator_window.sh must create unique orch-* window name."""
     text = (SCRIPTS_DIR / "set_orchestrator_window.sh").read_text(encoding="utf-8")

@@ -9,7 +9,9 @@
 #   WORKER_AGENT    — агент Kiro (optional, default: kiro_default; prefer kiro-worker / kiro-worker-flash / kiro-worker-opus)
 #   WORKER_MODEL    — модель (optional; e.g. claude-sonnet-4.6 / claude-haiku-4.5)
 #   WORKER_ROLE     — роль воркера для отчёта (default: research)
-#   WORKER_WORKTREE — изолированный git worktree, в котором работает воркер (optional, default: REPO_ROOT)
+#   WORKER_WORKTREE — изолированный git worktree воркера. REQUIRED для code-changing workers
+#                     (implementation/plan-execution/quick/review-fix). Fallback на REPO_ROOT
+#                     только для read-only/research ролей. Bypass: WORKER_WORKTREE_BYPASS=1.
 #   WORKER_TIMEOUT  — failsafe-таймаут (сек): нет терминального сигнала за это время → шлём [FAILED] (default: 1800)
 #
 # Флоу (kiro-cli flow):
@@ -101,6 +103,21 @@ fi
 PROMPT_LINK="Read and execute the worker prompt file at: ${PROMPT_FILE}"
 
 # --- Worker cwd (E: worktree isolation) + failsafe budget ---
+# HARD STOP: code-changing workers must run in an isolated worktree.
+# Pass WORKER_WORKTREE=$(./scripts/create_worker_worktree.sh ...) before launch,
+# or set WORKER_WORKTREE_BYPASS=1 only for an explicit orchestrator-approved exception.
+_CODE_CHANGING_ROLES="implementation plan-execution quick review-fix"
+if [[ -z "${WORKER_WORKTREE:-}" && -z "${WORKER_WORKTREE_BYPASS:-}" ]]; then
+  for _cr in $_CODE_CHANGING_ROLES; do
+    if [[ "$WORKER_ROLE" == "$_cr" ]]; then
+      echo "ERROR: WORKER_WORKTREE is required for code-changing workers (WORKER_ROLE=$WORKER_ROLE)." >&2
+      echo "  Create an isolated worktree first:" >&2
+      echo "    WORKER_WORKTREE=\$(./scripts/create_worker_worktree.sh <branch> <path>)" >&2
+      echo "  To bypass (orchestrator-approved only): set WORKER_WORKTREE_BYPASS=1" >&2
+      exit 2
+    fi
+  done
+fi
 WORKER_CWD="${WORKER_WORKTREE:-$REPO_ROOT}"
 if [[ -n "${WORKER_WORKTREE:-}" && ! -d "$WORKER_WORKTREE" ]]; then
   echo "ERROR: WORKER_WORKTREE is not a directory: $WORKER_WORKTREE" >&2

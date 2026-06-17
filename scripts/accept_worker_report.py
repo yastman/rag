@@ -126,6 +126,34 @@ def forbidden_files_touched(text: str) -> list[str]:
     return hits
 
 
+def diff_vs_report(
+    reported: list[str], branch: str, repo_root: Path | None = None
+) -> tuple[bool, list[str]]:
+    """Compare reported changed_files against actual git diff for branch.
+
+    Returns (match: bool, undeclared_files: list[str]).
+    undeclared_files = files in git diff but NOT in the report.
+    If git is unavailable or branch is empty, returns (True, []) — no facts to emit.
+    """
+    cwd = str(repo_root) if repo_root else None
+    try:
+        result = subprocess.run(  # nosec B603 B607
+            ["git", "diff", "--name-only", f"{branch}...HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+        )
+    except FileNotFoundError:
+        return True, []  # git not available
+    if result.returncode != 0:
+        return True, []  # branch not found or not a git repo
+
+    diff_files = [f.strip() for f in result.stdout.splitlines() if f.strip()]
+    reported_set = set(reported)
+    undeclared = [f for f in diff_files if f not in reported_set]
+    return not undeclared, undeclared
+
+
 def close_window(worker_name: str) -> None:
     closer = Path(__file__).with_name("close_markdown_worker_window.py")
     subprocess.run([sys.executable, str(closer), "--worker", worker_name], check=False)  # nosec B603
@@ -140,6 +168,16 @@ def main() -> int:
         "--role", required=True, choices=["research", "implementation", "review-fix", "pr-review"]
     )
     parser.add_argument("--close-window", metavar="WORKER_NAME")
+    parser.add_argument(
+        "--branch",
+        default="",
+        metavar="BASE_BRANCH",
+        help=(
+            "Base branch for git diff reconciliation (e.g. 'main', 'dev'). "
+            "When provided, emits diff_files_match=1|0 and undeclared_files=<csv> "
+            "by comparing git diff <branch>...HEAD against the report's changed_files."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.report.exists():
@@ -176,6 +214,28 @@ def main() -> int:
         print(f"forbidden_files={','.join(forbidden)}")
 
     checks_passed = required_present and verification_found and not forbidden
+
+    # Diff-vs-report reconciliation (Acceptance Gate #4).
+    # Emits mechanical facts only; the orchestrator decides next action.
+    if args.branch:
+        reported_files = extract_changed_files(text)
+        match, undeclared = diff_vs_report(
+            reported_files, args.branch, repo_root=Path(__file__).resolve().parents[1]
+        )
+        print(f"diff_files_match={int(match)}")
+        if undeclared:
+            print(f"undeclared_files={','.join(undeclared)}")
+        # Undeclared files in the diff are a hard failure for the forbidden-file check:
+        # a worker touching .env without declaring it must not pass.
+        if not match:
+            undeclared_forbidden = [
+                f for f in undeclared if any(pat in f for pat in FORBIDDEN_PATTERNS)
+            ]
+            if undeclared_forbidden:
+                forbidden = list(set(forbidden) | set(undeclared_forbidden))
+                print(f"forbidden_files_touched={len(forbidden)}")
+                print(f"forbidden_files={','.join(forbidden)}")
+                checks_passed = False
 
     # Strict mode: structural Pydantic validation is an extra mechanical fact.
     if os.getenv("KIRO_STRICT_REPORT") == "1":

@@ -80,9 +80,8 @@ Launch workers mechanically from an accepted `SWARM_PLAN`.
    - read-only report fields: `findings`, `evidence_commands`, `next_action`
    - required superpowers for worker type (see below).
 4. Before launch, ensure selected Kiro agent/config can read local skill roots:
-   - `/home/user/.kiro/skills/*`
-   - `/home/user/.kiro/skills/*`
-   - `/home/user/.kiro/skills/*`
+   - `.kiro/skills/*` (repo-local skills, relative to the project root)
+   - `~/.kiro/skills/*` (user-global skills)
    This belongs in Kiro permissions, not worker prompts.
 5. Launch with `scripts/launch_kiro_worker.sh` only.
    - Do not use `kiro-cli chat --no-interactive` headless, `--verbose`, polling, or transcript streaming.

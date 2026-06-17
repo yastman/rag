@@ -49,6 +49,14 @@ prompt:
      `auto_reindex` freshness via `codeindexer jobs` / `doctor` / `doctor --fix`
      / focused `reindex`, no custom git hooks).
    - `local_validation`, `disposition` (`pr | merge_done | keep_worktree | discard_with_confirmation`)
+   - **When `disposition=pr`**: PR creation ownership must be made explicit.
+     The orchestrator/control-plane is forbidden from running git/gh commands
+     (mechanical checks only). So the plan MUST either:
+     (a) Bake an explicit `"Create the PR using scripts/create_pr.sh after push"`
+         instruction into the implementation worker's prompt — the worker is then
+         responsible for push + PR, and the prompt must include this assignment, OR
+     (b) Add a dedicated `pr-create` worker step after the implementation step.
+     Without one of these, PRs will silently never be created (card_87ff5230243a).
    - code-changing prompt contract to include exact section `Finish Report Must Include:`
      with `changed_files`, `superpowers_used`, `skipped_superpowers`,
      `tests_run`, `verification_evidence`, and `evidence_commands`
