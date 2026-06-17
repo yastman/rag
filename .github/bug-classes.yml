@@ -29,3 +29,8 @@ bug_classes:
     description: DoclingClient read_bytes() loads entire document into memory before multipart upload
     canonical_issue: "#2622"
     guardrail: "tests/unit/ingestion/test_docling_client_streaming.py"
+
+  - id: perf/dynamic-import-hotpath
+    description: Filesystem dynamic import (spec_from_file_location/exec_module) used in RAG hot-path, bypassing module cache and type identity
+    canonical_issue: "#2620"
+    guardrail: tests/contract/test_no_dynamic_import_in_runtime_hotpath_contract.py
