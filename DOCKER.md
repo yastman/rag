@@ -46,6 +46,15 @@ Optional profiles add scoped services:
 | `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
 | `full` | all profile-gated services | |
 
+**Python extras per profile** (root `pyproject.toml`, for native / non-Docker use):
+- `default/core` — no extra needed; base `[project.dependencies]` are the lean core set.
+- `bot` — uses `telegram_bot/pyproject.toml` and its own `telegram_bot/uv.lock`; root extras not used.
+- `ingest` — `uv sync --extra ingest` (adds `docling`, `cocoindex`, `fastembed`, `pymupdf`). `Dockerfile.ingestion` uses `--extra ingest`.
+- `ml-local` (BGE-M3 local inference) — `uv sync --extra ml-local` (adds `torch`, `FlagEmbedding`, `sentence-transformers`, `scipy`).
+- `ml` (Langfuse observability stack) — pure Docker containers; no root Python extras required.
+- `obs` (Loki/Promtail/Alertmanager) — pure Docker containers; no root Python extras required.
+- `voice` — archived (ARCH-02); voice agent ran from `archive/api/`; no active Python extras for root project.
+
 ### VPS default runtime
 
 `compose.yml:compose.vps.yml` starts only the RAG chatbot core by default:
