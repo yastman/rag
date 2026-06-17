@@ -3,8 +3,7 @@
 
 Markdown-first workers do NOT use this validator. It runs only when the
 environment sets ``KIRO_STRICT_REPORT=1`` (legacy / explicit strict machine
-handoff). By default it is a no-op that exits 0. See
-``.kiro/skills/shared/strict-json-policy.md``.
+handoff). By default it is a no-op that exits 0.
 
 Usage:
     KIRO_STRICT_REPORT=1 python scripts/validate_done_json.py path/to/file.done.json

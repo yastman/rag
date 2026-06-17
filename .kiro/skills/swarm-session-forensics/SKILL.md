@@ -64,12 +64,6 @@ log reads), then ask for completion in Markdown with a fresh
    evidence conflicts remain after follow-up, safety/production ambiguity exists,
    or Flash reports low confidence.
 
-## Legacy Strict Mode
-
-Use strict JSON artifacts only when the user asks for a machine-readable trace
-table, token table, or automated repair handoff. Mark that prompt with
-`SWARM_CONTRACT=strict_json`.
-
 ## Output
 
 Produce or accept a Markdown `SESSION_FORENSICS` report. Emit

@@ -8,18 +8,8 @@ description: 'Use when tmux swarm state is unsafe or inconsistent, or when a swa
 Diagnose broken swarm state with bounded reads, repair only the control surface,
 and avoid turning recovery into broad task discovery.
 
-## Worker-First Rule
-
-The orchestrator is the control plane. If this step requires broad reading, launch or use
-a worker artifact. Do not spend orchestrator context on raw issue archaeology,
-full diffs, raw logs, broad repo scans, or transcript reading unless the
-artifact is missing, contradictory, safety-critical, or the task is tiny.
-
-## Handoff Discipline
-
-If this skill emits `next_skill`, stop current-phase work and invoke that
-skill before continuing. Do not perform the next phase locally unless the next
-skill is unavailable or the task is tiny/local.
+<!-- Guard blocks: Worker-First Rule, Handoff Discipline, Token Budget →
+     see `shared/orchestrator-guard-blocks.md` -->
 
 ## Inputs
 

@@ -44,7 +44,42 @@ Write code before the test? Delete it. Start over.
 
 Implement fresh from tests. Period.
 
-## Red-Green-Refactor
+## Repo-Specific Commands (rag-fresh / Python / pytest / uv / make)
+
+This repo uses Python 3.11+ with `uv`, `pytest`, and `make`. Translate the
+generic TDD commands as follows:
+
+**RED — write and watch fail:**
+```bash
+uv run pytest tests/unit/path/to/test_new_feature.py -x -q
+# confirm: FAILED (not ERROR), correct failure message
+```
+
+**GREEN — minimal code, watch pass:**
+```bash
+uv run pytest tests/unit/path/to/test_new_feature.py -x -q
+# confirm: 1 passed
+```
+
+**Verify suite still green (pick the smallest target for your change tier):**
+```bash
+make test-core      # src/core/, src/runtime/, contracts — preferred first
+make test-contract  # .kiro/skills/, .kiro/steering/, scripts/ changes
+make test           # adapter/service changes (telegram_bot/, src/api/)
+make check          # Ruff lint + MyPy strict — always run before claiming done
+```
+
+See `AGENTS.md` Test Policy and `docs/engineering/test-writing-guide.md` for
+the full tier table and test-writing conventions for this repo.
+
+**Red Flags for this repo:**
+- Skipping `make check` — MyPy will catch type errors the tests don't.
+- Running `npm test` or `jest` — this is a Python repo.
+- Only running the full `make test-full` — prefer focused tier first.
+
+---
+
+
 
 ```dot
 digraph tdd_cycle {

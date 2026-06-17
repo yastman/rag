@@ -1,6 +1,6 @@
 ---
 name: swarm-acceptance
-description: Accept tmux/Kiro worker terminal events. Use when a worker emits DONE/FAILED/BLOCKED, when acceptance must classify next action from a compact report, or when repair/relaunch routing is required. Prefer Markdown reports; use legacy strict JSON only for .json terminal artifacts or explicit strict_json mode.
+description: Accept tmux/Kiro worker terminal events. Use when a worker emits DONE/FAILED/BLOCKED, when acceptance must classify next action from a compact report, or when repair/relaunch routing is required. Markdown reports are default; strict JSON only for legacy .json terminal artifacts.
 ---
 
 # Swarm Acceptance

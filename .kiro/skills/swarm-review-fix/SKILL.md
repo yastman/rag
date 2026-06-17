@@ -65,8 +65,3 @@ Do not create a new Python 3.14 environment, run `uv sync`, upgrade dependency
 groups, or build heavy packages such as `grpcio` from source during review-fix
 unless dependency installation is the named blocker. If the reusable environment
 is unavailable, report the check as blocked/skipped.
-
-## Legacy Strict Mode
-
-Use strict JSON only when explicitly requested with `SWARM_CONTRACT=strict_json`
-for automated machine handoff.

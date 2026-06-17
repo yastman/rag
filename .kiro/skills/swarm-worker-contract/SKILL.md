@@ -1,6 +1,6 @@
 ---
 name: swarm-worker-contract
-description: Use only in legacy or local the orchestrator swarm workers before finishing implementation, review, review-fix, or operator-skill work; Markdown reports are default, machine JSON is legacy strict_json mode only.
+description: Use only in legacy or local the orchestrator swarm workers before finishing implementation, review, review-fix, or operator-skill work; Markdown reports are default.
 ---
 
 # Swarm Worker Contract
@@ -110,9 +110,3 @@ similarity, report `classification: unknown` and list the missing evidence in
 `blockers`.
 Do not claim duplicate/recurrence/umbrella/bug-class work as DONE without valid
 `bug_class_registry_evidence`.
-
-## Legacy Strict JSON
-
-Machine JSON artifacts, signal validators, registry state, and wake-up receipts
-are legacy strict mode. Use them only when the prompt explicitly sets
-`SWARM_CONTRACT=strict_json` or requires automated machine handoff.
