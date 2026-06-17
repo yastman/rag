@@ -1922,17 +1922,6 @@ class PropertyBot:
             update_kwargs["metadata"] = root_trace_metadata
         get_client().update_current_span(**update_kwargs)
 
-        # Update session last_active for idle detection (#445)
-        if self._cache.redis is not None:
-            try:
-                await self._cache.redis.set(
-                    f"session:last_active:{message.from_user.id}",
-                    str(time.time()),
-                    ex=7200,  # 2h TTL
-                )
-            except Exception:
-                logger.debug("Failed to update session last_active", exc_info=True)
-
     async def _send_markdown_chunks(
         self,
         message: Message,
@@ -3440,17 +3429,6 @@ class PropertyBot:
                         )
                 except Exception:
                     logger.warning("Failed to save voice history turn", exc_info=True)
-
-            # Update session last_active for idle detection (#445)
-            if self._cache.redis is not None:
-                try:
-                    await self._cache.redis.set(
-                        f"session:last_active:{message.from_user.id}",
-                        str(time.time()),
-                        ex=7200,  # 2h TTL
-                    )
-                except Exception:
-                    logger.debug("Failed to update session last_active", exc_info=True)
 
     async def _send_hitl_confirmation(
         self,
