@@ -1,0 +1,762 @@
+"""Langfuse observability helpers with runtime initialization.
+
+This module always exposes the real Langfuse SDK APIs (`observe`, `get_client`,
+`propagate_attributes`) and relies on SDK-native graceful degradation when
+credentials are unavailable.
+
+Use `initialize_langfuse()` after loading runtime config (e.g. BotConfig) to
+ensure credentials from `.env`/environment are applied before first tracing.
+"""
+
+import atexit
+import contextlib
+import json
+import logging
+import os
+import threading
+import warnings
+from datetime import UTC, datetime
+from typing import Any
+
+from src.observability.bootstrap import (
+    disable_otel_exporter as _disable_otel_exporter,
+)
+from src.observability.bootstrap import (
+    is_endpoint_reachable as _is_endpoint_reachable,
+)
+from src.security.pii_redaction import PIIRedactor
+
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Issue #1381 — suppress the Langfuse SDK Pydantic V1 UserWarning
+# ---------------------------------------------------------------------------
+
+
+def _install_langfuse_warning_filters() -> None:
+    """Suppress the Langfuse Pydantic V1 ``UserWarning`` on Python 3.14+.
+
+    Langfuse SDK 4.3.x's internal compat shim imports ``pydantic.v1`` which
+    Pydantic 2 deliberately deprecates on Python 3.14 with::
+
+        UserWarning: Core Pydantic V1 functionality isn't compatible with
+        Python 3.14 or greater.
+
+    The warning is harmless today — Langfuse only touches a tiny v1 surface —
+    but it pollutes every bot run, test, and validation script. We install a
+    *narrowly scoped* filter that drops only this specific message, so any
+    unrelated ``UserWarning`` (e.g. from our own code) still surfaces.
+    """
+    warnings.filterwarnings(
+        "ignore",
+        message=r"Core Pydantic V1 functionality isn't compatible with Python 3\.14.*",
+        category=UserWarning,
+    )
+
+
+# Apply the filter as early as possible — before the guarded Langfuse import
+# below — so the warning never reaches stderr / Loki / pytest captures.
+_install_langfuse_warning_filters()
+
+_MAX_PII_TEXT_LENGTH = 4000
+_MODEL_DEFINITIONS_ENV = "LANGFUSE_MODEL_DEFINITIONS_JSON"
+_MODEL_SYNC_ENABLED_ENV = "LANGFUSE_MODEL_SYNC_ENABLED"
+_MODEL_LIST_PAGE_SIZE = 100
+_OTEL_EXPORT_DEFAULTS = {
+    "OTEL_BSP_SCHEDULE_DELAY": "30000",
+    "OTEL_BSP_EXPORT_TIMEOUT": "10000",
+    "OTEL_EXPORTER_OTLP_TIMEOUT": "10000",
+}
+
+_pii_redactor = PIIRedactor()
+
+_langfuse_endpoint_warned = False
+
+
+# ---------------------------------------------------------------------------
+# Guarded Langfuse SDK import (graceful degradation under Python 3.14)
+# ---------------------------------------------------------------------------
+
+try:
+    from langfuse import Langfuse
+    from langfuse import get_client as _real_get_client
+    from langfuse import observe as _real_observe
+    from langfuse import propagate_attributes as _real_propagate
+
+    _LANGFUSE_AVAILABLE = True
+    _LANGFUSE_IMPORT_ERROR = None
+except Exception as _e:
+    _LANGFUSE_AVAILABLE = False
+    _LANGFUSE_IMPORT_ERROR = _e
+
+    class Langfuse:  # type: ignore[no-redef]
+        """Placeholder that raises the original import error on instantiation."""
+
+        def __init__(self, *args, **kwargs):
+            raise _LANGFUSE_IMPORT_ERROR
+
+    def _real_observe(*args, **kwargs):
+        """No-op decorator factory."""
+
+        def decorator(func):
+            return func
+
+        if args and callable(args[0]) and not kwargs:
+            return args[0]
+        return decorator
+
+    def _real_get_client():  # type: ignore[misc]
+        return None
+
+    @contextlib.contextmanager
+    def _real_propagate(**kwargs):  # type: ignore[misc]
+        yield
+
+
+# ---------------------------------------------------------------------------
+# Module state
+# ---------------------------------------------------------------------------
+
+_langfuse_client: Langfuse | None = None
+_langfuse_init_attempted = False
+# #2214: guard the lazy singleton init. Without a lock, two startup threads can
+# both pass the ``_langfuse_client is None`` check and each construct a Langfuse
+# client + register an atexit shutdown; the second client overwrites the global
+# and the first leaks (its buffered spans are never flushed). Use a re-entrant
+# lock so a thread already inside ``initialize_langfuse`` can call it again
+# (e.g. via ``get_langfuse_client``) without deadlocking.
+_langfuse_init_lock = threading.RLock()
+
+
+# ---------------------------------------------------------------------------
+# PII masking (always available)
+# ---------------------------------------------------------------------------
+
+
+def mask_pii(data: Any) -> Any:
+    """Mask PII before sending to Langfuse.
+
+    Applied to all inputs/outputs/metadata automatically.
+    Delegates to PIIRedactor for pattern matching; truncates long strings.
+
+    Masks:
+    - Ukrainian passport numbers
+    - Tax IDs (РНОКПП, 10 digits)
+    - Telegram user IDs (9-10 digits)
+    - Phone numbers (10-15 digits with optional +)
+    - Email addresses
+    - Long texts (>4000 chars truncated)
+    """
+    return _pii_redactor.mask(data, max_length=_MAX_PII_TEXT_LENGTH)
+
+
+# ---------------------------------------------------------------------------
+# Public SDK exports
+# ---------------------------------------------------------------------------
+
+observe = _real_observe
+get_client = _real_get_client
+propagate_attributes = _real_propagate
+
+
+def _langfuse_enabled() -> bool:
+    """Return whether Langfuse client construction is explicitly enabled.
+
+    DEPS-OBS2 makes JSON logs the default observability path. Operators must
+    opt in to Langfuse with ``LANGFUSE_ENABLED=true`` before environment-based
+    credentials can construct a client. Explicit function arguments remain a
+    programmatic override for tests and edge-owned optional listeners.
+    """
+    return os.getenv("LANGFUSE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_config_value(explicit: str | None, env_name: str) -> str | None:
+    """Resolve explicit override first, then environment variable."""
+    value = explicit if explicit is not None else os.getenv(env_name)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _ensure_otel_service_name(default: str) -> None:
+    """Set OTEL_SERVICE_NAME to default when absent, preserving explicit config."""
+    if not os.environ.get("OTEL_SERVICE_NAME"):
+        os.environ["OTEL_SERVICE_NAME"] = default
+
+
+def _resolve_release(explicit: str | None = None) -> str:
+    """Resolve the release/version string for Langfuse + OTEL resource (#2227).
+
+    Order of precedence:
+      1. explicit argument,
+      2. ``LANGFUSE_RELEASE`` env var,
+      3. installed package version (``contextual-rag@<version>``),
+      4. ``unknown`` sentinel.
+
+    Mirrors ``src/observability_sentry.py::_resolve_release`` so Sentry and
+    Langfuse group events by the same release string. Never returns ``None``
+    / empty so Langfuse always has a value to power "Aggregate by version".
+    """
+    candidate = explicit if explicit is not None else os.getenv("LANGFUSE_RELEASE", "")
+    candidate = (candidate or "").strip()
+    if candidate:
+        return candidate
+    try:
+        from importlib import metadata as _metadata
+
+        return f"contextual-rag@{_metadata.version('contextual-rag')}"
+    except Exception:
+        return "contextual-rag@unknown"
+
+
+def _ensure_otel_resource_attributes(*, service_namespace: str = "rag") -> None:
+    """Merge OTEL resource attributes into ``OTEL_RESOURCE_ATTRIBUTES`` (#2227).
+
+    The OpenTelemetry SDK reads ``OTEL_RESOURCE_ATTRIBUTES`` natively via the
+    ``OTELResourceDetector`` inside ``Resource.create()``, so every span the
+    Langfuse v4 SDK emits picks these up without touching the TracerProvider.
+
+    We *merge* rather than overwrite: keys an operator already set (e.g. in
+    ``compose.yml``) win, and we only fill the gaps. This adds:
+
+      * ``service.version``        — release string (see ``_resolve_release``),
+        powers Langfuse "Aggregate by version" / release-regression views.
+      * ``service.namespace``      — logical app grouping (bot+rag-api+bge-m3).
+      * ``deployment.environment`` — OTEL semantic env (mirrors
+        ``LANGFUSE_TRACING_ENVIRONMENT``), distinct from the Langfuse-specific
+        ``environment`` kwarg.
+      * ``host.name``              — emitting container/instance hostname, for
+        multi-replica triage.
+    """
+    existing_raw = os.environ.get("OTEL_RESOURCE_ATTRIBUTES", "")
+    merged: dict[str, str] = {}
+    for pair in existing_raw.split(","):
+        pair = pair.strip()
+        if pair and "=" in pair:
+            key, val = pair.split("=", 1)
+            key, val = key.strip(), val.strip()
+            # Skip empty values (e.g. ``service.version=`` when ${GIT_SHA} is
+            # unset in compose) so our defaults can fill them. A non-empty
+            # operator value always wins.
+            if val:
+                merged[key] = val
+
+    defaults: dict[str, str] = {
+        "service.version": _resolve_release(),
+        "service.namespace": service_namespace,
+    }
+    tracing_env = (os.environ.get("LANGFUSE_TRACING_ENVIRONMENT", "") or "").strip()
+    if tracing_env:
+        defaults["deployment.environment"] = tracing_env
+    try:
+        import socket
+
+        defaults["host.name"] = socket.gethostname()
+    except Exception:
+        defaults["host.name"] = "unknown"
+
+    # Operator-set keys win; defaults only fill gaps.
+    for key, val in defaults.items():
+        merged.setdefault(key, val)
+
+    os.environ["OTEL_RESOURCE_ATTRIBUTES"] = ",".join(f"{k}={v}" for k, v in sorted(merged.items()))
+
+
+def _ensure_otel_export_defaults() -> None:
+    """Set conservative OTEL export defaults unless explicitly configured."""
+    for env_name, default in _OTEL_EXPORT_DEFAULTS.items():
+        if not os.environ.get(env_name):
+            os.environ[env_name] = default
+
+
+def _to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return float(stripped)
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_unit(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        candidate = value.strip().upper()
+    else:
+        candidate = str(getattr(value, "value", value)).strip().upper()
+    return candidate or None
+
+
+def _normalize_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        except ValueError:
+            return None
+    return None
+
+
+def _load_model_definitions_from_env() -> list[dict[str, Any]]:
+    """Load custom Langfuse model definitions from JSON env."""
+    raw = os.getenv(_MODEL_DEFINITIONS_ENV, "").strip()
+    if not raw:
+        return []
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Invalid %s JSON, skipping model definition sync", _MODEL_DEFINITIONS_ENV)
+        return []
+
+    entries: list[Any]
+    if isinstance(payload, list):
+        entries = payload
+    elif isinstance(payload, dict):
+        entries = [payload]
+    else:
+        logger.warning("%s must be list/dict, got %s", _MODEL_DEFINITIONS_ENV, type(payload))
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for idx, item in enumerate(entries):
+        if not isinstance(item, dict):
+            logger.warning(
+                "Skipping model definition #%d: expected object, got %s", idx, type(item)
+            )
+            continue
+
+        model_name = str(item.get("model_name", "")).strip()
+        match_pattern = str(item.get("match_pattern", "")).strip()
+        if not model_name or not match_pattern:
+            logger.warning(
+                "Skipping model definition #%d: model_name and match_pattern are required",
+                idx,
+            )
+            continue
+
+        definition: dict[str, Any] = {
+            "model_name": model_name,
+            "match_pattern": match_pattern,
+        }
+
+        unit = _normalize_unit(item.get("unit"))
+        if unit:
+            definition["unit"] = unit
+
+        start_date = _normalize_datetime(item.get("start_date"))
+        if start_date is not None:
+            definition["start_date"] = start_date
+
+        for key in ("input_price", "output_price", "total_price"):
+            value = _to_float(item.get(key))
+            if value is not None:
+                definition[key] = value
+
+        tokenizer_id = item.get("tokenizer_id")
+        if isinstance(tokenizer_id, str) and tokenizer_id.strip():
+            definition["tokenizer_id"] = tokenizer_id.strip()
+
+        tokenizer_config = item.get("tokenizer_config")
+        if isinstance(tokenizer_config, dict) and tokenizer_config:
+            definition["tokenizer_config"] = tokenizer_config
+
+        normalized.append(definition)
+
+    return normalized
+
+
+def _model_definitions_equal(existing: Any, target: dict[str, Any]) -> bool:
+    if str(getattr(existing, "model_name", "")).strip() != target["model_name"]:
+        return False
+    if str(getattr(existing, "match_pattern", "")).strip() != target["match_pattern"]:
+        return False
+
+    existing_unit = _normalize_unit(getattr(existing, "unit", None))
+    target_unit = _normalize_unit(target.get("unit"))
+    if existing_unit != target_unit:
+        return False
+
+    for key in ("input_price", "output_price", "total_price"):
+        existing_price = _to_float(getattr(existing, key, None))
+        target_price = _to_float(target.get(key))
+        if existing_price != target_price:
+            return False
+
+    existing_tokenizer = getattr(existing, "tokenizer_id", None)
+    target_tokenizer = target.get("tokenizer_id")
+    return (existing_tokenizer or None) == (target_tokenizer or None)
+
+
+def sync_langfuse_model_definitions(
+    client: Langfuse | None,
+    *,
+    definitions: list[dict[str, Any]] | None = None,
+) -> int:
+    """Ensure Langfuse custom model definitions are present via SDK API."""
+    if client is None:
+        return 0
+
+    if os.getenv(_MODEL_SYNC_ENABLED_ENV, "true").strip().lower() in {"0", "false", "no"}:
+        return 0
+
+    model_definitions = (
+        definitions if definitions is not None else _load_model_definitions_from_env()
+    )
+    if not model_definitions:
+        return 0
+
+    api = getattr(client, "api", None)
+    models_api = getattr(api, "models", None) if api is not None else None
+    if models_api is None:
+        logger.warning("Langfuse model sync skipped: client.api.models unavailable")
+        return 0
+
+    try:
+        from langfuse.api.commons.types.model_usage_unit import ModelUsageUnit
+    except Exception:
+        logger.warning("Langfuse model sync skipped: ModelUsageUnit import failed")
+        return 0
+
+    existing: list[Any] = []
+    page = 1
+    while True:
+        try:
+            page_data = models_api.list(page=page, limit=_MODEL_LIST_PAGE_SIZE)
+        except Exception:
+            logger.warning("Langfuse model sync skipped: unable to list models", exc_info=True)
+            return 0
+        rows = list(getattr(page_data, "data", []) or [])
+        existing.extend(rows)
+        if len(rows) < _MODEL_LIST_PAGE_SIZE:
+            break
+        page += 1
+
+    created_or_updated = 0
+    for definition in model_definitions:
+        model_name = definition["model_name"]
+        same_name = [m for m in existing if getattr(m, "model_name", None) == model_name]
+        custom = [m for m in same_name if not bool(getattr(m, "is_langfuse_managed", False))]
+
+        current = custom[0] if custom else None
+        if current and _model_definitions_equal(current, definition):
+            continue
+
+        if current is not None:
+            model_id = getattr(current, "id", None)
+            if isinstance(model_id, str) and model_id:
+                try:
+                    models_api.delete(model_id)
+                except Exception:
+                    logger.warning(
+                        "Langfuse model sync: failed to delete stale model '%s' (%s)",
+                        model_name,
+                        model_id,
+                        exc_info=True,
+                    )
+                    continue
+                existing = [m for m in existing if getattr(m, "id", None) != model_id]
+
+        try:
+            create_kwargs = dict(definition)
+            unit = create_kwargs.get("unit")
+            if isinstance(unit, str) and unit.strip():
+                create_kwargs["unit"] = ModelUsageUnit[unit.strip().upper()]
+            created = models_api.create(**create_kwargs)
+            existing.append(created)
+            created_or_updated += 1
+        except Exception:
+            logger.warning(
+                "Langfuse model sync: failed to create model '%s'",
+                model_name,
+                exc_info=True,
+            )
+
+    return created_or_updated
+
+
+def initialize_langfuse(
+    *,
+    public_key: str | None = None,
+    secret_key: str | None = None,
+    host: str | None = None,
+    force: bool = False,
+) -> Langfuse | None:
+    """Initialize a Langfuse client after runtime config is loaded.
+
+    Returns None when credentials are missing, endpoint unreachable, or client creation fails.
+    When the endpoint is unreachable, logs a WARNING once and skips OTEL exporter registration.
+
+    Thread-safe (#2214): initialization is serialized by ``_langfuse_init_lock``
+    so concurrent startup threads cannot each build a client and
+    double-register the atexit shutdown hook (the second client would
+    overwrite the global and the first would never flush).
+    """
+    # Fast path: already initialized — avoid lock contention on the hot path.
+    if _langfuse_client is not None and not force:
+        return _langfuse_client
+    with _langfuse_init_lock:
+        return _initialize_langfuse_locked(
+            public_key=public_key,
+            secret_key=secret_key,
+            host=host,
+            force=force,
+        )
+
+
+def _initialize_langfuse_locked(
+    *,
+    public_key: str | None,
+    secret_key: str | None,
+    host: str | None,
+    force: bool,
+) -> Langfuse | None:
+    """Body of :func:`initialize_langfuse`; must run while holding the lock."""
+    global _langfuse_client
+    global _langfuse_init_attempted
+    global _langfuse_endpoint_warned
+
+    if _langfuse_client is not None and not force:
+        return _langfuse_client
+
+    explicit_config = public_key is not None or secret_key is not None or host is not None
+    if not explicit_config and not _langfuse_enabled():
+        _langfuse_client = None
+        if force or not _langfuse_init_attempted:
+            logger.info("Langfuse disabled (set LANGFUSE_ENABLED=true to enable optional listener)")
+        _langfuse_init_attempted = True
+        _disable_otel_exporter()
+        return None
+
+    # Return cached None without re-logging when already attempted
+    if _langfuse_init_attempted and _langfuse_client is None and not force:
+        return None
+
+    if not _LANGFUSE_AVAILABLE:
+        _langfuse_client = None
+        if not _langfuse_init_attempted:
+            logger.warning("Langfuse SDK unavailable (import failed): %s", _LANGFUSE_IMPORT_ERROR)
+        _langfuse_init_attempted = True
+        _disable_otel_exporter()
+        return None
+
+    resolved_public_key = _resolve_config_value(public_key, "LANGFUSE_PUBLIC_KEY")
+    resolved_secret_key = _resolve_config_value(secret_key, "LANGFUSE_SECRET_KEY")
+    resolved_host = _resolve_config_value(host, "LANGFUSE_HOST")
+
+    if not resolved_public_key or not resolved_secret_key:
+        _langfuse_client = None
+        if force or not _langfuse_init_attempted:
+            logger.info("Langfuse disabled (missing LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY)")
+        _langfuse_init_attempted = True
+        _disable_otel_exporter()
+        return None
+
+    # Probe endpoint reachability only when an explicit host is configured.
+    # Cloud default (no host) is assumed reachable to avoid blocking startup.
+    if resolved_host and not _is_endpoint_reachable(resolved_host):
+        _langfuse_client = None
+        _langfuse_init_attempted = True
+        if not _langfuse_endpoint_warned:
+            _langfuse_endpoint_warned = True
+            logger.warning(
+                "Langfuse endpoint unreachable (%s) — tracing disabled. "
+                "Start Langfuse locally or unset LANGFUSE_HOST to suppress this warning.",
+                resolved_host,
+            )
+        _disable_otel_exporter(shutdown=False)
+        return None
+
+    kwargs: dict[str, Any] = {
+        "public_key": resolved_public_key,
+        "secret_key": resolved_secret_key,
+        "mask": mask_pii,  # type: ignore[arg-type]  # MaskFunction typing mismatch
+    }
+    if resolved_host:
+        kwargs["host"] = resolved_host
+    tracing_env = os.environ.get("LANGFUSE_TRACING_ENVIRONMENT")
+    if tracing_env:
+        kwargs["environment"] = tracing_env
+
+    # Release tag powers Langfuse "Aggregate by version" dashboards (#2227).
+    kwargs["release"] = _resolve_release()
+
+    _ensure_otel_service_name("telegram-bot")
+    # Merge service.version / service.namespace / deployment.environment /
+    # host.name into OTEL_RESOURCE_ATTRIBUTES so every emitted span carries
+    # release + env + namespace for Langfuse UI grouping (#2227). OTEL SDK
+    # reads this env var natively via OTELResourceDetector.
+    _ensure_otel_resource_attributes()
+    _ensure_otel_export_defaults()
+    try:
+        kwargs["flush_at"] = int(os.environ.get("LANGFUSE_FLUSH_AT", "512"))
+        kwargs["flush_interval"] = float(os.environ.get("LANGFUSE_FLUSH_INTERVAL", "5.0"))
+        _langfuse_client = Langfuse(**kwargs)
+        atexit.register(_langfuse_client.shutdown)
+        _langfuse_init_attempted = True
+        synced = sync_langfuse_model_definitions(_langfuse_client)
+        if synced > 0:
+            logger.info("Langfuse model definitions synced: %d", synced)
+        logger.info("Langfuse observability initialized")
+        return _langfuse_client
+    except Exception:
+        logger.warning("Failed to initialize Langfuse client", exc_info=True)
+        _langfuse_client = None
+        _langfuse_init_attempted = True
+        _disable_otel_exporter(shutdown=False)
+        return None
+
+
+def get_langfuse_client() -> Langfuse | None:
+    """Get initialized Langfuse client, lazy-initializing from env when possible."""
+    if _langfuse_client is not None:
+        return _langfuse_client
+    return initialize_langfuse()
+
+
+def flush_langfuse() -> None:
+    """Flush buffered spans/scores on the initialized client, if one exists.
+
+    #2214: the ``BatchSpanProcessor`` flushes on a clean ``atexit``, but a hard
+    ``os._exit()`` or a signal kill drops whatever is still buffered. Long-lived
+    CLI entry points (e.g. ingestion) should call this in a ``finally`` block so
+    their lifecycle traces are not silently lost on abrupt shutdown.
+
+    This is a no-op when no client has been initialized (so it never triggers a
+    lazy init just to flush) and swallows flush errors — losing observability on
+    shutdown must never crash the caller.
+    """
+    if _langfuse_client is None:
+        return
+    with contextlib.suppress(Exception):
+        _langfuse_client.flush()
+
+
+def traced_pipeline(
+    *,
+    session_id: str,
+    user_id: str,
+    tags: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
+):
+    """Context manager for pipeline-level trace propagation.
+
+    Wraps propagate_attributes with sensible defaults.
+    Use at any entry point that invokes @observe-decorated functions.
+    """
+    return propagate_attributes(
+        session_id=session_id,
+        user_id=user_id,
+        tags=tags or [],
+        metadata=metadata or {},
+    )
+
+
+def _reset_langfuse_client_for_tests() -> None:
+    """Reset module-level client cache (test-only helper)."""
+    global _langfuse_client
+    global _langfuse_init_attempted
+    global _langfuse_endpoint_warned
+    _langfuse_client = None
+    _langfuse_init_attempted = False
+    _langfuse_endpoint_warned = False
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle trace helpers (shared by voice and ingestion families)
+# ---------------------------------------------------------------------------
+
+
+def make_lifecycle_session_id(family: str, key: str) -> str:
+    """Build a stable trace session id for a lifecycle family.
+
+    Returns ``"{family}-{normalized_key}"`` or ``"{family}-unknown"`` when *key*
+    is empty or whitespace-only.
+    """
+    normalized = (key or "").strip().replace(" ", "-")
+    return f"{family}-{normalized or 'unknown'}"
+
+
+def update_lifecycle_trace(
+    *,
+    family: str,
+    span_name: str,
+    session_id: str,
+    user_id: str,
+    tags: list[str],
+    metadata: dict[str, Any],
+    trace_id: str | None = None,
+) -> None:
+    """Update (or create) a lifecycle trace span via Langfuse.
+
+    This is the shared core used by both the voice and ingestion families.
+    It creates a span observation and propagates trace attributes in a single
+    context block.
+    """
+    lf = get_langfuse_client()
+    if lf is None:
+        return
+
+    resolved_trace_id = trace_id or lf.create_trace_id(seed=session_id)
+
+    with (
+        lf.start_as_current_observation(
+            as_type="span",
+            name=span_name,
+            trace_context={"trace_id": resolved_trace_id},
+        ) as observation,
+        propagate_attributes(
+            session_id=session_id,
+            user_id=user_id,
+            tags=tags,
+        ),
+    ):
+        observation.update(metadata=metadata)
+
+
+async def try_update_lifecycle_trace_async(
+    *,
+    family: str,
+    span_name: str,
+    session_id: str,
+    user_id: str,
+    tags: list[str],
+    metadata: dict[str, Any],
+    trace_id: str | None = None,
+) -> None:
+    """Best-effort async wrapper around :func:`update_lifecycle_trace`.
+
+    Suppresses all exceptions so callers never fail due to tracing issues.
+    """
+    with contextlib.suppress(Exception):
+        update_lifecycle_trace(
+            family=family,
+            span_name=span_name,
+            session_id=session_id,
+            user_id=user_id,
+            tags=tags,
+            metadata=metadata,
+            trace_id=trace_id,
+        )
