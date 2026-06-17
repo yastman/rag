@@ -41,7 +41,7 @@ def _format_context_for_mode(
                     meta_str += f"Цена: {price_val:,}€\n"
                 else:
                     meta_str += f"Цена: {price_val}€\n"
-            except Exception:
+            except ValueError:
                 meta_str += f"Цена: {metadata['price']}€\n"
 
         if sources_enabled:

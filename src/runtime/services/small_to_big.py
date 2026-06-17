@@ -249,7 +249,13 @@ class SmallToBigService:
             ]
 
         except Exception as e:
-            logger.error(f"Failed to fetch neighbors for {doc_id}:{center_order}: {e}")
+            logger.error(
+                "Failed to fetch neighbors for %s:%s (%s): %s",
+                doc_id,
+                center_order,
+                type(e).__name__,
+                e,
+            )
             return []
 
     def format_expanded_context(

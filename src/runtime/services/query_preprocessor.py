@@ -144,7 +144,7 @@ class HyDEGenerator:
             )
             return query
         except Exception as e:
-            logger.error("HyDE generation failed: %s", e)
+            logger.error("HyDE generation failed (%s): %s", type(e).__name__, e)
             _update_current_span(
                 lf,
                 level="ERROR",
