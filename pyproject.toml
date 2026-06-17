@@ -18,6 +18,11 @@ dependencies = [
     "python-dotenv",
     "typing-extensions>=4.0.0",
     "numpy",
+    # aiohttp and requests: version-control safety pins (#2710 audit).
+    # Neither is imported directly by src/ runtime code; both are pulled
+    # transitively (aiohttp by litellm/openai; requests by docling, fastembed,
+    # and mkdocs-material). Declaring them explicitly prevents resolver surprises
+    # when optional extras are co-installed.
     "aiohttp",
     "requests",
     "phonenumbers>=9.0.25",
@@ -26,6 +31,10 @@ dependencies = [
 [project.optional-dependencies]
 # Explicit core extra for CI/docs symmetry. The base install already contains
 # this same lean set so `uv sync` / `uv sync --no-dev` remain core-only.
+# NOTE (#2710): this extra is intentionally identical to the base dependencies
+# list above. It exists so Makefile/CI can reference `--extra core` explicitly
+# without diverging from the default install. Do not add packages here that
+# are not already in [project.dependencies].
 core = [
     "openai",
     "qdrant-client>=1.17.1",
@@ -96,6 +105,7 @@ ingestion = [
 ]
 
 # Backward-compatible alias for existing make targets and docs.
+# NOTE (#2710): identical to `ingestion` above. Keep in sync or consolidate.
 ingest = [
     "pymupdf>=1.26.0",
     "docling>=2.94.0",
