@@ -1,4 +1,4 @@
-"""Canonical home for service-content YAML loaders (#1948 slice 3).
+"""Canonical home for service-content YAML loaders (#1948 slice 3, #2747).
 
 Issue #1948 ("``src/api`` and ``mini_app`` import from ``telegram_bot``")
 flagged that shared modules used by both the bot and the Mini App backend
@@ -9,19 +9,13 @@ that points here, preserving the bot's existing import surface.
 
 Layering rule (enforced by
 ``tests/contract/test_layering_no_telegram_bot_imports_contract.py``
-in PR #2018 once that lands, and by
-``tests/contract/test_issue_1948_content_loader_slice_contract.py``
-right now):
+and ``tests/contract/test_content_loader_path_contract.py``):
 
   - ``mini_app/`` imports from ``src.services.content_loader``.
   - ``telegram_bot/`` internals may continue to use either path.
 
-Filesystem caveat: the YAML payloads themselves still live under
-``telegram_bot/config/`` because they are bot-specific UI/CRM content.
-The canonical path is computed relative to the repository root so this
-module does not import ``telegram_bot``. Moving the YAMLs out of
-``telegram_bot/config/`` is out of scope for #1948 slice 3 and tracked
-as a follow-up under #1948.
+YAML payloads live under ``src/config/`` (#2747) so this shared module
+does not depend on the Telegram adapter's directory layout.
 """
 
 from __future__ import annotations
@@ -33,9 +27,8 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 
 
-# Resolve the bot's config directory relative to the repository root.
 # ``src/services/content_loader.py`` → ``parents[2]`` is the repo root.
-_CONFIG_DIR = Path(__file__).resolve().parents[2] / "telegram_bot" / "config"
+_CONFIG_DIR = Path(__file__).resolve().parents[2] / "src" / "config"
 
 
 @functools.lru_cache(maxsize=1)

@@ -13,7 +13,7 @@ from src.ingestion.chunker import Chunk
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
 
-DEFAULT_SERVICES_PATH = Path("telegram_bot/config/services.yaml")
+DEFAULT_SERVICES_PATH = Path("src/config/services.yaml")
 
 
 def load_services(services_path: Path) -> list[tuple[str, dict]]:
