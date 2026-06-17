@@ -1,5 +1,8 @@
 """Unit tests for telegram_bot/services/query_preprocessor.py."""
 
+import re
+from unittest.mock import patch
+
 import pytest
 
 from telegram_bot.services.query_preprocessor import QueryPreprocessor
@@ -66,6 +69,69 @@ class TestNormalizeTranslit:
         assert "Варна" in result
         assert "2-room" in result
         assert "50000 EUR" in result
+
+    def test_translit_preserves_cyrillic(self):
+        result = _pp.normalize_translit("квартиры в Бургасе")
+        assert result == "квартиры в Бургасе"
+
+
+class TestQueryPreprocessorTranslitPrecompiled:
+    """Tests for precompiled transliteration patterns (issue #1644).
+
+    Patterns derived from the static TRANSLIT_MAP must be compiled once
+    (at class/module init) and reused — never inside the per-query hot path.
+    """
+
+    def test_translit_patterns_compiled_once(self):
+        """re.compile must NOT be invoked inside the per-query hot path."""
+        pp = QueryPreprocessor()
+        pp.normalize_translit("warmup Burgas")
+
+        queries = [
+            "Burgas",
+            "Sunny Beach",
+            "Sveti Vlas Albena Nesebar",
+            "BURGAS apartment in Varna",
+            "квартира в Sofia рядом с Albena",
+            "Golden Sands hotel in Sozopol",
+        ]
+
+        with patch("re.compile", wraps=re.compile) as mock_compile:
+            for q in queries:
+                pp.normalize_translit(q)
+            mock_compile.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("latin_input", "expected_output"),
+        [
+            pytest.param("apartments in Burgas", "apartments in Бургас", id="burgas"),
+            pytest.param("flights to Varna", "flights to Варна", id="varna"),
+            pytest.param("hotel in Sofia", "hotel in София", id="sofia"),
+            pytest.param(
+                "Sunny Beach apartments", "Солнечный берег apartments", id="sunny_beach_phrase"
+            ),
+            pytest.param("villa in Sveti Vlas", "villa in Святой Влас", id="sveti_vlas_phrase"),
+            pytest.param("Nessebar old town", "Несебър old town", id="nessebar_variant"),
+            pytest.param("Golden Sands hotel", "Золотые пески hotel", id="golden_sands"),
+        ],
+    )
+    def test_translit_output_unchanged(self, latin_input, expected_output):
+        """Byte-identical output guarantee vs. the legacy per-call re.compile version."""
+        assert _pp.normalize_translit(latin_input) == expected_output
+
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [
+            pytest.param("BURGAS", "Бургас", id="all_upper"),
+            pytest.param("burgas", "Бургас", id="all_lower"),
+            pytest.param("BuRgAs", "Бургас", id="mixed_case"),
+            pytest.param("SUNNY BEACH", "Солнечный берег", id="upper_phrase"),
+            pytest.param("sunny beach", "Солнечный берег", id="lower_phrase"),
+        ],
+    )
+    def test_translit_handles_case_insensitivity(self, query, expected):
+        """The IGNORECASE flag must be preserved across the refactor."""
+        assert _pp.normalize_translit(query) == expected
 
 
 class TestGetRRFWeights:
