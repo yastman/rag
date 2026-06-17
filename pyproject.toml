@@ -81,27 +81,6 @@ docs = [
 ]
 
 
-# Optional observability listeners and error tracking
-observability = [
-    "langfuse>=4.0.0,<5.0",
-]
-
-# Optional heavyweight UI/media dependencies
-ui = [
-    "pillow>=12.2.0",
-    "gradio>=6.7.0",
-]
-
-# Mini App (Telegram Web App — FastAPI backend)
-mini-app = [
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
-    "httpx>=0.27.0",
-]
-
-# Voice bot (LiveKit Agents + RAG API) — archived to archive/voice/ (ARCH-02 #2598)
-voice = []
-
 # Docling service dependencies live in services/docling because the root
 # project talks to docling-serve over HTTP. Keeping this root extra empty avoids
 # pulling KFP/Kubernetes service-only packages into the application lockfile.
@@ -125,9 +104,9 @@ ingest = [
     "fastembed>=0.7.4",
 ]
 
-# All optional dependencies
+# All optional dependencies (kept surfaces only; archived extras removed by #2640)
 all = [
-    "contextual-rag[core,telegram,providers,docs,voice,ingest,ml-local,observability,ui,mini-app]",
+    "contextual-rag[core,telegram,providers,docs,ingest,ml-local]",
 ]
 
 # =============================================================================
@@ -152,13 +131,6 @@ dev = [
     "telethon>=1.42.0",
     "pytest-split>=0.11.0",
     "fakeredis>=2.26.0",
-    # Static-analysis support for optional surfaces moved out of base deps.
-    # These stay dev-only so `uv sync --no-dev` keeps the runtime dependency diet.
-    "langfuse>=4.0.0,<5.0",
-    "pillow>=12.2.0",
-    "gradio>=6.7.0",
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
 ]
 
 # =============================================================================

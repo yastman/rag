@@ -1,4 +1,4 @@
-"""Dependency split contracts for the core runtime and optional extras (#2484)."""
+"""Dependency split contracts for the core runtime and optional extras (#2484, #2640)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from pathlib import Path
 
 PYPROJECT = Path("pyproject.toml")
 MAKEFILE = Path("Makefile")
+
+# Archived extras removed by #2640 (monolith archival epic #2596)
+ARCHIVED_EXTRAS = {"observability", "ui", "mini-app", "voice", "eval"}
 
 
 def _project() -> dict:
@@ -73,27 +76,29 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     assert {"docling", "cocoindex", "pymupdf", "fastembed"}.issubset(
         _dep_names(extras["ingestion"])
     )
-    assert {"datasets", "pandas"}.issubset(_dep_names(extras["eval"]))
-    assert "ragas" not in _dep_names(extras["eval"])
-    # voice extra emptied by ARCH-02 #2598 (livekit-* archived to archive/voice/)
-    assert "voice" in extras
 
 
-def test_all_extra_includes_every_runtime_surface() -> None:
-    """`uv sync --all-extras` should preserve the historical full install."""
+def test_archived_extras_removed_from_pyproject() -> None:
+    """Archived surface extras must be removed from pyproject.toml (#2640)."""
+    extras = _project()["project"]["optional-dependencies"]
+    still_present = ARCHIVED_EXTRAS & set(extras)
+    assert not still_present, (
+        f"Archived extras still present in pyproject.toml: {sorted(still_present)}. "
+        "Remove them as part of #2640 monolith archival."
+    )
+
+
+def test_all_extra_includes_every_kept_runtime_surface() -> None:
+    """`uv sync --all-extras` should cover all kept surfaces after archival (#2640)."""
     all_extra = " ".join(_project()["project"]["optional-dependencies"]["all"])
 
-    for name in [
-        "core",
-        "telegram",
-        "providers",
-        "observability",
-        "ingest",
-        "eval",
-        "voice",
-        "ui",
-    ]:
-        assert name in all_extra
+    for name in ["core", "telegram", "providers", "ingest"]:
+        assert name in all_extra, f"'all' extra must include '{name}'"
+
+    for name in ARCHIVED_EXTRAS:
+        assert name not in all_extra, (
+            f"'all' extra must not include archived extra '{name}' (#2640)"
+        )
 
 
 def test_full_optional_unit_lanes_sync_all_extras() -> None:
