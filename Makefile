@@ -246,11 +246,17 @@ all-checks: lint type-check security ## Run all code quality checks
 # TESTING
 # =============================================================================
 
-test: ## Run deterministic core PR/local gate (core + graph paths)
-	@echo "$(BLUE)Running deterministic core gate (test-core + graph_paths)...$(NC)"
+test: ## Run deterministic core PR/local gate (core + graph paths + no-service lane)
+	@echo "$(BLUE)Running deterministic core gate (test-core + graph_paths + no-service lane)...$(NC)"
 	$(MAKE) test-core
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/integration/test_graph_paths.py -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	$(MAKE) test-no-service-lane
 	@echo "$(GREEN)✓ Deterministic core gate complete$(NC)"
+
+test-no-service-lane: ## Run no-service integration/smoke lane (#2324 Phase 1.2)
+	@echo "$(BLUE)Running no-service integration/smoke lane (-m no_services)...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/integration tests/smoke -q --timeout=30 -m "no_services and not requires_extras and not slow"
+	@echo "$(GREEN)✓ No-service integration/smoke lane complete$(NC)"
 
 test-core: ## Run monolith core-required tests only (local/manual)
 	@echo "$(BLUE)Running monolith core test gate...$(NC)"

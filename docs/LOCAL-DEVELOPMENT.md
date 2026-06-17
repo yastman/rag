@@ -234,7 +234,8 @@ Python tests are local/manual validation.
 | Local Command | What It Covers |
 |---|---|
 | `make test-core` | local/manual core monolith gate (core + runtime + contracts) |
-| `make test` | local/manual broad fast gate (unit + critical graph paths) |
+| `make test` | local/manual broad fast gate (core + graph paths + no-service integration/smoke lane) |
+| `make test-no-service-lane` | no-service integration/smoke lane only (`-m no_services`) |
 | `make test-contract` | local/manual static contract gate |
 | `make test-full` | local/manual heavy full gate |
 | `nightly-heavy workflow` | optional/manual/scheduled, not required |

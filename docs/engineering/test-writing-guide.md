@@ -62,7 +62,11 @@ Do not add Telegram, Mini App, voice, ingestion, eval, or legacy graph tests to 
 
 ### Deterministic core lane
 - `make test` is the PR/local deterministic core gate: it runs `make test-core`
-  plus the no-service graph-path integration check.
+  plus the no-service graph-path integration check and the **no-service
+  integration/smoke lane** (`make test-no-service-lane`).
+- `make test-no-service-lane` runs all `tests/integration` and `tests/smoke`
+  files marked `no_services` using pytest's `-m no_services` selector.
+  This lane catches collateral no-service regressions on every PR gate (#2324 Phase 1.2).
 - `make test` must not collect the broad `tests/unit/` tree, because that tree
   includes optional Telegram, API, voice, ingestion, evaluation, observability,
   and service-adapter tests.
