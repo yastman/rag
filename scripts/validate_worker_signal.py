@@ -652,7 +652,7 @@ def validate_launch(
     *,
     quick: bool = False,
 ) -> None:
-    required_fields = (
+    required_fields: tuple[str, ...] = (
         "worker",
         "runner",
         "agent",
