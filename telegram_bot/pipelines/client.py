@@ -14,7 +14,6 @@ from src.observability_payloads import build_safe_input_payload
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.rag import rag_pipeline
-from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
 from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.scoring import score, write_langfuse_scores
@@ -27,7 +26,7 @@ from telegram_bot.services.cache_policy import (
 )
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.history_service import HistoryService
-from telegram_bot.services.telegram_formatting import send_html_messages
+from telegram_bot.services.telegram_formatting import format_sources_html, send_html_messages
 from telegram_bot.services.types import PipelineResult
 
 
@@ -41,6 +40,9 @@ _PIPELINE_STORE_TYPES: frozenset[str] = frozenset({"FAQ", "GENERAL", "ENTITY", "
 
 # Fallback confidence threshold for semantic cache store guard.
 _CONFIDENCE_THRESHOLD = 0.005
+
+# Maximum sources to show in source attribution.
+_MAX_SOURCES = 5
 
 
 # ---------------------------------------------------------------------------
@@ -435,7 +437,7 @@ async def run_client_pipeline(
     documents_list: list[Any] = result.get("documents", [])
     sources_required = bool(getattr(config, "show_sources", False))
     if sources_required and documents_list:
-        sources_html = format_sources(documents_list)
+        sources_html = format_sources_html(documents_list)
         result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
 
     response_already_sent = result.get("response_sent", False)

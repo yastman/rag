@@ -23,8 +23,8 @@ Main bot orchestrator. Initializes:
 - `Bot` instance with configured token
 - `Dispatcher` with FSM storage (Redis or memory)
 - All service layers (cache, embeddings, LLM, Qdrant)
-- Voice path via `build_graph()` (StateGraph, migration to `create_agent` tracked in #2405)
-- Text path via `create_agent` which calls `run_assistant_request()` for core RAG
+- Voice path via `build_graph()` (compatibility façade over imperative pipeline)
+- Text path via `run_core_text_request()` → assistant core (`src/core/`)
 
 Navigation:
 

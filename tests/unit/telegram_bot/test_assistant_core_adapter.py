@@ -42,17 +42,6 @@ def test_build_user_context_is_transport_neutral() -> None:
     assert ctx.language == "ru"
 
 
-def test_core_entrypoint_flag_defaults_off(monkeypatch) -> None:
-    from telegram_bot.assistant_core_adapter import (
-        CORE_ENTRYPOINT_ENV,
-        core_entrypoint_enabled,
-    )
-
-    monkeypatch.delenv(CORE_ENTRYPOINT_ENV, raising=False)
-
-    assert not core_entrypoint_enabled()
-
-
 def test_response_text_for_telegram_returns_core_text() -> None:
     from src.core import AssistantResult
     from telegram_bot.assistant_core_adapter import response_text_for_telegram

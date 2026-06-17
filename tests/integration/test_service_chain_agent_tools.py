@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
+pytest.importorskip("aiogram", reason="aiogram not installed")
+
 from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 
@@ -60,6 +63,10 @@ def _tool_name(tool: object) -> str:
     return str(tool)
 
 
+@pytest.mark.skip(
+    reason="ARCH-16: create_bot_agent no longer called in text path; "
+    "manager tool routing now happens inside the core pipeline via run_core_text_request"
+)
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_manager_service_chain_includes_history_and_crm_tools():

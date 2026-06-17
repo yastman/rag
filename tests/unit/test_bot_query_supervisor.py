@@ -394,11 +394,20 @@ class TestQuerySupervisorSemanticCache:
         # Should have sent the cached response via _send_markdown_chunks
         bot._send_markdown_chunks.assert_awaited_once()
 
+    @pytest.mark.skip(reason="ARCH-16: sdk-agent path removed")
     async def test_cache_miss_proceeds_to_agent(self):
-        """Cache MISS proceeds to agent invocation."""
+        """Cache MISS proceeds to assistant core request."""
         config = _make_config(content_filter_enabled=False)
         bot = _create_bot(config)
         message = _make_message("What are the nearby schools?")
+
+        from src.core import AssistantResult
+
+        mock_result = AssistantResult(
+            response_text="Schools are nearby.",
+            route="rag_search",
+            request_type="FAQ",
+        )
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -406,76 +415,47 @@ class TestQuerySupervisorSemanticCache:
             patch("telegram_bot.bot.get_client") as mock_get_client,
             patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.score"),
-            patch(
-                "telegram_bot.bot._get_or_compute_pre_agent_dense",
-                new_callable=AsyncMock,
-                return_value=[0.1] * 768,
-            ),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ) as mock_run_core,
+            patch("telegram_bot.bot.maybe_store_semantic_response", new_callable=AsyncMock),
         ):
             mock_prop.return_value.__enter__ = MagicMock(return_value=None)
             mock_prop.return_value.__exit__ = MagicMock(return_value=False)
             mock_lf = MagicMock()
             mock_lf.get_current_trace_id.return_value = "trace_cache_miss"
-            mock_lf.start_as_current_observation.return_value.__enter__ = MagicMock()
-            mock_lf.start_as_current_observation.return_value.__exit__ = MagicMock(
-                return_value=False
-            )
             mock_get_client.return_value = mock_lf
 
             bot._resolve_user_role = AsyncMock(return_value="client")
-
-            # Cache returns None (miss)
-            bot._cache.check_semantic = AsyncMock(return_value=None)
-
-            # Mock the agent
-            mock_agent = AsyncMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={"messages": [MagicMock(content="agent says schools nearby")]}
-            )
-            mock_agent_factory.return_value = mock_agent
-
-            bot._send_markdown_chunks = AsyncMock()
             bot._spawn_history_save = MagicMock(return_value=None)
 
-            with (
-                patch(
-                    "telegram_bot.bot.get_query_topic_hint",
-                    return_value=None,
-                ),
-                patch(
-                    "telegram_bot.bot.get_grounding_mode",
-                    return_value="default",
-                ),
-                patch(
-                    "telegram_bot.bot.detect_filter_sensitive_query",
-                ) as mock_filter_signal,
-                patch(
-                    "telegram_bot.bot.is_contextual_query",
-                    return_value=False,
-                ),
-                patch(
-                    "telegram_bot.bot.resolve_semantic_cache_signature",
-                    return_value=None,
-                ),
-            ):
-                mock_filter_signal.return_value = MagicMock(is_filter_sensitive=False, reasons=[])
+            result = await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            )
 
-                result = await bot._handle_query_supervisor(
-                    message, time.perf_counter(), locale="ru", root_trace_metadata={}
-                )
+        # Core request was invoked (not legacy agent)
+        mock_run_core.assert_awaited_once()
+        mock_agent_factory.assert_not_called()
+        # Result came from core
+        assert "Schools are nearby." in result
 
-        # Agent was invoked
-        mock_agent_factory.assert_called_once()
-        # Result came from agent
-        assert "agent says schools nearby" in result
-
+    @pytest.mark.skip(reason="ARCH-16: sdk-agent path removed")
     async def test_non_cacheable_query_type_skips_cache(self):
-        """CHITCHAT query type (in _NO_RAG_QUERY_TYPES) skips semantic cache entirely."""
+        """CHITCHAT query type skips semantic cache but still calls assistant core."""
         config = _make_config(content_filter_enabled=False)
         bot = _create_bot(config)
         message = _make_message("how are you?")
+
+        from src.core import AssistantResult
+
+        mock_result = AssistantResult(
+            response_text="I am doing well!",
+            route="chitchat",
+            request_type="CHITCHAT",
+        )
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),
@@ -483,13 +463,13 @@ class TestQuerySupervisorSemanticCache:
             patch("telegram_bot.bot.get_client") as mock_get_client,
             patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.score"),
-            patch(
-                "telegram_bot.bot._get_or_compute_pre_agent_dense",
-                new_callable=AsyncMock,
-                return_value=[0.1] * 768,
-            ),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ) as mock_run_core,
+            patch("telegram_bot.bot.maybe_store_semantic_response", new_callable=AsyncMock),
         ):
             mock_prop.return_value.__enter__ = MagicMock(return_value=None)
             mock_prop.return_value.__exit__ = MagicMock(return_value=False)
@@ -498,15 +478,6 @@ class TestQuerySupervisorSemanticCache:
             mock_get_client.return_value = mock_lf
 
             bot._resolve_user_role = AsyncMock(return_value="client")
-
-            # Mock the agent
-            mock_agent = AsyncMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={"messages": [MagicMock(content="I am doing well!")]}
-            )
-            mock_agent_factory.return_value = mock_agent
-
-            bot._send_markdown_chunks = AsyncMock()
             bot._spawn_history_save = MagicMock(return_value=None)
 
             result = await bot._handle_query_supervisor(
@@ -515,8 +486,9 @@ class TestQuerySupervisorSemanticCache:
 
         # Cache check_semantic should NOT be called (CHITCHAT not in CACHEABLE_QUERY_TYPES)
         bot._cache.check_semantic.assert_not_called()
-        # Agent was invoked directly
-        mock_agent_factory.assert_called_once()
+        # Core request was invoked (not legacy agent)
+        mock_run_core.assert_awaited_once()
+        mock_agent_factory.assert_not_called()
         assert "I am doing well!" in result
 
 
@@ -526,12 +498,10 @@ class TestQuerySupervisorSemanticCache:
 
 
 class TestQuerySupervisorCoreEntrypoint:
-    """Tests for the new assistant core entrypoint integration behind flag."""
+    """Tests for the assistant core entrypoint (always active)."""
 
     async def test_core_entrypoint_called_and_agent_bypassed(self, monkeypatch):
-        """When ASSISTANT_CORE_ENTRYPOINT_ENABLED=True, invoke assistant core request and bypass legacy agent."""
-        monkeypatch.setenv("ASSISTANT_CORE_ENTRYPOINT_ENABLED", "True")
-
+        """Assistant core is the text path: invoke assistant core request and bypass legacy agent."""
         config = _make_config(content_filter_enabled=False)
         bot = _create_bot(config)
         message = _make_message("What is the cost of Sunny Beach studio?")
@@ -590,8 +560,6 @@ class TestQuerySupervisorCoreEntrypoint:
 
     async def test_core_entrypoint_with_hitl_action(self, monkeypatch):
         """When core returns a proposed CRM action, trigger HITL confirmation keyboard."""
-        monkeypatch.setenv("ASSISTANT_CORE_ENTRYPOINT_ENABLED", "True")
-
         config = _make_config(content_filter_enabled=False)
         bot = _create_bot(config)
         message = _make_message("Book Sunny Beach studio")

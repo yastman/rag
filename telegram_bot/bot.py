@@ -2148,10 +2148,10 @@ class PropertyBot:
     ) -> str:
         """Handle query via imperative adapter SDK (#413 — replaces build_supervisor_graph)."""
 
+        from src.runtime.graph.nodes.guard import _BLOCKED_RESPONSE
+        from src.runtime.services.rag_core import CACHEABLE_QUERY_TYPES
+
         from .agents.agent import LOCALE_TO_LANGUAGE
-        from .agents.context import BotContext
-        from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
-        from .graph.nodes.guard import _BLOCKED_RESPONSE
 
         assert message.bot is not None
         assert message.from_user is not None
@@ -2260,8 +2260,8 @@ class PropertyBot:
 
             # Pre-agent semantic cache check (#563) — skip agent entirely on HIT.
             # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
+            extracted_filters: dict[str, Any] = {}
             if query_type in CACHEABLE_QUERY_TYPES:
-                extracted_filters: dict[str, Any] = {}
                 try:
                     # 1. Dense embedding for semantic lookup only (#1501)
                     dense = await _get_or_compute_pre_agent_dense(
@@ -2504,147 +2504,72 @@ class PropertyBot:
                         "Client direct pipeline failed; falling back to sdk_agent",
                     )
 
-            from .assistant_core_adapter import core_entrypoint_enabled
+            from src.core import CoreDependencies
 
-            if core_entrypoint_enabled():
-                from src.core import CoreDependencies
+            from .assistant_core_adapter import build_user_context, run_core_text_request
 
-                from .assistant_core_adapter import build_user_context, run_core_text_request
-
-                user_context = build_user_context(
-                    user_id=user_id,
-                    session_id=session_id,
-                    role=role,
-                    filters=extracted_filters or None,
-                    language=language,
+            user_context = build_user_context(
+                user_id=user_id,
+                session_id=session_id,
+                role=role,
+                filters=extracted_filters or None,
+                language=language,
+            )
+            dependencies = CoreDependencies(
+                cache=self._cache,
+                embeddings=self._embeddings,
+                sparse_embeddings=self._sparse,
+                qdrant=self._qdrant,
+                reranker=self._reranker,
+                llm=self._llm,
+                config=self.config,
+            )
+            async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                core_result = await run_core_text_request(
+                    query=user_text,
+                    collection=self.config.qdrant_collection,
+                    user_context=user_context,
+                    dependencies=dependencies,
                 )
-                dependencies = CoreDependencies(
-                    cache=self._cache,
-                    embeddings=self._embeddings,
-                    sparse_embeddings=self._sparse,
-                    qdrant=self._qdrant,
-                    reranker=self._reranker,
-                    llm=self._llm,
-                    config=self.config,
+            response_text = core_result.response_text
+            rag_result_store["query_type"] = core_result.request_type or query_type
+            rag_result_store["cache_hit"] = core_result.cache_hit
+            rag_result_store["rerank_applied"] = core_result.rerank_applied
+            rag_result_store["sources_count"] = core_result.documents_count
+            rag_result_store["grade_confidence"] = 1.0 if core_result.documents_count > 0 else 0.0
+            rag_result_store["grounded"] = True
+            rag_result_store["legal_answer_safe"] = True
+            rag_result_store["semantic_cache_safe_reuse"] = True
+            rag_result_store["documents"] = [
+                {
+                    "metadata": {
+                        "title": src.get("title", ""),
+                        "url": src.get("url", ""),
+                    },
+                    "score": 1.0,
+                }
+                for src in core_result.retrieved_sources
+            ]
+            if core_result.proposed_crm_action:
+                action = core_result.proposed_crm_action
+                payload = {
+                    "action_type": action.action_type,
+                    "payload": action.payload,
+                    "preview": action.summary,
+                }
+                await self._send_hitl_confirmation(
+                    message=message,
+                    payload=payload,
+                    thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
                 )
-                async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                    core_result = await run_core_text_request(
-                        query=user_text,
-                        collection=self.config.qdrant_collection,
-                        user_context=user_context,
-                        dependencies=dependencies,
-                    )
-                response_text = core_result.response_text
-                rag_result_store["query_type"] = core_result.request_type or query_type
-                rag_result_store["cache_hit"] = core_result.cache_hit
-                rag_result_store["rerank_applied"] = core_result.rerank_applied
-                rag_result_store["sources_count"] = core_result.documents_count
-                rag_result_store["grade_confidence"] = (
-                    1.0 if core_result.documents_count > 0 else 0.0
-                )
-                rag_result_store["grounded"] = True
-                rag_result_store["legal_answer_safe"] = True
-                rag_result_store["semantic_cache_safe_reuse"] = True
-                rag_result_store["documents"] = [
-                    {
-                        "metadata": {
-                            "title": src.get("title", ""),
-                            "url": src.get("url", ""),
-                        },
-                        "score": 1.0,
-                    }
-                    for src in core_result.retrieved_sources
-                ]
+                return None  # type: ignore[return-value]
 
-                class DummyContext:
-                    response_sent = False
-                    history_reply_markup = None
+            class DummyContext:
+                response_sent = False
+                history_reply_markup = None
 
-                ctx: Any = DummyContext()
-                messages = []
-            else:
-                # Build tools list via shared helper
-                from .agents.tool_assembly import build_agent_tools
-
-                tools = build_agent_tools(
-                    role=role,
-                    config=self.config,
-                    history_service=self._history_service,
-                )
-
-                # Create agent via SDK — route through the in-process LiteLLM router (#420)
-                agent = create_bot_agent(
-                    model=self.config.supervisor_model,
-                    tools=tools,
-                    checkpointer=self._agent_checkpointer,
-                    language=language,
-                    base_url=self.config.llm_base_url,
-                    api_key=self.config.llm_api_key,
-                    role=role,
-                    max_history_messages=self.config.agent_max_history_messages,
-                    max_tokens=self.config.supervisor_max_tokens,
-                )
-
-                # Build context for tool DI
-                ctx = BotContext(
-                    telegram_user_id=user_id,
-                    session_id=session_id,
-                    language=language,
-                    history_service=self._history_service,
-                    embeddings=self._embeddings,
-                    sparse_embeddings=self._sparse,
-                    qdrant=self._qdrant,
-                    cache=self._cache,
-                    reranker=self._reranker,
-                    llm=self._llm,
-                    content_filter_enabled=self.config.content_filter_enabled,
-                    guard_mode=self.config.guard_mode,
-                    role=role,
-                    history_relevance_threshold=self.config.history_relevance_threshold,
-                    original_query=message.text or "",
-                    original_user_query=message.text or "",
-                    bot=bot,
-                    manager_ids=list(self.config.manager_ids),
-                    apartments_service=self._apartments_service,
-                    search_event_store=self._search_event_store,
-                    config=self.config,
-                )
-
-                # Initialize handler inside propagation context so it inherits session/user/tags.
-                langfuse_handler = create_callback_handler()
-                callbacks = [langfuse_handler] if langfuse_handler else []
-                async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                    response_text, result = await self._astream_supervisor_with_recovery(
-                        agent=agent,
-                        tools=tools,
-                        role=role,
-                        user_text=user_text,
-                        chat_id=message.chat.id,
-                        callbacks=callbacks,
-                        bot_context=ctx,
-                        rag_result_store=rag_result_store,
-                        forum_thread_id=forum_thread_id,
-                        use_streaming=message.chat.type == "private",
-                    )
-
-                # Check for HITL interrupt (#443)
-                interrupt_data = result.get("__interrupt__")
-                if interrupt_data:
-                    interrupt_payload = interrupt_data[0].value
-                    await self._send_hitl_confirmation(
-                        message=message,
-                        payload=interrupt_payload,
-                        thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
-                    )
-                    return None  # type: ignore[return-value]
-
-                # Extract response from final message
-                messages = result.get("messages", [])
-                if not response_text and messages:
-                    last_msg = messages[-1]
-                    response_text = (
-                        last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                    )
+            ctx: Any = DummyContext()
+            messages: list[Any] = []
 
             # Extract LLM metrics from supervisor agent response (#515)
             if messages:
@@ -2701,9 +2626,10 @@ class PropertyBot:
                         "OFF_TOPIC",
                     }
                 ):
-                    from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
+                    from telegram_bot.services.telegram_formatting import format_sources_html
 
-                    sources_html = format_sources(documents)
+                    _MAX_SOURCES = 5
+                    sources_html = format_sources_html(documents, max_sources=_MAX_SOURCES)
                     rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
 
                 from telegram_bot.services.telegram_formatting import (
