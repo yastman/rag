@@ -66,12 +66,10 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # handlers (mirrors crm_callbacks.py before the FSM-to-dialog migration).
     "telegram_bot/dialogs/crm_quick_actions.py": ["ERROR"],
     # Background scheduler jobs — observability wrappers around hot lead
-    # notification, lead score sync, nurturing dispatch / funnel rollup;
-    # ERROR span recorded on unhandled exceptions before re-raise so the
-    # job's trace is not silently green (#1662, #1810).
+    # notification; ERROR span recorded on unhandled exceptions before re-raise
+    # so the job's trace is not silently green (#1662, #1810).
+    # NOTE: lead_score_sync, nurturing_scheduler, session_summary_worker archived in #2602.
     "telegram_bot/services/hot_lead_notifier.py": ["ERROR"],
-    "telegram_bot/services/lead_score_sync.py": ["ERROR"],
-    "telegram_bot/services/nurturing_scheduler.py": ["ERROR"],
     # Query analyzer LLM wrapper — records ERROR on OpenAI / connection /
     # rate-limit / timeout exceptions before falling back to the user's raw
     # query (#1659, #1810).
@@ -80,10 +78,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # span when the helper LLM call fails before falling back to the
     # original query (#1810).
     "telegram_bot/services/query_preprocessor.py": ["ERROR"],
-    # Session-summary worker — records ERROR on session-summary-llm span
-    # when the summarization LLM call fails; outer session-summary-check
-    # already swallows worker-cycle errors (#1662, #1810).
-    "telegram_bot/services/session_summary_worker.py": ["ERROR"],
 }
 
 

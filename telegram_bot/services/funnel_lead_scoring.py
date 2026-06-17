@@ -6,7 +6,6 @@ import json
 import logging
 from typing import Any
 
-from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
 from telegram_bot.services.lead_scoring import classify_lead, compute_lead_score
 from telegram_bot.services.lead_scoring_models import LeadScoreRecord
 
@@ -115,14 +114,6 @@ async def persist_and_sync_funnel_lead_score(
         )
     )
 
-    sync_result = await sync_pending_lead_scores(
-        scoring_store=lead_scoring_store,
-        kommo_client=kommo_client,
-        score_field_id=int(getattr(config, "kommo_lead_score_field_id", 0) or 0),
-        band_field_id=int(getattr(config, "kommo_lead_band_field_id", 0) or 0),
-        limit=20,
-    )
-
     notified = False
     threshold = int(getattr(config, "manager_hot_lead_threshold", 60) or 60)
     if hot_lead_notifier is not None and score_value >= threshold:
@@ -139,5 +130,4 @@ async def persist_and_sync_funnel_lead_score(
         "score_value": score_value,
         "score_band": score_band,
         "notified": notified,
-        **sync_result,
     }

@@ -12,7 +12,6 @@ TELEGRAM_PYPROJECT = ROOT / "telegram_bot" / "pyproject.toml"
 OPTIONAL_PACKAGES = {
     "gradio",
     "pillow",
-    "apscheduler",
     "sentry-sdk",
     "langfuse",
 }
@@ -52,4 +51,4 @@ def test_root_extras_keep_optional_dependency_targets() -> None:
 def test_telegram_extras_keep_observability_targets() -> None:
     optional = _load(TELEGRAM_PYPROJECT)["project"].get("optional-dependencies", {})
     flattened = {_package_name(dep) for deps in optional.values() for dep in deps}
-    assert {"langfuse", "sentry-sdk", "apscheduler"} <= flattened
+    assert {"langfuse", "sentry-sdk"} <= flattened

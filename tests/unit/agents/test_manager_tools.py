@@ -202,30 +202,14 @@ class TestCreateManagerNurturingTools:
 
 class TestCreateCrmScoreSyncTool:
     async def test_access_denied_for_client(self) -> None:
-        import unittest.mock as mock
-
-        with (
-            mock.patch(
-                "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
-                new_callable=AsyncMock,
-            ),
-            mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe),
-        ):
-            tool = _make_score_sync_tool()
-            result = await tool.ainvoke({"query": "sync"}, config=_cfg(role="client"))
+        tool = _make_score_sync_tool()
+        result = await tool.ainvoke({"query": "sync"}, config=_cfg(role="client"))
         assert result == "Access denied"
 
-    async def test_manager_can_sync(self) -> None:
+    async def test_manager_gets_archived_message(self) -> None:
         import unittest.mock as mock
 
-        mock_sync = AsyncMock(return_value={"synced": 3, "failed": 0, "skipped": 1})
-        with (
-            mock.patch(
-                "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
-                mock_sync,
-            ),
-            mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe),
-        ):
+        with mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe):
             tool = create_crm_score_sync_tool(
                 scoring_store=None,
                 kommo_client=None,
@@ -235,20 +219,12 @@ class TestCreateCrmScoreSyncTool:
             result = await tool.ainvoke(
                 {"query": "sync"}, config=_cfg(role="manager", user_id=5, session_id="s1")
             )
-        assert "synced 3" in result
-        assert "failed 0" in result
+        assert "archived" in result.lower() or "no longer available" in result.lower()
 
-    async def test_result_contains_user_context(self) -> None:
+    async def test_admin_also_gets_archived_message(self) -> None:
         import unittest.mock as mock
 
-        mock_sync = AsyncMock(return_value={"synced": 1, "failed": 0, "skipped": 0})
-        with (
-            mock.patch(
-                "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
-                mock_sync,
-            ),
-            mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe),
-        ):
+        with mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe):
             tool = create_crm_score_sync_tool(
                 scoring_store=None,
                 kommo_client=None,
@@ -258,5 +234,4 @@ class TestCreateCrmScoreSyncTool:
             result = await tool.ainvoke(
                 {"query": "sync"}, config=_cfg(role="admin", user_id=99, session_id="xyz")
             )
-        assert "99" in result
-        assert "xyz" in result
+        assert result != "Access denied"

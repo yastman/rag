@@ -505,10 +505,8 @@ class PropertyBot:
         # Search event store (initialized in start() with pg_pool)
         self._search_event_store: Any | None = None
 
-        # Nurturing scheduler (initialized in start() if enabled)
-        self._nurturing_scheduler: Any | None = None
-
-        # Manager runtime services (initialized in start() if enabled)
+        # Manager runtime services — archived schedulers removed (#2602);
+        # attributes kept as None stubs for tool_assembly compatibility.
         self._nurturing_service: Any | None = None
         self._funnel_analytics_service: Any | None = None
 
@@ -4154,32 +4152,6 @@ class PropertyBot:
                     except Exception:
                         logger.exception("Failed to initialize hot lead notifier")
 
-                # Initialize nurturing scheduler (#390)
-                if self.config.nurturing_enabled:
-                    try:
-                        from .services.funnel_analytics_service import FunnelAnalyticsService
-                        from .services.nurturing_scheduler import NurturingScheduler
-                        from .services.nurturing_service import NurturingService
-
-                        nurturing_svc = NurturingService(
-                            pool=self._pg_pool,
-                            bot=self.bot if self.config.nurturing_dispatch_enabled else None,
-                            qdrant=self._qdrant if self.config.nurturing_dispatch_enabled else None,
-                            llm=self._llm if self.config.nurturing_dispatch_enabled else None,
-                        )
-                        analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
-                        self._nurturing_service = nurturing_svc
-                        self._funnel_analytics_service = analytics_svc
-                        self._nurturing_scheduler = NurturingScheduler(
-                            nurturing_service=nurturing_svc,
-                            analytics_service=analytics_svc,
-                            lease_store=None,
-                            config=self.config,
-                        )
-                        await self._nurturing_scheduler.start()
-                        logger.info("Nurturing scheduler started")
-                    except Exception:
-                        logger.exception("Failed to start nurturing scheduler")
             except Exception:
                 logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
                 startup_report.add(
@@ -4208,29 +4180,6 @@ class PropertyBot:
             logger.info(
                 "Skipping PostgreSQL pool init because preflight already marked it unavailable"
             )
-
-        # Initialize session summary worker (#445)
-        self._session_summary_worker: Any | None = None
-        if self.config.session_summary_enabled and self._cache.redis is not None:
-            try:
-                from .services.session_summary_worker import SessionSummaryWorker
-
-                self._session_summary_worker = SessionSummaryWorker(
-                    redis=self._cache.redis,
-                    llm=self._llm,
-                    kommo_client=self._kommo_client,
-                    idle_timeout_min=self.config.session_idle_timeout_min,
-                    poll_interval_sec=self.config.session_summary_poll_sec,
-                    summary_model=self.config.session_summary_model,
-                    # Real history retrieval (e.g. legacy graph checkpointer) is
-                    # not yet wired (#1599). Pass None explicitly so the worker
-                    # logs a startup warning instead of silently no-op'ing.
-                    history_source=None,
-                )
-                await self._session_summary_worker.start()
-                logger.info("SessionSummaryWorker started")
-            except Exception:
-                logger.exception("Failed to start SessionSummaryWorker")
 
         # Initialize AI Advisor service (#697)
         self._ai_advisor_service: Any | None = None
@@ -4582,14 +4531,6 @@ class PropertyBot:
                 logger.warning("Failed to close agent checkpointer cleanly", exc_info=True)
             finally:
                 self._agent_checkpointer = None
-        if getattr(self, "_session_summary_worker", None) is not None:
-            await self._session_summary_worker.stop()
-            self._session_summary_worker = None
-        if self._nurturing_scheduler is not None:
-            await self._nurturing_scheduler.stop()
-            self._nurturing_scheduler = None
-        self._nurturing_service = None
-        self._funnel_analytics_service = None
         if self._pg_pool is not None:
             await self._pg_pool.close()
             logger.info("PostgreSQL pool closed")

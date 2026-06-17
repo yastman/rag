@@ -8,7 +8,6 @@ from typing import Any
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
 from telegram_bot.observability import observe
-from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
 
 
 def _resolve_role(config: RunnableConfig) -> str:
@@ -77,7 +76,7 @@ def create_crm_score_sync_tool(
     score_field_id: int,
     band_field_id: int,
 ) -> Any:
-    """Create crm_sync_lead_score production tool."""
+    """Create crm_sync_lead_score tool (archived — lead_score_sync removed in #2602)."""
 
     @tool
     @observe(name="tool-crm-sync-lead-score", as_type="tool")
@@ -86,18 +85,6 @@ def create_crm_score_sync_tool(
         role = _resolve_role(config)
         if role not in {"manager", "admin"}:
             return "Access denied"
-
-        user_id, session_id = _get_user_context(config)
-        result = await sync_pending_lead_scores(
-            scoring_store=scoring_store,
-            kommo_client=kommo_client,
-            score_field_id=score_field_id,
-            band_field_id=band_field_id,
-            limit=20,
-        )
-        return (
-            f"CRM score sync completed: synced {result['synced']}, failed {result['failed']}, "
-            f"skipped {result['skipped']} (user {user_id}, session {session_id})"
-        )
+        return "CRM lead score sync is no longer available (scheduler archived in #2602)."
 
     return crm_sync_lead_score
