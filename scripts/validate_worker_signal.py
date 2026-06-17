@@ -749,7 +749,11 @@ def validate_role(role: str, data: dict[str, Any], errors: list[str]) -> None:
     if role in {"artifact-check", "local-verification"} and data.get("pushed") is not False:
         fail(errors, "pushed must be false for artifact-check/local-verification")
 
-    if role == "review-fix" and data.get("status") == "done" and data.get("review_decision") == "clean":
+    if (
+        role == "review-fix"
+        and data.get("status") == "done"
+        and data.get("review_decision") == "clean"
+    ):
         fail(errors, "review-fix done cannot use review_decision clean")
 
 

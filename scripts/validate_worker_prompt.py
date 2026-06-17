@@ -430,9 +430,7 @@ def validate(text: str, *, contract: str) -> list[str]:
     if re.search(r"(?im)^\s*variant:\s*empty\s*$", text):
         errors.append('variant must be "" or "empty string", not literal "empty"')
     if any(pattern.search(text) for pattern in CJ_SUBMIT_PATTERNS):
-        errors.append(
-            "prompt source must not use C-j as submit; Kiro TUI treats Ctrl+J as newline"
-        )
+        errors.append("prompt source must not use C-j as submit; Kiro TUI treats Ctrl+J as newline")
     if any(pattern.search(text) for pattern in ENTER_SUBMIT_PATTERNS):
         errors.append("prompt source must not use Enter as submit; Kiro TUI requires isolated C-m")
 
@@ -495,7 +493,7 @@ def validate(text: str, *, contract: str) -> list[str]:
         if any(pattern.search(text) for pattern in RAW_WAKEUP_PATTERNS + FULL_RAW_WAKEUP_PATTERNS):
             errors.append(
                 "raw tmux wake-up snippets are forbidden in new full worker prompts; "
-                "use tmux send-keys -t \"$ORCH_TARGET\" after writing SIGNAL_FILE"
+                'use tmux send-keys -t "$ORCH_TARGET" after writing SIGNAL_FILE'
             )
 
         required_markers = (
