@@ -188,7 +188,6 @@ class _PromptConfig:
         "max_tokens",
         "prompt_config",
         "prompt_name",
-        "prompt_obj",
         "response_policy_mode",
         "system_prompt",
     )
@@ -199,14 +198,12 @@ class _PromptConfig:
         system_prompt: str,
         max_tokens: int,
         prompt_name: str,
-        prompt_obj: Any,
         prompt_config: dict[str, Any],
         response_policy_mode: str,
     ) -> None:
         self.system_prompt = system_prompt
         self.max_tokens = max_tokens
         self.prompt_name = prompt_name
-        self.prompt_obj = prompt_obj
         self.prompt_config = prompt_config
         self.response_policy_mode = response_policy_mode
 
@@ -271,15 +268,9 @@ def _select_prompt_config(
     legacy_max_tokens = int(config.generate_max_tokens)
     prompt_config: dict[str, Any] = {}
     prompt_name = "generate"
-    prompt_obj: Any = None
 
     if needs_coverage:
         system_prompt, prompt_config = dyn["get_prompt_with_config"](
-            "generate_exhaustive_list",
-            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
-            variables={"domain": config.domain},
-        )
-        _, prompt_obj = dyn["get_prompt_with_object"](
             "generate_exhaustive_list",
             fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
             variables={"domain": config.domain},
@@ -303,7 +294,6 @@ def _select_prompt_config(
         style_token_limit = extra.get("style_token_limit") or dyn["get_token_limit"]
         style_budget = style_token_limit(style_info.style, style_info.difficulty)
         max_tokens = min(style_budget, legacy_max_tokens)
-        prompt_obj = None
         response_policy_mode = "enforced"
     else:
         build_sys_prompt_config_fn = extra.get("build_system_prompt_with_config")
@@ -321,9 +311,6 @@ def _select_prompt_config(
             system_prompt, prompt_config = dyn["get_prompt_with_config"](
                 "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
             )
-        _, prompt_obj = dyn["get_prompt_with_object"](
-            "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
-        )
         max_tokens = (
             min(int(prompt_config["max_tokens"]), legacy_max_tokens)
             if "max_tokens" in prompt_config
@@ -336,7 +323,6 @@ def _select_prompt_config(
         system_prompt=system_prompt,
         max_tokens=max_tokens,
         prompt_name=prompt_name,
-        prompt_obj=prompt_obj,
         prompt_config=prompt_config,
         response_policy_mode=response_policy_mode,
     )
@@ -520,7 +506,6 @@ async def generate_answer(
     )
     prompt_config = pc.prompt_config
     prompt_name = pc.prompt_name
-    prompt_obj = pc.prompt_obj
     max_tokens = pc.max_tokens
     response_policy_mode = pc.response_policy_mode
 
@@ -560,8 +545,6 @@ async def generate_answer(
             "max_tokens": max_tokens,
             **config.get_reasoning_kwargs(),
         }
-        if prompt_obj is not None:
-            create_kwargs["langfuse_prompt"] = prompt_obj
 
         response_obj = await _chat_create_with_optional_name(
             llm,
@@ -612,8 +595,6 @@ async def generate_answer(
             generation_payload["usage_details"] = usage_details
         elif completion_tokens is not None:
             generation_payload["usage_details"] = {"output": int(completion_tokens)}
-        if prompt_obj is not None:
-            generation_payload["prompt"] = prompt_obj
         with contextlib.suppress(Exception):
             _update_current_generation(lf_client, **generation_payload)
 
@@ -868,7 +849,6 @@ async def generate_answer_stream(
     )
     prompt_config = pc.prompt_config
     prompt_name = pc.prompt_name
-    prompt_obj = pc.prompt_obj
     max_tokens = pc.max_tokens
     response_policy_mode = pc.response_policy_mode
 
@@ -923,8 +903,6 @@ async def generate_answer_stream(
         "stream_options": {"include_usage": True},
         **config.get_reasoning_kwargs(),
     }
-    if prompt_obj is not None:
-        stream_create_kwargs["langfuse_prompt"] = prompt_obj
 
     stream = await _chat_create_with_optional_name(
         llm,
@@ -979,8 +957,6 @@ async def generate_answer_stream(
             generation_payload["usage_details"] = usage_details
         elif completion_tokens is not None:
             generation_payload["usage_details"] = {"output": int(completion_tokens)}
-        if prompt_obj is not None:
-            generation_payload["prompt"] = prompt_obj
         with contextlib.suppress(Exception):
             _update_current_generation(lf_client, **generation_payload)
 

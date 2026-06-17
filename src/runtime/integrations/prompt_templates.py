@@ -9,7 +9,6 @@ Issue: #129
 
 from __future__ import annotations
 
-from src.runtime.integrations.prompt_manager import get_prompt
 from src.runtime.services.response_style_detector import ResponseStyle
 
 
@@ -94,15 +93,9 @@ def build_system_prompt_with_manager(
     difficulty: str,
     domain: str,
 ) -> str:
-    """Build system prompt via Langfuse prompt manager with contract fallback.
+    """Build system prompt from local contract templates.
 
-    Routes through get_prompt() to allow remote prompt overrides and A/B experiments.
-    The fallback template has word_limit pre-rendered, domain passed as {{domain}}
-    for Langfuse variable substitution.
+    Formerly routed through Langfuse prompt manager for A/B experiments;
+    now delegates directly to ``build_system_prompt`` (#2628).
     """
-    word_limit = get_word_limit(style, difficulty)
-    # Pre-render word_limit (dynamic), keep {{domain}} for Langfuse substitution
-    fallback = CONTRACT_PROMPTS[style].replace("{word_limit}", str(word_limit))
-    fallback = fallback.replace("{domain}", "{{domain}}")
-    prompt_name = f"generate_{style}"
-    return get_prompt(prompt_name, fallback=fallback, variables={"domain": domain})
+    return build_system_prompt(style, difficulty, domain)

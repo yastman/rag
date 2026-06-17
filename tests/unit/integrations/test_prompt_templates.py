@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 from telegram_bot.integrations.prompt_templates import (
     CONTRACT_PROMPTS,
     build_system_prompt,
@@ -72,33 +70,24 @@ class TestBuildSystemPrompt:
 
 
 class TestBuildSystemPromptWithManager:
-    """build_system_prompt_with_manager keeps prompt-manager integration."""
+    """build_system_prompt_with_manager delegates to local build_system_prompt (#2628)."""
 
-    def test_routes_through_prompt_manager(self) -> None:
-        with patch(
-            "telegram_bot.integrations.prompt_templates.get_prompt",
-            return_value="managed prompt",
-        ) as mock_get_prompt:
-            prompt = build_system_prompt_with_manager("short", "easy", "недвижимость")
+    def test_returns_rendered_contract_prompt(self) -> None:
+        prompt = build_system_prompt_with_manager("short", "easy", "недвижимость")
+        assert "недвижимость" in prompt
+        assert "OUTPUT CONTRACT" in prompt
 
-        assert prompt == "managed prompt"
-        mock_get_prompt.assert_called_once()
-        kwargs = mock_get_prompt.call_args.kwargs
-        assert kwargs["fallback"] != ""
-        assert kwargs["variables"] == {"domain": "недвижимость"}
-        assert mock_get_prompt.call_args.args[0] == "generate_short"
+    def test_equivalent_to_build_system_prompt(self) -> None:
+        expected = build_system_prompt("short", "easy", "тест")
+        result = build_system_prompt_with_manager("short", "easy", "тест")
+        assert result == expected
 
-    def test_fallback_renders_word_limit_and_preserves_domain_variable(self) -> None:
-        with patch(
-            "telegram_bot.integrations.prompt_templates.get_prompt",
-            return_value="ignored",
-        ) as mock_get_prompt:
-            build_system_prompt_with_manager("short", "easy", "недвижимость")
+    def test_no_langfuse_routing(self) -> None:
+        """No external prompt manager is imported in prompt_templates."""
+        import src.runtime.integrations.prompt_templates as pt_module
 
-        fallback = mock_get_prompt.call_args.kwargs["fallback"]
-        # 100 / 1.3 ~= 76 -> hard number should be embedded in fallback
-        assert "{word_limit}" not in fallback
-        assert "76" in fallback
-        # Domain should be deferred for prompt_manager variable substitution
-        assert "по {domain}" not in fallback
-        assert "{{domain}}" in fallback
+        assert not hasattr(pt_module, "get_prompt"), (
+            "get_prompt should not be imported into prompt_templates after #2628"
+        )
+        prompt = build_system_prompt_with_manager("balanced", "medium", "недвижимость")
+        assert "недвижимость" in prompt

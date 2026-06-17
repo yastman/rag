@@ -1,226 +1,99 @@
-"""Tests for Langfuse Prompt Management integration."""
+"""Tests for local prompt management (no Langfuse dependency)."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-from telegram_bot.integrations.prompt_manager import (
-    DEFAULT_CACHE_TTL,
+from src.runtime.integrations.prompt_manager import (
     _apply_fallback_vars,
-    _missing_prompts_until,
-    _reset_client,
-    _transient_failures_until,
     get_prompt,
+    get_prompt_with_config,
+    get_prompt_with_object,
 )
 
 
-@pytest.fixture(autouse=True)
-def _reset_singleton():
-    """Reset prompt TTL caches before each test."""
-    _reset_client()
-    yield
-    _reset_client()
-
-
 class TestGetPrompt:
-    def test_returns_fallback_when_langfuse_unavailable(self):
-        mock_client = MagicMock()
-        mock_client.api = None
-        mock_client.get_prompt.side_effect = Exception("Langfuse disabled")
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt("test-prompt", fallback="default prompt text")
+    def test_returns_fallback_text(self):
+        result = get_prompt("any-name", fallback="default prompt text")
         assert result == "default prompt text"
 
-    def test_returns_fallback_with_vars_when_langfuse_unavailable(self):
-        mock_client = MagicMock()
-        mock_client.api = None
-        mock_client.get_prompt.side_effect = Exception("Langfuse disabled")
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt(
-                "test-prompt",
-                fallback="Hello {{name}}, welcome to {{place}}!",
-                variables={"name": "John", "place": "Sofia"},
-            )
+    def test_applies_variables_to_fallback(self):
+        result = get_prompt(
+            "test-prompt",
+            fallback="Hello {{name}}, welcome to {{place}}!",
+            variables={"name": "John", "place": "Sofia"},
+        )
         assert result == "Hello John, welcome to Sofia!"
 
-    def test_fetches_prompt_from_langfuse(self):
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "Langfuse prompt text"
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
+    def test_returns_plain_string(self):
+        result = get_prompt("my-prompt", fallback="fallback text")
+        assert isinstance(result, str)
 
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt("my-prompt", fallback="fallback text")
+    def test_cache_ttl_param_accepted_and_ignored(self):
+        result = get_prompt("test", fallback="fb", cache_ttl=60)
+        assert result == "fb"
 
-        assert result == "Langfuse prompt text"
-        mock_client.get_prompt.assert_called_once_with(
-            "my-prompt", cache_ttl_seconds=DEFAULT_CACHE_TTL
+    def test_no_variables_returns_fallback_unchanged(self):
+        fallback = "Ты — ассистент по {{domain}}."
+        result = get_prompt("generate", fallback=fallback)
+        assert result == fallback
+
+    def test_partial_variable_substitution(self):
+        result = get_prompt(
+            "test",
+            fallback="Hello {{name}} from {{missing}}",
+            variables={"name": "World"},
         )
-        mock_prompt.compile.assert_called_once_with()
+        assert result == "Hello World from {{missing}}"
 
-    def test_compiles_with_variables(self):
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "Ассистент по недвижимость"
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
 
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt(
-                "generate",
-                fallback="Ассистент по {{domain}}",
-                variables={"domain": "недвижимость"},
-            )
+class TestGetPromptWithConfig:
+    def test_returns_tuple_of_text_and_empty_dict(self):
+        text, config = get_prompt_with_config("generate", fallback="prompt text")
+        assert text == "prompt text"
+        assert config == {}
 
-        assert result == "Ассистент по недвижимость"
-        mock_prompt.compile.assert_called_once_with(domain="недвижимость")
-
-    def test_custom_cache_ttl(self):
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "cached"
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            get_prompt("test", fallback="fb", cache_ttl=60)
-
-        mock_client.get_prompt.assert_called_once_with("test", cache_ttl_seconds=60)
-
-    def test_falls_back_on_exception(self):
-        mock_client = MagicMock()
-        mock_client.get_prompt.side_effect = Exception("API error")
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt("broken", fallback="safe fallback")
-
-        assert result == "safe fallback"
-
-    def test_falls_back_with_vars_on_exception(self):
-        mock_client = MagicMock()
-        mock_client.get_prompt.side_effect = Exception("API error")
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt("broken", fallback="Hello {{name}}", variables={"name": "World"})
-
-        assert result == "Hello World"
-
-    def test_not_found_error_is_temporarily_cached(self):
-        mock_client = MagicMock()
-        mock_client.get_prompt.side_effect = Exception(
-            "status_code: 404, body: {'message': \"Prompt not found: 'generate'\"}"
+    def test_applies_variables(self):
+        text, config = get_prompt_with_config(
+            "generate",
+            fallback="Ты — ассистент по {{domain}}.",
+            variables={"domain": "недвижимость"},
         )
+        assert text == "Ты — ассистент по недвижимость."
+        assert config == {}
 
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            first = get_prompt("generate", fallback="fallback", cache_ttl=60)
-            second = get_prompt("generate", fallback="fallback", cache_ttl=60)
+    def test_cache_ttl_accepted(self):
+        text, config = get_prompt_with_config("test", fallback="fb", cache_ttl=60)
+        assert text == "fb"
+        assert config == {}
 
-        assert first == "fallback"
-        assert second == "fallback"
-        # 2nd call should use local missing-cache and skip Langfuse call.
-        assert mock_client.get_prompt.call_count == 1
 
-    def test_transient_failure_is_temporarily_cached(self):
-        mock_client = MagicMock()
-        mock_client.get_prompt.side_effect = Exception("[Errno 111] Connection refused")
+class TestGetPromptWithObject:
+    def test_returns_tuple_with_none_object(self):
+        text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback text")
+        assert text == "fallback text"
+        assert prompt_obj is None
 
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            first = get_prompt("generate", fallback="fallback", cache_ttl=60)
-            second = get_prompt("generate", fallback="fallback", cache_ttl=60)
-
-        assert first == "fallback"
-        assert second == "fallback"
-        # 2nd call should use local transient-cache and skip Langfuse call.
-        assert mock_client.get_prompt.call_count == 1
-
-    def test_transient_failure_cache_expires(self):
-        mock_client = MagicMock()
-        mock_client.get_prompt.side_effect = Exception("[Errno 111] Connection refused")
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            get_prompt("generate", fallback="fallback", cache_ttl=0)
-            get_prompt("generate", fallback="fallback", cache_ttl=0)
-
-        # TTL=0 means cache expires immediately; both calls hit SDK.
-        assert mock_client.get_prompt.call_count == 2
-
-    def test_no_manual_api_probe_for_missing_prompt(self):
-        mock_client = MagicMock()
-        mock_client.api.prompts.get.side_effect = RuntimeError("must not be called")
-        mock_client.get_prompt.side_effect = Exception(
-            "status_code: 404, body: {'message': \"Prompt not found: 'generate'\"}"
+    def test_applies_variables_and_returns_none_object(self):
+        text, prompt_obj = get_prompt_with_object(
+            "generate",
+            fallback="Ассистент по {{domain}}",
+            variables={"domain": "недвижимость"},
         )
+        assert text == "Ассистент по недвижимость"
+        assert prompt_obj is None
 
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt("generate", fallback="fallback", cache_ttl=60)
+    def test_cache_ttl_accepted(self):
+        text, obj = get_prompt_with_object("test", fallback="fb", cache_ttl=60)
+        assert text == "fb"
+        assert obj is None
 
-        assert result == "fallback"
-        mock_client.get_prompt.assert_called_once()
-        mock_client.api.prompts.get.assert_not_called()
-
-    def test_forwards_langfuse_prompt_label_from_env(self, monkeypatch: pytest.MonkeyPatch):
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "staging prompt"
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
-        monkeypatch.setenv("LANGFUSE_PROMPT_LABEL", "staging")
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt("my-prompt", fallback="fallback text")
-
-        assert result == "staging prompt"
-        mock_client.get_prompt.assert_called_once_with(
-            "my-prompt",
-            cache_ttl_seconds=DEFAULT_CACHE_TTL,
-            label="staging",
+    def test_fallback_with_variables_compiled(self):
+        text, obj = get_prompt_with_object(
+            "generate",
+            fallback="Hello {{name}}",
+            variables={"name": "World"},
         )
-
-    def test_successful_fetch_clears_transient_failure_cache(self):
-        mock_client = MagicMock()
-        # First call fails transiently and is cached; second SDK call succeeds after cache clear.
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "langfuse prompt"
-        mock_client.get_prompt.side_effect = [
-            Exception("[Errno 111] Connection refused"),
-            mock_prompt,
-        ]
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            # First call caches transient failure
-            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
-            # Second call uses cache
-            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
-            # Manually expire cache to simulate retry
-            _transient_failures_until.clear()
-            # Third call succeeds and should clear caches
-            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "langfuse prompt"
-
-        assert mock_client.get_prompt.call_count == 2
-        assert "my-prompt" not in _transient_failures_until
-        assert "my-prompt" not in _missing_prompts_until
-
-    def test_successful_fetch_clears_missing_prompt_cache(self):
-        mock_client = MagicMock()
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "langfuse prompt"
-        mock_client.get_prompt.side_effect = [
-            Exception("status_code: 404, body: {'message': \"Prompt not found: 'my-prompt'\"}"),
-            mock_prompt,
-        ]
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            # First call caches 404
-            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
-            # Manually expire cache to simulate retry
-            _missing_prompts_until.clear()
-            # Second call succeeds and should clear caches
-            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "langfuse prompt"
-
-        assert mock_client.get_prompt.call_count == 2
-        assert "my-prompt" not in _missing_prompts_until
-        assert "my-prompt" not in _transient_failures_until
+        assert text == "Hello World"
+        assert obj is None
 
 
 class TestApplyFallbackVars:
@@ -237,178 +110,3 @@ class TestApplyFallbackVars:
     def test_missing_var_unchanged(self):
         result = _apply_fallback_vars("{{missing}}", {"other": "val"})
         assert result == "{{missing}}"
-
-
-class TestSpanOutputPromptVersion:
-    def test_span_output_includes_prompt_version_from_langfuse(self):
-        """Span output must include prompt_version when prompt is fetched from Langfuse."""
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "Langfuse prompt text"
-        mock_prompt.version = 3
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            get_prompt("my-prompt", fallback="fallback text")
-
-        output_calls = [
-            c
-            for c in mock_client.update_current_span.call_args_list
-            if "output" in (c.kwargs or {})
-        ]
-        assert len(output_calls) == 1
-        assert output_calls[0].kwargs["output"]["prompt_version"] == 3
-
-    def test_span_output_includes_prompt_version_for_compiled_with_variables(self):
-        """Span output must include prompt_version when compiling with variables."""
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "Compiled with vars"
-        mock_prompt.version = 7
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            get_prompt("my-prompt", fallback="fallback", variables={"domain": "real_estate"})
-
-        output_calls = [
-            c
-            for c in mock_client.update_current_span.call_args_list
-            if "output" in (c.kwargs or {})
-        ]
-        assert len(output_calls) == 1
-        assert output_calls[0].kwargs["output"]["prompt_version"] == 7
-
-    def test_span_output_has_no_prompt_version_for_fallback(self):
-        """Span output must not include prompt_version when falling back."""
-        mock_client = MagicMock()
-        mock_client.api = None
-        mock_client.get_prompt.side_effect = Exception("Langfuse disabled")
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            get_prompt("test-prompt", fallback="default prompt text")
-
-        output_calls = [
-            c
-            for c in mock_client.update_current_span.call_args_list
-            if "output" in (c.kwargs or {})
-        ]
-        assert len(output_calls) == 1
-        assert "prompt_version" not in output_calls[0].kwargs["output"]
-
-
-class TestResetClient:
-    def test_reset_clears_missing_prompt_cache(self):
-        _missing_prompts_until["some-prompt"] = 9999999999.0
-        _reset_client()
-        assert "some-prompt" not in _missing_prompts_until
-
-    def test_reset_clears_transient_failure_cache(self):
-        _transient_failures_until["some-prompt"] = 9999999999.0
-        _reset_client()
-        assert "some-prompt" not in _transient_failures_until
-
-
-# ---------------------------------------------------------------------------
-# get_prompt_with_object — exposes raw Langfuse Prompt object alongside text
-# (#1666: Link Prompt Management entries to LLM generations)
-# ---------------------------------------------------------------------------
-
-
-from telegram_bot.integrations.prompt_manager import get_prompt_with_object
-
-
-class TestGetPromptWithObject:
-    """Tests for get_prompt_with_object — returns (compiled_text, raw_prompt_or_None)."""
-
-    def test_returns_prompt_object_when_langfuse_succeeds(self):
-        """When Langfuse is available and prompt is found, returns the raw Prompt object."""
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "Langfuse prompt text"
-        mock_prompt.version = 5
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback")
-
-        assert text == "Langfuse prompt text"
-        assert prompt_obj is mock_prompt
-        mock_client.get_prompt.assert_called_once_with(
-            "my-prompt", cache_ttl_seconds=DEFAULT_CACHE_TTL
-        )
-
-    def test_returns_none_object_when_langfuse_client_unavailable(self):
-        """When Langfuse client is None (disabled), returns fallback string with None object."""
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=None):
-            text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback text")
-
-        assert text == "fallback text"
-        assert prompt_obj is None
-
-    def test_returns_none_object_when_prompt_not_found(self):
-        """When Langfuse returns 404, returns fallback string with None object."""
-        mock_client = MagicMock()
-        mock_client.get_prompt.side_effect = Exception(
-            "status_code: 404, body: {'message': \"Prompt not found: 'my-prompt'\"}"
-        )
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback text")
-
-        assert text == "fallback text"
-        assert prompt_obj is None
-
-    def test_returns_none_object_on_transient_failure(self):
-        """When Langfuse raises a transient error, returns fallback with None object."""
-        mock_client = MagicMock()
-        mock_client.get_prompt.side_effect = Exception("[Errno 111] Connection refused")
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback")
-
-        assert text == "fallback"
-        assert prompt_obj is None
-
-    def test_compiles_with_variables_and_returns_prompt_object(self):
-        """Variables are passed to prompt.compile and the raw object is still returned."""
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "Ассистент по недвижимость"
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            text, prompt_obj = get_prompt_with_object(
-                "generate",
-                fallback="Ассистент по {{domain}}",
-                variables={"domain": "недвижимость"},
-            )
-
-        assert text == "Ассистент по недвижимость"
-        assert prompt_obj is mock_prompt
-        mock_prompt.compile.assert_called_once_with(domain="недвижимость")
-
-    def test_fallback_with_variables_returns_compiled_fallback_and_none(self):
-        """When falling back, fallback {{var}} placeholders are still substituted."""
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=None):
-            text, prompt_obj = get_prompt_with_object(
-                "generate",
-                fallback="Hello {{name}}",
-                variables={"name": "World"},
-            )
-
-        assert text == "Hello World"
-        assert prompt_obj is None
-
-    def test_does_not_break_existing_get_prompt_contract(self):
-        """get_prompt() still returns a plain string — no breaking change."""
-        mock_prompt = MagicMock()
-        mock_prompt.compile.return_value = "compiled"
-        mock_client = MagicMock()
-        mock_client.get_prompt.return_value = mock_prompt
-
-        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result = get_prompt("my-prompt", fallback="fallback")
-
-        # Must still be a plain string, not a tuple — backwards-compat guard.
-        assert isinstance(result, str)
-        assert result == "compiled"
