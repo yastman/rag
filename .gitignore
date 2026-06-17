@@ -224,7 +224,6 @@ CLAUDE.md
 .claude/cache/
 .claude/prompts/
 docs/audits/
-docs/archive/
 
 # Build artifacts & test outputs
 .artifacts/
