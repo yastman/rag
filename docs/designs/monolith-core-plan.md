@@ -14,7 +14,7 @@
 - [`unified-assistant-entrypoint-contract.md`](unified-assistant-entrypoint-contract.md)
 - [`yaroslav-simplification-workflow.md`](yaroslav-simplification-workflow.md)
 - ADR: [`../adr/0015-sdk-native-baseline.md`](../adr/0015-sdk-native-baseline.md),
-  [`../adr/0010-voice-path-create-agent-migration-plan.md`](../adr/0010-voice-path-create-agent-migration-plan.md),
+  [`../archive/adr/0010-voice-path-create-agent-migration-plan.md`](../archive/adr/0010-voice-path-create-agent-migration-plan.md) _(archived)_,
   [`../adr/0012-langgraph-orchestration.md`](../adr/0012-langgraph-orchestration.md),
   [`../adr/0019-core-text-path-procedural-runtime.md`](../adr/0019-core-text-path-procedural-runtime.md)
 

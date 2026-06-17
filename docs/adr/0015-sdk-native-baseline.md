@@ -41,7 +41,7 @@ These are not justified deviations — they are tracked work items kept in fligh
 
 | Custom code | SDK target | Tracked under |
 |---|---|---|
-| Voice path 11-node `StateGraph` (`telegram_bot/graph/graph.py::build_graph`) | `langchain.agents.create_agent` (already used on text path) | [#1535](https://github.com/yastman/rag/issues/1535), child slices [#2050](https://github.com/yastman/rag/issues/2050) / [#2051](https://github.com/yastman/rag/issues/2051) / [#2052](https://github.com/yastman/rag/issues/2052) |
+| Voice path 11-node `StateGraph` (`telegram_bot/graph/graph.py::build_graph`) | `langchain.agents.create_agent` (already used on text path) | [#1535](https://github.com/yastman/rag/issues/1535), child slices [#2050](https://github.com/yastman/rag/issues/2050) / [#2051](https://github.com/yastman/rag/issues/2051) / [#2052](https://github.com/yastman/rag/issues/2052). ADR-0010 is archived (voice surface is optional). |
 | Regex-based prompt-injection guard (`graph/nodes/guard.py`) | LangChain `InjectedState` + middleware | low-priority follow-up; current regex covers the threat model |
 
 ### Justified custom code (no SDK equivalent or domain-specific)
@@ -93,5 +93,5 @@ This ADR is documentation only. The behavioral guarantees are enforced by existi
 - Issue [#1232](https://github.com/yastman/rag/issues/1232) — FSM-to-dialog migration tracker; this ADR does not close it
 - Issue [#2055](https://github.com/yastman/rag/issues/2055) — phone collector design exception for one-tap contact share
 - PR [#2112](https://github.com/yastman/rag/pull/2112) — follow-up contract pin for SDK-native draft streaming
-- ADR [0010](0010-voice-path-create-agent-migration-plan.md) — voice path migration plan
+- ADR [0010](../archive/adr/0010-voice-path-create-agent-migration-plan.md) — voice path migration plan _(archived)_
 - ADR [0012](0012-langgraph-orchestration.md) — LangGraph orchestration

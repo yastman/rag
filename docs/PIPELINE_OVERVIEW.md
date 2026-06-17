@@ -1,6 +1,6 @@
 # Pipeline Overview
 
-> Operational overview of ingestion, query, and voice flows. The core text RAG path is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). Telegram/voice adapters use `create_agent` for conversational shell behavior. See [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md), [`docs/adr/0019-core-text-path-procedural-runtime.md`](adr/0019-core-text-path-procedural-runtime.md), and [#2405](https://github.com/yastman/rag/issues/2405) for the migration context.
+> Operational overview of ingestion, query, and voice flows. The core text RAG path is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). Telegram/voice adapters use `create_agent` for conversational shell behavior. See [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) and [`docs/adr/0019-core-text-path-procedural-runtime.md`](adr/0019-core-text-path-procedural-runtime.md) for implementation detail.
 
 Operational overview of ingestion, query, and voice flows.
 
@@ -10,7 +10,7 @@ The bot has **two paths** for queries (see [`CLIENT_PIPELINE.md`](CLIENT_PIPELIN
 
 - **Core text path** is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). This is the canonical product path.
 - **Telegram adapter** uses `create_agent` for conversational shell behavior (streaming, tools, history trimming). It calls `run_assistant_request()` for product RAG.
-- **Voice path** uses a custom `StateGraph` built by `build_graph()` ([`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py)). Migration to `create_agent` is tracked in [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) and #1535 / #2405.
+- **Voice path** uses a custom `StateGraph` built by `build_graph()` ([`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py)). Voice is an optional surface (see `docs/archive/adr/0010-voice-path-create-agent-migration-plan.md`).
 
 The node list below describes the **voice-path StateGraph** and the inner stages reused by the text path's `rag_search` tool. Routing rules and conditional edges between these nodes live in [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md).
 
@@ -82,7 +82,7 @@ make ingest-unified-status
 
 ## 4) Voice Flow
 
-Source code: `src/voice/agent.py` + `src/api/main.py`.
+Source code: `src/voice/agent.py` + `src/api/main.py`. This is an optional surface; off by default.
 
 Runtime path:
 1. LiveKit session starts voice agent.
@@ -93,13 +93,10 @@ Runtime path:
 
 ## 5) Observability
 
-- App traces/scores: Langfuse (`telegram_bot/observability.py`, scoring hooks)
-- Required trace families validated by make e2e-core-live:
-  - `rag-api-query`
-  - `voice-session`
-  - `ingestion-cli-run`
-- Log monitoring: Loki + Promtail + Alertmanager
-- Alert rules: `docker/monitoring/rules/*.yaml`
+- Structured product logs are the required observability surface (`src/utils/product_events.py`).
+- Optional Langfuse traces/scores: `telegram_bot/observability.py`, scoring hooks in `src/evaluation/`.
+- Log monitoring: Loki + Promtail + Alertmanager (optional `obs` profile).
+- Alert rules: `docker/monitoring/rules/*.yaml`.
 
 ## 6) Main Operational Commands
 
