@@ -2550,19 +2550,6 @@ class PropertyBot:
                 }
                 for src in core_result.retrieved_sources
             ]
-            if core_result.proposed_crm_action:  # type: ignore[attr-defined]
-                action = core_result.proposed_crm_action  # type: ignore[attr-defined]
-                payload = {
-                    "action_type": action.action_type,
-                    "payload": action.payload,
-                    "preview": action.summary,
-                }
-                await self._send_hitl_confirmation(
-                    message=message,
-                    payload=payload,
-                    thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
-                )
-                return None  # type: ignore[return-value]
 
             class DummyContext:
                 response_sent = False
