@@ -45,7 +45,6 @@ local SDK docs, runbooks, and Context7 refresh targets agents should use.
 | `loki` | [`runtime-services.md`](runtime-services.md), [`../ALERTING.md`](../ALERTING.md) | Runtime service; no app SDK owner | Official Loki docs | Log query, retention, or readiness rules |
 | `promtail` | [`runtime-services.md`](runtime-services.md), [`../ALERTING.md`](../ALERTING.md) | Runtime service; no app SDK owner | Official Promtail/Grafana Agent docs | Log shipping, scrape, or label rules |
 | `alertmanager` | [`runtime-services.md`](runtime-services.md), [`../ALERTING.md`](../ALERTING.md) | Runtime service; no app SDK owner | Official Alertmanager docs | Routing, receiver, or silence rules |
-| `rag-api` | [`runtime-services.md`](runtime-services.md), [`../RAG_API.md`](../RAG_API.md), [`../../src/api/README.md`](../../src/api/README.md) | `fastapi`, `openai`, `langfuse`, `qdrant-client`, `redis-py` | `/fastapi/fastapi`, `/openai/openai-python`, `/langfuse/langfuse-python`, `/qdrant/qdrant-client`, `/redis/redis-py` | Route, client, tracing, retrieval, or cache rules |
 =======
 =======
 | `rag-api` | [`runtime-services.md`](runtime-services.md), [`../archive/RAG_API.md`](../archive/RAG_API.md), [`../../src/api/README.md`](../../src/api/README.md) | `fastapi`, `openai`, `langfuse`, `qdrant-client`, `redis-py` | `/fastapi/fastapi`, `/openai/openai-python`, `/langfuse/langfuse-python`, `/qdrant/qdrant-client`, `/redis/redis-py` | Route, client, tracing, retrieval, or cache rules |
