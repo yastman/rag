@@ -8,11 +8,11 @@ Runs every 5 minutes and checks:
 Logs are picked up by Promtail -> Loki -> Alertmanager.
 """
 
-import datetime as dt
+import asyncio
+import contextlib
 import logging
 
 import redis.asyncio as aioredis
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
@@ -29,22 +29,47 @@ CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 class RedisHealthMonitor:
     """Monitors Redis health metrics on a periodic schedule."""
 
-    def __init__(self, redis_url: str, check_interval: int = CHECK_INTERVAL_SECONDS):
+    INITIAL_CHECK_DELAY_SECONDS = 10  # Parity with old APScheduler first-check timing
+
+    def __init__(
+        self,
+        redis_url: str,
+        check_interval: int = CHECK_INTERVAL_SECONDS,
+        initial_check_delay: int = INITIAL_CHECK_DELAY_SECONDS,
+    ):
         """Initialize the monitor.
 
         Args:
             redis_url: Redis connection URL
             check_interval: Seconds between health checks (default: 300)
+            initial_check_delay: Seconds before the first health check (default: 10)
         """
         self.redis_url = redis_url
         self.check_interval = check_interval
-        self._scheduler: AsyncIOScheduler | None = None
+        self.initial_check_delay = initial_check_delay
+        self._task: asyncio.Task[None] | None = None
         self._redis: aioredis.Redis | None = None
         self._prev_evicted_keys: int | None = None
         self._prev_checkpoint_count: int | None = None
 
-    async def start(self):
-        """Start the periodic health check using APScheduler."""
+    async def _run_periodic(self) -> None:
+        """Asyncio-native periodic loop: short initial delay then steady-state ticks."""
+        # Fire first check promptly (~10s) to match old APScheduler behaviour,
+        # then settle into the steady-state interval.
+        await asyncio.sleep(self.initial_check_delay)
+        try:
+            await self._check_health()
+        except Exception:
+            logger.exception("Redis health check failed in periodic loop")
+        while True:
+            await asyncio.sleep(self.check_interval)
+            try:
+                await self._check_health()
+            except Exception:
+                logger.exception("Redis health check failed in periodic loop")
+
+    async def start(self) -> None:
+        """Start the periodic health check using an asyncio background task."""
         self._redis = aioredis.from_url(
             self.redis_url,
             encoding="utf-8",
@@ -56,18 +81,7 @@ class RedisHealthMonitor:
             retry=Retry(ExponentialBackoff(), 3),
             health_check_interval=30,
         )
-        self._scheduler = AsyncIOScheduler(
-            job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 300}
-        )
-        self._scheduler.add_job(
-            self._check_health,
-            "interval",
-            seconds=self.check_interval,
-            id="redis-health-monitor",
-            replace_existing=True,
-            next_run_time=dt.datetime.now(dt.UTC) + dt.timedelta(seconds=10),
-        )
-        self._scheduler.start()
+        self._task = asyncio.create_task(self._run_periodic(), name="redis-health-monitor")
         logger.info(
             "Redis health monitor started (interval=%ds, hit_rate_threshold=%.0f%%, "
             "memory_threshold=%.0f%%)",
@@ -76,11 +90,13 @@ class RedisHealthMonitor:
             MEMORY_WARNING_THRESHOLD * 100,
         )
 
-    async def stop(self):
-        """Shut down the scheduler and close Redis connection."""
-        if self._scheduler is not None:
-            self._scheduler.shutdown(wait=False)
-            self._scheduler = None
+    async def stop(self) -> None:
+        """Cancel the background task and close Redis connection."""
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
         if self._redis is not None:
             await self._redis.aclose()
             self._redis = None
