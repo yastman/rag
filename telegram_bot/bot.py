@@ -510,9 +510,6 @@ class PropertyBot:
         self._nurturing_service: Any | None = None
         self._funnel_analytics_service: Any | None = None
 
-        # Hot lead notifier (initialized in start() when manager_ids configured)
-        self._hot_lead_notifier: Any | None = None
-
         # Handoff services (Forum Topics bridge + Redis state machine)
         self._handoff_state: HandoffState | None = None
         self._forum_bridge: ForumBridge | None = None
@@ -2649,10 +2646,6 @@ class PropertyBot:
                     role=role,
                     config=self.config,
                     history_service=self._history_service,
-                    funnel_analytics_service=self._funnel_analytics_service,
-                    nurturing_service=self._nurturing_service,
-                    lead_scoring_store=self._lead_scoring_store,
-                    kommo_client=getattr(self, "_kommo_client", None),
                 )
 
                 # Create agent via SDK — route through the in-process LiteLLM router (#420)
@@ -2684,9 +2677,6 @@ class PropertyBot:
                     content_filter_enabled=self.config.content_filter_enabled,
                     guard_mode=self.config.guard_mode,
                     role=role,
-                    manager_id=(
-                        self.config.kommo_responsible_user_id if role == "manager" else None
-                    ),
                     history_relevance_threshold=self.config.history_relevance_threshold,
                     original_query=message.text or "",
                     original_user_query=message.text or "",
@@ -3605,10 +3595,6 @@ class PropertyBot:
             role=role,
             config=self.config,
             history_service=self._history_service,
-            funnel_analytics_service=self._funnel_analytics_service,
-            nurturing_service=self._nurturing_service,
-            lead_scoring_store=self._lead_scoring_store,
-            kommo_client=getattr(self, "_kommo_client", None),
         )
 
         agent = create_bot_agent(
@@ -3638,7 +3624,6 @@ class PropertyBot:
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
             role=role,
-            manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
             apartments_service=self._apartments_service,
             search_event_store=self._search_event_store,
             config=self.config,
@@ -3800,10 +3785,6 @@ class PropertyBot:
             role=role,
             config=self.config,
             history_service=self._history_service,
-            funnel_analytics_service=self._funnel_analytics_service,
-            nurturing_service=self._nurturing_service,
-            lead_scoring_store=self._lead_scoring_store,
-            kommo_client=getattr(self, "_kommo_client", None),
         )
 
         agent = create_bot_agent(
@@ -3833,7 +3814,6 @@ class PropertyBot:
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
             role=role,
-            manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
             original_query=query_text,
             original_user_query=query_text,
             bot=bot,
@@ -4130,23 +4110,6 @@ class PropertyBot:
                 self._search_event_store = SearchEventStore(pool=self._pg_pool)
                 logger.info("Search event store ready")
 
-                # Initialize hot lead notifier (#402)
-                if self.config.manager_ids and self._cache.redis is not None:
-                    try:
-                        from .services.hot_lead_notifier import HotLeadNotifier
-
-                        self._hot_lead_notifier = HotLeadNotifier(
-                            bot=self.bot,
-                            cache=self._cache,
-                            manager_ids=self.config.manager_ids,
-                            dedupe_ttl_sec=self.config.manager_hot_lead_dedupe_sec,
-                        )
-                        logger.info(
-                            "Hot lead notifier ready (managers=%s)", self.config.manager_ids
-                        )
-                    except Exception:
-                        logger.exception("Failed to initialize hot lead notifier")
-
             except Exception:
                 logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
                 startup_report.add(
@@ -4175,21 +4138,6 @@ class PropertyBot:
             logger.info(
                 "Skipping PostgreSQL pool init because preflight already marked it unavailable"
             )
-
-        # Initialize AI Advisor service (#697)
-        self._ai_advisor_service: Any | None = None
-        if self._kommo_client is not None:
-            try:
-                from .services.ai_advisor_service import AIAdvisorService
-
-                self._ai_advisor_service = AIAdvisorService(
-                    kommo_client=self._kommo_client,
-                    llm=self._llm,
-                    cache=self._cache,
-                )
-                logger.info("AIAdvisorService initialized")
-            except Exception:
-                logger.exception("Failed to initialize AIAdvisorService")
 
         # Cache bot user id for echo-skip in group handlers (#730 review)
         try:
@@ -4237,13 +4185,11 @@ class PropertyBot:
         # Register services in dp.workflow_data so all handlers receive them via data dict
         self.dp["user_service"] = self._user_service
         self.dp["lead_scoring_store"] = self._lead_scoring_store
-        self.dp["hot_lead_notifier"] = self._hot_lead_notifier
         self.dp["kommo_client"] = self._kommo_client
         self.dp["pg_pool"] = self._pg_pool
         self.dp["bot_config"] = self.config
         self.dp["property_bot"] = self
         self.dp["topic_service"] = self._topic_service
-        self.dp["ai_advisor_service"] = self._ai_advisor_service
         self.dp["apartments_service"] = self._apartments_service
         self.dp["favorites_service"] = self._favorites_service
         self.dp["search_event_store"] = self._search_event_store
@@ -4261,7 +4207,6 @@ class PropertyBot:
 
         from .dialogs.catalog import catalog_dialog
         from .dialogs.client_menu import client_menu_dialog
-        from .dialogs.crm_ai_advisor import advisor_dialog
         from .dialogs.crm_contacts import (
             contacts_menu_dialog,
             create_contact_dialog,
@@ -4304,7 +4249,6 @@ class PropertyBot:
         self.dp.include_router(my_tasks_dialog)
         self.dp.include_router(create_note_dialog)
         self.dp.include_router(crm_quick_actions_dialog)
-        self.dp.include_router(advisor_dialog)
         self.dp.include_router(settings_dialog)
         self.dp.include_router(demo_dialog)
         self.dp.include_router(funnel_dialog)

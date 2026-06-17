@@ -3743,7 +3743,7 @@ class TestToolListByRole:
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
-            patch("telegram_bot.agents.manager_tools.build_tools_for_role") as mock_build,
+            patch("telegram_bot.agents.tool_assembly.build_tools_for_role") as mock_build,
         ):
             mock_build.side_effect = lambda *, role, base_tools, manager_tools: (  # noqa: ARG005
                 list(base_tools) + list(manager_tools)

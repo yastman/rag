@@ -63,14 +63,6 @@ class TestBotConfigIsPydanticSettings:
         assert config.use_hyde is True
         assert config.mmr_enabled is False
 
-    def test_manager_hot_lead_defaults(self):
-        """Manager hot-lead config fields have sane defaults (#388)."""
-        from telegram_bot.config import BotConfig
-
-        cfg = BotConfig()
-        assert cfg.manager_hot_lead_threshold == 60
-        assert cfg.manager_hot_lead_dedupe_sec == 3600
-
     def test_manager_ids_empty_env_does_not_crash(self, monkeypatch):
         """Empty MANAGER_IDS should be treated as no managers, not JSON parse error."""
         monkeypatch.setenv("MANAGER_IDS", "")

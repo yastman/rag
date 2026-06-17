@@ -510,15 +510,6 @@ class BotConfig(BaseSettings):
         default_factory=list,
         validation_alias=AliasChoices("manager_ids", "MANAGER_IDS"),
     )
-    manager_hot_lead_threshold: int = Field(
-        default=60,
-        validation_alias=AliasChoices("manager_hot_lead_threshold", "MANAGER_HOT_LEAD_THRESHOLD"),
-    )
-    manager_hot_lead_dedupe_sec: int = Field(
-        default=3600,
-        validation_alias=AliasChoices("manager_hot_lead_dedupe_sec", "MANAGER_HOT_LEAD_DEDUPE_SEC"),
-    )
-
     # ── Handoff (Forum Topics) ──────────────────────────────────────
     handoff_enabled: EmptyStrBool = Field(
         default=False,

@@ -1,8 +1,8 @@
-"""Focused tests for manager_tools helper branches."""
+"""Tests for role helpers moved to tool_assembly (#2629)."""
 
 from __future__ import annotations
 
-from telegram_bot.agents.manager_tools import _get_user_context, _resolve_role, build_tools_for_role
+from telegram_bot.agents.tool_assembly import _get_user_context, _resolve_role, build_tools_for_role
 
 
 def test_resolve_role_uses_bot_context_when_explicit_role_missing() -> None:

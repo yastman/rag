@@ -30,9 +30,9 @@ async def test_crm_menu_getter_has_required_keys():
         "btn_contacts",
         "btn_tasks",
         "btn_note",
-        "btn_ai_advisor",
         "btn_settings",
         "btn_back",
     ):
         assert key in result, f"Missing key: {key}"
         assert isinstance(result[key], str) and len(result[key]) > 0, f"Empty value for {key}"
+    assert "btn_ai_advisor" not in result

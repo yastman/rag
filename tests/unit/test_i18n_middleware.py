@@ -37,12 +37,10 @@ class TestI18nMiddlewareInit:
         params = set(sig.parameters.keys())
         forbidden = {
             "lead_scoring_store",
-            "hot_lead_notifier",
             "kommo_client",
             "pg_pool",
             "bot_config",
             "property_bot",
-            "ai_advisor_service",
         }
         assert not (forbidden & params), f"Unexpected params still present: {forbidden & params}"
 
@@ -83,12 +81,10 @@ class TestI18nMiddlewareCall:
         service_keys = {
             "user_service",
             "lead_scoring_store",
-            "hot_lead_notifier",
             "kommo_client",
             "pg_pool",
             "bot_config",
             "property_bot",
-            "ai_advisor_service",
             "apartments_service",
             "favorites_service",
             "search_event_store",

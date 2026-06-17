@@ -87,7 +87,6 @@ EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
     "SearchLeadsSG": ("query", "results"),
     "ContactsMenuSG": ("main",),
     "SearchContactsSG": ("query", "results"),
-    "AIAdvisorSG": ("main", "loading", "result"),
     "CrmQuickActionSG": (
         "waiting_note",
         "waiting_task",

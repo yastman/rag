@@ -278,7 +278,7 @@ def create_bot_agent(model, tools: list, context_schema, checkpointer=None):
 If the tool should only be available to certain roles:
 
 ```python
-from telegram_bot.agents.manager_tools import build_tools_for_role
+from telegram_bot.agents.tool_assembly import build_tools_for_role
 
 def get_all_tools(ctx: BotContext) -> list:
     tools = [rag_search, history_search]  # Base tools

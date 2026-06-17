@@ -155,14 +155,6 @@ class SearchContactsSG(StatesGroup):
     results = State()
 
 
-class AIAdvisorSG(StatesGroup):
-    """AI advisor dialog (#697)."""
-
-    main = State()
-    loading = State()  # "⏳ Анализирую данные..."
-    result = State()  # LLM response display
-
-
 class CrmQuickActionSG(StatesGroup):
     """Quick CRM actions triggered from card inline buttons (#697 Task 8)."""
 

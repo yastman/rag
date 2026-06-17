@@ -9,7 +9,7 @@ from telegram_bot.services.funnel_lead_scoring import persist_and_sync_funnel_le
 
 
 @pytest.mark.asyncio
-async def test_persist_and_sync_calls_hot_lead_notifier_for_hot_score():
+async def test_persist_and_sync_persists_score():
     user_service = AsyncMock()
     user_service.get_or_create = AsyncMock(return_value=SimpleNamespace(id=7))
 
@@ -24,15 +24,9 @@ async def test_persist_and_sync_calls_hot_lead_notifier_for_hot_score():
     lead_scoring_store = AsyncMock()
     lead_scoring_store.upsert_score = AsyncMock()
 
-    kommo_client = AsyncMock()
-
-    hot_lead_notifier = AsyncMock()
-    hot_lead_notifier.notify_if_hot = AsyncMock(return_value=True)
-
     config = SimpleNamespace(
         kommo_lead_score_field_id=701,
         kommo_lead_band_field_id=702,
-        manager_hot_lead_threshold=60,
     )
 
     result = await persist_and_sync_funnel_lead_score(
@@ -44,15 +38,13 @@ async def test_persist_and_sync_calls_hot_lead_notifier_for_hot_score():
         user_service=user_service,
         pg_pool=pg_pool,
         lead_scoring_store=lead_scoring_store,
-        kommo_client=kommo_client,
-        hot_lead_notifier=hot_lead_notifier,
+        kommo_client=None,
         config=config,
     )
 
     assert result["persisted"] is True
     assert result["score_band"] == "hot"
     lead_scoring_store.upsert_score.assert_called_once()
-    hot_lead_notifier.notify_if_hot.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -67,7 +59,6 @@ async def test_persist_and_sync_skips_if_runtime_services_missing():
         pg_pool=None,
         lead_scoring_store=None,
         kommo_client=None,
-        hot_lead_notifier=None,
         config=SimpleNamespace(),
     )
 

@@ -1,7 +1,7 @@
 """Manager main menu dialog (aiogram-dialog).
 
-Root CRM hub — 4 entity categories + 3 tools.
-Сделки/Контакты/Задачи have sub-menus, Заметка is direct wizard.
+Root hub — CRM entity categories + search + settings.
+AI Advisor removed in #2629 (CRM-only flow archived).
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from aiogram_dialog.widgets.kbd import Button, Column, Start
 from aiogram_dialog.widgets.text import Format
 
 from .states import (
-    AIAdvisorSG,
     ContactsMenuSG,
     CreateNoteSG,
     LeadsMenuSG,
@@ -50,7 +49,6 @@ async def get_manager_menu_data(
             "btn_contacts": "👤 Контакты",
             "btn_tasks": "✅ Задачи",
             "btn_note": "📝 Заметка",
-            "btn_ai_advisor": "🤖 AI-Советник",
             "btn_search": "🔍 Поиск по базе",
             "btn_settings": "⚙️ Настройки",
         }
@@ -61,7 +59,6 @@ async def get_manager_menu_data(
         "btn_contacts": i18n.get("mgr-contacts"),
         "btn_tasks": i18n.get("mgr-tasks"),
         "btn_note": i18n.get("mgr-note"),
-        "btn_ai_advisor": i18n.get("mgr-ai-advisor"),
         "btn_search": i18n.get("mgr-search"),
         "btn_settings": i18n.get("mgr-settings"),
     }
@@ -109,12 +106,7 @@ manager_menu_dialog = Dialog(
                 id="mgr_note",
                 state=CreateNoteSG.text,
             ),
-            # 3 tools
-            Start(
-                Format("{btn_ai_advisor}"),
-                id="mgr_ai_advisor",
-                state=AIAdvisorSG.main,
-            ),
+            # Tools
             Button(
                 Format("{btn_search}"),
                 id="mgr_search",

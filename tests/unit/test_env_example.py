@@ -81,8 +81,6 @@ class TestEnvExampleCompleteness:
 
     REQUIRED_MANAGER_VARS = [
         "MANAGER_IDS",
-        "MANAGER_HOT_LEAD_THRESHOLD",
-        "MANAGER_HOT_LEAD_DEDUPE_SEC",
     ]
 
     REQUIRED_DB_VARS = [

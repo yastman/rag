@@ -842,7 +842,6 @@ async def on_summary_search(
                 pg_pool=manager.middleware_data.get("pg_pool"),
                 lead_scoring_store=manager.middleware_data.get("lead_scoring_store"),
                 kommo_client=manager.middleware_data.get("kommo_client"),
-                hot_lead_notifier=manager.middleware_data.get("hot_lead_notifier"),
                 config=manager.middleware_data.get("bot_config"),
             )
     except Exception:
