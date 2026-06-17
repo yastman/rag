@@ -22,7 +22,7 @@ class IngestionMetrics:
 
     # Timing
     docling_duration_ms: float = 0
-    voyage_duration_ms: float = 0
+    bge_m3_duration_ms: float = 0
     qdrant_duration_ms: float = 0
     total_duration_ms: float = 0
 
@@ -44,7 +44,7 @@ class IngestionMetrics:
             "chunks_created": self.chunks_created,
             "chunks_deleted": self.chunks_deleted,
             "docling_ms": round(self.docling_duration_ms, 1),
-            "voyage_ms": round(self.voyage_duration_ms, 1),
+            "bge_m3_ms": round(self.bge_m3_duration_ms, 1),
             "qdrant_ms": round(self.qdrant_duration_ms, 1),
             "total_ms": round(self.total_duration_ms, 1),
             "error": self.error_message,
@@ -58,7 +58,7 @@ def timed_operation(metrics: IngestionMetrics, operation: str):
 
     Args:
         metrics: IngestionMetrics instance to update
-        operation: One of 'docling', 'voyage', 'qdrant'
+        operation: One of 'docling', 'bge_m3', 'qdrant'
 
     Usage:
         with timed_operation(metrics, 'docling'):
@@ -82,7 +82,7 @@ def log_ingestion_result(metrics: IngestionMetrics) -> None:
         logger.info(
             f"Ingested {metrics.source_path}: {metrics.chunks_created} chunks "
             f"(docling={metrics.docling_duration_ms:.0f}ms, "
-            f"voyage={metrics.voyage_duration_ms:.0f}ms, "
+            f"bge_m3={metrics.bge_m3_duration_ms:.0f}ms, "
             f"qdrant={metrics.qdrant_duration_ms:.0f}ms)",
             extra={"structured": log_data},
         )

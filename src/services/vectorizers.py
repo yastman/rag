@@ -25,7 +25,7 @@ class UserBaseVectorizer(BaseVectorizer):
     Connects to USER-base FastAPI service running on port 8003/8000.
     Returns 768-dimensional embeddings optimized for Russian text.
 
-    Advantages over Voyage API:
+    Advantages over external embedding APIs:
     - Zero API cost (local)
     - Lower latency (~5ms vs ~30ms)
     - Best Russian semantic matching (ruMTEB #1)

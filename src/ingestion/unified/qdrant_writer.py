@@ -50,23 +50,19 @@ class QdrantHybridWriter:
     - file_id: str (flat, for fast delete)
 
     Vector Names:
-    - dense: BGE-M3 1024-dim (or Voyage)
+    - dense: BGE-M3 1024-dim
     - bm42: BGE-M3 sparse (named 'bm42' for backward compat with existing collection)
     """
 
-    VOYAGE_BATCH_SIZE = 128
     BGE_M3_BATCH_SIZE = 32
 
     def __init__(
         self,
         qdrant_url: str,
         qdrant_api_key: str | None = None,
-        voyage_api_key: str | None = None,
-        voyage_model: str = "voyage-4-large",
         bge_m3_url: str | None = None,
         bge_m3_timeout: float = 300.0,
         bge_m3_concurrency: int = 1,
-        use_local_embeddings: bool = False,
     ):
         # Qdrant client
         self.client = QdrantClient(
@@ -84,31 +80,10 @@ class QdrantHybridWriter:
             timeout=bge_m3_timeout,
             batch_size=self.BGE_M3_BATCH_SIZE,
         )
+        self._dense_semaphore = threading.Semaphore(max(1, bge_m3_concurrency))
         logger.info("QdrantHybridWriter BGE-M3 URL: %s", self.bge_m3_url)
         logger.info("QdrantHybridWriter BGE-M3 timeout: %ss", bge_m3_timeout)
-
-        # Dense embeddings: local BGE-M3 or Voyage API
-        self.use_local_embeddings = use_local_embeddings
-        self.voyage = None
-
-        if use_local_embeddings:
-            self._dense_semaphore = threading.Semaphore(max(1, bge_m3_concurrency))
-            logger.info(
-                f"QdrantHybridWriter dense: local BGE-M3 (concurrency={bge_m3_concurrency})"
-            )
-        else:
-            if not voyage_api_key:
-                raise ValueError("voyage_api_key is required when use_local_embeddings=False")
-            # Lazy import (#1773): voyageai is an optional extra and must not
-            # be imported by the default ingestion path.
-            from src.services.voyage import VoyageService
-
-            self.voyage = VoyageService(
-                api_key=voyage_api_key,
-                model_docs=voyage_model,
-            )
-            logger.info(f"QdrantHybridWriter dense: Voyage ({voyage_model})")
-
+        logger.info("QdrantHybridWriter dense: local BGE-M3 (concurrency=%d)", bge_m3_concurrency)
         logger.info("QdrantHybridWriter sparse: BGE-M3 /encode/sparse")
 
     def _embed_sparse(self, texts: list[str]) -> list[dict[str, list]]:
@@ -469,16 +444,11 @@ class QdrantHybridWriter:
             # Step 1: Extract texts
             texts = [chunk.text for chunk in chunks]
 
-            # Step 2: Generate embeddings (local BGE-M3 or Voyage API).
+            # Step 2: Generate embeddings (BGE-M3 dense + sparse + colbert).
             # Any failure here exits via `except` BEFORE any destructive call.
-            if self.use_local_embeddings:
-                dense_embeddings = self._embed_documents_local(texts)
-            else:
-                if self.voyage is None:
-                    raise RuntimeError("VoyageService not initialized")
-                dense_embeddings = await self.voyage.embed_documents(texts)
+            dense_embeddings = self._embed_documents_local(texts)
             sparse_embeddings = self._embed_sparse(texts)
-            colbert_embeddings = self._embed_colbert(texts) if self.use_local_embeddings else []
+            colbert_embeddings = self._embed_colbert(texts)
 
             # Step 3: Build points
             points: list[PointStruct] = []
@@ -608,32 +578,14 @@ class QdrantHybridWriter:
                 if error := self._text_exceeds_single_point_limit(text, source_path):
                     raise ValueError(error)
 
-            # Step 2: Generate embeddings — single hybrid call when local BGE-M3.
+            # Step 2: Generate embeddings — single hybrid call via BGE-M3.
             # Any failure here exits via `except` BEFORE any destructive call.
-            all_dense_embeddings: list[list[float]]
-            if self.use_local_embeddings:
-                hybrid_result = self._bge_client.encode_hybrid(texts)
-                all_dense_embeddings = [
-                    [float(value) for value in embedding] for embedding in hybrid_result.dense_vecs
-                ]
-                sparse_embeddings = hybrid_result.lexical_weights
-                colbert_embeddings = hybrid_result.colbert_vecs or []
-            else:
-                if self.voyage is None:
-                    raise RuntimeError("VoyageService not initialized")
-                all_dense_embeddings = []
-                for i in range(0, len(texts), self.VOYAGE_BATCH_SIZE):
-                    batch = texts[i : i + self.VOYAGE_BATCH_SIZE]
-                    response = self.voyage._client.embed(
-                        texts=batch,
-                        model=self.voyage._model_docs,
-                        input_type="document",
-                    )
-                    all_dense_embeddings.extend(
-                        [[float(value) for value in embedding] for embedding in response.embeddings]
-                    )
-                sparse_embeddings = self._embed_sparse(texts)
-                colbert_embeddings = []
+            hybrid_result = self._bge_client.encode_hybrid(texts)
+            all_dense_embeddings: list[list[float]] = [
+                [float(value) for value in embedding] for embedding in hybrid_result.dense_vecs
+            ]
+            sparse_embeddings = hybrid_result.lexical_weights
+            colbert_embeddings = hybrid_result.colbert_vecs or []
 
             # Step 3: Build points
             points: list[PointStruct] = []

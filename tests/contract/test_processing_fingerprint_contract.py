@@ -125,7 +125,7 @@ class TestStaticContract:
 def _indexed_state(
     *,
     content_hash: str = "h",
-    embedding_model: str = "voyage-4-large",
+    embedding_model: str = "bge-m3-api",
     pipeline_version: str = "v3.2.1",
 ) -> FileState:
     return FileState(
@@ -142,25 +142,25 @@ class TestShouldReprocessHelper:
 
     def test_returns_false_when_all_three_fields_match(self) -> None:
         state = _indexed_state(
-            content_hash="h", embedding_model="voyage-4-large", pipeline_version="v3.2.1"
+            content_hash="h", embedding_model="bge-m3-api", pipeline_version="v3.2.1"
         )
         assert (
             _should_reprocess(
                 state,
                 content_hash="h",
-                embedding_model="voyage-4-large",
+                embedding_model="bge-m3-api",
                 pipeline_version="v3.2.1",
             )
             is False
         )
 
     def test_returns_true_when_only_embedding_model_differs(self) -> None:
-        state = _indexed_state(embedding_model="voyage-4-large")
+        state = _indexed_state(embedding_model="bge-m3-api")
         assert (
             _should_reprocess(
                 state,
                 content_hash="h",
-                embedding_model="bge-m3-api",
+                embedding_model="bge-m3-api-v2",
                 pipeline_version="v3.2.1",
             )
             is True
@@ -172,7 +172,7 @@ class TestShouldReprocessHelper:
             _should_reprocess(
                 state,
                 content_hash="h",
-                embedding_model="voyage-4-large",
+                embedding_model="bge-m3-api",
                 pipeline_version="v3.3.0",
             )
             is True
@@ -184,7 +184,7 @@ class TestShouldReprocessHelper:
             _should_reprocess(
                 state,
                 content_hash="new",
-                embedding_model="voyage-4-large",
+                embedding_model="bge-m3-api",
                 pipeline_version="v3.2.1",
             )
             is True
@@ -193,7 +193,7 @@ class TestShouldReprocessHelper:
     def test_none_fingerprint_args_preserve_legacy_hash_only_behavior(self) -> None:
         """When embedding_model/pipeline_version are None, the helper falls back
         to legacy hash-only comparison (backward compatibility)."""
-        state = _indexed_state(embedding_model="voyage-4-large", pipeline_version="v3.2.1")
+        state = _indexed_state(embedding_model="bge-m3-api", pipeline_version="v3.2.1")
         # Legacy callers pass None for fingerprint pieces — should match on hash only.
         assert (
             _should_reprocess(
@@ -220,7 +220,7 @@ class TestShouldReprocessHelper:
             _should_reprocess(
                 None,
                 content_hash="h",
-                embedding_model="voyage-4-large",
+                embedding_model="bge-m3-api",
                 pipeline_version="v3.2.1",
             )
             is True
@@ -236,7 +236,7 @@ class TestShouldReprocessHelper:
         state = FileState(
             file_id="f1",
             content_hash="h",
-            embedding_model="voyage-4-large",
+            embedding_model="bge-m3-api",
             pipeline_version="v3.2.1",
             status="pending",
         )
@@ -244,7 +244,7 @@ class TestShouldReprocessHelper:
             _should_reprocess(
                 state,
                 content_hash="h",
-                embedding_model="voyage-4-large",
+                embedding_model="bge-m3-api",
                 pipeline_version="v3.2.1",
             )
             is True
@@ -267,7 +267,49 @@ class TestShouldProcessSyncFingerprintIntegration:
 
     def test_indexed_same_hash_different_embedding_returns_true(self, monkeypatch) -> None:
         state = _indexed_state(
-            content_hash="h", embedding_model="voyage-4-large", pipeline_version="v3.2.1"
+            content_hash="h", embedding_model="bge-m3-api", pipeline_version="v3.2.1"
+        )
+
+        async def _fake_get_state(_self, _file_id: str) -> FileState | None:
+            return state
+
+        monkeypatch.setattr(UnifiedStateManager, "get_state", _fake_get_state)
+        mgr = UnifiedStateManager(database_url="postgres://localhost/test")
+
+        assert (
+            mgr.should_process_sync(
+                "f1",
+                "h",
+                embedding_model="bge-m3-api-v2",
+                pipeline_version="v3.2.1",
+            )
+            is True
+        )
+
+    def test_indexed_same_hash_different_pipeline_returns_true(self, monkeypatch) -> None:
+        state = _indexed_state(
+            content_hash="h", embedding_model="bge-m3-api", pipeline_version="v3.2.1"
+        )
+
+        async def _fake_get_state(_self, _file_id: str) -> FileState | None:
+            return state
+
+        monkeypatch.setattr(UnifiedStateManager, "get_state", _fake_get_state)
+        mgr = UnifiedStateManager(database_url="postgres://localhost/test")
+
+        assert (
+            mgr.should_process_sync(
+                "f1",
+                "h",
+                embedding_model="bge-m3-api",
+                pipeline_version="v9.9.9",
+            )
+            is True
+        )
+
+    def test_indexed_all_match_returns_false(self, monkeypatch) -> None:
+        state = _indexed_state(
+            content_hash="h", embedding_model="bge-m3-api", pipeline_version="v3.2.1"
         )
 
         async def _fake_get_state(_self, _file_id: str) -> FileState | None:
@@ -283,55 +325,13 @@ class TestShouldProcessSyncFingerprintIntegration:
                 embedding_model="bge-m3-api",
                 pipeline_version="v3.2.1",
             )
-            is True
-        )
-
-    def test_indexed_same_hash_different_pipeline_returns_true(self, monkeypatch) -> None:
-        state = _indexed_state(
-            content_hash="h", embedding_model="voyage-4-large", pipeline_version="v3.2.1"
-        )
-
-        async def _fake_get_state(_self, _file_id: str) -> FileState | None:
-            return state
-
-        monkeypatch.setattr(UnifiedStateManager, "get_state", _fake_get_state)
-        mgr = UnifiedStateManager(database_url="postgres://localhost/test")
-
-        assert (
-            mgr.should_process_sync(
-                "f1",
-                "h",
-                embedding_model="voyage-4-large",
-                pipeline_version="v9.9.9",
-            )
-            is True
-        )
-
-    def test_indexed_all_match_returns_false(self, monkeypatch) -> None:
-        state = _indexed_state(
-            content_hash="h", embedding_model="voyage-4-large", pipeline_version="v3.2.1"
-        )
-
-        async def _fake_get_state(_self, _file_id: str) -> FileState | None:
-            return state
-
-        monkeypatch.setattr(UnifiedStateManager, "get_state", _fake_get_state)
-        mgr = UnifiedStateManager(database_url="postgres://localhost/test")
-
-        assert (
-            mgr.should_process_sync(
-                "f1",
-                "h",
-                embedding_model="voyage-4-large",
-                pipeline_version="v3.2.1",
-            )
             is False
         )
 
     def test_legacy_no_fingerprint_args_still_works(self, monkeypatch) -> None:
         """Backward compat: callers that don't pass fingerprint args get hash-only check."""
         state = _indexed_state(
-            content_hash="h", embedding_model="voyage-4-large", pipeline_version="v3.2.1"
+            content_hash="h", embedding_model="bge-m3-api", pipeline_version="v3.2.1"
         )
 
         async def _fake_get_state(_self, _file_id: str) -> FileState | None:

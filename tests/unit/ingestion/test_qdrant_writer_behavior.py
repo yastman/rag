@@ -3,8 +3,9 @@
 
 Tests the actual business logic:
 - delete_file_sync: filter structure, count before delete, skip delete when empty
-- upsert_chunks_sync: payload contract, vector construction, delete before upsert,
-  Voyage batching, sparse edge cases, colbert presence/absence, error handling
+- upsert_chunks_sync: payload contract, vector construction, atomic-replace order,
+  sparse edge cases, colbert presence, error handling
+BGE-M3 is the sole embedding path (#2631).
 """
 
 from __future__ import annotations
@@ -19,7 +20,6 @@ from src.services.bge_m3_client import HybridResult
 
 
 pytestmark = pytest.mark.requires_extras
-
 
 
 # ---------------------------------------------------------------------------
@@ -72,50 +72,17 @@ def mock_bge_client():
     )
     client.encode_colbert.return_value = MagicMock(colbert_vecs=[[[0.1] * 128] * 5])
     client.encode_dense.return_value = MagicMock(vectors=[[0.2] * 1024])
+    client.encode_hybrid.return_value = HybridResult(
+        dense_vecs=[[0.2] * 1024],
+        lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
+        colbert_vecs=[[[0.1] * 128] * 5],
+    )
     return client
 
 
 @pytest.fixture
-def mock_voyage():
-    """Mock VoyageService client (Voyage API path)."""
-    voyage = MagicMock()
-    voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-    voyage._model_docs = "voyage-4-large"
-    return voyage
-
-
-@pytest.fixture
-def writer_voyage(mock_qdrant_client, mock_bge_client, mock_voyage):
-    """QdrantHybridWriter using Voyage for dense embeddings."""
-    with (
-        patch(
-            "src.ingestion.unified.qdrant_writer.QdrantClient",
-            return_value=mock_qdrant_client,
-        ),
-        patch(
-            "src.services.bge_m3_client.BGEM3SyncClient",
-            return_value=mock_bge_client,
-        ),
-        patch(
-            "src.services.voyage.VoyageService",
-            return_value=mock_voyage,
-        ),
-    ):
-        w = QdrantHybridWriter(
-            qdrant_url="http://localhost:6333",
-            voyage_api_key="test_key",
-            use_local_embeddings=False,
-        )
-    # After construction, inject mocks so tests can set side_effects
-    w.client = mock_qdrant_client
-    w._bge_client = mock_bge_client
-    w.voyage = mock_voyage
-    yield w
-
-
-@pytest.fixture
-def writer_local(mock_qdrant_client, mock_bge_client):
-    """QdrantHybridWriter using local BGE-M3 for all embeddings."""
+def writer(mock_qdrant_client, mock_bge_client):
+    """QdrantHybridWriter using BGE-M3 (sole embedding path)."""
     with (
         patch(
             "src.ingestion.unified.qdrant_writer.QdrantClient",
@@ -128,7 +95,6 @@ def writer_local(mock_qdrant_client, mock_bge_client):
     ):
         w = QdrantHybridWriter(
             qdrant_url="http://localhost:6333",
-            use_local_embeddings=True,
         )
     w.client = mock_qdrant_client
     w._bge_client = mock_bge_client
@@ -143,29 +109,29 @@ def writer_local(mock_qdrant_client, mock_bge_client):
 class TestDeleteFileSyncBehavior:
     """Verify delete_file_sync filter structure and count-before-delete logic."""
 
-    def test_returns_zero_when_no_points_exist(self, writer_voyage, mock_qdrant_client):
+    def test_returns_zero_when_no_points_exist(self, writer, mock_qdrant_client):
         """Returns 0 and does not call delete when count is 0."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
 
-        result = writer_voyage.delete_file_sync("file_1", "my_collection")
+        result = writer.delete_file_sync("file_1", "my_collection")
 
         assert result == 0
         mock_qdrant_client.delete.assert_not_called()
 
-    def test_returns_count_and_deletes_when_points_exist(self, writer_voyage, mock_qdrant_client):
+    def test_returns_count_and_deletes_when_points_exist(self, writer, mock_qdrant_client):
         """Returns count and calls delete when points exist."""
         mock_qdrant_client.count.return_value = MagicMock(count=5)
 
-        result = writer_voyage.delete_file_sync("file_1", "my_collection")
+        result = writer.delete_file_sync("file_1", "my_collection")
 
         assert result == 5
         mock_qdrant_client.delete.assert_called_once()
 
-    def test_count_uses_metadata_file_id_filter(self, writer_voyage, mock_qdrant_client):
+    def test_count_uses_metadata_file_id_filter(self, writer, mock_qdrant_client):
         """count() is called with metadata.file_id filter (not flat file_id)."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
 
-        writer_voyage.delete_file_sync("my_file_id", "col")
+        writer.delete_file_sync("my_file_id", "col")
 
         count_kwargs = mock_qdrant_client.count.call_args.kwargs
         filt = count_kwargs["count_filter"]
@@ -174,16 +140,14 @@ class TestDeleteFileSyncBehavior:
         assert condition.key == "metadata.file_id"
         assert condition.match.value == "my_file_id"
 
-    def test_delete_uses_same_filter_as_count(self, writer_voyage, mock_qdrant_client):
+    def test_delete_uses_same_filter_as_count(self, writer, mock_qdrant_client):
         """delete() wraps the same metadata.file_id filter in FilterSelector (canonical SDK)."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
 
-        writer_voyage.delete_file_sync("target_file", "col")
+        writer.delete_file_sync("target_file", "col")
 
         delete_kwargs = mock_qdrant_client.delete.call_args.kwargs
         selector = delete_kwargs["points_selector"]
-        # Canonical SDK shape per Qdrant Python client docs (Context7-verified):
-        # `points_selector=models.FilterSelector(filter=models.Filter(...))`.
         assert isinstance(selector, FilterSelector)
         filt = selector.filter
         assert isinstance(filt, Filter)
@@ -191,11 +155,11 @@ class TestDeleteFileSyncBehavior:
         assert condition.key == "metadata.file_id"
         assert condition.match.value == "target_file"
 
-    def test_delete_uses_correct_collection_name(self, writer_voyage, mock_qdrant_client):
+    def test_delete_uses_correct_collection_name(self, writer, mock_qdrant_client):
         """delete() passes the correct collection_name."""
         mock_qdrant_client.count.return_value = MagicMock(count=2)
 
-        writer_voyage.delete_file_sync("fid", "target_collection")
+        writer.delete_file_sync("fid", "target_collection")
 
         delete_kwargs = mock_qdrant_client.delete.call_args.kwargs
         assert delete_kwargs["collection_name"] == "target_collection"
@@ -209,77 +173,80 @@ class TestDeleteFileSyncBehavior:
 class TestUpsertChunksSyncBehavior:
     """Verify upsert_chunks_sync builds correct PointStruct objects."""
 
-    def test_empty_chunks_returns_zero_stats(self, writer_voyage):
+    def test_empty_chunks_returns_zero_stats(self, writer):
         """Empty chunk list skips all embedding and upsert work."""
-        stats = writer_voyage.upsert_chunks_sync([], "file_1", "/path/file.pdf", {}, "col")
+        stats = writer.upsert_chunks_sync([], "file_1", "/path/file.pdf", {}, "col")
 
         assert stats.points_upserted == 0
         assert stats.points_deleted == 0
         assert stats.errors is None
 
     def test_upsert_called_with_correct_collection(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """upsert() receives the collection_name passed to upsert_chunks_sync."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk()
-        writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "my_collection")
+        writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "my_collection")
 
         upsert_kwargs = mock_qdrant_client.upsert.call_args.kwargs
         assert upsert_kwargs["collection_name"] == "my_collection"
 
-    def test_builds_point_with_dense_and_sparse_vectors(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+    def test_builds_point_with_dense_sparse_and_colbert_vectors(
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
-        """Each PointStruct has 'dense' and 'bm42' vector keys."""
+        """Each PointStruct has 'dense', 'bm42', and 'colbert' vector keys."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1, 2], "values": [0.5, 0.3]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk(text="Hello world", order=0)
-        writer_voyage.upsert_chunks_sync([chunk], "file_1", "/path/file.pdf", {}, "col")
+        writer.upsert_chunks_sync([chunk], "file_1", "/path/file.pdf", {}, "col")
 
         points = mock_qdrant_client.upsert.call_args.kwargs["points"]
         assert len(points) == 1
         assert isinstance(points[0], PointStruct)
         assert "dense" in points[0].vector
         assert "bm42" in points[0].vector
+        assert "colbert" in points[0].vector
 
-    def test_payload_contains_page_content(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
-    ):
+    def test_payload_contains_page_content(self, writer, mock_qdrant_client, mock_bge_client):
         """Payload must include page_content with the chunk text."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk(text="Actual chunk text", order=2)
-        writer_voyage.upsert_chunks_sync([chunk], "fid", "/path/doc.pdf", {}, "col")
+        writer.upsert_chunks_sync([chunk], "fid", "/path/doc.pdf", {}, "col")
 
         points = mock_qdrant_client.upsert.call_args.kwargs["points"]
         assert points[0].payload["page_content"] == "Actual chunk text"
 
     def test_payload_metadata_has_required_fields(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """Payload metadata must include file_id, source, order (contract)."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk(text="Text", order=3)
-        writer_voyage.upsert_chunks_sync(
+        writer.upsert_chunks_sync(
             [chunk], "file_001", "/path/test.pdf", {"file_name": "test.pdf"}, "col"
         )
 
@@ -290,27 +257,27 @@ class TestUpsertChunksSyncBehavior:
         assert "order" in meta
 
     def test_payload_has_flat_file_id_for_fast_delete(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """Top-level payload must include flat 'file_id' field for fast delete queries."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk()
-        writer_voyage.upsert_chunks_sync([chunk], "flat_fid", "/p", {}, "col")
+        writer.upsert_chunks_sync([chunk], "flat_fid", "/p", {}, "col")
 
         points = mock_qdrant_client.upsert.call_args.kwargs["points"]
         assert points[0].payload["file_id"] == "flat_fid"
 
     def test_upsert_called_before_stale_delete_atomic_swap(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """Upsert must run BEFORE the post-upsert stale-id sweep (#1602)."""
         call_order: list[str] = []
-        # Pretend there's a stale orphan so a delete sweep is required after upsert
         mock_qdrant_client.count.return_value = MagicMock(count=1)
         mock_qdrant_client.scroll.return_value = (
             [MagicMock(id="00000000-0000-0000-0000-stalexxxxxxx")],
@@ -318,75 +285,35 @@ class TestUpsertChunksSyncBehavior:
         )
         mock_qdrant_client.delete.side_effect = lambda **_: call_order.append("delete")
         mock_qdrant_client.upsert.side_effect = lambda **_: call_order.append("upsert")
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk()
-        writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         # Replacement points become live first; stale ids are swept after.
         assert call_order == ["upsert", "delete"]
 
     def test_stats_points_upserted_matches_chunk_count(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """WriteStats.points_upserted equals the number of chunks."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
         n = 3
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024] * n)
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}] * n
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024] * n,
+            lexical_weights=[{"indices": [1], "values": [0.5]}] * n,
+            colbert_vecs=[[[0.1] * 128] * 5] * n,
         )
 
         chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(n)]
-        stats = writer_voyage.upsert_chunks_sync(chunks, "fid", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync(chunks, "fid", "/p", {}, "col")
 
         assert stats.points_upserted == n
         assert stats.errors is None
-
-
-# ---------------------------------------------------------------------------
-# upsert_chunks_sync — colbert vector behavior
-# ---------------------------------------------------------------------------
-
-
-class TestColbertVectorBehavior:
-    """Verify colbert inclusion/exclusion based on embedding mode."""
-
-    def test_colbert_absent_in_voyage_mode(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
-    ):
-        """When use_local_embeddings=False, 'colbert' key must NOT appear in vector."""
-        mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
-        )
-
-        chunk = _make_chunk()
-        writer_voyage.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
-
-        points = mock_qdrant_client.upsert.call_args.kwargs["points"]
-        assert "colbert" not in points[0].vector
-
-    def test_colbert_present_in_local_embeddings_mode(
-        self, writer_local, mock_qdrant_client, mock_bge_client
-    ):
-        """When use_local_embeddings=True, 'colbert' key must appear in vector."""
-        mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_bge_client.encode_hybrid.return_value = HybridResult(
-            dense_vecs=[[0.2] * 1024],
-            lexical_weights=[{"indices": [1], "values": [0.5]}],
-            colbert_vecs=[[[0.3] * 128] * 5],
-        )
-
-        chunk = _make_chunk()
-        writer_local.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
-
-        points = mock_qdrant_client.upsert.call_args.kwargs["points"]
-        assert "colbert" in points[0].vector
 
 
 # ---------------------------------------------------------------------------
@@ -398,17 +325,18 @@ class TestUpsertChunksSyncEdgeCases:
     """Verify edge cases: empty sparse indices, batching, error handling."""
 
     def test_sparse_with_empty_indices_creates_valid_sparse_vector(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """SparseVector with empty indices/values must not raise an error."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [], "values": []}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [], "values": []}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk()
-        stats = writer_voyage.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
 
         assert stats.errors is None
         points = mock_qdrant_client.upsert.call_args.kwargs["points"]
@@ -417,60 +345,40 @@ class TestUpsertChunksSyncEdgeCases:
         assert sparse_vec.indices == []
         assert sparse_vec.values == []
 
-    def test_voyage_embed_batched_for_large_chunk_list(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
-    ):
-        """Voyage API calls are batched at VOYAGE_BATCH_SIZE chunks per call."""
-        batch_size = QdrantHybridWriter.VOYAGE_BATCH_SIZE
-        num_chunks = batch_size + 10  # forces 2 batches
-
-        mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.side_effect = [
-            MagicMock(embeddings=[[0.1] * 1024] * batch_size),
-            MagicMock(embeddings=[[0.2] * 1024] * 10),
-        ]
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}] * num_chunks
-        )
-
-        chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(num_chunks)]
-        stats = writer_voyage.upsert_chunks_sync(chunks, "f", "/p", {}, "col")
-
-        assert mock_voyage._client.embed.call_count == 2
-        assert stats.points_upserted == num_chunks
-
     def test_qdrant_exception_captured_in_error_stats(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """If upsert raises, WriteStats.errors contains the message; points_upserted=0."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
         mock_qdrant_client.upsert.side_effect = RuntimeError("Qdrant timeout")
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk()
-        stats = writer_voyage.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
 
         assert stats.errors is not None
         assert "Qdrant timeout" in stats.errors[0]
         assert stats.points_upserted == 0
 
     def test_oversized_payload_skipped_with_error(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """Single-point requests above the safe limit are skipped, not sent to Qdrant."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         # Create chunk with oversized text (~40MB)
         huge_text = "x" * (35 * 1024 * 1024)
         chunk = _make_chunk(text=huge_text)
-        stats = writer_voyage.upsert_chunks_sync([chunk], "f", "/big.pdf", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "f", "/big.pdf", {}, "col")
 
         assert stats.errors is not None
         assert "exceeds" in stats.errors[0]
@@ -478,13 +386,14 @@ class TestUpsertChunksSyncEdgeCases:
         mock_qdrant_client.upsert.assert_not_called()
 
     def test_upsert_is_split_into_multiple_requests_when_batch_is_too_large(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """Request-size batching should split points into multiple upsert() calls."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024] * 3)
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}] * 3
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024] * 3,
+            lexical_weights=[{"indices": [1], "values": [0.5]}] * 3,
+            colbert_vecs=[[[0.1] * 128] * 5] * 3,
         )
 
         chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(3)]
@@ -499,7 +408,7 @@ class TestUpsertChunksSyncEdgeCases:
                 700,
             ),
         ):
-            stats = writer_voyage.upsert_chunks_sync(chunks, "f", "/split.md", {}, "col")
+            stats = writer.upsert_chunks_sync(chunks, "f", "/split.md", {}, "col")
 
         assert stats.errors is None
         assert stats.points_upserted == 3
@@ -510,13 +419,14 @@ class TestUpsertChunksSyncEdgeCases:
         assert len(second_points) == 1
 
     def test_single_point_larger_than_request_limit_is_rejected(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """A single point larger than the request limit should fail fast."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
         )
 
         chunk = _make_chunk(text="single point", order=0)
@@ -527,7 +437,7 @@ class TestUpsertChunksSyncEdgeCases:
                 512,
             ),
         ):
-            stats = writer_voyage.upsert_chunks_sync([chunk], "f", "/big.md", {}, "col")
+            stats = writer.upsert_chunks_sync([chunk], "f", "/big.md", {}, "col")
 
         assert stats.errors is not None
         assert "exceeds" in stats.errors[0]
@@ -536,17 +446,15 @@ class TestUpsertChunksSyncEdgeCases:
 
 
 # ---------------------------------------------------------------------------
-# Regression guard: local BGE-M3 path must use encode_hybrid()
+# Regression guard: BGE-M3 encode_hybrid is the sole embedding path (#2631)
 # ---------------------------------------------------------------------------
 
 
 class TestHybridEncodingRegression:
-    """Regression: local BGE-M3 ingestion MUST use encode_hybrid, not 3 calls."""
+    """BGE-M3 encode_hybrid must be the sole embedding path after #2631."""
 
-    def test_upsert_chunks_sync_uses_hybrid_when_local(
-        self, writer_local, mock_bge_client, mock_qdrant_client
-    ):
-        """Writer with use_local_embeddings=True calls bge.encode_hybrid once."""
+    def test_upsert_chunks_sync_uses_hybrid(self, writer, mock_bge_client, mock_qdrant_client):
+        """Writer calls bge.encode_hybrid once; no encode_dense/sparse/colbert separately."""
         mock_bge_client.encode_hybrid.return_value = HybridResult(
             dense_vecs=[[0.2] * 1024],
             lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
@@ -555,7 +463,7 @@ class TestHybridEncodingRegression:
         mock_qdrant_client.count.return_value = MagicMock(count=0)
 
         chunk = _make_chunk(text="test text", order=0)
-        writer_local.upsert_chunks_sync(
+        writer.upsert_chunks_sync(
             chunks=[chunk],
             file_id="test-file",
             source_path="test.md",
@@ -567,3 +475,15 @@ class TestHybridEncodingRegression:
         mock_bge_client.encode_dense.assert_not_called()
         mock_bge_client.encode_sparse.assert_not_called()
         mock_bge_client.encode_colbert.assert_not_called()
+
+    def test_writer_has_no_voyage_attribute(self, writer):
+        """QdrantHybridWriter must not have a voyage attribute after #2631."""
+        assert not hasattr(writer, "voyage"), (
+            "QdrantHybridWriter must not have a .voyage attribute; Voyage path removed in #2631"
+        )
+
+    def test_writer_has_no_use_local_embeddings_attribute(self, writer):
+        """QdrantHybridWriter must not have use_local_embeddings after #2631."""
+        assert not hasattr(writer, "use_local_embeddings"), (
+            "use_local_embeddings flag removed in #2631; BGE-M3 is the only path"
+        )

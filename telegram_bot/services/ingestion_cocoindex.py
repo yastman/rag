@@ -38,7 +38,7 @@ class CocoIndexIngestionStats(IngestionStats):
 class CocoIndexIngestionService(IngestionService):
     """CocoIndex-based ingestion service.
 
-    Uses CocoIndex flows for document processing and Voyage AI for embeddings.
+    Uses CocoIndex flows for document processing and BGE-M3 for embeddings.
     """
 
 

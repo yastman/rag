@@ -416,7 +416,7 @@ class QdrantService:
         """Hybrid search with RRF fusion (dense + sparse).
 
         Args:
-            dense_vector: Dense embedding vector (e.g., voyage-4)
+            dense_vector: Dense embedding vector (e.g., bge-m3)
             sparse_vector: Sparse vector dict {"indices": [...], "values": [...]}
             filters: Optional metadata filters
             top_k: Number of results to return

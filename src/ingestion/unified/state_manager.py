@@ -64,7 +64,7 @@ class FileState:
     content_hash: str | None = None
     parser_version: str | None = None
     chunker_version: str | None = None
-    embedding_model: str = "voyage-4-large"
+    embedding_model: str = "bge-m3-api"
     chunk_count: int = 0
     collection_name: str | None = None
     pipeline_version: str = "v3.2.1"

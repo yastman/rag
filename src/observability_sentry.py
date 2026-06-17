@@ -75,7 +75,6 @@ _PROJECT_DENYLIST: tuple[str, ...] = (
     "openai_api_key",
     "anthropic_api_key",
     "groq_api_key",
-    "voyage_api_key",
     "redis_password",
     "postgres_password",
     "clickhouse_password",

@@ -56,7 +56,6 @@ class IngestionService:
         self,
         qdrant_url: str | None = None,
         qdrant_api_key: str | None = None,
-        voyage_api_key: str | None = None,
         collection_name: str = "documents",
         chunk_size: int = 512,
         chunk_overlap: int = 50,
@@ -66,7 +65,6 @@ class IngestionService:
         Args:
             qdrant_url: Qdrant server URL (defaults to QDRANT_URL env var)
             qdrant_api_key: Qdrant API key (defaults to QDRANT_API_KEY env var)
-            voyage_api_key: Voyage AI API key (defaults to VOYAGE_API_KEY env var)
             collection_name: Target Qdrant collection name
             chunk_size: Tokens per chunk
             chunk_overlap: Overlap between chunks
@@ -74,7 +72,6 @@ class IngestionService:
         resolved_qdrant_url = qdrant_url or os.getenv("QDRANT_URL")
         self.qdrant_url: str = resolved_qdrant_url or "http://localhost:6333"
         self.qdrant_api_key = qdrant_api_key or os.getenv("QDRANT_API_KEY")
-        self.voyage_api_key = voyage_api_key or os.getenv("VOYAGE_API_KEY")
         self.collection_name = collection_name
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -114,7 +111,6 @@ class IngestionService:
             collection_name=self.collection_name,
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
-            voyage_api_key=self.voyage_api_key,
         )
 
     async def ingest_directory(self, directory: Path) -> IngestionStats:

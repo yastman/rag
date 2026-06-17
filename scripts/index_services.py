@@ -46,9 +46,7 @@ def create_writer() -> QdrantHybridWriter:
     return QdrantHybridWriter(
         qdrant_url=os.getenv("QDRANT_URL", "http://localhost:6333"),
         qdrant_api_key=os.getenv("QDRANT_API_KEY"),
-        voyage_api_key=os.getenv("VOYAGE_API_KEY"),
         bge_m3_url=os.getenv("BGE_M3_URL", "http://localhost:8000"),
-        use_local_embeddings=True,
     )
 
 
