@@ -2,18 +2,7 @@
 """Contract: QdrantHybridTargetConnector must not reuse a cached writer when
 the effective target spec changes.
 
-Closes #1605.
-
-Audit finding:
-  ``QdrantHybridTargetConnector._get_writer()`` checked only ``cls._writer is None``.
-  A process calling _get_writer() with two different specs (e.g. first
-  ``use_local_embeddings=True``, then ``use_local_embeddings=False``) would
-  silently keep the first writer's client/config, producing stale ingestion
-  behaviour.
-
-  The docling cache already did this correctly via a ``(backend, url, timeout,
-  max_tokens)`` cache-key tuple + ``_docling_key`` comparison. This contract
-  requires the same pattern for the writer.
+Closes #1605. Updated for #2631 (Voyage removed; BGE-M3 is the sole path).
 
 Tests are split into two sections:
 - Static (AST-only): always run, no cocoindex needed.
@@ -71,6 +60,17 @@ def test_get_writer_contains_key_comparison() -> None:
     assert "_writer_key" in src, "_get_writer must use a _writer_key fingerprint comparison."
 
 
+def test_no_voyage_fields_in_spec() -> None:
+    """QdrantHybridTargetSpec must not contain voyage_api_key or voyage_model (#2631)."""
+    src = _read_src()
+    assert "voyage_api_key" not in src, (
+        "voyage_api_key must be removed from QdrantHybridTargetSpec (#2631)"
+    )
+    assert "voyage_model" not in src, (
+        "voyage_model must be removed from QdrantHybridTargetSpec (#2631)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Behavioural contract: distinct specs produce distinct writers
 # (requires cocoindex ingest extra)
@@ -99,7 +99,7 @@ def reset_connector_state():
     QdrantHybridTargetConnector._writer_key = original_key
 
 
-def _make_spec(*, use_local_embeddings: bool = True, voyage_model: str = "voyage-3"):
+def _make_spec(*, bge_m3_url: str = "http://localhost:8000", bge_m3_concurrency: int = 1):
     """Create a minimal QdrantHybridTargetSpec for testing."""
     pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
     from src.ingestion.unified.targets.qdrant_hybrid_target import (
@@ -109,9 +109,8 @@ def _make_spec(*, use_local_embeddings: bool = True, voyage_model: str = "voyage
     return QdrantHybridTargetSpec(
         collection_name="test_collection",
         qdrant_url="http://localhost:6333",
-        use_local_embeddings=use_local_embeddings,
-        voyage_model=voyage_model,
-        bge_m3_url="http://localhost:8000",
+        bge_m3_url=bge_m3_url,
+        bge_m3_concurrency=bge_m3_concurrency,
     )
 
 
@@ -133,7 +132,7 @@ def _call_get_writer(spec, writer_instance):
 def test_same_spec_returns_cached_writer() -> None:
     """Calling _get_writer twice with identical spec must return the same
     writer instance (cache hit)."""
-    spec = _make_spec(use_local_embeddings=True)
+    spec = _make_spec()
 
     writer_a = MagicMock(name="writer_a")
     writer_b = MagicMock(name="writer_b")
@@ -148,67 +147,38 @@ def test_same_spec_returns_cached_writer() -> None:
 
 
 @requires_cocoindex
-def test_different_embedding_mode_produces_new_writer() -> None:
-    """Calling _get_writer with a spec that differs only in
-    ``use_local_embeddings`` must produce a fresh writer instance."""
-    spec_local = _make_spec(use_local_embeddings=True)
-    spec_voyage = _make_spec(use_local_embeddings=False)
+def test_different_bge_m3_url_produces_new_writer() -> None:
+    """Calling _get_writer with a different bge_m3_url must produce a fresh writer."""
+    spec_a = _make_spec(bge_m3_url="http://localhost:8000")
+    spec_b = _make_spec(bge_m3_url="http://bge-m3-alt:8000")
 
-    writer_local = MagicMock(name="writer_local")
-    writer_voyage = MagicMock(name="writer_voyage")
+    writer_a = MagicMock(name="writer_a")
+    writer_b = MagicMock(name="writer_b")
 
-    result_local = _call_get_writer(spec_local, writer_local)
-    result_voyage = _call_get_writer(spec_voyage, writer_voyage)
+    result_a = _call_get_writer(spec_a, writer_a)
+    result_b = _call_get_writer(spec_b, writer_b)
 
-    assert result_local is writer_local
-    assert result_voyage is writer_voyage
-    assert result_local is not result_voyage, (
-        "_get_writer must not reuse a cached writer when use_local_embeddings changes."
+    assert result_a is writer_a
+    assert result_b is writer_b
+    assert result_a is not result_b, (
+        "_get_writer must not reuse a cached writer when bge_m3_url changes."
     )
 
 
 @requires_cocoindex
-def test_different_voyage_model_produces_new_writer() -> None:
-    """Calling _get_writer with a different ``voyage_model`` must produce a
-    fresh writer instance."""
-    spec_v3 = _make_spec(use_local_embeddings=False, voyage_model="voyage-3")
-    spec_v3_lite = _make_spec(use_local_embeddings=False, voyage_model="voyage-3-lite")
+def test_different_concurrency_produces_new_writer() -> None:
+    """Calling _get_writer with different bge_m3_concurrency must produce a fresh writer."""
+    spec_1 = _make_spec(bge_m3_concurrency=1)
+    spec_4 = _make_spec(bge_m3_concurrency=4)
 
-    writer_v3 = MagicMock(name="writer_v3")
-    writer_v3_lite = MagicMock(name="writer_v3_lite")
+    writer_1 = MagicMock(name="writer_1")
+    writer_4 = MagicMock(name="writer_4")
 
-    result_v3 = _call_get_writer(spec_v3, writer_v3)
-    result_lite = _call_get_writer(spec_v3_lite, writer_v3_lite)
+    result_1 = _call_get_writer(spec_1, writer_1)
+    result_4 = _call_get_writer(spec_4, writer_4)
 
-    assert result_v3 is writer_v3
-    assert result_lite is writer_v3_lite
-    assert result_v3 is not result_lite, (
-        "_get_writer must not reuse a cached writer when voyage_model changes."
-    )
-
-
-@requires_cocoindex
-def test_env_voyage_api_key_change_produces_new_writer(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When spec omits voyage_api_key, the cache key must include the env fallback.
-
-    QdrantHybridWriter receives ``spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", "")``.
-    The fingerprint must use that same effective value, otherwise a process that
-    changes the env key between runs can silently reuse the old Voyage client.
-    """
-    spec = _make_spec(use_local_embeddings=False)
-
-    writer_old_key = MagicMock(name="writer_old_key")
-    writer_new_key = MagicMock(name="writer_new_key")
-
-    monkeypatch.setenv("VOYAGE_API_KEY", "old-key")
-    result_old = _call_get_writer(spec, writer_old_key)
-
-    monkeypatch.setenv("VOYAGE_API_KEY", "new-key")
-    result_new = _call_get_writer(spec, writer_new_key)
-
-    assert result_old is writer_old_key
-    assert result_new is writer_new_key
-    assert result_old is not result_new, (
-        "_get_writer must not reuse a cached writer when the effective "
-        "VOYAGE_API_KEY fallback changes."
+    assert result_1 is writer_1
+    assert result_4 is writer_4
+    assert result_1 is not result_4, (
+        "_get_writer must not reuse a cached writer when bge_m3_concurrency changes."
     )

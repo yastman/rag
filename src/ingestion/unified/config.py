@@ -42,10 +42,6 @@ class UnifiedConfig:
     docling_timeout: float = 300.0
     max_tokens_per_chunk: int = 512
 
-    # Voyage
-    voyage_api_key: str = field(default_factory=lambda: os.getenv("VOYAGE_API_KEY", ""))
-    voyage_model: str = "voyage-4-large"
-
     # BGE-M3 API (dense + sparse embeddings)
     bge_m3_url: str = field(
         default_factory=lambda: os.getenv("BGE_M3_URL", "http://localhost:8000")
@@ -53,9 +49,6 @@ class UnifiedConfig:
     bge_m3_timeout: float = field(default_factory=lambda: float(os.getenv("BGE_M3_TIMEOUT", "300")))
     bge_m3_concurrency: int = field(
         default_factory=lambda: int(os.getenv("BGE_M3_CONCURRENCY", "1"))
-    )
-    use_local_embeddings: bool = field(
-        default_factory=lambda: os.getenv("USE_LOCAL_DENSE_EMBEDDINGS", "false").lower() == "true"
     )
 
     # Pipeline

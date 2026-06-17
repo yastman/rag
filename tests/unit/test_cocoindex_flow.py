@@ -4,17 +4,15 @@ Tests the CocoIndex flow configuration and helper classes
 without requiring the actual CocoIndex library.
 
 Milestone J: Document Ingestion Pipeline (2026-02-02)
+Note: Voyage AI embedding removed in #2631; BGE-M3 is the canonical path.
 """
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import numpy as np
-
 import src.ingestion.cocoindex_flow as cocoindex_flow
 from src.ingestion.cocoindex_flow import (
     FlowConfig,
-    VoyageEmbedFunction,
     check_cocoindex_available,
     create_document_flow,
     setup_and_run_flow,
@@ -32,7 +30,6 @@ class TestFlowConfig:
         assert config.collection_name == "documents"
         assert config.chunk_size == 512
         assert config.chunk_overlap == 50
-        assert config.voyage_model == "voyage-4-large"
         assert config.vector_size == 1024
         assert config.refresh_interval_seconds == 60
 
@@ -43,69 +40,18 @@ class TestFlowConfig:
             collection_name="custom_docs",
             chunk_size=1024,
             chunk_overlap=100,
-            voyage_model="voyage-3-large",
         )
 
         assert config.qdrant_url == "http://custom:6333"
         assert config.collection_name == "custom_docs"
         assert config.chunk_size == 1024
         assert config.chunk_overlap == 100
-        assert config.voyage_model == "voyage-3-large"
 
-    def test_env_var_defaults(self, monkeypatch):
-        """Test that config reads from environment variables."""
-        monkeypatch.setenv("QDRANT_URL", "http://env-qdrant:6333")
-        monkeypatch.setenv("VOYAGE_API_KEY", "test-voyage-key")
-
+    def test_no_voyage_fields(self):
+        """FlowConfig must not have voyage_api_key or voyage_model (#2631)."""
         config = FlowConfig()
-
-        assert config.qdrant_url == "http://env-qdrant:6333"
-        assert config.voyage_api_key == "test-voyage-key"
-
-
-class TestVoyageEmbedFunction:
-    """Tests for VoyageEmbedFunction class."""
-
-    def test_init_defaults(self):
-        """Test initialization with defaults."""
-        func = VoyageEmbedFunction()
-
-        assert func.model == "voyage-4-large"
-        assert func._service is None  # Lazy loaded
-
-    def test_init_custom_model(self):
-        """Test initialization with custom model."""
-        func = VoyageEmbedFunction(
-            api_key="test-key",
-            model="voyage-3-large",
-        )
-
-        assert func.api_key == "test-key"
-        assert func.model == "voyage-3-large"
-
-    def test_call_embeds_texts(self):
-        """Test that calling the function embeds texts."""
-        func = VoyageEmbedFunction(api_key="test-key")
-
-        # Mock the VoyageService
-        mock_service = MagicMock()
-        mock_service.embed_documents = AsyncMock(return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
-        func._service = mock_service
-
-        def _run_until_complete(coro):
-            # Test double for loop.run_until_complete that avoids leaked coroutine warnings.
-            coro.close()
-            return [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
-
-        with patch("asyncio.get_event_loop") as mock_loop:
-            mock_loop.return_value.is_running.return_value = False
-            mock_loop.return_value.run_until_complete.side_effect = _run_until_complete
-
-            result = func(["text1", "text2"])
-
-        assert len(result) == 2
-        assert isinstance(result[0], np.ndarray)
-        assert result[0].dtype == np.float32
+        assert not hasattr(config, "voyage_api_key"), "voyage_api_key removed in #2631"
+        assert not hasattr(config, "voyage_model"), "voyage_model removed in #2631"
 
 
 class TestCheckCocoindexAvailable:
@@ -220,17 +166,23 @@ class TestModuleImports:
         """Test that expected exports are available."""
         from src.ingestion.cocoindex_flow import (
             FlowConfig,
-            VoyageEmbedFunction,
             check_cocoindex_available,
             create_document_flow,
             setup_and_run_flow,
         )
 
         assert FlowConfig is not None
-        assert VoyageEmbedFunction is not None
         assert callable(check_cocoindex_available)
         assert callable(create_document_flow)
         assert callable(setup_and_run_flow)
+
+    def test_voyage_embed_function_not_exported(self):
+        """VoyageEmbedFunction must not exist in cocoindex_flow (#2631)."""
+        import src.ingestion.cocoindex_flow as flow_module
+
+        assert not hasattr(flow_module, "VoyageEmbedFunction"), (
+            "VoyageEmbedFunction removed in #2631"
+        )
 
     def test_ingestion_module_exports(self):
         """Test that ingestion module exports CocoIndex components."""

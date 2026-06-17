@@ -3,7 +3,7 @@
 
 This target connector receives mutations from CocoIndex and:
 1. Parses documents via DoclingClient
-2. Generates embeddings (BGE-M3 dense + sparse, or Voyage dense + BGE-M3 sparse)
+2. Generates embeddings (BGE-M3 dense + sparse + ColBERT)
 3. Writes to Qdrant with payload contract
 4. Updates state in Postgres
 """
@@ -11,7 +11,6 @@ This target connector receives mutations from CocoIndex and:
 import dataclasses
 import hashlib
 import logging
-import os
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,12 +50,8 @@ class QdrantHybridTargetSpec(TargetSpec):
     docling_timeout: float = 300.0
     max_tokens_per_chunk: int = 512
 
-    # Voyage
-    voyage_api_key: str | None = None
-    voyage_model: str = "voyage-4-large"
-
     # Local embeddings (BGE-M3 dense + sparse)
-    use_local_embeddings: bool = False
+    use_local_embeddings: bool = True
     bge_m3_url: str = "http://localhost:8000"
     bge_m3_timeout: float = 300.0
     bge_m3_concurrency: int = 1
@@ -79,9 +74,7 @@ class QdrantHybridTargetSpec(TargetSpec):
             docling_url=config.docling_url,
             docling_timeout=config.docling_timeout,
             max_tokens_per_chunk=config.max_tokens_per_chunk,
-            voyage_api_key=config.voyage_api_key,
-            voyage_model=config.voyage_model,
-            use_local_embeddings=config.use_local_embeddings,
+            use_local_embeddings=True,
             bge_m3_url=config.bge_m3_url,
             bge_m3_timeout=config.bge_m3_timeout,
             bge_m3_concurrency=config.bge_m3_concurrency,
@@ -111,7 +104,7 @@ class QdrantHybridTargetConnector:
 
     Handles:
     - Document parsing via Docling
-    - Embedding generation (BGE-M3 dense + sparse, or Voyage dense + BGE-M3 sparse)
+    - Embedding generation (BGE-M3 dense + sparse + ColBERT)
     - Qdrant upsert with payload contract
     - Postgres state tracking
     """
@@ -165,16 +158,11 @@ class QdrantHybridTargetConnector:
         effective spec fingerprint changes (#1605).
 
         Cache key covers every field consumed by QdrantHybridWriter.__init__:
-        qdrant_url, qdrant_api_key, voyage_api_key, voyage_model,
-        use_local_embeddings, bge_m3_url, bge_m3_timeout, bge_m3_concurrency.
+        qdrant_url, qdrant_api_key, bge_m3_url, bge_m3_timeout, bge_m3_concurrency.
         """
-        voyage_api_key = spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", "")
         writer_key = (
             spec.qdrant_url,
             spec.qdrant_api_key,
-            voyage_api_key,
-            spec.voyage_model,
-            spec.use_local_embeddings,
             spec.bge_m3_url,
             spec.bge_m3_timeout,
             spec.bge_m3_concurrency,
@@ -185,9 +173,6 @@ class QdrantHybridTargetConnector:
                     cls._writer = QdrantHybridWriter(
                         qdrant_url=spec.qdrant_url,
                         qdrant_api_key=spec.qdrant_api_key,
-                        voyage_api_key=voyage_api_key,
-                        voyage_model=spec.voyage_model,
-                        use_local_embeddings=spec.use_local_embeddings,
                         bge_m3_url=spec.bge_m3_url,
                         bge_m3_timeout=spec.bge_m3_timeout,
                         bge_m3_concurrency=spec.bge_m3_concurrency,
@@ -299,9 +284,7 @@ class QdrantHybridTargetConnector:
         logger.debug(f"Hash: {content_hash}")
 
         # Resolve processing fingerprint pieces.
-        # Mirrors the FileState upsert below: bge-m3-api when local embeddings
-        # are used, otherwise the configured Voyage model.
-        current_embedding_model = "bge-m3-api" if spec.use_local_embeddings else spec.voyage_model
+        current_embedding_model = "bge-m3-api"
         current_pipeline_version = spec.pipeline_version
 
         # Check if processing needed (skip unchanged content AND matching

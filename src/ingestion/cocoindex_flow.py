@@ -1,10 +1,11 @@
 """CocoIndex flow definitions for document ingestion.
 
 Defines data transformation flows for ingesting documents into Qdrant
-using Voyage AI embeddings. Uses CocoIndex's incremental processing
+using BGE-M3 embeddings. Uses CocoIndex's incremental processing
 and data lineage features.
 
 Milestone J: Document Ingestion Pipeline (2026-02-02)
+Note: Voyage AI embedding path removed in #2631; BGE-M3 is the canonical path.
 """
 
 import asyncio
@@ -16,9 +17,6 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 from urllib.parse import urlparse
-
-import numpy as np
-from numpy.typing import NDArray
 
 
 try:
@@ -51,9 +49,10 @@ class FlowConfig:
     chunk_size: int = 512  # Tokens per chunk
     chunk_overlap: int = 50  # Overlap between chunks
 
-    # Voyage settings
-    voyage_api_key: str | None = field(default_factory=lambda: os.getenv("VOYAGE_API_KEY"))
-    voyage_model: str = "voyage-4-large"
+    # BGE-M3 settings
+    bge_m3_url: str = field(
+        default_factory=lambda: os.getenv("BGE_M3_URL", "http://localhost:8000")
+    )
     vector_size: int = 1024
 
     # Refresh interval for watching directories
@@ -65,84 +64,6 @@ def check_cocoindex_available() -> bool:
     return COCOINDEX_AVAILABLE
 
 
-class VoyageEmbedFunction:
-    """CocoIndex-compatible embedding function using Voyage AI.
-
-    This class wraps VoyageService for use with CocoIndex's transform system.
-    It handles batching and async-to-sync conversion internally.
-    """
-
-    def __init__(
-        self,
-        api_key: str | None = None,
-        model: str = "voyage-4-large",
-    ):
-        """Initialize Voyage embedding function.
-
-        Args:
-            api_key: Voyage API key (defaults to VOYAGE_API_KEY env var)
-            model: Voyage model name
-        """
-        resolved_api_key = api_key if api_key is not None else os.getenv("VOYAGE_API_KEY")
-        self.api_key: str = resolved_api_key or ""
-        self.model = model
-        self._service: Any | None = None
-
-    @property
-    def service(self) -> Any:
-        """Lazy-load VoyageService."""
-        if self._service is None:
-            from src.services.voyage import VoyageService
-
-            self._service = VoyageService(
-                api_key=self.api_key,
-                model_docs=self.model,
-            )
-        return self._service
-
-    def __call__(self, texts: list[str]) -> list[NDArray[np.float32]]:
-        """Embed texts using Voyage AI.
-
-        Args:
-            texts: List of texts to embed
-
-        Returns:
-            List of embedding vectors
-        """
-        import asyncio
-
-        async def _embed():
-            return await self.service.embed_documents(texts)
-
-        # Run async in sync context. asyncio.get_event_loop() is deprecated
-        # in 3.12+ and raises RuntimeError without a running loop in 3.14;
-        # use get_running_loop()/asyncio.run() per #1639 / Context7 cpython.
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-        if loop is not None and loop.is_running():
-            # Called from inside an active event loop (e.g. CocoIndex executor
-            # invokes us during async flow execution). Drop to a worker thread
-            # so we can spin up a fresh loop via asyncio.run without re-entering.
-            import concurrent.futures
-
-            # Raw worker threads start with a clean contextvars.Context and
-            # asyncio.run spins a fresh loop, so the active OTEL/Langfuse parent
-            # span would be lost. Capture the current context and re-activate it
-            # inside the worker via ctx.run(...) so child spans nest correctly
-            # (asyncio.run's Task copies the active context). See #2251.
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                ctx = contextvars.copy_context()
-                future = pool.submit(ctx.run, asyncio.run, _embed())
-                embeddings = future.result()
-        else:
-            # Called from purely sync context — own the loop for this call.
-            embeddings = asyncio.run(_embed())
-
-        return [np.array(emb, dtype=np.float32) for emb in embeddings]
-
-
 def create_document_flow(
     config: FlowConfig | None = None,
     source_path: str = "documents",
@@ -152,8 +73,11 @@ def create_document_flow(
     This flow:
     1. Reads documents from a local directory
     2. Splits content into chunks
-    3. Generates Voyage AI embeddings
-    4. Exports to Qdrant vector database
+    3. Exports to Qdrant vector database (embedding via external BGE-M3 step)
+
+    Note: Voyage AI embedding path removed in #2631. The active ingestion
+    path uses QdrantHybridTargetConnector with BGE-M3 directly. This flow
+    is kept for CocoIndex compatibility reference.
 
     Args:
         config: Flow configuration (defaults to FlowConfig())
@@ -195,23 +119,12 @@ def create_document_flow(
 
             # Process each chunk
             with doc["chunks"].row() as chunk:
-                # Generate embedding using Voyage AI
-                embed_fn = VoyageEmbedFunction(
-                    api_key=config.voyage_api_key,
-                    model=config.voyage_model,
-                )
-
-                chunk["embedding"] = chunk["text"].transform(
-                    lambda texts: embed_fn(texts if isinstance(texts, list) else [texts])[0]
-                )
-
-                # Collect chunk data
+                # Collect chunk data (embedding generated by external BGE-M3 step)
                 doc_embeddings.collect(
                     file_name=doc["filename"],
                     file_path=doc["path"],
                     location=chunk["location"],
                     text=chunk["text"],
-                    embedding=chunk["embedding"],
                 )
 
         # Export to Qdrant

@@ -121,41 +121,6 @@ class BotConfig(BaseSettings):
     top_k: int = 5
     min_score: float = 0.3
 
-    # Voyage AI Configuration
-    voyage_api_key: str = Field(
-        default="", validation_alias=AliasChoices("voyage_api_key", "VOYAGE_API_KEY")
-    )
-    voyage_model_docs: str = Field(
-        default="voyage-4-large",
-        validation_alias=AliasChoices("voyage_model_docs", "VOYAGE_MODEL_DOCS"),
-    )
-    voyage_model_queries: str = Field(
-        default="voyage-4-lite",
-        validation_alias=AliasChoices("voyage_model_queries", "VOYAGE_MODEL_QUERIES"),
-    )
-    voyage_model_rerank: str = Field(
-        default="rerank-2.5",
-        validation_alias=AliasChoices("voyage_model_rerank", "VOYAGE_RERANK_MODEL"),
-    )
-    voyage_embedding_dim: int = Field(
-        default=1024,
-        validation_alias=AliasChoices("voyage_embedding_dim", "VOYAGE_EMBEDDING_DIM"),
-    )
-
-    # Legacy (for backward compatibility)
-    voyage_embed_model: str = Field(
-        default="voyage-3-large",
-        validation_alias=AliasChoices("voyage_embed_model", "VOYAGE_EMBED_MODEL"),
-    )
-    voyage_cache_model: str = Field(
-        default="voyage-3-lite",
-        validation_alias=AliasChoices("voyage_cache_model", "VOYAGE_CACHE_MODEL"),
-    )
-    voyage_rerank_model: str = Field(
-        default="rerank-2",
-        validation_alias=AliasChoices("voyage_rerank_model", "VOYAGE_RERANK_MODEL"),
-    )
-
     # Search Configuration
     search_top_k: int = Field(
         default=40, validation_alias=AliasChoices("search_top_k", "SEARCH_TOP_K")
@@ -181,13 +146,13 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("user_context_ttl", "USER_CONTEXT_TTL"),
     )
 
-    # Retrieval provider (bge_m3_api | voyage)
+    # Retrieval provider (bge_m3_api | userbase)
     retrieval_dense_provider: str = Field(
         default="bge_m3_api",
         validation_alias=AliasChoices("retrieval_dense_provider", "RETRIEVAL_DENSE_PROVIDER"),
     )
 
-    # Rerank provider (colbert | none | voyage)
+    # Rerank provider (colbert | none)
     rerank_provider: str = Field(
         default="colbert", validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER")
     )

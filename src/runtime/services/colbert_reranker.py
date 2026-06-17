@@ -1,7 +1,7 @@
 """ColBERT reranker service client.
 
 HTTP client for bge-m3-api /rerank endpoint (ColBERT MaxSim).
-Replaces VoyageService.rerank when RERANK_PROVIDER=colbert.
+BGE-M3 ColBERT reranker (RERANK_PROVIDER=colbert).
 Delegates to BGEM3Client (unified SDK layer).
 
 Deprecated: Server-side ColBERT via hybrid_search_rrf_colbert() (#569) is
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class ColbertRerankerService:
     """HTTP client for bge-m3-api ColBERT reranking.
 
-    Provides drop-in replacement for VoyageService.rerank.
+    Provides BGE-M3 ColBERT reranking via bge-m3-api /rerank endpoint.
     Uses ColBERT MaxSim scoring for local, fast reranking.
 
     Deprecated:

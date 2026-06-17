@@ -97,7 +97,7 @@ class DoclingConfig:
 
     base_url: str = "http://localhost:5001"
     timeout: float = 300.0  # Long timeout for large documents
-    max_tokens: int = 512  # Optimal for Voyage-4-large
+    max_tokens: int = 512  # Optimal chunk size for BGE-M3
     merge_peers: bool = True  # Merge undersized peer chunks
     # docling-serve expects a HuggingFace model name (string) for `chunking_tokenizer`.
     # If omitted, docling-serve uses its server-side default tokenizer.
@@ -427,7 +427,7 @@ class DoclingClient:
             source_type: Type identifier (pdf, docx, gdrive, etc.)
 
         Returns:
-            List of Chunk objects compatible with VoyageIndexer
+            List of Chunk objects compatible with QdrantHybridWriter
         """
         # Generate document hash for doc_id
         doc_id = self._generate_doc_id(source)

@@ -188,9 +188,6 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "RUNTIME_EVENTS_MAX_AGE_DAYS": "Runtime events retention; doc TBD",
     "SCORE_IMPROVEMENT_DELTA": "Lead score improvement delta; doc TBD",
     "USER_CONTEXT_TTL": "User context cache TTL; doc TBD",
-    "VOYAGE_EMBEDDING_DIM": "Voyage matryoshka dimension; legacy",
-    "VOYAGE_MODEL_DOCS": "Voyage docs model override; legacy",
-    "VOYAGE_MODEL_QUERIES": "Voyage queries model override; legacy",
     # --- Swarm / Kiro CI controls ------------------------------------------
     "KIRO_STRICT_REPORT": "Swarm worker report contract flag; gates legacy JSON validators in scripts/, not an operator .env.example setting",
 }

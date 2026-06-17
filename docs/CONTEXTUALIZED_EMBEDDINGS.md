@@ -117,37 +117,14 @@ and calls `ContextualizedEmbeddingService`.
 
 ## A/B Testing
 
-Run the A/B test to compare baseline vs contextualized embeddings:
+The previous A/B harness (`scripts/benchmark/contextualized_ab.py`) compared
+dense Voyage embeddings (voyage-3-large) against contextualized embeddings
+(voyage-context-3). It has been archived to `archive/scripts/benchmark/` after
+the dense Voyage service was removed from the codebase.
 
-```bash
-# Basic test
-python scripts/benchmark/contextualized_ab.py
-
-# With ground truth evaluation
-python scripts/benchmark/contextualized_ab.py \
-    --ground-truth tests/eval/ground_truth.json \
-    --k 5 \
-    --runs 3
-
-# Different dimension
-python scripts/benchmark/contextualized_ab.py --dim 2048
-```
-
-### Metrics Evaluated
-
-| Metric | Description |
-|--------|-------------|
-| Latency | Embedding + search time |
-| Precision@k | % of relevant docs in top-k |
-| Recall@k | % of relevant docs retrieved |
-| Overlap | % same results as baseline |
-
-### Pass Criteria
-
-- Latency overhead <= 50%
-- Overlap with baseline >= 60%
-- Precision delta >= -10%
-- Recall delta >= -10%
+A new harness comparing BGE-M3 (the current production embedding provider) vs
+contextualized embeddings can be written once the contextualized path is wired
+into the main ingestion/query runtime.
 
 ---
 
@@ -273,7 +250,7 @@ logging.getLogger("src.models.contextualized_embedding").setLevel(logging.DEBUG)
 
 ## See Also
 
-- `scripts/benchmark/contextualized_ab.py` - A/B testing script
+- `archive/scripts/benchmark/contextualized_ab.py` - Archived A/B testing script (dense Voyage baseline removed)
 - `tests/unit/models/test_contextualized_pipeline.py` - Service pipeline tests
 - `docs/PIPELINE_OVERVIEW.md` - Overall architecture
 - [Voyage AI Documentation](https://docs.voyageai.com/docs/contextualized-chunk-embeddings)

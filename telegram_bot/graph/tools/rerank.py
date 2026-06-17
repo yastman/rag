@@ -32,8 +32,8 @@ def make_rerank_tool(
 
     Args:
         rerank_fn: Async callable ``(query, documents) -> reordered_documents``.
-            Production wiring will pass either Voyage AI rerank or the
-            ColBERT reranker depending on ``RERANK_PROVIDER``.
+            Production wiring passes the ColBERT reranker depending on
+            ``RERANK_PROVIDER``.
         name: Tool name surfaced to the LLM.
 
     On error, the original document list is returned unchanged so the

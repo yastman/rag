@@ -18,9 +18,10 @@ import time
 from pathlib import Path
 from typing import Any, cast
 
+from telegram_bot.services.voyage import VoyageService
+
 from telegram_bot.config import BotConfig
 from telegram_bot.services.qdrant import QdrantService
-from telegram_bot.services.voyage import VoyageService
 
 
 def precision_at_k(retrieved_ids: list[str], relevant_ids: list[str], k: int) -> float:

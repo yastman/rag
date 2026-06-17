@@ -16,8 +16,8 @@ Tiers:
   5. Rerank results cache (Redis exact, 2h TTL)
   + Conversation history (Redis LIST, 20 msgs, 2h TTL)
 
-NOTE: redisvl imports are lazy-loaded in initialize() to avoid ~7.5s import
-overhead from voyageai SDK (pandas, scipy.stats) during test collection.
+NOTE: redisvl imports are lazy-loaded in initialize() to avoid heavy import
+overhead (pandas, scipy.stats) during test collection.
 """
 
 from __future__ import annotations

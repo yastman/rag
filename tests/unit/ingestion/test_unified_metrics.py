@@ -29,7 +29,7 @@ class TestIngestionMetrics:
         assert m.chunks_created == 0
         assert m.chunks_deleted == 0
         assert m.docling_duration_ms == 0
-        assert m.voyage_duration_ms == 0
+        assert m.bge_m3_duration_ms == 0
         assert m.qdrant_duration_ms == 0
         assert m.total_duration_ms == 0
         assert m.error_message is None
@@ -51,7 +51,7 @@ class TestToStructuredLog:
         m.chunks_created = 10
         m.chunks_deleted = 2
         m.docling_duration_ms = 100.123
-        m.voyage_duration_ms = 200.456
+        m.bge_m3_duration_ms = 200.456
         m.qdrant_duration_ms = 50.789
         m.total_duration_ms = 351.368
 
@@ -69,14 +69,14 @@ class TestToStructuredLog:
         """Duration fields are rounded to 1 decimal."""
         m = IngestionMetrics(file_id="f1", source_path="x.pdf")
         m.docling_duration_ms = 100.1567
-        m.voyage_duration_ms = 200.4321
+        m.bge_m3_duration_ms = 200.4321
         m.qdrant_duration_ms = 50.789
         m.total_duration_ms = 351.3778
 
         log = m.to_structured_log()
 
         assert log["docling_ms"] == 100.2
-        assert log["voyage_ms"] == 200.4
+        assert log["bge_m3_ms"] == 200.4
         assert log["qdrant_ms"] == 50.8
         assert log["total_ms"] == 351.4
 
@@ -102,7 +102,7 @@ class TestTimedOperation:
         ("operation", "attr", "start", "end"),
         [
             ("docling", "docling_duration_ms", 100.0, 100.011),
-            ("voyage", "voyage_duration_ms", 200.0, 200.022),
+            ("bge_m3", "bge_m3_duration_ms", 200.0, 200.022),
             ("qdrant", "qdrant_duration_ms", 300.0, 300.033),
         ],
     )
