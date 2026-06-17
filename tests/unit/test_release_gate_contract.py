@@ -262,7 +262,7 @@ def test_bot_dockerfile_healthcheck_command_is_runtime_available() -> None:
 
 def test_bot_k8s_probes_are_runtime_available() -> None:
     """Bot k8s probes must use a command guaranteed in the bot image."""
-    k8s_text = (ROOT / "k8s" / "base" / "bot" / "deployment.yaml").read_text()
+    k8s_text = (ROOT / "archive" / "k8s" / "base" / "bot" / "deployment.yaml").read_text()
     bot_df_text = (ROOT / "telegram_bot" / "Dockerfile").read_text()
 
     has_pgrep = "pgrep" in k8s_text
