@@ -14,4 +14,8 @@
 #     canonical_issue: "#1234"
 #     guardrail: tests/contract/test_cache_invalidation.py
 
-bug_classes: []
+bug_classes:
+  - id: tech-debt/archival
+    description: Non-core surfaces moved to archive/ to reduce active repo footprint
+    canonical_issue: "#2596"
+    guardrail: "no langchain import under src/; mini_app only under archive/; no k8s/ at repo root"
