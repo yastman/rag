@@ -1,6 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-eval-extra test-observability-extra test-optional-surfaces \
+	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra test-optional-surfaces \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	ingest-dir ingest-status ingest-services \
@@ -300,6 +300,12 @@ test-ingest-extra: ## Run optional ingestion-extra tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
 	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
 
+test-voice-extra: ## Run optional voice-extra tests explicitly
+	@echo "$(BLUE)Running voice-extra tests...$(NC)"
+	uv sync --extra voice --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/voice/ -q --timeout=30
+	@echo "$(GREEN)✓ Voice-extra tests complete$(NC)"
+
 test-eval-extra: ## Run optional evaluation-extra tests explicitly
 	@echo "$(BLUE)Running evaluation-extra tests...$(NC)"
 	uv sync --extra eval --all-groups
@@ -312,7 +318,7 @@ test-observability-extra: ## Run optional observability-extra tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/observability/ -q --timeout=30
 	@echo "$(GREEN)✓ Observability-extra tests complete$(NC)"
 
-test-optional-surfaces: test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
+test-optional-surfaces: test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
 	@echo "$(GREEN)✓ Optional surface lanes complete$(NC)"
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
