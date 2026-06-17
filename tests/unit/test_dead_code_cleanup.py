@@ -6,7 +6,7 @@ Verifies:
 2. DocumentChunker FIXED_SIZE and SLIDING_WINDOW strategies emit DeprecationWarning
    (replaced by CocoIndex + Docling HybridChunker in production).
 3. DocumentChunker SEMANTIC strategy does NOT emit DeprecationWarning
-   (still the production path via src/core/pipeline.py).
+   (still the production path used by the ingestion pipeline).
 """
 
 import warnings
@@ -80,7 +80,7 @@ class TestChunkerDeprecatedStrategies:
         )
 
     def test_semantic_strategy_no_deprecation(self):
-        """SEMANTIC is the production path in src/core/pipeline.py — no warning."""
+        """SEMANTIC is the production chunking path — no warning."""
         from src.ingestion.chunker import ChunkingStrategy, DocumentChunker
 
         with warnings.catch_warnings(record=True) as w:

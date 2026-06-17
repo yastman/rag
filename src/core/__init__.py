@@ -31,10 +31,6 @@ def __getattr__(name: str) -> object:
         from .assistant import run_assistant_request
 
         return run_assistant_request
-    if name == "RAGPipeline":
-        from .pipeline import RAGPipeline
-
-        return RAGPipeline
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -49,7 +45,6 @@ __all__ = [
     "EmbeddingProvider",
     "LLMProvider",
     "QdrantClientProtocol",
-    "RAGPipeline",
     "RerankerProvider",
     "SparseEmbeddingProvider",
     "TelemetryLogger",
