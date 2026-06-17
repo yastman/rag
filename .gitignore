@@ -336,3 +336,4 @@ rockfresh-autoresearch-summary-and-implementation-prompt.md
 
 # codeindexer local config
 .indexer.toml
+.agents/
