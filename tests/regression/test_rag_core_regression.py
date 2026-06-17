@@ -196,7 +196,7 @@ class TestCacheHitPath:
     """Cache hit: response served from cache, generation skipped."""
 
     @pytest.mark.asyncio
-    async def test_cache_hit_returns_cached_response(self) -> None:
+    async def test_pipeline_cache_hit_returns_cached_response(self) -> None:
         """When rag_pipeline signals cache_hit, result route is cache_hit."""
         from src.core.assistant import run_assistant_request
 
@@ -220,7 +220,7 @@ class TestCacheHitPath:
         assert result.response_text == cached_text
 
     @pytest.mark.asyncio
-    async def test_cache_hit_skips_generation(self) -> None:
+    async def test_pipeline_cache_hit_skips_generation(self) -> None:
         """generate_answer must NOT be called when cache_hit is True."""
         from src.core.assistant import run_assistant_request
 

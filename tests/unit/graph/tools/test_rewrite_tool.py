@@ -15,23 +15,23 @@ from telegram_bot.graph.tools.rewrite import make_rewrite_tool
 
 
 class TestRewriteToolMetadata:
-    def test_default_name(self):
+    def test_rewrite_default_name(self):
         t = make_rewrite_tool(rewrite_fn=AsyncMock(return_value="rewritten"))
         assert t.name == "rewrite_query"
 
-    def test_custom_name(self):
+    def test_rewrite_custom_name(self):
         t = make_rewrite_tool(rewrite_fn=AsyncMock(return_value="x"), name="my_rewriter")
         assert t.name == "my_rewriter"
 
-    def test_description_is_non_empty(self):
+    def test_rewrite_description_is_non_empty(self):
         t = make_rewrite_tool(rewrite_fn=AsyncMock(return_value="x"))
         assert t.description
 
-    def test_tool_metadata_has_name(self):
+    def test_rewrite_tool_metadata_has_name(self):
         t = make_rewrite_tool(rewrite_fn=AsyncMock(return_value="x"))
         assert "name" in t.tool_metadata
 
-    def test_callable(self):
+    def test_rewrite_callable(self):
         t = make_rewrite_tool(rewrite_fn=AsyncMock(return_value="x"))
         assert callable(t)
 

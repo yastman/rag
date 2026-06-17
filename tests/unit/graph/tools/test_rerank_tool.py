@@ -22,23 +22,23 @@ REORDERED = [DOCS[1], DOCS[0]]
 
 
 class TestRerankToolMetadata:
-    def test_default_name(self):
+    def test_rerank_default_name(self):
         t = make_rerank_tool(rerank_fn=AsyncMock(return_value=REORDERED))
         assert t.name == "rerank_documents"
 
-    def test_custom_name(self):
+    def test_rerank_custom_name(self):
         t = make_rerank_tool(rerank_fn=AsyncMock(return_value=[]), name="my_reranker")
         assert t.name == "my_reranker"
 
-    def test_description_is_non_empty(self):
+    def test_rerank_description_is_non_empty(self):
         t = make_rerank_tool(rerank_fn=AsyncMock(return_value=[]))
         assert t.description
 
-    def test_tool_metadata_has_name(self):
+    def test_rerank_tool_metadata_has_name(self):
         t = make_rerank_tool(rerank_fn=AsyncMock(return_value=[]))
         assert "name" in t.tool_metadata
 
-    def test_callable(self):
+    def test_rerank_callable(self):
         t = make_rerank_tool(rerank_fn=AsyncMock(return_value=[]))
         assert callable(t)
 
