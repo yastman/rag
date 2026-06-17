@@ -30,7 +30,6 @@ rules:
         - /telegram_bot/services/apartments_service.py
         - /telegram_bot/services/qdrant.py
         - /src/retrieval/search_engines.py
-        - /src/evaluation/search_engines.py
 
   - id: python.no-subprocess-shell-true
     message: Avoid subprocess shell=True; pass an argv list with shell=False.

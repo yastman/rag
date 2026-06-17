@@ -54,8 +54,8 @@ pytest src/retrieval/
 # Type-check
 make check
 
-# Evaluation AB test (heavy, requires populated collection)
-python -m src.evaluation.run_ab_test --help
+# Evaluation AB test (archived under archive/evaluation/)
+# python -m archive.evaluation.run_ab_test --help
 ```
 
 ## See Also

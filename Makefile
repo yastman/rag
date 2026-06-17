@@ -305,9 +305,9 @@ test-voice-extra: ## Run optional voice-extra tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/voice/ -q --timeout=30
 	@echo "$(GREEN)✓ Voice-extra tests complete$(NC)"
 
-test-eval-extra: ## Run optional evaluation-extra tests explicitly
+test-eval-extra: ## Run optional evaluation-extra tests explicitly (evaluation archived under archive/)
 	@echo "$(BLUE)Running evaluation-extra tests...$(NC)"
-	uv sync --extra eval --all-groups
+	uv sync --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/evaluation/ -q --timeout=30
 	@echo "$(GREEN)✓ Evaluation-extra tests complete$(NC)"
 
@@ -1142,61 +1142,6 @@ baseline-check: baseline-compile baseline-smoke ## Optional Langfuse baseline ch
 	make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=$(BASELINE_SESSION)
 
 # =============================================================================
-# RAG EVALUATION (RAGAS + DeepEval)
-# =============================================================================
-
-.PHONY: eval-rag eval-rag-quick eval-rag-full
-
-eval-rag: ## Run RAG evaluation with RAGAS metrics (faithfulness >= 0.8)
-	@echo "$(BLUE)Running RAG evaluation with RAGAS...$(NC)"
-	@echo "$(YELLOW)Dataset: tests/eval/ground_truth.json (55 samples)$(NC)"
-	@echo "$(YELLOW)LLM: $(EVAL_MODEL) via LiteLLM SDK router$(NC)"
-	LANGFUSE_TRACING_ENABLED=true \
-	uv run python -m src.evaluation.ragas_evaluation
-	@echo "$(GREEN)✓ RAG evaluation complete$(NC)"
-
-eval-rag-quick: ## Quick RAG evaluation (10 samples)
-	@echo "$(BLUE)Running quick RAG evaluation...$(NC)"
-	EVAL_SAMPLE_SIZE=10 \
-	uv run python -m src.evaluation.ragas_evaluation
-	@echo "$(GREEN)✓ Quick evaluation complete$(NC)"
-
-eval-rag-full: ## Full RAG evaluation with all metrics
-	@echo "$(BLUE)Running full RAG evaluation...$(NC)"
-	LANGFUSE_TRACING_ENABLED=true \
-	EVAL_INCLUDE_DEEPEVAL=true \
-	uv run python -m src.evaluation.ragas_evaluation
-	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
-
-.PHONY: eval-goldset-sync eval-experiment
-
-eval-goldset-sync: ## Sync gold set to Langfuse dataset
-	@echo "$(BLUE)Syncing gold set to Langfuse...$(NC)"
-	uv run python scripts/eval/goldset_sync.py
-	@echo "$(GREEN)✓ Gold set synced$(NC)"
-
-eval-experiment: ## Run RAG experiment on gold set
-	@echo "$(BLUE)Running RAG experiment...$(NC)"
-	uv run python scripts/eval/run_experiment.py
-	@echo "$(GREEN)✓ Experiment complete$(NC)"
-
-.PHONY: eval-gold-gen eval-gold-gen-dry eval-sdk-experiment eval-sdk-experiment-named
-
-eval-gold-gen: ## Generate gold set from Qdrant → Langfuse Dataset + JSONL
-	@echo "$(BLUE)Generating gold set from Qdrant...$(NC)"
-	uv run python scripts/generate_gold_set.py --collection gdrive_documents_bge
-
-eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only, no Langfuse)
-	@echo "$(BLUE)Generating gold set (dry-run)...$(NC)"
-	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
-
-eval-sdk-experiment: ## Run SDK experiment on gold set (DATASET=name required)
-	@echo "$(BLUE)Running SDK experiment on gold set...$(NC)"
-	uv run python scripts/run_experiment.py --dataset $(DATASET)
-
-eval-sdk-experiment-named: ## Run named SDK experiment (DATASET=name NAME=label required)
-	@echo "$(BLUE)Running SDK experiment '$(NAME)'...$(NC)"
-	uv run python scripts/run_experiment.py --dataset $(DATASET) --name $(NAME)
 
 # =============================================================================
 # GOOGLE DRIVE SYNC (rclone)

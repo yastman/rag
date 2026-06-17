@@ -15,7 +15,7 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 | Retrieval | `src.retrieval.create_search_engine` | Factory for search engine variants |
 | API | `src.api.main:app` | FastAPI application for HTTP RAG queries |
 | Voice | `src.voice.agent` | LiveKit voice agent (deferred) |
-| Evaluation | `src.evaluation.smoke_test` | Smoke tests and RAG quality evaluation |
+| Evaluation | `archive/evaluation/smoke_test` | Smoke tests and RAG quality evaluation (archived) |
 
 ## Directory Guide
 

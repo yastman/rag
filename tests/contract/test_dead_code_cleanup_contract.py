@@ -21,7 +21,7 @@ REMOVED_SYMBOLS = {
         "find_stale_worktrees",
         "fix_merged_branches",
     },
-    "src/evaluation/langfuse_integration.py": {"trace_search_with_spans"},
+    "archive/evaluation/langfuse_integration.py": {"trace_search_with_spans"},
     "src/ingestion/docling_client.py": {"convert_file"},
     "src/runtime/graph/config.py": {"create_hybrid_embeddings"},
     "src/runtime/pipeline/rag.py": {

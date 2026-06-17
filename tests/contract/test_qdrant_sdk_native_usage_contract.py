@@ -40,7 +40,6 @@ SCAN_FILES: list[Path] = [
     REPO_ROOT / "telegram_bot" / "services" / "apartments_service.py",
     REPO_ROOT / "telegram_bot" / "services" / "qdrant.py",
     REPO_ROOT / "src" / "retrieval" / "search_engines.py",
-    REPO_ROOT / "src" / "evaluation" / "search_engines.py",
     # New retrieval seam added in #2576 — runtime pipeline and graph tool callers.
     REPO_ROOT / "src" / "runtime" / "retrieval" / "service.py",
     REPO_ROOT / "src" / "runtime" / "pipeline" / "rag.py",
