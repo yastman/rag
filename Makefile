@@ -964,7 +964,7 @@ deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scri
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-group e2e-telegram-test e2e-setup
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-core-live e2e-core-live-real-llm e2e-test-group e2e-telegram-test e2e-setup
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -980,11 +980,6 @@ e2e-index-data: ## Index test data into Qdrant
 	@echo "$(BLUE)Indexing test properties...$(NC)"
 	uv run python scripts/index_test_properties.py
 	@echo "$(GREEN)✓ Test data indexed$(NC)"
-
-e2e-test: ## Run pytest E2E suite (Docker/live services)
-	@echo "$(BLUE)Running pytest E2E suite...$(NC)"
-	uv run pytest tests/e2e/test_core_flows_live.py -v --tb=short -m "e2e and not legacy_api"
-	@echo "$(GREEN)✓ Pytest E2E suite complete$(NC)"
 
 e2e-core-live: ## Run simplification core live golden path (Qdrant + BGE-M3)
 	@echo "$(BLUE)Running simplification core live E2E golden path...$(NC)"
@@ -1131,7 +1126,7 @@ eval-experiment: ## Run RAG experiment on gold set
 	uv run python scripts/eval/run_experiment.py
 	@echo "$(GREEN)✓ Experiment complete$(NC)"
 
-.PHONY: eval-gold-gen eval-gold-gen-dry eval-sdk-experiment eval-sdk-experiment-named
+.PHONY: eval-gold-gen eval-gold-gen-dry
 
 eval-gold-gen: ## Generate gold set from Qdrant → Langfuse Dataset + JSONL
 	@echo "$(BLUE)Generating gold set from Qdrant...$(NC)"
@@ -1140,14 +1135,6 @@ eval-gold-gen: ## Generate gold set from Qdrant → Langfuse Dataset + JSONL
 eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only, no Langfuse)
 	@echo "$(BLUE)Generating gold set (dry-run)...$(NC)"
 	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
-
-eval-sdk-experiment: ## Run SDK experiment on gold set (DATASET=name required)
-	@echo "$(BLUE)Running SDK experiment on gold set...$(NC)"
-	uv run python scripts/run_experiment.py --dataset $(DATASET)
-
-eval-sdk-experiment-named: ## Run named SDK experiment (DATASET=name NAME=label required)
-	@echo "$(BLUE)Running SDK experiment '$(NAME)'...$(NC)"
-	uv run python scripts/run_experiment.py --dataset $(DATASET) --name $(NAME)
 
 # =============================================================================
 # GOOGLE DRIVE SYNC (rclone)
