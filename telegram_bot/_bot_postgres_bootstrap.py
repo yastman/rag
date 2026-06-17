@@ -60,7 +60,6 @@ REALESTATE_SCHEMA_STATEMENTS: tuple[str, ...] = (
         stage VARCHAR(30) DEFAULT 'new',
         score INTEGER DEFAULT 0,
         preferences JSONB DEFAULT '{}',
-        kommo_lead_id BIGINT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
     )

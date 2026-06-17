@@ -9,7 +9,7 @@ Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from telegram_bot.agents.context import get_bot_context
@@ -137,43 +137,14 @@ async def daily_summary(
     Args:
         date: Date for summary: "today", "yesterday", or YYYY-MM-DD format.
     """
-    ctx = _get_ctx(config)
-    if not ctx or not ctx.kommo_client:
-        return "CRM недоступен. Обратитесь к администратору."
-
-    # Parse date
-    if date == "today":
-        target = datetime.now(UTC).date()
-    elif date == "yesterday":
-        target = (datetime.now(UTC) - timedelta(days=1)).date()
-    else:
+    # CRM integration archived (#2689). Validate date format and return stub.
+    if date not in ("today", "yesterday"):
         try:
-            target = datetime.strptime(date, "%Y-%m-%d").date()
+            datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
             return "Некорректный формат даты. Используйте YYYY-MM-DD."
 
-    try:
-        # NOTE: KommoClient does not support date-range filtering; fetches latest 50 records.
-        # The date parameter is used only for the summary header, not for actual filtering.
-        # TODO: add date-range filter when Kommo API supports it (#445)
-        leads = await ctx.kommo_client.search_leads(query="", limit=50)
-        tasks = await ctx.kommo_client.get_tasks(limit=50)
-    except Exception as e:
-        logger.exception("daily_summary CRM query failed")
-        return f"Ошибка при запросе CRM: {e}"
-
-    # Build data string for summarization
-    lines = [f"CRM Activity for {target.isoformat()} (latest 50 records):"]
-    lines.append(f"Leads: {len(leads)}")
-    for lead in leads[:10]:
-        name = getattr(lead, "name", "—")
-        budget = getattr(lead, "budget", None)
-        budget_str = f", budget: {budget}" if budget else ""
-        lines.append(f"  - {name}{budget_str}")
-    lines.append(f"Tasks due: {len(tasks)}")
-    data = "\n".join(lines)
-
-    return await _summarize_with_llm(data, ctx.llm)
+    return "CRM недоступен. Обратитесь к администратору."
 
 
 # ---------------------------------------------------------------------------
@@ -227,10 +198,7 @@ async def handoff(
         except Exception:
             logger.warning("Failed to notify manager %s", mid, exc_info=True)
 
-    # Kommo handoff task creation was removed in #1541: the legacy branch was
-    # guarded by ``lead_id`` which was always ``None`` (resolution was never
-    # implemented). Manager notification above remains the single handoff
-    # surface until lead_id resolution lands as a separate behavioural change.
+    # CRM handoff task creation was removed in #1541; archived in #2689.
 
     # Honest scoring (#2212): handoff_triggered must reflect a REAL action — at
     # least one manager actually notified — not merely that the tool ran. If no

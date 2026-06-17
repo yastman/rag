@@ -1291,7 +1291,7 @@ class PropertyBot:
         message: Any,
         state: FSMContext | None = None,
     ) -> None:
-        """Create forum topic + Kommo lead + set handoff state (#730)."""
+        """Create forum topic and set handoff state (#730)."""
         if self._forum_bridge is None:
             return
 
@@ -2550,8 +2550,8 @@ class PropertyBot:
                 }
                 for src in core_result.retrieved_sources
             ]
-            if core_result.proposed_crm_action:
-                action = core_result.proposed_crm_action
+            if core_result.proposed_crm_action:  # type: ignore[attr-defined]
+                action = core_result.proposed_crm_action  # type: ignore[attr-defined]
                 payload = {
                     "action_type": action.action_type,
                     "payload": action.payload,
