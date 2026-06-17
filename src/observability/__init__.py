@@ -34,13 +34,6 @@ from src.observability.scores import (
     write_history_scores,
     write_langfuse_scores,
 )
-from src.observability.sentry_integration import (
-    add_safe_breadcrumb,
-    hash_id,
-    initialize_sentry,
-    runtime_scope,
-    set_runtime_tags,
-)
 
 
 __all__ = [
@@ -50,7 +43,6 @@ __all__ = [
     "_install_langfuse_warning_filters",
     "_is_endpoint_reachable",
     "_reset_langfuse_client_for_tests",
-    "add_safe_breadcrumb",
     "build_safe_input_payload",
     "build_safe_output_payload",
     "compute_checkpointer_overhead_proxy_ms",
@@ -58,17 +50,13 @@ __all__ = [
     "flush_langfuse",
     "get_client",
     "get_langfuse_client",
-    "hash_id",
     "initialize_langfuse",
-    "initialize_sentry",
     "is_endpoint_reachable",
     "make_lifecycle_session_id",
     "mask_pii",
     "observe",
     "propagate_attributes",
-    "runtime_scope",
     "score",
-    "set_runtime_tags",
     "sync_langfuse_model_definitions",
     "traced_pipeline",
     "try_update_lifecycle_trace_async",

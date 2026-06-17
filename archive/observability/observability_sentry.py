@@ -1,2 +1,1 @@
-"""Backward-compat shim — redirects to src.observability.sentry_integration."""
-
+"""Archived — sentry observability removed in ARCH-04 (#2600)."""
