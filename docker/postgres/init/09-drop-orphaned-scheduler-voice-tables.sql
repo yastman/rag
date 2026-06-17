@@ -28,5 +28,7 @@ DROP TABLE IF EXISTS lead_scores;
 DROP TABLE IF EXISTS funnel_metrics_daily;
 DROP TABLE IF EXISTS scheduler_leases;
 
--- Voice transcript table (ARCH-02)
+-- Voice transcript table (ARCH-02) — lives in postgres DB (04-voice-schema.sql has no \c switch)
+\c postgres;
 DROP TABLE IF EXISTS call_transcripts;
+\c realestate;
