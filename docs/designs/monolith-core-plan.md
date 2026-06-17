@@ -491,8 +491,7 @@ Observability: каждый запрос реконструируется по `
 1. Telegram переключать на core за feature flag или резать ветку сразу после
    зелёного E2E?
 2. `src/api` — поддерживаемый adapter или явно optional до реального потребителя?
-3. Минимальный live-E2E dependency set: Qdrant + local embeddings + fake LLM /
-   + real LLM opt-in / + service embeddings + real LLM?
+3. Минимальный live-E2E dependency set: Qdrant + BGE-M3 сервис + real LLM (opt-in) / или Qdrant + `local_bge_m3` (dev fallback) + fake LLM? **(Решено ADR-0020: production default = BGE-M3 сервис; `local_bge_m3` только dev/offline fallback.)**
 4. Какие CRM actions нужны в первом `CrmAction` контракте?
 5. Сколько держать легаси `telegram_bot.*` shims после миграции?
 
