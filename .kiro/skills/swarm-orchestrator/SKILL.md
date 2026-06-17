@@ -135,20 +135,8 @@ Stop conditions:
 - the requested endpoint is reached, such as a compact plan, launched workers,
   created or updated PR, merge-readiness report, or completed merge.
 
-## Token Budget
-
-Before invoking the next phase, run only tiny targeted checks:
-
-- exact artifact path existence or size;
-- whether a terminal line is `[DONE]`, `[FAILED]`, or `[BLOCKED]`;
-- whether the user already supplied an accepted compact report or plan;
-- whether the current request is swarm automation or ordinary local work.
-
-Do not use tiny checks as a pretext for SSH/VPS/server access, broad log
-archaeology, storage scanning, or pane/pane-id driven routing.
-
-If answering requires issue/PR/queue metadata, repo reading, synthesis, or
-report drafting, route to a worker-backed phase.
+<!-- Guard blocks: Worker-First Rule, Handoff Discipline, Token Budget →
+     see `shared/orchestrator-guard-blocks.md` -->
 
 ## Phase Rules
 
@@ -213,4 +201,4 @@ External skills are thinking tools, not mandatory bureaucracy.
 - Skills must not merge PR
 - Skills must not modify `.kiro/skills/**` or `.kiro/agents/**` unless task is explicitly about agent infrastructure
 - Auto-merge policy: when the orchestrator is running in autonomous mode (user said "автономный режим", "делай всё", "авто режим", or equivalent) AND all review workers returned `merge_ready: true` with no blockers, the orchestrator MUST merge into `dev` automatically without waiting for additional confirmation. Manual confirmation is only required when: (a) merging to `main`/`master`, (b) any reviewer returned blockers, (c) the PR touches secrets/auth/destructive operations, or (d) the user did NOT grant autonomous mode.
-- Reference-only skills (`.kiro/skills_reference/`) are for reading only, not activation
+- Reference-only skills (`.kiro/skills_reference/`) are installed by `scripts/install_ready_skills.sh` as upstream read-only copies for context; they are NOT activated. Kiro-only deployments do not need them at runtime — the active `.kiro/skills/` copies are canonical.

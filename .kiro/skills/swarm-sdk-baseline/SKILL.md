@@ -69,12 +69,6 @@ secret_policy:
 evidence_commands:
 ```
 
-## Legacy Strict Gate
-
-Use strict `SDK_DOCS_BASELINE` JSON only when an automated launch must consume
-the result without the orchestrator interpretation. Mark the prompt and launcher with
-`SWARM_CONTRACT=strict_json`.
-
 ## Output
 
 Produce or accept Markdown `SDK_ADVISORY`. Emit `next_skill:"swarm-launch"`

@@ -127,28 +127,14 @@ artifact paths.
    - If blocked, state the missing decision, artifact, access, or safety
      approval.
 
-## Orchestrator Token Budget
+<!-- Guard blocks: Token Budget, Handoff Discipline →
+     see `shared/orchestrator-guard-blocks.md` -->
 
-The orchestrator should spend tokens on classification, patching, and validation, not
-evidence archaeology.
-
-Before a secretary/evidence artifact exists, the orchestrator may do only targeted checks:
-current tmux pane, selected files named by the user, exact artifact paths,
-selected skill frontmatter/body, and validator/test output.
-
-Do not run broad `git status`, wide `find`, broad `rg`, raw GitHub issue/PR
-archaeology, raw TUI log reads, full `.signals` listings, or archived session
-search as routine intake. If those facts are needed, ask a secretary worker for
-a compact dossier.
-
-## Handoff
+## Routing
 
 - For normal swarm task execution, start with `$swarm-intake` and then follow
   `next_skill` through focused swarm phase skills.
 - For broken runtime state, use `$swarm-recovery`.
-- For PR review/merge readiness, use `$swarm-pr-review-flow` or `$gh-pr-review`
-  depending on whether the orchestrator or Kiro owns the review.
+- For PR review/merge readiness, use `$swarm-pr-review-flow` or `$gh-pr-review`.
 - For skill creation or focused skill edits, use `$skill-creator`.
-
-If this skill emits `next_skill`, stop current-phase work and invoke that skill
-before continuing.
+- If this skill emits `next_skill`, stop and invoke that skill before continuing.

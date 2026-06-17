@@ -136,6 +136,24 @@ For each launchable worker, include:
 - `anti_regression_contract`
 - `disposition`
 
+### local_validation: Risk-Tier Make Target Routing
+
+Pick the smallest `make` target that covers the changed area (AGENTS.md Test
+Policy and `gh-pr-review` risk-tier table are the canonical source):
+
+| Tier | Changed paths | Required make target |
+|------|---------------|----------------------|
+| docs | README, docs/, comments | `git diff --check` |
+| style | formatting, lint-only | `make lint` (focused Ruff) |
+| skills/steering | `.kiro/skills/`, `.kiro/steering/` | `make test-contract` |
+| core | `src/core/`, `src/runtime/`, contracts | `make test-core` |
+| adapter | `telegram_bot/`, `src/api/`, voice | focused adapter tests; `make test-core` if core contract touched |
+| dependency | `pyproject.toml`, `uv.lock` | lock/import checks + `make test-contract` |
+| full | broad cross-layer | `make test-full` (manual pre-merge only) |
+
+Always also run `make check` (Ruff + MyPy) for any code-changing worker.
+Emit `tests_run` in the finish report using these targets, not ad-hoc pytest selectors.
+
 For `anti_regression`, include:
 
 - `classification`: `new | duplicate | recurrence | umbrella | unknown`

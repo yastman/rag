@@ -122,6 +122,12 @@ Launch workers mechanically from an accepted `SWARM_PLAN`.
 
 ## Agent Selection
 
+MCP availability: all four MCP servers (codeindexer, codegraph, context7, exa)
+are globally configured in `~/.kiro/settings/mcp.json` and are present in
+every worker session. The agent JSON tools array lists native tools only; MCP
+comes from the Kiro global config. If a worker reports a tool unavailable, run
+`codeindexer doctor` and check `~/.kiro/settings/mcp.json`.
+
 | Worker kind | Agent | Model | KIRO_REQUIRED_SKILLS |
 |---|---|---|---|
 | secretary / read-only | `kiro-worker-flash` | `claude-haiku-4.5` | `swarm-secretary-intake,verification-before-completion` |

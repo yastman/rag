@@ -39,11 +39,6 @@ PASTE_BUFFER_WINDOW_WAKEUP_PATTERNS = (
     re.compile(r"tmux\s+paste-buffer\b[^\n]*\s-t\s+['\"]?(?:\$\{ORCH_TARGET[^}]*\}|\$ORCH_TARGET)"),
 )
 
-FULL_RAW_WAKEUP_PATTERNS = (
-    re.compile(r"tmux\s+send-keys\s+-t\s+['\"]?(?:\$\{ORCH_TARGET[^}]*\}|\$ORCH_TARGET)['\"]?"),
-    re.compile(r"tmux\s+paste-buffer\b[^\n]*\s-t\s+['\"]?(?:\$\{ORCH_TARGET[^}]*\}|\$ORCH_TARGET)"),
-)
-
 CJ_SUBMIT_PATTERNS = (
     re.compile(r"tmux\s+send-keys\b[^\n]*\bC-j\b"),
     re.compile(r"tmux\s+send-keys\b[^\n]*\bC-J\b"),
@@ -143,9 +138,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("prompt", type=Path)
     parser.add_argument(
         "--contract",
-        choices=("markdown", "full", "quick", "strict_json"),
+        choices=("markdown", "quick"),
         default="markdown",
-        help="Prompt contract to validate. Markdown is default; strict_json/full require SIGNAL_FILE and JSON finish sections.",
+        help="Prompt contract to validate. Markdown is default.",
     )
     return parser.parse_args()
 
@@ -489,56 +484,6 @@ def validate(text: str, *, contract: str) -> list[str]:
         if "SWARM_CONTRACT=strict_json" in text:
             errors.append("markdown prompt must not opt into SWARM_CONTRACT=strict_json")
 
-    if contract in {"full", "strict_json"}:
-        if any(pattern.search(text) for pattern in RAW_WAKEUP_PATTERNS + FULL_RAW_WAKEUP_PATTERNS):
-            errors.append(
-                "raw tmux wake-up snippets are forbidden in new full worker prompts; "
-                'use tmux send-keys -t "$ORCH_TARGET" after writing SIGNAL_FILE'
-            )
-
-        required_markers = (
-            "## WORKER MODEL",
-            "## REQUIRED KIRO SKILLS",
-            "## WORKER PROMPT PAYLOAD",
-            "## VERIFICATION BUDGET",
-            "## FINISH CONTRACT",
-        )
-        for marker in required_markers:
-            if marker not in text:
-                errors.append(f"full prompt missing required section: {marker}")
-
-        if not has_any(text, ("{{ORCH_PANE}}", "__ORCH_PANE__")):
-            errors.append("full prompt source must include {{ORCH_PANE}} or __ORCH_PANE__")
-        if not has_any(text, ("{{ORCH_TARGET}}", "__ORCH_TARGET__")):
-            errors.append("full prompt source must include {{ORCH_TARGET}} or __ORCH_TARGET__")
-        if not has_any(text, ("{{ORCH_WINDOW_ID}}", "__ORCH_WINDOW_ID__")):
-            errors.append(
-                "full prompt source must include {{ORCH_WINDOW_ID}} or __ORCH_WINDOW_ID__"
-            )
-        if not has_any(text, ("{{ORCH_WINDOW_NAME}}", "__ORCH_WINDOW_NAME__")):
-            errors.append(
-                "full prompt source must include {{ORCH_WINDOW_NAME}} or __ORCH_WINDOW_NAME__"
-            )
-        if not has_any(text, ("{{ORCH_SESSION_NAME}}", "__ORCH_SESSION_NAME__")):
-            errors.append(
-                "full prompt source must include {{ORCH_SESSION_NAME}} or __ORCH_SESSION_NAME__"
-            )
-        if not has_any(text, ("{{ORCH_WINDOW_INDEX}}", "__ORCH_WINDOW_INDEX__")):
-            errors.append(
-                "full prompt source must include {{ORCH_WINDOW_INDEX}} or __ORCH_WINDOW_INDEX__"
-            )
-
-        if "Signal path:" not in text and "SIGNAL_FILE" not in text:
-            errors.append("full prompt must state Signal path or SIGNAL_FILE")
-        if "verification_budget:" not in text:
-            errors.append("full prompt must state verification_budget")
-        if "Docs lookup policy:" not in text:
-            errors.append("full prompt must state Docs lookup policy")
-        if "SDK/custom decision:" not in text and "sdk_native_check:not_applicable" not in text:
-            errors.append(
-                "full prompt must state SDK/custom decision or sdk_native_check:not_applicable"
-            )
-
     if is_secretary_prompt(text):
         if "## SECRETARY PROMPT PAYLOAD" not in text:
             errors.append("secretary prompt missing ## SECRETARY PROMPT PAYLOAD")
@@ -552,8 +497,6 @@ def validate(text: str, *, contract: str) -> list[str]:
                 errors.append(f"secretary prompt missing {marker}")
         if not has_any(text, ("{{ORCH_TARGET}}", "__ORCH_TARGET__")):
             errors.append("secretary prompt source must include {{ORCH_TARGET}} or __ORCH_TARGET__")
-        if contract in {"full", "strict_json"} and "SIGNAL_FILE" not in text:
-            errors.append("secretary prompt must state SIGNAL_FILE")
         validate_secretary_artifact_paths(text, errors)
         validate_secretary_route(text, errors)
 

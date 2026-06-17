@@ -3,8 +3,7 @@
 
 Markdown-first workers do not use this validator. It runs only when
 ``KIRO_STRICT_REPORT=1`` is set (legacy / explicit strict machine handoff);
-otherwise it is a no-op that exits 0. See
-``.kiro/skills/shared/strict-json-policy.md`` (#2305 P3).
+otherwise it is a no-op that exits 0.
 """
 
 from __future__ import annotations
