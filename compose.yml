@@ -185,13 +185,10 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       # Local embeddings (matches VPS production)
       RETRIEVAL_DENSE_PROVIDER: bge_m3_api
-      RETRIEVAL_SPARSE_PROVIDER: bge_m3_api
       BGE_M3_URL: http://bge-m3:8000
       BGE_M3_TIMEOUT: "${BGE_M3_TIMEOUT:-120}"
       GENERATE_MAX_TOKENS: "${GENERATE_MAX_TOKENS:-2048}"
       RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
-      # Semantic cache
-      USE_LOCAL_EMBEDDINGS: "true"
       # Services
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       QDRANT_URL: http://qdrant:6333
