@@ -45,8 +45,6 @@ Optional profiles add scoped services:
 | `obs` | `loki`, `promtail`, `alertmanager` | Optional log monitoring |
 | `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
 | `full` | all profile-gated services | |
-=======
->>>>>>> d40541a332 (fix(review): remove committed conflict markers [2667-B1])
 
 ### VPS default runtime
 
