@@ -67,7 +67,7 @@ done
 log "Bot functional smoke (Qdrant + LiteLLM)"
 make test-bot-health-vps
 
-log "Bot network reachability (qdrant, litellm, postgres, redis, bge-m3, user-base)"
+log "Bot network reachability (qdrant, litellm, postgres, redis, bge-m3)"
 docker compose exec -T bot python - <<'PY'
 import socket
 import sys
@@ -78,7 +78,6 @@ targets = [
     ("postgres", 5432),
     ("redis", 6379),
     ("bge-m3", 8000),
-    ("user-base", 8000),
 ]
 
 failed = []

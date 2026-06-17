@@ -36,9 +36,6 @@ jobs:
           - image_name: rag-docling
             build_context: ./services/docling
             dockerfile: services/docling/Dockerfile
-          - image_name: rag-user-base
-            build_context: ./services/user-base
-            dockerfile: services/user-base/Dockerfile
           - image_name: rag-bge-m3
             build_context: ./services/bge-m3-api
             dockerfile: services/bge-m3-api/Dockerfile

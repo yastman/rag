@@ -89,9 +89,6 @@ check "bge-m3 health" "curl -sf http://localhost:8000/health | grep -q ok"
 # 5. bm42
 check "bm42 health" "curl -sf http://localhost:8002/health | grep -q ok"
 
-# 6. user-base
-check "user-base health" "curl -sf http://localhost:8003/health | grep -q ok"
-
 # Summary
 [[ "$QUIET" != "--quiet" ]] && echo "=================="
 [[ "$QUIET" != "--quiet" ]] && echo -e "Passed: ${GREEN}$PASSED${NC}, Failed: ${RED}$FAILED${NC}"

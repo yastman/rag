@@ -68,7 +68,7 @@ scrape_configs:
 
       # Parse Python logging format
       - match:
-          selector: '{service=~"bot|bge-m3|bm42|user-base"}'
+          selector: '{service=~"bot|bge-m3|bm42"}'
           stages:
             - regex:
                 expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (?P<logger>\S+) - (?P<level>\w+) - (?P<message>.*)$'

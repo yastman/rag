@@ -5,20 +5,20 @@ Moved from ``telegram_bot/services/vectorizers.py`` as part of the fourth
 slice of the reverse-layering fix tracked under #1948 / #2047 / #2049.
 The legacy module is kept as a re-export shim.
 
-UserBaseVectorizer: Local Russian embedding model (deepvk/USER-base).
-Best-in-class for RU semantic matching (STS 74.35 on ruMTEB).
+UserBaseVectorizer (deepvk/USER2-base) has been archived to
+archive/user-base/ (#2627). BGE-M3 is the canonical embedding provider.
 """
 
 import logging
 from typing import Any, cast
 
-import httpx
 from redisvl.utils.vectorize import BaseVectorizer
 
 
 logger = logging.getLogger(__name__)
 
 
+<<<<<<< HEAD
 class UserBaseVectorizer(BaseVectorizer):
     """Vectorizer using local USER-base service for Russian embeddings.
 
@@ -177,6 +177,8 @@ class UserBaseVectorizer(BaseVectorizer):
             self._sync_client = None
 
 
+=======
+>>>>>>> 4a71464c04 (ARCH-13: archive USER-base service (#2627))
 class BgeM3CacheVectorizer(BaseVectorizer):
     """Lightweight vectorizer for SemanticCache index schema (1024-dim BGE-M3).
 

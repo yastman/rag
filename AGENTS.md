@@ -78,7 +78,6 @@ simplification.
 - [`services/AGENTS.override.md`](services/AGENTS.override.md)
 - [`services/bge-m3-api/AGENTS.override.md`](services/bge-m3-api/AGENTS.override.md)
 - [`services/docling/AGENTS.override.md`](services/docling/AGENTS.override.md)
-- [`services/user-base/AGENTS.override.md`](services/user-base/AGENTS.override.md)
 - [`archive/mini_app/frontend/src/AGENTS.override.md`](archive/mini_app/frontend/src/AGENTS.override.md)
 
 ## Safety

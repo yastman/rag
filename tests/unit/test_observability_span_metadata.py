@@ -199,37 +199,6 @@ class TestBGEServiceSpanMetadata:
         )
 
 
-class TestUserBaseServiceSpanMetadata:
-    """USER-base API service spans must be typed as embedding with capture disabled."""
-
-    @pytest.fixture(scope="class")
-    def userbase_service_spans(self):
-        path = REPO_ROOT / "services" / "user-base" / "main.py"
-        return _collect_observe_decorators(path)
-
-    @pytest.mark.parametrize(
-        "span_name",
-        [
-            "user-base-service-embed",
-            "user-base-service-embed-batch",
-        ],
-    )
-    def test_userbase_service_span_has_embedding_type_and_capture_disabled(
-        self, userbase_service_spans, span_name
-    ):
-        assert span_name in userbase_service_spans, f"Span '{span_name}' not found"
-        info = userbase_service_spans[span_name]
-        assert info["as_type"] == "embedding", (
-            f"Span '{span_name}' must have as_type='embedding' (got {info['as_type']!r})"
-        )
-        assert info["capture_input"] is False, (
-            f"Span '{span_name}' must have capture_input=False (got {info['capture_input']!r})"
-        )
-        assert info["capture_output"] is False, (
-            f"Span '{span_name}' must have capture_output=False (got {info['capture_output']!r})"
-        )
-
-
 class TestBGEIntegrationWrapperSpanMetadata:
     """BGE integration wrapper spans must have capture disabled."""
 

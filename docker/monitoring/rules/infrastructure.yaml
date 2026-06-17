@@ -144,7 +144,7 @@ groups:
 
       - alert: EmbeddingServiceError
         expr: |
-          count_over_time({container=~"dev-bge-m3|dev-bm42|dev-user-base"} |~ "(?i)error|failed|exception" [5m]) > 3
+          count_over_time({container=~"dev-bge-m3|dev-bm42"} |~ "(?i)error|failed|exception" [5m]) > 3
         for: 3m
         labels:
           severity: warning

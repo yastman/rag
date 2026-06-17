@@ -26,7 +26,12 @@ if TYPE_CHECKING:
         generate_summary,
     )
     from .small_to_big import ExpandedChunk, SmallToBigService
+<<<<<<< HEAD
     from .vectorizers import UserBaseVectorizer
+=======
+    from .vectorizers import BgeM3CacheVectorizer
+    from .voyage import VoyageService
+>>>>>>> 4a71464c04 (ARCH-13: archive USER-base service (#2627))
 
 
 __all__ = [
@@ -43,7 +48,11 @@ __all__ = [
     "QueryPreprocessor",
     "SessionSummary",
     "SmallToBigService",
+<<<<<<< HEAD
     "UserBaseVectorizer",
+=======
+    "VoyageService",
+>>>>>>> 4a71464c04 (ARCH-13: archive USER-base service (#2627))
     "check_responses_parse_compat",
     "format_summary_as_note",
     "generate_response",
@@ -66,7 +75,11 @@ _IMPORT_MAP = {
     "QueryAnalyzer": ".query_analyzer",
     "QueryPreprocessor": ".query_preprocessor",
     "SmallToBigService": ".small_to_big",
+<<<<<<< HEAD
     "UserBaseVectorizer": ".vectorizers",
+=======
+    "VoyageService": ".voyage",
+>>>>>>> 4a71464c04 (ARCH-13: archive USER-base service (#2627))
     "format_summary_as_note": ".session_summary",
     "generate_summary": ".session_summary",
 }

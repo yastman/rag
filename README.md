@@ -62,7 +62,7 @@ make core-up      # compatibility alias for docker-core-up
 make docker-up    # existing alias for docker-core-up
 ```
 
-Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, user-base, and ingestion remain behind their dedicated compose profiles or targets.
+Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, and ingestion remain behind their dedicated compose profiles or targets.
 
 ## Core Capabilities
 
@@ -219,7 +219,7 @@ Docker Compose is the primary local/VPS runtime. Profiles split the system by op
 
 | Profile | Services |
 |---|---|
-| default/core | PostgreSQL, Redis, Qdrant, BGE-M3, Docling, user-base |
+| default/core | PostgreSQL, Redis, Qdrant, BGE-M3, Docling |
 | `bot` | LiteLLM and Telegram bot |
 | `ingest` | unified ingestion service |
 | `ml` | Langfuse, ClickHouse, MinIO, Redis Langfuse, worker |

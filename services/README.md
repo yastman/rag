@@ -11,7 +11,6 @@ They are referenced from the main [`compose.yml`](../compose.yml) and started as
 |---|---|---|---|---|---|
 | `bge-m3-api/` | Multi-vector embeddings (dense, sparse, ColBERT) | [`app.py`](bge-m3-api/app.py) | `bge-m3` | — (default) | http://localhost:8000 |
 | `docling/` | Document parsing (PDF → markdown/HTML) | `docling-serve` | `docling` | — (default) | http://localhost:5001 |
-| `user-base/` | Russian dense embeddings (USER2-base) | [`main.py`](user-base/main.py) | `user-base` | — (default) | http://localhost:8003 |
 
 ## Quick Validation
 
@@ -27,11 +26,6 @@ curl -fsS http://localhost:8000/health
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build docling
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d docling
 curl -fsS http://localhost:5001/health
-
-# user-base
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build user-base
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d user-base
-curl -fsS http://localhost:8003/health
 ```
 
 ## Tests & Checks
@@ -40,7 +34,6 @@ curl -fsS http://localhost:8003/health
 |---|---|---|---|
 | `bge-m3` | `tests/unit/test_bge_m3_endpoints.py`, `tests/unit/test_bge_m3_rerank.py` | `tests/unit/test_docker_static_validation.py` | `tests/smoke/test_zoo_smoke.py` |
 | `docling` | `tests/unit/test_docling*.py` | `tests/unit/test_dockerfile_docling_sync.py` | — |
-| `user-base` | `tests/unit/test_userbase_endpoints.py` | `tests/unit/test_userbase_dockerfile_permissions.py`, `tests/unit/test_dockerfile_python_abi.py` | `tests/smoke/test_zoo_smoke.py` |
 
 Run all relevant unit tests:
 
@@ -52,7 +45,6 @@ make test-unit
 
 - **bge-m3-api**: embedding model serving, metrics export, healthchecks
 - **docling**: document conversion, no persistent state (read-only root with `./data/docling` mount)
-- **user-base**: Russian-language dense vector generation, optional ONNX backend via `EMBEDDING_BACKEND=onnx`
 
 Do not modify the application code in these directories without also verifying the corresponding Compose health checks and `make verify-compose-images` after image pin updates.
 

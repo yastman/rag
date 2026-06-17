@@ -127,7 +127,7 @@ def test_script_continues_after_redis_dependency_failure(tmp_path: Path) -> None
 
     combined = cp.stdout + cp.stderr
     # The script should mention at least one non-Redis check by name.
-    assert any(marker in combined for marker in ("Qdrant", "bge-m3", "litellm", "user-base")), (
+    assert any(marker in combined for marker in ("Qdrant", "bge-m3", "litellm")), (
         "script must run independent checks even when Redis check has a "
         f"dependency failure; got:\n{combined}"
     )

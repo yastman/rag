@@ -171,7 +171,7 @@ class TestMakefileAiProfile:
 # =============================================================================
 
 # Services that have security defaults applied in dev compose (via <<: *security-defaults)
-_SECURITY_SERVICES = ["bge-m3", "user-base", "docling", "bot"]
+_SECURITY_SERVICES = ["bge-m3", "docling", "bot"]
 
 # Services that exist in both dev AND vps compose
 _VPS_SECURITY_SERVICES = [s for s in _SECURITY_SERVICES if s != "ingestion"]
@@ -209,7 +209,7 @@ class TestVpsSecurityBaseline:
             "compose.yml is missing x-security-defaults extension field"
         )
 
-    @pytest.mark.parametrize("svc_name", ["bge-m3", "user-base", "bot"])
+    @pytest.mark.parametrize("svc_name", ["bge-m3", "bot"])
     def test_vps_service_has_read_only(self, vps: dict, svc_name: str) -> None:
         """VPS services that are read-only in dev must also be read-only in vps."""
         services = vps["services"]
@@ -220,7 +220,7 @@ class TestVpsSecurityBaseline:
             f"vps:{svc_name} must have read_only: true (matching dev compose)"
         )
 
-    @pytest.mark.parametrize("svc_name", ["bge-m3", "user-base", "bot"])
+    @pytest.mark.parametrize("svc_name", ["bge-m3", "bot"])
     def test_vps_service_has_tmpfs(self, vps: dict, svc_name: str) -> None:
         """VPS services must have tmpfs /tmp (required when read_only: true)."""
         services = vps["services"]
@@ -254,7 +254,7 @@ def _duration_to_seconds(raw: str) -> int:
 class TestModelServiceHealthcheckGrace:
     """Model services need enough healthcheck grace period for cold starts."""
 
-    @pytest.mark.parametrize("svc_name", ["bge-m3", "user-base"])
+    @pytest.mark.parametrize("svc_name", ["bge-m3"])
     def test_model_service_start_period_is_sufficient(self, vps: dict, svc_name: str) -> None:
         svc = vps["services"][svc_name]
         start_period = svc.get("healthcheck", {}).get("start_period")
@@ -283,7 +283,6 @@ VPS_CORE_SERVICES = {
     "redis",
     "qdrant",
     "bge-m3",
-    "user-base",
     "bot",
 }
 
