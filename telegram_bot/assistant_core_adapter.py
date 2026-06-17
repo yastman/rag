@@ -1,13 +1,11 @@
-"""Telegram adapter helpers for the assistant core rollout.
+"""Telegram adapter helpers for the assistant core.
 
-CORE-008 keeps these helpers isolated so the production text path can switch to
-``src.core.run_assistant_request`` in a controlled follow-up without mixing
-Telegram rendering with runtime RAG ownership.
+These helpers isolate Telegram-specific transport from the assistant core
+so the core path stays independent of the Telegram rendering surface.
 """
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from src.core import (
@@ -16,15 +14,6 @@ from src.core import (
     UserContext,
 )
 from src.core.app import AssistantApp
-
-
-CORE_ENTRYPOINT_ENV = "ASSISTANT_CORE_ENTRYPOINT_ENABLED"
-
-
-def core_entrypoint_enabled() -> bool:
-    """Return whether Telegram should use the assistant core entrypoint."""
-
-    return os.getenv(CORE_ENTRYPOINT_ENV, "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def build_user_context(
@@ -72,9 +61,7 @@ def response_text_for_telegram(result: AssistantResult) -> str:
 
 
 __all__ = [
-    "CORE_ENTRYPOINT_ENV",
     "build_user_context",
-    "core_entrypoint_enabled",
     "response_text_for_telegram",
     "run_core_text_request",
 ]

@@ -526,12 +526,10 @@ class TestQuerySupervisorSemanticCache:
 
 
 class TestQuerySupervisorCoreEntrypoint:
-    """Tests for the new assistant core entrypoint integration behind flag."""
+    """Tests for the assistant core entrypoint (always active)."""
 
     async def test_core_entrypoint_called_and_agent_bypassed(self, monkeypatch):
-        """When ASSISTANT_CORE_ENTRYPOINT_ENABLED=True, invoke assistant core request and bypass legacy agent."""
-        monkeypatch.setenv("ASSISTANT_CORE_ENTRYPOINT_ENABLED", "True")
-
+        """Assistant core is the text path: invoke assistant core request and bypass legacy agent."""
         config = _make_config(content_filter_enabled=False)
         bot = _create_bot(config)
         message = _make_message("What is the cost of Sunny Beach studio?")
@@ -590,8 +588,6 @@ class TestQuerySupervisorCoreEntrypoint:
 
     async def test_core_entrypoint_with_hitl_action(self, monkeypatch):
         """When core returns a proposed CRM action, trigger HITL confirmation keyboard."""
-        monkeypatch.setenv("ASSISTANT_CORE_ENTRYPOINT_ENABLED", "True")
-
         config = _make_config(content_filter_enabled=False)
         bot = _create_bot(config)
         message = _make_message("Book Sunny Beach studio")
