@@ -18,10 +18,10 @@ import warnings
 from datetime import UTC, datetime
 from typing import Any
 
-from src.observability_bootstrap import (
+from src.observability.bootstrap import (
     disable_otel_exporter as _disable_otel_exporter,
 )
-from src.observability_bootstrap import (
+from src.observability.bootstrap import (
     is_endpoint_reachable as _is_endpoint_reachable,
 )
 from src.security.pii_redaction import PIIRedactor
@@ -198,7 +198,8 @@ def _resolve_release(explicit: str | None = None) -> str:
       3. installed package version (``contextual-rag@<version>``),
       4. ``unknown`` sentinel.
 
-    Mirrors the release resolution pattern so Langfuse groups events by the same release string. Never returns ``None``
+    Mirrors ``src/observability_sentry.py::_resolve_release`` so Sentry and
+    Langfuse group events by the same release string. Never returns ``None``
     / empty so Langfuse always has a value to power "Aggregate by version".
     """
     candidate = explicit if explicit is not None else os.getenv("LANGFUSE_RELEASE", "")
