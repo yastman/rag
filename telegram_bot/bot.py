@@ -530,11 +530,6 @@ class PropertyBot:
         self._polling_lock_consecutive_failures: int = 0
         self._polling_lock_owner: str | None = None
 
-        # Metrics server compatibility slot. The in-process Prometheus endpoint
-        # is removed; pipeline counters/latencies are emitted as structured
-        # JSON product logs instead.
-        self._metrics_server: Any | None = None
-
         # Bounded fan-out for fire-and-forget history persistence (#1600).
         # Without a bound the text path could accumulate unbounded background
         # tasks under burst traffic / slow DB writes. Track every spawned save
@@ -4443,20 +4438,6 @@ class PropertyBot:
     async def stop(self):
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
-
-        # Stop legacy metrics server if an older runtime attached one.
-        if self._metrics_server is not None:
-            try:
-                from .metrics_server import stop_metrics_server
-
-                await stop_metrics_server(self._metrics_server)
-            except Exception:
-                logger.warning(
-                    "Failed to stop metrics server cleanly",
-                    exc_info=True,
-                )
-            finally:
-                self._metrics_server = None
 
         # Drain pending fire-and-forget history saves before tearing services down
         # so in-flight DB writes are not lost on shutdown (#1600). Bounded by

@@ -345,7 +345,6 @@ class TestOtelServiceNameDefaults:
 
     _EXPECTED = {
         "bge-m3": "bge-m3",
-        "bot": "telegram-bot",
         "ingestion": "ingestion",
     }
 

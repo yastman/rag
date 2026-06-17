@@ -77,7 +77,6 @@ services:
       COLBERT_TIMEOUT: "${COLBERT_TIMEOUT:-120}"
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
-      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-telegram-bot}"
 
   # ML services — profile-gated on dev (VPS: always-on via compose.yml base)
   clickhouse:

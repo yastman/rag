@@ -84,7 +84,6 @@ docs = [
 # Optional observability listeners and error tracking
 observability = [
     "langfuse>=4.0.0,<5.0",
-    "sentry-sdk>=2.0,<3.0",
 ]
 
 # Optional heavyweight UI/media dependencies
@@ -155,7 +154,6 @@ dev = [
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
     "click>=8.1.7",
-    "opentelemetry-exporter-otlp-proto-grpc>=1.39.0",
     "pre-commit>=3.8.0",
     "telethon>=1.42.0",
     "pytest-split>=0.11.0",
@@ -163,7 +161,6 @@ dev = [
     # Static-analysis support for optional surfaces moved out of base deps.
     # These stay dev-only so `uv sync --no-dev` keeps the runtime dependency diet.
     "langfuse>=4.0.0,<5.0",
-    "sentry-sdk>=2.0,<3.0",
     "pillow>=12.2.0",
     "gradio>=6.7.0",
     "fastapi>=0.115.0",
@@ -182,9 +179,7 @@ dev = [
 # pre-release constraint override, but DEPS-OBS1 removes all instrumentation
 # packages from the base monolith dependencies.
 [tool.uv]
-override-dependencies = [
-    "opentelemetry-instrumentation-fastapi>=0.58b0",
-]
+override-dependencies = []
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
