@@ -334,12 +334,14 @@ async def test_hybrid_retrieve_does_not_store_relaxed_results_under_strict_filte
             "topic": "finance",
             "doc_type": "faq",
         },
+        retrieval_config={"top_k": 20},
     )
     store_calls = mock_cache.store_search_results.await_args_list
     assert len(store_calls) == 1
     assert store_calls[0].args[0] == [0.1] * 1024
     assert store_calls[0].args[1] == user_filters
     assert len(store_calls[0].args[2]) == 3
+    assert store_calls[0].kwargs.get("retrieval_config") == {"top_k": 20}
 
 
 async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(

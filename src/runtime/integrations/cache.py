@@ -817,19 +817,41 @@ class CacheLayerManager:
 
     # ========== Convenience: Search Results ==========
 
+    @staticmethod
+    def _build_search_key(
+        embedding_prefix: list[float],
+        filters: dict | None,
+        retrieval_config: dict | None,
+    ) -> str:
+        """Build a stable cache key incorporating embedding, filters, and retrieval config.
+
+        Retrieval config fields (e.g. top_k, collection, mode) must be part of the key
+        so that different retrieval configurations do not collide on the same entry (#2618).
+        """
+        payload = (
+            str(embedding_prefix)
+            + json.dumps(filters, sort_keys=True, default=str)
+            + json.dumps(retrieval_config or {}, sort_keys=True, default=str)
+        )
+        return _hash(payload)
+
     @observe(name="cache-search-get", capture_input=False, capture_output=False)
     async def get_search_results(
-        self, embedding_prefix: list[float], filters: dict | None = None
+        self,
+        embedding_prefix: list[float],
+        filters: dict | None = None,
+        retrieval_config: dict | None = None,
     ) -> list[dict] | None:
-        """Get cached search results by embedding prefix + filters hash."""
+        """Get cached search results by embedding prefix + filters + retrieval config hash."""
         lf = get_client()
         lf.update_current_span(
             input={
                 "embedding_prefix_dim": len(embedding_prefix),
                 "filters_count": len(filters or {}),
+                "retrieval_config_keys": sorted((retrieval_config or {}).keys()),
             }
         )
-        key = _hash(str(embedding_prefix) + json.dumps(filters, sort_keys=True, default=str))
+        key = self._build_search_key(embedding_prefix, filters, retrieval_config)
         result = await self.get_exact("search", key)
         lf.update_current_span(
             output={"hit": result is not None, "results_count": len(result or [])}
@@ -842,17 +864,19 @@ class CacheLayerManager:
         embedding_prefix: list[float],
         filters: dict | None,
         results: list[dict],
+        retrieval_config: dict | None = None,
     ) -> None:
-        """Store search results."""
+        """Store search results keyed by embedding + filters + retrieval config."""
         lf = get_client()
         lf.update_current_span(
             input={
                 "embedding_prefix_dim": len(embedding_prefix),
                 "filters_count": len(filters or {}),
+                "retrieval_config_keys": sorted((retrieval_config or {}).keys()),
                 "results_count": len(results),
             }
         )
-        key = _hash(str(embedding_prefix) + json.dumps(filters, sort_keys=True, default=str))
+        key = self._build_search_key(embedding_prefix, filters, retrieval_config)
         await self.store_exact("search", key, results)
         lf.update_current_span(output={"stored": True, "results_count": len(results)})
 

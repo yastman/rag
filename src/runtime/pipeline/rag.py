@@ -582,7 +582,10 @@ async def _hybrid_retrieve(
     start = time.perf_counter()
 
     # Step 2: Check search cache
-    cached_results = await cache.get_search_results(dense_vector, initial_filters)
+    _retrieval_cfg: dict = {"top_k": top_k}
+    cached_results = await cache.get_search_results(
+        dense_vector, initial_filters, retrieval_config=_retrieval_cfg
+    )
     if cached_results is not None:
         latency = time.perf_counter() - start
         logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
@@ -695,7 +698,9 @@ async def _hybrid_retrieve(
             normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
             if normalized_filters in stored_filters:
                 continue
-            await cache.store_search_results(dense_vector, normalized_filters, results)
+            await cache.store_search_results(
+                dense_vector, normalized_filters, results, retrieval_config=_retrieval_cfg
+            )
             stored_filters.append(normalized_filters)
 
     latency = time.perf_counter() - start

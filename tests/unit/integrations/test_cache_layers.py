@@ -1321,3 +1321,102 @@ class TestCacheSpanMetadata:
             c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
         ]
         assert any(c.kwargs["metadata"].get("model") == "bge_m3_sparse" for c in metadata_calls)
+
+
+class TestSearchCacheKeyRetrieval:
+    """Regression tests for #2618 — search-results cache key must incorporate retrieval config.
+
+    Different retrieval configs (e.g. top_k, collection) with the same embedding and
+    filters must NOT collide on the same cache entry.
+    """
+
+    async def test_different_top_k_produce_different_cache_keys(self):
+        """Same embedding+filters but different top_k must yield distinct cache keys (bug #2618)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        seen_keys: list[str] = []
+
+        async def mock_store_exact(tier, key, value, ttl=None):
+            seen_keys.append(key)
+
+        mgr.store_exact = AsyncMock(side_effect=mock_store_exact)
+
+        vector = [0.1, 0.2, 0.3]
+        filters = {"city": "Sofia"}
+
+        await mgr.store_search_results(
+            vector, filters, [{"id": "a"}], retrieval_config={"top_k": 5}
+        )
+        await mgr.store_search_results(
+            vector, filters, [{"id": "b"}], retrieval_config={"top_k": 20}
+        )
+
+        assert len(set(seen_keys)) == 2, (
+            "top_k=5 and top_k=20 must produce distinct cache keys but collided"
+        )
+
+    async def test_different_collection_produce_different_cache_keys(self):
+        """Same embedding+filters but different collection must yield distinct cache keys (bug #2618)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        seen_keys: list[str] = []
+
+        async def mock_store_exact(tier, key, value, ttl=None):
+            seen_keys.append(key)
+
+        mgr.store_exact = AsyncMock(side_effect=mock_store_exact)
+
+        vector = [0.5] * 3
+        filters = {"lang": "ru"}
+
+        await mgr.store_search_results(
+            vector, filters, [{"id": "a"}], retrieval_config={"collection": "catalog"}
+        )
+        await mgr.store_search_results(
+            vector, filters, [{"id": "b"}], retrieval_config={"collection": "faq"}
+        )
+
+        assert len(set(seen_keys)) == 2, (
+            "collection=catalog and collection=faq must produce distinct cache keys but collided"
+        )
+
+    async def test_no_retrieval_config_is_backward_compatible(self):
+        """Omitting retrieval_config still works and is stable (backward compat)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        seen_keys: list[str] = []
+
+        async def mock_store_exact(tier, key, value, ttl=None):
+            seen_keys.append(key)
+
+        mgr.store_exact = AsyncMock(side_effect=mock_store_exact)
+
+        vector = [0.1, 0.2, 0.3]
+        await mgr.store_search_results(vector, {"city": "Sofia"}, [{"id": "a"}])
+        await mgr.store_search_results(vector, {"city": "Sofia"}, [{"id": "b"}])
+
+        # Same key — second call overwrites first (normal exact-cache behaviour)
+        assert len(set(seen_keys)) == 1
+
+    async def test_retrieval_config_included_in_get_key(self):
+        """get_search_results with retrieval_config must use the same key as store."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        docs = [{"id": "1", "text": "doc", "score": 0.9}]
+        mgr.redis = AsyncMock()
+        mgr.redis.get = AsyncMock(return_value=None)
+        mgr.redis.setex = AsyncMock()
+
+        vector = [0.1, 0.2, 0.3]
+        filters = {"lang": "ru"}
+        cfg = {"top_k": 10, "mode": "rrf"}
+
+        await mgr.store_search_results(vector, filters, docs, retrieval_config=cfg)
+        stored_key_call = mgr.redis.setex.await_args
+
+        # Simulate a get with the same config — should use the same Redis key
+        mgr.redis.get = AsyncMock(return_value=None)  # reset
+        await mgr.get_search_results(vector, filters, retrieval_config=cfg)
+        get_key_call = mgr.redis.get.await_args
+
+        stored_redis_key = stored_key_call.args[0]
+        get_redis_key = get_key_call.args[0]
+        assert stored_redis_key == get_redis_key, (
+            f"store key {stored_redis_key!r} != get key {get_redis_key!r}"
+        )

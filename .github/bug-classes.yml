@@ -19,3 +19,8 @@ bug_classes:
     description: Non-core surfaces moved to archive/ to reduce active repo footprint
     canonical_issue: "#2596"
     guardrail: "no langchain import under src/; mini_app only under archive/; no k8s/ at repo root"
+
+  - id: cache-key-missing-retrieval-config
+    description: Search-results cache key omitted retrieval config (top_k, collection, mode), causing different configs to collide on the same cached entry
+    canonical_issue: "#2618"
+    guardrail: "tests/unit/integrations/test_cache_layers.py::TestSearchCacheKeyRetrieval"
