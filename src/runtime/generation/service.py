@@ -151,6 +151,223 @@ def _get_dynamic_modules(extra: dict[str, Any] | None = None) -> dict[str, Any]:
     return modules
 
 
+class _GenerationSetup:
+    """Resolved common setup values shared between generate_answer and generate_answer_stream."""
+
+    __slots__ = (
+        "coverage_reason",
+        "effective_query",
+        "legal_answer_safe",
+        "needs_coverage",
+        "sources_enabled",
+        "style_info",
+    )
+
+    def __init__(
+        self,
+        *,
+        effective_query: str,
+        style_info: Any,
+        needs_coverage: bool,
+        coverage_reason: str | None,
+        sources_enabled: bool,
+        legal_answer_safe: bool,
+    ) -> None:
+        self.effective_query = effective_query
+        self.style_info = style_info
+        self.needs_coverage = needs_coverage
+        self.coverage_reason = coverage_reason
+        self.sources_enabled = sources_enabled
+        self.legal_answer_safe = legal_answer_safe
+
+
+class _PromptConfig:
+    """Resolved prompt/token config shared between generate_answer and generate_answer_stream."""
+
+    __slots__ = (
+        "max_tokens",
+        "prompt_config",
+        "prompt_name",
+        "prompt_obj",
+        "response_policy_mode",
+        "system_prompt",
+    )
+
+    def __init__(
+        self,
+        *,
+        system_prompt: str,
+        max_tokens: int,
+        prompt_name: str,
+        prompt_obj: Any,
+        prompt_config: dict[str, Any],
+        response_policy_mode: str,
+    ) -> None:
+        self.system_prompt = system_prompt
+        self.max_tokens = max_tokens
+        self.prompt_name = prompt_name
+        self.prompt_obj = prompt_obj
+        self.prompt_config = prompt_config
+        self.response_policy_mode = response_policy_mode
+
+
+def _resolve_generation_setup(
+    request: GenerationRequest,
+    dyn: dict[str, Any],
+) -> _GenerationSetup:
+    """Resolve query, style, coverage, sources, and legal-answer-safe for a generation request."""
+    extra = request.extra_kwargs or {}
+    docs = request.documents or []
+    raw_history = request.raw_messages or []
+    messages = _select_recent_history(raw_history, _MAX_HISTORY_MESSAGES)
+
+    effective_query = request.query
+    if not effective_query and messages:
+        last_msg = messages[-1]
+        effective_query = (
+            last_msg.get("content", "")
+            if isinstance(last_msg, dict)
+            else getattr(last_msg, "content", "")
+        )
+
+    detector = extra.get("style_detector") or dyn["ResponseStyleDetector"]()
+    style_info = detector.detect(effective_query)
+
+    coverage_decision = dyn["detect_coverage_mode"](effective_query)
+    needs_coverage = bool(extra.get("needs_coverage", False)) or coverage_decision.needs_coverage
+    coverage_reason = coverage_decision.reason or (
+        "state:needs_coverage" if needs_coverage else None
+    )
+
+    sources_enabled = bool(
+        getattr(request.config, "show_sources", False) or request.grounding_mode == "strict"
+    )
+    legal_answer_safe = request.grounding_mode != "strict" or is_strict_grounding_safe(
+        documents=docs,
+        sources_enabled=sources_enabled,
+        grade_confidence=request.grade_confidence,
+    )
+
+    return _GenerationSetup(
+        effective_query=effective_query,
+        style_info=style_info,
+        needs_coverage=needs_coverage,
+        coverage_reason=coverage_reason,
+        sources_enabled=sources_enabled,
+        legal_answer_safe=legal_answer_safe,
+    )
+
+
+def _select_prompt_config(
+    *,
+    config: Any,
+    needs_coverage: bool,
+    use_style: bool,
+    style_info: Any,
+    dyn: dict[str, Any],
+    extra: dict[str, Any],
+) -> _PromptConfig:
+    """Select system prompt, token budget, and policy mode for a generation call."""
+    legacy_max_tokens = int(config.generate_max_tokens)
+    prompt_config: dict[str, Any] = {}
+    prompt_name = "generate"
+    prompt_obj: Any = None
+
+    if needs_coverage:
+        system_prompt, prompt_config = dyn["get_prompt_with_config"](
+            "generate_exhaustive_list",
+            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
+            variables={"domain": config.domain},
+        )
+        _, prompt_obj = dyn["get_prompt_with_object"](
+            "generate_exhaustive_list",
+            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
+            variables={"domain": config.domain},
+        )
+        max_tokens = (
+            min(int(prompt_config["max_tokens"]), legacy_max_tokens)
+            if "max_tokens" in prompt_config
+            else legacy_max_tokens
+        )
+        response_policy_mode = "coverage"
+        prompt_name = "generate_exhaustive_list"
+    elif use_style:
+        style_prompt_builder = (
+            extra.get("style_prompt_builder") or dyn["build_system_prompt_with_manager"]
+        )
+        system_prompt = style_prompt_builder(
+            style=style_info.style,
+            difficulty=style_info.difficulty,
+            domain=config.domain,
+        )
+        style_token_limit = extra.get("style_token_limit") or dyn["get_token_limit"]
+        style_budget = style_token_limit(style_info.style, style_info.difficulty)
+        max_tokens = min(style_budget, legacy_max_tokens)
+        prompt_obj = None
+        response_policy_mode = "enforced"
+    else:
+        build_sys_prompt_config_fn = extra.get("build_system_prompt_with_config")
+        build_sys_prompt_fn = extra.get("build_system_prompt")
+        if build_sys_prompt_config_fn is not None:
+            system_prompt, prompt_config = build_sys_prompt_config_fn(config.domain)
+        elif build_sys_prompt_fn is not None:
+            res = build_sys_prompt_fn(config.domain)
+            if isinstance(res, tuple):
+                system_prompt, prompt_config = res
+            else:
+                system_prompt = res
+                prompt_config = {}
+        else:
+            system_prompt, prompt_config = dyn["get_prompt_with_config"](
+                "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
+            )
+        _, prompt_obj = dyn["get_prompt_with_object"](
+            "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
+        )
+        max_tokens = (
+            min(int(prompt_config["max_tokens"]), legacy_max_tokens)
+            if "max_tokens" in prompt_config
+            else legacy_max_tokens
+        )
+        shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
+        response_policy_mode = "shadow" if shadow_mode else "disabled"
+
+    return _PromptConfig(
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
+        prompt_name=prompt_name,
+        prompt_obj=prompt_obj,
+        prompt_config=prompt_config,
+        response_policy_mode=response_policy_mode,
+    )
+
+
+def _build_llm_messages(
+    *,
+    system_prompt: str,
+    raw_history: list[Any],
+    effective_query: str,
+    context: str,
+    extra: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Build the LLM messages list from system prompt, history, and current query."""
+    select_recent_history = extra.get("select_recent_history") or _select_recent_history
+    messages = select_recent_history(raw_history, _MAX_HISTORY_MESSAGES)
+
+    llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    for msg in messages[:-1]:
+        role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
+        content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
+        if role in ("user", "human"):
+            llm_messages.append({"role": "user", "content": str(content)})
+        elif role in ("assistant", "ai"):
+            llm_messages.append({"role": "assistant", "content": str(content)})
+
+    user_content = f"Контекст:\n{context}\n\nВопрос: {effective_query}\n\nОтветь на вопрос на основе контекста выше."
+    llm_messages.append({"role": "user", "content": user_content})
+    return llm_messages
+
+
 async def generate_answer(
     request: GenerationRequest,
     *,
@@ -189,34 +406,14 @@ async def generate_answer(
 
     docs = request.documents or []
     raw_history = request.raw_messages or []
-    messages = _select_recent_history(raw_history, _MAX_HISTORY_MESSAGES)
 
-    # Derive query from last message if caller didn't pass explicit query.
-    effective_query = request.query
-    if not effective_query and messages:
-        last_msg = messages[-1]
-        effective_query = (
-            last_msg.get("content", "")
-            if isinstance(last_msg, dict)
-            else getattr(last_msg, "content", "")
-        )
-
-    detector = extra.get("style_detector") or dyn["ResponseStyleDetector"]()
-    style_info = detector.detect(effective_query)
-    coverage_decision = dyn["detect_coverage_mode"](effective_query)
-    needs_coverage = bool(extra.get("needs_coverage", False)) or coverage_decision.needs_coverage
-    coverage_reason = coverage_decision.reason or (
-        "state:needs_coverage" if needs_coverage else None
-    )
-
-    sources_enabled = bool(
-        getattr(config, "show_sources", False) or request.grounding_mode == "strict"
-    )
-    legal_answer_safe = request.grounding_mode != "strict" or is_strict_grounding_safe(
-        documents=docs,
-        sources_enabled=sources_enabled,
-        grade_confidence=request.grade_confidence,
-    )
+    setup = _resolve_generation_setup(request, dyn)
+    effective_query = setup.effective_query
+    style_info = setup.style_info
+    needs_coverage = setup.needs_coverage
+    coverage_reason = setup.coverage_reason
+    sources_enabled = setup.sources_enabled
+    legal_answer_safe = setup.legal_answer_safe
 
     format_context = extra.get("format_context") or _format_context
     format_params = inspect.signature(format_context).parameters
@@ -311,101 +508,40 @@ async def generate_answer(
 
     style_enabled = bool(getattr(config, "response_style_enabled", False))
     shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
-    legacy_max_tokens = int(config.generate_max_tokens)
+    use_style = style_enabled and not shadow_mode
 
-    prompt_config: dict[str, Any] = {}
-    prompt_name = "generate"
-    prompt_obj: Any | None = None
-    use_style = False
-
-    if needs_coverage:
-        system_prompt, prompt_config = dyn["get_prompt_with_config"](
-            "generate_exhaustive_list",
-            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
-            variables={"domain": config.domain},
-        )
-        _, prompt_obj = dyn["get_prompt_with_object"](
-            "generate_exhaustive_list",
-            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
-            variables={"domain": config.domain},
-        )
-        if "max_tokens" in prompt_config:
-            max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
-        else:
-            max_tokens = legacy_max_tokens
-        response_policy_mode = "coverage"
-        prompt_name = "generate_exhaustive_list"
-    else:
-        use_style = style_enabled and not shadow_mode
-        response_policy_mode = (
-            "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
-        )
-
-    if needs_coverage:
-        pass
-    elif use_style:
-        style_prompt_builder = (
-            extra.get("style_prompt_builder") or dyn["build_system_prompt_with_manager"]
-        )
-        style_system_prompt = style_prompt_builder(
-            style=style_info.style,
-            difficulty=style_info.difficulty,
-            domain=config.domain,
-        )
-        style_token_limit = extra.get("style_token_limit") or dyn["get_token_limit"]
-        style_budget = style_token_limit(style_info.style, style_info.difficulty)
-        system_prompt = style_system_prompt
-        max_tokens = min(style_budget, legacy_max_tokens)
-        prompt_obj = None
-    else:
-        build_sys_prompt_config_fn = extra.get("build_system_prompt_with_config")
-        build_sys_prompt_fn = extra.get("build_system_prompt")
-        if build_sys_prompt_config_fn is not None:
-            system_prompt, prompt_config = build_sys_prompt_config_fn(config.domain)
-        elif build_sys_prompt_fn is not None:
-            res = build_sys_prompt_fn(config.domain)
-            if isinstance(res, tuple):
-                system_prompt, prompt_config = res
-            else:
-                system_prompt = res
-                prompt_config = {}
-        else:
-            system_prompt, prompt_config = dyn["get_prompt_with_config"](
-                "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
-            )
-        _, prompt_obj = dyn["get_prompt_with_object"](
-            "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
-        )
-        if "max_tokens" in prompt_config:
-            max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
-        else:
-            max_tokens = legacy_max_tokens
+    pc = _select_prompt_config(
+        config=config,
+        needs_coverage=needs_coverage,
+        use_style=use_style,
+        style_info=style_info,
+        dyn=dyn,
+        extra=extra,
+    )
+    prompt_config = pc.prompt_config
+    prompt_name = pc.prompt_name
+    prompt_obj = pc.prompt_obj
+    max_tokens = pc.max_tokens
+    response_policy_mode = pc.response_policy_mode
 
     effective_temperature: float = prompt_config.get("temperature", config.llm_temperature)
     ensure_history_instruction = (
         extra.get("ensure_history_instruction") or _ensure_history_instruction
     )
-    system_prompt = ensure_history_instruction(system_prompt)
+    system_prompt = ensure_history_instruction(pc.system_prompt)
 
     if sources_enabled and docs:
         citation_instruction = extra.get("citation_instruction", _CITATION_INSTRUCTION)
         separator = "\n" if system_prompt.endswith("\n") else "\n\n"
         system_prompt = f"{system_prompt}{separator}{citation_instruction}"
 
-    llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
-    select_recent_history = extra.get("select_recent_history") or _select_recent_history
-    messages = select_recent_history(raw_history, _MAX_HISTORY_MESSAGES)
-
-    for msg in messages[:-1]:
-        role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
-        content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
-        if role in ("user", "human"):
-            llm_messages.append({"role": "user", "content": str(content)})
-        elif role in ("assistant", "ai"):
-            llm_messages.append({"role": "assistant", "content": str(content)})
-
-    user_content = f"Контекст:\n{context}\n\nВопрос: {effective_query}\n\nОтветь на вопрос на основе контекста выше."
-    llm_messages.append({"role": "user", "content": user_content})
+    llm_messages = _build_llm_messages(
+        system_prompt=system_prompt,
+        raw_history=raw_history,
+        effective_query=effective_query,
+        context=context,
+        extra=extra,
+    )
 
     actual_model = config.llm_model
     ttft_ms = 0.0
@@ -672,35 +808,14 @@ async def generate_answer_stream(
 
     docs = request.documents or []
     raw_history = request.raw_messages or []
-    messages = _select_recent_history(raw_history, _MAX_HISTORY_MESSAGES)
 
-    effective_query = request.query
-    if not effective_query and messages:
-        last_msg = messages[-1]
-        effective_query = (
-            last_msg.get("content", "")
-            if isinstance(last_msg, dict)
-            else getattr(last_msg, "content", "")
-        )
-
-    detector = extra.get("style_detector") or dyn["ResponseStyleDetector"]()
-    style_info = detector.detect(effective_query)
-    coverage_decision = dyn["detect_coverage_mode"](effective_query)
-    needs_coverage = bool(extra.get("needs_coverage", False)) or coverage_decision.needs_coverage
-    coverage_reason = coverage_decision.reason or (
-        "state:needs_coverage" if needs_coverage else None
-    )
-
-    sources_enabled = bool(
-        getattr(config, "show_sources", False) or request.grounding_mode == "strict"
-    )
-
-    # Strict fallback check (runs before stream starts)
-    legal_answer_safe = request.grounding_mode != "strict" or is_strict_grounding_safe(
-        documents=docs,
-        sources_enabled=sources_enabled,
-        grade_confidence=request.grade_confidence,
-    )
+    setup = _resolve_generation_setup(request, dyn)
+    effective_query = setup.effective_query
+    style_info = setup.style_info
+    needs_coverage = setup.needs_coverage
+    coverage_reason = setup.coverage_reason
+    sources_enabled = setup.sources_enabled
+    legal_answer_safe = setup.legal_answer_safe
 
     # Pre-stream updates to Langfuse span
     _update_current_span(
@@ -741,98 +856,32 @@ async def generate_answer_stream(
 
     style_enabled = bool(getattr(config, "response_style_enabled", False))
     shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
-    legacy_max_tokens = int(config.generate_max_tokens)
+    use_style = style_enabled and not shadow_mode
 
-    prompt_config: dict[str, Any] = {}
-    prompt_name = "generate"
-    prompt_obj: Any | None = None
-    use_style = False
-
-    if needs_coverage:
-        system_prompt, prompt_config = dyn["get_prompt_with_config"](
-            "generate_exhaustive_list",
-            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
-            variables={"domain": config.domain},
-        )
-        _, prompt_obj = dyn["get_prompt_with_object"](
-            "generate_exhaustive_list",
-            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
-            variables={"domain": config.domain},
-        )
-        if "max_tokens" in prompt_config:
-            max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
-        else:
-            max_tokens = legacy_max_tokens
-        response_policy_mode = "coverage"
-        prompt_name = "generate_exhaustive_list"
-    else:
-        use_style = style_enabled and not shadow_mode
-        response_policy_mode = (
-            "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
-        )
-
-    if needs_coverage:
-        pass
-    elif use_style:
-        style_prompt_builder = (
-            extra.get("style_prompt_builder") or dyn["build_system_prompt_with_manager"]
-        )
-        style_system_prompt = style_prompt_builder(
-            style=style_info.style,
-            difficulty=style_info.difficulty,
-            domain=config.domain,
-        )
-        style_token_limit = extra.get("style_token_limit") or dyn["get_token_limit"]
-        style_budget = style_token_limit(style_info.style, style_info.difficulty)
-        system_prompt = style_system_prompt
-        max_tokens = min(style_budget, legacy_max_tokens)
-        prompt_obj = None
-    else:
-        build_sys_prompt_config_fn = extra.get("build_system_prompt_with_config")
-        build_sys_prompt_fn = extra.get("build_system_prompt")
-        if build_sys_prompt_config_fn is not None:
-            system_prompt, prompt_config = build_sys_prompt_config_fn(config.domain)
-        elif build_sys_prompt_fn is not None:
-            res = build_sys_prompt_fn(config.domain)
-            if isinstance(res, tuple):
-                system_prompt, prompt_config = res
-            else:
-                system_prompt = res
-                prompt_config = {}
-        else:
-            system_prompt, prompt_config = dyn["get_prompt_with_config"](
-                "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
-            )
-        _, prompt_obj = dyn["get_prompt_with_object"](
-            "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
-        )
-        if "max_tokens" in prompt_config:
-            max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
-        else:
-            max_tokens = legacy_max_tokens
+    pc = _select_prompt_config(
+        config=config,
+        needs_coverage=needs_coverage,
+        use_style=use_style,
+        style_info=style_info,
+        dyn=dyn,
+        extra=extra,
+    )
+    prompt_config = pc.prompt_config
+    prompt_name = pc.prompt_name
+    prompt_obj = pc.prompt_obj
+    max_tokens = pc.max_tokens
+    response_policy_mode = pc.response_policy_mode
 
     effective_temperature: float = prompt_config.get("temperature", config.llm_temperature)
     ensure_history_instruction = (
         extra.get("ensure_history_instruction") or _ensure_history_instruction
     )
-    system_prompt = ensure_history_instruction(system_prompt)
+    system_prompt = ensure_history_instruction(pc.system_prompt)
 
     if sources_enabled and docs:
         citation_instruction = extra.get("citation_instruction", _CITATION_INSTRUCTION)
         separator = "\n" if system_prompt.endswith("\n") else "\n\n"
         system_prompt = f"{system_prompt}{separator}{citation_instruction}"
-
-    llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
-    select_recent_history = extra.get("select_recent_history") or _select_recent_history
-    messages = select_recent_history(raw_history, _MAX_HISTORY_MESSAGES)
-
-    for msg in messages[:-1]:
-        role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
-        content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
-        if role in ("user", "human"):
-            llm_messages.append({"role": "user", "content": str(content)})
-        elif role in ("assistant", "ai"):
-            llm_messages.append({"role": "assistant", "content": str(content)})
 
     format_context = extra.get("format_context") or _format_context
     format_params = inspect.signature(format_context).parameters
@@ -848,8 +897,13 @@ async def generate_answer_stream(
     else:
         context = format_context(docs, effective_max_context_docs)
 
-    user_content = f"Контекст:\n{context}\n\nВопрос: {effective_query}\n\nОтветь на вопрос на основе контекста выше."
-    llm_messages.append({"role": "user", "content": user_content})
+    llm_messages = _build_llm_messages(
+        system_prompt=system_prompt,
+        raw_history=raw_history,
+        effective_query=effective_query,
+        context=context,
+        extra=extra,
+    )
 
     actual_model = config.llm_model
     ttft_ms = 0.0
