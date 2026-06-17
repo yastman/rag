@@ -10,8 +10,6 @@ import yaml
 ROOT = Path(__file__).parents[2]
 BASE_COMPOSE = ROOT / "compose.yml"
 DEV_COMPOSE = ROOT / "compose.dev.yml"
-LIVEKIT_URL_EXPR = "${LIVEKIT_URL:-ws://livekit-server:7880}"
-LIVEKIT_CONFIG = ROOT / "docker" / "livekit" / "livekit.yaml"
 
 
 def _load_compose() -> dict:
@@ -40,42 +38,6 @@ def test_minio_dev_host_ports_are_overrideable() -> None:
     assert "127.0.0.1:${MINIO_CONSOLE_PORT:-9091}:9001" in ports
     assert "127.0.0.1:9090:9000" not in ports
     assert "127.0.0.1:9091:9001" not in ports
-
-
-def test_voice_agent_uses_env_driven_livekit_url() -> None:
-    compose = _load_compose()
-    environment = compose["services"]["voice-agent"]["environment"]
-
-    assert environment["LIVEKIT_URL"] == LIVEKIT_URL_EXPR
-
-
-def test_voice_agent_healthcheck_checks_voice_agent_process() -> None:
-    compose = _load_compose()
-    healthcheck = compose["services"]["voice-agent"]["healthcheck"]["test"]
-
-    assert healthcheck == ["CMD", "python", "-m", "src.voice.healthcheck"]
-
-
-def test_livekit_sip_uses_env_driven_livekit_url_everywhere() -> None:
-    compose = _load_compose()
-    environment = compose["services"]["livekit-sip"]["environment"]
-
-    assert environment["LIVEKIT_WS_URL"] == LIVEKIT_URL_EXPR
-    assert f"ws_url: {LIVEKIT_URL_EXPR}" in environment["SIP_CONFIG_BODY"]
-
-
-def test_livekit_server_receives_api_secret() -> None:
-    compose = _load_compose()
-    environment = compose["services"]["livekit-server"]["environment"]
-
-    assert environment["LIVEKIT_API_SECRET"] == "${LIVEKIT_API_SECRET:-}"
-
-
-def test_livekit_template_secret_has_no_hardcoded_fallback() -> None:
-    config_text = LIVEKIT_CONFIG.read_text()
-
-    assert "${LIVEKIT_API_SECRET:-secret}" not in config_text
-    assert "LIVEKIT_API_SECRET" in config_text
 
 
 def test_clickhouse_command_has_no_invalid_listen_host_flag() -> None:

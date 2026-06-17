@@ -1,6 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra test-optional-surfaces \
+	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-eval-extra test-observability-extra test-optional-surfaces \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	ingest-dir ingest-status ingest-services \
@@ -64,8 +64,7 @@ PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/api \
 	tests/unit/evaluation \
 	tests/unit/ingestion \
-	tests/unit/observability \
-	tests/unit/voice)
+	tests/unit/observability)
 # Explicit owner lanes for tests excluded from the lean broad unit lane.
 # Keep these variables in sync with the matching opt-in targets below.
 PYTEST_TELEGRAM_ADAPTER_PATHS := \
@@ -301,12 +300,6 @@ test-ingest-extra: ## Run optional ingestion-extra tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
 	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
 
-test-voice-extra: ## Run optional voice-extra tests explicitly
-	@echo "$(BLUE)Running voice-extra tests...$(NC)"
-	uv sync --extra voice --all-groups
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/voice/ -q --timeout=30
-	@echo "$(GREEN)✓ Voice-extra tests complete$(NC)"
-
 test-eval-extra: ## Run optional evaluation-extra tests explicitly
 	@echo "$(BLUE)Running evaluation-extra tests...$(NC)"
 	uv sync --extra eval --all-groups
@@ -319,7 +312,7 @@ test-observability-extra: ## Run optional observability-extra tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/observability/ -q --timeout=30
 	@echo "$(GREEN)✓ Observability-extra tests complete$(NC)"
 
-test-optional-surfaces: test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
+test-optional-surfaces: test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
 	@echo "$(GREEN)✓ Optional surface lanes complete$(NC)"
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
@@ -603,7 +596,7 @@ REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
-REMOTE_ACTIVE_SERVICES := bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
+REMOTE_ACTIVE_SERVICES := bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant minio clickhouse user-base bot
 REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base bot
 
 remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
@@ -651,9 +644,9 @@ remote-env-check: ## Verify remote .env exists and report missing required varia
 			echo 'Required variables present'; \
 		fi"
 
-remote-active-up: ## Start active remote stack (bot + ml + voice profiles)
+remote-active-up: ## Start active remote stack (bot + ml profiles)
 	@echo "$(BLUE)Starting active remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot --profile ml --profile voice up -d $(REMOTE_ACTIVE_SERVICES)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot --profile ml up -d $(REMOTE_ACTIVE_SERVICES)"
 	@echo "$(GREEN)✓ Active remote stack started$(NC)"
 
 remote-core-up: ## Start minimal RAG bot core on remote MacBook Docker
@@ -736,7 +729,7 @@ remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(YELLOW)container not found$(NC)"; fi; \
 	exit $$fail
 
-.PHONY: core-min-up core-up docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
+.PHONY: core-min-up core-up docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
 
 core-min-up: ## Start minimal core services only (qdrant + redis)
 	@echo "$(BLUE)Starting minimal core services (qdrant + redis)...$(NC)"
@@ -774,13 +767,6 @@ docker-ingest-up: ## Start core + ingestion service
 	@echo "$(BLUE)Starting ingestion service...$(NC)"
 	$(LOCAL_COMPOSE_CMD) --profile ingest up -d
 	@echo "$(GREEN)✓ Ingestion service started$(NC)"
-
-docker-voice-up: ## Start core + voice services (livekit, sip, voice-agent)
-	@echo "$(BLUE)Preflight: checking livekit config...$(NC)"
-	@test -f docker/livekit/livekit.yaml || { echo "$(RED)✗ docker/livekit/livekit.yaml not found$(NC)"; exit 1; }
-	@echo "$(BLUE)Starting voice services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) --profile voice up -d
-	@echo "$(GREEN)✓ Voice services started$(NC)"
 
 docker-full-up: ## Start all services (full stack)
 	@echo "$(BLUE)Starting full stack...$(NC)"

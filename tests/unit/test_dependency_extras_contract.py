@@ -76,7 +76,8 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     )
     assert {"datasets", "pandas"}.issubset(_dep_names(extras["eval"]))
     assert "ragas" not in _dep_names(extras["eval"])
-    assert any(dep.startswith("livekit-agents") for dep in extras["voice"])
+    # voice extra emptied by ARCH-02 #2598 (livekit-* archived to archive/voice/)
+    assert "voice" in extras
 
 
 def test_all_extra_includes_every_runtime_surface() -> None:

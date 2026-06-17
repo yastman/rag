@@ -52,7 +52,7 @@ def test_compose_includes_expected_profile_groups():
         for p in service.get("profiles", []) or []:
             explicit_profiles.add(str(p))
 
-    required = {"bot", "ml", "obs", "ingest", "voice", "full"}
+    required = {"bot", "ml", "obs", "ingest", "full"}
     missing = required.difference(explicit_profiles)
     assert not missing, f"Missing required compose profile groups: {sorted(missing)}"
 

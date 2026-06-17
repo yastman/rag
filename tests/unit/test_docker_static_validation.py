@@ -15,13 +15,11 @@ from aiogram.utils.token import validate_token
 
 
 DOCKERFILES = [
-    "src/api/Dockerfile",
     "Dockerfile.ingestion",
     "telegram_bot/Dockerfile",
     "services/bge-m3-api/Dockerfile",
     "services/user-base/Dockerfile",
     "services/docling/Dockerfile",
-    "src/voice/Dockerfile",
 ]
 
 # Images that import telegram_bot.observability (which imports langfuse) must not
@@ -29,7 +27,6 @@ DOCKERFILES = [
 # that is incompatible with Python 3.14.
 _LANGFUSE_RUNTIME_DOCKERFILES = [
     "telegram_bot/Dockerfile",
-    "src/api/Dockerfile",
     "Dockerfile.ingestion",
 ]
 
@@ -199,31 +196,6 @@ def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
     text = Path(dockerfile).read_text()
     assert "python3.13" in text or "python:3.13" in text, (
         f"{dockerfile} must use Python 3.13 runtime for langfuse SDK compatibility"
-    )
-
-
-def test_voice_agent_healthcheck_does_not_use_rag_api_port() -> None:
-    """voice-agent healthcheck must not reference port 8080 to avoid confusion with rag-api (#1510)."""
-    import yaml
-
-    compose = yaml.safe_load(COMPOSE_FILE.read_text())
-    voice = compose["services"]["voice-agent"]
-    health_test = " ".join(voice["healthcheck"]["test"])
-    assert "8080" not in health_test, (
-        "voice-agent healthcheck must not reference port 8080 (rag-api); use a process check instead"
-    )
-
-
-def test_voice_agent_has_otel_service_name() -> None:
-    """voice-agent must set a stable OTEL_SERVICE_NAME default like other Langfuse-instrumented services (#1510)."""
-    import yaml
-
-    compose = yaml.safe_load(COMPOSE_FILE.read_text())
-    voice = compose["services"]["voice-agent"]
-    env = voice.get("environment", {})
-    assert "OTEL_SERVICE_NAME" in env, "voice-agent must set OTEL_SERVICE_NAME in compose.yml"
-    assert "voice-agent" in env["OTEL_SERVICE_NAME"], (
-        "voice-agent OTEL_SERVICE_NAME default must include 'voice-agent'"
     )
 
 
@@ -428,50 +400,4 @@ def test_compose_dev_bge_m3_renders_with_ci_env() -> None:
     )
     assert result.returncode == 0, (
         f"Compose bge-m3 config rendering failed:\n{result.stderr or result.stdout}"
-    )
-
-
-# ── voice-agent healthcheck runtime safety (#1510) ─────────────────────────
-
-
-def test_voice_agent_compose_healthcheck_is_runtime_safe() -> None:
-    """voice-agent compose healthcheck must use Python stdlib available in python:slim."""
-    import yaml
-
-    compose = yaml.safe_load(COMPOSE_FILE.read_text())
-    voice = compose["services"]["voice-agent"]
-    health_test = " ".join(voice["healthcheck"]["test"])
-    assert "pgrep" not in health_test, (
-        "voice-agent compose healthcheck runs inside python:slim; pgrep requires procps"
-    )
-    assert "python" in health_test, (
-        "voice-agent compose healthcheck must use Python stdlib available in the image"
-    )
-    assert "src.voice.healthcheck" in health_test, (
-        "voice-agent compose healthcheck must reference the dedicated src.voice.healthcheck module; "
-        "the module uses its own PID exclusion to avoid self-matching"
-    )
-
-
-def test_voice_dockerfile_healthcheck_does_not_use_localhost_8080() -> None:
-    """src/voice/Dockerfile must not reference localhost:8080/health (#1510)."""
-    dockerfile = Path("src/voice/Dockerfile").read_text()
-    assert "localhost:8080/health" not in dockerfile, (
-        "src/voice/Dockerfile healthcheck must not reference localhost:8080 (rag-api endpoint)"
-    )
-    assert "8080" not in dockerfile, (
-        "src/voice/Dockerfile must not reference port 8080 (rag-api port)"
-    )
-
-
-def test_voice_dockerfile_healthcheck_is_self_match_safe() -> None:
-    """src/voice/Dockerfile HEALTHCHECK must not contain the process needle literally (#1510)."""
-    dockerfile = Path("src/voice/Dockerfile").read_text()
-    healthcheck = dockerfile.split("HEALTHCHECK", 1)[1].split("\n\nCMD", 1)[0]
-    assert "python" in healthcheck, (
-        "src/voice/Dockerfile HEALTHCHECK must use Python stdlib in python:slim runtime"
-    )
-    assert "src.voice.healthcheck" in healthcheck, (
-        "src/voice/Dockerfile HEALTHCHECK must reference the dedicated src.voice.healthcheck module; "
-        "the module uses its own PID exclusion to avoid self-matching"
     )
