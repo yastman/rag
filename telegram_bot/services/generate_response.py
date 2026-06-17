@@ -548,6 +548,80 @@ async def _generate_streaming(
     )
 
 
+def _unpack_stream_result(
+    stream_result: Any,
+) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
+    """Unpack a 5-, 6-, or 7-element stream result tuple into canonical fields."""
+    if len(stream_result) == 5:
+        answer, actual_model, ttft_ms, completion_tokens, sent_msg = stream_result
+        stream_only_ttft_ms = None
+        usage_details = None
+    elif len(stream_result) == 6:
+        answer, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg = (
+            stream_result
+        )
+        usage_details = None
+    else:
+        (
+            answer,
+            actual_model,
+            ttft_ms,
+            completion_tokens,
+            stream_only_ttft_ms,
+            usage_details,
+            sent_msg,
+        ) = stream_result
+    return (
+        answer,
+        actual_model,
+        ttft_ms,
+        completion_tokens,
+        stream_only_ttft_ms,
+        usage_details,
+        sent_msg,
+    )
+
+
+async def _non_streaming_llm_call(
+    *,
+    llm: Any,
+    config: Any,
+    llm_messages: list[dict[str, str]],
+    effective_temperature: float,
+    max_tokens: int,
+    prompt_obj: Any | None,
+    sources_enabled: bool,
+) -> tuple[str, str, float, float | None, dict[str, int] | None]:
+    """Run a single non-streaming LLM call and return (answer, model, ttft_ms, completion_tokens, usage_details)."""
+    t_start = time.monotonic()
+    create_kwargs: dict[str, Any] = {
+        "model": config.llm_model,
+        "messages": llm_messages,
+        "temperature": effective_temperature,
+        "max_tokens": max_tokens,
+        **config.get_reasoning_kwargs(),
+    }
+    if prompt_obj is not None:
+        create_kwargs["langfuse_prompt"] = prompt_obj
+    response_obj = await _chat_create_with_optional_name(
+        llm,
+        observation_name="generate-answer",
+        **create_kwargs,
+    )
+    t_end = time.monotonic()
+    answer = response_obj.choices[0].message.content or ""
+    answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
+    actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
+    ttft_ms = (t_end - t_start) * 1000
+    usage = getattr(response_obj, "usage", None)
+    usage_details: dict[str, int] | None = None
+    completion_tokens: float | None = None
+    if usage is not None:
+        usage_details = _extract_usage_details(usage)
+        completion_tokens = _coerce_positive_number(getattr(usage, "completion_tokens", None))
+    return answer, actual_model, ttft_ms, completion_tokens, usage_details
+
+
 async def _generate_streaming_response(
     *,
     req: GenerationRequest,
@@ -716,34 +790,15 @@ async def _generate_streaming_response(
             **stream_kwargs,
         )
 
-        if len(stream_result) == 5:
-            (
-                answer,
-                actual_model,
-                ttft_ms,
-                completion_tokens,
-                sent_msg,
-            ) = stream_result
-            stream_only_ttft_ms = None
-        elif len(stream_result) == 6:
-            (
-                answer,
-                actual_model,
-                ttft_ms,
-                completion_tokens,
-                stream_only_ttft_ms,
-                sent_msg,
-            ) = stream_result
-        else:
-            (
-                answer,
-                actual_model,
-                ttft_ms,
-                completion_tokens,
-                stream_only_ttft_ms,
-                usage_details,
-                sent_msg,
-            ) = stream_result
+        (
+            answer,
+            actual_model,
+            ttft_ms,
+            completion_tokens,
+            stream_only_ttft_ms,
+            usage_details,
+            sent_msg,
+        ) = _unpack_stream_result(stream_result)
         response_sent = sent_msg is not None
 
     except Exception as stream_exc:
@@ -763,32 +818,21 @@ async def _generate_streaming_response(
                         exc_info=True,
                     )
                 sent_msg = getattr(stream_exc, "sent_msg", None)
-                t_llm_start = time.monotonic()
-                create_kwargs = {
-                    "model": config.llm_model,
-                    "messages": llm_messages,
-                    "temperature": effective_temperature,
-                    "max_tokens": max_tokens,
-                    **config.get_reasoning_kwargs(),
-                }
-                if prompt_obj is not None:
-                    create_kwargs["langfuse_prompt"] = prompt_obj
-                response_obj = await _chat_create_with_optional_name(
-                    llm,
-                    observation_name="generate-answer",
-                    **create_kwargs,
+                (
+                    answer,
+                    actual_model,
+                    ttft_ms,
+                    completion_tokens,
+                    usage_details,
+                ) = await _non_streaming_llm_call(
+                    llm=llm,
+                    config=config,
+                    llm_messages=llm_messages,
+                    effective_temperature=effective_temperature,
+                    max_tokens=max_tokens,
+                    prompt_obj=prompt_obj,
+                    sources_enabled=sources_enabled,
                 )
-                t_llm_end = time.monotonic()
-                answer = response_obj.choices[0].message.content or ""
-                answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
-                actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
-                ttft_ms = (t_llm_end - t_llm_start) * 1000
-                usage = getattr(response_obj, "usage", None)
-                if usage is not None:
-                    usage_details = _extract_usage_details(usage)
-                    completion_tokens = _coerce_positive_number(
-                        getattr(usage, "completion_tokens", None)
-                    )
                 stream_recovery = True
                 delivered = False
                 if sent_msg is not None:
@@ -831,32 +875,21 @@ async def _generate_streaming_response(
                     )
                 else:
                     logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
-                t_llm_start = time.monotonic()
-                create_kwargs = {
-                    "model": config.llm_model,
-                    "messages": llm_messages,
-                    "temperature": effective_temperature,
-                    "max_tokens": max_tokens,
-                    **config.get_reasoning_kwargs(),
-                }
-                if prompt_obj is not None:
-                    create_kwargs["langfuse_prompt"] = prompt_obj
-                response_obj = await _chat_create_with_optional_name(
-                    llm,
-                    observation_name="generate-answer",
-                    **create_kwargs,
+                (
+                    answer,
+                    actual_model,
+                    ttft_ms,
+                    completion_tokens,
+                    usage_details,
+                ) = await _non_streaming_llm_call(
+                    llm=llm,
+                    config=config,
+                    llm_messages=llm_messages,
+                    effective_temperature=effective_temperature,
+                    max_tokens=max_tokens,
+                    prompt_obj=prompt_obj,
+                    sources_enabled=sources_enabled,
                 )
-                t_llm_end = time.monotonic()
-                answer = response_obj.choices[0].message.content or ""
-                answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
-                actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
-                ttft_ms = (t_llm_end - t_llm_start) * 1000
-                usage = getattr(response_obj, "usage", None)
-                if usage is not None:
-                    usage_details = _extract_usage_details(usage)
-                    completion_tokens = _coerce_positive_number(
-                        getattr(usage, "completion_tokens", None)
-                    )
                 stream_recovery = True
         except Exception as e:
             if _is_connection_error(e):
@@ -885,7 +918,7 @@ async def _generate_streaming_response(
     PipelineMetrics.get().record("generate", elapsed * 1000)
 
     if actual_model != "fallback":
-        generation_payload = {"model": actual_model}
+        generation_payload: dict[str, Any] = {"model": actual_model}
         if usage_details:
             generation_payload["usage_details"] = usage_details
         elif completion_tokens is not None:
@@ -983,7 +1016,7 @@ async def _generate_streaming_response(
             "latency_stages": {**current_latency, "generate": elapsed},
             "llm_decode_ms": llm_decode_ms,
             "llm_tps": llm_tps,
-            "llm_queue_ms": extract_queue_ms(response_obj) if "response_obj" in locals() else None,
+            "llm_queue_ms": None,
             "llm_timeout": hard_timeout,
             "llm_stream_recovery": stream_recovery,
             "streaming_enabled": True,

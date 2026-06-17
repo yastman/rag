@@ -2130,6 +2130,294 @@ class PropertyBot:
             return None  # caller falls through to sdk_agent path
         return result.answer
 
+    @staticmethod
+    def _trace_guard_blocked(
+        *,
+        user_text: str,
+        query_type: str,
+        pipeline_start: float,
+        risk_score: float,
+        pattern: str | None,
+        root_trace_metadata: dict[str, Any] | None,
+    ) -> None:
+        """Write Langfuse trace + scores for a hard-blocked injection (#1368)."""
+        wall_ms = (time.perf_counter() - pipeline_start) * 1000
+        lf = get_client()
+        tid = lf.get_current_trace_id() or ""
+        lf.update_current_span(
+            input={"query": user_text},
+            output={"response": "BLOCKED"},
+            metadata={
+                "pipeline_mode": "sdk_agent",
+                "pipeline_wall_ms": wall_ms,
+                "e2e_latency_ms": wall_ms,
+                "guard_blocked": True,
+                "injection_pattern": pattern,
+                "injection_risk_score": risk_score,
+            },
+        )
+        if tid:
+            score(lf, tid, name="guard_blocked", value=1, data_type="BOOLEAN")
+            score(
+                lf,
+                tid,
+                name="injection_pattern",
+                value=pattern or "unknown",
+                data_type="CATEGORICAL",
+            )
+            try:
+                write_langfuse_scores(
+                    lf,
+                    {
+                        "query_type": query_type,
+                        "pipeline_wall_ms": wall_ms,
+                        "e2e_latency_ms": wall_ms,
+                        "cache_hit": False,
+                        "input_type": "text",
+                        "search_results_count": 0,
+                        "grade_confidence": 0.0,
+                        "injection_detected": True,
+                        "injection_risk_score": risk_score,
+                        "injection_pattern": pattern,
+                    },
+                    trace_id=tid,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to write Langfuse scores in guard-blocked path", exc_info=True
+                )
+        if root_trace_metadata is not None:
+            root_trace_metadata.update(
+                {
+                    "pipeline_mode": "sdk_agent",
+                    "pipeline_wall_ms": wall_ms,
+                    "e2e_latency_ms": wall_ms,
+                    "guard_blocked": True,
+                    "injection_pattern": pattern,
+                    "injection_risk_score": risk_score,
+                }
+            )
+
+    async def _handle_pre_agent_cache_hit(
+        self,
+        *,
+        message: Any,
+        cached: str,
+        user_text: str,
+        query_type: str,
+        role: str,
+        pipeline_start: float,
+        pre_agent_start: float,
+        rag_result_store: dict[str, Any],
+        root_trace_metadata: dict[str, Any] | None,
+        dense: list[float],
+    ) -> str:
+        """Send cached response and write Langfuse trace for cache-hit path."""
+        logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
+        rag_result_store["cache_hit"] = True
+        rag_result_store["query_type"] = query_type
+        rag_result_store["cache_key_embedding"] = dense
+        lf = get_client()
+        pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
+        rag_result_store["pre_agent_ms"] = pre_agent_ms
+        _raw_tid = lf.get_current_trace_id()
+        tid = _raw_tid if isinstance(_raw_tid, str) else ""
+        reply_markup = None
+        if tid and query_type not in _NO_RAG_QUERY_TYPES:
+            from telegram_bot.feedback import build_feedback_keyboard
+
+            reply_markup = build_feedback_keyboard(tid)
+        await self._send_markdown_chunks(message, str(cached), reply_markup=reply_markup)
+        wall_ms = (time.perf_counter() - pipeline_start) * 1000
+        cache_trace_metadata: dict[str, Any] = {
+            "pipeline_mode": "pre_agent_cache",
+            "pipeline_wall_ms": wall_ms,
+            "pre_agent_ms": pre_agent_ms,
+            "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
+            "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
+            "e2e_latency_ms": wall_ms,
+            "topic_hint": rag_result_store.get("topic_hint", ""),
+            "grounding_mode": rag_result_store.get("grounding_mode", ""),
+            "filter_signature": rag_result_store.get("semantic_cache_filter_signature", ""),
+            "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
+            "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+            "grounded": bool(rag_result_store.get("grounded", True)),
+            "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
+            "semantic_cache_safe_reuse": bool(
+                rag_result_store.get("semantic_cache_safe_reuse", True)
+            ),
+            "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
+        }
+        lf.update_current_span(
+            input={"query": user_text},
+            output={"response": cached},
+            metadata=cache_trace_metadata,
+        )
+        if tid:
+            score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
+            score(lf, tid, name="query_type", value=query_type, data_type="CATEGORICAL")
+            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
+            try:
+                write_langfuse_scores(lf, rag_result_store, trace_id=tid)
+            except Exception:
+                logger.warning(
+                    "Failed to write Langfuse scores in pre-agent cache hit", exc_info=True
+                )
+        if root_trace_metadata is not None:
+            root_trace_metadata.update(cache_trace_metadata)
+        return cached
+
+    async def _send_core_response(
+        self,
+        *,
+        message: Any,
+        response_text: str,
+        user_text: str,
+        query_type: str,
+        rag_result_store: dict[str, Any],
+        ctx: Any,
+        forum_thread_id: int | None,
+    ) -> None:
+        """Send response with feedback keyboard and source attribution."""
+        lf = get_client()
+        _raw_trace_id = lf.get_current_trace_id()
+        trace_id = _raw_trace_id if isinstance(_raw_trace_id, str) else ""
+
+        reply_markup = None
+        if trace_id and query_type and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
+            from telegram_bot.feedback import build_feedback_keyboard
+
+            reply_markup = build_feedback_keyboard(trace_id)
+        if reply_markup is None and ctx.history_reply_markup is not None:
+            reply_markup = ctx.history_reply_markup
+
+        sources_html = ""
+        documents = rag_result_store.get("documents", [])
+        if (
+            self._graph_config.show_sources
+            and documents
+            and query_type not in {"CHITCHAT", "OFF_TOPIC"}
+        ):
+            from telegram_bot.services.telegram_formatting import format_sources_html
+
+            _MAX_SOURCES = 5
+            sources_html = format_sources_html(documents, max_sources=_MAX_SOURCES)
+            rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
+
+        from telegram_bot.services.telegram_formatting import (
+            build_html_messages,
+            record_langfuse_response_output,
+            send_html_messages,
+        )
+
+        html_messages = build_html_messages(response_text, sources_html=sources_html)
+
+        if message.chat.type == "private":
+            draft_state = rag_result_store.get("_draft_state")
+            try:
+                if draft_state is None and len(html_messages) == 1:
+                    draft_state = {
+                        "chat_id": message.chat.id,
+                        "thread_id": forum_thread_id,
+                        "draft_id": _new_draft_id(),
+                    }
+                if draft_state is not None and len(html_messages) == 1:
+                    send_kwargs: dict[str, Any] = {
+                        "chat_id": draft_state["chat_id"],
+                        "text": html_messages[0],
+                        "parse_mode": "HTML",
+                        "reply_markup": reply_markup,
+                    }
+                    thread_id = draft_state.get("thread_id")
+                    if thread_id is not None:
+                        send_kwargs["message_thread_id"] = thread_id
+                    await self.bot.send_message(**send_kwargs)
+                    record_langfuse_response_output(response_text, len(html_messages))
+                else:
+                    await send_html_messages(
+                        message, response_text, sources_html=sources_html, reply_markup=reply_markup
+                    )
+                ctx.response_sent = True
+            except Exception:
+                logger.warning(
+                    "Draft finalize via bot.send_message failed, falling back to send_html_messages"
+                )
+                try:
+                    await send_html_messages(
+                        message, response_text, sources_html=sources_html, reply_markup=reply_markup
+                    )
+                    ctx.response_sent = True
+                except Exception:
+                    logger.exception("Failed to send text response")
+                    if response_text:
+                        await message.answer(response_text)
+                    ctx.response_sent = True
+        else:
+            await send_html_messages(
+                message, response_text, sources_html=sources_html, reply_markup=reply_markup
+            )
+            if html_messages:
+                ctx.response_sent = True
+
+    @staticmethod
+    def _write_final_pipeline_trace(
+        *,
+        user_text: str,
+        wall_ms: float,
+        pre_agent_ms: float,
+        filter_signature: str | None,
+        rag_result_store: dict[str, Any],
+        root_trace_metadata: dict[str, Any] | None,
+    ) -> None:
+        """Write end-of-pipeline Langfuse span metadata and root trace metadata."""
+        lf = get_client()
+        lf.update_current_span(
+            input={"query": user_text},
+            metadata={
+                "pipeline_mode": "sdk_agent",
+                "query_type": rag_result_store.get("query_type", ""),
+                "topic_hint": rag_result_store.get("topic_hint", ""),
+                "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                "filter_signature": filter_signature or "",
+                "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
+                "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+                "grounded": bool(rag_result_store.get("grounded", True)),
+                "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
+                "semantic_cache_safe_reuse": bool(
+                    rag_result_store.get("semantic_cache_safe_reuse", True)
+                ),
+                "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
+                "pipeline_wall_ms": wall_ms,
+                "pre_agent_ms": pre_agent_ms,
+                "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
+                "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
+                "e2e_latency_ms": wall_ms,
+            },
+        )
+        if root_trace_metadata is not None:
+            root_trace_metadata.update(
+                {
+                    "pipeline_mode": "sdk_agent",
+                    "query_type": rag_result_store.get("query_type", ""),
+                    "topic_hint": rag_result_store.get("topic_hint", ""),
+                    "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                    "filter_signature": filter_signature or "",
+                    "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
+                    "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+                    "grounded": bool(rag_result_store.get("grounded", True)),
+                    "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
+                    "semantic_cache_safe_reuse": bool(
+                        rag_result_store.get("semantic_cache_safe_reuse", True)
+                    ),
+                    "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
+                    "pipeline_wall_ms": wall_ms,
+                    "pre_agent_ms": pre_agent_ms,
+                    "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
+                    "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
+                    "e2e_latency_ms": wall_ms,
+                }
+            )
+
     @observe(
         name="telegram-rag-supervisor",
         capture_input=False,
@@ -2186,67 +2474,14 @@ class PropertyBot:
                             user_text,
                         )
                         await message.answer(BLOCKED_RESPONSE)
-                        wall_ms = (time.perf_counter() - pipeline_start) * 1000
-                        lf = get_client()
-                        tid = lf.get_current_trace_id() or ""
-                        lf.update_current_span(
-                            input={"query": user_text},
-                            output={"response": BLOCKED_RESPONSE},
-                            metadata={
-                                "pipeline_mode": "sdk_agent",
-                                "pipeline_wall_ms": wall_ms,
-                                "e2e_latency_ms": wall_ms,
-                                "guard_blocked": True,
-                                "injection_pattern": pattern,
-                                "injection_risk_score": risk_score,
-                            },
+                        self._trace_guard_blocked(
+                            user_text=user_text,
+                            query_type=query_type,
+                            pipeline_start=pipeline_start,
+                            risk_score=risk_score,
+                            pattern=pattern,
+                            root_trace_metadata=root_trace_metadata,
                         )
-                        if tid:
-                            score(
-                                lf,
-                                tid,
-                                name="guard_blocked",
-                                value=1,
-                                data_type="BOOLEAN",
-                            )
-                            score(
-                                lf,
-                                tid,
-                                name="injection_pattern",
-                                value=pattern or "unknown",
-                                data_type="CATEGORICAL",
-                            )
-                            # Write full Langfuse score set for guard-blocked path (#1368)
-                            try:
-                                minimal_result = {
-                                    "query_type": query_type,
-                                    "pipeline_wall_ms": wall_ms,
-                                    "e2e_latency_ms": wall_ms,
-                                    "cache_hit": False,
-                                    "input_type": "text",
-                                    "search_results_count": 0,
-                                    "grade_confidence": 0.0,
-                                    "injection_detected": True,
-                                    "injection_risk_score": risk_score,
-                                    "injection_pattern": pattern,
-                                }
-                                write_langfuse_scores(lf, minimal_result, trace_id=tid)
-                            except Exception:
-                                logger.warning(
-                                    "Failed to write Langfuse scores in guard-blocked path",
-                                    exc_info=True,
-                                )
-                        if root_trace_metadata is not None:
-                            root_trace_metadata.update(
-                                {
-                                    "pipeline_mode": "sdk_agent",
-                                    "pipeline_wall_ms": wall_ms,
-                                    "e2e_latency_ms": wall_ms,
-                                    "guard_blocked": True,
-                                    "injection_pattern": pattern,
-                                    "injection_risk_score": risk_score,
-                                }
-                            )
                         return BLOCKED_RESPONSE
                     # soft/log mode: log but don't block
                     logger.warning(
@@ -2260,6 +2495,7 @@ class PropertyBot:
             # Pre-agent semantic cache check (#563) — skip agent entirely on HIT.
             # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
             extracted_filters: dict[str, Any] = {}
+            filter_signature: str | None = None
             if query_type in CACHEABLE_QUERY_TYPES:
                 try:
                     # 1. Dense embedding for semantic lookup only (#1501)
@@ -2292,7 +2528,7 @@ class PropertyBot:
                         rag_result_store.setdefault("legal_answer_safe", True)
                         rag_result_store.setdefault("semantic_cache_safe_reuse", True)
                         rag_result_store.setdefault("safe_fallback_used", False)
-                    filter_signature: str | None = None
+                    filter_signature = None
                     if filter_signal.is_filter_sensitive:
                         extracted_filters = await self._extract_pre_agent_filters(user_text)
                         if extracted_filters:
@@ -2373,82 +2609,18 @@ class PropertyBot:
                             ) * 1000
                             rag_result_store["semantic_cache_already_checked"] = True
                     if cached:
-                        logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
-                        rag_result_store["cache_hit"] = True
-                        rag_result_store["query_type"] = query_type
-                        rag_result_store["cache_key_embedding"] = dense
-                        # Do NOT prepare sparse/ColBERT on HIT (#1501)
-                        lf = get_client()
-                        pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
-                        rag_result_store["pre_agent_ms"] = pre_agent_ms
-                        _raw_tid = lf.get_current_trace_id()
-                        tid = _raw_tid if isinstance(_raw_tid, str) else ""
-                        reply_markup = None
-                        if tid and query_type not in _NO_RAG_QUERY_TYPES:
-                            from telegram_bot.feedback import build_feedback_keyboard
-
-                            reply_markup = build_feedback_keyboard(tid)
-                        await self._send_markdown_chunks(
-                            message,
-                            str(cached),
-                            reply_markup=reply_markup,
+                        return await self._handle_pre_agent_cache_hit(
+                            message=message,
+                            cached=cached,
+                            user_text=user_text,
+                            query_type=query_type,
+                            role=role,
+                            pipeline_start=pipeline_start,
+                            pre_agent_start=pre_agent_start,
+                            rag_result_store=rag_result_store,
+                            root_trace_metadata=root_trace_metadata,
+                            dense=dense,
                         )
-                        wall_ms = (time.perf_counter() - pipeline_start) * 1000
-                        cache_trace_metadata = {
-                            "pipeline_mode": "pre_agent_cache",
-                            "pipeline_wall_ms": wall_ms,
-                            "pre_agent_ms": pre_agent_ms,
-                            "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-                            "pre_agent_cache_check_ms": rag_result_store.get(
-                                "pre_agent_cache_check_ms"
-                            ),
-                            "e2e_latency_ms": wall_ms,
-                            "topic_hint": rag_result_store.get("topic_hint", ""),
-                            "grounding_mode": rag_result_store.get("grounding_mode", ""),
-                            "filter_signature": rag_result_store.get(
-                                "semantic_cache_filter_signature", ""
-                            ),
-                            "grade_confidence": float(
-                                rag_result_store.get("grade_confidence", 0.0) or 0.0
-                            ),
-                            "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-                            "grounded": bool(rag_result_store.get("grounded", True)),
-                            "legal_answer_safe": bool(
-                                rag_result_store.get("legal_answer_safe", True)
-                            ),
-                            "semantic_cache_safe_reuse": bool(
-                                rag_result_store.get("semantic_cache_safe_reuse", True)
-                            ),
-                            "safe_fallback_used": bool(
-                                rag_result_store.get("safe_fallback_used", False)
-                            ),
-                        }
-                        lf.update_current_span(
-                            input={"query": user_text},
-                            output={"response": cached},
-                            metadata=cache_trace_metadata,
-                        )
-                        if tid:
-                            score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
-                            score(
-                                lf,
-                                tid,
-                                name="query_type",
-                                value=query_type,
-                                data_type="CATEGORICAL",
-                            )
-                            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
-                            # Write full Langfuse score set for pre-agent cache hit (#1368)
-                            try:
-                                write_langfuse_scores(lf, rag_result_store, trace_id=tid)
-                            except Exception:
-                                logger.warning(
-                                    "Failed to write Langfuse scores in pre-agent cache hit",
-                                    exc_info=True,
-                                )
-                        if root_trace_metadata is not None:
-                            root_trace_metadata.update(cache_trace_metadata)
-                        return cached
                     # MISS: prepare retrieval vectors, then build state contract (#1501)
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
                     rag_result_store["query_type"] = query_type
@@ -2584,104 +2756,16 @@ class PropertyBot:
             # Send response with feedback buttons, sources, and Markdown (#426).
             # Skip if a tool already delivered the response via streaming (#428).
             if response_text and not ctx.response_sent:
-                lf = get_client()
-                _raw_trace_id = lf.get_current_trace_id()
-                trace_id = _raw_trace_id if isinstance(_raw_trace_id, str) else ""
                 query_type = rag_result_store.get("query_type", "")
-
-                # Build feedback keyboard
-                reply_markup = None
-                if trace_id and query_type and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
-                    from telegram_bot.feedback import build_feedback_keyboard
-
-                    reply_markup = build_feedback_keyboard(trace_id)
-
-                # Fallback: history_search stores keyboard in BotContext side-channel (#434)
-                if reply_markup is None and ctx.history_reply_markup is not None:
-                    reply_markup = ctx.history_reply_markup
-
-                # Build source attribution
-                sources_html = ""
-                documents = rag_result_store.get("documents", [])
-                if (
-                    self._graph_config.show_sources
-                    and documents
-                    and query_type
-                    not in {
-                        "CHITCHAT",
-                        "OFF_TOPIC",
-                    }
-                ):
-                    from telegram_bot.services.telegram_formatting import format_sources_html
-
-                    _MAX_SOURCES = 5
-                    sources_html = format_sources_html(documents, max_sources=_MAX_SOURCES)
-                    rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
-
-                from telegram_bot.services.telegram_formatting import (
-                    build_html_messages,
-                    record_langfuse_response_output,
-                    send_html_messages,
+                await self._send_core_response(
+                    message=message,
+                    response_text=response_text,
+                    user_text=user_text,
+                    query_type=query_type,
+                    rag_result_store=rag_result_store,
+                    ctx=ctx,
+                    forum_thread_id=forum_thread_id,
                 )
-
-                html_messages = build_html_messages(response_text, sources_html=sources_html)
-
-                if message.chat.type == "private":
-                    draft_state = rag_result_store.get("_draft_state")
-                    try:
-                        if draft_state is None and len(html_messages) == 1:
-                            draft_state = {
-                                "chat_id": message.chat.id,
-                                "thread_id": forum_thread_id,
-                                "draft_id": _new_draft_id(),
-                            }
-                        if draft_state is not None and len(html_messages) == 1:
-                            send_kwargs: dict[str, Any] = {
-                                "chat_id": draft_state["chat_id"],
-                                "text": html_messages[0],
-                                "parse_mode": "HTML",
-                                "reply_markup": reply_markup,
-                            }
-                            thread_id = draft_state.get("thread_id")
-                            if thread_id is not None:
-                                send_kwargs["message_thread_id"] = thread_id
-                            await self.bot.send_message(**send_kwargs)
-                            record_langfuse_response_output(response_text, len(html_messages))
-                        else:
-                            await send_html_messages(
-                                message,
-                                response_text,
-                                sources_html=sources_html,
-                                reply_markup=reply_markup,
-                            )
-                        ctx.response_sent = True
-                    except Exception:
-                        logger.warning(
-                            "Draft finalize via bot.send_message failed, "
-                            "falling back to send_html_messages"
-                        )
-                        try:
-                            await send_html_messages(
-                                message,
-                                response_text,
-                                sources_html=sources_html,
-                                reply_markup=reply_markup,
-                            )
-                            ctx.response_sent = True
-                        except Exception:
-                            logger.exception("Failed to send text response")
-                            if response_text:
-                                await message.answer(response_text)
-                            ctx.response_sent = True
-                else:
-                    await send_html_messages(
-                        message,
-                        response_text,
-                        sources_html=sources_html,
-                        reply_markup=reply_markup,
-                    )
-                    if html_messages:
-                        ctx.response_sent = True
 
             # Store final agent response in semantic cache for cacheable query types.
             # Use cache_key_embedding (original query embedding) so that future
@@ -2752,59 +2836,15 @@ class PropertyBot:
             pre_agent_ms = float(rag_result_store.get("pre_agent_ms", 0.0) or 0.0)
 
             # Write Langfuse trace metadata
-            lf = get_client()
-            lf.update_current_span(
-                input={"query": message.text},
-                metadata={
-                    "pipeline_mode": "sdk_agent",
-                    "query_type": rag_result_store.get("query_type", ""),
-                    "topic_hint": rag_result_store.get("topic_hint", ""),
-                    "grounding_mode": rag_result_store.get("grounding_mode", ""),
-                    "filter_signature": filter_signature or "",
-                    "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
-                    "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-                    "grounded": bool(rag_result_store.get("grounded", True)),
-                    "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
-                    "semantic_cache_safe_reuse": bool(
-                        rag_result_store.get("semantic_cache_safe_reuse", True)
-                    ),
-                    "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
-                    "pipeline_wall_ms": wall_ms,
-                    "pre_agent_ms": pre_agent_ms,
-                    "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-                    "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
-                    "e2e_latency_ms": wall_ms,
-                },
+            self._write_final_pipeline_trace(
+                user_text=user_text,
+                wall_ms=wall_ms,
+                pre_agent_ms=pre_agent_ms,
+                filter_signature=filter_signature,
+                rag_result_store=rag_result_store,
+                root_trace_metadata=root_trace_metadata,
             )
-            if root_trace_metadata is not None:
-                root_trace_metadata.update(
-                    {
-                        "pipeline_mode": "sdk_agent",
-                        "query_type": rag_result_store.get("query_type", ""),
-                        "topic_hint": rag_result_store.get("topic_hint", ""),
-                        "grounding_mode": rag_result_store.get("grounding_mode", ""),
-                        "filter_signature": filter_signature or "",
-                        "grade_confidence": float(
-                            rag_result_store.get("grade_confidence", 0.0) or 0.0
-                        ),
-                        "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-                        "grounded": bool(rag_result_store.get("grounded", True)),
-                        "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
-                        "semantic_cache_safe_reuse": bool(
-                            rag_result_store.get("semantic_cache_safe_reuse", True)
-                        ),
-                        "safe_fallback_used": bool(
-                            rag_result_store.get("safe_fallback_used", False)
-                        ),
-                        "pipeline_wall_ms": wall_ms,
-                        "pre_agent_ms": pre_agent_ms,
-                        "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-                        "pre_agent_cache_check_ms": rag_result_store.get(
-                            "pre_agent_cache_check_ms"
-                        ),
-                        "e2e_latency_ms": wall_ms,
-                    }
-                )
+            lf = get_client()
             tid = lf.get_current_trace_id() or ""
             if tid:
                 lf.create_score(
