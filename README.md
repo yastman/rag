@@ -83,7 +83,7 @@ Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, user-base,
 
 A simple chatbot receives a message and calls an LLM. This repository treats the assistant as an operating system for business workflows:
 
-- The graph can decide whether to answer, retrieve, rewrite, rerank, call tools, ask for approval, or hand off.
+- The pipeline can decide whether to answer, retrieve, rewrite, rerank, call tools, ask for approval, or hand off.
 - Retrieval is not a single vector query; it includes dense/sparse search, optional reranking, cache policy, grading, and fallbacks.
 - Domain behavior lives behind tools and prompts, so catalog/search/CRM logic can be replaced without rewriting the runtime.
 - Runtime behavior is observable through traces, logs, health checks, validation commands, and documented runbooks.
