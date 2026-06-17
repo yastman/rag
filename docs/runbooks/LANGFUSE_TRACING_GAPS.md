@@ -106,12 +106,10 @@ curl -s ${LANGFUSE_HOST}/api/public/health | jq
 ```
 
 If `LANGFUSE_HOST` points to local Langfuse (for example `http://localhost:3001`) and health check fails, either:
-- start the local ML/Langfuse stack (`make docker-ml-up`), or
+- **Langfuse ML stack is archived (ARCH-08)**; disable tracing locally with:
 - disable Langfuse tracing for native local run (`unset LANGFUSE_HOST` or `LANGFUSE_TRACING_ENABLED=false`).
 
-Langfuse is part of the `ml` profile with ClickHouse, MinIO, and
-`redis-langfuse`. The `obs` profile (loki/promtail/alertmanager) has been
-archived (#2599); it did not start Langfuse.
+Langfuse and the `ml` profile (ClickHouse, MinIO, redis-langfuse) are archived (ARCH-08). For local tracing, see `archive/ml/`.
 
 ### 2. Verify Environment Variables (Presence Only)
 

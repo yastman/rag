@@ -14,6 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+
+pytest.importorskip("asyncpg", reason="telegram extra required")
+
 from telegram_bot.preflight import _build_dependency_report, _check_single_dep
 
 

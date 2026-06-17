@@ -89,10 +89,10 @@ make test-api-adapter
 make test-providers-extra
 make test-legacy-graph-extra
 make test-ingest-extra
-make test-voice-extra
-make test-eval-extra
-make test-observability-extra
-make test-optional-surfaces
+# archived: make test-voice-extra
+# archived: make test-eval-extra
+# archived: make test-observability-extra
+# archived: make test-optional-surfaces
 ```
 
 Broad-unit exclusions are not silent coverage drops:
@@ -157,8 +157,8 @@ of `make test`, `make test-core`, or the required static gates, and they should
 only be run when the optional observability stack is available.
 
 ```bash
-make baseline-smoke          # optional smoke with Langfuse tracing
-make baseline-compare        # optional compare against a baseline tag
+# archived: make baseline-smoke          # optional smoke with Langfuse tracing
+# archived: make baseline-compare        # optional compare against a baseline tag
 ```
 
 ### Compose validation (for runtime-impacting changes)

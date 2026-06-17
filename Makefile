@@ -1,6 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra test-optional-surfaces \
+	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra \
 	smoke-fast smoke-zoo \
 	ingest-dir ingest-status ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
@@ -14,8 +14,8 @@
 	release-polling-lock \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
-	remote-active-up remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
-	remote-full-up remote-bot-up remote-bot-restart remote-bot-logs \
+	remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
+	remote-bot-up remote-bot-restart remote-bot-logs \
 	remote-local-up remote-local-down remote-local-logs remote-service-health
 
 # Configurable container names & thresholds
@@ -24,8 +24,6 @@ POLLING_LOCK_KEY ?= telegram-bot:polling
 RELEASE_POLLING_LOCK_FORCE ?= 0
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
-K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
-K3S_IMAGE_TAG ?= v$(PROJECT_VERSION)
 LINT_PATHS := src/ telegram_bot/ services/ scripts/
 
 # Default target
@@ -52,7 +50,7 @@ PYTHON_VERSION ?= 3.12
 UV_RUN_NO_SYNC ?= uv run --no-sync
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_ARGS ?= -n 2 --dist=worksteal
-PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
+PYTEST_FULL_PARALLEL_DIRS ?= tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 CORE_LIVE_TEST_PATH := tests/e2e/test_core_live_ingest_answer.py
 CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH) -v --tb=short -m "e2e and requires_services"
@@ -298,27 +296,6 @@ test-ingest-extra: ## Run optional ingestion-extra tests explicitly
 	uv sync --extra ingest --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
 	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
-
-test-voice-extra: ## Run optional voice-extra tests explicitly
-	@echo "$(BLUE)Running voice-extra tests...$(NC)"
-	uv sync --extra voice --all-groups
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/voice/ -q --timeout=30
-	@echo "$(GREEN)✓ Voice-extra tests complete$(NC)"
-
-test-eval-extra: ## Run optional evaluation-extra tests explicitly (evaluation archived under archive/)
-	@echo "$(BLUE)Running evaluation-extra tests...$(NC)"
-	uv sync --all-groups
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/evaluation/ -q --timeout=30
-	@echo "$(GREEN)✓ Evaluation-extra tests complete$(NC)"
-
-test-observability-extra: ## Run optional observability-extra tests explicitly
-	@echo "$(BLUE)Running observability-extra tests...$(NC)"
-	uv sync --extra observability --all-groups
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/observability/ -q --timeout=30
-	@echo "$(GREEN)✓ Observability-extra tests complete$(NC)"
-
-test-optional-surfaces: test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra ## Run optional surface lanes explicitly
-	@echo "$(GREEN)✓ Optional surface lanes complete$(NC)"
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
@@ -601,8 +578,7 @@ REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
-REMOTE_ACTIVE_SERVICES := bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse bot
-REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 bot
+REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base bot
 
 remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
 	@echo "$(BLUE)Remote Docker status ($(REMOTE_DOCKER_HOST))...$(NC)"
@@ -649,11 +625,6 @@ remote-env-check: ## Verify remote .env exists and report missing required varia
 			echo 'Required variables present'; \
 		fi"
 
-remote-active-up: ## Start active remote stack (bot + ml profiles)
-	@echo "$(BLUE)Starting active remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot --profile ml up -d $(REMOTE_ACTIVE_SERVICES)"
-	@echo "$(GREEN)✓ Active remote stack started$(NC)"
-
 remote-core-up: ## Start minimal RAG bot core on remote MacBook Docker
 	@echo "$(BLUE)Starting minimal RAG bot core on $(REMOTE_DOCKER_HOST)...$(NC)"
 	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d $(REMOTE_CORE_SERVICES)"
@@ -666,11 +637,6 @@ remote-core-ps: ## Show remote core container status
 remote-core-logs: ## Show recent remote core logs
 	@echo "$(BLUE)Remote core logs ($(REMOTE_DOCKER_HOST))...$(NC)"
 	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 $(REMOTE_CORE_SERVICES)"
-
-remote-full-up: ## Start full remote stack (all profiles)
-	@echo "$(BLUE)Starting full remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full up -d"
-	@echo "$(GREEN)✓ Full remote stack started$(NC)"
 
 remote-bot-up: ## Start remote bot container
 	@echo "$(BLUE)Starting remote bot on $(REMOTE_DOCKER_HOST)...$(NC)"
@@ -753,12 +719,7 @@ docker-bot-up: preflight-bot ## Start core + bot services (bot)
 	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
 
-docker-ml-up: ## Start core + ML platform (langfuse, clickhouse, minio)
-	@echo "$(BLUE)Starting ML platform services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) --profile ml up -d
-	@echo "$(GREEN)✓ ML platform started$(NC)"
-
-docker-ai-up: ## Start core + heavy AI services (bge-m3)
+docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base)
 	@echo "$(BLUE)Starting AI services...$(NC)"
 	$(LOCAL_COMPOSE_CMD) up -d bge-m3
 	@echo "$(GREEN)✓ AI services started$(NC)"
@@ -1066,84 +1027,6 @@ e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
 
 # =============================================================================
-# BASELINE & OBSERVABILITY
-# =============================================================================
-
-.PHONY: baseline-smoke baseline-load baseline-compile baseline-compare baseline-set baseline-report baseline-check
-
-# Generate unique session ID from git commit
-BASELINE_SESSION := smoke-$(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d%H%M%S)
-LOAD_SESSION := load-$(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d%H%M%S)
-
-baseline-smoke: ## Run smoke tests with Langfuse tracing
-	@echo "$(BLUE)Running smoke tests with Langfuse tracing...$(NC)"
-	@echo "$(YELLOW)Session: $(BASELINE_SESSION)$(NC)"
-	LANGFUSE_SESSION_ID="$(BASELINE_SESSION)" \
-	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
-	LANGFUSE_TRACING_ENABLED=true \
-	uv run pytest tests/smoke/ -v --tb=short -x
-	@echo ""
-	@echo "$(GREEN)Results tagged as: $(BASELINE_SESSION)$(NC)"
-	@echo "$(YELLOW)View in Langfuse: http://localhost:3001$(NC)"
-
-baseline-load: ## Run load tests with Langfuse tracing
-	@echo "$(BLUE)Running load tests with Langfuse tracing...$(NC)"
-	@echo "$(YELLOW)Session: $(LOAD_SESSION)$(NC)"
-	LANGFUSE_SESSION_ID="$(LOAD_SESSION)" \
-	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
-	LANGFUSE_TRACING_ENABLED=true \
-	uv run pytest tests/load/ -v --tb=short
-	@echo ""
-	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
-
-baseline-compile: compile-python ## Backward-compatible baseline syntax gate (#2320)
-
-baseline-compare: ## Compare current run against baseline (usage: make baseline-compare BASELINE_TAG=... CURRENT_SESSION=...)
-ifndef BASELINE_TAG
-	$(error BASELINE_TAG is required. Usage: make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=ci-abc-job-1)
-endif
-ifndef CURRENT_SESSION
-	$(error CURRENT_SESSION is required.)
-endif
-	@echo "$(BLUE)Comparing baseline...$(NC)"
-	uv run python -m tests.baseline.cli compare \
-		--baseline-tag="$(BASELINE_TAG)" \
-		--current-session="$(CURRENT_SESSION)" \
-		--thresholds=tests/baseline/thresholds.yaml \
-		--output="reports/baseline-$(CURRENT_SESSION).json"
-
-baseline-set: ## Tag traces as baseline (usage: make baseline-set TAG=... SESSION_ID=...)
-ifndef TAG
-	$(error TAG is required. Usage: make baseline-set TAG=main-latest SESSION_ID=smoke-abc-20260128)
-endif
-ifndef SESSION_ID
-	$(error SESSION_ID is required.)
-endif
-	@echo "$(BLUE)Setting $(TAG) as baseline...$(NC)"
-	uv run python -m tests.baseline.cli set-baseline --tag="$(TAG)" --session-id="$(SESSION_ID)"
-
-baseline-report: ## Generate HTML baseline report
-ifndef BASELINE_TAG
-	$(error BASELINE_TAG is required. Usage: make baseline-report BASELINE_TAG=... CURRENT_TAG=...)
-endif
-ifndef CURRENT_TAG
-	$(error CURRENT_TAG is required. Usage: make baseline-report BASELINE_TAG=... CURRENT_TAG=...)
-endif
-	@echo "$(BLUE)Generating baseline report...$(NC)"
-	uv run python -m tests.baseline.cli report \
-		--baseline="$(BASELINE_TAG)" \
-		--current="$(CURRENT_TAG)" \
-		--thresholds=tests/baseline/thresholds.yaml \
-		--output=reports/baseline-$(shell date +%Y%m%d-%H%M%S).html
-	@echo "$(GREEN)Report saved to reports/$(NC)"
-
-baseline-check: baseline-compile baseline-smoke ## Optional Langfuse baseline check (smoke + compare with main)
-	@echo "$(BLUE)Comparing with main baseline...$(NC)"
-	make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=$(BASELINE_SESSION)
-
-# =============================================================================
-
-# =============================================================================
 # GOOGLE DRIVE SYNC (rclone)
 # =============================================================================
 # rclone sync scripts were removed from public repo.
@@ -1265,69 +1148,6 @@ qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
 	@echo "           -d '{\"on_disk_payload\": true}'"
 	@echo "  • Monitor volume size: docker system df -v | grep qdrant"
 	@echo "$(GREEN)✓ Qdrant cleanup complete$(NC)"
-
-# K3S DEPLOYMENT
-# =============================================================================
-
-.PHONY: k3s-core k3s-bot k3s-ingest k3s-full k3s-status k3s-logs k3s-down k3s-secrets k3s-ingest-start k3s-ingest-stop \
-	k3s-build k3s-build-bot k3s-build-ingest k3s-push-all k3s-prepull
-
-k3s-core: ## Deploy core services (postgres, redis, qdrant) to k3s
-	kubectl apply -k archive/k8s/overlays/core/ --load-restrictor=LoadRestrictionsNone
-
-k3s-bot: ## Deploy bot stack to k3s (core + ML + bot)
-	kubectl apply -k archive/k8s/overlays/bot/ --load-restrictor=LoadRestrictionsNone
-
-k3s-ingest: ## Deploy ingestion stack to k3s (core + docling + bge-m3 + ingestion)
-	kubectl apply -k archive/k8s/overlays/ingest/ --load-restrictor=LoadRestrictionsNone
-
-k3s-full: ## Deploy all services to k3s
-	kubectl apply -k archive/k8s/overlays/full/
-
-k3s-status: ## Show k3s pod status
-	kubectl get pods -n rag -o wide
-
-k3s-logs: ## Show logs for a service: make k3s-logs SVC=bot
-	kubectl logs -n rag deployment/$(SVC) -f --tail=50
-
-k3s-down: ## Delete all k3s resources
-	kubectl delete -k archive/k8s/overlays/full/ --ignore-not-found
-
-k3s-secrets: ## Create k8s secrets from archive/k8s/secrets/.env
-	@tmp_api_keys=$$(mktemp); \
-		tmp_db_credentials=$$(mktemp); \
-		trap 'rm -f "$$tmp_api_keys" "$$tmp_db_credentials"' EXIT; \
-		grep -v '^POSTGRES_PASSWORD=' archive/k8s/secrets/.env > "$$tmp_api_keys"; \
-		POSTGRES_PASSWORD=$$(awk -F= '/^POSTGRES_PASSWORD=/{sub(/^[^=]*=/,""); print; found=1; exit} END{if(!found) exit 1}' archive/k8s/secrets/.env) || { \
-			echo "POSTGRES_PASSWORD is required in archive/k8s/secrets/.env" >&2; \
-			exit 1; \
-		}; \
-		[ -n "$$POSTGRES_PASSWORD" ] || { \
-			echo "POSTGRES_PASSWORD is required in archive/k8s/secrets/.env" >&2; \
-			exit 1; \
-		}; \
-		printf 'POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=postgres\n' "$$POSTGRES_PASSWORD" > "$$tmp_db_credentials"; \
-		kubectl create secret generic api-keys --from-env-file="$$tmp_api_keys" -n rag --dry-run=client -o yaml | kubectl apply -f -; \
-		kubectl create secret generic db-credentials --from-env-file="$$tmp_db_credentials" -n rag --dry-run=client -o yaml | kubectl apply -f -
-
-k3s-ingest-start: ## Scale ingestion to 1 replica
-	kubectl scale deployment ingestion -n rag --replicas=1
-
-k3s-ingest-stop: ## Scale ingestion to 0 replicas
-	kubectl scale deployment ingestion -n rag --replicas=0
-
-k3s-push-%: ## Build and push a versioned GHCR image: make k3s-push-bot K3S_IMAGE_TAG=v2.14.0
-	@case "$*" in \
-		bot) dockerfile="telegram_bot/Dockerfile"; build_context="."; image_name="rag-bot" ;; \
-		ingestion) dockerfile="Dockerfile.ingestion"; build_context="."; image_name="rag-ingestion" ;; \
-		docling) dockerfile="services/docling/Dockerfile"; build_context="./services/docling"; image_name="rag-docling" ;; \
-		bge-m3) dockerfile="services/bge-m3-api/Dockerfile"; build_context="./services/bge-m3-api"; image_name="rag-bge-m3" ;; \
-		*) echo "Unsupported k3s image target: $*"; exit 1 ;; \
-	esac; \
-	image_ref="$(K3S_IMAGE_REGISTRY)/$$image_name:$(K3S_IMAGE_TAG)"; \
-	echo "Building $$image_ref from $$dockerfile (context $$build_context)"; \
-	docker build -f "$$dockerfile" -t "$$image_ref" "$$build_context"; \
-	docker push "$$image_ref"
 
 # =============================================================================
 # DOCKER IMAGE DRIFT (#322)

@@ -65,9 +65,9 @@ COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --profile vps-noncore up
 make docker-up
 
 # Profile stacks
-make docker-bot-up
+# make docker-ml-up  # archived (ARCH-08)
 make docker-ingest-up
-make docker-ml-up
+make docker-bot-up
 make docker-full-up
 
 # Lifecycle
@@ -135,7 +135,7 @@ still need to be throwaway/dev-only:
 `telegram_bot/pyproject.toml` and `telegram_bot/uv.lock`. The root `uv.lock`
 does not define the bot image dependency set.
 
-### ML profile (`make docker-ml-up`)
+### ML profile (archived — see `archive/obs/` and `archive/api/`)
 
 - `NEXTAUTH_SECRET`
 - `SALT`

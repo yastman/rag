@@ -26,6 +26,9 @@ from pathlib import Path
 
 import pytest
 
+
+asyncpg = pytest.importorskip("asyncpg", reason="ingest extra required")
+
 from src.ingestion.unified.state_manager import (
     FileState,
     UnifiedStateManager,

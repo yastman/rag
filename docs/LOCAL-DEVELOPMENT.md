@@ -69,7 +69,7 @@ make docker-up
 make docker-bot-up
 
 # Optional profiles
-make docker-ml-up
+make docker-core-up
 make docker-ingest-up
 # obs (loki/promtail/alertmanager) archived — see archive/obs/
 
@@ -426,7 +426,7 @@ Optional Telethon trace scenarios with Langfuse validation:
 
 ```bash
 make local-up
-make docker-ml-up
+make docker-core-up
 make bot
 ```
 
