@@ -3,10 +3,6 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_all_pass": [
-    "tests/unit/test_agent_routing_eval.py",
-    "tests/unit/test_preflight.py"
-  ],
   "test_answer_defaults_to_empty_string": [
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
@@ -14,10 +10,6 @@
   "test_backfill_enables_server_side_colbert_search": [
     "tests/integration/test_colbert_backfill.py",
     "tests/unit/test_colbert_backfill.py"
-  ],
-  "test_baseline_search_returns_results": [
-    "tests/unit/evaluation/test_search_engines_eval.py",
-    "tests/unit/test_search_engines.py"
   ],
   "test_cache_check_computes_colbert_when_embedding_cached": [
     "tests/unit/agents/test_rag_pipeline.py",
@@ -84,27 +76,6 @@
     "tests/unit/contextualization/test_claude.py",
     "tests/unit/contextualization/test_openai.py"
   ],
-  "test_convert_nested_dict": [
-    "tests/unit/evaluation/test_search_engines_eval.py",
-    "tests/unit/test_search_engines.py"
-  ],
-  "test_convert_nested_list": [
-    "tests/unit/evaluation/test_search_engines_eval.py",
-    "tests/unit/test_search_engines.py"
-  ],
-  "test_convert_python_types_unchanged": [
-    "tests/unit/evaluation/test_run_ab_test.py",
-    "tests/unit/evaluation/test_search_engines_eval.py",
-    "tests/unit/test_search_engines.py"
-  ],
-  "test_create_baseline_engine": [
-    "tests/unit/evaluation/test_search_engines_eval.py",
-    "tests/unit/test_search_engines.py"
-  ],
-  "test_create_dbsf_colbert_engine": [
-    "tests/unit/evaluation/test_search_engines_eval.py",
-    "tests/unit/test_search_engines.py"
-  ],
   "test_create_llm_auto_trace_false_uses_plain_openai": [
     "tests/unit/graph/test_config.py",
     "tests/unit/test_langfuse_openai_trace_context.py"
@@ -146,14 +117,6 @@
     "tests/integration/test_docker_services.py",
     "tests/smoke/test_smoke_services.py"
   ],
-  "test_embed_documents_sync": [
-    "tests/unit/models/test_contextualized_pipeline.py",
-    "tests/unit/test_contextualized_embeddings.py"
-  ],
-  "test_embed_query_sync": [
-    "tests/unit/models/test_contextualized_pipeline.py",
-    "tests/unit/test_contextualized_embeddings.py"
-  ],
   "test_empty_query": [
     "tests/unit/services/test_filter_extractor.py",
     "tests/unit/services/test_voyage_integration.py"
@@ -161,9 +124,7 @@
   "test_empty_results": [
     "tests/unit/dialogs/test_funnel.py",
     "tests/unit/retrieval/test_search_engines.py",
-    "tests/unit/test_agent_routing_eval.py",
-    "tests/unit/test_run_experiment.py",
-    "tests/unit/test_validate_aggregates.py"
+    "tests/unit/test_run_experiment.py"
   ],
   "test_empty_string": [
     "tests/unit/graph/test_guard_node.py",
@@ -173,14 +134,6 @@
   "test_empty_trace_id_writes_nothing": [
     "tests/unit/observability/test_trace_contracts.py",
     "tests/unit/observability/test_trace_resilience.py"
-  ],
-  "test_exact_match": [
-    "tests/unit/services/test_apartments_service.py",
-    "tests/unit/test_agent_routing_eval.py"
-  ],
-  "test_extract_article_number": [
-    "tests/unit/evaluation/test_search_engines_eval.py",
-    "tests/unit/test_chunker.py"
   ],
   "test_extract_is_observed": [
     "tests/unit/services/test_apartment_extraction_pipeline.py",
@@ -220,20 +173,6 @@
     "tests/unit/contextualization/test_claude.py",
     "tests/unit/contextualization/test_groq.py"
   ],
-  "test_get_valid_token_from_cache": [
-    "tests/unit/services/test_kommo_token_store.py",
-    "tests/unit/services/test_kommo_tokens.py"
-  ],
-  "test_health_endpoint": [
-  ],
-  "test_hybrid_search_returns_results": [
-    "tests/smoke/test_ingestion_health.py",
-    "tests/unit/evaluation/test_search_engines_eval.py"
-  ],
-  "test_hybrid_search_uses_query_points": [
-    "tests/unit/evaluation/test_search_engines_eval.py",
-    "tests/unit/test_search_engines.py"
-  ],
   "test_init_creates_async_client": [
     "tests/integration/test_qdrant_service.py",
     "tests/unit/contextualization/test_claude.py",
@@ -263,10 +202,6 @@
     "tests/unit/test_cocoindex_flow.py",
     "tests/unit/test_hyde.py",
     "tests/unit/test_ingestion_service.py"
-  ],
-  "test_init_with_default_settings": [
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/test_contextualized_embeddings.py"
   ],
   "test_init_with_settings": [
     "tests/unit/contextualization/test_claude.py",
@@ -392,7 +327,6 @@
     "tests/unit/services/test_types.py"
   ],
   "test_settings_defaults": [
-    "tests/unit/models/test_contextualized_pipeline.py",
     "tests/unit/test_bge_m3_endpoints.py",
     "tests/unit/test_small_to_big.py"
   ],
@@ -415,9 +349,5 @@
   "test_streaming_uses_send_message_draft": [
     "tests/unit/graph/nodes/test_generate.py",
     "tests/unit/services/test_generate_response.py"
-  ],
-  "test_supported_dimensions": [
-    "tests/unit/models/test_contextualized_pipeline.py",
-    "tests/unit/test_contextualized_embeddings.py"
   ]
 }
