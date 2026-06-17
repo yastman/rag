@@ -26,7 +26,7 @@ ROOT = Path(__file__).parents[2]
 
 
 def _load_env_example_keys() -> set[str]:
-    path = Path("k8s/secrets/.env.example")
+    path = Path("archive/k8s/secrets/.env.example")
     keys: set[str] = set()
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -46,7 +46,7 @@ def _load_container_env(path: Path, container_name: str) -> dict[str, dict[str, 
 def _run_make_k3s_secrets(env_text: str) -> tuple[subprocess.CompletedProcess[str], str, str]:
     with TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
-        env_path = root / "k8s" / "secrets" / ".env"
+        env_path = root / "archive" / "k8s" / "secrets" / ".env"
         env_path.parent.mkdir(parents=True)
         env_path.write_text(env_text)
         makefile_path = root / "Makefile"
@@ -144,7 +144,7 @@ def test_make_k3s_secrets_requires_postgres_password() -> None:
 
 
 def test_bot_deployment_uses_db_secret_password_in_database_url() -> None:
-    env = _load_container_env(ROOT / "k8s" / "base" / "bot" / "deployment.yaml", "bot")
+    env = _load_container_env(ROOT / "archive" / "k8s" / "base" / "bot" / "deployment.yaml", "bot")
 
     assert env["POSTGRES_PASSWORD"]["valueFrom"]["secretKeyRef"] == {
         "name": "db-credentials",
@@ -156,7 +156,9 @@ def test_bot_deployment_uses_db_secret_password_in_database_url() -> None:
 
 
 def test_ingestion_deployment_uses_db_secret_password_in_database_url() -> None:
-    env = _load_container_env(ROOT / "k8s" / "base" / "ingestion" / "deployment.yaml", "ingestion")
+    env = _load_container_env(
+        ROOT / "archive" / "k8s" / "base" / "ingestion" / "deployment.yaml", "ingestion"
+    )
 
     assert env["POSTGRES_PASSWORD"]["valueFrom"]["secretKeyRef"] == {
         "name": "db-credentials",

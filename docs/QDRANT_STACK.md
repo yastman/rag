@@ -171,7 +171,7 @@ Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collect
 
 ## SQL Index Navigation (Postgres Init Drift)
 
-`k8s/base/configmaps/postgres-init.yaml` only embeds `00-init-databases.sql`, `02-cocoindex.sql`, and `03-unified-ingestion-alter.sql`. `docker/postgres/init/` additionally contains `04-voice-schema.sql`, `05-realestate-schema.sql`, `06-lead-scoring-sync.sql`, `07-nurturing-funnel-analytics.sql`, and `08-user-favorites.sql`. The K8s init ConfigMap is missing scripts 04–08, which means voice transcripts, real-estate users/leads, lead scoring, nurturing analytics, and user favorites tables will not be created in K8s-deployed Postgres unless they are provisioned separately.
+`archive/k8s/base/configmaps/postgres-init.yaml` only embeds `00-init-databases.sql`, `02-cocoindex.sql`, and `03-unified-ingestion-alter.sql`. `docker/postgres/init/` additionally contains `04-voice-schema.sql`, `05-realestate-schema.sql`, `06-lead-scoring-sync.sql`, `07-nurturing-funnel-analytics.sql`, and `08-user-favorites.sql`. The K8s init ConfigMap is missing scripts 04–08, which means voice transcripts, real-estate users/leads, lead scoring, nurturing analytics, and user favorites tables will not be created in K8s-deployed Postgres unless they are provisioned separately.
 
 ## Runtime-Required vs Legacy-Only Fields
 

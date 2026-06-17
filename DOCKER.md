@@ -170,7 +170,7 @@ Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in 
 | `rag-api` | `rag-api` |
 | `voice-agent` | `voice-agent` |
 
-The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution. Kubernetes manifests under `k8s/` additionally hard-code the `telegram-bot` identity.
+The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution. Kubernetes manifests under `archive/k8s/` additionally hard-code the `telegram-bot` identity.
 
 To override, export `OTEL_SERVICE_NAME` in the shell or set it in `.env` before starting services:
 
@@ -337,7 +337,7 @@ Never remove `vps_qdrant_data`, `vps_postgres_data`, `vps_redis_data`, or
 
 ## Internal K3s Images
 
-- Kubernetes manifests under `k8s/` use versioned GitHub Container Registry images instead of local `rag/*:latest` tags.
+- Kubernetes manifests under `archive/k8s/` use versioned GitHub Container Registry images instead of local `rag/*:latest` tags.
 - Canonical image names:
   - `ghcr.io/yastman/rag-bot`
   - `ghcr.io/yastman/rag-ingestion`

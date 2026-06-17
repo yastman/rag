@@ -72,7 +72,7 @@ simplification.
 ## Local Overrides
 
 - [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
-- [`k8s/AGENTS.override.md`](k8s/AGENTS.override.md)
+- [`archive/k8s/AGENTS.override.md`](archive/k8s/AGENTS.override.md)
 - [`src/ingestion/unified/AGENTS.override.md`](src/ingestion/unified/AGENTS.override.md)
 - [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)
 - [`services/AGENTS.override.md`](services/AGENTS.override.md)
