@@ -39,9 +39,8 @@ PHASE1_MODULES: tuple[tuple[str, str, int], ...] = (
     ("telegram_bot/scoring.py", "src/scoring.py", 50),
     ("telegram_bot/phone_utils.py", "src/phone_utils.py", 30),
     ("telegram_bot/services/content_loader.py", "src/services/content_loader.py", 50),
-    # observability.py keeps a bot-specific create_callback_handler local
-    # alongside the re-exports, so the ceiling is higher.
-    ("telegram_bot/observability.py", "src/observability.py", 100),
+    # observability was converted to a package in ARCH-13; pin the __init__.py
+    ("telegram_bot/observability.py", "src/observability/__init__.py", 100),
 )
 
 
@@ -124,10 +123,11 @@ def test_phase1_shims_re_export_from_canonical_src() -> None:
         # Derive the expected ``from src.<module>`` prefix from the src path.
         # e.g. src/scoring.py -> src.scoring; src/runtime/graph/state.py
         # -> src.runtime.graph.state; src/services/content_loader.py
-        # -> src.services.content_loader
+        # -> src.services.content_loader; src/observability/__init__.py
+        # -> src.observability (strip trailing .__init__ for packages)
         rel = src_path[len("src/") :]
         rel = rel.removesuffix(".py")
-        expected_module = "src." + rel.replace("/", ".")
+        expected_module = ("src." + rel.replace("/", ".")).removesuffix(".__init__")
         text = legacy_full.read_text(encoding="utf-8")
 
         if f"from {expected_module} import" not in text:

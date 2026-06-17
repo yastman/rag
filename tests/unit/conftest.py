@@ -1,7 +1,6 @@
 """Unit test specific fixtures for isolation."""
 
 import contextlib
-import importlib.util
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -49,28 +48,148 @@ def pytest_configure(config):
         _mocked_module_names.append("FlagEmbedding")
 
     # -- aiogram (optional Telegram runtime dep) -----------------------------
-    try:
-        if importlib.util.find_spec("aiogram") is None:
-            raise ModuleNotFoundError("aiogram not installed")
-    except ModuleNotFoundError:
-        for mod_name in ("aiogram", "aiogram.filters", "aiogram.types"):
+    _aiogram_real = "aiogram" in sys.modules and not isinstance(sys.modules["aiogram"], MagicMock)
+    if not _aiogram_real:
+        # Build proper State/StatesGroup stubs that support class-level State attrs.
+        class _State:
+            """Minimal aiogram.fsm.state.State stub."""
+
+            def __init__(self) -> None:
+                self._state: str = ""
+
+            def __set_name__(self, owner: type, name: str) -> None:
+                self._state = f"{owner.__name__}:{name}"
+
+            def __repr__(self) -> str:
+                return f"<State {self._state!r}>"
+
+        class _StatesGroupMeta(type):
+            """Metaclass that resolves State descriptors at class creation time."""
+
+            def __new__(mcs, name: str, bases: tuple, namespace: dict) -> type:
+                return super().__new__(mcs, name, bases, namespace)
+
+        class _StatesGroup(metaclass=_StatesGroupMeta):
+            """Minimal aiogram.fsm.state.StatesGroup stub."""
+
+        _fsm_state_mod = MagicMock()
+        _fsm_state_mod.State = _State
+        _fsm_state_mod.StatesGroup = _StatesGroup
+
+        _fsm_context_mod = MagicMock()
+        _fsm_mod = MagicMock()
+        _fsm_mod.state = _fsm_state_mod
+        _fsm_mod.context = _fsm_context_mod
+
+        _aiogram_submodules = [
+            "aiogram",
+            "aiogram.dispatcher",
+            "aiogram.dispatcher.flags",
+            "aiogram.enums",
+            "aiogram.exceptions",
+            "aiogram.filters",
+            "aiogram.filters.callback_data",
+            "aiogram.types",
+            "aiogram.utils",
+            "aiogram.utils.callback_answer",
+            "aiogram.utils.chat_action",
+            "aiogram.utils.keyboard",
+            "aiogram.utils.token",
+        ]
+        for mod_name in _aiogram_submodules:
             _saved_modules[mod_name] = sys.modules.get(mod_name)
+            sys.modules[mod_name] = MagicMock()
+        # Register fsm submodules with proper stubs
+        for mod_name in ("aiogram.fsm", "aiogram.fsm.context", "aiogram.fsm.state"):
+            _saved_modules[mod_name] = sys.modules.get(mod_name)
+        sys.modules["aiogram.fsm"] = _fsm_mod
+        sys.modules["aiogram.fsm.context"] = _fsm_context_mod
+        sys.modules["aiogram.fsm.state"] = _fsm_state_mod
+        _aiogram_submodules.extend(["aiogram.fsm", "aiogram.fsm.context", "aiogram.fsm.state"])
+        _mocked_module_names.extend(_aiogram_submodules)
 
-        mock_aiogram = MagicMock()
-        mock_aiogram.Bot = MagicMock()
-        mock_aiogram.Dispatcher = MagicMock()
-        mock_aiogram.F = MagicMock()
+    # -- aiogram_dialog (optional dialog framework dep) ----------------------
+    _dialog_real = "aiogram_dialog" in sys.modules and not isinstance(
+        sys.modules["aiogram_dialog"], MagicMock
+    )
+    if not _dialog_real:
+        _dialog_submodules = [
+            "aiogram_dialog",
+            "aiogram_dialog.api",
+            "aiogram_dialog.api.entities",
+            "aiogram_dialog.api.entities.events",
+            "aiogram_dialog.api.exceptions",
+            "aiogram_dialog.api.protocols",
+            "aiogram_dialog.widgets",
+            "aiogram_dialog.widgets.kbd",
+            "aiogram_dialog.widgets.text",
+        ]
+        for mod_name in _dialog_submodules:
+            _saved_modules[mod_name] = sys.modules.get(mod_name)
+            sys.modules[mod_name] = MagicMock()
+        _mocked_module_names.extend(_dialog_submodules)
 
-        mock_filters = MagicMock()
-        mock_filters.Command = MagicMock()
+    # -- langgraph (removed dep — tests use Runtime as a context container) --
+    _langgraph_real = "langgraph" in sys.modules and not isinstance(
+        sys.modules["langgraph"], MagicMock
+    )
+    if not _langgraph_real:
+        _langgraph_submodules = [
+            "langgraph",
+            "langgraph.runtime",
+            "langgraph.types",
+            "langgraph.checkpoint",
+            "langgraph.checkpoint.base",
+            "langgraph.checkpoint.memory",
+            "langgraph.checkpoint.redis",
+            "langgraph.checkpoint.redis.aio",
+            "langgraph.checkpoint.serde",
+            "langgraph.checkpoint.serde.jsonplus",
+        ]
+        for mod_name in _langgraph_submodules:
+            _saved_modules[mod_name] = sys.modules.get(mod_name)
+            sys.modules[mod_name] = MagicMock()
+        _mocked_module_names.extend(_langgraph_submodules)
 
-        mock_types = MagicMock()
-        mock_types.Message = MagicMock()
+    # -- asyncpg (optional postgres dep) ------------------------------------
+    _asyncpg_real = "asyncpg" in sys.modules and not isinstance(sys.modules["asyncpg"], MagicMock)
+    if not _asyncpg_real:
+        _saved_modules["asyncpg"] = sys.modules.get("asyncpg")
+        sys.modules["asyncpg"] = MagicMock()
+        _mocked_module_names.append("asyncpg")
 
-        sys.modules["aiogram"] = mock_aiogram
-        sys.modules["aiogram.filters"] = mock_filters
-        sys.modules["aiogram.types"] = mock_types
-        _mocked_module_names.extend(["aiogram", "aiogram.filters", "aiogram.types"])
+    # -- anthropic (optional Claude dep) ------------------------------------
+    _anthropic_real = "anthropic" in sys.modules and not isinstance(
+        sys.modules["anthropic"], MagicMock
+    )
+    if not _anthropic_real:
+        _saved_modules["anthropic"] = sys.modules.get("anthropic")
+        sys.modules["anthropic"] = MagicMock()
+        _mocked_module_names.append("anthropic")
+
+    # -- fluent_compiler / fluentogram (optional i18n dep) ------------------
+    _fluent_real = "fluent_compiler" in sys.modules and not isinstance(
+        sys.modules["fluent_compiler"], MagicMock
+    )
+    if not _fluent_real:
+        _fluent_mods = [
+            "fluent_compiler",
+            "fluent_compiler.bundle",
+            "fluentogram",
+        ]
+        for mod_name in _fluent_mods:
+            _saved_modules[mod_name] = sys.modules.get(mod_name)
+            sys.modules[mod_name] = MagicMock()
+        _mocked_module_names.extend(_fluent_mods)
+
+    # -- cachetools (optional caching dep) ----------------------------------
+    _cachetools_real = "cachetools" in sys.modules and not isinstance(
+        sys.modules["cachetools"], MagicMock
+    )
+    if not _cachetools_real:
+        _saved_modules["cachetools"] = sys.modules.get("cachetools")
+        sys.modules["cachetools"] = MagicMock()
+        _mocked_module_names.append("cachetools")
 
 
 def pytest_unconfigure(config):
