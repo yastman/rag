@@ -25,7 +25,8 @@ Main bot orchestrator. Initializes:
 - All service layers (cache, embeddings, LLM, Qdrant)
 - Voice path via `build_graph()` (StateGraph, optional surface — see `archive/mini_app/` for migration history)
 - Text path via `create_agent` which calls `run_assistant_request()` for core RAG
->>>>>>> 52382d8fb1 (ARCH-10: docs archive + rewrite for the monolith (#2606))
+=======
+>>>>>>> d40541a332 (fix(review): remove committed conflict markers [2667-B1])
 
 Navigation:
 
