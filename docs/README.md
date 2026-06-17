@@ -53,6 +53,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 
 ## Architecture & Design
 
+- [`architecture/STRUCTURE.md`](architecture/STRUCTURE.md) — **Canonical project structure and layering map** (active directories, import rules, archived surfaces).
 - [`designs/README.md`](designs/README.md) — Active product simplification design docs and Stage 0 decisions.
 - [`PROJECT_STACK.md`](PROJECT_STACK.md) — System architecture and subsystem map.
 - [`BOT_ARCHITECTURE.md`](BOT_ARCHITECTURE.md) — Bot layer architecture.
