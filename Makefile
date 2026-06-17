@@ -263,6 +263,7 @@ test-core: ## Run monolith core-required tests only (local/manual)
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest \
 	  tests/unit/core/ \
 	  tests/unit/runtime/ \
+	  tests/regression/ \
 	  tests/contract/test_runtime_no_telegram_bot_coupling_contract.py \
 	  tests/contract/test_layering_no_telegram_bot_imports_contract.py \
 	  tests/contract/test_langfuse_optional_core_contract.py \
