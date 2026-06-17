@@ -22,7 +22,7 @@ def test_remote_core_services_are_minimal() -> None:
 def test_remote_core_up_uses_bot_profile() -> None:
     text = MAKEFILE.read_text()
     assert "remote-core-up:" in text
-    section = text[text.index("remote-core-up:") : text.index("remote-full-up:")]
+    section = text[text.index("remote-core-up:") : text.index("remote-core-ps:")]
     assert "--profile bot" in section
     assert "$(REMOTE_CORE_SERVICES)" in section
 

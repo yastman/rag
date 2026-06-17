@@ -14,7 +14,7 @@
 	release-polling-lock \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
-	remote-active-up remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
+	remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
 	remote-bot-up remote-bot-restart remote-bot-logs \
 	remote-local-up remote-local-down remote-local-logs remote-service-health
 
