@@ -74,6 +74,21 @@ class TestErrorHandlerMiddleware:
 
         assert any("Error in handler" in record.message for record in caplog.records)
 
+    async def test_error_does_not_send_message_for_non_message_event(self):
+        """Test that error does not try to send message for non-Message events."""
+        middleware = ErrorHandlerMiddleware()
+
+        handler = AsyncMock(side_effect=RuntimeError("Internal error"))
+        event = MagicMock(spec=[])  # Not a Message
+        data = {}
+
+        with patch("telegram_bot.middlewares.error_handler.logger"):
+            with pytest.raises(RuntimeError):
+                await middleware(handler, event, data)
+
+        # No answer method should be called
+        assert not hasattr(event, "answer") or not event.answer.called
+
 
 class TestSetupErrorMiddleware:
     """Test setup_error_middleware function."""
@@ -358,6 +373,30 @@ class TestThrottlingMiddleware:
         assert 0.6 in middleware._caches
         assert len(middleware._caches) == 2
 
+    async def test_callback_query_throttle_sends_alert(self):
+        """Test that throttled callback queries show alert."""
+        middleware = ThrottlingMiddleware(default_rate=1.0)
+
+        handler = AsyncMock(return_value="success")
+
+        user = MagicMock(spec=User)
+        user.id = 12345
+
+        event = MagicMock(spec=CallbackQuery)
+        event.answer = AsyncMock()
+        data = {"event_from_user": user}
+
+        # First request
+        await middleware(handler, event, data)
+
+        # Second request - throttled
+        result = await middleware(handler, event, data)
+
+        assert result is None
+        event.answer.assert_called_once()
+        call_kwargs = event.answer.call_args.kwargs
+        assert call_kwargs.get("show_alert") is True
+
 
 class TestSetupThrottlingMiddleware:
     """Test setup_throttling_middleware function."""
@@ -371,6 +410,20 @@ class TestSetupThrottlingMiddleware:
         dp.callback_query.middleware = MagicMock()
 
         setup_throttling_middleware(dp, default_rate=2.0, admin_ids=[123])
+
+        dp.message.middleware.register.assert_called_once()
+        # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
+        assert dp.callback_query.middleware.register.call_count == 2
+
+    def test_setup_uses_defaults(self):
+        """Test that setup works with default parameters."""
+        dp = MagicMock(spec=Dispatcher)
+        dp.message = MagicMock()
+        dp.message.middleware = MagicMock()
+        dp.callback_query = MagicMock()
+        dp.callback_query.middleware = MagicMock()
+
+        setup_throttling_middleware(dp)
 
         dp.message.middleware.register.assert_called_once()
         # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
