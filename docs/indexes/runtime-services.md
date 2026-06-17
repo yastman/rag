@@ -114,5 +114,5 @@ python -m telegram_bot.preflight   # startup health check
 The voice path (LiveKit + SIP + voice agent) is an optional surface. It is not part of the core product path and is off by default.
 
 - **Compose profile**: `voice` (intentionally off by default)
-- **Implementation**: `src/voice/agent.py`, `src/api/main:app`
+- **Implementation**: `archive/voice/agent.py`, `archive/api/main:app` (archived)
 - **Archived docs**: [`../archive/observability/VOICE_TRACING_BASELINE.md`](../archive/observability/VOICE_TRACING_BASELINE.md)

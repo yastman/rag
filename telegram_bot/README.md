@@ -29,7 +29,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 - **Redis** — caching, throttling, user context
 - **BGE-M3** — dense + sparse embeddings (local REST API)
 - **Langfuse** — tracing and observability (optional, graceful degradation)
-- **LiveKit** — voice calls (see `src/voice/`; deferred by default)
+- **LiveKit** — voice calls (archived; see `archive/voice/`)
 
 ## Focused Checks
 

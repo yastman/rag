@@ -17,15 +17,15 @@ The Langfuse tracing gaps runbook has been archived at [`../archive/runbooks/LAN
 | Question | Where to Look |
 |---|---|
 | Are traces being exported? | `telegram_bot/observability.py` (Langfuse client + helpers) and `telegram_bot/middlewares/langfuse_middleware.py` (trace root) |
-| What spans are emitted? | Search for `span=` or `trace=` in `telegram_bot/graph/`, `telegram_bot/services/`, `src/api/` |
-| Is scoring configured? | `src/evaluation/` and `telegram_bot/scoring.py` |
+| What spans are emitted? | Search for `span=` or `trace=` in `telegram_bot/graph/`, `telegram_bot/services/` |
+| Is scoring configured? | `telegram_bot/scoring.py` |
 | Trace validation command | core E2E plus JSON/product-log review (`make e2e-core-live`) |
 
 ### Fast Search
 
 ```bash
-# Langfuse spans and scoring in bot and API
-rg -n "langfuse|trace|span|score|observation" telegram_bot/ src/api/ src/evaluation/
+# Langfuse spans and scoring in bot
+rg -n "langfuse|trace|span|score|observation" telegram_bot/
 
 # Ingestion trace contract
 rg -n "ingestion-cli|ingestion-flow|ingestion-qdrant" src/ingestion/unified/

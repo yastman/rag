@@ -13,7 +13,7 @@ Start with the runbook, then search related code:
 cat docs/archive/runbooks/LANGFUSE_TRACING_GAPS.md
 
 # Trace spans and scoring in source
-rg -n "Langfuse|trace|observation|score" telegram_bot/graph/ telegram_bot/services/ src/api/ src/evaluation/
+rg -n "Langfuse|trace|observation|score" telegram_bot/graph/ telegram_bot/services/
 ```
 
 See also: [`observability-and-storage.md`](observability-and-storage.md#langfuse-traces)

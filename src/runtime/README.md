@@ -1,21 +1,22 @@
 # `src/runtime` — shared runtime kernel scaffold
 
 Migration target for [#1948](https://github.com/yastman/rag/issues/1948)
-("reverse layering: `src/api` and `mini_app` import from `telegram_bot`")
+("reverse layering: `archive/api` and `archive/mini_app` imported from `telegram_bot`")
 and the parallel decomposition slice in
 [#1265](https://github.com/yastman/rag/issues/1265).
 
 ## Why this directory exists
 
-`src/api/main.py` currently imports from `telegram_bot.graph.*`,
+`archive/api/main.py` historically imported from `telegram_bot.graph.*`,
 `telegram_bot.integrations.cache`, `telegram_bot.services.qdrant`, and
-`telegram_bot.scoring`. The current violation list lives in
+`telegram_bot.scoring`. Both `archive/api/` and `archive/mini_app/` are now archived.
+The current violation list lives in
 [`tests/data/known_layering_violations.json`](../../tests/data/known_layering_violations.json)
 and is locked by
 [`tests/contract/test_layering_no_telegram_bot_imports_contract.py`](../../tests/contract/test_layering_no_telegram_bot_imports_contract.py).
 
-The plan in #1948 is to relocate the truly shared kernel modules to
-`src/runtime/` so `src/api`, `mini_app`, and `telegram_bot` all import
+The plan in #1948 was to relocate the truly shared kernel modules to
+`src/runtime/` so adapters and `telegram_bot` all import
 from a single home, and the dependency arrows finally point in the
 direction the README/`pyproject` advertise.
 
@@ -42,7 +43,7 @@ For each module relocated into `src/runtime/`:
    from `src.runtime` (preserves any external dependents while we
    migrate Docker images and k8s manifests). The shim should be
    marked `# Deprecated: re-export shim, drop after #2049.`
-4. Update `src/api/main.py` and any `mini_app/` callers to import
+4. Update any remaining callers to import
    from `src.runtime.<path>`.
 5. Remove the corresponding entry from
    `tests/data/known_layering_violations.json`. The contract test

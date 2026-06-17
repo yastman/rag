@@ -32,7 +32,7 @@ Key capabilities:
 **30 minutes:** add `telegram_bot/graph/`, `telegram_bot/agents/`, and
 `telegram_bot/services/`.
 
-**Deep dive:** add `src/ingestion/unified/`, `src/voice/`, `compose*.yml`,
+**Deep dive:** add `src/ingestion/unified/`, `compose*.yml`,
 `DOCKER.md`, and the test directories.
 
 Ordered list for sequential reading:
@@ -44,8 +44,7 @@ Ordered list for sequential reading:
 5. `telegram_bot/services/` for business logic, cache, Kommo, catalog search,
    lead scoring, and handoff services.
 6. `src/ingestion/unified/` for ingestion determinism, state, DLQ, and Qdrant writes.
-7. `src/voice/` for LiveKit voice agent and shared RAG API integration.
-8. `compose.yml`, `compose.dev.yml`, and `DOCKER.md` for runtime architecture.
+7. `compose.yml`, `compose.dev.yml`, and `DOCKER.md` for runtime architecture.
 
 ## Folder Map
 
@@ -81,20 +80,19 @@ dialogs, phone collection, handoff, and command/message handlers.
 Unified ingestion pipeline: Google Drive/local file identity, Docling parsing,
 chunking, manifest/state handling, Qdrant writes, retries, and DLQ behavior.
 
-### `src/voice/`
+### `archive/voice/` (archived)
 
 LiveKit voice agent path, transcript persistence, RAG API client, SIP setup,
-and voice observability helpers.
+and voice observability helpers. Archived — not part of the active runtime.
 
-### `mini_app/`
+### `mini_app/` (archived)
 
-Telegram Mini App backend and frontend. Treat this as a lightweight entry
-surface, not full parity with the Telegram bot.
+Telegram Mini App backend and frontend. Archived under `archive/mini_app/` — not part of the required runtime.
 
 ### `services/`
 
-Local service containers and helper APIs, including BGE-M3 and USER2-base
-embedding services.
+Local service containers and helper APIs, including BGE-M3 and Docling
+embedding/parsing services.
 
 ### `compose*.yml`, `docker/`, `DOCKER.md`
 
@@ -129,7 +127,6 @@ registry, and portfolio material.
 - `src/runtime/integrations/prompt_manager.py`
 - `src/ingestion/unified/cli.py`
 - `src/ingestion/unified/state_manager.py`
-- `src/voice/agent.py`
 - `compose.yml`
 - `DOCKER.md`
 
@@ -139,6 +136,7 @@ registry, and portfolio material.
 - Loki/Alertmanager are local/dev monitoring unless production evidence is
   added.
 - HITL applies to CRM write operations, not every possible state transition.
-- The Mini App is a lightweight entry point and not full catalog-search parity.
+- The Mini App is archived under `archive/mini_app/` and is not part of the required runtime.
+- Voice and RAG API surfaces are archived under `archive/voice/` and `archive/api/`.
 - Some i18n migration work remains because not every user-facing string is in
   Fluent files.

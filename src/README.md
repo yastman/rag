@@ -4,7 +4,7 @@ Shared domain, retrieval, ingestion, and API code for the contextual RAG system.
 
 ## Purpose
 
-Contains all non-transport logic: document ingestion, vector search, model contextualization, evaluation, and the standalone RAG API. `telegram_bot/` imports from here; most of `src/` stays Telegram-agnostic. `src/api/` is an adapter that intentionally reuses the Telegram LangGraph pipeline (via `telegram_bot.graph.graph.build_graph()`) until that pipeline is extracted into a shared location.
+Contains all non-transport logic: document ingestion, vector search, model contextualization, and shared services. `telegram_bot/` imports from here; most of `src/` stays Telegram-agnostic. The RAG API (`archive/api/`) and voice agent (`archive/voice/`) are archived optional surfaces.
 
 ## Entrypoints
 
@@ -13,8 +13,8 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 | Ingestion (legacy) | `src.ingestion.service` | High-level ingestion service wrapper |
 | Ingestion (current) | `src.ingestion.unified.cli` | CocoIndex-based unified pipeline CLI |
 | Retrieval | `src.retrieval.create_search_engine` | Factory for search engine variants |
-| API | `src.api.main:app` | FastAPI application for HTTP RAG queries |
-| Voice | `src.voice.agent` | LiveKit voice agent (deferred) |
+| API (archived) | `archive/api/main:app` | FastAPI application for HTTP RAG queries (archived) |
+| Voice (archived) | `archive/voice/agent` | LiveKit voice agent (archived) |
 | Evaluation | `archive/evaluation/smoke_test` | Smoke tests and RAG quality evaluation (archived) |
 
 ## Directory Guide
@@ -24,15 +24,12 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 | `api/` | FastAPI RAG API — thin wrapper around LangGraph pipeline |
 | `config/` | Shared settings, constants, and Qdrant collection policy |
 | `contextualization/` | Claude-based contextualized embedding generation |
-| `core/` | Legacy RAG pipeline orchestrator |
-| `evaluation/` | Smoke tests, RAGAS, AB tests, Langfuse integration |
-| `governance/` | Compliance and policy helpers |
+| `core/` | Assistant core entrypoint and public contract |
 | `ingestion/` | Document parsing, chunking, indexing, unified pipeline |
 | `models/` | BGE-M3 contextualized embedding model wrappers |
 | `retrieval/` | Search engines (baseline, hybrid RRF, DBSF+ColBERT) |
 | `security/` | Security utilities |
 | `utils/` | Shared helpers |
-| `voice/` | LiveKit voice agent and SIP setup (deferred by default) |
 
 ## Architecture Law
 
@@ -67,7 +64,7 @@ Practical rules for this tree:
 
 ```bash
 make check
-pytest src/retrieval/ src/ingestion/unified/ src/api/
+pytest src/retrieval/ src/ingestion/unified/
 ```
 
 ## See Also
