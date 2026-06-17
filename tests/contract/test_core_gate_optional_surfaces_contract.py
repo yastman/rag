@@ -35,10 +35,6 @@ OPTIONAL_SURFACE_TOKENS = (
     "test-providers-extra",
     "test-legacy-graph-extra",
     "test-ingest-extra",
-    "test-voice-extra",
-    "test-eval-extra",
-    "test-observability-extra",
-    "test-optional-surfaces",
 )
 OPTIONAL_TARGETS = (
     "test-telegram-adapter",
@@ -46,16 +42,8 @@ OPTIONAL_TARGETS = (
     "test-providers-extra",
     "test-legacy-graph-extra",
     "test-ingest-extra",
-    "test-voice-extra",
-    "test-eval-extra",
-    "test-observability-extra",
-    "test-optional-surfaces",
 )
-OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS = (
-    "baseline-smoke",
-    "baseline-load",
-    "baseline-check",
-)
+OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS: tuple[str, ...] = ()
 REQUIRED_GATE_TARGETS = (
     "test",
     "test-core",

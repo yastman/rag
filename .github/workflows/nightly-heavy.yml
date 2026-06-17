@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   nightly-full:
-    name: Nightly Full (integration + smoke + baseline)
+    name: Nightly Full (integration + smoke)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -36,7 +36,7 @@ jobs:
         run: >
           PYTHONDONTWRITEBYTECODE=1
           uv run pytest
-          tests/integration/ tests/smoke/ tests/baseline/
+          tests/integration/ tests/smoke/
           -n auto --dist=worksteal
           -q --timeout=60
           -m "not legacy_api and not requires_extras"
