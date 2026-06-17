@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from langchain_core.runnables import RunnableConfig
-
 from telegram_bot.agents.manager_tools import (
     _get_user_context,
     _resolve_role,
@@ -14,6 +12,7 @@ from telegram_bot.agents.manager_tools import (
     create_crm_score_sync_tool,
     create_manager_nurturing_tools,
 )
+from telegram_bot.agents.tooling import RunnableConfig
 
 
 # ---------------------------------------------------------------------------

@@ -131,7 +131,7 @@ async def _run_handle_query_supervisor(
     mock_config, mock_lf_client, *, history_service=None, streaming=False
 ):
     """Run handle_query through SDK agent path with mocked agent (#413)."""
-    from langchain_core.messages import AIMessageChunk
+    from telegram_bot.agents.agent import AgentMessage as AIMessageChunk
 
     bot = _create_bot(mock_config)
     if history_service is not None:

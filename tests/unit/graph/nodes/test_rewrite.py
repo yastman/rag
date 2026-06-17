@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
+from src.runtime.graph.state import Message
 from telegram_bot.graph.nodes.rewrite import rewrite_node
 from telegram_bot.graph.state import make_initial_state
 
@@ -24,7 +24,7 @@ def _make_runtime(llm=None) -> Runtime:
 def _state_with_query(query: str = "original query") -> dict:
     """Create minimal state with a human message."""
     state = make_initial_state(user_id=1, session_id="s1", query=query)
-    state["messages"] = [HumanMessage(content=query)]
+    state["messages"] = [Message(content=query)]
     state["rewrite_count"] = 0
     state["llm_call_count"] = 0
     return state
@@ -291,7 +291,7 @@ class TestRewriteNodeQueryExtraction:
 
     async def test_query_from_human_message_object(self):
         state = make_initial_state(user_id=1, session_id="s1", query="original")
-        state["messages"] = [HumanMessage(content="query via message object")]
+        state["messages"] = [Message(content="query via message object")]
         state["rewrite_count"] = 0
 
         with patch(

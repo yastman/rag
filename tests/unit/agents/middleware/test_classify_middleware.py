@@ -14,9 +14,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from langchain.messages import AIMessage, HumanMessage
 
+from src.runtime.graph.state import Message as HumanMessage
 from telegram_bot.graph.middleware.classify import (
+    AIMessage,
     ClassifyMiddleware,
     _ClassifyAwareState,
 )
