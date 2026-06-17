@@ -67,7 +67,7 @@ make docker-up
 # Profile stacks
 make docker-bot-up
 make docker-ingest-up
-make docker-ml-up
+make docker-bot-up
 make docker-full-up
 
 # Lifecycle
@@ -135,7 +135,7 @@ still need to be throwaway/dev-only:
 `telegram_bot/pyproject.toml` and `telegram_bot/uv.lock`. The root `uv.lock`
 does not define the bot image dependency set.
 
-### ML profile (`make docker-ml-up`)
+### ML profile (`make docker-bot-up`)
 
 - `NEXTAUTH_SECRET`
 - `SALT`

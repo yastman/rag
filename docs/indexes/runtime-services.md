@@ -27,7 +27,7 @@ Common commands:
 make docker-up          # default/unprofiled services
 make docker-bot-up      # bot profile
 make docker-ingest-up   # ingestion profile
-make docker-ml-up       # ML/Langfuse profile
+make docker-core-up       # ML/Langfuse profile
 # docker-obs-up / monitoring-up archived — see archive/obs/
 make docker-ps          # list running containers
 ```
