@@ -232,6 +232,8 @@ The repo also includes remote Docker helpers for running Compose on a remote hos
 
 ## Project Map
 
+Use [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md) for the canonical directory ownership map (purpose, owner layer, status, allowed imports, tests, and docs for every major directory).
+
 Use [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) for the maintained folder map and high-signal files.
 
 High-level entry points:
