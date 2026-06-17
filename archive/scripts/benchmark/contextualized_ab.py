@@ -24,9 +24,10 @@ import time
 from pathlib import Path
 from typing import Any, cast
 
+from telegram_bot.services.voyage import VoyageService
+
 from telegram_bot.config import BotConfig
 from telegram_bot.services.qdrant import QdrantService
-from telegram_bot.services.voyage import VoyageService
 
 
 # Optional: import contextualized service if available
