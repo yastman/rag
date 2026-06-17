@@ -40,8 +40,7 @@ test = [
     "redis>=7.0",
     "cachetools>=5.0",
     "python-dotenv>=1.0",
-    "qdrant-client>=1.17",
-    "aiogram>=3.0",
     "langfuse>=4.0.0",
-    "langchain-core>=1.2",
+    # Removed: qdrant-client, aiogram, langchain-core — no test files exist
+    # in this service directory; these were stale deps (#2710).
 ]
