@@ -30,7 +30,6 @@ from src.observability.safe_payloads import build_safe_input_payload, build_safe
 from src.observability.scores import (
     compute_checkpointer_overhead_proxy_ms,
     score,
-    write_crm_scores,
     write_history_scores,
     write_langfuse_scores,
 )
@@ -61,7 +60,6 @@ __all__ = [
     "traced_pipeline",
     "try_update_lifecycle_trace_async",
     "update_lifecycle_trace",
-    "write_crm_scores",
     "write_history_scores",
     "write_langfuse_scores",
 ]

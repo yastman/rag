@@ -24,8 +24,6 @@ Slice 1 extraction map:
   (``_build_pre_agent_state_contract``, ``_has_async_method``,
   ``_get_or_compute_pre_agent_dense``,
   ``_prepare_pre_agent_retrieval_vectors``).
-* ``_bot_kommo`` (#1265 PR-6) — Kommo CRM startup token seeder
-  (``_seed_kommo_access_token``).
 
 Each extraction is enforced by a contract test under
 ``tests/contract/test_bot_*_extraction_contract.py``: byte-for-byte
@@ -71,7 +69,6 @@ from src.runtime.grounding.policy import get_grounding_mode
 from . import (
     _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
     _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
-    _bot_kommo,  # #1265 Slice 1 PR-6: extracted Kommo startup helpers
     _bot_lifecycle,  # #1265 Slice 2 PR-8 / #2048: extracted lifecycle helpers
     _bot_observability,  # #1265 Slice 1 PR-2: extracted observability helpers
     _bot_pre_agent,  # #1265 Slice 1 PR-5: extracted pre-agent helpers
@@ -355,20 +352,6 @@ def _extract_stream_chunk_text(message_chunk: Any) -> str:
     return _bot_streaming._extract_stream_chunk_text(message_chunk)
 
 
-async def _seed_kommo_access_token(
-    *,
-    redis: Any,
-    access_token: str,
-    subdomain: str,
-) -> bool:
-    """Thin wrapper — see ``_bot_kommo`` (#1265 Slice 1 PR-6)."""
-    return await _bot_kommo._seed_kommo_access_token(
-        redis=redis,
-        access_token=access_token,
-        subdomain=subdomain,
-    )
-
-
 class PropertyBot:
     """Telegram bot for domain-specific search (configurable via BOT_DOMAIN)."""
 
@@ -493,22 +476,11 @@ class PropertyBot:
         # PostgreSQL pool — initialized in start()
         self._pg_pool: Any = None
 
-        # Kommo CRM client (initialized in start() if enabled)
-        self._kommo_client: Any | None = None
-
-        # Lead scoring store (initialized in start() with pg_pool)
-        self._lead_scoring_store: Any | None = None
-
         # Favorites service (initialized in start() with pg_pool)
         self._favorites_service: Any = None
 
         # Search event store (initialized in start() with pg_pool)
         self._search_event_store: Any | None = None
-
-        # Manager runtime services — archived schedulers removed (#2602);
-        # attributes kept as None stubs for tool_assembly compatibility.
-        self._nurturing_service: Any | None = None
-        self._funnel_analytics_service: Any | None = None
 
         # Handoff services (Forum Topics bridge + Redis state machine)
         self._handoff_state: HandoffState | None = None
@@ -1371,22 +1343,7 @@ class PropertyBot:
 
             summary = await generate_handoff_summary(history, llm=self._llm)
 
-        # 3. Kommo lead (optional).
-        lead_url = None
-        lead_id = None
-        if self._kommo_client is not None:
-            try:
-                from .services.kommo_models import LeadCreate
-
-                lead = await self._kommo_client.create_lead(
-                    LeadCreate(name=f"Handoff: {display_name}")  # type: ignore[call-arg]
-                )
-                lead_id = lead.id
-                lead_url = f"https://{self.config.kommo_subdomain}.kommo.com/leads/detail/{lead.id}"
-            except Exception:
-                logger.exception("Kommo lead creation failed during handoff")
-
-        # 4. Post context pack.
+        # 3. Post context pack.
         await self._forum_bridge.post_context_pack(
             topic_id=topic_id,
             client_name=display_name,
@@ -1394,14 +1351,14 @@ class PropertyBot:
             locale=locale,
             qualification=qualification,
             summary=summary,
-            lead_url=lead_url,
+            lead_url=None,
         )
 
-        # 5. Set Redis state + FSM.
+        # 4. Set Redis state + FSM.
         data = HandoffData(
             client_id=user_id,
             topic_id=topic_id,
-            lead_id=lead_id,
+            lead_id=None,
             mode="human_waiting",
             qualification=qualification,
         )
@@ -1450,15 +1407,6 @@ class PropertyBot:
 
         key = StorageKey(bot_id=self.bot.id, chat_id=handoff.client_id, user_id=handoff.client_id)
         await self.dp.storage.set_state(key, state=None)
-
-        # Update Kommo (optional).
-        if self._kommo_client is not None and handoff.lead_id is not None:
-            try:
-                await self._kommo_client.add_note(
-                    "leads", handoff.lead_id, "Диалог с клиентом завершён менеджером."
-                )
-            except Exception:
-                logger.exception("Failed to update Kommo on handoff close")
 
     @observe(name="cb-service", capture_input=False, capture_output=False)
     async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
@@ -2618,19 +2566,6 @@ class PropertyBot:
                     }
                     for src in core_result.retrieved_sources
                 ]
-                if core_result.proposed_crm_action:
-                    action = core_result.proposed_crm_action
-                    payload = {
-                        "action_type": action.action_type,
-                        "payload": action.payload,
-                        "preview": action.summary,
-                    }
-                    await self._send_hitl_confirmation(
-                        message=message,
-                        payload=payload,
-                        thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
-                    )
-                    return None  # type: ignore[return-value]
 
                 class DummyContext:
                     response_sent = False
@@ -2666,7 +2601,6 @@ class PropertyBot:
                     telegram_user_id=user_id,
                     session_id=session_id,
                     language=language,
-                    kommo_client=getattr(self, "_kommo_client", None),
                     history_service=self._history_service,
                     embeddings=self._embeddings,
                     sparse_embeddings=self._sparse,
@@ -3002,10 +2936,6 @@ class PropertyBot:
                         score_id=f"{tid}-tool_calls_total",
                     )
 
-                # CRM tool usage scores (#440)
-                from telegram_bot.scoring import write_crm_scores
-
-                write_crm_scores(lf, current_turn_msgs, trace_id=tid)
                 # Overwrite sources_shown/sources_count with actual post-send values (#514)
                 sources_count_actual = int(rag_result_store.get("sources_count", 0) or 0)
                 if sources_count_actual > 0:
@@ -3613,7 +3543,6 @@ class PropertyBot:
             telegram_user_id=user_id,
             session_id=session_id,
             language=self.config.domain_language,
-            kommo_client=getattr(self, "_kommo_client", None),
             history_service=self._history_service,
             embeddings=self._embeddings,
             sparse_embeddings=self._sparse,
@@ -3803,7 +3732,6 @@ class PropertyBot:
             telegram_user_id=user_id,
             session_id=session_id,
             language=language,
-            kommo_client=getattr(self, "_kommo_client", None),
             history_service=self._history_service,
             embeddings=self._embeddings,
             sparse_embeddings=self._sparse,
@@ -3997,57 +3925,6 @@ class PropertyBot:
                 )
             )
 
-        # Initialize Kommo CRM client if enabled (#420: fail-safe, must not block startup)
-        if self.config.kommo_enabled and self.config.kommo_subdomain:
-            try:
-                from .services.kommo_client import KommoClient
-                from .services.kommo_tokens import REDIS_KEY, KommoTokenStore
-
-                if self._cache.redis is None:
-                    logger.warning("Kommo CRM skipped: Redis client not initialized")
-                    self._kommo_client = None
-                else:
-                    token_store = KommoTokenStore(
-                        redis=self._cache.redis,
-                        client_id=self.config.kommo_client_id,
-                        client_secret=self.config.kommo_client_secret.get_secret_value(),
-                        subdomain=self.config.kommo_subdomain,
-                        redirect_uri=self.config.kommo_redirect_uri,
-                    )
-                    auth_code = self.config.kommo_auth_code or None
-                    should_init_kommo = True
-                    if auth_code is None:
-                        existing = await self._cache.redis.hgetall(REDIS_KEY)
-                        if not existing:
-                            env_token = self.config.kommo_access_token.get_secret_value()
-                            if env_token:
-                                await token_store.seed_env_token(env_token)
-                                logger.info(
-                                    "Kommo: seeded access token from KOMMO_ACCESS_TOKEN env var"
-                                )
-                            else:
-                                logger.info(
-                                    "Kommo CRM disabled: no stored tokens and no KOMMO_AUTH_CODE "
-                                    "(set env var for first-time setup)"
-                                )
-                                self._kommo_client = None
-                                should_init_kommo = False
-
-                    if should_init_kommo:
-                        await token_store.initialize(authorization_code=auth_code)
-
-                        self._kommo_client = KommoClient(
-                            subdomain=self.config.kommo_subdomain,
-                            token_store=token_store,
-                        )
-                        logger.info(
-                            "Kommo CRM client initialized (subdomain=%s)",
-                            self.config.kommo_subdomain,
-                        )
-            except Exception:
-                logger.warning("Kommo CRM init failed — CRM features disabled", exc_info=True)
-                self._kommo_client = None
-
         # Initialize PostgreSQL pool for realestate DB
         postgres_available = (
             preflight_result.get("postgres", True) if isinstance(preflight_result, dict) else True
@@ -4092,12 +3969,6 @@ class PropertyBot:
                 from .services.user_service import UserService
 
                 self._user_service = UserService(pool=self._pg_pool)
-
-                # Initialize lead scoring store (#384)
-                from .services.lead_scoring_store import LeadScoringStore
-
-                self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
-                logger.info("Lead scoring store ready")
 
                 # Initialize favorites service (#628)
                 from .services.favorites_service import FavoritesService
@@ -4184,8 +4055,6 @@ class PropertyBot:
 
         # Register services in dp.workflow_data so all handlers receive them via data dict
         self.dp["user_service"] = self._user_service
-        self.dp["lead_scoring_store"] = self._lead_scoring_store
-        self.dp["kommo_client"] = self._kommo_client
         self.dp["pg_pool"] = self._pg_pool
         self.dp["bot_config"] = self.config
         self.dp["property_bot"] = self
@@ -4207,20 +4076,6 @@ class PropertyBot:
 
         from .dialogs.catalog import catalog_dialog
         from .dialogs.client_menu import client_menu_dialog
-        from .dialogs.crm_contacts import (
-            contacts_menu_dialog,
-            create_contact_dialog,
-            search_contacts_dialog,
-        )
-        from .dialogs.crm_leads import (
-            create_lead_dialog,
-            leads_menu_dialog,
-            my_leads_dialog,
-            search_leads_dialog,
-        )
-        from .dialogs.crm_notes import create_note_dialog
-        from .dialogs.crm_quick_actions import crm_quick_actions_dialog
-        from .dialogs.crm_tasks import create_task_dialog, my_tasks_dialog, tasks_menu_dialog
         from .dialogs.demo import demo_dialog
         from .dialogs.faq import faq_dialog
         from .dialogs.filter_dialog import filter_dialog
@@ -4229,26 +4084,10 @@ class PropertyBot:
         from .dialogs.manager_menu import manager_menu_dialog
         from .dialogs.settings import settings_dialog
         from .dialogs.viewing import viewing_dialog
-        from .handlers.crm_callbacks import create_crm_router
-
-        # CRM card inline callbacks (crm:* prefix) — before aiogram-dialog setup (#697)
-        self.dp.include_router(create_crm_router())
 
         self.dp.include_router(client_menu_dialog)
         self.dp.include_router(catalog_dialog)
         self.dp.include_router(manager_menu_dialog)
-        self.dp.include_router(leads_menu_dialog)
-        self.dp.include_router(create_lead_dialog)
-        self.dp.include_router(my_leads_dialog)
-        self.dp.include_router(search_leads_dialog)
-        self.dp.include_router(contacts_menu_dialog)
-        self.dp.include_router(create_contact_dialog)
-        self.dp.include_router(search_contacts_dialog)
-        self.dp.include_router(tasks_menu_dialog)
-        self.dp.include_router(create_task_dialog)
-        self.dp.include_router(my_tasks_dialog)
-        self.dp.include_router(create_note_dialog)
-        self.dp.include_router(crm_quick_actions_dialog)
         self.dp.include_router(settings_dialog)
         self.dp.include_router(demo_dialog)
         self.dp.include_router(funnel_dialog)
@@ -4437,9 +4276,6 @@ class PropertyBot:
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
         self._pre_agent_filter_extractor = None
-        if self._kommo_client is not None:
-            await self._kommo_client.close()
-            self._kommo_client = None
         if self._checkpointer is not None:
             try:
                 if hasattr(self._checkpointer, "__aexit__"):

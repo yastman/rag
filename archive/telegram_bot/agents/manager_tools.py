@@ -6,8 +6,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from telegram_bot.agents.context import get_bot_context
-from telegram_bot.agents.tooling import RunnableConfig, tool
-from telegram_bot.observability import observe
+from telegram_bot.agents.tooling import RunnableConfig
 
 
 def _resolve_role(config: RunnableConfig) -> str:
@@ -22,13 +21,6 @@ def _resolve_role(config: RunnableConfig) -> str:
     return "client"
 
 
-def _get_user_context(config: RunnableConfig) -> tuple[int | None, str | None]:
-    configurable = (config or {}).get("configurable", {})
-    user_id = configurable.get("user_id")
-    session_id = configurable.get("session_id")
-    return user_id, session_id
-
-
 def build_tools_for_role(
     *, role: str, base_tools: list[Any], manager_tools: Iterable[Any]
 ) -> list[Any]:
@@ -37,54 +29,3 @@ def build_tools_for_role(
     if role == "manager":
         tools.extend(list(manager_tools))
     return tools
-
-
-def create_manager_nurturing_tools(*, analytics_service: Any, nurturing_service: Any) -> list[Any]:
-    """Create manager-only nurturing + analytics tools."""
-
-    @tool
-    @observe(name="manager-get-funnel-analytics", as_type="tool")
-    async def manager_get_funnel_analytics(query: str, config: RunnableConfig) -> str:
-        """Get funnel conversion analytics for manager review."""
-        role = _resolve_role(config)
-        if role not in {"manager", "admin"}:
-            return "Access denied"
-        if analytics_service is None:
-            return "Analytics service unavailable"
-        report = await analytics_service.get_latest_summary()
-        return str(report)
-
-    @tool
-    @observe(name="manager-run-nurturing-batch", as_type="tool")
-    async def manager_run_nurturing_batch(query: str, config: RunnableConfig) -> str:
-        """Execute an on-demand nurturing batch for warm/cold leads."""
-        role = _resolve_role(config)
-        if role not in {"manager", "admin"}:
-            return "Access denied"
-        if nurturing_service is None:
-            return "Nurturing service unavailable"
-        count = await nurturing_service.run_once(limit=100)
-        return f"Nurturing batch executed: {count} leads"
-
-    return [manager_get_funnel_analytics, manager_run_nurturing_batch]
-
-
-def create_crm_score_sync_tool(
-    *,
-    scoring_store: Any,
-    kommo_client: Any,
-    score_field_id: int,
-    band_field_id: int,
-) -> Any:
-    """Create crm_sync_lead_score tool (archived — lead_score_sync removed in #2602)."""
-
-    @tool
-    @observe(name="tool-crm-sync-lead-score", as_type="tool")
-    async def crm_sync_lead_score(query: str, config: RunnableConfig) -> str:
-        """Sync pending lead scores to Kommo CRM."""
-        role = _resolve_role(config)
-        if role not in {"manager", "admin"}:
-            return "Access denied"
-        return "CRM lead score sync is no longer available (scheduler archived in #2602)."
-
-    return crm_sync_lead_score

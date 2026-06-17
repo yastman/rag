@@ -40,7 +40,6 @@ def test_core_public_contract_imports() -> None:
         AssistantRequest,
         AssistantResult,
         CoreDependencies,
-        CrmAction,
         UserContext,
         contracts,
     )
@@ -49,7 +48,6 @@ def test_core_public_contract_imports() -> None:
     assert AssistantRequest is contracts.AssistantRequest
     assert AssistantResult is contracts.AssistantResult
     assert CoreDependencies is contracts.CoreDependencies
-    assert CrmAction is contracts.CrmAction
     assert UserContext is contracts.UserContext
 
 
@@ -198,7 +196,6 @@ class TestAssistantResult:
         assert result.latency_ms == 0.0
         assert result.error_type is None
         assert result.error_message is None
-        assert result.proposed_crm_action is None
         assert result.request_id == ""
         assert result.cache_hit is False
         assert result.llm_model is None
@@ -219,23 +216,6 @@ class TestAssistantResult:
         assert result.error_type == "llm_timeout"
         assert result.error_message == "LLM request timed out after 30s"
         assert result.route == "error"
-
-    def test_crm_action_set(self) -> None:
-        """proposed_crm_action should accept a CrmAction dataclass instance."""
-        from src.core.assistant import AssistantResult, CrmAction
-
-        action = CrmAction(
-            action_type="create_lead",
-            payload={"client": "Alice"},
-            summary="Create lead for Alice",
-        )
-        result = AssistantResult(
-            response_text="",
-            proposed_crm_action=action,
-        )
-
-        assert result.proposed_crm_action is action
-        assert result.proposed_crm_action.action_type == "create_lead"
 
     def test_is_standard_library_dataclass(self) -> None:
         """AssistantResult must be a stdlib @dataclass, not Pydantic."""
@@ -260,7 +240,6 @@ class TestAssistantResult:
             latency_ms=42.5,
             error_type=None,
             error_message=None,
-            proposed_crm_action=None,
             request_id="req-1",
             cache_hit=True,
             llm_model="gpt-4o-mini",
@@ -277,44 +256,11 @@ class TestAssistantResult:
         assert result.latency_ms == 42.5
         assert result.error_type is None
         assert result.error_message is None
-        assert result.proposed_crm_action is None
         assert result.request_id == "req-1"
         assert result.cache_hit is True
         assert result.llm_model == "gpt-4o-mini"
         assert result.llm_call_count == 1
         assert result.rerank_applied is True
-
-
-# =============================================================================
-# CrmAction
-# =============================================================================
-
-
-class TestCrmAction:
-    """Tests for the CrmAction dataclass."""
-
-    def test_creation(self) -> None:
-        """CrmAction must accept action_type, payload, and summary."""
-        from src.core.assistant import CrmAction
-
-        action = CrmAction(
-            action_type="create_lead",
-            payload={"name": "John", "source": "telegram"},
-            summary="Create lead for John (Telegram)",
-        )
-
-        assert action.action_type == "create_lead"
-        assert action.payload == {"name": "John", "source": "telegram"}
-        assert action.summary == "Create lead for John (Telegram)"
-
-    def test_is_standard_library_dataclass(self) -> None:
-        """CrmAction must be a stdlib @dataclass."""
-        from dataclasses import is_dataclass
-
-        from src.core.assistant import CrmAction
-
-        assert is_dataclass(CrmAction)
-        assert not hasattr(CrmAction, "model_validate")
 
 
 # =============================================================================

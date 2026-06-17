@@ -69,7 +69,7 @@ def get_entry_point_config(key: str) -> dict[str, Any] | None:
 def get_phone_config(service_key: str) -> dict[str, Any] | None:
     """Get phone collector config — checks services first, then entry_points.
 
-    Returns dict with crm_title, phone_prompt, phone_success keys.
+    Returns dict with phone_prompt, phone_success keys.
     """
     svc = get_service_card(service_key)
     if svc:

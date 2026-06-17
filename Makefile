@@ -74,8 +74,7 @@ PYTEST_TELEGRAM_ADAPTER_PATHS := \
 	tests/unit/services/test_catalog_rendering.py \
 	tests/unit/services/test_catalog_session.py \
 	tests/unit/services/test_draft_streamer_removed.py \
-	tests/unit/services/test_favorites_service.py \
-	tests/unit/services/test_kommo_models.py
+	tests/unit/services/test_favorites_service.py
 PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_*bot*.py \
 	tests/unit/test_bot*.py \
@@ -93,7 +92,6 @@ PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_docker_static_validation*.py \
 	tests/unit/test_error_handler.py \
 	tests/unit/test_feedback.py \
-	tests/unit/test_kommo_token_seed.py \
 	tests/unit/test_main.py \
 	tests/unit/test_perf_fixes.py \
 	tests/unit/test_results_pagination_bugs.py \

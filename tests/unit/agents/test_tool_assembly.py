@@ -31,8 +31,8 @@ class TestBuildAgentTools:
         assert "apartment_search" in tool_names
         assert len(tools) > 2
 
-    def test_manager_role_includes_history_when_provided(self, mock_config):
-        """Manager role adds history_search when history_service is provided."""
+    def test_manager_role_returns_extended_tools(self, mock_config):
+        """Manager role returns base + manager tools + utility."""
         tools = build_agent_tools(
             role="manager",
             config=mock_config,
