@@ -964,7 +964,7 @@ deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scri
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-core-live e2e-core-live-real-llm e2e-test-group e2e-telegram-test e2e-setup
+.PHONY: e2e-install e2e-generate-data e2e-core-live e2e-core-live-real-llm e2e-test-group e2e-telegram-test e2e-setup
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -976,10 +976,6 @@ e2e-generate-data: ## Generate test property data
 	uv run python scripts/generate_test_properties.py
 	@echo "$(GREEN)✓ Test data generated$(NC)"
 
-e2e-index-data: ## Index test data into Qdrant
-	@echo "$(BLUE)Indexing test properties...$(NC)"
-	uv run python scripts/index_test_properties.py
-	@echo "$(GREEN)✓ Test data indexed$(NC)"
 
 e2e-core-live: ## Run simplification core live golden path (Qdrant + BGE-M3)
 	@echo "$(BLUE)Running simplification core live E2E golden path...$(NC)"
@@ -1087,45 +1083,6 @@ baseline-check: baseline-compile baseline-smoke ## Optional Langfuse baseline ch
 	@echo "$(BLUE)Comparing with main baseline...$(NC)"
 	make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=$(BASELINE_SESSION)
 
-# =============================================================================
-# RAG EVALUATION (RAGAS + DeepEval)
-# =============================================================================
-
-.PHONY: eval-rag eval-rag-quick eval-rag-full
-
-eval-rag: ## Run RAG evaluation with RAGAS metrics (faithfulness >= 0.8)
-	@echo "$(BLUE)Running RAG evaluation with RAGAS...$(NC)"
-	@echo "$(YELLOW)Dataset: tests/eval/ground_truth.json (55 samples)$(NC)"
-	@echo "$(YELLOW)LLM: $(EVAL_MODEL) via LiteLLM SDK router$(NC)"
-	LANGFUSE_TRACING_ENABLED=true \
-	uv run python -m src.evaluation.ragas_evaluation
-	@echo "$(GREEN)✓ RAG evaluation complete$(NC)"
-
-eval-rag-quick: ## Quick RAG evaluation (10 samples)
-	@echo "$(BLUE)Running quick RAG evaluation...$(NC)"
-	EVAL_SAMPLE_SIZE=10 \
-	uv run python -m src.evaluation.ragas_evaluation
-	@echo "$(GREEN)✓ Quick evaluation complete$(NC)"
-
-eval-rag-full: ## Full RAG evaluation with all metrics
-	@echo "$(BLUE)Running full RAG evaluation...$(NC)"
-	LANGFUSE_TRACING_ENABLED=true \
-	EVAL_INCLUDE_DEEPEVAL=true \
-	uv run python -m src.evaluation.ragas_evaluation
-	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
-
-.PHONY: eval-goldset-sync eval-experiment
-
-eval-goldset-sync: ## Sync gold set to Langfuse dataset
-	@echo "$(BLUE)Syncing gold set to Langfuse...$(NC)"
-	uv run python scripts/eval/goldset_sync.py
-	@echo "$(GREEN)✓ Gold set synced$(NC)"
-
-eval-experiment: ## Run RAG experiment on gold set
-	@echo "$(BLUE)Running RAG experiment...$(NC)"
-	uv run python scripts/eval/run_experiment.py
-	@echo "$(GREEN)✓ Experiment complete$(NC)"
-
 .PHONY: eval-gold-gen eval-gold-gen-dry
 
 eval-gold-gen: ## Generate gold set from Qdrant → Langfuse Dataset + JSONL
@@ -1141,7 +1098,6 @@ eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only, no Langfuse)
 # =============================================================================
 # rclone sync scripts were removed from public repo.
 # See docs/GDRIVE_INGESTION.md for ingestion setup.
-	@tail -10 /var/log/rclone-sync.log 2>/dev/null || echo "No logs yet"
 
 # =============================================================================
 # DOCUMENT INGESTION (CocoIndex Pipeline)

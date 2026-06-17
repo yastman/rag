@@ -12,7 +12,7 @@ Automation, indexing, benchmarking, validation, and maintenance scripts.
 | **Benchmarks** | `benchmark_*.py`, `test_*_ab.py`, `test_quantization_ab.py` | A/B and throughput comparisons |
 | **Experiment** | `generate_test_properties.py` | Synthetic data generators |
 | **Maintenance** | `qdrant_snapshot.py`, `reindex_to_binary.py` | Disaster recovery and migration |
-| **Ops** | `test_release_health_vps.sh`, `test_bot_health.sh`, `smoke-zoo.sh` | Deployment and health checks |
+| **Ops** | `release_health_vps.sh`, `bot_health.sh`, `smoke-zoo.sh` | Deployment and health checks |
 | **Hygiene** | Native `make git-hygiene`, `make git-hygiene-fix`, `make repo-cleanup`, `make repo-cleanup-force` targets | Repo hygiene |
 | **CRM / Seeding** | `kommo_seed.py`, `update_advisor_prompts.py` | CRM seeding and prompt updates |
 

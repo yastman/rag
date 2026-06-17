@@ -29,6 +29,14 @@ REMOVED_TARGETS = (
     "monitoring-test-alert",
     "remote-active-up",
     "remote-full-up",
+    # #2720: stale eval targets removed (scripts archived, module removed)
+    "eval-rag",
+    "eval-rag-quick",
+    "eval-rag-full",
+    "eval-goldset-sync",
+    "eval-experiment",
+    # #2720: stale e2e-index-data removed (script never existed)
+    "e2e-index-data",
 )
 
 # K3S image variables that must NOT appear in the Makefile after cleanup.
