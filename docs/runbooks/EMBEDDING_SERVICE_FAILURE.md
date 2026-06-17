@@ -27,7 +27,6 @@ Use this runbook when alerts from `docker/monitoring/rules/infrastructure.yaml` 
 |---|---|---|
 | `bge-m3` | `dev-bge-m3-1`, `dev_bge_m3_1` | Dense + multivec embeddings (primary) |
 | `bm42` | `dev-bm42-1`, `dev_bm42_1` | Sparse embeddings (when enabled) |
-| `user-base` | `dev-user-base-1` | Auxiliary embedding cache; bundled in the embedding family alert |
 | Voyage (external) | n/a — third-party API used by ingestion | Reranker / fallback embeddings |
 
 ## Fast-Path Diagnosis (read-only)
@@ -35,7 +34,7 @@ Use this runbook when alerts from `docker/monitoring/rules/infrastructure.yaml` 
 ### 1. Container state
 
 ```bash
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ps bge-m3 bm42 user-base
+COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ps bge-m3 bm42
 ```
 
 If a container is `Exited`/`Restarting`, capture the exit reason:
@@ -130,7 +129,7 @@ If `bge_embed_error` rate from the bot is non-zero, `BGEEmbedErrorFromBot` is es
 
 ### `EmbeddingServiceError`
 
-1. Identify which container the errors come from (alert query covers `dev-bge-m3|dev-bm42|dev-user-base`).
+1. Identify which container the errors come from (alert query covers `dev-bge-m3|dev-bm42`).
 2. Look for repeated patterns: missing model file, CUDA/CPU mismatch, timeouts.
 3. Apply the matching service fix; do **not** restart the bot until embeddings recover, or it will retry-storm.
 

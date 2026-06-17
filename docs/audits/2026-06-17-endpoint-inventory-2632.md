@@ -2,16 +2,16 @@
 
 **Audit date:** 2026-06-17
 **Branch:** `audit/2632-endpoint-inventory`
-**Related issues:** #2598 (ARCH-02 voice+RAG-API archive), #2597 (mini-app archive), #2627 (user-base decision)
+**Related issues:** #2598 (ARCH-02 voice+RAG-API archive), #2597 (mini-app archive), #2684 (user-base archive)
 
 ---
 
 ## Summary
 
-After the monolith cleanup (#2598, #2597), the live codebase has no public-facing
+After the monolith cleanup (#2598, #2597, #2684), the live codebase has no public-facing
 HTTP API surface. The Telegram bot is the only production channel. Two internal
-Docker-network services (BGE-M3 and Docling) remain. The user-base service remains
-(guarded by #2627).
+Docker-network services (BGE-M3 and Docling) remain. The user-base service has been
+archived per #2684.
 
 ---
 
@@ -48,10 +48,10 @@ Status: **KEEP** — active internal service, used by `src/ingestion/docling_cli
 
 ---
 
-### `services/user-base/main.py` — USER2-base Dense Embedding Service
+### `archive/user-base/main.py` — USER2-base Dense Embedding Service (Archived)
 
 Internal Docker-network service. Port `8003` (dev: `127.0.0.1:8003`).
-Retained pending #2627 decision.
+Archived per #2684.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -59,7 +59,7 @@ Retained pending #2627 decision.
 | POST | `/embed` | Single-text dense embedding (768-dim) |
 | POST | `/embed_batch` | Batch dense embeddings |
 
-Status: **KEEP (pending #2627)** — service is deployed; #2627 tracks removal decision.
+Status: **ARCHIVED** — moved to `archive/user-base/`. Not in Compose, not imported by live code.
 
 ---
 
@@ -161,7 +161,6 @@ localhost-only ports:
 | Service | Port | Proto |
 |---------|------|-------|
 | bge-m3 | `8000` | HTTP |
-| user-base | `8003` | HTTP |
 | docling | `5001` | HTTP |
 | qdrant | `6333`, `6334` | HTTP, gRPC |
 | redis | `6379` | Redis |
@@ -181,7 +180,6 @@ No `rag-api`, `voice-agent`, `livekit`, or `mini-app` services remain in Compose
 
 | Item | Status |
 |------|--------|
-| `services/user-base` | Retained pending #2627 |
 | `tests/unit/voice/test_sip_setup.py` | Uses `pytest.importorskip("livekit")`; skips cleanly |
 | `tests/unit/voice/test_voice_agent.py` | Uses `pytest.importorskip("livekit")`; skips cleanly |
 | `tests/contract/test_no_partial_fastapi_shim_contract.py` | Tests that `test_rag_api_runtime.py` uses importorskip; passes trivially after file removal |

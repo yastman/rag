@@ -53,13 +53,13 @@ rag-fresh/
 │
 ├── services/                   # External sidecar services (Docker images only)
 │   ├── bge-m3-api/             # BGE-M3 embedding + rerank sidecar
-│   ├── docling/                # Document parsing / chunking sidecar
-│   └── user-base/              # Telegram user-base service
+│   └── docling/                # Document parsing / chunking sidecar
 │
 ├── archive/                    # ARCHIVED surfaces — never imported by live code
 │   ├── api/                    # FastAPI RAG API (archived)
 │   ├── voice/                  # LiveKit voice agent (archived)
 │   ├── mini_app/               # Telegram Mini App (archived)
+│   ├── user-base/              # Russian dense embedding sidecar (archived #2684)
 │   └── k8s/                    # k3s manifests (archived)
 │
 ├── tests/                      # Test tiers
@@ -178,7 +178,6 @@ monolith — the Python codebase calls them over HTTP.
 |---|---|
 | `services/bge-m3-api/` | BGE-M3 dense + sparse + ColBERT embedding sidecar |
 | `services/docling/` | Document parsing and chunking sidecar |
-| `services/user-base/` | Telegram user registration sidecar |
 
 ---
 
@@ -194,6 +193,7 @@ runtime. **Archived code must not be imported by any live `src/` or
 | `archive/voice/` | LiveKit voice agent (archived) |
 | `archive/mini_app/` | Telegram Mini App backend + frontend (archived) |
 | `archive/k8s/` | k3s manifests for core services (archived) |
+| `archive/user-base/` | Russian dense embedding sidecar (archived per #2684) |
 
 ---
 
@@ -266,11 +266,11 @@ and must shrink over time.
 | `telegram_bot/` | ✅ Active — Telegram adapter (production channel) |
 | `services/bge-m3-api/` | ✅ Active — embedding sidecar |
 | `services/docling/` | ✅ Active — parsing sidecar |
-| `services/user-base/` | ✅ Active — user service sidecar |
 | `archive/api/` | 🗃 Archived — FastAPI RAG API |
 | `archive/voice/` | 🗃 Archived — LiveKit voice agent |
 | `archive/mini_app/` | 🗃 Archived — Telegram Mini App |
 | `archive/k8s/` | 🗃 Archived — k3s manifests |
+| `archive/user-base/` | 🗃 Archived — user-base embedding sidecar (#2684) |
 
 ---
 

@@ -70,7 +70,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`../DOCKER.md`](../DOCKER.md) — Docker Compose profiles, service map, env requirements.
 - [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) — Local setup and validation guide.
 - [`ONBOARDING.md`](ONBOARDING.md) — New-contributor onboarding guide.
-- [`services/README.md`](../services/README.md) — Local service containers (BGE-M3, Docling, user-base).
+- [`services/README.md`](../services/README.md) — Local service containers (BGE-M3, Docling).
 - [`docker/README.md`](../docker/README.md) — Helper runtime assets (configs, scripts, monitoring rules).
 - [`archive/k8s/README.md`](../archive/k8s/README.md) — Partial k3s manifests, overlays, and deploy commands (archived).
 - [`archive/README.md`](archive/README.md) — Archived surface docs index.

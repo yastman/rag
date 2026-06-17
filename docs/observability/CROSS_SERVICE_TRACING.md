@@ -10,7 +10,7 @@ trace-coverage audit (#2246). It is enforced by
 
 | Direction | Mechanism | Where |
 |-----------|-----------|-------|
-| Inbound (server) | `FastAPIInstrumentor.instrument_app(app)` extracts `traceparent` + `baggage` from request headers and continues the caller's trace | `services/bge-m3-api/app.py`, `services/user-base/main.py`, `src/api/main.py`, `mini_app/api.py` (via `instrument_fastapi_app(app)`) |
+| Inbound (server) | `FastAPIInstrumentor.instrument_app(app)` extracts `traceparent` + `baggage` from request headers and continues the caller's trace | `services/bge-m3-api/app.py`, `src/api/main.py`, `mini_app/api.py` (via `instrument_fastapi_app(app)`) |
 | Outbound (client) | process-wide `HTTPXClientInstrumentor` injects `traceparent` + `baggage` on every `httpx` request | `src/services/bge_m3_client.py`, `src/services/kommo_client.py`, `src/voice/rag_api_client.py`, `src/ingestion/docling_client.py` |
 | Activation | `activate_otel_instrumentations()` wires httpx/asyncpg/redis/grpc/logging at startup | `src/observability.py` -> `src/observability_otel.py` |
 | Context format | W3C **TraceContext** + W3C **Baggage** | `OTEL_PROPAGATORS=tracecontext,baggage` declared per service (#2254) |
