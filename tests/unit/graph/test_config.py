@@ -323,7 +323,7 @@ class TestGraphConfig:
 
 
 class TestFocusedConfigClasses:
-    """Tests for focused sub-config classes introduced in #2482."""
+    """Tests for the focused sub-config dataclasses introduced in #2482."""
 
     def test_llm_config_defaults(self):
         from src.runtime.graph.config import LlmConfig
@@ -397,6 +397,7 @@ class TestFocusedConfigClasses:
         assert cfg.show_sources is False
         assert cfg.streaming_enabled is True
         assert cfg.classifier_mode == "regex"
+        assert cfg.ttft_drift_warn_ms == 500
 
     def test_voice_config_defaults(self):
         from src.runtime.graph.config import VoiceConfig
@@ -475,12 +476,10 @@ class TestFocusedConfigClasses:
         assert voice.voice_language == "en"
         assert security.guard_mode == "log"
 
-    def test_all_sub_configs_exported(self):
-        """All focused config classes are exported from the module."""
-        from src.runtime.graph import config as cfg_module
+    def test_sub_configs_exported_in_all(self):
+        import src.runtime.graph.config as cfg_module
 
         for name in [
-            "GraphConfig",
             "LlmConfig",
             "RetrievalConfig",
             "CacheConfig",
@@ -488,13 +487,16 @@ class TestFocusedConfigClasses:
             "ResponseConfig",
             "VoiceConfig",
             "SecurityConfig",
+            "GraphConfig",
+            "_FLAT_KWARGS",
         ]:
             assert hasattr(cfg_module, name), f"{name} not exported"
-            assert name in cfg_module.__all__, f"{name} not in __all__"
+            if not name.startswith("_"):
+                assert name in cfg_module.__all__, f"{name} not in __all__"
 
 
 class TestGraphConfigFlatCompatContract:
-    """Full backward-compatibility contract for the legacy flat field set (#2482).
+    """Full backward-compatibility contract for the legacy flat field set (#2482/#2577).
 
     Covers every entry in _FLAT_KWARGS:
     - each field can be passed as a flat kwarg to GraphConfig(**kwargs)
