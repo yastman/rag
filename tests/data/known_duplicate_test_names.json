@@ -19,10 +19,6 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_cache_threshold": [
-    "tests/unit/test_query_preprocessor.py",
-    "tests/unit/test_query_preprocessor_unit.py"
-  ],
   "test_chunk_creation": [
     "tests/unit/test_chunker.py",
     "tests/unit/test_contextual_schema.py"
@@ -296,10 +292,6 @@
   "test_returns_count": [
     "tests/unit/dialogs/test_filter_dialog.py",
     "tests/unit/ingestion/test_state_manager_async.py"
-  ],
-  "test_rrf_weights": [
-    "tests/unit/test_query_preprocessor.py",
-    "tests/unit/test_query_preprocessor_unit.py"
   ],
   "test_scores_defaults_to_empty_dict": [
     "tests/unit/pipelines/test_client_pipeline.py",

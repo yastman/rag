@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 from qdrant_client import models
 
@@ -11,6 +12,8 @@ from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
 from src.retrieval.search_engine_shared import lexical_weights_to_sparse as shared_sparse
 from src.retrieval.search_engines import (
     BaselineSearchEngine,
+    DBSFColBERTSearchEngine,
+    HybridRRFColBERTSearchEngine,
     HybridRRFSearchEngine,
     SearchResult,
     create_search_engine,
@@ -392,3 +395,135 @@ class TestCreateSearchEngine:
         from src.retrieval.search_engines import HybridRRFColBERTSearchEngine
 
         assert isinstance(engine, HybridRRFColBERTSearchEngine)
+
+
+# ---------------------------------------------------------------------------
+# HybridRRFColBERTSearchEngine
+# ---------------------------------------------------------------------------
+
+
+class TestHybridRRFColBERTSearchEngine:
+    @pytest.fixture
+    def colbert_engine(self, mock_settings: Settings) -> HybridRRFColBERTSearchEngine:
+        with (
+            patch("src.retrieval.search_engines.QdrantClient"),
+            patch("src.retrieval.search_engines.get_bge_m3_model"),
+        ):
+            engine = HybridRRFColBERTSearchEngine(mock_settings)
+            engine.client = MagicMock()
+        return engine
+
+    def test_colbert_get_name(self, mock_settings: Settings) -> None:
+        with (
+            patch("src.retrieval.search_engines.QdrantClient"),
+            patch("src.retrieval.search_engines.get_bge_m3_model"),
+        ):
+            engine = HybridRRFColBERTSearchEngine(mock_settings)
+        assert engine.get_name() == "hybrid_rrf_colbert"
+
+    def test_colbert_search_with_embedding_uses_dense(
+        self, colbert_engine: HybridRRFColBERTSearchEngine
+    ) -> None:
+        colbert_engine.client.query_points.return_value = MagicMock(points=[])
+        colbert_engine.search([0.1, 0.2, 0.3], top_k=5)
+        call_kwargs = colbert_engine.client.query_points.call_args[1]
+        assert call_kwargs["using"] == "dense"
+
+    def test_colbert_search_uses_nested_prefetch(
+        self, colbert_engine: HybridRRFColBERTSearchEngine
+    ) -> None:
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2, 0.3]),
+            "lexical_weights": {"100": 0.5, "200": 0.8},
+            "colbert_vecs": np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]),
+        }
+        colbert_engine.model = mock_model
+
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "metadata": {"article_number": "115"},
+            "page_content": "Test content",
+        }
+        mock_point.score = 0.95
+        colbert_engine.client.query_points.return_value = MagicMock(points=[mock_point])
+
+        with patch("src.retrieval.search_engines.get_client", return_value=MagicMock()):
+            results = colbert_engine.search("test query", top_k=5)
+
+        call_kwargs = colbert_engine.client.query_points.call_args[1]
+        assert "prefetch" in call_kwargs
+        assert call_kwargs["using"] == "colbert"
+        assert len(results) == 1
+        assert results[0].score == 0.95
+
+
+# ---------------------------------------------------------------------------
+# DBSFColBERTSearchEngine
+# ---------------------------------------------------------------------------
+
+
+class TestDBSFColBERTSearchEngine:
+    @pytest.fixture
+    def dbsf_engine(self, mock_settings: Settings) -> DBSFColBERTSearchEngine:
+        with (
+            patch("src.retrieval.search_engines.QdrantClient"),
+            patch("src.retrieval.search_engines.get_bge_m3_model"),
+        ):
+            engine = DBSFColBERTSearchEngine(mock_settings)
+            engine.client = MagicMock()
+        return engine
+
+    def test_dbsf_get_name(self, mock_settings: Settings) -> None:
+        with (
+            patch("src.retrieval.search_engines.QdrantClient"),
+            patch("src.retrieval.search_engines.get_bge_m3_model"),
+        ):
+            engine = DBSFColBERTSearchEngine(mock_settings)
+        assert engine.get_name() == "dbsf_colbert"
+
+    def test_dbsf_search_uses_dbsf_fusion(self, dbsf_engine: DBSFColBERTSearchEngine) -> None:
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2, 0.3]),
+            "lexical_weights": {"100": 0.5},
+            "colbert_vecs": np.array([[0.1, 0.2]]),
+        }
+        dbsf_engine.model = mock_model
+
+        mock_point = MagicMock()
+        mock_point.payload = {"page_content": "Test"}
+        mock_point.score = 0.9
+        dbsf_engine.client.query_points.return_value = MagicMock(points=[mock_point])
+
+        with patch("src.retrieval.search_engines.get_client", return_value=MagicMock()):
+            dbsf_engine.search("test query", top_k=5)
+
+        call_kwargs = dbsf_engine.client.query_points.call_args[1]
+        assert "prefetch" in call_kwargs
+        assert call_kwargs["using"] == "colbert"
+
+    def test_dbsf_reads_article_number_from_metadata(
+        self, dbsf_engine: DBSFColBERTSearchEngine
+    ) -> None:
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2, 0.3]),
+            "lexical_weights": {"100": 0.5},
+            "colbert_vecs": np.array([[0.1, 0.2]]),
+        }
+        dbsf_engine.model = mock_model
+
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "metadata": {"article_number": "115"},
+            "page_content": "Test",
+        }
+        mock_point.score = 0.9
+        dbsf_engine.client.query_points.return_value = MagicMock(points=[mock_point])
+
+        with patch("src.retrieval.search_engines.get_client", return_value=MagicMock()):
+            results = dbsf_engine.search("test query", top_k=5)
+
+        assert len(results) == 1
+        assert results[0].article_number == "115"
