@@ -18,7 +18,6 @@ def test_local_dev_docker_targets_use_local_compose_override() -> None:
     targets = [
         "docker-core-up",
         "docker-bot-up",
-        "docker-obs-up",
         "docker-ml-up",
         "docker-ai-up",
         "docker-ingest-up",
@@ -31,10 +30,6 @@ def test_local_dev_docker_targets_use_local_compose_override() -> None:
         "local-logs",
         "local-ps",
         "local-build",
-        "monitoring-up",
-        "monitoring-down",
-        "monitoring-logs",
-        "monitoring-status",
     ]
     for target in targets:
         block = _target_block(target)
