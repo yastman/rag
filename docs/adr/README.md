@@ -23,6 +23,7 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0017 - OpenTelemetry trace sampling roadmap](0017-otel-trace-sampling-roadmap.md)
 - [0018 - W3C Baggage vs `propagate_attributes`](0018-w3c-baggage-vs-propagate-attributes.md)
 - [0019 - Core text path uses procedural runtime, not `create_agent`](0019-core-text-path-procedural-runtime.md)
+- [0020 - Orchestration monolith: BGE-M3 and Docling stay as separate services](0020-orchestration-monolith.md)
 
 ## When To Use
 
