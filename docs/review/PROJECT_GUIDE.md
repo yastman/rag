@@ -126,7 +126,7 @@ registry, and portfolio material.
 - `telegram_bot/services/qdrant.py`
 - `telegram_bot/integrations/cache.py`
 - `telegram_bot/scoring.py`
-- `telegram_bot/integrations/prompt_manager.py`
+- `src/runtime/integrations/prompt_manager.py`
 - `src/ingestion/unified/cli.py`
 - `src/ingestion/unified/state_manager.py`
 - `src/voice/agent.py`

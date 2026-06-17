@@ -173,7 +173,6 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
 - **context7_id:** /langfuse/langfuse-python
 - **как_у_нас:**
   - `telegram_bot/observability.py` — центральный модуль (init, observe, callback handler)
-  - `telegram_bot/integrations/prompt_manager.py` — prompt management
   - `telegram_bot/scoring.py` — RAG quality scores written to Langfuse per query (see [`docs/RAG_QUALITY_SCORES.md`](../RAG_QUALITY_SCORES.md) for the full enumeration; parity is enforced by `tests/contract/test_rag_quality_scores_doc_drift.py`)
   - `src/ingestion/unified/observability.py` — ingestion-side @observe
 - **паттерны:**
@@ -181,14 +180,10 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - propagate_attributes() — обязательная обёртка entry-point (иначе orphan traces)
   - langfuse.openai.AsyncOpenAI как drop-in замена openai.AsyncOpenAI (auto-tracing)
   - Trace details: `client.api.trace.get(trace_id, fields="core,io,scores,metrics")`; nested observations сначала читать через SDK-native `client.api.observations.get_many(trace_id=..., fields="core,basic", cursor=...)`, а для self-hosted OSS fallback использовать SDK `client.api.trace.get(trace_id, fields="core,io,scores,observations,metrics")`
-  - Prompt management: `telegram_bot.integrations.prompt_manager.get_prompt()` / `get_prompt_with_config()` → `client.get_prompt(...)`
   - CallbackHandler для LangChain/agent calls
   - PII masking через mask= параметр при Langfuse()
 - **gotchas:**
   - Для основного bot/query/runtime path использовать `langfuse.openai.AsyncOpenAI`
-  - НЕ возвращаться к manual `client.api.prompts.get(...)` probing, пока `client.get_prompt(...)` покрывает нужный path; keep this as an SDK-registry convention instead of a project Semgrep guardrail.
-  - propagate_attributes() ПЕРЕД любым @observe кодом
-  - capture_input/output=False на тяжёлых нодах (payload bloat prevention)
   - НЕ писать custom HTTP-клиент для observations. Langfuse Cloud: `api.observations.get_many(...)`; self-hosted OSS v4 может отвечать, что v2 observations доступны только Cloud, тогда fallback — SDK `trace.get(..., fields="...,observations,...")`.
   - Для полной локальной диагностики в Langfuse v3 лучше `langfuse api traces get <id> --fields core,io,scores,observations,metrics --json`; `traces list` иногда хватает, а `observations list` может быть 404
 

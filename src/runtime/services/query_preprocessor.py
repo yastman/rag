@@ -11,7 +11,7 @@ from typing import Any
 import openai
 
 from src.observability import get_client, observe
-from src.runtime.integrations.prompt_manager import get_prompt_with_object
+from src.runtime.integrations.prompt_manager import get_prompt
 from src.runtime.llm import create_litellm_chat_client
 
 
@@ -105,9 +105,7 @@ class HyDEGenerator:
         )
 
         try:
-            system_prompt, prompt_obj = get_prompt_with_object(
-                "hyde", fallback=self.HYDE_SYSTEM_PROMPT
-            )
+            system_prompt = get_prompt("hyde", fallback=self.HYDE_SYSTEM_PROMPT)
             create_kwargs: dict[str, Any] = {
                 "model": self.model,
                 "messages": [
@@ -117,7 +115,6 @@ class HyDEGenerator:
                 "temperature": 0.7,
                 "max_tokens": 200,
             }
-            _ = prompt_obj  # Prompt objects are edge-observability metadata only.
             response = await self.client.chat.completions.create(  # type: ignore[call-overload]
                 **create_kwargs,
             )
