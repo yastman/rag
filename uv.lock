@@ -10,9 +10,6 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform == 'darwin'",
 ]
 
-[manifest]
-overrides = [{ name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.58b0" }]
-
 [[package]]
 name = "accelerate"
 version = "1.12.0"
@@ -657,7 +654,6 @@ all = [
     { name = "requests" },
     { name = "scipy" },
     { name = "sentence-transformers" },
-    { name = "sentry-sdk" },
     { name = "tenacity" },
     { name = "torch", version = "2.11.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
@@ -725,7 +721,6 @@ ml-local = [
 ]
 observability = [
     { name = "langfuse" },
-    { name = "sentry-sdk" },
 ]
 providers = [
     { name = "anthropic" },
@@ -753,7 +748,6 @@ dev = [
     { name = "gradio" },
     { name = "langfuse" },
     { name = "mypy" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc" },
     { name = "pillow" },
     { name = "pre-commit" },
     { name = "pylint" },
@@ -765,7 +759,6 @@ dev = [
     { name = "pytest-timeout" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "sentry-sdk" },
     { name = "telethon" },
     { name = "uvicorn" },
     { name = "vulture" },
@@ -830,7 +823,6 @@ requires-dist = [
     { name = "requests", marker = "extra == 'core'" },
     { name = "scipy", marker = "extra == 'ml-local'" },
     { name = "sentence-transformers", marker = "extra == 'ml-local'" },
-    { name = "sentry-sdk", marker = "extra == 'observability'", specifier = ">=2.0,<3.0" },
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "tenacity", marker = "extra == 'core'", specifier = ">=8.2.0" },
     { name = "torch", marker = "extra == 'ml-local'", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cpu" },
@@ -852,7 +844,6 @@ dev = [
     { name = "gradio", specifier = ">=6.7.0" },
     { name = "langfuse", specifier = ">=4.0.0,<5.0" },
     { name = "mypy", specifier = ">=1.11.0" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.39.0" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pre-commit", specifier = ">=3.8.0" },
     { name = "pylint", specifier = ">=3.2.0" },
@@ -864,7 +855,6 @@ dev = [
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.6.0" },
-    { name = "sentry-sdk", specifier = ">=2.0,<3.0" },
     { name = "telethon", specifier = ">=1.42.0" },
     { name = "uvicorn", specifier = ">=0.30.0" },
     { name = "vulture", specifier = ">=2.11" },
@@ -3121,25 +3111,6 @@ wheels = [
 ]
 
 [[package]]
-name = "opentelemetry-exporter-otlp-proto-grpc"
-version = "1.39.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "googleapis-common-protos" },
-    { name = "grpcio", version = "1.67.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
-    { name = "grpcio", version = "1.78.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp-proto-common" },
-    { name = "opentelemetry-proto" },
-    { name = "opentelemetry-sdk" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/53/48/b329fed2c610c2c32c9366d9dc597202c9d1e58e631c137ba15248d8850f/opentelemetry_exporter_otlp_proto_grpc-1.39.1.tar.gz", hash = "sha256:772eb1c9287485d625e4dbe9c879898e5253fea111d9181140f51291b5fec3ad", size = 24650, upload-time = "2025-12-11T13:32:41.429Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/a3/cc9b66575bd6597b98b886a2067eea2693408d2d5f39dad9ab7fc264f5f3/opentelemetry_exporter_otlp_proto_grpc-1.39.1-py3-none-any.whl", hash = "sha256:fa1c136a05c7e9b4c09f739469cbdb927ea20b34088ab1d959a849b5cc589c18", size = 19766, upload-time = "2025-12-11T13:32:21.027Z" },
-]
-
-[[package]]
 name = "opentelemetry-exporter-otlp-proto-http"
 version = "1.39.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4740,19 +4711,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/66/7c/08ff0012507297a4dd74a5420fdc0eb9e3e80f4e88cab1538d7f28db303d/sentencepiece-0.2.1-cp314-cp314t-win32.whl", hash = "sha256:d3233770f78e637dc8b1fda2cd7c3b99ec77e7505041934188a4e7fe751de3b0", size = 1099765, upload-time = "2025-08-12T07:00:46.058Z" },
     { url = "https://files.pythonhosted.org/packages/91/d5/2a69e1ce15881beb9ddfc7e3f998322f5cedcd5e4d244cb74dade9441663/sentencepiece-0.2.1-cp314-cp314t-win_amd64.whl", hash = "sha256:5e4366c97b68218fd30ea72d70c525e6e78a6c0a88650f57ac4c43c63b234a9d", size = 1157807, upload-time = "2025-08-12T07:00:47.673Z" },
     { url = "https://files.pythonhosted.org/packages/f3/16/54f611fcfc2d1c46cbe3ec4169780b2cfa7cf63708ef2b71611136db7513/sentencepiece-0.2.1-cp314-cp314t-win_arm64.whl", hash = "sha256:105e36e75cbac1292642045458e8da677b2342dcd33df503e640f0b457cb6751", size = 1136264, upload-time = "2025-08-12T07:00:49.485Z" },
-]
-
-[[package]]
-name = "sentry-sdk"
-version = "2.58.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "certifi" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/26/b3/fb8291170d0e844173164709fc0fa0c221ed75a5da740c8746f2a83b4eb1/sentry_sdk-2.58.0.tar.gz", hash = "sha256:c1144d947352d54e5b7daa63596d9f848adf684989c06c4f5a659f0c85a18f6f", size = 438764, upload-time = "2026-04-13T17:23:26.265Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/eb/d875669993b762556ae8b2efd86219943b4c0864d22204d622a9aee3052b/sentry_sdk-2.58.0-py2.py3-none-any.whl", hash = "sha256:688d1c704ddecf382ea3326f21a67453d4caa95592d722b7c780a36a9d23109e", size = 460919, upload-time = "2026-04-13T17:23:24.675Z" },
 ]
 
 [[package]]

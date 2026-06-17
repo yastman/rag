@@ -9,6 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REMOVED_FILES = {
     "scripts/log_correlation.py",
+    "src/observability_sentry.py",
+    "telegram_bot/observability_sentry.py",
+    "telegram_bot/metrics_server.py",
 }
 
 REMOVED_SYMBOLS = {
@@ -20,15 +23,6 @@ REMOVED_SYMBOLS = {
     },
     "src/evaluation/langfuse_integration.py": {"trace_search_with_spans"},
     "src/ingestion/docling_client.py": {"convert_file"},
-    "src/observability_sentry.py": {
-        "_resolve",
-        "error_boundary_breadcrumb",
-        "handler_breadcrumb",
-        "lifecycle_breadcrumb",
-        "message_receive_breadcrumb",
-        "rag_breadcrumb",
-        "session_breadcrumb",
-    },
     "src/runtime/graph/config.py": {"create_hybrid_embeddings"},
     "src/runtime/pipeline/rag.py": {
         "_detect_filter_sensitive_query",

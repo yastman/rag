@@ -198,8 +198,7 @@ def _resolve_release(explicit: str | None = None) -> str:
       3. installed package version (``contextual-rag@<version>``),
       4. ``unknown`` sentinel.
 
-    Mirrors ``src/observability_sentry.py::_resolve_release`` so Sentry and
-    Langfuse group events by the same release string. Never returns ``None``
+    Mirrors the release resolution pattern so Langfuse groups events by the same release string. Never returns ``None``
     / empty so Langfuse always has a value to power "Aggregate by version".
     """
     candidate = explicit if explicit is not None else os.getenv("LANGFUSE_RELEASE", "")

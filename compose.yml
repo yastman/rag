@@ -257,15 +257,6 @@ services:
       LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
       LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
       LANGFUSE_PROMPT_LABEL: "${LANGFUSE_PROMPT_LABEL:-production}"
-      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-telegram-bot}"
-      OTEL_PROPAGATORS: "${OTEL_PROPAGATORS:-tracecontext,baggage}"
-      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
-      # Sentry-compatible error tracking (optional; disabled when DSN is blank)
-      SENTRY_DSN: "${SENTRY_DSN:-}"
-      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-local}"
-      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
-      SENTRY_TRACES_SAMPLE_RATE: "${SENTRY_TRACES_SAMPLE_RATE:-0.0}"
-      SENTRY_DEBUG: "${SENTRY_DEBUG:-false}"
       # CRM — Kommo integration
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"

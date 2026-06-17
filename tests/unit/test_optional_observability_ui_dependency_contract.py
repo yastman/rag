@@ -11,7 +11,7 @@ import yaml
 
 PYPROJECT = Path("pyproject.toml")
 COMPOSE_DEV = Path("compose.dev.yml")
-HEAVY_OPTIONAL = {"gradio", "pillow", "sentry-sdk", "langfuse"}
+HEAVY_OPTIONAL = {"gradio", "pillow", "langfuse"}
 
 
 def _dep_names(deps: list[str]) -> set[str]:
@@ -36,7 +36,7 @@ def test_observability_and_heavy_ui_are_not_base_dependencies() -> None:
 def test_observability_scheduling_and_ui_extras_own_heavy_deps() -> None:
     extras = _project()["project"]["optional-dependencies"]
 
-    assert {"langfuse", "sentry-sdk"}.issubset(_dep_names(extras["observability"]))
+    assert {"langfuse"}.issubset(_dep_names(extras["observability"]))
     assert {"pillow", "gradio"}.issubset(_dep_names(extras["ui"]))
     # apscheduler/scheduling extra removed in #2602
 

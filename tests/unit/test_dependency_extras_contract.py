@@ -56,7 +56,6 @@ def test_base_dependencies_are_core_only() -> None:
         "gradio",
         "pillow",
         "langfuse",
-        "sentry-sdk",
         "apscheduler",
     }
 
