@@ -8,7 +8,7 @@ import uuid
 
 import asyncpg
 
-from src.voice.schemas import CallStatus
+from archive.voice.schemas import CallStatus
 
 
 logger = logging.getLogger(__name__)

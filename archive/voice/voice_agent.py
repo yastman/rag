@@ -10,8 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any, NotRequired, TypedDict
 
-from telegram_bot.agents.agent import AgentMessage, ImperativeBotAgent
-from telegram_bot.agents.rag_tool import rag_search
+from archive.voice._agent_stubs import AgentMessage, ImperativeBotAgent, rag_search
 
 
 logger = logging.getLogger(__name__)

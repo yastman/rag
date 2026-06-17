@@ -19,10 +19,10 @@ from dotenv import load_dotenv
 
 from src.observability import get_client, initialize_langfuse, observe, propagate_attributes
 from src.observability_sentry import initialize_sentry, set_runtime_tags
-from src.voice.observability import trace_voice_session, update_voice_trace, voice_session_id
-from src.voice.rag_api_client import RagApiClient, RagApiClientError, RagQueryRequest
-from src.voice.schemas import CallStatus
-from src.voice.transcript_store import TranscriptStore
+from archive.voice.observability import trace_voice_session, update_voice_trace, voice_session_id
+from archive.voice.rag_api_client import RagApiClient, RagApiClientError, RagQueryRequest
+from archive.voice.schemas import CallStatus
+from archive.voice.transcript_store import TranscriptStore
 
 
 _LIVEKIT_IMPORT_ERROR: Exception | None = None
