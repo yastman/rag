@@ -37,15 +37,6 @@ Default `up` (no profile) starts unprofiled services:
 
 Optional profiles add scoped services:
 
-<<<<<<< HEAD
-| Profile | Services |
-| --- | --- |
-| `bot` | `litellm`, `bot` |
-| `ingest` | `ingestion` |
-| `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` |
-| `obs` | archived — see `archive/obs/` |
-| `full` | all profile-gated services |
-=======
 | Profile | Services | Notes |
 | --- | --- | --- |
 | `bot` | `litellm`, `bot` | Core bot path |
@@ -54,7 +45,6 @@ Optional profiles add scoped services:
 | `obs` | `loki`, `promtail`, `alertmanager` | Optional log monitoring |
 | `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
 | `full` | all profile-gated services | |
->>>>>>> b28627a277 (ARCH-10: docs archive + rewrite for the monolith (#2606))
 
 ### VPS default runtime
 
