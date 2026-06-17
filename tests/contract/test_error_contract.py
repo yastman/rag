@@ -57,19 +57,13 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "src/runtime/generation/service.py": ["ERROR"],
     "telegram_bot/services/history_service.py": ["ERROR"],
     "telegram_bot/middlewares/error_handler.py": ["ERROR"],
-    # CRM callback handlers — exception path of CRM dialog/wrapper spans
-    # (note prompt, task prompt, task edit, etc.); telegram answer fails or
-    # backing CRM call raises and the trace must record ERROR (#1810).
-    "telegram_bot/handlers/crm_callbacks.py": ["ERROR"],
-    # CRM quick-actions aiogram-dialog (#2053) — error spans on Kommo
-    # add_note / create_task / update_task failures inside dialog message
-    # handlers (mirrors crm_callbacks.py before the FSM-to-dialog migration).
-    "telegram_bot/dialogs/crm_quick_actions.py": ["ERROR"],
-    # Background scheduler jobs — observability wrappers around hot lead
-    # notification; ERROR span recorded on unhandled exceptions before re-raise
-    # so the job's trace is not silently green (#1662, #1810).
+    # CRM callback handlers — archived in #2625 (CRM archival).
+    # "telegram_bot/handlers/crm_callbacks.py": ["ERROR"],
+    # CRM quick-actions aiogram-dialog — archived in #2625.
+    # "telegram_bot/dialogs/crm_quick_actions.py": ["ERROR"],
+    # Background scheduler jobs — hot_lead_notifier archived in #2625.
     # NOTE: lead_score_sync, nurturing_scheduler, session_summary_worker archived in #2602.
-    "telegram_bot/services/hot_lead_notifier.py": ["ERROR"],
+    # "telegram_bot/services/hot_lead_notifier.py": ["ERROR"],
     # Query analyzer LLM wrapper — records ERROR on OpenAI / connection /
     # rate-limit / timeout exceptions before falling back to the user's raw
     # query (#1659, #1810).

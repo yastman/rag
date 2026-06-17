@@ -1,4 +1,4 @@
-"""Verify docker-compose bot service has CRM env vars (#402)."""
+"""Verify docker-compose bot service has required env vars (#402, updated #2635)."""
 
 from functools import cache
 from pathlib import Path
@@ -19,18 +19,8 @@ def _load_bot_env(compose_file: str) -> dict[str, str]:
     return env
 
 
+# Kommo CRM vars removed — CRM surface archived in #2625.
 REQUIRED_VARS = [
-    "KOMMO_ENABLED",
-    "KOMMO_SUBDOMAIN",
-    "KOMMO_ACCESS_TOKEN",
-    "KOMMO_CLIENT_ID",
-    "KOMMO_CLIENT_SECRET",
-    "KOMMO_REDIRECT_URI",
-    "KOMMO_TELEGRAM_FIELD_ID",
-    "KOMMO_DEFAULT_PIPELINE_ID",
-    "KOMMO_SESSION_FIELD_ID",
-    "KOMMO_LEAD_SCORE_FIELD_ID",
-    "KOMMO_LEAD_BAND_FIELD_ID",
     "MANAGER_IDS",
     "REALESTATE_DATABASE_URL",
 ]

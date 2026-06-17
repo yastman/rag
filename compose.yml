@@ -123,12 +123,6 @@ services:
       HF_HOME: /models/hf
       TRANSFORMERS_CACHE: /models/hf
       MODEL_CACHE_DIR: /models/hf
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
-      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-bge-m3}"
-      OTEL_PROPAGATORS: "${OTEL_PROPAGATORS:-tracecontext,baggage}"
-      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -215,14 +209,6 @@ services:
       # Domain configuration
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
-      # Langfuse observability (optional — bot degrades gracefully)
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
-      LANGFUSE_TRACING_ENVIRONMENT: "${LANGFUSE_TRACING_ENVIRONMENT:-}"
-      LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
-      LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
-      LANGFUSE_PROMPT_LABEL: "${LANGFUSE_PROMPT_LABEL:-production}"
       # Manager
       MANAGER_IDS: "${MANAGER_IDS:-}"
       MANAGERS_GROUP_ID: "${MANAGERS_GROUP_ID:-}"
@@ -271,12 +257,6 @@ services:
     stop_grace_period: 30s
     logging: *default-logging
     environment:
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
-      - LANGFUSE_HOST=${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-ingestion}
-      - OTEL_PROPAGATORS=${OTEL_PROPAGATORS:-tracecontext,baggage}
-      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
@@ -323,6 +303,7 @@ services:
   # ClickHouse for Langfuse v3 analytics
   clickhouse:
     <<: *security-defaults
+    profiles: ["ml", "full"]
     image: clickhouse/clickhouse-server:26.5.1@sha256:07afc18d8a9706eb9d85c5c5d2752e5270f91bbc2894caeaecb73e4d0f603bf5
     # Official ClickHouse entrypoint chowns /var/lib/clickhouse and drops to
     # the clickhouse user. Keep cap_drop:[ALL] but restore only these startup
@@ -353,6 +334,7 @@ services:
   # MinIO S3-compatible storage for Langfuse v3
   minio:
     <<: *security-defaults
+    profiles: ["ml", "full"]
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     restart: unless-stopped
     read_only: false
@@ -378,6 +360,7 @@ services:
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
     <<: *security-defaults
+    profiles: ["ml", "full"]
     image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
     # Match the redis user (uid 999) baked into redis:8.x so the process can
     # write /data with cap_drop:[ALL] (no CAP_DAC_OVERRIDE/CAP_FOWNER to bypass
@@ -417,6 +400,7 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
+    profiles: ["ml", "full"]
     image: langfuse/langfuse-worker:3.175.0@sha256:cf7ac3d5d29bce3d2f4626d5b3231665c5585a81599b5f54fd8e30f648874403
     restart: always
     depends_on:
@@ -482,6 +466,7 @@ services:
 
   # Langfuse v3 Web
   langfuse:
+    profiles: ["ml", "full"]
     image: langfuse/langfuse:3.175.0@sha256:45c0fb329106da48ebffcfc17a5a7f585bb5bfb94c44125add7bdd19a440ed9b
     restart: always
     depends_on:
