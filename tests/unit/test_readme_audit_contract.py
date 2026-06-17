@@ -34,7 +34,7 @@ class TestServicesReadme:
 
 class TestVoiceReadme:
     def test_voicebot_import_check(self):
-        text = _read("src/voice/README.md")
+        text = _read("archive/voice/README.md")
         assert "VoiceBot" in text
         assert "PropertyVoiceAgent" not in text
 

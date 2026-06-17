@@ -1,5 +1,7 @@
 # Voice / LiveKit W3C TraceContext baseline (#2257)
 
+> **Archived** — voice surface moved to `archive/voice/` under ARCH-02 #2598. This document is preserved for reference only.
+
 SDK baseline for how the voice path participates in the single distributed trace
 (#2244). Research-only decision record: it documents the supported approach and
 the current state, and defers the behavioural change (deprecating the manual

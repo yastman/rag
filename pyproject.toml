@@ -105,18 +105,8 @@ mini-app = [
     "httpx>=0.27.0",
 ]
 
-# Voice bot (LiveKit Agents + RAG API)
-voice = [
-    "livekit-agents[silero,turn-detector]~=1.4",
-    "livekit-plugins-elevenlabs~=1.1",
-    "livekit-plugins-openai~=1.1",
-    "livekit~=1.0",
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
-    "httpx>=0.27.0",
-    "opentelemetry-sdk>=1.39.0",
-    "opentelemetry-exporter-otlp-proto-http>=1.39.0",
-]
+# Voice bot (LiveKit Agents + RAG API) — archived to archive/voice/ (ARCH-02 #2598)
+voice = []
 
 # Docling service dependencies live in services/docling because the root
 # project talks to docling-serve over HTTP. Keeping this root extra empty avoids
@@ -194,7 +184,7 @@ dev = [
 # =============================================================================
 # UV: Dependency Overrides
 # =============================================================================
-# Optional docling/livekit extras still need the FastAPI instrumentation
+# Optional docling extras still need the FastAPI instrumentation
 # pre-release constraint override, but DEPS-OBS1 removes all instrumentation
 # packages from the base monolith dependencies.
 [tool.uv]
@@ -252,6 +242,7 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+    "archive",
 ]
 
 # Line length: 100 (slightly longer than Black's 88 for readability)
@@ -332,7 +323,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 # Import sorting configuration (isort replacement)
 [tool.ruff.lint.isort]
-known-first-party = ["config", "evaluation"]
+known-first-party = ["config", "evaluation", "src", "telegram_bot"]
 force-single-line = false
 lines-after-imports = 2
 

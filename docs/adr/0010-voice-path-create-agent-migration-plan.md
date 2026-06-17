@@ -1,6 +1,6 @@
 # ADR-0010: Voice Path Migration to `create_agent` SDK — Plan
 
-**Status:** Proposed
+**Status:** Superseded — archived (ARCH-02 #2598)
 
 **Date:** 2026-05-22
 

@@ -41,7 +41,6 @@ Optional profiles add scoped services:
 | --- | --- |
 | `bot` | `litellm`, `bot` |
 | `ingest` | `ingestion` |
-| `voice` | `rag-api`, `livekit-server`, `livekit-sip`, `voice-agent`, `litellm` — **intentionally separate/off for now** |
 | `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` |
 | `obs` | `loki`, `promtail`, `alertmanager` |
 | `full` | all profile-gated services |
@@ -68,7 +67,6 @@ make docker-up
 # Profile stacks
 make docker-bot-up
 make docker-ingest-up
-make docker-voice-up
 make docker-ml-up
 make docker-obs-up
 make docker-full-up
@@ -97,7 +95,6 @@ still need to be throwaway/dev-only:
 - `CLICKHOUSE_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
 - `LANGFUSE_REDIS_PASSWORD`
-- `LIVEKIT_API_SECRET` when using the `voice` profile
 
 ## Service Endpoints (Host)
 
@@ -116,8 +113,6 @@ still need to be throwaway/dev-only:
 | MinIO Console | `http://localhost:${MINIO_CONSOLE_PORT:-9091}` |
 | Loki | `http://localhost:3100` |
 | Alertmanager | `http://localhost:9093` |
-| RAG API (voice path) | `http://localhost:8080` |
-| LiveKit | `ws://localhost:7880` |
 
 ## Required Environment Variables
 
@@ -152,11 +147,6 @@ does not define the bot image dependency set.
 - `TELEGRAM_ALERTING_BOT_TOKEN`
 - `TELEGRAM_ALERTING_CHAT_ID`
 
-### Voice path
-
-- `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` (dev defaults exist)
-- `ELEVENLABS_API_KEY` (if ElevenLabs is used)
-
 ### OpenTelemetry Service Identity (`OTEL_SERVICE_NAME`)
 
 Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in Compose so traces and observations are consistently attributed. The variable is optional — every service falls back to its default when `OTEL_SERVICE_NAME` is unset.
@@ -167,8 +157,6 @@ Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in 
 | `bot` | `telegram-bot` |
 | `user-base` | `user-base` |
 | `ingestion` | `ingestion` |
-| `rag-api` | `rag-api` |
-| `voice-agent` | `voice-agent` |
 
 The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution. Kubernetes manifests under `archive/k8s/` additionally hard-code the `telegram-bot` identity.
 
@@ -440,5 +428,4 @@ curl -s http://localhost:6333/collections/gdrive_documents_bge | python3 -m json
 - Images are pinned by tag+digest in compose files; update pins explicitly.
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
 - Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development may still use the repo's `uv` environment (Python 3.11+).
-- The `voice` profile (LiveKit, SIP, voice agent) is intentionally not part of the current local bring-up. Bring it up separately only when explicitly needed.
 - The Mini App frontend/runtime is archived under `archive/mini_app/`; its nginx contract is preserved there for reference, but it is not a required runtime surface.

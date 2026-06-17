@@ -18,7 +18,6 @@ import pytest
 pytestmark = pytest.mark.requires_extras
 
 
-
 _TRACE_ID = "trace-contract-abc"
 
 # Minimal state dict that exercises all 13 core RAG scores.
@@ -447,6 +446,7 @@ class TestBuildTraceMetadataContract:
         assert "voice_audio" not in metadata
 
 
+@pytest.mark.skip(reason="src.voice archived to archive/voice (ARCH-02 #2598)")
 class TestVoiceLifecycleTraceContract:
     """Voice lifecycle traces should preserve call/session/status contract (#609)."""
 

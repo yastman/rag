@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+
 pytestmark = pytest.mark.requires_extras("evaluation")
 
 from src.evaluation.ragas_evaluation import RAGASEvaluationUnavailable, run_ragas_evaluation

@@ -53,7 +53,6 @@ REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 
 LANGFUSE_RUNTIME_DOCKERFILES: tuple[str, ...] = (
     "telegram_bot/Dockerfile",
-    "src/api/Dockerfile",
     "Dockerfile.ingestion",
 )
 """Dockerfiles whose runtime imports ``telegram_bot.observability`` (Langfuse)."""

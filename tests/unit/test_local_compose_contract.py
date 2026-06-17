@@ -22,7 +22,6 @@ def test_local_dev_docker_targets_use_local_compose_override() -> None:
         "docker-ml-up",
         "docker-ai-up",
         "docker-ingest-up",
-        "docker-voice-up",
         "docker-full-up",
         "docker-down",
         "docker-ps",

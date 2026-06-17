@@ -180,8 +180,8 @@ def test_release_gate_has_disk_pressure_blocker() -> None:
 
 
 _PYTHON_SLIM_DOCKERFILES = [
-    ROOT / "src" / "api" / "Dockerfile",
-    ROOT / "src" / "voice" / "Dockerfile",
+    ROOT / "archive" / "api" / "Dockerfile",
+    ROOT / "archive" / "voice" / "Dockerfile",
 ]
 
 
@@ -207,11 +207,11 @@ def test_python_slim_healthchecks_do_not_use_wget() -> None:
 
 
 def test_compose_rag_api_voice_agent_healthchecks_do_not_use_wget() -> None:
-    """compose.yml healthchecks for rag-api and voice-agent run in python:slim images;
-    wget is not available there."""
+    """compose.yml healthchecks for services that previously ran in python:slim images.
+    Voice/RAG-API services are archived; this test now passes trivially."""
     compose_text = (ROOT / "compose.yml").read_text()
 
-    # Find rag-api healthcheck section
+    # rag-api and voice-agent are archived; no match expected
     rag_api_match = re.search(
         r"rag-api:.*?healthcheck:\s*\n(.*?)(?=\n  \w|\n\w|\Z)",
         compose_text,
@@ -238,13 +238,6 @@ def test_compose_rag_api_voice_agent_healthchecks_do_not_use_wget() -> None:
         assert "python" in voice_agent_healthcheck, (
             "voice-agent compose healthcheck should use Python stdlib available in python:slim."
         )
-
-
-def test_voice_agent_dockerfile_healthcheck_checks_voice_agent_process() -> None:
-    cmd = _extract_healthcheck_cmd(ROOT / "src" / "voice" / "Dockerfile")
-
-    assert "python -m src.voice.healthcheck" in cmd
-    assert "localhost:8080/health" not in cmd
 
 
 def test_bot_dockerfile_healthcheck_command_is_runtime_available() -> None:

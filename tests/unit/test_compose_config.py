@@ -347,7 +347,6 @@ class TestOtelServiceNameDefaults:
         "bge-m3": "bge-m3",
         "bot": "telegram-bot",
         "ingestion": "ingestion",
-        "rag-api": "rag-api",
     }
 
     def _get_env(self, svc: dict) -> dict:
