@@ -64,7 +64,6 @@ from aiogram.types import (
     Message,
 )
 from aiogram.utils.chat_action import ChatActionSender
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
@@ -529,7 +528,7 @@ class PropertyBot:
         self._topic_manager: Any = None
         self._miniapp_subscriber_task: asyncio.Task[None] | None = None
         self._polling_lock: RedisPollingLock | None = None
-        self._polling_lock_scheduler: AsyncIOScheduler | None = None
+        self._polling_lock_task: asyncio.Task[None] | None = None
         self._polling_lock_consecutive_failures: int = 0
         self._polling_lock_owner: str | None = None
 
@@ -4444,21 +4443,18 @@ class PropertyBot:
             await self._polling_lock.acquire(self._polling_lock_owner)
             refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
             self._polling_lock_consecutive_failures = 0
-            self._polling_lock_scheduler = AsyncIOScheduler(
-                job_defaults={
-                    "coalesce": True,
-                    "max_instances": 1,
-                    "misfire_grace_time": refresh_interval,
-                }
+
+            async def _polling_lock_heartbeat_loop() -> None:
+                while True:
+                    await asyncio.sleep(refresh_interval)
+                    try:
+                        await self._polling_lock_heartbeat_tick()
+                    except Exception:
+                        logger.exception("Polling lock heartbeat loop error")
+
+            self._polling_lock_task = asyncio.create_task(
+                _polling_lock_heartbeat_loop(), name="polling-lock-heartbeat"
             )
-            self._polling_lock_scheduler.add_job(
-                self._polling_lock_heartbeat_tick,
-                "interval",
-                seconds=refresh_interval,
-                id="polling-lock-heartbeat",
-                replace_existing=True,
-            )
-            self._polling_lock_scheduler.start()
 
         # DEPS-OBS3: in-process Prometheus /metrics is removed. Pipeline
         # counters/latencies are emitted as structured JSON product logs.
@@ -4466,9 +4462,11 @@ class PropertyBot:
         try:
             await self.dp.start_polling(self.bot)
         finally:
-            if self._polling_lock_scheduler is not None:
-                self._polling_lock_scheduler.shutdown(wait=False)
-                self._polling_lock_scheduler = None
+            if self._polling_lock_task is not None:
+                self._polling_lock_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._polling_lock_task
+                self._polling_lock_task = None
 
     async def _warmup_bge(self) -> None:
         """Warm up BGE-M3 connection pool (#953).
@@ -4538,9 +4536,11 @@ class PropertyBot:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._miniapp_subscriber_task
             self._miniapp_subscriber_task = None
-        if self._polling_lock_scheduler is not None:
-            self._polling_lock_scheduler.shutdown(wait=False)
-            self._polling_lock_scheduler = None
+        if self._polling_lock_task is not None:
+            self._polling_lock_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._polling_lock_task
+            self._polling_lock_task = None
         if self._polling_lock is not None and self._polling_lock_owner is not None:
             try:
                 await self._polling_lock.release()

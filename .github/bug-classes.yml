@@ -34,3 +34,8 @@ bug_classes:
     description: Filesystem dynamic import (spec_from_file_location/exec_module) used in RAG hot-path, bypassing module cache and type identity
     canonical_issue: "#2620"
     guardrail: tests/contract/test_no_dynamic_import_in_runtime_hotpath_contract.py
+
+  - id: apscheduler-missing-extra
+    description: apscheduler imported at module level without scheduling extra causing ImportError at startup
+    canonical_issue: "#2617"
+    guardrail: tests/unit/services/test_redis_monitor_asyncio.py, tests/unit/services/test_session_summary_worker_asyncio.py, tests/unit/test_bot_polling_lock_asyncio.py

@@ -3,17 +3,17 @@
 Polls Redis for ``session:last_active:{user_id}`` keys older than ``idle_timeout_min``.
 Generates summary via LLM, writes to Kommo as note (if available).
 
-Worker lifecycle uses APScheduler interval job for periodic polling.
+Worker lifecycle uses an asyncio-native periodic task for periodic polling.
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from telegram_bot.observability import get_client, observe
 
@@ -53,27 +53,26 @@ class SessionSummaryWorker:
         self._summary_model = summary_model
         self._max_sessions_per_cycle = max(1, max_sessions_per_cycle)
         self._history_source = history_source
-        self._scheduler: AsyncIOScheduler | None = None
+        self._task: asyncio.Task[None] | None = None
+
+    async def _run_periodic(self) -> None:
+        """Asyncio-native periodic loop: sleep then tick, forever until cancelled."""
+        while True:
+            await asyncio.sleep(self._poll_interval_sec)
+            try:
+                await self._check_idle_sessions()
+            except Exception:
+                logger.exception("SessionSummaryWorker cycle failed in periodic loop")
 
     async def start(self) -> None:
-        """Start the background polling using APScheduler.
+        """Start the background polling using an asyncio background task.
 
         Logs a warning when ``history_source`` is not wired (#1599) — the
         worker would otherwise start, scan idle sessions, and silently delete
         keys without ever generating a summary, which looked like the feature
         was running while it was actually a no-op.
         """
-        self._scheduler = AsyncIOScheduler(
-            job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 300}
-        )
-        self._scheduler.add_job(
-            self._check_idle_sessions,
-            "interval",
-            seconds=self._poll_interval_sec,
-            id="session-summary-worker",
-            replace_existing=True,
-        )
-        self._scheduler.start()
+        self._task = asyncio.create_task(self._run_periodic(), name="session-summary-worker")
         if self._history_source is None:
             logger.warning(
                 "SessionSummaryWorker started without history_source — idle "
@@ -95,10 +94,12 @@ class SessionSummaryWorker:
         )
 
     async def stop(self) -> None:
-        """Shut down the scheduler."""
-        if self._scheduler is not None:
-            self._scheduler.shutdown(wait=False)
-            self._scheduler = None
+        """Cancel the background task."""
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
         logger.info("SessionSummaryWorker stopped")
 
     @observe(name="session-summary-check")
