@@ -268,3 +268,98 @@ def test_runbook_documents_runner_policy_essentials() -> None:
     assert not missing, (
         "SELF_HOSTED_RUNNER.md must document these runner policy essentials: " + ", ".join(missing)
     )
+
+
+# ---------------------------------------------------------------------------
+# #2637: CI/coverage gates after monolith cleanup
+# ---------------------------------------------------------------------------
+
+
+def test_nightly_full_does_not_run_baseline_tests() -> None:
+    """nightly-full must not run tests/baseline/ — baseline infra is not a retained
+    integration surface and was not part of the kept monolith E2E proof."""
+    text = Path(".github/workflows/nightly-heavy.yml").read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    nightly_full = data["jobs"].get("nightly-full")
+    assert nightly_full is not None, "nightly-heavy.yml must define nightly-full"
+    run_commands = " ".join(
+        step.get("run", "")
+        for step in nightly_full.get("steps", [])
+        if isinstance(step.get("run", ""), str)
+    )
+    assert "tests/baseline" not in run_commands, (
+        "nightly-full must not include tests/baseline/ — "
+        "baseline infra is not a retained integration/smoke surface"
+    )
+
+
+def test_nightly_full_job_name_reflects_kept_surfaces() -> None:
+    """nightly-full job name must not reference 'baseline' (kept surfaces only)."""
+    data = yaml.safe_load(Path(".github/workflows/nightly-heavy.yml").read_text(encoding="utf-8"))
+    name = data["jobs"]["nightly-full"].get("name", "")
+    assert "baseline" not in name.lower(), (
+        f"nightly-full job name {name!r} still references 'baseline'; "
+        "update to reflect kept integration + smoke surfaces only"
+    )
+
+
+def test_nightly_full_python_version_is_313() -> None:
+    """nightly-full must use Python 3.13 to match project tooling (#2623)."""
+    text = Path(".github/workflows/nightly-heavy.yml").read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    nightly_full = data["jobs"]["nightly-full"]
+    run_commands = [
+        step.get("run", "")
+        for step in nightly_full.get("steps", [])
+        if isinstance(step.get("run", ""), str)
+    ]
+    assert any("3.13" in cmd for cmd in run_commands), (
+        "nightly-full must install Python 3.13 — found: " + str(run_commands)
+    )
+    assert not any("3.12" in cmd for cmd in run_commands), (
+        "nightly-full must not reference Python 3.12 (use 3.13 per #2623)"
+    )
+
+
+def test_core_tests_python_version_is_313() -> None:
+    """core-tests workflow must use Python 3.13 to match project tooling (#2623)."""
+    text = Path(".github/workflows/core-tests.yml").read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    test_core_job = data["jobs"].get("test-core")
+    assert test_core_job is not None, "core-tests.yml must define test-core job"
+    run_commands = [
+        step.get("run", "")
+        for step in test_core_job.get("steps", [])
+        if isinstance(step.get("run", ""), str)
+    ]
+    assert any("3.13" in cmd for cmd in run_commands), (
+        "core-tests test-core must install Python 3.13 — found: " + str(run_commands)
+    )
+    assert not any("3.12" in cmd for cmd in run_commands), (
+        "core-tests test-core must not reference Python 3.12 (use 3.13 per #2623)"
+    )
+
+
+def test_coverage_omits_evaluation_directory_not_individual_files() -> None:
+    """Coverage omit must use src/evaluation/* directory glob, not individual files.
+
+    After archival cleanup the whole evaluation surface is omitted;
+    listing individual files is fragile and misses new additions.
+    """
+    import tomllib
+
+    data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    omit_list: list[str] = data.get("tool", {}).get("coverage", {}).get("run", {}).get("omit", [])
+    # Must have the directory glob
+    assert any("src/evaluation" in entry and "*" in entry for entry in omit_list), (
+        "coverage.run.omit must include a glob like 'src/evaluation/*' or 'src/evaluation/**' "
+        "instead of listing individual files"
+    )
+    # Must NOT list individual src/evaluation/*.py files
+    individual_eval_files = [
+        e for e in omit_list if e.startswith("src/evaluation/") and e.endswith(".py")
+    ]
+    assert not individual_eval_files, (
+        f"coverage.run.omit still lists individual evaluation files: {individual_eval_files}; "
+        "replace with a directory glob"
+    )

@@ -456,13 +456,8 @@ omit = [
     # Scripts directory (not production code)
     "scripts/*",
     "scripts/**/*",
-    # Evaluation scripts (archived, not production code)
-    "archive/evaluation/create_golden_set.py",
-    "archive/evaluation/generate_test_queries.py",
-    "archive/evaluation/run_ab_test.py",
-    "archive/evaluation/smoke_test.py",
-    "archive/evaluation/search_engines_rerank.py",
-    "archive/evaluation/langfuse_integration.py",
+    # Evaluation surface (not production code — omit entire directory)
+    "src/evaluation/*",
     # One-off setup scripts
     "telegram_bot/setup_qdrant_indexes.py",
     # Test/debug scripts in wrong location
