@@ -1,8 +1,115 @@
 # Canonical Project Structure and Layering Map
 
-**Issue:** #2633 (ARCH-19)
+**Issue:** #2633 (ARCH-19), extended by #2721 (directory ownership audit)
 **Status:** Authoritative after archival PRs for voice, API, k8s, and Voyage landed.
 **Enforced by:** `tests/contract/test_canonical_structure_contract.py`
+
+---
+
+## Directory Ownership Map
+
+Canonical table for every major directory. Answers: what it does, who owns it, whether it is active/optional/archived, what may import it, what tests cover it, and what docs describe it.
+
+| Directory | Purpose | Owner layer | Status | Allowed imports | Tests | Docs | Action |
+|---|---|---|---|---|---|---|---|
+| `src/core/` | Public assistant entrypoint: `run_assistant_request()`, `AssistantResult`, typed state contracts | core | ✅ Active | `src/runtime`, `src/services`, `src/config`, `src/models` | `tests/unit/core/`, `tests/contract/test_core_*.py` | `src/core/README.md`, `docs/designs/unified-assistant-entrypoint-contract.md` | Canonical; do not add domain logic here |
+| `src/runtime/` | RAG pipeline, retrieval, generation, grounding, LLM routing, orchestration | runtime | ✅ Active | `src/adapters`, `src/retrieval`, `src/core`, `src/services`, `src/config`, `src/models` | `tests/unit/runtime/`, `tests/integration/test_graph_paths.py` | `src/runtime/README.md`, `docs/PIPELINE_OVERVIEW.md` | Never import `telegram_bot` |
+| `src/runtime/pipeline/` | Imperative `AssistantPipeline` — main runtime loop | runtime | ✅ Active | same as `src/runtime/` | `tests/unit/runtime/` | `src/runtime/README.md` | Primary orchestration path (ADR-0019) |
+| `src/runtime/graph/` | LangGraph compat facade (builder + nodes) | runtime | ✅ Active (transitional) | same as `src/runtime/` | `tests/unit/graph/`, `tests/integration/test_graph_paths.py` | `src/runtime/README.md` | Migration target — new features go to `pipeline/` |
+| `src/adapters/` | Provider/SDK adapters: BGE-M3, OpenAI embeddings, LiteLLM | adapters | ✅ Active | `src/config`, `src/models` | `tests/unit/adapters/` | `src/runtime/README.md` | Must not import `src/runtime` or `telegram_bot` |
+| `src/adapters/llm/` | LiteLLM adapter | adapters | ✅ Active (transitional coupling) | `src/config` | `tests/unit/adapters/` | `docs/engineering/sdk-registry.md` | Tracked coupling in `tests/data/known_layering_violations.json`; resolve by moving factory to adapters |
+| `src/ingestion/` | Ingestion infrastructure: CocoIndex flow, Docling client, chunker, indexer | ingestion | ✅ Active | `src/adapters`, `src/services`, `src/config`, `src/models` | `tests/unit/ingestion/`, `tests/integration/test_unified_ingestion_e2e.py` | `docs/INGESTION.md`, `src/ingestion/README.md` | Never import `src/runtime` or `telegram_bot` |
+| `src/ingestion/unified/` | Canonical CocoIndex+Docling pipeline: file identity, upsert/delete, retry, DLQ, PostgreSQL state | ingestion | ✅ Active | `src/adapters`, `src/services`, `src/config` | `tests/unit/ingestion/`, `tests/integration/` | `docs/INGESTION.md`, `src/ingestion/unified/AGENTS.override.md` | Canonical ingestion path |
+| `src/retrieval/` | Search engines, reranker, topic classifier | runtime | ✅ Active | `src/adapters`, `src/services`, `src/config`, `src/models` | `tests/unit/retrieval/`, `tests/unit/test_search_engines.py` | `src/retrieval/README.md` | |
+| `src/services/` | Shared service clients: BGE-M3 HTTP client, vectorizers, content loader, handoff state | services | ✅ Active | `src/config`, `src/models` | `tests/unit/services/` | `src/runtime/README.md` | Low-level clients only; no business logic |
+| `src/models/` | Shared data models (apartment/catalog model, embedding model) | core | ✅ Active | none | `tests/unit/models/` | `src/models/README.md` | Domain-specific; replace for a different vertical |
+| `src/config/` | Settings (Pydantic), constants, Qdrant policy | infra | ✅ Active | none | `tests/unit/config/`, `tests/unit/test_settings*.py` | `src/config/README.md` | |
+| `src/security/` | PII redaction utilities | infra | ✅ Active | `src/config` | `tests/unit/security/` | `src/security/README.md` | |
+| `src/utils/` | Product events (structured logs), serialization helpers | infra | ✅ Active | `src/config` | `tests/unit/utils/` | `src/utils/README.md` | `product_events.py` is the required observability path |
+| `src/contextualization/` | Contextual embedding providers (OpenAI, Groq, Claude) | ingestion | ✅ Active | `src/config`, `src/services` | `tests/unit/contextualization/` | `docs/CONTEXTUALIZED_EMBEDDINGS.md` | |
+| `src/observability/` | Langfuse client wrapper, safe payloads, scores, OTel bootstrap | infra | ✅ Active (optional at runtime) | `src/config` | `tests/unit/observability/`, `tests/unit/test_observability*.py` | `docs/PIPELINE_OVERVIEW.md` | Langfuse is optional; core runs without it |
+| `telegram_bot/` | Telegram adapter — the only production channel | adapter | ✅ Active | `src/*` freely | `tests/unit/` (broad), `tests/integration/`, `tests/smoke/` | `telegram_bot/README.md`, `docs/BOT_ARCHITECTURE.md` | `src/` must never import back |
+| `telegram_bot/agents/` | CRM tools, domain search tools, HITL interrupt, agent factory | adapter | ✅ Active | `src/*`, `telegram_bot/services/`, `telegram_bot/graph/` | `tests/unit/agents/` | `telegram_bot/agents/README.md` | HITL wraps all sensitive CRM writes |
+| `telegram_bot/services/` | Catalog search, Kommo client, lead scoring, handoff, hot-lead, filtering | adapter | ✅ Active | `src/*`, `telegram_bot/models/` | `tests/unit/services/`, `tests/unit/test_*.py` | `telegram_bot/services/README.md` | Domain-specific; replace for a different vertical |
+| `telegram_bot/graph/` | Compat facades over `src/runtime/graph` (thin re-exports) | adapter | ✅ Active (transitional) | `src/runtime/graph/`, `src/*` | `tests/unit/graph/` | `telegram_bot/graph/README.md` | Shims listed in Compatibility Shims section; must shrink |
+| `telegram_bot/dialogs/` | aiogram-dialogs flows: catalog, CRM, funnel, handoff, settings | adapter | ✅ Active | `telegram_bot/*`, `src/*` | `tests/unit/dialogs/` | `telegram_bot/dialogs/README.md` | |
+| `telegram_bot/handlers/` | aiogram message/command handlers, phone collector | adapter | ✅ Active | `telegram_bot/*`, `src/*` | `tests/unit/handlers/` | `telegram_bot/handlers/README.md` | |
+| `telegram_bot/integrations/` | Bot cache, memory (LangGraph checkpointer), prompt manager | adapter | ✅ Active | `telegram_bot/*`, `src/*` | `tests/unit/integrations/` | `telegram_bot/integrations/README.md` | |
+| `telegram_bot/middlewares/` | i18n, throttling, error handling, Langfuse middleware | adapter | ✅ Active | `telegram_bot/*`, `src/*` | `tests/unit/test_middlewares*.py`, `tests/unit/middlewares/` | `telegram_bot/middlewares/README.md` | |
+| `telegram_bot/keyboards/` | Inline keyboard builders | adapter | ✅ Active | `telegram_bot/*` | `tests/unit/keyboards/` | `telegram_bot/keyboards/README.md` | |
+| `telegram_bot/pipelines/` | Bot-side pipeline client | adapter | ✅ Active | `telegram_bot/*`, `src/*` | `tests/unit/pipelines/` | `telegram_bot/pipelines/README.md` | |
+| `telegram_bot/locales/` | Fluent i18n bundles (en, ru, uk) | adapter | ✅ Active | none | `tests/unit/test_handoff_i18n.py` | `telegram_bot/locales/README.md` | Some strings still being migrated to Fluent |
+| `telegram_bot/models/` | Bot-specific Pydantic models | adapter | ✅ Active | none | — | `telegram_bot/models/README.md` | |
+| `telegram_bot/constants/` | Bot constants | adapter | ✅ Active | none | `tests/unit/test_telegram_constants.py` | `telegram_bot/constants/README.md` | |
+| `telegram_bot/config/` | Bot YAML configs (services, mini_app) | adapter | ✅ Active | none | `tests/unit/test_bot_config.py` | `telegram_bot/config/README.md` | |
+| `services/bge-m3-api/` | BGE-M3 dense + sparse + ColBERT embedding sidecar (Docker only) | infra | ✅ Active | HTTP only — not a Python dep | `tests/unit/test_bge_m3_endpoints.py` | `services/bge-m3-api/README.md`, `docs/QDRANT_STACK.md` | |
+| `services/docling/` | Document parsing and chunking sidecar (Docker only) | infra | ✅ Active | HTTP only — not a Python dep | `tests/unit/test_dockerfile_docling_sync.py` | `services/docling/README.md` | |
+| `tests/unit/` | Fast unit tests (mocked/no external deps) | tests | ✅ Active | test-only | `make test-core`, `make test-unit` | `tests/README.md` | |
+| `tests/contract/` | Static/structural contract tests | tests | ✅ Active | test-only | `make test-contract` | `tests/README.md` | Enforces layering, import rules, and swarm contracts |
+| `tests/integration/` | Service-integration tests (real Qdrant/Redis) | tests | ✅ Active | test-only | manual / `make test-full` | `tests/README.md` | Requires live services |
+| `tests/e2e_core/` | Core E2E without Telegram (Qdrant + BGE-M3) | tests | ✅ Active | test-only | `make e2e-core-live` | `tests/e2e_core/README.md` | Main product simplification proof |
+| `tests/e2e/` | Full-stack pipeline and Telegram E2E | tests | ✅ Active | test-only | manual | `tests/README.md` | Requires live Telegram session |
+| `tests/smoke/` | Runtime smoke tests against live services | tests | ✅ Active | test-only | manual | `tests/README.md` | |
+| `tests/eval/` | RAG evaluation (RAGAS, ground truth) | tests | optional | test-only | manual | `tests/README.md` | Requires Langfuse |
+| `tests/baseline/` | Langfuse baseline metrics and threshold checks | tests | optional | test-only | manual | `tests/README.md` | Requires Langfuse |
+| `tests/benchmark/` | Performance comparisons (RRF vs DBSF, ColBERT, etc.) | tests | optional | test-only | manual | `tests/README.md` | |
+| `tests/chaos/` | Resilience tests (service failures, LLM fallbacks) | tests | optional | test-only | manual | `tests/README.md` | |
+| `tests/load/` | Concurrent throughput and cache eviction tests | tests | optional | test-only | manual | `tests/README.md` | |
+| `tests/regression/` | RAG core regression tests | tests | optional | test-only | manual | `tests/README.md` | |
+| `tests/fixtures/` | Shared test data, CI env stubs | tests | ✅ Active | test-only | — | — | |
+| `tests/data/` | Allowlists and known-state JSON (layering violations, duplicate names) | tests | ✅ Active | test-only | — | — | |
+| `scripts/` | Operational scripts: indexing, setup, validation, benchmarks, Qdrant ops | infra | ✅ Active | `src/*`, standalone | `tests/unit/scripts/` | `scripts/README.md`, `scripts/AGENTS.override.md` | See #2720 for CI/Makefile/scripts audit |
+| `scripts/e2e/` | E2E runner, scenario config, Claude judge, report generation | infra | ✅ Active | `src/*` | — | `scripts/e2e/README.md` | |
+| `scripts/archive/` | Superseded scripts (eval, quantization A/B, Kommo seed) | infra | 🗃 Archived | none | — | `scripts/archive/README.md` | Do not use; kept for reference |
+| `docs/` | All project documentation | docs | ✅ Active | — | — | `docs/README.md` | |
+| `docs/architecture/` | THIS document and architecture artifacts | docs | ✅ Active | — | — | `docs/README.md` | Canonical structure map lives here |
+| `docs/designs/` | Active product simplification design docs and Stage 0 decisions | docs | ✅ Active | — | — | `docs/designs/README.md` | Source of truth for simplification work |
+| `docs/adr/` | Architecture decision records | docs | ✅ Active | — | — | `docs/adr/README.md` | |
+| `docs/engineering/` | Engineering process: test-writing, SDK registry, issue triage, playbooks | docs | ✅ Active | — | — | `docs/engineering/README.md` | |
+| `docs/runbooks/` | Operational runbooks: bot failure, Redis cache, Qdrant, PostgreSQL WAL | docs | ✅ Active | — | — | `docs/runbooks/README.md` | |
+| `docs/indexes/` | Task-oriented lookup indexes | docs | ✅ Active | — | — | `docs/indexes/README.md` | |
+| `docs/review/` | Reviewer and portfolio entry points | docs | ✅ Active | — | — | `docs/review/README.md` | |
+| `docs/audits/` | Point-in-time audit artifacts (config drift, endpoint inventory, etc.) | docs | ✅ Active | — | — | — | See #2719 for docs truthfulness audit |
+| `docs/audit/` | Public exports audit | docs | ✅ Active | — | — | — | |
+| `docs/archive/` | Archived docs (voice, API, Mini App, observability) | docs | 🗃 Archived | — | — | `docs/archive/README.md` | |
+| `docs/observability/` | Trace coverage audit and cross-service tracing contract | docs | ✅ Active | — | — | — | |
+| `docs/security/` | Secret scanning runbooks, filter patterns | docs | ✅ Active | — | — | — | |
+| `docs/plans/` | Shared implementation plans | docs | ✅ Active | — | — | — | |
+| `docs/portfolio/` | Portfolio and resume case study | docs | ✅ Active | — | — | `docs/portfolio/README.md` | |
+| `docker/` | Compose helper configs (Qdrant, Postgres, monitoring, ingestion, LiveKit) | infra | ✅ Active | — | — | `docker/README.md` | |
+| `archive/api/` | FastAPI RAG API | adapter | 🗃 Archived | none (must not be imported) | — | `archive/api/README.md` | Use `src/core` directly |
+| `archive/voice/` | LiveKit voice agent | adapter | 🗃 Archived | none | — | `archive/voice/README.md` | |
+| `archive/mini_app/` | Telegram Mini App backend + frontend | adapter | 🗃 Archived | none | — | `archive/mini_app/README.md` | |
+| `archive/k8s/` | k3s manifests for core services | infra | 🗃 Archived | none | — | `archive/k8s/README.md` | Partial parity with Compose; not required |
+| `archive/user-base/` | Telegram user registration sidecar | infra | 🗃 Archived | none | — | `archive/user-base/README.md` | |
+| `archive/telegram_bot/` | Old bot code superseded by current `telegram_bot/` | adapter | 🗃 Archived | none | — | — | |
+| `archive/evaluation/` | Old evaluation scripts superseded by `tests/eval/` and `tests/baseline/` | tests | 🗃 Archived | none | — | `archive/evaluation/README.md` | |
+| `archive/schedulers/` | Lead score sync, nurturing scheduler, session summary worker | infra | 🗃 Archived | none | — | — | |
+| `archive/obs/` | Old Loki/Alertmanager/Promtail configs | infra | 🗃 Archived | none | — | `archive/obs/README.md` | Moved to `docker/monitoring/` |
+| `archive/observability/` | Sentry and Prometheus metrics server stubs | infra | 🗃 Archived | none | — | — | |
+| `archive/services/` | Voyage embeddings service stubs | infra | 🗃 Archived | none | — | — | |
+| `archive/scripts/` | Old eval and audit scripts | infra | 🗃 Archived | none | — | `archive/scripts/README.md` | |
+| `archive/tests/` | Tests for archived code | tests | 🗃 Archived | none | — | — | |
+| `.github/` | CI workflows, issue templates, CODEOWNERS, Dependabot | infra | ✅ Active | — | `tests/unit/test_ci_deploy_workflow.py` | `AGENTS.md` | See #2720 for CI audit |
+| `.kiro/` | Agent skills, steering, and orchestration config | infra | ✅ Active | — | `tests/contract/test_kiro_swarm_skills_contract.py` | `AGENTS.md` | |
+| `data/` | Local test data, demo corpus, Docling output | infra | ✅ Active | — | — | `data/README.md` | Not committed to production |
+| `compose.yml` | Primary Docker Compose runtime | infra | ✅ Active | — | `tests/unit/test_compose*.py` | `DOCKER.md` | |
+| `compose.core.yml` | Minimal core stack (Qdrant + Redis only) | infra | ✅ Active | — | — | `DOCKER.md` | |
+| `compose.dev.yml` | Dev overrides | infra | ✅ Active | — | — | `DOCKER.md` | |
+| `pyproject.toml` | Python project, deps, tools (Ruff, MyPy, pytest) | infra | ✅ Active | — | — | `docs/LOCAL-DEVELOPMENT.md` | |
+| `Makefile` | All local commands | infra | ✅ Active | — | `tests/unit/test_makefile_contract.py` | `docs/LOCAL-DEVELOPMENT.md` | See #2720 for Makefile audit |
+| `.env.example` | Environment variable template | infra | ✅ Active | — | `tests/contract/test_env_example_completeness_contract.py` | `docs/LOCAL-DEVELOPMENT.md` | |
+
+**Status legend:**
+- ✅ Active — part of the required runtime or test suite
+- 🟡 Optional — useful but not required for the core proof (`make e2e-core-live`)
+- 🗃 Archived — dead code; must not be imported by live `src/` or `telegram_bot/` modules
+
+**Related audits:**
+- Layer-boundary violations: #2712
+- Docs truthfulness and product-surface map: #2719
+- CI, Makefile, scripts, and automation: #2720
+- Archived-but-in-src surfaces: #2694
 
 ---
 

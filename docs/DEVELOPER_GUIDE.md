@@ -2,6 +2,8 @@
 
 This guide explains how to add new pipeline nodes, agent tools, query types, and ingestion sources to the system.
 
+For the canonical directory ownership map (purpose, owner layer, status, and import rules), see [`docs/architecture/STRUCTURE.md`](architecture/STRUCTURE.md).
+
 ## Adding a New LangGraph Node
 
 ### When to Add a Node
