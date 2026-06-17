@@ -70,7 +70,6 @@ def test_custom_build_services_have_stable_explicit_image_names():
     data = load_yaml("compose.yml")
     expected = {
         "bge-m3": "${COMPOSE_PROJECT_NAME:-dev}_bge-m3",
-        "user-base": "${COMPOSE_PROJECT_NAME:-dev}_user-base",
         "docling": "${COMPOSE_PROJECT_NAME:-dev}_docling",
         "bot": "${COMPOSE_PROJECT_NAME:-dev}_bot",
         "ingestion": "${COMPOSE_PROJECT_NAME:-dev}_ingestion",

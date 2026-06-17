@@ -33,7 +33,7 @@ The script enumerates active worktrees via `git worktree list`, infers their Doc
 ## Compose Profiles (`compose.yml` + `compose.dev.yml`)
 
 Default `up` (no profile) starts unprofiled services:
-- `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `docling`
+- `postgres`, `redis`, `qdrant`, `bge-m3`, `docling`
 
 Optional profiles add scoped services:
 
@@ -48,7 +48,7 @@ Optional profiles add scoped services:
 ### VPS default runtime
 
 `compose.yml:compose.vps.yml` starts only the RAG chatbot core by default:
-`postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `litellm`, and `bot`.
+`postgres`, `redis`, `qdrant`, `bge-m3`, `litellm`, and `bot`.
 
 Docling, ingestion, and self-hosted Langfuse are optional/profile
 runtime on VPS and must not be assumed to be resident services. To run the
@@ -154,7 +154,6 @@ Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in 
 | --- | --- |
 | `bge-m3` | `bge-m3` |
 | `bot` | `telegram-bot` |
-| `user-base` | `user-base` |
 | `ingestion` | `ingestion` |
 
 The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution. Kubernetes manifests under `archive/k8s/` additionally hard-code the `telegram-bot` identity.
@@ -329,7 +328,6 @@ Never remove `vps_qdrant_data`, `vps_postgres_data`, `vps_redis_data`, or
   - `ghcr.io/yastman/rag-bot`
   - `ghcr.io/yastman/rag-ingestion`
   - `ghcr.io/yastman/rag-docling`
-  - `ghcr.io/yastman/rag-user-base`
   - `ghcr.io/yastman/rag-bge-m3`
 - Publish workflow: `.github/workflows/publish-internal-images.yml`
 - Manual publish helper: `make k3s-push-<service> K3S_IMAGE_TAG=v<version>`

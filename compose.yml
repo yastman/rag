@@ -142,39 +142,6 @@ services:
           memory: ${BGE_M3_MEMORY_LIMIT:-4G}
           pids: 200
 
-  user-base:
-    <<: *security-defaults
-    image: "${COMPOSE_PROJECT_NAME:-dev}_user-base"
-    build:
-      context: ./services/user-base
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    logging: *default-logging
-    volumes:
-      - hf_cache:/models
-    environment:
-      HF_HOME: /models/hf
-      TRANSFORMERS_CACHE: /models/hf
-      SENTENCE_TRANSFORMERS_HOME: /models/sentence-transformers
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
-      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-user-base}"
-      OTEL_PROPAGATORS: "${OTEL_PROPAGATORS:-tracecontext,baggage}"
-      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      # Cold-start model download can take several minutes on first run.
-      start_period: 420s
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          pids: 100
-
   docling:
     <<: *security-defaults
     image: "${COMPOSE_PROJECT_NAME:-dev}_docling"
@@ -231,7 +198,6 @@ services:
       RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
       # Semantic cache
       USE_LOCAL_EMBEDDINGS: "true"
-      USER_BASE_URL: http://user-base:8000
       # Services
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       QDRANT_URL: http://qdrant:6333
@@ -296,8 +262,6 @@ services:
       qdrant:
         condition: service_healthy
       bge-m3:
-        condition: service_healthy
-      user-base:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'telegram_bot.main' || exit 1"]

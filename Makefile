@@ -601,8 +601,8 @@ REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
-REMOTE_ACTIVE_SERVICES := bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant minio clickhouse user-base bot
-REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base bot
+REMOTE_ACTIVE_SERVICES := bge-m3 redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse bot
+REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 bot
 
 remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
 	@echo "$(BLUE)Remote Docker status ($(REMOTE_DOCKER_HOST))...$(NC)"
@@ -704,7 +704,7 @@ remote-local-logs: ## Show recent remote MacBook compose logs
 remote-core-health: ## Check minimal RAG bot core health on remote MacBook Docker
 	@echo "$(BLUE)Remote core health ($(REMOTE_DOCKER_HOST))...$(NC)"
 	@fail=0; \
-	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('postgres',5432),('redis',6379),('user-base',8000)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
+	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('postgres',5432),('redis',6379)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
 	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(RED)container not found$(NC)"; fail=1; fi; \
 	exit $$fail
@@ -758,9 +758,9 @@ docker-ml-up: ## Start core + ML platform (langfuse, clickhouse, minio)
 	$(LOCAL_COMPOSE_CMD) --profile ml up -d
 	@echo "$(GREEN)✓ ML platform started$(NC)"
 
-docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base)
+docker-ai-up: ## Start core + heavy AI services (bge-m3)
 	@echo "$(BLUE)Starting AI services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) up -d bge-m3 user-base
+	$(LOCAL_COMPOSE_CMD) up -d bge-m3
 	@echo "$(GREEN)✓ AI services started$(NC)"
 
 docker-ingest-up: ## Start core + ingestion service
@@ -1321,7 +1321,6 @@ k3s-push-%: ## Build and push a versioned GHCR image: make k3s-push-bot K3S_IMAG
 		bot) dockerfile="telegram_bot/Dockerfile"; build_context="."; image_name="rag-bot" ;; \
 		ingestion) dockerfile="Dockerfile.ingestion"; build_context="."; image_name="rag-ingestion" ;; \
 		docling) dockerfile="services/docling/Dockerfile"; build_context="./services/docling"; image_name="rag-docling" ;; \
-		user-base) dockerfile="services/user-base/Dockerfile"; build_context="./services/user-base"; image_name="rag-user-base" ;; \
 		bge-m3) dockerfile="services/bge-m3-api/Dockerfile"; build_context="./services/bge-m3-api"; image_name="rag-bge-m3" ;; \
 		*) echo "Unsupported k3s image target: $*"; exit 1 ;; \
 	esac; \

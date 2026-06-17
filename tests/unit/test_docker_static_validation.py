@@ -18,7 +18,6 @@ DOCKERFILES = [
     "Dockerfile.ingestion",
     "telegram_bot/Dockerfile",
     "services/bge-m3-api/Dockerfile",
-    "services/user-base/Dockerfile",
     "services/docling/Dockerfile",
 ]
 
