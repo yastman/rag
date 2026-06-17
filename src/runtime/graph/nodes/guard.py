@@ -19,6 +19,7 @@ import time
 from typing import Any
 
 from src.observability import get_client, observe
+from src.runtime.services.rag_core import BLOCKED_RESPONSE as _BLOCKED_RESPONSE
 
 
 logger = logging.getLogger(__name__)
@@ -106,13 +107,6 @@ _CATEGORY_RISK: dict[str, float] = {
     "encoding_evasion": 0.7,
     "dan_jailbreak": 0.95,
 }
-
-# Blocked response message
-_BLOCKED_RESPONSE = (
-    "Извините, ваш запрос не может быть обработан.\n\n"
-    "Я помощник по недвижимости. Пожалуйста, задайте вопрос о квартирах, "
-    "домах или другой недвижимости."
-)
 
 # Threshold above which score counts as injection
 _INJECTION_THRESHOLD = 0.5
@@ -209,7 +203,6 @@ async def guard_node(
 
 __all__ = [
     "INJECTION_PATTERNS",
-    "_BLOCKED_RESPONSE",
     "_INJECTION_THRESHOLD",
     "detect_injection",
     "guard_node",
