@@ -83,7 +83,9 @@ needs out-of-scope files, report `BLOCKED` instead of broadening scope.
 - Allow workers to edit, commit, push, or create/update PR only when prompt
   explicitly assigns that operation.
 - the orchestrator owns merge readiness and merge decisions, using current-head review and
-  required-check evidence.
+  required-check evidence. In autonomous mode, when `merge_ready: true` and no blockers exist,
+  the orchestrator merges into `dev` automatically. Manual confirmation is required only for
+  merges to `main`/`master`, PRs with blockers, or PRs touching secrets/auth/destructive ops.
 - Acceptance owns verified post-merge worktree/branch cleanup through explicit
   disposition; workers do not delete worktrees or branches by default.
 
@@ -102,5 +104,10 @@ Produce Markdown `MERGE_READINESS` with:
 - `merge_ready`
 - `next_action`
 - `next_skill`
+
+When `merge_ready: true`, set `next_skill: swarm-acceptance` and
+`next_action: disposition=merge_done` so the orchestrator routes directly
+to acceptance for merge execution. Do not merge from within this skill —
+merge ownership stays with `swarm-acceptance`.
 
 Use strict JSON only for explicit legacy machine orchestration.

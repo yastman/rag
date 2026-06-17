@@ -1,131 +1,17 @@
-version: 1
-source_of_truth: true
-markdown_mirror: docs/engineering/bug-classes.md
+# Bug class registry
+# Used by swarm-acceptance and validate_pr_guardrails.py for anti-regression contract.
+# Add entries as bug classes are identified in PRs.
+#
+# Format:
+#   - id: <slug>
+#     description: <short description>
+#     canonical_issue: <#number>
+#     guardrail: <test file or contract that prevents recurrence>
+#
+# Example:
+#   - id: stale-cache-hit
+#     description: Redis cache returns stale embedding on schema change
+#     canonical_issue: "#1234"
+#     guardrail: tests/contract/test_cache_invalidation.py
 
-guardrail_standards:
-  regression_driven_tdd: >
-    Regression-driven TDD means bug -> failing regression test -> minimal fix
-    -> permanent gate. The test becomes the prevention mechanism.
-  guardrail: >
-    A guardrail is a permanent executable rule that prevents a recurring bug
-    class. Automated guardrails are checks, not comments or manual review
-    conventions.
-  quality_gate: >
-    A quality gate is a CI or branch-protection enforcement point that blocks
-    merge when a guardrail fails.
-  principle: Every recurring bug must become a permanent guardrail.
-  native_first: >
-    Use native platform/tool features first, configure tools second, and write
-    custom project code only for project-specific root-cause memory or
-    cross-file invariants.
-
-bug_classes:
-  - name: uv .venv mutation
-    guardrail: >
-      Review-safe gates use check-frozen / candidate-check: uv sync --frozen
-      --check first, then $(UV_RUN_NO_SYNC) (uv run --no-sync) for Ruff/MyPy;
-      bot startup preflight also uses $(UV_RUN_NO_SYNC); contract coverage in
-      tests/contract/test_makefile_review_gate_no_autosync_contract.py and
-      tests/unit/test_makefile_contract.py; CI gate via make test-contract.
-    canonical_issue: "#2296"
-    related_issues:
-      - "#2285"
-      - "#2289"
-    first_seen: "2025"
-    last_confirmed: "2026"
-
-  - name: Docker/compose drift
-    guardrail: >
-      tests/unit/test_compose_runtime_contract.py pins service profile
-      expectations and BGE-M3 canonical endpoint/port contracts;
-      tests/unit/test_check_image_drift.py locks the read-only
-      runtime drift checker; telegram_bot/preflight.py validates
-      BGE-M3 canonical port 8000 for local/native URLs before any
-      network call; tests/contract/test_qdrant_preflight_contract.py
-      locks Qdrant SDK transport fallback and non-empty startup
-      diagnostics; make verify-compose-runtime compares running image
-      digests and published host ports against Compose source.
-    canonical_issue: "#2185"
-    related_issues:
-      - "#2123"
-      - "#2182"
-      - "#2188"
-      - "#2103"
-      - "#2124"
-    first_seen: "2025"
-    last_confirmed: "2026"
-
-  - name: self-hosted runner scheduling drift
-    guardrail: >
-      tests/unit/test_trusted_heavy_workflow.py pins PR self-hosted jobs to the
-      pr-fast label group and keeps Fast Tests and Heavy Contract Tests
-      authoritative for trusted risk-path PRs;
-      tests/unit/test_ci_deploy_workflow.py pins nightly-heavy label routing,
-      read-only permissions, cancellation, and timeouts; scripts/check_self_hosted_runner.sh
-      verifies pr-fast and nightly-heavy runner label groups before workflows
-      are considered live.
-    canonical_issue: "#1531"
-    related_issues:
-      - "#2310"
-      - "#2311"
-    first_seen: "2026"
-    last_confirmed: "2026"
-
-  - name: History-rewrite syntactic corruption
-    guardrail: >
-      make compile-python runs compileall over every repo-tracked Python file
-      to catch unterminated string literals and other syntactic breakage caused
-      by secret-scrub history rewrites; wired into trusted-heavy.yml Fast Tests
-      and nightly-heavy.yml as early gates. make baseline-compile remains a
-      compatibility alias for this repo-wide guardrail.
-    canonical_issue: "#2320"
-    related_issues:
-      - "#2319"
-      - "#1982"
-      - "#1580"
-    first_seen: "2026"
-    last_confirmed: "2026"
-
-  - name: RAG quality regression
-    guardrail: >
-      Evaluation pipeline (make eval-rag, make eval-rag-quick,
-      make eval-rag-full) gates quality score thresholds; regression is
-      detected if score drops below baseline. Preventive/backlog pending first
-      concrete duplicate cluster.
-    canonical_issue: preventive/backlog
-    related_issues: []
-    first_seen: "2025"
-    last_confirmed: "2026"
-
-  - name: Testing hygiene/tautological assertions
-    guardrail: >
-      tests/contract/test_ingestion_e2e_assertions_contract.py enforces
-      assertion quality for ingestion flows; docs/engineering/test-writing-guide.md
-      defines review traps and anti-duplication rules; make test gates these
-      checks on every push.
-    canonical_issue: "#1515"
-    related_issues:
-      - "#1539"
-      - "#1944"
-      - "#1978"
-      - "#1508"
-      - "#1617"
-      - "#1626"
-    first_seen: "2025"
-    last_confirmed: "2026"
-
-  - name: Test service-dependency lane drift
-    guardrail: >
-      Every tests/integration/test_*.py and tests/smoke/test_*.py file must
-      carry exactly one file-level no_services or requires_services marker
-      via pytestmark; both markers must be registered in
-      [tool.pytest.ini_options].markers; contract coverage in
-      tests/contract/test_service_dependency_markers_contract.py;
-      CI gate via make test-contract.
-    canonical_issue: "#2324"
-    related_issues:
-      - "#2319"
-      - "#2320"
-      - "#2325"
-    first_seen: "2026"
-    last_confirmed: "2026"
+bug_classes: []

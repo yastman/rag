@@ -38,7 +38,10 @@ prompt:
 1. Read the accepted artifact and pick route: `no_worker`, `launch`, `ask_user`, `blocked`, `review`, or `recovery`.
 2. For launchable work, define each worker with:
    - `id`, `kind` (`implementation | review-fix | review | docs | secretary`)
-   - `worktree`, `base_branch`, `target_branch`
+   - `worktree`: real filesystem path under `.worktrees/<target_branch>` (e.g.
+     `.worktrees/fix/2305-worker-a`). Never set to "main worktree" or the repo
+     root — every code-changing worker gets its own isolated worktree.
+   - `base_branch`, `target_branch`
    - `reserved_files`, `required_skills`, `required_superpowers`, `forbidden_superpowers`
    - `required_discovery_tools`: indexed-tool contract per
      `shared/indexed-tool-contract.md` (Code Indexer first, CodeGraph for exact

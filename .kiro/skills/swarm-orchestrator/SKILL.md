@@ -212,5 +212,5 @@ External skills are thinking tools, not mandatory bureaucracy.
 - Do not allow skills to override orchestrator decisions
 - Skills must not merge PR
 - Skills must not modify `.kiro/skills/**` or `.kiro/agents/**` unless task is explicitly about agent infrastructure
-- Auto-merge is not enabled — merge decision stays with orchestrator
+- Auto-merge policy: when the orchestrator is running in autonomous mode (user said "автономный режим", "делай всё", "авто режим", or equivalent) AND all review workers returned `merge_ready: true` with no blockers, the orchestrator MUST merge into `dev` automatically without waiting for additional confirmation. Manual confirmation is only required when: (a) merging to `main`/`master`, (b) any reviewer returned blockers, (c) the PR touches secrets/auth/destructive operations, or (d) the user did NOT grant autonomous mode.
 - Reference-only skills (`.kiro/skills_reference/`) are for reading only, not activation

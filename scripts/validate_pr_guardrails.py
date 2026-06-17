@@ -70,7 +70,8 @@ def validate(pr: int, bug_class: str | None = None) -> list[str]:
         changed_files = []
 
     has_test = any(
-        "test" in f or "guardrail" in f or f.endswith((".yml", ".yaml")) for f in changed_files
+        f.startswith(("tests/", "test_")) or "_test.py" in f or "/test_" in f or "guardrail" in f
+        for f in changed_files
     )
     if changed_files and not has_test:
         findings.append(

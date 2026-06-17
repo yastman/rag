@@ -49,9 +49,10 @@ FORBIDDEN_PATTERNS: tuple[str, ...] = (
 )
 
 # Fields whose presence can be satisfied by an aliased section header.
-FIELD_ALIASES: dict[str, str] = {
-    "verification_evidence": "evidence_commands",
-}
+# NOTE: verification_evidence is intentionally NOT aliased to evidence_commands.
+# Both fields must be present independently — the evidence narrative and the
+# replay commands serve different purposes and cannot substitute for each other.
+FIELD_ALIASES: dict[str, str] = {}
 
 
 def _load_schema():

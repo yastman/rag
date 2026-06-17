@@ -8,14 +8,17 @@ import argparse
 
 DEFAULT_WORKER_MODEL = "claude-sonnet-4.6"
 DEFAULT_SECRETARY_FLASH_MODEL = "claude-haiku-4.5"
+DEFAULT_OPUS_MODEL = "claude-opus-4.8"
 
 CANONICAL_WORKER_ROUTES = {
     "implementation": ("kiro-worker", DEFAULT_WORKER_MODEL),
     "plan-execution": ("kiro-worker", DEFAULT_WORKER_MODEL),
     "quick": ("kiro-worker", DEFAULT_WORKER_MODEL),
     "local-verification": ("kiro-worker", DEFAULT_WORKER_MODEL),
-    "pr-review": ("kiro-worker-opus", DEFAULT_WORKER_MODEL),
-    "review-fix": ("kiro-worker", DEFAULT_WORKER_MODEL),
+    # pr-review and review-fix use kiro-worker-opus/claude-opus-4.8 per skill tables
+    # (swarm-plan/SKILL.md, swarm-launch/SKILL.md) and kiro-worker-opus.json.
+    "pr-review": ("kiro-worker-opus", DEFAULT_OPUS_MODEL),
+    "review-fix": ("kiro-worker-opus", DEFAULT_OPUS_MODEL),
 }
 
 SECRETARY_AGENT_MODELS = {
@@ -26,8 +29,8 @@ SECRETARY_AGENT_MODELS = {
 RECOMMENDED_ROUTE_MODELS = {
     "secretary-pro": DEFAULT_WORKER_MODEL,
     "implementation": DEFAULT_WORKER_MODEL,
-    "pr-review": DEFAULT_WORKER_MODEL,
-    "review-fix": DEFAULT_WORKER_MODEL,
+    "pr-review": DEFAULT_OPUS_MODEL,
+    "review-fix": DEFAULT_OPUS_MODEL,
     "local-verification": DEFAULT_WORKER_MODEL,
 }
 

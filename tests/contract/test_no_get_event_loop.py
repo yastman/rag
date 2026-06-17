@@ -37,7 +37,7 @@ SCAN_DIRS = [
 # whether to drop sync support or build a tested sync-async boundary
 # that does not break shared async resources. Tracked under #1639.
 ALLOWLIST: dict[str, set[int]] = {
-    "src/runtime/integrations/embeddings.py": {65, 68, 185, 188},
+    "src/runtime/integrations/embeddings.py": {52, 55, 151, 154},
 }
 
 

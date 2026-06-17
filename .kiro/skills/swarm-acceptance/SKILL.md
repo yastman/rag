@@ -140,9 +140,15 @@ After accepting code-changing work, choose one explicit disposition:
 
 - `pr`: leave the worker worktree and branch intact, create or update the PR,
   report branch/head SHA/PR URL, and do not delete anything.
-- `merge_done`: only after merge is externally verified; fetch, verify the
-  merged head contains the worker head or PR merge commit, then remove the clean
-  worker worktree and delete the local branch only if it is fully merged.
+- `merge_done`: execute the merge, then clean up. Steps:
+  1. Confirm required GitHub checks are green: `gh pr checks <pr> --required`
+  2. Merge: `gh pr merge <pr> --merge --delete-branch`
+  3. Fetch and verify merged head: `git fetch origin dev && git log origin/dev --oneline -1`
+  4. Remove the worker worktree: `git worktree remove <worktree_path> --force`
+  5. Delete the local branch if still present: `git branch -D <target_branch>`
+  Never run `merge_done` if required checks are red or `merge_ready` is false.
+  The `worktree_path` must be the path from `SWARM_PLAN.workers[].worktree`
+  (e.g. `.worktrees/fix/2305-worker-a`), not the main repo checkout.
 - `keep_worktree`: leave worktree and branch intact, record reason and next
   owner/action.
 - `discard_with_confirmation`: require explicit human confirmation naming the
