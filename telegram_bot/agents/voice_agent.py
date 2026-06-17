@@ -1,7 +1,6 @@
 """Voice agent facade backed by the imperative assistant core.
 
-The voice path no longer constructs a LangChain ``create_agent`` graph.  The
-factory remains as a compatibility surface for tests/callers that expect an
+The factory remains as a compatibility surface for tests/callers that expect an
 object with ``ainvoke``/``astream``, but orchestration is delegated to the
 procedural core/tool path.
 """

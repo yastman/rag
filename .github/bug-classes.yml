@@ -14,4 +14,8 @@
 #     canonical_issue: "#1234"
 #     guardrail: tests/contract/test_cache_invalidation.py
 
-bug_classes: []
+bug_classes:
+  - id: tech-debt/archival
+    description: Dead code, duplicate directories, or stale dependency residue with zero runtime blast radius
+    canonical_issue: "#2597"
+    guardrail: "no langchain import under src/; mini_app only under archive/"

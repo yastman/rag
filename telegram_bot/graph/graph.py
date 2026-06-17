@@ -1,8 +1,7 @@
 """Legacy graph entrypoint backed by the imperative assistant pipeline.
 
 ``build_graph`` is retained as a compatibility factory for callers that still
-expect an object with ``ainvoke``.  It no longer builds a LangGraph
-``StateGraph`` and imports no LangChain/LangGraph/LangMem packages.
+expect an object with ``ainvoke``.
 """
 
 from __future__ import annotations
