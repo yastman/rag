@@ -140,6 +140,7 @@ logs/
 data/embeddings/
 data/evaluation/
 data/gold_set*.jsonl
+# evaluation/results/ and langfuse_logs/ point at archived surfaces (voice, Mini App, trace validation)
 evaluation/results/
 evaluation/evaluation/
 *.tar.gz
@@ -179,7 +180,7 @@ data/demo/*.xlsx
 mlruns/
 .mlflow
 
-# Langfuse
+# Langfuse (archived surface)
 langfuse_logs/
 
 # Qdrant
@@ -337,3 +338,10 @@ rockfresh-autoresearch-summary-and-implementation-prompt.md
 # codeindexer local config
 .indexer.toml
 .agents/
+
+# Post-archival layout: Mini App frontend build artifacts (archived surface)
+archive/mini_app/frontend/node_modules/
+archive/mini_app/frontend/dist/
+
+# Voice test fixture (archived surface — voice archival #2598)
+data/test/voice_note_sample.ogg
