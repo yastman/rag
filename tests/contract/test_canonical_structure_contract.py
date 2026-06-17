@@ -37,7 +37,6 @@ REQUIRED_ACTIVE_DIRS = [
     "telegram_bot",
     "services/bge-m3-api",
     "services/docling",
-    "services/user-base",
     "archive",
 ]
 
