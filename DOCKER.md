@@ -427,5 +427,5 @@ curl -s http://localhost:6333/collections/gdrive_documents_bge | python3 -m json
   local/dev Compose.
 - Images are pinned by tag+digest in compose files; update pins explicitly.
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
-- Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development may still use the repo's `uv` environment (Python 3.11+).
+- Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development requires Python 3.12+ (`uv` environment; see [Python matrix](docs/LOCAL-DEVELOPMENT.md#7-python-runtime-note)).
 - The Mini App frontend/runtime is archived under `archive/mini_app/`; its nginx contract is preserved there for reference, but it is not a required runtime surface.

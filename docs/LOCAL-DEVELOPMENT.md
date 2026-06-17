@@ -4,7 +4,7 @@ Canonical local setup and verification flow.
 
 ## Prerequisites
 
-- Python `3.12` recommended (`>=3.11` supported)
+- Python `3.12` required (`>=3.12`; 3.12 is the recommended local dev version)
 - `uv`
 - Docker + Docker Compose v2
 
@@ -351,7 +351,16 @@ optional/profile-gated. See [`../DOCKER.md`](../DOCKER.md) for details and
 
 ## 7. Python Runtime Note
 
-Docker images that import `telegram_bot.observability` (and therefore `langfuse`) run on Python 3.13. Local native development via `uv` may use a different Python version (3.11+ supported, 3.12 recommended).
+**Python version matrix (#2623):**
+
+| Component            | requires-python | Docker runtime | Notes                                |
+|----------------------|-----------------|----------------|--------------------------------------|
+| root / core / ingest | >=3.12          | 3.13           | Langfuse/pydantic.v1 compat          |
+| telegram_bot         | >=3.12          | 3.13           | Langfuse/pydantic.v1 compat          |
+| services/bge-m3-api  | —               | 3.14           | Independent ML service; no Langfuse  |
+| services/docling     | >=3.14          | 3.14           | docling-serve requires Python 3.14+  |
+
+Local native development requires Python 3.12+ (`.python-version` = `3.12`). Docker images that import `telegram_bot.observability` (Langfuse) run on Python 3.13 due to pydantic.v1 compatibility constraints (see `test_dockerfile_runtime_policy_contract.py`).
 
 ## 8. Running Components Without Docker Wrapper
 

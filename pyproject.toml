@@ -2,7 +2,7 @@
 name = "contextual-rag"
 version = "2.14.0"
 description = "Contextual RAG Pipeline with DBSF + ColBERT hybrid search"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # Core assistant/runtime path. `uv sync --no-dev` intentionally installs
     # only these lean dependencies; optional product surfaces live in extras.
