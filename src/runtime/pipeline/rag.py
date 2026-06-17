@@ -18,14 +18,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import importlib.util
 import logging
 import time
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any, TypeVar
 
 from src.observability import get_client, observe
+from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from src.runtime.graph.config import GraphConfig
 from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
 from src.runtime.services.cache_policy import (
@@ -51,24 +50,6 @@ from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
 
 _T = TypeVar("_T")
-
-
-def _load_topic_classifier_attr(attr_name: str) -> Any:
-    module_path = Path(__file__).resolve().parents[2] / "retrieval" / "topic_classifier.py"
-    spec = importlib.util.spec_from_file_location("_runtime_topic_classifier", module_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load topic classifier from {module_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return getattr(module, attr_name)
-
-
-def detect_score_gap(*args: Any, **kwargs: Any) -> Any:
-    return _load_topic_classifier_attr("detect_score_gap")(*args, **kwargs)
-
-
-def get_query_topic_hint(*args: Any, **kwargs: Any) -> Any:
-    return _load_topic_classifier_attr("get_query_topic_hint")(*args, **kwargs)
 
 
 def _identity_observe(*args: Any, **kwargs: Any) -> Callable[[_T], _T]:
