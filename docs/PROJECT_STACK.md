@@ -19,8 +19,8 @@ Current stack snapshot for this repository as of 2026-05-07.
 | Telegram bot | `telegram_bot/` | Main user-facing interface, LangGraph orchestration |
 | Graph pipeline | `telegram_bot/graph/` | Classification, guard, cache, retrieval, rerank, generation |
 | Bot services | `telegram_bot/services/` | Qdrant, LLM, BGE-M3 clients, reranker, routing |
-| RAG API | `src/api/` | FastAPI wrapper around the same graph runtime |
-| Voice agent | `src/voice/` | LiveKit agent that calls `src/api` |
+| RAG API (archived) | `archive/api/` | FastAPI wrapper around the graph runtime (archived optional surface) |
+| Voice agent (archived) | `archive/voice/` | LiveKit agent that called `archive/api` (archived optional surface) |
 | Unified ingestion | `src/ingestion/unified/` | CocoIndex flow + Docling + Qdrant writer + state manager |
 | Retrieval/evaluation | `src/retrieval/`, `src/evaluation/` | Search variants, metrics, offline eval |
 

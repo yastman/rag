@@ -71,7 +71,7 @@ Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, and ingest
 | Stateful AI orchestration | Repo-native imperative assistant pipeline routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization; legacy `telegram_bot/graph/` factories are compatibility facades | [`src/runtime/pipeline/assistant_pipeline.py`](src/runtime/pipeline/assistant_pipeline.py) |
 | Typed workflow state | One state contract tracks query, routing, retrieval, filters, cache, scoring, policy, latency, and response metadata | [`src/core/contracts.py`](src/core/contracts.py) |
 | Assistant core entrypoint | Direct Python calls use `run_assistant_request()` and return `AssistantResult` for E2E and adapters | [`src/core/assistant.py`](src/core/assistant.py) |
-| Optional runtime adapters | Telegram is the production adapter; voice, API, and Mini App surfaces are optional around the core proof | [`telegram_bot/`](telegram_bot/), [`src/voice/`](src/voice/), [`src/api/`](src/api/), [`archive/mini_app/`](archive/mini_app/) |
+| Optional runtime adapters | Telegram is the production adapter; voice, API, and Mini App surfaces are archived optional surfaces | [`telegram_bot/`](telegram_bot/), [`archive/voice/`](archive/voice/), [`archive/api/`](archive/api/), [`archive/mini_app/`](archive/mini_app/) |
 | Self-hosted retrieval | BGE-M3 + Qdrant support dense, sparse, and ColBERT-style retrieval paths | [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) |
 | Deterministic ingestion | CocoIndex and Docling parse, chunk, embed, upsert/delete, retry, and track DLQ state | [`docs/INGESTION.md`](docs/INGESTION.md) |
 | Business tool actions | CRM/domain tools can create workflow actions with HITL confirmation for sensitive writes | [`telegram_bot/agents/`](telegram_bot/agents/) |
@@ -93,11 +93,11 @@ A simple chatbot receives a message and calls an LLM. This repository treats the
 ```mermaid
 graph TB
     subgraph "Channels"
-        TG["Telegram Bot"]
-        TV["Telegram Voice"]
-        MA["Telegram Mini App"]
-        VA["LiveKit Voice Agent"]
-        API["FastAPI RAG API"]
+        TG["Telegram Bot (active)"]
+        TV["Telegram Voice (archived)"]
+        MA["Telegram Mini App (archived)"]
+        VA["LiveKit Voice Agent (archived)"]
+        API["FastAPI RAG API (archived)"]
     end
 
     subgraph "AI Workflow Core"
@@ -129,9 +129,10 @@ graph TB
     end
 
     TG --> ROUTER
-    TV --> ROUTER
-    MA --> TG
-    VA --> API --> ROUTER
+    TV -.archived.-> ROUTER
+    MA -.archived.-> TG
+    VA -.archived.-> API
+    API -.archived.-> ROUTER
     ROUTER --> GRAPH
     GRAPH --> RAG
     GRAPH --> TOOLS
@@ -242,7 +243,7 @@ High-level entry points:
 | Assistant core entrypoint | [`src/core/assistant.py`](src/core/assistant.py) |
 | Telegram adapter / graph compat facades | [`telegram_bot/graph/`](telegram_bot/graph/) |
 | Business/domain tools | [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) |
-| RAG API and voice | [`src/api/`](src/api/) and [`src/voice/`](src/voice/) |
+| RAG API and voice (archived) | [`archive/api/`](archive/api/) and [`archive/voice/`](archive/voice/) |
 | Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
 | Mini App | [`archive/mini_app/`](archive/mini_app/) |
 | Runtime | [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), [`DOCKER.md`](DOCKER.md) |

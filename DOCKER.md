@@ -104,7 +104,6 @@ still need to be throwaway/dev-only:
 | Qdrant | `http://localhost:6333` (`6334` gRPC) |
 | Redis | `localhost:6379` |
 | BGE-M3 API | `http://localhost:8000` |
-| User Base | `http://localhost:8003` |
 | Docling | `http://localhost:5001` |
 | Langfuse | `http://localhost:3001` |
 | MinIO API | `http://localhost:${MINIO_API_PORT:-9090}` |

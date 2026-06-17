@@ -8,7 +8,7 @@ Every code PR must respect these rules. Contract tests enforce them in CI.
 ## Layer Diagram
 
 ```text
-External adapters (telegram_bot, src/api, src/voice, mini_app)
+External adapters (telegram_bot, archive/api, archive/voice, archive/mini_app)
         │
         ▼
     src.core (public contract + entrypoint)
@@ -29,9 +29,9 @@ External adapters (telegram_bot, src/api, src/voice, mini_app)
 
 ```text
 telegram_bot  → src.core
-src/api       → src.core
-src/voice     → src.core (or optional API adapter)
-mini_app      → src.core (or optional API adapter)
+archive/api   → src.core (archived optional surface)
+archive/voice → src.core (or optional API adapter; archived)
+archive/mini_app → src.core (or optional API adapter; archived)
 src.core      → src.runtime
 src.runtime   → src/services, src/retrieval, external SDKs
 ```
@@ -61,10 +61,10 @@ Track: #2478, #2486, #2489.
 ### External Adapters
 
 ```text
-telegram_bot/  — Telegram UI, handlers, dialogs, keyboards, middlewares
-src/api/       — Optional HTTP API surface
-src/voice/     — Optional voice adapter
-mini_app/      — Optional Mini App surface
+telegram_bot/  — Telegram UI, handlers, dialogs, keyboards, middlewares (active)
+archive/api/   — Optional HTTP API surface (archived)
+archive/voice/ — Optional voice adapter (archived)
+archive/mini_app/ — Optional Mini App surface (archived)
 ```
 
 Adapters **must not** own product RAG/generation logic.

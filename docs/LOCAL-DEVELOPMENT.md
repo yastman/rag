@@ -344,7 +344,7 @@ The recommended production flow is:
 5. GitHub Actions deploys `main` to VPS.
 
 The VPS default runtime (`compose.yml:compose.vps.yml`) starts only the RAG
-chatbot core: `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `litellm`,
+chatbot core: `postgres`, `redis`, `qdrant`, `bge-m3`, `litellm`,
 and `bot`. Mini app, Docling, ingestion, and self-hosted Langfuse are
 optional/profile-gated. See [`../DOCKER.md`](../DOCKER.md) for details and
 [cleanup commands](../DOCKER.md#vps-cleanup).
