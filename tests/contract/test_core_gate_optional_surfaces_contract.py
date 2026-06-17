@@ -47,14 +47,6 @@ OPTIONAL_TARGETS = (
     "test-telegram-adapter",
     "test-providers-extra",
     "test-ingest-extra",
-<<<<<<< HEAD
-=======
-)
-OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS = (
-    "baseline-smoke",
-    "baseline-load",
-    "baseline-check",
->>>>>>> 9cdc7c8ed7 (audit(2638): remove archived surface targets and scripts from Makefile)
 )
 OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS: tuple[str, ...] = ()
 REQUIRED_GATE_TARGETS = (
