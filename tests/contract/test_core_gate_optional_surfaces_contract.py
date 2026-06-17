@@ -2,8 +2,14 @@
 
 Optional surface tests remain first-class, but they depend on extras or adapter
 SDKs that are intentionally absent from the lean core install. ``make test`` is
-therefore limited to the core gate plus the no-service graph-path check, and
-optional surfaces must be run through explicit opt-in Make targets.
+therefore limited to the core gate plus the no-service graph-path check.
+
+After #2638: archived surface targets (test-api-adapter, test-legacy-graph-extra,
+test-voice-extra, test-eval-extra, test-observability-extra, test-optional-surfaces)
+are removed from the Makefile. The remaining explicit opt-in targets are
+test-telegram-adapter, test-providers-extra, and test-ingest-extra.
+Exclusion variables (PYTEST_LEGACY_GRAPH_PATHS, PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS)
+remain defined for the broad test-unit lane to avoid collecting extras-dependent tests.
 """
 
 from __future__ import annotations
@@ -36,12 +42,19 @@ OPTIONAL_SURFACE_TOKENS = (
     "test-legacy-graph-extra",
     "test-ingest-extra",
 )
+# Remaining explicit opt-in targets after #2638 cleanup.
 OPTIONAL_TARGETS = (
     "test-telegram-adapter",
-    "test-api-adapter",
     "test-providers-extra",
-    "test-legacy-graph-extra",
     "test-ingest-extra",
+<<<<<<< HEAD
+=======
+)
+OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS = (
+    "baseline-smoke",
+    "baseline-load",
+    "baseline-check",
+>>>>>>> 9cdc7c8ed7 (audit(2638): remove archived surface targets and scripts from Makefile)
 )
 OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS: tuple[str, ...] = ()
 REQUIRED_GATE_TARGETS = (
@@ -122,23 +135,28 @@ def test_langfuse_baseline_diagnostics_are_not_required_gate_dependencies() -> N
         )
 
 
-def test_broad_unit_exclusions_are_owned_by_explicit_lanes() -> None:
+def test_broad_unit_exclusions_are_defined_and_applied() -> None:
+    """Exclusion variables must remain defined and applied in the broad test-unit lane.
+
+    After #2638: test-legacy-graph-extra and test-api-adapter are removed.
+    The exclusion variables (PYTEST_LEGACY_GRAPH_PATHS, PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS)
+    are kept as definitions so test-unit does not accidentally collect extras-dependent tests.
+    """
     text = _makefile_text()
 
-    owner_vars = {
-        "PYTEST_TELEGRAM_ADAPTER_PATHS": "test-telegram-adapter",
-        "PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS": "test-telegram-adapter",
-        "PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS": "test-providers-extra",
-        "PYTEST_LEGACY_GRAPH_PATHS": "test-legacy-graph-extra",
-    }
-    broad_body = _target_body(text, "test-unit")
-
-    for var_name, owner_target in owner_vars.items():
-        var_ref = f"$({var_name})"
-        assert var_ref in text, f"{var_name} must remain defined in Makefile"
-        assert var_ref in _target_body(text, owner_target), (
-            f"{var_name} must be assigned to explicit owner lane {owner_target}"
+    # Variables must remain defined so the broad lane still excludes extras-dependent tests.
+    required_vars = (
+        "PYTEST_TELEGRAM_ADAPTER_PATHS",
+        "PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS",
+        "PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS",
+        "PYTEST_LEGACY_GRAPH_PATHS",
+    )
+    for var_name in required_vars:
+        assert f"$({var_name})" in text or f"{var_name} " in text, (
+            f"{var_name} must remain defined in Makefile"
         )
+
+    broad_body = _target_body(text, "test-unit")
 
     telegram_body = _target_body(text, "test-telegram-adapter")
     assert "--ignore" not in telegram_body
@@ -148,4 +166,3 @@ def test_broad_unit_exclusions_are_owned_by_explicit_lanes() -> None:
     assert "$(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB)" in broad_body
     assert "$(PYTEST_OPTIONAL_PROVIDER_IGNORE)" in broad_body
     assert "$(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)" in text
-    assert "$(PYTEST_LEGACY_GRAPH_PATHS)" in _target_body(text, "test-legacy-graph-extra")

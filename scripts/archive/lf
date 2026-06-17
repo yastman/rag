@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Langfuse CLI quick-audit recipes.
+# shellcheck source=/dev/null
 #
 # Wraps `langfuse api ...` with the env-file load and adds curated
 # perf-audit views used during the "виды внж в болгарии" / 2026-05-26
