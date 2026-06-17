@@ -582,107 +582,7 @@ services:
         limits:
           memory: 512M
 
-  # =============================================================================
-  # MONITORING & ALERTING (dev-only)
-  # =============================================================================
-
-  loki:
-    <<: *security-defaults
-    image: grafana/loki:3.7.2@sha256:191d4fdfb7264f16989f0a57f320872620a5a7c2ceeec6229212c4190ec49b86
-    profiles: ["obs", "full"]
-    restart: unless-stopped
-    read_only: false
-    volumes:
-      - ./docker/monitoring/loki.yaml:/etc/loki/local-config.yaml:ro
-      - ./docker/monitoring/rules:/etc/loki/rules/fake:ro
-      - loki_data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  promtail:
-    <<: *security-defaults
-    image: grafana/promtail:3.6.11@sha256:a761cb834cfaeee29745440d4884d6748f0a08d8f68928db1d707018c1dcfbe9
-    profiles: ["obs", "full"]
-    restart: unless-stopped
-    read_only: false
-    volumes:
-      - ./docker/monitoring/promtail.yaml:/etc/promtail/config.yml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      loki:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9080 && printf 'GET /ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && head -1 <&3 | grep -q '200 OK'"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-
-  alertmanager:
-    <<: *security-defaults
-    image: prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286
-    profiles: ["obs", "full"]
-    restart: unless-stopped
-    read_only: false
-    volumes:
-      - ./docker/monitoring/alertmanager.yaml:/etc/alertmanager/alertmanager.tmpl:ro
-      - alertmanager_data:/alertmanager
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        # Check if Telegram bot token is configured
-        if [ -z "$${TELEGRAM_ALERTING_BOT_TOKEN}" ]; then
-          echo "WARNING: TELEGRAM_ALERTING_BOT_TOKEN not set, using null receiver"
-          # Create minimal config with null receiver
-          cat > /etc/alertmanager/alertmanager.yml << 'NULLCONFIG'
-        global:
-          resolve_timeout: 5m
-        route:
-          receiver: 'null'
-          group_by: ['alertname']
-          group_wait: 30s
-          group_interval: 5m
-          repeat_interval: 4h
-        receivers:
-          - name: 'null'
-        NULLCONFIG
-        else
-          # Substitute environment variables in config template
-          cat /etc/alertmanager/alertmanager.tmpl | \
-            sed "s|\$${TELEGRAM_ALERTING_BOT_TOKEN}|$${TELEGRAM_ALERTING_BOT_TOKEN}|g" | \
-            sed "s|\$${TELEGRAM_ALERTING_CHAT_ID}|$${TELEGRAM_ALERTING_CHAT_ID}|g" \
-            > /etc/alertmanager/alertmanager.yml
-        fi
-        # Start alertmanager
-        exec /bin/alertmanager \
-          --config.file=/etc/alertmanager/alertmanager.yml \
-          --storage.path=/alertmanager \
-          --web.external-url=http://localhost:9093
-    environment:
-      TELEGRAM_ALERTING_BOT_TOKEN: ${TELEGRAM_ALERTING_BOT_TOKEN:-}
-      TELEGRAM_ALERTING_CHAT_ID: ${TELEGRAM_ALERTING_CHAT_ID:-0}
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9093/-/healthy || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 128M
+  # loki, promtail, alertmanager archived — see archive/obs/
 
 # =============================================================================
 # VOLUMES
@@ -698,6 +598,4 @@ volumes:
   clickhouse_logs:
   minio_data:
   ingestion-manifest:
-  loki_data:
-  alertmanager_data:
   langfuse_redis_data:

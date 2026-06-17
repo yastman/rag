@@ -2,7 +2,6 @@
 	test-preflight test-smoke test-load-eviction \
 	test-telegram-adapter test-api-adapter test-providers-extra test-legacy-graph-extra test-ingest-extra test-voice-extra test-eval-extra test-observability-extra test-optional-surfaces \
 	smoke-fast smoke-zoo \
-	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	ingest-dir ingest-status ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
@@ -735,7 +734,7 @@ remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(YELLOW)container not found$(NC)"; fi; \
 	exit $$fail
 
-.PHONY: core-min-up core-up docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
+.PHONY: core-min-up core-up docker-core-up docker-bot-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
 
 core-min-up: ## Start minimal core services only (qdrant + redis)
 	@echo "$(BLUE)Starting minimal core services (qdrant + redis)...$(NC)"
@@ -753,11 +752,6 @@ docker-bot-up: preflight-bot ## Start core + bot services (bot)
 	@echo "$(BLUE)Starting bot services...$(NC)"
 	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
-
-docker-obs-up: ## Start core + observability (loki, promtail, alertmanager)
-	@echo "$(BLUE)Starting observability services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) --profile obs up -d
-	@echo "$(GREEN)✓ Observability services started$(NC)"
 
 docker-ml-up: ## Start core + ML platform (langfuse, clickhouse, minio)
 	@echo "$(BLUE)Starting ML platform services...$(NC)"
@@ -1203,54 +1197,6 @@ eval-sdk-experiment: ## Run SDK experiment on gold set (DATASET=name required)
 eval-sdk-experiment-named: ## Run named SDK experiment (DATASET=name NAME=label required)
 	@echo "$(BLUE)Running SDK experiment '$(NAME)'...$(NC)"
 	uv run python scripts/run_experiment.py --dataset $(DATASET) --name $(NAME)
-
-# =============================================================================
-# MONITORING & ALERTING
-# =============================================================================
-
-.PHONY: monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert
-
-monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
-	@echo "$(BLUE)Starting monitoring stack...$(NC)"
-	$(LOCAL_COMPOSE_CMD) --profile obs up -d
-	@echo "$(GREEN)✓ Monitoring stack started$(NC)"
-	@echo "$(YELLOW)Services:$(NC)"
-	@echo "  Loki:         http://localhost:3100"
-	@echo "  Alertmanager: http://localhost:9093"
-
-monitoring-down: ## Stop monitoring stack
-	@echo "$(BLUE)Stopping monitoring stack...$(NC)"
-	$(LOCAL_COMPOSE_CMD) --profile obs stop
-	@echo "$(GREEN)✓ Monitoring stack stopped$(NC)"
-
-monitoring-logs: ## View monitoring stack logs
-	@echo "$(BLUE)Monitoring stack logs (Ctrl+C to exit):$(NC)"
-	$(LOCAL_COMPOSE_CMD) logs -f loki promtail alertmanager
-
-monitoring-status: ## Show monitoring stack status
-	@echo "$(BLUE)Monitoring stack status:$(NC)"
-	@$(LOCAL_COMPOSE_CMD) ps loki promtail alertmanager
-	@echo ""
-	@echo "$(YELLOW)Checking health...$(NC)"
-	@curl -s http://localhost:3100/ready > /dev/null 2>&1 && echo "  Loki: $(GREEN)OK$(NC)" || echo "  Loki: $(RED)DOWN$(NC)"
-	@curl -s http://localhost:9093/-/healthy > /dev/null 2>&1 && echo "  Alertmanager: $(GREEN)OK$(NC)" || echo "  Alertmanager: $(RED)DOWN$(NC)"
-	@docker logs dev-promtail 2>&1 | tail -1 | grep -q "level=info" && echo "  Promtail: $(GREEN)OK$(NC)" || echo "  Promtail: $(YELLOW)CHECK LOGS$(NC)"
-
-monitoring-test-alert: ## Send a test alert to verify Telegram integration
-	@echo "$(BLUE)Sending test alert...$(NC)"
-	@# Load the canonical local .env file so `make` works without manual `source`.
-	@set -a; [ -f ./.env ] && . ./.env; set +a; \
-	if [ -z "$$TELEGRAM_ALERTING_BOT_TOKEN" ] || [ -z "$$TELEGRAM_ALERTING_CHAT_ID" ]; then \
-		echo "$(RED)Error: TELEGRAM_ALERTING_BOT_TOKEN and TELEGRAM_ALERTING_CHAT_ID must be set$(NC)"; \
-		echo "$(YELLOW)Export them or add to .env file$(NC)"; \
-		exit 1; \
-	fi
-	@START_AT=$$(date -u -Iseconds); \
-	END_AT=$$(date -u -Iseconds -d '+2 minutes'); \
-	curl -fsS -X POST http://localhost:9093/api/v2/alerts \
-		-H "Content-Type: application/json" \
-		-d "[{\"labels\":{\"alertname\":\"TestAlert\",\"severity\":\"critical\",\"service\":\"test\"},\"annotations\":{\"summary\":\"Test alert from make monitoring-test-alert\",\"description\":\"This is a test alert to verify Telegram integration is working correctly.\"},\"startsAt\":\"$$START_AT\",\"endsAt\":\"$$END_AT\"}]" \
-		> /dev/null && echo "$(GREEN)✓ Test alert sent! Check your Telegram.$(NC)" || echo "$(RED)Failed to send alert. Is Alertmanager running?$(NC)"
 
 # =============================================================================
 # GOOGLE DRIVE SYNC (rclone)

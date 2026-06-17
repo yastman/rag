@@ -110,9 +110,8 @@ If `LANGFUSE_HOST` points to local Langfuse (for example `http://localhost:3001`
 - disable Langfuse tracing for native local run (`unset LANGFUSE_HOST` or `LANGFUSE_TRACING_ENABLED=false`).
 
 Langfuse is part of the `ml` profile with ClickHouse, MinIO, and
-`redis-langfuse`. The `obs` profile (`make docker-obs-up` or
-`make monitoring-up`) is for Loki, Promtail, and Alertmanager; it does not
-start Langfuse.
+`redis-langfuse`. The `obs` profile (loki/promtail/alertmanager) has been
+archived (#2599); it did not start Langfuse.
 
 ### 2. Verify Environment Variables (Presence Only)
 

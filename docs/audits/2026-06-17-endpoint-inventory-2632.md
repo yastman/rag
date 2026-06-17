@@ -170,8 +170,8 @@ localhost-only ports:
 | clickhouse (ml profile) | `8123`, `9009` | HTTP |
 | minio (ml profile) | `9090`, `9091` | HTTP |
 | redis-langfuse (ml profile) | `6380` | Redis |
-| loki (obs profile) | `3100` | HTTP |
-| alertmanager (obs profile) | `9093` | HTTP |
+| loki (obs profile) | `3100` | HTTP | **archived #2599** |
+| alertmanager (obs profile) | `9093` | HTTP | **archived #2599** |
 
 No `rag-api`, `voice-agent`, `livekit`, or `mini-app` services remain in Compose.
 
