@@ -4,14 +4,14 @@
 >
 > See also: [`PIPELINE_OVERVIEW.md`](PIPELINE_OVERVIEW.md) for the operational overview of all flows (ingestion / query / voice) and [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) for the StateGraph routing rules used by the voice path and the text-path `rag_search` tool.
 >
-> Migration plan and SDK context: [`docs/adr/0010-voice-path-create-agent-migration-plan.md`](adr/0010-voice-path-create-agent-migration-plan.md), SDK-native audit issue [#1538](https://github.com/yastman/rag/issues/1538), voice migration tracker [#1535](https://github.com/yastman/rag/issues/1535).
+> Voice migration plan (archived): [`docs/archive/adr/0010-voice-path-create-agent-migration-plan.md`](archive/adr/0010-voice-path-create-agent-migration-plan.md).
 
 The Telegram bot uses a **dual-path architecture** to route queries efficiently based on role and query complexity. The two paths use **different orchestrators**:
 
 | Path | Orchestrator | Source | Status |
 |---|---|---|---|
 | Text (text + agent intent) | `langchain.agents.create_agent` (LangChain 1.x) | [`telegram_bot/agents/agent.py`](../telegram_bot/agents/agent.py) | SDK-native |
-| Voice | Custom `StateGraph` from `build_graph()` | [`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py) | Pending migration ([ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md), #1535) |
+| Voice | Custom `StateGraph` from `build_graph()` | [`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py) | Optional surface |
 
 The voice path's `StateGraph` is reused (read-only) by the text path's `rag_search` tool, so the routing rules in `PIPELINE_ROUTING.md` apply to both paths' retrieve→grade→rerank inner loop.
 
@@ -90,7 +90,7 @@ Client pipeline uses store guards:
 ### Characteristics
 
 - **1-N LLM calls** (agent loop + generation)
-- **Orchestrator:** `langchain.agents.create_agent` (LangChain 1.x SDK) — not a raw `StateGraph`. Voice path still uses `StateGraph` pending [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) / #1535.
+- **Orchestrator:** `langchain.agents.create_agent` (LangChain 1.x SDK) — not a raw `StateGraph`. Voice path still uses `StateGraph` (optional surface).
 - **Tools available:** RAG search, history, CRM operations
 - **Higher latency** but more capable
 

@@ -37,13 +37,14 @@ Default `up` (no profile) starts unprofiled services:
 
 Optional profiles add scoped services:
 
-| Profile | Services |
-| --- | --- |
-| `bot` | `litellm`, `bot` |
-| `ingest` | `ingestion` |
-| `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` |
-| `obs` | archived — see `archive/obs/` |
-| `full` | all profile-gated services |
+| Profile | Services | Notes |
+| --- | --- | --- |
+| `bot` | `litellm`, `bot` | Core bot path |
+| `ingest` | `ingestion` | Unified ingestion |
+| `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` | Optional Langfuse observability |
+| `obs` | `loki`, `promtail`, `alertmanager` | Optional log monitoring |
+| `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
+| `full` | all profile-gated services | |
 
 ### VPS default runtime
 
@@ -105,13 +106,13 @@ still need to be throwaway/dev-only:
 | BGE-M3 API | `http://localhost:8000` |
 | User Base | `http://localhost:8003` |
 | Docling | `http://localhost:5001` |
-| Mini App API | `http://localhost:8090` |
-| Mini App Frontend | `http://localhost:8091` |
 | Langfuse | `http://localhost:3001` |
 | MinIO API | `http://localhost:${MINIO_API_PORT:-9090}` |
 | MinIO Console | `http://localhost:${MINIO_CONSOLE_PORT:-9091}` |
 | Loki | `http://localhost:3100` |
 | Alertmanager | `http://localhost:9093` |
+
+> Mini App frontend/API is archived under `archive/mini_app/` and no longer a required runtime surface.
 
 ## Required Environment Variables
 

@@ -89,7 +89,7 @@ Fan-out to the dedicated runbook for whichever check fails: [`QDRANT_TROUBLESHOO
 make e2e-core-live
 ```
 
-If traces are stale or missing, see [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md). Langfuse can be healthy while the bot still records `LLM failed: Connection error` spans — that points back at LiteLLM, not Langfuse.
+If traces are stale or missing, see [`LANGFUSE_TRACING_GAPS.md`](../archive/runbooks/LANGFUSE_TRACING_GAPS.md). Langfuse can be healthy while the bot still records `LLM failed: Connection error` spans — that points back at LiteLLM, not Langfuse.
 
 ## Service Failure vs App Bug
 
@@ -175,7 +175,7 @@ If traces are stale or missing, see [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACIN
 - [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md)
 - [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md)
 - [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md)
-- [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md)
+- [`LANGFUSE_TRACING_GAPS.md`](../archive/runbooks/LANGFUSE_TRACING_GAPS.md)
 - [`EMBEDDING_SERVICE_FAILURE.md`](EMBEDDING_SERVICE_FAILURE.md)
 - [`docs/RAG_QUALITY_SCORES.md`](../RAG_QUALITY_SCORES.md)
 - [`DOCKER.md`](../../DOCKER.md)

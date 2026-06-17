@@ -111,16 +111,8 @@ python -m telegram_bot.preflight   # startup health check
 
 ## Voice Agent
 
-LiveKit-powered voice path. Deferred by default.
+The voice path (LiveKit + SIP + voice agent) is an optional surface. It is not part of the core product path and is off by default.
 
-- **Entrypoint**: `src/voice/agent.py`
-- **RAG API**: `src/api/main:app`
 - **Compose profile**: `voice` (intentionally off by default)
-
-To start:
-
-```bash
-make docker-voice-up
-```
-
-See [`../../src/voice/`](../../src/voice/) for implementation details.
+- **Implementation**: `src/voice/agent.py`, `src/api/main:app`
+- **Archived docs**: [`../archive/observability/VOICE_TRACING_BASELINE.md`](../archive/observability/VOICE_TRACING_BASELINE.md)
