@@ -148,6 +148,23 @@ Runtime/security/dependency PRs may be merged by autopilot only when:
 - no security uncertainty remains;
 - findings explicitly say clean.
 
+## Duplicate PR Preflight
+
+Before creating a new PR, check for existing open PRs that overlap the same issue or branch:
+
+```bash
+# Check by issue number
+gh pr list --search "#<issue>" --state open
+
+# Check by branch name pattern
+gh pr list --search "<keyword>" --state open
+
+# Check by head branch (exact)
+gh pr list --head <branch-name>
+```
+
+If an open PR already exists for the same issue or scope, do not create a duplicate. Update or reuse the existing PR instead. Document the preflight result in the PR body under "Duplicate PR preflight".
+
 ## PR Coordinator Flow
 
 1. Read PR title, body, comments, labels, and changed files.
