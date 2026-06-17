@@ -29,22 +29,38 @@ CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 class RedisHealthMonitor:
     """Monitors Redis health metrics on a periodic schedule."""
 
-    def __init__(self, redis_url: str, check_interval: int = CHECK_INTERVAL_SECONDS):
+    INITIAL_CHECK_DELAY_SECONDS = 10  # Parity with old APScheduler first-check timing
+
+    def __init__(
+        self,
+        redis_url: str,
+        check_interval: int = CHECK_INTERVAL_SECONDS,
+        initial_check_delay: int = INITIAL_CHECK_DELAY_SECONDS,
+    ):
         """Initialize the monitor.
 
         Args:
             redis_url: Redis connection URL
             check_interval: Seconds between health checks (default: 300)
+            initial_check_delay: Seconds before the first health check (default: 10)
         """
         self.redis_url = redis_url
         self.check_interval = check_interval
+        self.initial_check_delay = initial_check_delay
         self._task: asyncio.Task[None] | None = None
         self._redis: aioredis.Redis | None = None
         self._prev_evicted_keys: int | None = None
         self._prev_checkpoint_count: int | None = None
 
     async def _run_periodic(self) -> None:
-        """Asyncio-native periodic loop: sleep then tick, forever until cancelled."""
+        """Asyncio-native periodic loop: short initial delay then steady-state ticks."""
+        # Fire first check promptly (~10s) to match old APScheduler behaviour,
+        # then settle into the steady-state interval.
+        await asyncio.sleep(self.initial_check_delay)
+        try:
+            await self._check_health()
+        except Exception:
+            logger.exception("Redis health check failed in periodic loop")
         while True:
             await asyncio.sleep(self.check_interval)
             try:

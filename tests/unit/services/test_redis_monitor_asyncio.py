@@ -65,7 +65,7 @@ async def test_stop_cancels_asyncio_task():
 @pytest.mark.asyncio
 async def test_tick_is_called_on_schedule():
     """_check_health must be called by the periodic loop."""
-    monitor = RedisHealthMonitor("redis://localhost:6379", check_interval=1)
+    monitor = RedisHealthMonitor("redis://localhost:6379", check_interval=1, initial_check_delay=0)
 
     call_count = 0
 
@@ -89,7 +89,7 @@ async def test_tick_is_called_on_schedule():
 @pytest.mark.asyncio
 async def test_exception_in_tick_does_not_stop_loop():
     """An exception in _check_health must be caught; the loop continues."""
-    monitor = RedisHealthMonitor("redis://localhost:6379", check_interval=1)
+    monitor = RedisHealthMonitor("redis://localhost:6379", check_interval=1, initial_check_delay=0)
 
     call_count = 0
 
@@ -128,3 +128,38 @@ async def test_graceful_cancel_on_stop():
     await monitor.stop()
 
     assert task.done()
+
+
+@pytest.mark.asyncio
+async def test_first_check_fires_promptly_not_after_full_interval():
+    """First _check_health must fire well before check_interval (within ~2s), not after it.
+
+    Restores parity with old APScheduler job that ran first check ~10s after start.
+    """
+    # Use a long interval so the old sleep-first loop would never fire during the test.
+    # Inject a short initial_check_delay to avoid a 10s real wait in CI.
+    monitor = RedisHealthMonitor(
+        "redis://localhost:6379", check_interval=300, initial_check_delay=0
+    )
+
+    call_count = 0
+
+    async def fake_check_health():
+        nonlocal call_count
+        call_count += 1
+
+    with patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url:
+        mock_client = AsyncMock()
+        mock_from_url.return_value = mock_client
+        monitor._check_health = fake_check_health  # type: ignore[assignment]
+        await monitor.start()
+
+    # With a 300s check_interval, the old sleep-first loop would never tick here.
+    # The new implementation must fire the first check very quickly (initial_check_delay=0).
+    await asyncio.sleep(0.2)
+    await monitor.stop()
+
+    assert call_count >= 1, (
+        f"Expected first health check to fire promptly, got {call_count} calls. "
+        "The loop appears to sleep the full interval before the first check."
+    )
