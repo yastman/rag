@@ -215,7 +215,6 @@ services:
       BUSINESS_HOURS_START: "${BUSINESS_HOURS_START:-9}"
       BUSINESS_HOURS_END: "${BUSINESS_HOURS_END:-18}"
       BUSINESS_HOURS_TZ: "${BUSINESS_HOURS_TZ:-Europe/Sofia}"
-      HANDOFF_WAIT_TIMEOUT_MIN: "${HANDOFF_WAIT_TIMEOUT_MIN:-15}"
       # Real Estate DB
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
     depends_on:

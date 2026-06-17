@@ -62,7 +62,6 @@ def test_handoff_config_defaults(monkeypatch):
     assert cfg.business_hours_start == 9
     assert cfg.business_hours_end == 18
     assert cfg.business_hours_tz == "Europe/Sofia"
-    assert cfg.handoff_wait_timeout_min == 15
 
 
 def test_handoff_config_from_env(monkeypatch):
