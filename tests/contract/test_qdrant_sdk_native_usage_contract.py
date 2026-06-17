@@ -262,3 +262,30 @@ def test_deprecated_client_search_in_new_seam_would_be_caught() -> None:
         "Scanner did not flag a synthetic deprecated client.search() call — "
         "the guardrail is broken and would miss real occurrences."
     )
+
+
+def test_app_level_search_methods_are_not_flagged() -> None:
+    """Fixture: app-level engine .search() methods are not flagged by the scanner.
+
+    The heuristic only flags receivers that look like Qdrant client handles
+    (contain "client" or "qdrant"). App-level method calls like
+    ``self.search()``, ``rrf_engine.search()``, or ``engine.search()``
+    must not be caught, or every search engine class would appear as an
+    offender.
+    """
+    synthetic_src = (
+        "async def search(self, query):\n"
+        "    return await self.search(query)\n"
+        "async def rrf_search(self, query):\n"
+        "    return await rrf_engine.search(query)\n"
+        "async def engine_search(self, query):\n"
+        "    return await engine.search(query)\n"
+    )
+    tree = ast.parse(synthetic_src, filename="<synthetic-app>")
+    synthetic_path = Path("<synthetic-app>")
+    offenders = _find_deprecated_client_search_calls(tree, synthetic_path)
+    assert not offenders, (
+        "Scanner incorrectly flagged app-level .search() method calls — "
+        "the allowlist heuristic is too broad and would produce false positives:\n"
+        + "\n".join(f"  {p}:{lineno} -> {expr}" for p, lineno, expr in offenders)
+    )
