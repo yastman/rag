@@ -736,7 +736,7 @@ def _apply_stream_safe_fallback(
     elapsed = time.monotonic() - t0
     with contextlib.suppress(Exception):
         dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
-    answer = extra.get("build_fallback_response", _build_fallback_response)(docs)
+    answer: str = extra.get("build_fallback_response", _build_fallback_response)(docs)
     current_latency = request.latency_stages or {}
     _update_current_span(
         lf_client,
