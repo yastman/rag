@@ -10,9 +10,9 @@ The bot has **two paths** for queries (see [`CLIENT_PIPELINE.md`](CLIENT_PIPELIN
 
 - **Core text path** is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). This is the canonical product path.
 - **Telegram adapter** uses `create_agent` for conversational shell behavior (streaming, tools, history trimming). It calls `run_assistant_request()` for product RAG.
-- **Voice path** uses a custom `StateGraph` built by `build_graph()` ([`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py)). Voice is an optional surface (see `docs/archive/adr/0010-voice-path-create-agent-migration-plan.md`).
+- **Voice path** uses `build_graph()` from the compat façade ([`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py)), which wraps `run_assistant_pipeline()` — **not** an active StateGraph (ARCH-16 decision, #2697). Voice is an optional surface (see `docs/archive/adr/0010-voice-path-create-agent-migration-plan.md`).
 
-The node list below describes the **voice-path StateGraph** and the inner stages reused by the text path's `rag_search` tool. Routing rules and conditional edges between these nodes live in [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md).
+The node list below describes the **voice-path façade stages** and the inner stages reused by the text path's `rag_search` tool. Routing rules and conditional edges between these nodes live in [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md).
 
 Main nodes:
 - `transcribe` (voice input only)
