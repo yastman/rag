@@ -7,7 +7,6 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from langfuse import observe
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
@@ -28,6 +27,7 @@ from qdrant_client.models import (
 
 from src.config import Settings, VectorDimensions
 from src.models import get_bge_m3_model
+from src.observability import observe
 
 from .chunker import Chunk
 

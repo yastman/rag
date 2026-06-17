@@ -20,7 +20,6 @@ import logging
 from dataclasses import dataclass
 from typing import Literal
 
-from langfuse import get_client, observe
 from tenacity import (
     before_sleep_log,
     retry,
@@ -28,6 +27,8 @@ from tenacity import (
     stop_after_attempt,
     wait_random_exponential,
 )
+
+from src.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
