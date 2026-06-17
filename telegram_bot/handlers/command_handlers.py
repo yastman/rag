@@ -67,22 +67,12 @@ async def cmd_start(
     """Handle /start command with lower-menu client root and SDK dialogs for flows."""
     assert message.from_user is not None
 
-    role = await bot._resolve_user_role(message.from_user.id)
+    if dialog_manager is not None:
+        with contextlib.suppress(Exception):
+            await dialog_manager.reset_stack(remove_keyboard=True)
+    from telegram_bot.dialogs.root_nav import show_client_main_menu
 
-    kommo_enabled = getattr(bot.config, "kommo_enabled", False)
-    if role == "manager" and kommo_enabled and dialog_manager is not None:
-        from aiogram_dialog import StartMode
-
-        from telegram_bot.dialogs.states import ManagerMenuSG
-
-        await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
-    else:
-        if dialog_manager is not None:
-            with contextlib.suppress(Exception):
-                await dialog_manager.reset_stack(remove_keyboard=True)
-        from telegram_bot.dialogs.root_nav import show_client_main_menu
-
-        await show_client_main_menu(message, i18n=i18n)
+    await show_client_main_menu(message, i18n=i18n)
 
 
 async def cmd_help(bot: PropertyBot, message: Message) -> None:

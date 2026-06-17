@@ -27,4 +27,3 @@ class Lead:
     stage: str = "new"  # new, qualified, hot, warm, cold, converted
     score: int = 0
     preferences: dict = field(default_factory=dict)
-    kommo_lead_id: int | None = None

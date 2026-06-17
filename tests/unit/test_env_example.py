@@ -63,21 +63,7 @@ class TestEnvExampleSanitization:
 class TestEnvExampleCompleteness:
     """Env example must document all CRM and manager config vars."""
 
-    REQUIRED_CRM_VARS = [
-        "KOMMO_ENABLED",
-        "KOMMO_SUBDOMAIN",
-        "KOMMO_ACCESS_TOKEN",
-        "KOMMO_TELEGRAM_FIELD_ID",
-        "KOMMO_CLIENT_ID",
-        "KOMMO_CLIENT_SECRET",
-        "KOMMO_REDIRECT_URI",
-        "KOMMO_AUTH_CODE",
-        "KOMMO_DEFAULT_PIPELINE_ID",
-        "KOMMO_RESPONSIBLE_USER_ID",
-        "KOMMO_SESSION_FIELD_ID",
-        "KOMMO_LEAD_SCORE_FIELD_ID",
-        "KOMMO_LEAD_BAND_FIELD_ID",
-    ]
+    REQUIRED_CRM_VARS: list[str] = []  # Kommo/CRM archived (#2689)
 
     REQUIRED_MANAGER_VARS = [
         "MANAGER_IDS",

@@ -62,10 +62,10 @@ class ForumBridge:
         if summary:
             lines.append("")
             lines.append(f"AI-саммари:\n{summary}")
-        # Kommo link
+        # CRM lead link (archived)
         if lead_url:
             lines.append("")
-            lines.append(f"Kommo: {lead_url}")
+            lines.append(f"CRM: {lead_url}")
         lines.append("")
         lines.append("/close — вернуть клиента боту")
         lines.append("---")

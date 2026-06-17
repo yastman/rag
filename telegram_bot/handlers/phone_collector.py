@@ -107,7 +107,6 @@ async def _process_valid_phone(
     phone: str,
     message: Message,
     state: FSMContext,
-    kommo_client: Any | None = None,
     bot_config: Any | None = None,
     search_event_store: Any | None = None,
 ) -> None:
@@ -143,7 +142,6 @@ async def _process_valid_phone(
 async def on_phone_received(
     message: Message,
     state: FSMContext,
-    kommo_client: Any | None = None,
     i18n: Any | None = None,
     bot_config: Any | None = None,
     search_event_store: Any | None = None,
@@ -189,22 +187,19 @@ async def on_phone_received(
         await message.answer(phone_invalid)
         return
 
-    await _process_valid_phone(phone, message, state, kommo_client, bot_config, search_event_store)
+    await _process_valid_phone(phone, message, state, bot_config, search_event_store)
 
 
 async def on_phone_contact(
     message: Message,
     state: FSMContext,
-    kommo_client: Any | None = None,
     bot_config: Any | None = None,
     search_event_store: Any | None = None,
 ) -> None:
     """Handle shared contact via request_contact button."""
     if message.contact and message.contact.phone_number:
         phone = normalize_phone(message.contact.phone_number) or message.contact.phone_number
-        await _process_valid_phone(
-            phone, message, state, kommo_client, bot_config, search_event_store
-        )
+        await _process_valid_phone(phone, message, state, bot_config, search_event_store)
     else:
         await message.answer("Не удалось получить номер. Введите вручную:")
 
