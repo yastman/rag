@@ -1088,10 +1088,12 @@ baseline-check: baseline-compile baseline-smoke ## Optional Langfuse baseline ch
 eval-gold-gen: ## Generate gold set from Qdrant → Langfuse Dataset + JSONL
 	@echo "$(BLUE)Generating gold set from Qdrant...$(NC)"
 	uv run python scripts/generate_gold_set.py --collection gdrive_documents_bge
+	@echo "$(GREEN)✓ Gold set generated$(NC)"
 
 eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only, no Langfuse)
 	@echo "$(BLUE)Generating gold set (dry-run)...$(NC)"
 	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
+
 
 # =============================================================================
 # GOOGLE DRIVE SYNC (rclone)

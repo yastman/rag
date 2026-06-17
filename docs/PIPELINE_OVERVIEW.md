@@ -82,9 +82,11 @@ make ingest-unified-status
 
 ## 4) Voice Flow
 
-Source code: `src/voice/agent.py` + `src/api/main.py`. This is an optional surface; off by default.
+> **Archived surface** — `src/voice/` and `src/api/` were removed from the active codebase
+> in ARCH-02 (#2598). Files live under `archive/voice/` and `archive/api/`. The voice
+> compose profile (`livekit`, `sip`, `voice-agent`, `rag-api`) is no longer in Compose.
 
-Runtime path:
+The former runtime path was:
 1. LiveKit session starts voice agent.
 2. `/call` dispatch metadata carries `langfuse_trace_id` for continuity.
 3. Voice agent calls RAG API (`POST /query`) with the same `langfuse_trace_id`.

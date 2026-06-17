@@ -25,8 +25,8 @@ mechanisms with different timing:
   `result` state and emits every score in one pass via the `score(...)` helper,
   which calls `lf.create_score(trace_id=..., score_id="<trace_id>-<name>")` —
   explicit trace scoping plus an idempotency key (#435). The bot calls it after
-  the supervisor run completes (`telegram_bot/bot.py`); the RAG API calls it at
-  the end of `/query` (`src/api/main.py`). `write_history_scores()` and
+  the supervisor run completes (`telegram_bot/bot.py`); the archived RAG API called it at
+  the end of `/query` (`archive/api/main.py` — archived in #2598). `write_history_scores()` and
   `write_crm_scores()` follow the same once-per-flow pattern.
 - **Per-node hit/miss and grade signals are NOT scores.** Nodes such as the
   cache node (`telegram_bot/graph/nodes/cache.py`) report real-time state with
@@ -136,9 +136,10 @@ Written via `write_crm_scores()` when CRM tools are invoked:
 ## Validation
 
 Required trace families validated by core E2E plus JSON/product-log review (`make e2e-core-live`):
-- `rag-api-query`
-- `voice-session`
 - `ingestion-cli-run`
+
+> Note: `rag-api-query` and `voice-session` were part of the archived RAG API and voice surface
+> (removed in #2598). They no longer apply to the active Telegram bot + assistant core path.
 
 ## Code Locations
 

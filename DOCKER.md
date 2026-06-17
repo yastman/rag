@@ -43,7 +43,7 @@ Optional profiles add scoped services:
 | `ingest` | `ingestion` | Unified ingestion |
 | `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` | Optional Langfuse observability |
 | `obs` | `loki`, `promtail`, `alertmanager` | Optional log monitoring |
-| `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
+| `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Archived surface; removed from Compose (#2598) |
 | `full` | all profile-gated services | |
 
 **Python extras per profile** (root `pyproject.toml`, for native / non-Docker use):

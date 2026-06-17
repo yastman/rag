@@ -379,8 +379,8 @@ make run-bot
 # Unified ingestion
 uv run python -m src.ingestion.unified.cli
 
-# RAG API
-uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
+# RAG API (archived — see archive/api/main.py; no longer in active src/)
+# uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 ```
 
 If your venv is stale and the bot startup fails with a missing import,

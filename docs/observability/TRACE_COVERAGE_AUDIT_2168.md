@@ -55,7 +55,7 @@ records:
 | Family | Path | Static |
 |---|---|:---:|
 | `rag-pipeline` | `telegram_bot/agents/rag_pipeline.py:1007` | ✅ |
-| `rag-api-query` | `src/api/main.py:326` | ✅ |
+| `rag-api-query` | `archive/api/main.py` (archived — #2598) | ⚠️ archived |
 | `rag-search-query` | `src/evaluation/langfuse_integration.py:87` | ✅ |
 | `rag-core-build-context` | `telegram_bot/services/rag_core.py` | ✅ (post #2163) |
 | `rag-core-rewrite-query` | `telegram_bot/services/rag_core.py` | ✅ (post #2163) |
