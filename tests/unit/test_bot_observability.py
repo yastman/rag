@@ -8,7 +8,9 @@ from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 
 
-pytestmark = pytest.mark.skip(reason="ARCH-16: sdk-agent branch removed; tests need full rewrite")
+pytestmark = pytest.mark.skip(
+    reason="ARCH-16: requires telegram adapter extra; sdk-agent path removed"
+)
 
 
 def _create_bot(mock_config: BotConfig) -> PropertyBot:

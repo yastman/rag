@@ -13,7 +13,6 @@ import pytest
 
 # Skip entire module if aiogram not installed
 
-pytestmark = pytest.mark.skip(reason="ARCH-16: sdk-agent branch removed; tests need full rewrite")
 
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
@@ -34,6 +33,11 @@ from telegram_bot.handlers.command_handlers import (
 from telegram_bot.preflight import PreflightError
 from telegram_bot.services.error_utils import walk_traceback_frames
 from telegram_bot.startup_status import DependencyCheckResult, StartupReport
+
+
+pytestmark = pytest.mark.skip(
+    reason="ARCH-16: requires telegram adapter extra; sdk-agent path removed"
+)
 
 
 @pytest.fixture
