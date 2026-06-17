@@ -179,3 +179,19 @@ def test_all_integration_and_smoke_files_are_classified() -> None:
             "pytestmark = pytest.mark.requires_services) to each file listed "
             "above."
         )
+
+
+def test_makefile_no_service_lane_target_exists() -> None:
+    """Makefile must define test-no-service-lane and wire it into make test (#2324 Phase 1.2)."""
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "test-no-service-lane:" in makefile, (
+        "Makefile must define a 'test-no-service-lane' target "
+        "(-m no_services selector for integration/smoke tests, #2324 Phase 1.2)"
+    )
+    assert "no_services" in makefile, (
+        "Makefile test-no-service-lane must use '-m no_services' selector"
+    )
+    # make test must invoke the no-service lane (directly or via the target)
+    assert "test-no-service-lane" in makefile.split("test-no-service-lane:")[0], (
+        "make test must call test-no-service-lane to run no-service integration/smoke tests"
+    )

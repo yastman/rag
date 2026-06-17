@@ -55,21 +55,20 @@ def test_redis_url_fixture_preserves_explicit_credentials(monkeypatch: pytest.Mo
 
 @pytest.mark.smoke
 def test_initial_state_message_uses_dot_notation() -> None:
-    """`state["messages"][0]` is a HumanMessage; access content via attribute (#1766).
+    """`state["messages"][0]` is a domain Message; access content via attribute.
 
-    LangChain SDK contract (per langgraph graph-api docs): when state uses
-    `add_messages`, messages are deserialized to BaseMessage objects and
-    must be read with dot notation, not dict subscript.
+    Domain contract (after LangChain removal): make_initial_state stores
+    Message dataclass objects. Access content via `.content`, not dict
+    subscript. Regression lock for #1766; updated post LangChain removal
+    when HumanMessage was replaced by the domain Message type.
     """
-    from langchain_core.messages import HumanMessage
-
-    from telegram_bot.graph.state import make_initial_state
+    from src.runtime.graph.state import Message, make_initial_state
 
     state = make_initial_state(user_id=1, session_id="s", query="hello")
-    assert isinstance(state["messages"][0], HumanMessage)
+    assert isinstance(state["messages"][0], Message)
     assert state["messages"][0].content == "hello"
 
     # Subscript must remain unsupported — protect against accidental
     # reintroduction of dict-style access in tests.
-    with pytest.raises(TypeError):
+    with pytest.raises((TypeError, KeyError)):
         _ = state["messages"][0]["content"]  # type: ignore[index]

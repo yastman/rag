@@ -158,3 +158,24 @@ def test_trusted_heavy_contains_contract_and_fast_gate_jobs() -> None:
     )
     assert "make test-contract" in commands
     assert "make test" in commands
+
+
+MAKEFILE = Path("Makefile")
+
+
+def test_make_test_includes_no_service_lane() -> None:
+    """make test must run the no-service integration/smoke lane (#2324 Phase 1.2).
+
+    Ensures collateral no-service regressions are caught on every PR gate.
+    """
+    assert MAKEFILE.exists(), "Makefile must exist"
+    text = MAKEFILE.read_text(encoding="utf-8")
+    assert "test-no-service-lane" in text, (
+        "Makefile must define test-no-service-lane for the no-service integration/smoke lane"
+    )
+    # Verify make test calls test-no-service-lane (it must appear before the definition)
+    before_def = text.split("test-no-service-lane:")[0]
+    assert "test-no-service-lane" in before_def, (
+        "make test must invoke test-no-service-lane "
+        "so no-service collateral regressions are caught on every PR gate"
+    )
