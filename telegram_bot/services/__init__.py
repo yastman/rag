@@ -19,8 +19,6 @@ if TYPE_CHECKING:
     from .query_analyzer import QueryAnalyzer
     from .query_preprocessor import HyDEGenerator, QueryPreprocessor
     from .small_to_big import ExpandedChunk, SmallToBigService
-    from .vectorizers import BgeM3CacheVectorizer
-    from .voyage import VoyageService
 
 
 __all__ = [
@@ -35,7 +33,6 @@ __all__ = [
     "QueryAnalyzer",
     "QueryPreprocessor",
     "SmallToBigService",
-    "VoyageService",
     "generate_response",
 ]
 
@@ -51,7 +48,6 @@ _IMPORT_MAP = {
     "QueryAnalyzer": ".query_analyzer",
     "QueryPreprocessor": ".query_preprocessor",
     "SmallToBigService": ".small_to_big",
-    "VoyageService": ".voyage",
 }
 
 
