@@ -46,4 +46,4 @@ of relying on the deleted required-lane tests from the pre-archive state.
 - [`../../DOCKER.md`](../../DOCKER.md) — current Compose/runtime contract.
 - [`../../docs/LOCAL-DEVELOPMENT.md`](../../docs/LOCAL-DEVELOPMENT.md) — current local validation ladder.
 - [`../../docs/indexes/runtime-services.md`](../../docs/indexes/runtime-services.md) — service ownership index.
-- [`../../docs/observability/MINIAPP_BROWSER_TRACING_DECISION.md`](../../docs/observability/MINIAPP_BROWSER_TRACING_DECISION.md) — archived browser tracing decision.
+- [`../../docs/archive/observability/MINIAPP_BROWSER_TRACING_DECISION.md`](../../docs/archive/observability/MINIAPP_BROWSER_TRACING_DECISION.md) — archived browser tracing decision.

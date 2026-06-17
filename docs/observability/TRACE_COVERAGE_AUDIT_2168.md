@@ -1,7 +1,7 @@
 # Langfuse Trace-Coverage Audit (Static Phase, #2168)
 
 > Scope: static codebase audit of every `@observe(name=...)` declaration
-> against `docs/runbooks/LANGFUSE_TRACING_GAPS.md` "Trace Interpretation
+> against `docs/archive/runbooks/LANGFUSE_TRACING_GAPS.md` "Trace Interpretation
 > Matrix". Runtime verification (live `make run-bot` + REST API queries
 > against Langfuse) is intentionally deferred to an operator with access
 > to the local Langfuse stack — the static phase below is reproducible
@@ -205,7 +205,7 @@ make langfuse-latest-trace-audit
 
 ## References
 
-- Runbook: `docs/runbooks/LANGFUSE_TRACING_GAPS.md`
+- Runbook: `docs/archive/runbooks/LANGFUSE_TRACING_GAPS.md`
 - Wave 2 PRs: #2158, #2163, #2164, #2165
 - Wave 2 follow-up: #2167 (executor contextvars propagation)
 - Wave 1 burn-down: #1658-#1666

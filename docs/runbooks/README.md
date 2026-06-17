@@ -8,7 +8,7 @@ Operator entrypoint for container/service investigations and incident response. 
 |---|---|
 | Remote Docker workflow (SSH, Colima, env sync, bot container) | See Docker runbook below |
 | Native Git/GitHub hygiene | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
-| Recent Langfuse traces (Russian: "изучи последние трейсы") | core E2E plus JSON/product-log review (`make e2e-core-live`) → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
+| Recent Langfuse traces (optional surface) | core E2E plus JSON/product-log review (`make e2e-core-live`) → [`../archive/runbooks/LANGFUSE_TRACING_GAPS.md`](../archive/runbooks/LANGFUSE_TRACING_GAPS.md) |
 | Qdrant health / query / index issues (Russian: "изучи последние qdrant запросы") | `curl -fsS http://localhost:6333/readyz` → [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Redis / cache degradation (Russian: "сломался redis") | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
 | LiteLLM / provider failure (Russian: "сломался litellm") | `uv run python scripts/probe/check_bot_runtime_env.py` → [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
@@ -18,8 +18,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Telegram bot is down / restarting / high error rate | `docker compose ps bot` → [`TELEGRAM_BOT_FAILURE.md`](TELEGRAM_BOT_FAILURE.md) |
 | Embedding service (BGE-M3 / BM42 / Voyage) errors | `docker compose ps bge-m3` → [`EMBEDDING_SERVICE_FAILURE.md`](EMBEDDING_SERVICE_FAILURE.md) |
 | Docling document parser down / OOM / conversion errors | `docker compose ps docling` → [`DOCLING_FAILURE.md`](DOCLING_FAILURE.md) |
-| MinIO object storage down / disk full / corruption | `curl -fsS http://localhost:9000/minio/health/ready` → [`MINIO_FAILURE.md`](MINIO_FAILURE.md) |
-| LightRAG graph retrieval down / API errors | `docker compose ps lightrag` → [`LIGHTRAG_FAILURE.md`](LIGHTRAG_FAILURE.md) |
+| MinIO object storage (optional `ml` profile) | `curl -fsS http://localhost:9000/minio/health/ready` → [`../archive/runbooks/MINIO_FAILURE.md`](../archive/runbooks/MINIO_FAILURE.md) |
 
 ## Start Here
 
@@ -27,7 +26,7 @@ Operator entrypoint for container/service investigations and incident response. 
 |---|---|
 | Remote Docker workflow (SSH, Colima, env sync, bot container) | See Docker runbook below |
 | Git/GitHub branch, PR, issue, worktree, and stash hygiene | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
-| Langfuse traces missing, gaps, or drift | [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
+| Langfuse traces missing (optional surface) | [`../archive/runbooks/LANGFUSE_TRACING_GAPS.md`](../archive/runbooks/LANGFUSE_TRACING_GAPS.md) |
 | LiteLLM / LLM connection failures or proxy errors | [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
 | Redis cache degradation, eviction, or latency | [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
 | Qdrant health, collection, or vector search issues | [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
@@ -38,8 +37,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Telegram bot container, Telegram API, or query-processing alerts | [`TELEGRAM_BOT_FAILURE.md`](TELEGRAM_BOT_FAILURE.md) |
 | Embedding service (BGE-M3, BM42, Voyage) alerts | [`EMBEDDING_SERVICE_FAILURE.md`](EMBEDDING_SERVICE_FAILURE.md) |
 | Docling document parser alerts | [`DOCLING_FAILURE.md`](DOCLING_FAILURE.md) |
-| MinIO storage alerts | [`MINIO_FAILURE.md`](MINIO_FAILURE.md) |
-| LightRAG graph-retrieval alerts | [`LIGHTRAG_FAILURE.md`](LIGHTRAG_FAILURE.md) |
+| MinIO storage (optional `ml` profile) | [`../archive/runbooks/MINIO_FAILURE.md`](../archive/runbooks/MINIO_FAILURE.md) |
 | Weekly git/pr/issue hygiene workflow | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
 
 ## Container / Service Map
@@ -48,7 +46,7 @@ Operator entrypoint for container/service investigations and incident response. 
 |---|---|---|
 | `qdrant` | `dev-qdrant-1`, `dev_qdrant_1` | [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | `redis` (app cache) and cache Redis containers | `dev-redis-1`, `dev_redis_1` | [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
-| `langfuse`, `langfuse-worker`, ClickHouse, MinIO, Langfuse Postgres/Redis | `dev-langfuse-1`, `dev-langfuse-worker-1`, `dev-clickhouse-1`, `dev-minio-1` | [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
+| `langfuse`, `langfuse-worker`, ClickHouse, MinIO, Langfuse Postgres/Redis (optional `ml` profile) | `dev-langfuse-1`, `dev-langfuse-worker-1`, `dev-clickhouse-1`, `dev-minio-1` | [`../archive/runbooks/LANGFUSE_TRACING_GAPS.md`](../archive/runbooks/LANGFUSE_TRACING_GAPS.md) |
 | `litellm` | `dev-litellm-1`, `dev_litellm_1` | [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
 | `postgres` | `dev-postgres-1`, `dev_postgres_1` | [`POSTGRESQL_WAL_RECOVERY.md`](POSTGRESQL_WAL_RECOVERY.md) |
 | Ingestion-related services | `dev-ingestion-1`, `dev-docling-1`, `dev-bge-m3-1` | [`vps-gdrive-ingestion-recovery.md`](vps-gdrive-ingestion-recovery.md) |

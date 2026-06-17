@@ -4,15 +4,13 @@ Quick orientation for Langfuse traces, Qdrant, and Redis/cache investigations. L
 
 ## Langfuse Traces
 
-Use this path when traces are missing, gaps appear, or you need to validate scoring.
+Langfuse is an optional observability surface. The core E2E path (`make e2e-core-live`) uses structured product logs and does not require Langfuse.
 
-For terminal-first trace checks, start with core E2E plus JSON/product-log review (`make e2e-core-live`) and the
-Langfuse tracing gaps runbook.
+Use this path when Langfuse is enabled and traces are missing, gaps appear, or you need to validate scoring.
 
-### Start Here
+For terminal-first trace checks, start with core E2E plus JSON/product-log review (`make e2e-core-live`).
 
-- **Runbook**: [`../runbooks/LANGFUSE_TRACING_GAPS.md`](../runbooks/LANGFUSE_TRACING_GAPS.md)
-- **Quality scoring**: [`../RAG_QUALITY_SCORES.md`](../RAG_QUALITY_SCORES.md)
+The Langfuse tracing gaps runbook has been archived at [`../archive/runbooks/LANGFUSE_TRACING_GAPS.md`](../archive/runbooks/LANGFUSE_TRACING_GAPS.md).
 
 ### Common Investigations
 

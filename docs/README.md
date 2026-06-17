@@ -60,12 +60,10 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`BOT_INTERNAL_STRUCTURE.md`](BOT_INTERNAL_STRUCTURE.md) — Bot internal component structure.
 - [`PIPELINE_OVERVIEW.md`](PIPELINE_OVERVIEW.md) — Ingestion, query, and voice runtime flows.
 - [`observability/CROSS_SERVICE_TRACING.md`](observability/CROSS_SERVICE_TRACING.md) — Cross-service W3C TraceContext/Baggage propagation contract.
-- [`observability/VOICE_TRACING_BASELINE.md`](observability/VOICE_TRACING_BASELINE.md) — Voice/LiveKit W3C TraceContext SDK baseline.
 - [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) — Query routing and state machine design.
 - [`CONTEXTUALIZED_EMBEDDINGS.md`](CONTEXTUALIZED_EMBEDDINGS.md) — Embedding strategy and contextualization.
-- [`RAG_API.md`](RAG_API.md) — FastAPI RAG API contract.
-- [`API_REFERENCE.md`](API_REFERENCE.md) — API reference.
-- [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Guide for extending graph nodes, tools, query types, and ingestion sources.
+- [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Guide for extending the assistant: tools, query types, and ingestion sources.
+- [`archive/README.md`](archive/README.md) — Archived surface docs (voice, Mini App, Langfuse tracing, OTel sampling, RAG API).
 
 ## Operations & Runbooks
 
@@ -75,6 +73,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`services/README.md`](../services/README.md) — Local service containers (BGE-M3, Docling, user-base).
 - [`docker/README.md`](../docker/README.md) — Helper runtime assets (configs, scripts, monitoring rules).
 - [`archive/k8s/README.md`](../archive/k8s/README.md) — Partial k3s manifests, overlays, and deploy commands (archived).
+- [`archive/README.md`](archive/README.md) — Archived surface docs index.
 - [`INGESTION.md`](INGESTION.md) — Unified ingestion guide and troubleshooting.
 - [`GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
