@@ -2,35 +2,29 @@
 
 ## Purpose
 
-Main RAG pipeline orchestrator.
-Owns the `RAGPipeline` orchestration API and `RAGResult` return contract.
-Coordinates configured embedding, retrieval, contextualization, and indexing helpers.
+Core assistant contracts, entrypoint, and app configuration.
+Exports typed contracts, the `run_assistant_request` entrypoint, and `AssistantApp`/`DependencyBuilder`.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| [`__init__.py`](./__init__.py) | Exports `RAGPipeline`, `RAGResult` |
-| [`pipeline.py`](./pipeline.py) | `RAGPipeline`: orchestrates embedding, retrieval, context enrichment |
+| [`__init__.py`](./__init__.py) | Lazy exports for `AssistantApp`, `DependencyBuilder`, `run_assistant_request`, and contracts |
+| [`contracts.py`](./contracts.py) | Typed state contracts: `AssistantRequest`, `AssistantResult`, provider protocols |
+| [`assistant.py`](./assistant.py) | `run_assistant_request()` — main assistant entrypoint |
+| [`app.py`](./app.py) | `AssistantApp`, `DependencyBuilder` |
 
 ## Boundaries
 
-- Delegates embedding to [`src/models/`](../models/)
-- Delegates search to [`src/retrieval/`](../retrieval/)
-- Delegates context enrichment to [`src/contextualization/`](../contextualization/)
-- Uses [`src/ingestion/`](../ingestion/) helpers only for the `index_documents()` path.
 - Does **not** handle transport-layer concerns (Telegram, HTTP)
+- Pipeline orchestration lives in [`src/runtime/pipeline/`](../runtime/pipeline/)
 
 ## Usage
 
 ```python
-from src.core import RAGPipeline
+from src.core import run_assistant_request, AssistantRequest
 
-pipeline = RAGPipeline()
-results = await pipeline.search("What are citizen rights?")
-
-for result in results.results:
-    print(result["text"])
+result = await run_assistant_request(AssistantRequest(...), deps)
 ```
 
 ## Focused checks
@@ -41,6 +35,5 @@ uv run pytest tests/unit/core/ -q
 
 ## See Also
 
+- [`src/runtime/pipeline/`](../runtime/pipeline/) — imperative assistant pipeline
 - [`src/config/`](../config/) — Settings and constants
-- [`src/retrieval/`](../retrieval/) — Search engine implementations
-- [`src/contextualization/`](../contextualization/) — LLM context enrichment

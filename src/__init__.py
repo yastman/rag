@@ -31,11 +31,6 @@ _DEPRECATED_EXPORTS = {
         "DocumentIndexer",
         "from src.ingestion import DocumentIndexer",
     ),
-    "RAGPipeline": (
-        "src.core",
-        "RAGPipeline",
-        "from src.core import RAGPipeline",
-    ),
     "Settings": (
         "src.config",
         "Settings",
