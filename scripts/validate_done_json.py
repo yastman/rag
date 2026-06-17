@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
-"""Validate a DONE JSON file against the expected schema for swarm workers.
+"""LEGACY — strict_json mode only. Validate a DONE JSON file (#2305 P3).
+
+Markdown-first workers do NOT use this validator. It runs only when the
+environment sets ``KIRO_STRICT_REPORT=1`` (legacy / explicit strict machine
+handoff). By default it is a no-op that exits 0. See
+``.kiro/skills/shared/strict-json-policy.md``.
 
 Usage:
-    python scripts/validate_done_json.py path/to/file.done.json
-    echo '{"status": "DONE", ...}' | python scripts/validate_done_json.py -
+    KIRO_STRICT_REPORT=1 python scripts/validate_done_json.py path/to/file.done.json
+    echo '{"status": "DONE", ...}' | KIRO_STRICT_REPORT=1 python scripts/validate_done_json.py -
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from typing import Any
 
@@ -92,6 +98,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to DONE JSON file, or '-' for stdin.",
     )
     args = parser.parse_args(argv)
+
+    if os.getenv("KIRO_STRICT_REPORT") != "1":
+        print(
+            "SKIP: legacy strict_json validator (set KIRO_STRICT_REPORT=1 to enable); "
+            "Markdown-first is the default path"
+        )
+        return 0
 
     try:
         if args.file == "-":

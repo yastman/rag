@@ -1,15 +1,16 @@
 # Pipeline Overview
 
-> Operational overview of ingestion, query, and voice flows. The query path is split across two orchestrators (text=`create_agent`, voice=`StateGraph`); see [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) for the canonical dual-path explanation, [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) for the StateGraph routing rules, and [`docs/adr/0010-voice-path-create-agent-migration-plan.md`](adr/0010-voice-path-create-agent-migration-plan.md) plus SDK-native audit issue [#1538](https://github.com/yastman/rag/issues/1538) for the migration context.
+> Operational overview of ingestion, query, and voice flows. The core text RAG path is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). Telegram/voice adapters use `create_agent` for conversational shell behavior. See [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md), [`docs/adr/0019-core-text-path-procedural-runtime.md`](adr/0019-core-text-path-procedural-runtime.md), and [#2405](https://github.com/yastman/rag/issues/2405) for the migration context.
 
 Operational overview of ingestion, query, and voice flows.
 
 ## 1) Query Pipeline (Telegram Bot / API)
 
-The bot has **two orchestrators** for queries (see [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) for full details):
+The bot has **two paths** for queries (see [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) for full details):
 
-- **Text path** uses `langchain.agents.create_agent` ([`telegram_bot/agents/agent.py`](../telegram_bot/agents/agent.py)). The agent calls a `rag_search` tool that internally drives the retrieve→grade→rerank loop, plus other tools (history, CRM).
-- **Voice path** uses a custom `StateGraph` built by `build_graph()` ([`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py)). Migration to `create_agent` is tracked in [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) and #1535 / #1538.
+- **Core text path** is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). This is the canonical product path.
+- **Telegram adapter** uses `create_agent` for conversational shell behavior (streaming, tools, history trimming). It calls `run_assistant_request()` for product RAG.
+- **Voice path** uses a custom `StateGraph` built by `build_graph()` ([`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py)). Migration to `create_agent` is tracked in [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) and #1535 / #2405.
 
 The node list below describes the **voice-path StateGraph** and the inner stages reused by the text path's `rag_search` tool. Routing rules and conditional edges between these nodes live in [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md).
 

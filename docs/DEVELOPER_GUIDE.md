@@ -91,6 +91,11 @@ Key existing state fields:
 
 In `telegram_bot/graph/graph.py`:
 
+> **Note:** `build_graph()` is the voice-path StateGraph. It is a migration target
+> (tracked in #2405 / ADR-0010). The core text RAG path is procedural via
+> `src.core.run_assistant_request()` (ADR-0019). New text-path features should
+> use the procedural path, not the graph builder.
+
 ```python
 from .nodes.your_node import your_node
 
@@ -209,7 +214,8 @@ graph.add_edge("sentiment", "guard")
 
 | File | Purpose |
 |------|---------|
-| `telegram_bot/graph/graph.py` | Graph builder + route functions |
+| `telegram_bot/graph/graph.py` | Voice-path StateGraph builder (migration target #2405) |
+| `src/runtime/pipeline/assistant_pipeline.py` | Core text RAG pipeline (ADR-0019, canonical) |
 | `telegram_bot/graph/state.py` | RAGState TypedDict |
 | `telegram_bot/graph/context.py` | GraphContext DI container |
 | `telegram_bot/observability.py` | @observe decorator |
@@ -349,7 +355,7 @@ Nodes receive dependencies through `runtime.context`, which provides a typed `Gr
 ### Adding New Dependencies
 
 1. Define in `GraphContext` (`telegram_bot/graph/context.py`)
-2. Pass to `build_graph()` in `PropertyBot.__init__()`
+2. Pass to `build_graph()` in `PropertyBot.__init__()` (voice path) or to `CoreDependencies` (core text path)
 3. Nodes access via `runtime.context["your_dependency"]`
 
 ## Testing New Nodes and Tools

@@ -32,15 +32,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# The five files where Qdrant SDK calls live — keep this list in sync with the
-# audit issue (#1538). Adding a new core retrieval / ingestion file? Extend
-# this list rather than working around the contract.
+# The files where Qdrant SDK calls live — keep this list in sync with the
+# audit issue (#1538, #2576). Adding a new core retrieval / ingestion file?
+# Extend this list rather than working around the contract.
 SCAN_FILES: list[Path] = [
     REPO_ROOT / "src" / "ingestion" / "unified" / "qdrant_writer.py",
     REPO_ROOT / "telegram_bot" / "services" / "apartments_service.py",
     REPO_ROOT / "telegram_bot" / "services" / "qdrant.py",
     REPO_ROOT / "src" / "retrieval" / "search_engines.py",
     REPO_ROOT / "src" / "evaluation" / "search_engines.py",
+    # New retrieval seam added in #2576 — runtime pipeline and graph tool callers.
+    REPO_ROOT / "src" / "runtime" / "retrieval" / "service.py",
+    REPO_ROOT / "src" / "runtime" / "pipeline" / "rag.py",
+    REPO_ROOT / "telegram_bot" / "graph" / "nodes" / "retrieve.py",
+    REPO_ROOT / "telegram_bot" / "graph" / "tools" / "retrieve.py",
 ]
 
 # Substrings that flag a custom rank-fusion or score-boost helper. The Qdrant
@@ -212,4 +217,48 @@ def test_no_deprecated_qdrant_client_search_calls() -> None:
         + "\n".join(
             f"  {p.relative_to(REPO_ROOT)}:{lineno} -> {expr}(...)" for p, lineno, expr in offenders
         )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fixture: new retrieval seam files are covered by SCAN_FILES (#2576)
+# ---------------------------------------------------------------------------
+
+
+def test_new_retrieval_seam_files_are_in_scan_list() -> None:
+    """New runtime retrieval seam must be included in SCAN_FILES (#2576).
+
+    This test pins the coverage guarantee: if a file is added to the retrieval
+    seam (src/runtime/retrieval/, src/runtime/pipeline/rag.py, or the graph
+    tool/node callers) without being added to SCAN_FILES, this test fails and
+    forces a deliberate decision.
+    """
+    required = [
+        REPO_ROOT / "src" / "runtime" / "retrieval" / "service.py",
+        REPO_ROOT / "src" / "runtime" / "pipeline" / "rag.py",
+        REPO_ROOT / "telegram_bot" / "graph" / "nodes" / "retrieve.py",
+        REPO_ROOT / "telegram_bot" / "graph" / "tools" / "retrieve.py",
+    ]
+    missing_from_scan = [p for p in required if p not in SCAN_FILES]
+    assert not missing_from_scan, (
+        "New retrieval seam files are not covered by the SDK-native contract scan (#2576). "
+        "Add them to SCAN_FILES:\n"
+        + "\n".join(f"  {p.relative_to(REPO_ROOT)}" for p in missing_from_scan)
+    )
+
+
+def test_deprecated_client_search_in_new_seam_would_be_caught() -> None:
+    """Fixture: scanner correctly catches a synthetic deprecated call in new seam code.
+
+    Builds a minimal AST with ``self._client.search(...)`` and confirms the
+    scanner returns an offender, proving that a real occurrence in the new
+    seam files would fail the contract.
+    """
+    synthetic_src = "async def retrieve(self):\n    self._client.search(collection_name='x')\n"
+    tree = ast.parse(synthetic_src, filename="<synthetic>")
+    synthetic_path = Path("<synthetic>")
+    offenders = _find_deprecated_client_search_calls(tree, synthetic_path)
+    assert offenders, (
+        "Scanner did not flag a synthetic deprecated client.search() call — "
+        "the guardrail is broken and would miss real occurrences."
     )

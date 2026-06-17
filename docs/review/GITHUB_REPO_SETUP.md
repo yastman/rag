@@ -7,9 +7,9 @@ recruiters, technical interviewers, collaborators, and public contributors.
 
 Recommended GitHub sidebar description:
 
-> Conversational AI automation platform: Telegram bot, RAG, domain catalog
-> search, CRM/workflow tools, voice agent, Langfuse observability, and
-> Dockerized AI runtime.
+> Domain Knowledge Assistant: answer from a private knowledge base, prepare
+> CRM actions after human confirmation. Telegram adapter, RAG, Qdrant,
+> optional voice/Mini App/Langfuse. Docker Compose runtime.
 
 Recommended topics:
 

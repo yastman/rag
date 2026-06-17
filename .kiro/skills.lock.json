@@ -1,0 +1,33 @@
+{
+  "sources": [
+    {
+      "name": "mattpocock-skills",
+      "repo": "https://github.com/mattpocock/skills",
+      "commit": "694fa30311e02c2639942308513555e61ee84a6f",
+      "active": [
+        "skills/productivity/grill-me",
+        "skills/engineering/grill-with-docs"
+      ]
+    },
+    {
+      "name": "superpowers",
+      "repo": "https://github.com/obra/superpowers",
+      "commit": "8cf39006140a743dce31ba4046fceab90cc214e6",
+      "active": [
+        "skills/writing-plans",
+        "skills/test-driven-development",
+        "skills/using-git-worktrees",
+        "skills/requesting-code-review",
+        "skills/receiving-code-review",
+        "skills/finishing-a-development-branch",
+        "skills/executing-plans",
+        "skills/verification-before-completion"
+      ],
+      "reference_only": [
+        "skills/using-superpowers",
+        "skills/subagent-driven-development",
+        "skills/dispatching-parallel-agents"
+      ]
+    }
+  ]
+}

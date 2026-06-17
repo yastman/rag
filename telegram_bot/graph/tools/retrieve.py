@@ -101,11 +101,11 @@ def make_retrieve_tool(
             return []
 
         try:
-            _raw_dense = getattr(embeddings, "dense", None)
             retrieval = RetrievalService(qdrant=qdrant)
+            dense = getattr(embeddings, "dense", None)
             response = await retrieval.retrieve_vectors(
                 VectorRetrievalRequest(
-                    dense_vector=_raw_dense if _raw_dense is not None else [],
+                    dense_vector=dense if dense is not None else [],
                     sparse_vector=getattr(embeddings, "sparse", None),
                     colbert_query=getattr(embeddings, "colbert", None),
                     top_k=k,
