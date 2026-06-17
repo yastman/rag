@@ -6,8 +6,8 @@
 (^|.*/)\.env\.example$
 (^|.*/)docker-compose\.dev\.yml$
 (^|.*/)docker-compose\.vps\.yml$
-(^|.*/)k8s/base/bot/deployment\.yaml$
-(^|.*/)k8s/base/ingestion/deployment\.yaml$
+(^|.*/)archive/k8s/base/bot/deployment\.yaml$
+(^|.*/)archive/k8s/base/ingestion/deployment\.yaml$
 (^|.*/)tests/unit/ingestion/test_unified_config\.py$
 (^|.*/)tests/unit/ingestion/test_unified_flow\.py$
 (^|.*/)tests/unit/test_k8s_secret_templates\.py$

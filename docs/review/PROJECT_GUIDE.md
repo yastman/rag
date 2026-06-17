@@ -101,9 +101,9 @@ embedding services.
 Docker Compose runtime. Compose is the primary local/VPS operating path. k3s
 manifests exist separately but are not full parity with the Compose service set.
 
-### `k8s/`
+### `archive/k8s/`
 
-Partial k3s manifests for core services. Use conservative wording when
+Archived k3s manifests for core services. Use conservative wording when
 describing k3s support.
 
 ### `tests/`

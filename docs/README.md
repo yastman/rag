@@ -73,7 +73,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`ONBOARDING.md`](ONBOARDING.md) — New-contributor onboarding guide.
 - [`services/README.md`](../services/README.md) — Local service containers (BGE-M3, Docling, user-base).
 - [`docker/README.md`](../docker/README.md) — Helper runtime assets (configs, scripts, monitoring rules).
-- [`k8s/README.md`](../k8s/README.md) — Partial k3s manifests, overlays, and deploy commands.
+- [`archive/k8s/README.md`](../archive/k8s/README.md) — Partial k3s manifests, overlays, and deploy commands (archived).
 - [`INGESTION.md`](INGESTION.md) — Unified ingestion guide and troubleshooting.
 - [`GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
@@ -118,4 +118,4 @@ find docs -maxdepth 3 -name README.md -o -path 'docs/runbooks/*.md'
 | `docs/engineering/` | Engineering process, standards, and workflow guides |
 | `docs/plans/` | Shared implementation plans and design specs |
 | `docs/review/` and `docs/portfolio/` | Reviewer and portfolio entry points |
-| Folder `README.md` files | Local subsystem indexes (e.g., `services/`, `k8s/`, `docker/`) |
+| Folder `README.md` files | Local subsystem indexes (e.g., `services/`, `archive/k8s/`, `docker/`) |

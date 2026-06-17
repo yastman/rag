@@ -1389,16 +1389,16 @@ qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
 	k3s-build k3s-build-bot k3s-build-ingest k3s-push-all k3s-prepull
 
 k3s-core: ## Deploy core services (postgres, redis, qdrant) to k3s
-	kubectl apply -k k8s/overlays/core/ --load-restrictor=LoadRestrictionsNone
+	kubectl apply -k archive/k8s/overlays/core/ --load-restrictor=LoadRestrictionsNone
 
 k3s-bot: ## Deploy bot stack to k3s (core + ML + bot)
-	kubectl apply -k k8s/overlays/bot/ --load-restrictor=LoadRestrictionsNone
+	kubectl apply -k archive/k8s/overlays/bot/ --load-restrictor=LoadRestrictionsNone
 
 k3s-ingest: ## Deploy ingestion stack to k3s (core + docling + bge-m3 + ingestion)
-	kubectl apply -k k8s/overlays/ingest/ --load-restrictor=LoadRestrictionsNone
+	kubectl apply -k archive/k8s/overlays/ingest/ --load-restrictor=LoadRestrictionsNone
 
 k3s-full: ## Deploy all services to k3s
-	kubectl apply -k k8s/overlays/full/
+	kubectl apply -k archive/k8s/overlays/full/
 
 k3s-status: ## Show k3s pod status
 	kubectl get pods -n rag -o wide
@@ -1407,19 +1407,19 @@ k3s-logs: ## Show logs for a service: make k3s-logs SVC=bot
 	kubectl logs -n rag deployment/$(SVC) -f --tail=50
 
 k3s-down: ## Delete all k3s resources
-	kubectl delete -k k8s/overlays/full/ --ignore-not-found
+	kubectl delete -k archive/k8s/overlays/full/ --ignore-not-found
 
-k3s-secrets: ## Create k8s secrets from k8s/secrets/.env
+k3s-secrets: ## Create k8s secrets from archive/k8s/secrets/.env
 	@tmp_api_keys=$$(mktemp); \
 		tmp_db_credentials=$$(mktemp); \
 		trap 'rm -f "$$tmp_api_keys" "$$tmp_db_credentials"' EXIT; \
-		grep -v '^POSTGRES_PASSWORD=' k8s/secrets/.env > "$$tmp_api_keys"; \
-		POSTGRES_PASSWORD=$$(awk -F= '/^POSTGRES_PASSWORD=/{sub(/^[^=]*=/,""); print; found=1; exit} END{if(!found) exit 1}' k8s/secrets/.env) || { \
-			echo "POSTGRES_PASSWORD is required in k8s/secrets/.env" >&2; \
+		grep -v '^POSTGRES_PASSWORD=' archive/k8s/secrets/.env > "$$tmp_api_keys"; \
+		POSTGRES_PASSWORD=$$(awk -F= '/^POSTGRES_PASSWORD=/{sub(/^[^=]*=/,""); print; found=1; exit} END{if(!found) exit 1}' archive/k8s/secrets/.env) || { \
+			echo "POSTGRES_PASSWORD is required in archive/k8s/secrets/.env" >&2; \
 			exit 1; \
 		}; \
 		[ -n "$$POSTGRES_PASSWORD" ] || { \
-			echo "POSTGRES_PASSWORD is required in k8s/secrets/.env" >&2; \
+			echo "POSTGRES_PASSWORD is required in archive/k8s/secrets/.env" >&2; \
 			exit 1; \
 		}; \
 		printf 'POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=postgres\n' "$$POSTGRES_PASSWORD" > "$$tmp_db_credentials"; \
