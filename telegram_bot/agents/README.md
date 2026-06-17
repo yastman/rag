@@ -13,7 +13,6 @@ Agent SDK tools and RAG pipeline functions. Alternative to the full LangGraph gr
 | [`agent.py`](./agent.py) | Agent SDK configuration and runner |
 | [`apartment_tools.py`](./apartment_tools.py) | Property search and filter tools |
 | [`crm_tools.py`](./crm_tools.py) | CRM integration tools |
-| [`manager_tools.py`](./manager_tools.py) | Manager escalation and notification tools |
 | [`utility_tools.py`](./utility_tools.py) | General utility tools |
 | [`history_tool.py`](./history_tool.py) | Conversation history retrieval |
 | [`hitl.py`](./hitl.py) | Human-in-the-loop hooks |

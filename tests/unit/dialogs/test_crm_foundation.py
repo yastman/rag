@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from telegram_bot.dialogs.states import (
-    AIAdvisorSG,
     CreateContactSG,
     CreateLeadSG,
     CreateNoteSG,
@@ -49,11 +48,6 @@ def test_search_sg_states():
     """SearchSG has states: query, results."""
     for state_name in ("query", "results"):
         assert hasattr(SearchSG, state_name), f"Missing state: {state_name}"
-
-
-def test_ai_advisor_sg_has_main():
-    """AIAdvisorSG has 'main' state."""
-    assert hasattr(AIAdvisorSG, "main")
 
 
 # --- Card Formatters ---

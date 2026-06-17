@@ -1,4 +1,4 @@
-"""Persist lead score from funnel answers and run side effects."""
+"""Persist lead score from funnel answers."""
 
 from __future__ import annotations
 
@@ -37,10 +37,9 @@ async def persist_and_sync_funnel_lead_score(
     pg_pool: Any,
     lead_scoring_store: Any,
     kommo_client: Any,
-    hot_lead_notifier: Any,
     config: Any,
 ) -> dict[str, Any]:
-    """Compute score from funnel data, persist it, sync it, and notify managers."""
+    """Compute score from funnel data, persist it, and sync it."""
     if user_service is None or pg_pool is None or lead_scoring_store is None:
         return {"persisted": False}
 
@@ -114,20 +113,10 @@ async def persist_and_sync_funnel_lead_score(
         )
     )
 
-    notified = False
-    threshold = int(getattr(config, "manager_hot_lead_threshold", 60) or 60)
-    if hot_lead_notifier is not None and score_value >= threshold:
-        try:
-            notified = await hot_lead_notifier.notify_if_hot(
-                {"lead_id": lead_id, "score": score_value, "session_id": session_id}
-            )
-        except Exception:
-            logger.exception("Failed to notify managers for hot lead %s", lead_id)
-
     return {
         "persisted": True,
         "lead_id": lead_id,
         "score_value": score_value,
         "score_band": score_band,
-        "notified": notified,
+        "notified": False,
     }

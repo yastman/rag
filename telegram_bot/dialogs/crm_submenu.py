@@ -2,6 +2,7 @@
 
 Refactored from action-dispatching menu to a navigation hub that routes
 to dedicated wizard dialogs for each CRM operation.
+AI Advisor removed in #2629 (CRM-only flow archived).
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from aiogram_dialog.widgets.kbd import Cancel, Column, Start
 from aiogram_dialog.widgets.text import Format
 
 from .states import (
-    AIAdvisorSG,
     ContactsMenuSG,
     CreateNoteSG,
     CreateTaskSG,
@@ -40,7 +40,6 @@ async def get_crm_menu_data(
         "btn_tasks": "✅ Создать задачу",
         "btn_my_tasks": "📋 Мои задачи",
         "btn_note": "📝 Заметка",
-        "btn_ai_advisor": "🤖 AI-Советник",
         "btn_settings": "⚙️ Настройки",
         "btn_back": "← Назад",
     }
@@ -74,11 +73,6 @@ crm_submenu_dialog = Dialog(
                 Format("{btn_note}"),
                 id="crm_nav_note",
                 state=CreateNoteSG.text,
-            ),
-            Start(
-                Format("{btn_ai_advisor}"),
-                id="crm_nav_ai",
-                state=AIAdvisorSG.main,
             ),
             Start(
                 Format("{btn_settings}"),

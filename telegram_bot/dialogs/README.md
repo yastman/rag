@@ -12,7 +12,6 @@ telegram_bot/dialogs
 - catalog.py
 - catalog_transport.py
 - client_menu.py
-- crm_ai_advisor.py
 - crm_cards.py
 - crm_contacts.py
 - crm_leads.py
