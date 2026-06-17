@@ -20,6 +20,7 @@ import os
 import subprocess
 from pathlib import Path
 
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = REPO_ROOT / "scripts" / "launch_kiro_worker.sh"
 
@@ -110,4 +111,3 @@ def test_launcher_supports_worker_worktree_isolation() -> None:
     assert "WORKER_CWD" in text
     assert 'cd "$WORKER_CWD"' in text, "wrapper must cd into the assigned worktree"
     assert '-c "$WORKER_CWD"' in text, "tmux window must open in the assigned worktree"
-

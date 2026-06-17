@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 REPO = Path(__file__).resolve().parents[2]
 
 STEERING_CONTRACT = REPO / ".kiro" / "steering" / "swarm-worker-contract.md"
@@ -49,8 +50,7 @@ def test_steering_contract_impl_chain_has_trio() -> None:
     assert row, "Could not find implementation worker row in swarm-worker-contract.md"
     for skill in REQUIRED_TRIO:
         assert skill in row, (
-            f"swarm-worker-contract.md implementation chain missing: {skill!r}\n"
-            f"Row: {row}"
+            f"swarm-worker-contract.md implementation chain missing: {skill!r}\nRow: {row}"
         )
 
 
@@ -61,8 +61,7 @@ def test_steering_contract_impl_chain_no_forbidden() -> None:
     assert row, "Could not find implementation worker row in swarm-worker-contract.md"
     for skill in FORBIDDEN_IN_IMPL_CHAIN:
         assert skill not in row, (
-            f"swarm-worker-contract.md implementation chain must NOT include: {skill!r}\n"
-            f"Row: {row}"
+            f"swarm-worker-contract.md implementation chain must NOT include: {skill!r}\nRow: {row}"
         )
 
 
@@ -93,8 +92,7 @@ def test_superpowers_map_impl_chain_has_trio() -> None:
     assert row, "Could not find implementation worker row in superpowers-map.md"
     for skill in REQUIRED_TRIO:
         assert skill in row, (
-            f"superpowers-map.md implementation chain missing: {skill!r}\n"
-            f"Row: {row}"
+            f"superpowers-map.md implementation chain missing: {skill!r}\nRow: {row}"
         )
 
 
@@ -105,8 +103,7 @@ def test_superpowers_map_impl_chain_no_forbidden() -> None:
     assert row, "Could not find implementation worker row in superpowers-map.md"
     for skill in FORBIDDEN_IN_IMPL_CHAIN:
         assert skill not in row, (
-            f"superpowers-map.md implementation chain must NOT include: {skill!r}\n"
-            f"Row: {row}"
+            f"superpowers-map.md implementation chain must NOT include: {skill!r}\nRow: {row}"
         )
 
 
@@ -190,5 +187,5 @@ def test_no_dangling_swarm_notify_orchestrator_reference() -> None:
     text = VALIDATOR.read_text(encoding="utf-8")
     assert "swarm_notify_orchestrator.py" not in text, (
         "validate_worker_prompt.py references non-existent scripts/swarm_notify_orchestrator.py; "
-        "replace with tmux send-keys -t \"$ORCH_TARGET\" wake-up mechanism"
+        'replace with tmux send-keys -t "$ORCH_TARGET" wake-up mechanism'
     )
