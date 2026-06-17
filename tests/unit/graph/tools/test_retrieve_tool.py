@@ -46,11 +46,11 @@ def _make_tool(*, embed_results=None, qdrant_results=None, embed_raises=False, q
 
 
 class TestRetrieveToolMetadata:
-    def test_default_name(self):
+    def test_retrieve_default_name(self):
         t = _make_tool()
         assert t.name == "retrieve_documents"
 
-    def test_custom_name(self):
+    def test_retrieve_custom_name(self):
         async def embed(q):
             return MagicMock()
 
@@ -59,15 +59,15 @@ class TestRetrieveToolMetadata:
         t = make_retrieve_tool(qdrant=qdrant, embed_query=embed, name="my_retriever")
         assert t.name == "my_retriever"
 
-    def test_description_is_non_empty(self):
+    def test_retrieve_description_is_non_empty(self):
         t = _make_tool()
         assert t.description
 
-    def test_tool_metadata_has_name(self):
+    def test_retrieve_tool_metadata_has_name(self):
         t = _make_tool()
         assert "name" in t.tool_metadata
 
-    def test_callable(self):
+    def test_retrieve_callable(self):
         t = _make_tool()
         assert callable(t)
 

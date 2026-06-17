@@ -41,7 +41,7 @@ class TestGraphConfigAutoTrace:
         assert isinstance(llm, LiteLLMChatClient)
         assert getattr(llm, "_langfuse_auto_trace", None) is False
 
-    def test_create_llm_auto_trace_false_uses_litellm_sdk(self) -> None:
+    def test_create_llm_auto_trace_false_uses_litellm_sdk_without_langfuse(self) -> None:
         from src.runtime.llm.router import LiteLLMChatClient
 
         cfg = GraphConfig(llm_model="m", llm_base_url="http://test:4000")

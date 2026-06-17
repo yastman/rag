@@ -104,7 +104,7 @@ class TestHyDEGenerator:
         assert hyde.base_url == "http://custom:5000"
         assert hyde.model == "gpt-4o"
 
-    def test_init_creates_litellm_router_client(self):
+    def test_init_creates_litellm_router_client_for_hyde(self):
         from src.runtime.llm.router import LiteLLMChatClient
 
         hyde = HyDEGenerator()
