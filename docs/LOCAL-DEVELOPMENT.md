@@ -71,7 +71,7 @@ make docker-bot-up
 # Optional profiles
 make docker-ml-up
 make docker-ingest-up
-make monitoring-up
+# obs (loki/promtail/alertmanager) archived — see archive/obs/
 
 # Voice is intentionally off by default; start separately when needed:
 # make docker-voice-up

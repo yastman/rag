@@ -14,7 +14,7 @@ The canonical source of truth for Compose files, profiles, service names, ports,
 | `bot` | Telegram bot runtime using the in-process LiteLLM SDK router |
 | `ingest` | Unified ingestion service |
 | `ml` | Langfuse + ClickHouse + MinIO |
-| `obs` | Loki + Promtail + Alertmanager |
+| `obs` | archived — see `archive/obs/` |
 | `voice` | LiveKit + SIP + voice agent (off by default) |
 
 > On VPS (`compose.yml:compose.vps.yml`), Docling, ingestion, and the
@@ -28,8 +28,7 @@ make docker-up          # default/unprofiled services
 make docker-bot-up      # bot profile
 make docker-ingest-up   # ingestion profile
 make docker-ml-up       # ML/Langfuse profile
-make docker-obs-up      # observability profile (Loki, Promtail, Alertmanager)
-make monitoring-up      # observability alias with endpoint hints
+# docker-obs-up / monitoring-up archived — see archive/obs/
 make docker-ps          # list running containers
 ```
 

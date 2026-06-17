@@ -111,5 +111,5 @@ make ingest-unified-preflight
 make ingest-unified-bootstrap
 make ingest-unified
 make e2e-core-live
-make monitoring-up
+# monitoring-up (obs stack) archived — see archive/obs/
 ```

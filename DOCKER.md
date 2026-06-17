@@ -42,7 +42,7 @@ Optional profiles add scoped services:
 | `bot` | `litellm`, `bot` |
 | `ingest` | `ingestion` |
 | `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` |
-| `obs` | `loki`, `promtail`, `alertmanager` |
+| `obs` | archived — see `archive/obs/` |
 | `full` | all profile-gated services |
 
 ### VPS default runtime
@@ -68,7 +68,6 @@ make docker-up
 make docker-bot-up
 make docker-ingest-up
 make docker-ml-up
-make docker-obs-up
 make docker-full-up
 
 # Lifecycle
@@ -340,7 +339,6 @@ Never remove `vps_qdrant_data`, `vps_postgres_data`, `vps_redis_data`, or
 
 ```bash
 # Logs
-make monitoring-logs
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility logs -f bot litellm qdrant
 
 # Rebuild selected services

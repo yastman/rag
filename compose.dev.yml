@@ -144,10 +144,4 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-ingestion}"
 
-  loki:
-    ports:
-      - "127.0.0.1:3100:3100"
-
-  alertmanager:
-    ports:
-      - "127.0.0.1:9093:9093"
+  # loki, alertmanager archived — see archive/obs/
