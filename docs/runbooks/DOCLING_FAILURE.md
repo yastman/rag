@@ -141,6 +141,6 @@ If a single document repeatedly crashes the converter, isolate it before restart
 
 - [`vps-gdrive-ingestion-recovery.md`](vps-gdrive-ingestion-recovery.md)
 - [`EMBEDDING_SERVICE_FAILURE.md`](EMBEDDING_SERVICE_FAILURE.md)
-- [`MINIO_FAILURE.md`](../archive/runbooks/MINIO_FAILURE.md)
+- [`../archive/runbooks/MINIO_FAILURE.md`](../archive/runbooks/MINIO_FAILURE.md)
 - [`DOCKER.md`](../../DOCKER.md)
 - [`docs/INGESTION.md`](../INGESTION.md)
