@@ -15,7 +15,30 @@ Launch workers mechanically from an accepted `SWARM_PLAN`.
 
 ## Workflow
 
-1. Validate each launchable worker before launch:
+1. **Create worktrees before launch.** For every code-changing worker in the plan,
+   run `scripts/create_worker_worktree.sh` to provision an isolated worktree
+   and capture the real path:
+
+   ```bash
+   WORKTREE_PATH=$(bash scripts/create_worker_worktree.sh \
+     "<target_branch>" "<base_branch>")
+   # e.g. WORKTREE_PATH=$(bash scripts/create_worker_worktree.sh \
+   #   fix/2305-worker-a dev)
+   ```
+
+   Pass the path as `WORKER_WORKTREE` when launching. Never run code-changing
+   workers in the main repo checkout — they would share the same branch and
+   could clobber each other.
+
+   **HARD STOP: Do not call `launch_kiro_worker.sh` for a code-changing
+   (implementation / review-fix / bug-debug) worker without first running
+   `create_worker_worktree.sh` and setting `WORKER_WORKTREE`. Skipping this
+   step is the #1 cause of branch-clobber bugs in parallel swarm runs.**
+
+   Read-only / secretary / review (no file edits) workers do not need a worktree;
+   omit `WORKER_WORKTREE` for them.
+
+2. Validate each launchable worker before launch:
    - `git -C <worktree> status --short` has only expected noise.
    - `git -C <worktree> branch --show-current` is `target_branch`.
    - `target_branch` is based on the remote PR base, usually `origin/<base_branch>`;
@@ -63,15 +86,33 @@ Launch workers mechanically from an accepted `SWARM_PLAN`.
    This belongs in Kiro permissions, not worker prompts.
 5. Launch with `scripts/launch_kiro_worker.sh` only.
    - Do not use `kiro-cli chat --no-interactive` headless, `--verbose`, polling, or transcript streaming.
+   - For code-changing workers, always pass `WORKER_WORKTREE` set to the path
+     returned by `create_worker_worktree.sh` (step 1). Example:
+
+     ```bash
+     WORKER_AGENT=kiro-worker \
+     WORKER_MODEL=claude-sonnet-4.6 \
+     WORKER_ROLE=implementation \
+     WORKER_WORKTREE="$WORKTREE_PATH" \
+     KIRO_REQUIRED_SKILLS=executing-plans,test-driven-development,verification-before-completion \
+     ./scripts/launch_kiro_worker.sh worker-A logs/prompts/worker-A.md
+     ```
 6. Send wake-up action via the shell tool only after the report is written; do not echo it in final text:
 
    ```bash
    WORKER_NAME="worker-name"
    REPORT_FILE="logs/REPORT.worker.md"
+   ORCH_TARGET="{{ORCH_TARGET}}"
    tmux send-keys -t "$ORCH_TARGET" -l "[DONE] $WORKER_NAME $REPORT_FILE"
    sleep 0.25
    tmux send-keys -t "$ORCH_TARGET" C-m
    ```
+
+   **`{{ORCH_TARGET}}` is substituted by `launch_kiro_worker.sh` at launch time**
+   from the orchestrator marker. Workers must NOT hardcode a window name and must
+   NOT re-read `.signals/orchestrator-window.json` at runtime — the marker may
+   have been refreshed by the time the wake-up runs. The launcher pins the correct
+   value at the moment of launch.
 
    Replace `[DONE]` with `[FAILED]` or `[BLOCKED]` when needed. Use only unique
    `ORCH_TARGET`; avoid pane targets. The orchestrator closes worker windows

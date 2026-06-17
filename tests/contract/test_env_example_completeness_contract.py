@@ -200,6 +200,8 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "VOYAGE_EMBEDDING_DIM": "Voyage matryoshka dimension; legacy",
     "VOYAGE_MODEL_DOCS": "Voyage docs model override; legacy",
     "VOYAGE_MODEL_QUERIES": "Voyage queries model override; legacy",
+    # --- Swarm / Kiro CI controls ------------------------------------------
+    "KIRO_STRICT_REPORT": "Swarm worker report contract flag; gates legacy JSON validators in scripts/, not an operator .env.example setting",
 }
 
 # Vars in .env.example but NOT directly read by Python code. These are
@@ -240,6 +242,10 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     # --- Misc ops vars -----------------------------------------------------
     "LOG_CORRELATION_SOURCE": "Operator-provided log dump path for manual correlation checks; no Python runtime reader",
     "MLFLOW_TRACKING_URI": "Read by mlflow CLI tooling, not the bot",
+    # --- Evaluation / LLM-as-judge vars ------------------------------------
+    "EVAL_LLM_API_KEY": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
+    "EVAL_LLM_BASE_URL": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
+    "OPENAI_BASE_URL": "OpenAI SDK base URL override; consumed by SDK at import time, not directly by Python code in this repo",
 }
 
 

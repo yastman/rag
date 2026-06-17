@@ -34,7 +34,7 @@ import argparse
 import importlib.util
 import os
 import re
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -49,9 +49,10 @@ FORBIDDEN_PATTERNS: tuple[str, ...] = (
 )
 
 # Fields whose presence can be satisfied by an aliased section header.
-FIELD_ALIASES: dict[str, str] = {
-    "verification_evidence": "evidence_commands",
-}
+# NOTE: verification_evidence is intentionally NOT aliased to evidence_commands.
+# Both fields must be present independently — the evidence narrative and the
+# replay commands serve different purposes and cannot substitute for each other.
+FIELD_ALIASES: dict[str, str] = {}
 
 
 def _load_schema():
@@ -127,7 +128,7 @@ def forbidden_files_touched(text: str) -> list[str]:
 
 def close_window(worker_name: str) -> None:
     closer = Path(__file__).with_name("close_markdown_worker_window.py")
-    subprocess.run([sys.executable, str(closer), "--worker", worker_name], check=False)
+    subprocess.run([sys.executable, str(closer), "--worker", worker_name], check=False)  # nosec B603
 
 
 def main() -> int:

@@ -71,7 +71,8 @@ REPORT_FILE="logs/${WORKER_NAME}.md"
 
 # --- Resolve KIRO_REQUIRED_SKILLS and append to prompt file ---
 if [[ -n "${KIRO_REQUIRED_SKILLS:-}" ]]; then
-  skill_section=""$'\n'"## RESOLVED REQUIRED SKILL SOURCES"
+  skill_section=""$'\n'"## REQUIRED SKILL SOURCES — READ FIRST"
+  skill_section+=$'\n'"**Before doing anything else**, read each skill file in full using your file-reading tools:"
   IFS=',' read -r -a _skills_raw <<< "$KIRO_REQUIRED_SKILLS"
   for _skill in "${_skills_raw[@]}"; do
     _skill="${_skill#"${_skill%%[![:space:]]*}"}"
@@ -90,10 +91,9 @@ if [[ -n "${KIRO_REQUIRED_SKILLS:-}" ]]; then
       echo "WARNING: KIRO_REQUIRED_SKILLS skill not found: $_skill" >&2
       continue
     fi
-    skill_section+=$'\n'"### Skill: ${_skill}"
-    skill_section+=$'\n'"$(cat "$_skill_file")"
-    skill_section+=$'\n'
+    skill_section+=$'\n'"- **${_skill}**: \`${_skill_file}\`"
   done
+  skill_section+=$'\n'"Do not proceed to the task until all skill files above have been read."
   printf '\n%s\n' "$skill_section" >> "$PROMPT_FILE"
 fi
 

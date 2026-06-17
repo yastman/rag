@@ -144,10 +144,10 @@ SDK_BASELINE_REQUIRED = [
 ]
 
 DISPATCHING_REQUIRED = [
-    "subagent",
-    "depends_on",
+    "independent",
     "Self-contained",
-    "loop_to",
+    "isolated context",
+    "parallel",
 ]
 
 SUBAGENT_DRIVEN_REQUIRED = [
@@ -411,3 +411,80 @@ def test_set_orchestrator_window_sh_creates_unique_name() -> None:
     assert "orch-" in text
     assert "orchestrator-window.json" in text
     assert "ORCH_TARGET" in text
+
+
+def test_route_constants_pr_review_matches_skill_tables() -> None:
+    """route_constants pr-review/review-fix agent+model must match skill tables and agent JSON.
+
+    Pins card_45fbee466367: the single source of truth is route_constants.py;
+    the skill tables (swarm-plan, swarm-launch) and kiro-worker-opus.json must agree.
+    """
+    import importlib.util
+    import json
+    import re
+
+    KIRO_SKILLS_DIR = SCRIPTS_DIR.parent / ".kiro" / "skills"
+    AGENTS_DIR = SCRIPTS_DIR.parent / ".kiro" / "agents"
+
+    spec = importlib.util.spec_from_file_location(
+        "route_constants", SCRIPTS_DIR / "route_constants.py"
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    routes = module.CANONICAL_WORKER_ROUTES
+    pr_agent, pr_model = routes["pr-review"]
+    rf_agent, rf_model = routes["review-fix"]
+
+    # Both must use kiro-worker-opus per skill tables.
+    assert pr_agent == "kiro-worker-opus", (
+        f"pr-review agent should be kiro-worker-opus, got {pr_agent!r}"
+    )
+    assert rf_agent == "kiro-worker-opus", (
+        f"review-fix agent should be kiro-worker-opus, got {rf_agent!r}"
+    )
+
+    # Model must match kiro-worker-opus.json
+    agent_json = AGENTS_DIR / "kiro-worker-opus.json"
+    if agent_json.exists():
+        agent_data = json.loads(agent_json.read_text(encoding="utf-8"))
+        expected_model = agent_data.get("model", "")
+        assert pr_model == expected_model, (
+            f"pr-review model {pr_model!r} disagrees with kiro-worker-opus.json model {expected_model!r}"
+        )
+        assert rf_model == expected_model, (
+            f"review-fix model {rf_model!r} disagrees with kiro-worker-opus.json model {expected_model!r}"
+        )
+
+    # Skill tables (swarm-plan, swarm-launch) must also agree.
+    for skill_name in ("swarm-plan", "swarm-launch"):
+        skill_file = KIRO_SKILLS_DIR / skill_name / "SKILL.md"
+        if not skill_file.exists():
+            continue
+        text = skill_file.read_text(encoding="utf-8")
+        # Table row: | review | `kiro-worker-opus` | `claude-opus-4.8` | ...
+        # Require backtick-wrapped values to avoid matching inline prose lists.
+        review_row = re.search(
+            r"\|\s*review\s*\|\s*`([a-z0-9-]+)`\s*\|\s*`([a-z0-9._-]+)`\s*\|", text
+        )
+        if review_row:
+            tbl_agent, tbl_model = review_row.group(1), review_row.group(2)
+            assert tbl_agent == pr_agent, (
+                f"{skill_name} review agent {tbl_agent!r} != route_constants pr-review {pr_agent!r}"
+            )
+            assert tbl_model == pr_model, (
+                f"{skill_name} review model {tbl_model!r} != route_constants pr-review {pr_model!r}"
+            )
+        rf_row = re.search(
+            r"\|\s*review-fix\s*\|\s*`([a-z0-9-]+)`\s*\|\s*`([a-z0-9._-]+)`\s*\|", text
+        )
+        if rf_row:
+            tbl_agent, tbl_model = rf_row.group(1), rf_row.group(2)
+            assert tbl_agent == rf_agent, (
+                f"{skill_name} review-fix agent {tbl_agent!r} != route_constants {rf_agent!r}"
+            )
+            assert tbl_model == rf_model, (
+                f"{skill_name} review-fix model {tbl_model!r} != route_constants {rf_model!r}"
+            )
