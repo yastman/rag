@@ -2148,8 +2148,7 @@ class PropertyBot:
     ) -> str:
         """Handle query via imperative adapter SDK (#413 — replaces build_supervisor_graph)."""
 
-        from src.runtime.graph.nodes.guard import _BLOCKED_RESPONSE
-        from src.runtime.services.rag_core import CACHEABLE_QUERY_TYPES
+        from src.runtime.services.rag_core import BLOCKED_RESPONSE, CACHEABLE_QUERY_TYPES
 
         from .agents.agent import LOCALE_TO_LANGUAGE
 
@@ -2186,13 +2185,13 @@ class PropertyBot:
                             pattern,
                             user_text,
                         )
-                        await message.answer(_BLOCKED_RESPONSE)
+                        await message.answer(BLOCKED_RESPONSE)
                         wall_ms = (time.perf_counter() - pipeline_start) * 1000
                         lf = get_client()
                         tid = lf.get_current_trace_id() or ""
                         lf.update_current_span(
                             input={"query": user_text},
-                            output={"response": _BLOCKED_RESPONSE},
+                            output={"response": BLOCKED_RESPONSE},
                             metadata={
                                 "pipeline_mode": "sdk_agent",
                                 "pipeline_wall_ms": wall_ms,
@@ -2248,7 +2247,7 @@ class PropertyBot:
                                     "injection_risk_score": risk_score,
                                 }
                             )
-                        return _BLOCKED_RESPONSE
+                        return BLOCKED_RESPONSE
                     # soft/log mode: log but don't block
                     logger.warning(
                         "Pre-agent guard detected (mode=%s, score=%.2f, pattern=%s): %.80s",

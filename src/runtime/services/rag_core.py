@@ -36,6 +36,15 @@ _MAX_CONTEXT_SNIPPET = 500  # chars per doc for judge evaluation
 # Query types eligible for semantic cache. Shared between agent SDK and LangGraph paths.
 CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED", "GENERAL"})
 
+# Public constant for the guard-blocked response message.
+# Exposed here so adapter layers (e.g. telegram_bot/bot.py) do not need to
+# reach into private src.runtime.graph.nodes.guard symbols.
+BLOCKED_RESPONSE: str = (
+    "Извините, ваш запрос не может быть обработан.\n\n"
+    "Я помощник по недвижимости. Пожалуйста, задайте вопрос о квартирах, "
+    "домах или другой недвижимости."
+)
+
 _REWRITE_PROMPT = (
     "Ты — помощник по поиску недвижимости. "
     "Пользователь задал вопрос, но результаты поиска оказались нерелевантными.\n\n"
