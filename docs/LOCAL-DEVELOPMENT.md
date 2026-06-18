@@ -316,22 +316,64 @@ against local Qdrant + BGE-M3. It uses deterministic synthetic fixtures and a
 fake LLM by default, so it does not require Telegram, Telethon, Langfuse,
 voice, Mini App, k8s, real CRM credentials, or trace validation.
 
-When real provider credentials and budget are available, run the opt-in real
-LLM check:
+## 5a. Real-LLM Release Lane
+
+`make e2e-core-live-real-llm` is the opt-in pre-release confidence check that
+replaces the fake LLM stub with a live provider call. Run it manually before
+cutting a release when real API credentials and budget are available. It is
+intentionally excluded from fast local gates and CI because it depends on
+external provider availability and spend.
+
+**Prerequisites**
+
+- Local services running: `make local-up` (Qdrant + BGE-M3 must be healthy)
+- `.env` populated with real LLM provider credentials (see below)
+- Real API key with sufficient quota for a short completion (~1–3 calls)
+
+**Required env vars** (set in `.env` before running):
+
+| Variable | Purpose |
+|---|---|
+| `LLM_MODEL` | Model string passed to LiteLLM, e.g. `gpt-4o-mini` |
+| `OPENAI_API_KEY` | API key for OpenAI-compatible providers |
+| `LLM_API_KEY` | Accepted as fallback if `OPENAI_API_KEY` is unset |
+
+Both `LLM_MODEL` and at least one of `LLM_API_KEY` / `OPENAI_API_KEY` are
+required. The Makefile preflight check will exit with a clear error if either
+is missing.
+
+**When to run**
+
+- Before tagging a release candidate to confirm end-to-end generation quality.
+- After changing the LLM provider, model, or prompt templates.
+- When validating a new provider key or account migration.
+- Do not run in CI or automated pipelines; use `make e2e-core-live` for those.
+
+**How to run**
 
 ```bash
-make e2e-core-live-real-llm
+make local-up                  # ensure Qdrant + BGE-M3 are up
+make e2e-core-live-real-llm    # runs with E2E_CORE_STRICT=1 E2E_CORE_REAL_LLM=1
 ```
 
-Required env for the real LLM check:
+**Expected output**
 
-- `LLM_BASE_URL`
-- `LLM_MODEL`
-- `LLM_API_KEY` or `OPENAI_API_KEY`
+The target loads `.env`, validates that `LLM_MODEL` and a provider key are
+set, then runs the same test file as `e2e-core-live` with `E2E_CORE_REAL_LLM=1`.
+A passing run ends with:
 
-The real LLM target is a manual confidence check. It is intentionally outside
-fast local gates and CI because it depends on external provider availability
-and spend.
+```
+✓ Simplification core live real LLM E2E complete
+```
+
+All tests in `tests/e2e/test_core_live_ingest_answer.py` marked `e2e and
+requires_services` should pass. Check pytest summary for the exact count.
+
+**Cost warning**
+
+Each run makes a small number of live LLM completions (typically 1–3 calls).
+Use a low-cost model such as `gpt-4o-mini` unless you intentionally need a
+higher-capability model. Track usage in your provider dashboard.
 
 ## 6. Production Deployment (VPS)
 
