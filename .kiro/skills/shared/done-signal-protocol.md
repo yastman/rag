@@ -26,7 +26,8 @@ Do not print or summarize the wake-up commands as final chat text.
 
 ## Route identity
 
-- `ORCH_TARGET` is `session:unique-orchestrator-window` — never a `%pane` id.
+- `ORCH_TARGET` is `session:@window-id` — an immutable tmux window-id target,
+  never a `%pane` id and never a window *name* (the name can drift; the id can't).
 - Refresh / verify the marker with
   `./scripts/set_orchestrator_window.sh --ensure-window-name <task>` from the
   intended orchestrator window. The marker lives in

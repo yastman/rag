@@ -33,7 +33,9 @@ The swarm pipeline uses **tmux** as its coordination layer (enforced by
 
 - Workers are launched via `scripts/launch_kiro_worker.sh`
 - Wake-up signals use `tmux send-keys -t "$ORCH_TARGET" -l ... C-m`
-- `ORCH_TARGET` is a named window set by `set_orchestrator_window.sh`
+- `ORCH_TARGET` is a stable window-id target (`session:@id`) set by
+  `set_orchestrator_window.sh`. The window is named once per session; wake-up
+  routes by the immutable window-id, so a later rename never misdelivers `[DONE]`.
 
 The skills in this directory are **worker-side** adaptations: they define what
 a worker does _inside_ a tmux session. Orchestrator skills (`swarm-orchestrator`,

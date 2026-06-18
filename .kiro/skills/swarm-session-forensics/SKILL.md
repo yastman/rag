@@ -47,7 +47,7 @@ log reads), then ask for completion in Markdown with a fresh
 
 1. Resolve the concrete target with narrow checks only: named window, pane,
    signal path, log path, transcript path, or today's session directory.
-2. Preserve route identity by checking `ORCH_TARGET session:unique-window-name`;
+2. Preserve route identity by checking `ORCH_TARGET session:@window-id`;
    treat pane IDs as transient debug metadata, never as identity.
 3. Prefer compact evidence checks first: report artifact, bounded tmux window/pane
    status checks, and the compact report fields.
