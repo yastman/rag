@@ -44,6 +44,69 @@ class ErrorHandlerMiddleware(BaseMiddleware):
             raise
 
 
+async def _answer_callback_safe(callback_query: Any, text: str | None = None) -> None:
+    """Answer callback query, swallowing expired/invalid query errors silently."""
+    try:
+        if text is not None:
+            await callback_query.answer(text)
+        else:
+            await callback_query.answer()
+    except TelegramBadRequest as exc:
+        if "query is too old" in str(exc) or "query ID is invalid" in str(exc):
+            logger.debug("Skipping expired callback query answer in error handler")
+        else:
+            logger.warning("Failed to answer callback query in error handler", exc_info=True)
+    except Exception:
+        logger.warning("Failed to answer callback query in error handler", exc_info=True)
+
+
+async def _handle_stale_dialog(callback_query: Any) -> None:
+    """Handle a stale aiogram-dialog UnknownIntent via callback_query."""
+    if callback_query is None:
+        return
+    await _answer_callback_safe(callback_query, _STALE_DIALOG_TEXT)
+    if callback_query.message is not None and hasattr(callback_query.message, "delete"):
+        try:
+            await callback_query.message.delete()
+        except TelegramBadRequest:
+            logger.debug("Failed to delete stale dialog message", exc_info=True)
+        except Exception:
+            logger.debug("Unexpected failure while deleting stale dialog message", exc_info=True)
+
+
+def _update_langfuse_span_on_error(exception: BaseException) -> None:
+    """Report error to Langfuse if a trace is active."""
+    try:
+        from telegram_bot.observability import get_client
+
+        lf = get_client()
+        if lf is None or not lf.get_current_trace_id():
+            return
+        status_message = f"{type(exception).__name__}: {str(exception)[:200]}"
+        update_observation = getattr(lf, "update_current_observation", None)
+        if callable(update_observation):
+            update_observation(level="ERROR", status_message=status_message)
+        else:
+            update_span = getattr(lf, "update_current_span", None)
+            if callable(update_span):
+                update_span(level="ERROR", status_message=status_message)
+            else:
+                update_generation = getattr(lf, "update_current_generation", None)
+                if callable(update_generation):
+                    update_generation(level="ERROR", status_message=status_message)
+    except Exception:
+        logger.debug("Failed to report error to Langfuse", exc_info=True)
+
+
+def _resolve_reply_message(update: Any, callback_query: Any) -> Any:
+    """Return the message to reply to, or None."""
+    if update.message is not None:
+        return update.message
+    if callback_query is not None and callback_query.message is not None:
+        return callback_query.message  # type: ignore[return-value]
+    return None
+
+
 async def handle_error(event: ErrorEvent) -> None:
     """Handle any exception raised in an aiogram handler.
 
@@ -60,28 +123,7 @@ async def handle_error(event: ErrorEvent) -> None:
             type(update).__name__,
             exception,
         )
-
-        if callback_query is not None:
-            try:
-                await callback_query.answer(_STALE_DIALOG_TEXT)
-            except TelegramBadRequest as exc:
-                if "query is too old" in str(exc) or "query ID is invalid" in str(exc):
-                    logger.debug("Skipping stale callback answer for expired query")
-                else:
-                    logger.warning("Failed to answer stale callback query", exc_info=True)
-            except Exception:
-                logger.warning("Failed to answer stale callback query", exc_info=True)
-
-            if callback_query.message is not None and hasattr(callback_query.message, "delete"):
-                try:
-                    await callback_query.message.delete()
-                except TelegramBadRequest:
-                    logger.debug("Failed to delete stale dialog message", exc_info=True)
-                except Exception:
-                    logger.debug(
-                        "Unexpected failure while deleting stale dialog message", exc_info=True
-                    )
-
+        await _handle_stale_dialog(callback_query)
         return
 
     logger.error(
@@ -90,46 +132,12 @@ async def handle_error(event: ErrorEvent) -> None:
         exception,
         exc_info=exception,
     )
-
-    # Report error to Langfuse if trace is active
-    try:
-        from telegram_bot.observability import get_client
-
-        lf = get_client()
-        if lf is not None and lf.get_current_trace_id():
-            status_message = f"{type(exception).__name__}: {str(exception)[:200]}"
-            update_observation = getattr(lf, "update_current_observation", None)
-            if callable(update_observation):
-                update_observation(level="ERROR", status_message=status_message)
-            else:
-                update_span = getattr(lf, "update_current_span", None)
-                if callable(update_span):
-                    update_span(level="ERROR", status_message=status_message)
-                else:
-                    update_generation = getattr(lf, "update_current_generation", None)
-                    if callable(update_generation):
-                        update_generation(level="ERROR", status_message=status_message)
-    except Exception:
-        logger.debug("Failed to report error to Langfuse", exc_info=True)
+    _update_langfuse_span_on_error(exception)
 
     if callback_query is not None:
-        try:
-            await callback_query.answer()
-        except TelegramBadRequest as exc:
-            if "query is too old" in str(exc) or "query ID is invalid" in str(exc):
-                logger.debug("Skipping expired callback query answer in error handler")
-            else:
-                logger.warning("Failed to answer callback query in error handler", exc_info=True)
-        except Exception:
-            logger.warning("Failed to answer callback query in error handler", exc_info=True)
+        await _answer_callback_safe(callback_query)
 
-    # Resolve a message to reply to, if the update carries one.
-    message = None
-    if update.message is not None:
-        message = update.message
-    elif callback_query is not None and callback_query.message is not None:
-        message = callback_query.message  # type: ignore[assignment]
-
+    message = _resolve_reply_message(update, callback_query)
     if message is not None:
         await message.answer(_ERROR_TEXT)
 
