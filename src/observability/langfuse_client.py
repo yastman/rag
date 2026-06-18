@@ -762,3 +762,49 @@ async def try_update_lifecycle_trace_async(
             metadata=metadata,
             trace_id=trace_id,
         )
+
+
+def create_callback_handler(
+    *,
+    trace_context: Any | None = None,
+) -> Any | None:
+    """Create a native v4 Langfuse CallbackHandler for LangChain integrations.
+
+    Centralises the ``langfuse.langchain`` import so callers outside
+    ``src.observability`` never import from the ``langfuse`` package directly.
+
+    Returns None when Langfuse is not configured or handler init fails.
+    """
+    if not _LANGFUSE_AVAILABLE:
+        return None
+    if get_langfuse_client() is None:
+        return None
+    try:
+        from langfuse.langchain import CallbackHandler
+
+        return CallbackHandler(trace_context=trace_context)
+    except Exception:
+        logger.warning("Failed to create Langfuse CallbackHandler", exc_info=True)
+        return None
+
+
+def get_score_config_types() -> tuple[Any, Any] | None:
+    """Return (ConfigCategory, ScoreConfigDataType) from the Langfuse SDK.
+
+    Centralises deep API type imports so callers outside ``src.observability``
+    never import from the ``langfuse`` package directly.
+
+    Returns None when Langfuse is not available.
+    """
+    if not _LANGFUSE_AVAILABLE:
+        return None
+    try:
+        from langfuse.api.commons.types.config_category import ConfigCategory
+        from langfuse.api.commons.types.score_config_data_type import (
+            ScoreConfigDataType,
+        )
+
+        return ConfigCategory, ScoreConfigDataType
+    except Exception:
+        logger.warning("Langfuse score config types unavailable", exc_info=True)
+        return None
