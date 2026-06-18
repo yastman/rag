@@ -275,7 +275,6 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - `src/api/main.py` — RAG API c `lifespan`, `app.state`, `/query`, `/health`
   - `mini_app/api.py` — Mini App backend + `CORSMiddleware`
   - `services/bge-m3-api/app.py` — embeddings/rerank service
-  - `services/user-base/main.py` — dense embedding service
 - **паттерны:**
   - Heavy startup/teardown через `lifespan`, не через module import side effects
   - Long-lived deps складывать в `app.state`
@@ -375,7 +374,6 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - `src/observability_otel.py` — idempotent `activate_otel_instrumentations()` + `instrument_fastapi_app(app)` (#2225)
   - `src/observability.py` — calls `activate_otel_instrumentations()` after Langfuse init
   - `services/bge-m3-api/app.py` — calls `FastAPIInstrumentor.instrument_app(app)` + `LoggingInstrumentor`
-  - `services/user-base/main.py` — calls `FastAPIInstrumentor.instrument_app(app)` + `LoggingInstrumentor`
   - `src/api/main.py` — calls `instrument_fastapi_app(app)` via the shared helper
   - `compose.yml` — `OTEL_PROPAGATORS=tracecontext,baggage` on every OTEL-instrumented service (#2246 F3)
   - `pyproject.toml` — `opentelemetry-instrumentation-{httpx,asyncpg,redis,grpc,aiohttp-client,requests,logging,fastapi}>=0.58b0`

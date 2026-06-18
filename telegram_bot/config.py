@@ -146,12 +146,6 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("user_context_ttl", "USER_CONTEXT_TTL"),
     )
 
-    # Retrieval provider (bge_m3_api | userbase)
-    retrieval_dense_provider: str = Field(
-        default="bge_m3_api",
-        validation_alias=AliasChoices("retrieval_dense_provider", "RETRIEVAL_DENSE_PROVIDER"),
-    )
-
     # Rerank provider (colbert | none)
     rerank_provider: str = Field(
         default="colbert", validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER")

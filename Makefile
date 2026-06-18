@@ -566,7 +566,7 @@ REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
-REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base bot
+REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 bot
 
 remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
 	@echo "$(BLUE)Remote Docker status ($(REMOTE_DOCKER_HOST))...$(NC)"
@@ -709,7 +709,7 @@ docker-bot-up: preflight-bot ## Start core + bot services (bot)
 	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
 
-docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base)
+docker-ai-up: ## Start core + heavy AI services (bge-m3)
 	@echo "$(BLUE)Starting AI services...$(NC)"
 	$(LOCAL_COMPOSE_CMD) up -d bge-m3
 	@echo "$(GREEN)✓ AI services started$(NC)"

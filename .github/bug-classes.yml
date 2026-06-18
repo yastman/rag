@@ -57,3 +57,6 @@ bug_classes:
     description: Registered handlers or endpoints that reference archived infrastructure (voice, Mini App, legacy API) remain reachable after architectural simplification, creating dead surface area
     canonical_issue: "#2709"
     guardrail: "tests/unit/handlers/test_command_handlers.py — /call handler returns early when livekit not configured"
+    description: Stale references (docs, Makefile, config fields, env vars) to services removed during ARCH simplification remain in the active runtime surface
+    canonical_issue: "#2684"
+    guardrail: "compose config validates; make test-core passes; no user-base in REMOTE_CORE_SERVICES, config.py, or runtime docs"
