@@ -6,12 +6,15 @@ Run the core product path end-to-end in under 5 minutes.
 
 - Docker with Compose support
 - Python 3.12+ and [`uv`](https://docs.astral.sh/uv/)
-- `.env` copied and filled:
+- `.env` copied from the example:
 
 ```bash
 cp .env.example .env
-# Fill MOCK_LLM=true (or LLM_MODEL + LLM_API_KEY for a real provider)
 ```
+
+`make e2e-core-live` needs no LLM credentials by default — it runs in mock mode.
+For a real provider, set `LLM_MODEL` + `LLM_API_KEY` and use
+`make e2e-core-live-real-llm` (see Next Steps).
 
 ## Steps
 
@@ -34,7 +37,7 @@ assistant pipeline against it, and exits with a pass/fail result.
 
 ```
 Running simplification core live E2E golden path...
-PASSED tests/e2e/core/... [classification, retrieval, generation, HITL-mock]
+PASSED tests/e2e/test_core_live_ingest_answer.py [classification, retrieval, generation, HITL-mock]
 ✓ Simplification core live E2E complete
 ```
 
