@@ -32,14 +32,14 @@ The script enumerates active worktrees via `git worktree list`, infers their Doc
 ## Compose Profiles (`compose.yml` + `compose.dev.yml`)
 
 Default `up` (no profile) starts unprofiled services:
-- `postgres`, `redis`, `qdrant`, `bge-m3`, `docling`
+- `postgres`, `redis`, `qdrant`, `bge-m3`
 
 Optional profiles add scoped services:
 
 | Profile | Services | Notes |
 | --- | --- | --- |
 | `bot` | `bot` | Core bot path |
-| `ingest` | `ingestion` | Unified ingestion |
+| `ingest` | `ingestion`, `docling` | Unified ingestion + Docling parser |
 | `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` | Optional Langfuse observability |
 | `obs` | `loki`, `promtail`, `alertmanager` | Archived — see `archive/obs/` |
 | `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |

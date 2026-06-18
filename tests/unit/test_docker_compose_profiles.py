@@ -63,12 +63,22 @@ def test_core_services_are_always_enabled():
     data = _load_compose()
     services = data.get("services", {})
 
-    core_services = {"redis", "qdrant", "bge-m3", "docling"}
+    core_services = {"redis", "qdrant", "bge-m3"}
     missing = [name for name in core_services if name not in services]
     assert not missing, f"Missing expected core services: {missing}"
 
     profiled_core = [name for name in core_services if services[name].get("profiles")]
     assert not profiled_core, f"Core services must be profile-free: {profiled_core}"
+
+
+def test_docling_is_profile_gated():
+    """Docling is optional (ingest workflow only) and must be profile-gated."""
+    data = _load_compose()
+    services = data.get("services", {})
+
+    assert "docling" in services, "docling service must exist in compose.yml"
+    profiles = services["docling"].get("profiles") or []
+    assert "ingest" in profiles, "docling must be in the 'ingest' profile"
 
 
 def test_compose_has_no_duplicate_host_ports():
