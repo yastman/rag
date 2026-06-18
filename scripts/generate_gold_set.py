@@ -340,7 +340,7 @@ async def run_pipeline(args: argparse.Namespace) -> None:
     export_to_jsonl(Path(args.output), all_items)
 
     if not args.dry_run:
-        from langfuse import Langfuse
+        from src.observability import Langfuse
 
         lf = Langfuse()
         dataset_name = args.dataset_name or make_dataset_name()

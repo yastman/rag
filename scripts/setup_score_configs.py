@@ -15,9 +15,8 @@ import sys
 from typing import Any
 
 from dotenv import load_dotenv
-from langfuse import Langfuse
-from langfuse.api.commons.types.config_category import ConfigCategory
-from langfuse.api.commons.types.score_config_data_type import ScoreConfigDataType
+
+from src.observability import Langfuse, get_score_config_types
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -82,11 +81,24 @@ SCORE_CONFIGS: list[dict[str, Any]] = [
     },
 ]
 
-_DATA_TYPE_MAP = {
-    "NUMERIC": ScoreConfigDataType.NUMERIC,
-    "CATEGORICAL": ScoreConfigDataType.CATEGORICAL,
-    "BOOLEAN": ScoreConfigDataType.BOOLEAN,
-}
+_DATA_TYPE_MAP: dict[str, Any] | None = None
+
+
+def _get_data_type_map() -> dict[str, Any]:
+    """Lazily build the data type map using Langfuse SDK types."""
+    global _DATA_TYPE_MAP
+    if _DATA_TYPE_MAP is not None:
+        return _DATA_TYPE_MAP
+    types = get_score_config_types()
+    if types is None:
+        raise RuntimeError("Langfuse SDK not available — cannot build score config type map")
+    _, ScoreConfigDataType = types
+    _DATA_TYPE_MAP = {
+        "NUMERIC": ScoreConfigDataType.NUMERIC,
+        "CATEGORICAL": ScoreConfigDataType.CATEGORICAL,
+        "BOOLEAN": ScoreConfigDataType.BOOLEAN,
+    }
+    return _DATA_TYPE_MAP
 
 
 def get_existing_configs(api: Any) -> dict[str, str]:
@@ -107,13 +119,17 @@ def setup_score_configs(api: Any) -> dict[str, str]:
     existing = get_existing_configs(api)
     result: dict[str, str] = dict(existing)
 
+    data_type_map = _get_data_type_map()
+    score_config_types = get_score_config_types()
+    ConfigCategory = score_config_types[0] if score_config_types else None
+
     for cfg in SCORE_CONFIGS:
         name = cfg["name"]
         if name in existing:
             logger.info("Skipping existing config: %s (%s)", name, existing[name])
             continue
 
-        data_type = _DATA_TYPE_MAP[cfg["data_type"]]
+        data_type = data_type_map[cfg["data_type"]]
 
         kwargs: dict[str, Any] = {"name": name, "data_type": data_type}
 
@@ -123,6 +139,8 @@ def setup_score_configs(api: Any) -> dict[str, str]:
             kwargs["max_value"] = cfg["max_value"]
 
         if cfg.get("categories"):
+            if ConfigCategory is None:
+                raise RuntimeError("Langfuse ConfigCategory type unavailable")
             kwargs["categories"] = [
                 ConfigCategory(label=cat["label"], value=cat["value"]) for cat in cfg["categories"]
             ]
