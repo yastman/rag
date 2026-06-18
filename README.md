@@ -221,10 +221,10 @@ Docker Compose is the primary local/VPS runtime. Profiles split the system by op
 | Profile | Services |
 |---|---|
 | default/core | PostgreSQL, Redis, Qdrant, BGE-M3, Docling |
-| `bot` | LiteLLM and Telegram bot |
+| `bot` | Telegram bot |
 | `ingest` | unified ingestion service |
 | `ml` | Langfuse, ClickHouse, MinIO, Redis Langfuse, worker |
-| `obs` | Loki, Promtail, Alertmanager |
+| `obs` | Loki, Promtail, Alertmanager (archived — see `archive/obs/`) |
 | `voice` | RAG API, LiveKit, SIP, voice agent |
 | `full` | all profile-gated services |
 
