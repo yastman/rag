@@ -299,6 +299,8 @@ renovate.json
 .release-please-manifest.json
 .env.local.example
 docker/rclone/
+scripts/swarm/
+.kiro/
 scripts/no-commit-to-main.sh
 scripts/local_pre_push.sh
 scripts/monitor-workers.sh
