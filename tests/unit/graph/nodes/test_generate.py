@@ -1,146 +1,84 @@
-"""Tests for _generate_streaming in voice path — native sendMessageDraft (Bot API 9.5)."""
+"""Tests for generate_node — verifies graph node uses canonical streaming from services."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
 
-import pytest
+def test_streaming_partial_delivery_error_is_canonical() -> None:
+    """StreamingPartialDeliveryError in graph node is the same class as in services."""
+    from telegram_bot.graph.nodes.generate import StreamingPartialDeliveryError as NodeError
+    from telegram_bot.services.generate_response import (
+        StreamingPartialDeliveryError as ServiceError,
+    )
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-class _MockStreamChunk:
-    """Mock OpenAI streaming chunk."""
-
-    def __init__(self, content: str | None = None, model: str | None = None) -> None:
-        delta = MagicMock()
-        delta.content = content
-        choice = MagicMock()
-        choice.delta = delta
-        self.choices = [choice] if content is not None else []
-        self.model = model
-        self.usage = None
+    assert NodeError is ServiceError, (
+        "graph/nodes/generate.StreamingPartialDeliveryError must be the canonical class "
+        "from services/generate_response, not a local duplicate"
+    )
 
 
-class _MockAsyncStream:
-    """Async iterator yielding mock stream chunks."""
+def test_generate_node_does_not_define_local_generate_streaming() -> None:
+    """generate_node no longer defines a local _generate_streaming — uses service default."""
+    import telegram_bot.graph.nodes.generate as mod
 
-    def __init__(self, texts: list[str]) -> None:
-        self._chunks = [_MockStreamChunk(t) for t in texts]
-        self._index = 0
-
-    def __aiter__(self) -> _MockAsyncStream:
-        return self
-
-    async def __anext__(self) -> _MockStreamChunk:
-        if self._index >= len(self._chunks):
-            raise StopAsyncIteration
-        chunk = self._chunks[self._index]
-        self._index += 1
-        return chunk
+    # The local duplicate should not exist
+    assert not hasattr(mod, "_generate_streaming"), (
+        "Local _generate_streaming was removed; graph node now uses "
+        "the canonical implementation from services/generate_response"
+    )
 
 
-def _make_mocks(
-    chunks: list[str] | None = None,
-    stream_error: Exception | None = None,
-) -> tuple[MagicMock, MagicMock, AsyncMock, AsyncMock]:
-    """Return (llm, config, message, sent_msg) mocks for _generate_streaming tests."""
-    if chunks is None:
-        chunks = ["Hello ", "world!"]
+def test_generate_node_uses_canonical_generate_streaming() -> None:
+    """generate_node delegates to service without overriding generate_streaming callback."""
+    import inspect
 
-    mock_sent_msg = AsyncMock()
-    mock_sent_msg.chat = MagicMock(id=123)
-    mock_sent_msg.message_id = 456
+    from telegram_bot.graph.nodes.generate import generate_node
 
-    mock_bot = AsyncMock()
-    mock_bot.send_message_draft = AsyncMock(return_value=True)
+    source = inspect.getsource(generate_node)
+    # Must NOT pass generate_streaming= to the service (no local override)
+    assert "generate_streaming=" not in source, (
+        "generate_node must not pass generate_streaming= to the service; "
+        "it should use the canonical default from services/generate_response"
+    )
+    # Must call the service function
+    assert "_generate_response_service" in source
 
-    mock_message = AsyncMock()
-    mock_message.chat = MagicMock(id=123)
-    mock_message.bot = mock_bot
-    mock_message.answer = AsyncMock(return_value=mock_sent_msg)
 
-    mock_stream = _MockAsyncStream(chunks)
-    mock_llm = MagicMock()
-    if stream_error is not None:
-        mock_llm.chat.completions.create = AsyncMock(side_effect=stream_error)
-    else:
-        mock_llm.chat.completions.create = AsyncMock(return_value=mock_stream)
+async def test_generate_node_non_streaming_returns_response() -> None:
+    """generate_node non-streaming path returns a response dict."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from telegram_bot.graph.state import make_initial_state
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Canonical answer."
+    mock_response = MagicMock(choices=[mock_choice], model="gpt-4o-mini", usage=None)
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
     mock_config = MagicMock()
+    mock_config.domain = "недвижимость"
     mock_config.llm_model = "gpt-4o-mini"
-    mock_config.llm_temperature = 0.7
-    mock_config.generate_max_tokens = 2048
+    mock_config.llm_temperature = 0.1
+    mock_config.generate_max_tokens = 128
+    mock_config.streaming_enabled = False
+    mock_config.show_sources = False
+    mock_config.response_style_enabled = False
+    mock_config.response_style_shadow_mode = False
+    mock_config.create_llm.return_value = mock_client
 
-    return mock_llm, mock_config, mock_message, mock_sent_msg
+    state = make_initial_state(user_id=1, session_id="s", query="test query")
+    state["documents"] = [{"text": "Context doc", "score": 0.9, "metadata": {}}]
 
+    from telegram_bot.graph.nodes.generate import generate_node
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+    mock_lf = MagicMock()
+    with (
+        patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+        patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+        patch("src.runtime.services.response_style_detector.get_client", return_value=mock_lf),
+        patch("src.runtime.generation.service.get_client", return_value=mock_lf),
+    ):
+        result = await generate_node(state)
 
-
-async def test_streaming_uses_send_message_draft() -> None:
-    """Voice path streaming uses bot.send_message_draft instead of edit_text."""
-    mock_llm, mock_config, mock_message, _ = _make_mocks()
-
-    from telegram_bot.graph.nodes.generate import _generate_streaming
-
-    result = await _generate_streaming(
-        llm=mock_llm,
-        config=mock_config,
-        llm_messages=[{"role": "user", "content": "test"}],
-        message=mock_message,
-    )
-
-    assert result[0] == "Hello world!"
-    mock_message.bot.send_message_draft.assert_called()
-    mock_message.answer.assert_called_once()
-
-
-async def test_stream_failure_raises() -> None:
-    """LLM stream creation failure raises the exception."""
-    mock_llm, mock_config, mock_message, _ = _make_mocks(
-        stream_error=ConnectionError("LLM unavailable"),
-    )
-
-    from telegram_bot.graph.nodes.generate import _generate_streaming
-
-    with pytest.raises(ConnectionError, match="LLM unavailable"):
-        await _generate_streaming(
-            llm=mock_llm,
-            config=mock_config,
-            llm_messages=[{"role": "user", "content": "test"}],
-            message=mock_message,
-        )
-
-
-async def test_streaming_retries_without_name_kwarg_for_plain_openai() -> None:
-    """Voice-path streaming retries without Langfuse `name` kwarg when unsupported."""
-    mock_llm, mock_config, mock_message, _ = _make_mocks(chunks=["Voice ", "ok"])
-    mock_stream = _MockAsyncStream(["Voice ", "ok"])
-    mock_llm.chat.completions.create = AsyncMock(
-        side_effect=[
-            TypeError("create() got an unexpected keyword argument 'name'"),
-            mock_stream,
-        ]
-    )
-
-    from telegram_bot.graph.nodes.generate import _generate_streaming
-
-    result = await _generate_streaming(
-        llm=mock_llm,
-        config=mock_config,
-        llm_messages=[{"role": "user", "content": "test"}],
-        message=mock_message,
-    )
-
-    assert result[0] == "Voice ok"
-    assert mock_llm.chat.completions.create.await_count == 2
-    first_call = mock_llm.chat.completions.create.await_args_list[0].kwargs
-    second_call = mock_llm.chat.completions.create.await_args_list[1].kwargs
-    assert first_call.get("name") == "generate-answer"
-    assert "name" not in second_call
+    assert result["response"] == "Canonical answer."
+    assert "generate" in result["latency_stages"]

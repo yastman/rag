@@ -14,8 +14,6 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import logging
-import time
-from datetime import UTC, datetime
 from typing import Any
 
 from telegram_bot.graph.state import RAGState
@@ -25,26 +23,20 @@ from telegram_bot.integrations.prompt_templates import (
     get_token_limit,
 )
 from telegram_bot.observability import get_client, observe
-from telegram_bot.services.generate_response import generate_response as _generate_response_service
+from telegram_bot.services.generate_response import (
+    StreamingPartialDeliveryError as StreamingPartialDeliveryError,  # re-export for compat
+)
+from telegram_bot.services.generate_response import (
+    generate_response as _generate_response_service,
+)
 from telegram_bot.services.response_style_detector import ResponseStyleDetector
 
 
 logger = logging.getLogger(__name__)
 
 
-class StreamingPartialDeliveryError(Exception):
-    """Raised when streaming delivered partial content to user then failed."""
-
-    def __init__(self, sent_msg: Any, partial_text: str):
-        self.sent_msg = sent_msg
-        self.partial_text = partial_text
-        super().__init__(f"Streaming failed after delivering {len(partial_text)} chars")
-
-
 # 5 context docs: more context diversity, marginal TTFT impact (~50ms).
 _MAX_CONTEXT_DOCS = 5
-# 200ms draft interval — sendMessageDraft has no rate limit.
-_DRAFT_INTERVAL = 0.2
 _MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
 _HISTORY_INSTRUCTION = (
@@ -99,7 +91,6 @@ _GENERATE_FALLBACK = (
     "ФОРМАТ:\n"
     "- Без преамбул и лишней воды.\n"
     "- Короткие абзацы по 1-3 предложения.\n"
-    "- Для 3+ пунктов используй маркированный список.\n"
     "- Для сравнений используй компактную таблицу или структурированный список.\n"
     "- Выделяй ключевые параметры: суммы, сроки, ограничения, условия.\n"
     "- Допустимо умеренное визуальное оформление, но без перегруза и без обязательных эмодзи.\n\n"
@@ -200,135 +191,6 @@ def _ensure_history_instruction(system_prompt: str) -> str:
     return f"{system_prompt}{separator}{_HISTORY_INSTRUCTION}"
 
 
-def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
-    """Return True if client rejected Langfuse-specific `name` kwarg."""
-    message = str(exc)
-    return "unexpected keyword argument" in message and "'name'" in message
-
-
-async def _chat_create_with_optional_name(
-    llm: Any,
-    *,
-    observation_name: str,
-    **kwargs: Any,
-) -> Any:
-    """Call chat.completions.create with Langfuse `name` when supported."""
-    create_fn = llm.chat.completions.create
-    if getattr(llm, "_langfuse_auto_trace", True) is False:
-        # Plain client created via GraphConfig.create_llm(auto_trace=False).
-        return await create_fn(**kwargs)
-    try:
-        return await create_fn(name=observation_name, **kwargs)
-    except TypeError as exc:
-        if not _is_unsupported_name_kwarg(exc):
-            raise
-        logger.debug("LLM client does not support `name`; retrying without it")
-        return await create_fn(**kwargs)
-
-
-async def _generate_streaming(
-    llm: Any,
-    config: Any,
-    llm_messages: list[dict[str, str]],
-    message: Any,
-    max_tokens: int = 0,
-    lf_client: Any | None = None,
-) -> tuple[str, str, float, int | None, float | None, Any]:
-    """Stream LLM response to Telegram via native sendMessageDraft (Bot API 9.5).
-
-    Sends draft updates as chunks arrive, then finalizes with message.answer().
-    """
-    accumulated = ""
-    last_draft = 0.0
-    ttft_ms = 0.0
-    actual_model = config.llm_model
-    completion_tokens: int | None = None
-
-    effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
-
-    chat_id = message.chat.id
-    bot = message.bot
-    draft_id = abs(hash(f"{chat_id}:{time.monotonic_ns()}")) % (2**31) or 1
-
-    t_request_start = time.monotonic()
-
-    stream = await _chat_create_with_optional_name(
-        llm,
-        observation_name="generate-answer",
-        model=config.llm_model,
-        messages=llm_messages,
-        temperature=config.llm_temperature,
-        max_tokens=effective_max_tokens,
-        stream=True,
-        stream_options={"include_usage": True},
-    )
-
-    t_stream_start = time.monotonic()
-    stream_only_ttft_ms: float | None = None
-    try:
-        async for chunk in stream:
-            if hasattr(chunk, "usage") and chunk.usage is not None:
-                ct = getattr(chunk.usage, "completion_tokens", None)
-                if ct is not None:
-                    completion_tokens = ct
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            # Reasoning models (e.g. gpt-oss-120b via Cerebras) may send tokens
-            # as delta.reasoning_content or delta.reasoning instead of delta.content.
-            # LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode
-            # (issues #9578, #15690), so we merge client-side as fallback.
-            text = delta.content if delta else None
-            if not text:
-                text = getattr(delta, "reasoning_content", None) or getattr(
-                    delta, "reasoning", None
-                )
-            if text:
-                if ttft_ms == 0.0:
-                    first_token_at = time.monotonic()
-                    ttft_ms = (first_token_at - t_request_start) * 1000
-                    stream_only_ttft_ms = (first_token_at - t_stream_start) * 1000
-                    if lf_client is not None:
-                        with contextlib.suppress(Exception):
-                            lf_client.update_current_generation(
-                                completion_start_time=datetime.now(UTC)
-                            )
-                accumulated += text
-                now = time.monotonic()
-                if now - last_draft >= _DRAFT_INTERVAL:
-                    with contextlib.suppress(Exception):
-                        await bot.send_message_draft(
-                            chat_id=chat_id,
-                            draft_id=draft_id,
-                            text=accumulated,
-                        )
-                    last_draft = now
-            if hasattr(chunk, "model") and chunk.model:
-                actual_model = chunk.model
-    except Exception:
-        if accumulated:
-            sent_msg = None
-            with contextlib.suppress(Exception):
-                sent_msg = await message.answer(accumulated)
-            raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
-        raise
-
-    if not accumulated:
-        raise ValueError("Streaming produced empty response")
-
-    # Final message — persisted in chat history
-    try:
-        sent_msg = await message.answer(accumulated, parse_mode="Markdown")
-    except Exception:
-        try:
-            sent_msg = await message.answer(accumulated)
-        except Exception:
-            logger.warning("Failed to send final streaming message")
-            sent_msg = None
-
-    return accumulated, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg
-
-
 def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float | None:
     """Return provider-reported queue time in ms, or None if unavailable/unreliable."""
     return None
@@ -379,7 +241,6 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         build_system_prompt=_build_system_prompt,
         ensure_history_instruction=_ensure_history_instruction,
         build_fallback_response=_build_fallback_response,
-        generate_streaming=_generate_streaming,
         style_detector=_detector,
         style_prompt_builder=build_system_prompt_with_manager,
         style_token_limit=get_token_limit,
