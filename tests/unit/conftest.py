@@ -81,13 +81,31 @@ def pytest_configure(config):
         _fsm_mod.state = _fsm_state_mod
         _fsm_mod.context = _fsm_context_mod
 
+        # Real stubs needed for isinstance() checks in production code
+        class _TelegramBadRequest(Exception):
+            """Minimal TelegramBadRequest stub."""
+
+            def __init__(self, method: object = None, message: str = "") -> None:
+                super().__init__(message)
+                self.message = message
+
+        class _ExceptionTypeFilter:
+            """Minimal ExceptionTypeFilter stub."""
+
+            def __init__(self, *exception_types: type) -> None:
+                self.exception_types = exception_types
+
+        _aiogram_exceptions_mod = MagicMock()
+        _aiogram_exceptions_mod.TelegramBadRequest = _TelegramBadRequest
+
+        _aiogram_filters_mod = MagicMock()
+        _aiogram_filters_mod.ExceptionTypeFilter = _ExceptionTypeFilter
+
         _aiogram_submodules = [
             "aiogram",
             "aiogram.dispatcher",
             "aiogram.dispatcher.flags",
             "aiogram.enums",
-            "aiogram.exceptions",
-            "aiogram.filters",
             "aiogram.filters.callback_data",
             "aiogram.types",
             "aiogram.utils",
@@ -99,6 +117,12 @@ def pytest_configure(config):
         for mod_name in _aiogram_submodules:
             _saved_modules[mod_name] = sys.modules.get(mod_name)
             sys.modules[mod_name] = MagicMock()
+        # Register modules with real stubs where isinstance() checks are needed
+        for mod_name in ("aiogram.exceptions", "aiogram.filters"):
+            _saved_modules[mod_name] = sys.modules.get(mod_name)
+        sys.modules["aiogram.exceptions"] = _aiogram_exceptions_mod
+        sys.modules["aiogram.filters"] = _aiogram_filters_mod
+        _aiogram_submodules.extend(["aiogram.exceptions", "aiogram.filters"])
         # Register fsm submodules with proper stubs
         for mod_name in ("aiogram.fsm", "aiogram.fsm.context", "aiogram.fsm.state"):
             _saved_modules[mod_name] = sys.modules.get(mod_name)
@@ -113,12 +137,18 @@ def pytest_configure(config):
         sys.modules["aiogram_dialog"], MagicMock
     )
     if not _dialog_real:
+
+        class _UnknownIntent(Exception):
+            """Minimal UnknownIntent stub for isinstance() checks."""
+
+        _dialog_exceptions_mod = MagicMock()
+        _dialog_exceptions_mod.UnknownIntent = _UnknownIntent
+
         _dialog_submodules = [
             "aiogram_dialog",
             "aiogram_dialog.api",
             "aiogram_dialog.api.entities",
             "aiogram_dialog.api.entities.events",
-            "aiogram_dialog.api.exceptions",
             "aiogram_dialog.api.protocols",
             "aiogram_dialog.widgets",
             "aiogram_dialog.widgets.kbd",
@@ -127,6 +157,12 @@ def pytest_configure(config):
         for mod_name in _dialog_submodules:
             _saved_modules[mod_name] = sys.modules.get(mod_name)
             sys.modules[mod_name] = MagicMock()
+        # Register exceptions module with real UnknownIntent stub
+        _saved_modules["aiogram_dialog.api.exceptions"] = sys.modules.get(
+            "aiogram_dialog.api.exceptions"
+        )
+        sys.modules["aiogram_dialog.api.exceptions"] = _dialog_exceptions_mod
+        _dialog_submodules.append("aiogram_dialog.api.exceptions")
         _mocked_module_names.extend(_dialog_submodules)
 
     # -- langgraph (removed dep — tests use Runtime as a context container) --
