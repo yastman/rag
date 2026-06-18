@@ -8,7 +8,6 @@ This document is the source of truth for containerized local/dev/VPS runtime in 
 | --- | --- | --- |
 | `compose.yml` | Secure baseline for all services | Shared base for local and VPS |
 | `compose.dev.yml` | Development overrides (ports, profile gating, local defaults) | Local development and integration testing |
-| `compose.vps.yml` | VPS production-like overrides | Server deployment and operations |
 
 ## Compose Project Name
 
@@ -39,10 +38,10 @@ Optional profiles add scoped services:
 
 | Profile | Services | Notes |
 | --- | --- | --- |
-| `bot` | `litellm`, `bot` | Core bot path |
+| `bot` | `bot` | Core bot path |
 | `ingest` | `ingestion` | Unified ingestion |
 | `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` | Optional Langfuse observability |
-| `obs` | `loki`, `promtail`, `alertmanager` | Optional log monitoring |
+| `obs` | `loki`, `promtail`, `alertmanager` | Archived — see `archive/obs/` |
 | `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
 | `full` | all profile-gated services | |
 
@@ -57,15 +56,15 @@ Optional profiles add scoped services:
 
 ### VPS default runtime
 
-`compose.yml:compose.vps.yml` starts only the RAG chatbot core by default:
-`postgres`, `redis`, `qdrant`, `bge-m3`, `litellm`, and `bot`.
+`compose.yml:compose.dev.yml` starts only the RAG chatbot core by default:
+`postgres`, `redis`, `qdrant`, `bge-m3`, and `bot`.
 
 Docling, ingestion, and self-hosted Langfuse are optional/profile
 runtime on VPS and must not be assumed to be resident services. To run the
 optional VPS profile locally, use:
 
 ```bash
-COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --profile vps-noncore up -d
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --profile bot up -d
 ```
 
 ## Makefile Shortcuts
@@ -346,11 +345,11 @@ Never remove `vps_qdrant_data`, `vps_postgres_data`, `vps_redis_data`, or
 
 ```bash
 # Logs
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility logs -f bot litellm qdrant
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility logs -f bot qdrant
 
 # Rebuild selected services
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility build bot litellm bge-m3
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility up -d --force-recreate bot litellm bge-m3
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility build bot bge-m3
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility up -d --force-recreate bot bge-m3
 
 # Image drift check against compose-pinned images (uses compose.yml + compose.dev.yml + tests/fixtures/compose.ci.env)
 make verify-compose-images

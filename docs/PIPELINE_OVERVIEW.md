@@ -72,7 +72,7 @@ uv run python -m src.ingestion.unified.cli status
 Common operator entrypoints:
 
 ```bash
-make sync-drive-status
+make ingest-unified-status
 make ingest-unified-preflight
 make ingest-unified-bootstrap
 make ingest-unified
@@ -82,7 +82,7 @@ make ingest-unified-status
 
 ## 4) Voice Flow
 
-Source code: `src/voice/agent.py` + `src/api/main.py`. This is an optional surface; off by default.
+Source code: `archive/voice/agent.py` + `archive/api/main.py`. This is an archived optional surface; off by default.
 
 Runtime path:
 1. LiveKit session starts voice agent.
@@ -103,7 +103,7 @@ Runtime path:
 ```bash
 make docker-up
 make docker-bot-up
-make sync-drive-status
+make ingest-unified-status
 make ingest-unified-preflight
 make ingest-unified-bootstrap
 make ingest-unified

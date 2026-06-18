@@ -133,7 +133,7 @@ make test-bot-health
 `make test-bot-health` is a local helper for the published native bot prerequisites:
 - Redis via the same `BotConfig` + `redis.from_url(...)` path used by native startup
 - Qdrant via `BotConfig.get_collection_name()` + `qdrant-client`
-- LiteLLM via proxy readiness (`/health/readiness`)
+- LiteLLM SDK router credentials (in-process; no proxy container required)
 - optional localhost Postgres note without turning DB reachability into a hard failure
 
 The authoritative startup preflight still lives in [`telegram_bot/preflight.py`](../telegram_bot/preflight.py) and runs when you start the bot. That runtime preflight also keeps the repo-local BGE-M3 health and warmup contract, because BGE-M3 is not a generic upstream SDK probe in this repo.
@@ -343,8 +343,8 @@ The recommended production flow is:
 4. Open/merge PR to `main`.
 5. GitHub Actions deploys `main` to VPS.
 
-The VPS default runtime (`compose.yml:compose.vps.yml`) starts only the RAG
-chatbot core: `postgres`, `redis`, `qdrant`, `bge-m3`, `litellm`,
+The VPS default runtime (`compose.yml:compose.dev.yml`) starts only the RAG
+chatbot core: `postgres`, `redis`, `qdrant`, `bge-m3`,
 and `bot`. Mini app, Docling, ingestion, and self-hosted Langfuse are
 optional/profile-gated. See [`../DOCKER.md`](../DOCKER.md) for details and
 [cleanup commands](../DOCKER.md#vps-cleanup).
@@ -399,7 +399,7 @@ make local-down
 ```
 
 `make local-up` starts the native bot dependencies needed for the local loop:
-Postgres, Redis, Qdrant, BGE-M3, and LiteLLM. Postgres is included so
+Postgres, Redis, Qdrant, and BGE-M3. Postgres is included so
 favorites backed by `realestate.public.user_favorites` are available during
 native bot runs.
 
