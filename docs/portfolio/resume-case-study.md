@@ -5,35 +5,38 @@ case study, not as developer setup documentation.
 
 ## One-Line Positioning
 
-AI-native conversational automation platform combining Telegram, RAG search,
-domain catalog matching, CRM/workflow automation, voice input, observability,
-and Dockerized AI infrastructure. Built with CI verification, automated quality checks, and AI-assisted
-development practices.
+RAG-powered domain knowledge assistant: Telegram adapter over a self-hosted
+retrieval core (BGE-M3 + Qdrant), imperative pipeline with typed state,
+CRM/workflow automation with human-in-the-loop confirmation, and deterministic
+document ingestion. Built with CI verification, automated quality gates, and
+AI-assisted development practices.
 
 ## Resume Summary - English
 
-Built a production-like conversational AI automation platform with Telegram bot,
-RAG search, natural-language domain catalog search, Kommo CRM workflows, voice
-input, and Docker Compose based local/VPS infrastructure. Implemented self-hosted BGE-M3
-embeddings, Qdrant hybrid retrieval with dense/sparse/ColBERT vectors, tiered
-Redis caching, semantic conversation memory, CRM lead automation with
-human-in-the-loop confirmation, Langfuse tracing, gold-set/evaluation tooling,
-and unified document ingestion. The system includes Compose profiles for bot, ingestion, voice, ML
-observability, monitoring, and full-stack runtime, plus 400+ test files.
-Developed with an AI-assisted engineering workflow: task decomposition, focused
-implementation units, automated quality gates, and CI-driven verification. AI
-tooling is used as a structured engineering accelerator within a disciplined
-development process.
+Built a domain knowledge assistant: Telegram bot over a self-hosted RAG core
+with BGE-M3 embeddings, Qdrant hybrid retrieval (dense/sparse/ColBERT vectors),
+tiered Redis caching, imperative assistant pipeline with typed state contracts,
+CRM lead automation with human-in-the-loop confirmation, and deterministic
+document ingestion (CocoIndex + Docling). Optional surfaces (voice, Mini App,
+k8s) are archived; the core proof runs with Telegram, Qdrant, Redis, and a
+Docker Compose stack. Langfuse tracing, gold-set evaluation tooling, and
+monitoring are available but not required for the core path. Developed with an
+AI-assisted engineering workflow: task decomposition, focused implementation
+units, automated quality gates, and CI-driven verification. AI tooling is used
+as a structured engineering accelerator within a disciplined development process.
 
 ## Resume Summary - Russian
 
-Разработал AI-native платформу conversational automation: Telegram-бот,
-RAG-поиск, поиск по доменному каталогу на естественном языке, интеграция с
-Kommo CRM, голосовой ввод и Docker-инфраструктура для локального/VPS запуска. Реализовал
-self-hosted BGE-M3 embeddings, Qdrant hybrid retrieval с dense/sparse/ColBERT
-векторами, многоуровневое Redis-кеширование, семантическую память диалогов,
-автоматизацию лидов в CRM с human-in-the-loop подтверждением, Langfuse
-трассировку, gold-set/evaluation tooling и unified ingestion документов.
+## Resume Summary - Russian
+
+Разработал ассистент на основе RAG: Telegram-бот поверх self-hosted ядра с
+BGE-M3 embeddings, Qdrant hybrid retrieval (dense/sparse/ColBERT векторы),
+многоуровневым Redis-кешированием, императивным assistant pipeline с typed state
+contracts, автоматизацией лидов в Kommo CRM с human-in-the-loop подтверждением
+и детерминированным ingestion документов (CocoIndex + Docling). Опциональные
+поверхности (голосовой агент, Mini App, k8s) архивированы; core proof работает
+с Telegram, Qdrant, Redis и Docker Compose. Langfuse трассировка, gold-set
+evaluation и мониторинг доступны, но не требуются для основного пути.
 Платформа разработана с использованием AI-ассистированного рабочего процесса:
 декомпозиция задач, автоматизированные quality gates и CI-driven верификация.
 AI-инструменты используются как структурированный инженерный акселератор
@@ -41,8 +44,10 @@ AI-инструменты используются как структуриро
 
 ## Best Resume Bullets
 
-- Built an AI automation platform for domain-specific business workflows with
-  Telegram, voice, CRM, RAG, catalog search, and mini-app surfaces.
+- Built a domain knowledge assistant: Telegram adapter over an imperative RAG
+  core with typed state contracts, CRM automation with HITL confirmation, and
+  deterministic document ingestion. Optional surfaces (voice, Mini App) are
+  archived and not required for the core proof.
 - Implemented self-hosted retrieval infrastructure using BGE-M3 and Qdrant:
   dense vectors, sparse BM42 vectors, and ColBERT multivector reranking.
 - Designed a tiered Redis cache for semantic answers, embeddings, search
@@ -55,9 +60,9 @@ AI-инструменты используются как структуриро
 - Built a deterministic ingestion pipeline: Google Drive/local files, Docling
   parsing, chunking, BGE-M3 embeddings, Qdrant upserts/deletes, Postgres state,
   retries, and DLQ.
-- Dockerized the system with Compose profiles for bot, ingestion, voice, ML
-  observability, monitoring, and full-stack runtime; k3s manifests cover core
-  services as an incremental migration path.
+- Dockerized the system with Compose profiles for bot, ingestion, ML
+  observability, monitoring, and full-stack runtime; optional profiles for voice
+  (archived) and k8s manifests for core services available.
 - Applied AI-assisted engineering workflows with automated verification gates,
   CI quality checks, and structured task decomposition. Broke large features
   into focused implementation units with explicit acceptance criteria and
@@ -85,18 +90,21 @@ ad-hoc scripting.
 
 ## Feature Cards
 
-### 1. LangGraph RAG Pipeline
+### 1. Imperative Assistant Pipeline
 
 **Problem:** Business users ask repeated questions about products, policies, documents,
 processes, and company workflows. Static FAQ answers are not enough.
 
-**Implementation:** Built a LangGraph pipeline with classification, prompt
-injection guard, cache check, retrieval, grading, reranking, query rewriting,
-generation, cache store, response, and optional summarization.
+**Implementation:** Built an imperative `AssistantPipeline` with typed state
+contracts covering classification, prompt-injection guard, cache check,
+retrieval, grading, reranking, query rewriting, generation, cache store,
+response, and optional summarization. LangGraph remains as a compatibility
+facade over the same runtime.
 
 **Impact:** The system behaves like a stateful AI workflow, not a simple LLM
 wrapper. It can route easy, off-topic, knowledge, catalog-search, and CRM-related
-queries through different paths.
+queries through different paths. The typed state contract makes pipeline behavior
+inspectable and testable end to end.
 
 ### 2. Self-Hosted Qdrant + BGE-M3 Retrieval
 
@@ -180,7 +188,7 @@ support catalog navigation, pagination, cards, favorites, and viewing flow.
 structured filters and avoids unnecessary LLM work when deterministic parsing is
 enough.
 
-### 8. Voice Input And Voice Agent
+### 8. Voice Input And Voice Agent (Archived)
 
 **Problem:** Business users may prefer voice messages or phone-like flows instead
 of text.
@@ -190,6 +198,10 @@ with ElevenLabs STT/TTS. The voice agent calls the same RAG API used by other
 channels and propagates Langfuse trace IDs for continuity. SIP support is
 represented as outbound trunk provisioning rather than a fully documented
 inbound call-routing flow.
+
+**Status:** Archived under `archive/voice/`. Not required for the core proof.
+Telegram text remains the production adapter; voice is an optional extension
+demonstrating that the same assistant core can serve multiple input channels.
 
 **Impact:** One AI workflow works across text, Telegram voice, and voice-agent
 channels.
@@ -258,7 +270,7 @@ monitoring unless production deployment evidence is added.
 
 ## Technical Highlights
 
-- **LLM orchestration:** LangGraph, LiteLLM, Langfuse OpenAI integration.
+- **LLM orchestration:** Imperative `AssistantPipeline`, typed state contracts, LiteLLM, LangGraph compat facade.
 - **Retrieval:** Qdrant Query API, RRF fusion, dense/sparse vectors, ColBERT
   multivectors, MaxSim rerank.
 - **Embeddings:** self-hosted `BAAI/bge-m3`, local `deepvk/USER2-base` service
@@ -267,11 +279,11 @@ monitoring unless production deployment evidence is added.
   cache, rerank cache.
 - **CRM:** Kommo tools, lead/contact/task/note workflows, HITL approvals,
   manager flows, lead scoring sync.
-- **Voice:** Telegram voice input, LiveKit voice agent, shared RAG API.
+- **Voice (archived):** Telegram voice input, LiveKit voice agent — archived under `archive/voice/`; not required for the core proof.
 - **Ingestion:** CocoIndex, Docling, BGE-M3, Qdrant writer, Postgres state/DLQ.
-- **Observability:** Langfuse traces, scores, prompt metadata,
+- **Observability (optional):** Langfuse traces, scores, prompt metadata,
   Loki/Alertmanager for local/dev monitoring, trace validation.
-- **Evaluation:** gold sets, RAGAS, Langfuse datasets/experiments, baseline
+- **Evaluation (optional):** gold sets, RAGAS, Langfuse datasets/experiments, baseline
   metrics, judge calibration scripts.
 - **Ops:** Docker Compose profiles, healthchecks, pinned images, non-root
   runtime users, VPS Docker Compose deployment path, partial k3s manifests.
@@ -303,8 +315,10 @@ monitoring unless production deployment evidence is added.
    LLM usage, latency, grounding, prompt source/version, and CRM/history events.
 
 6. **What makes this more than a chatbot?**
-   It has ingestion, retrieval infrastructure, CRM automation, voice channel,
-   memory, evaluation, observability, and Dockerized runtime services.
+   It has ingestion, retrieval infrastructure, CRM automation, memory,
+   evaluation, observability, and Dockerized runtime services. Optional surfaces
+   (voice, Mini App) are archived but demonstrate the assistant core is
+   adapter-agnostic.
 
 ## Data and Asset Boundaries
 
