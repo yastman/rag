@@ -561,6 +561,31 @@ async def _cache_check(
     }
 
 
+async def _store_search_results(
+    *,
+    cache: Any,
+    dense_vector: list[float],
+    results: list[dict[str, Any]],
+    search_meta: dict[str, Any],
+    initial_filters: dict[str, Any] | None,
+    final_filters: dict[str, Any] | None,
+    retrieval_config: dict[str, Any],
+) -> None:
+    """Store retrieval results under the de-duplicated filter targets."""
+    if not results or search_meta.get("backend_error", False):
+        return
+    stored_filters: list[dict[str, Any] | None] = []
+    cache_targets = [final_filters] if final_filters != initial_filters else [initial_filters]
+    for cache_filters in cache_targets:
+        normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
+        if normalized_filters in stored_filters:
+            continue
+        await cache.store_search_results(
+            dense_vector, normalized_filters, results, retrieval_config=retrieval_config
+        )
+        stored_filters.append(normalized_filters)
+
+
 async def _retrieve_with_relaxation(
     *,
     qdrant: Any,
@@ -861,17 +886,15 @@ async def _hybrid_retrieve(
         record_pipeline_event("retrieval_zero_docs")
 
     # Step 5: Cache results
-    if results and not search_meta.get("backend_error", False):
-        stored_filters: list[dict[str, Any] | None] = []
-        cache_targets = [final_filters] if final_filters != initial_filters else [initial_filters]
-        for cache_filters in cache_targets:
-            normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
-            if normalized_filters in stored_filters:
-                continue
-            await cache.store_search_results(
-                dense_vector, normalized_filters, results, retrieval_config=_retrieval_cfg
-            )
-            stored_filters.append(normalized_filters)
+    await _store_search_results(
+        cache=cache,
+        dense_vector=dense_vector,
+        results=results,
+        search_meta=search_meta,
+        initial_filters=initial_filters,
+        final_filters=final_filters,
+        retrieval_config=_retrieval_cfg,
+    )
 
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
