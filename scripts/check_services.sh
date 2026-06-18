@@ -29,6 +29,17 @@ check_http() {
   fi
 }
 
+check_http_optional() {
+  local name="$1" url="$2" hint="$3"
+  if curl -sf --max-time "$TIMEOUT" "$url" -o /dev/null 2>/dev/null; then
+    echo "PASS  $name  ($url)"
+    PASS=$((PASS + 1))
+  else
+    # Optional service: warn but do not count as a failure.
+    echo "WARN  $name ($hint)  ($url)"
+  fi
+}
+
 check_tcp() {
   local name="$1" host="$2" port="$3"
   if nc -z -w "$TIMEOUT" "$host" "$port" 2>/dev/null; then
@@ -45,7 +56,7 @@ echo "--- Local service health ---"
 check_http "Qdrant"  "http://${QDRANT_HOST}:${QDRANT_PORT}/readyz"
 check_tcp  "Redis"   "${REDIS_HOST}" "${REDIS_PORT}"
 check_http "BGE-M3"  "http://${BGE_M3_HOST}:${BGE_M3_PORT}/health"
-check_http "Docling" "http://${DOCLING_HOST}:${DOCLING_PORT}/health"
+check_http_optional "Docling" "http://${DOCLING_HOST}:${DOCLING_PORT}/health" "optional — start with make local-up-ingest"
 
 echo "---"
 echo "Result: ${PASS} PASS, ${FAIL} FAIL"
