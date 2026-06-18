@@ -13,6 +13,7 @@ Concise index for engineering process docs. These pages describe workflow, valid
 | [`sdk-registry.md`](sdk-registry.md) | Checking SDK/framework ownership and preferred project patterns before code changes. |
 | [`docs-maintenance.md`](docs-maintenance.md) | Updating docs, choosing canonical owners, and running docs verification. |
 | [`script-native-migration-matrix.md`](script-native-migration-matrix.md) | Auditing `scripts/` helpers and deciding keep/archive/native CLI migration paths. |
+| [`mcp-tools.md`](mcp-tools.md) | Navigating the codebase with codeindexer MCP, codegraph MCP, and Context7. |
 
 
 ## Historical Or Resolved Notes
