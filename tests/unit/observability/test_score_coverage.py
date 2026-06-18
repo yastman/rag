@@ -18,7 +18,6 @@ import pytest
 pytestmark = pytest.mark.requires_extras
 
 
-
 _TRACE_ID = "trace-coverage-001"
 
 _FULL_RESULT: dict = {
@@ -272,6 +271,7 @@ def crm_scores() -> dict[str, dict]:
     return {c.kwargs["name"]: c.kwargs for c in lf.create_score.call_args_list}
 
 
+@pytest.mark.skip(reason="stale: write_crm_scores removed from scoring (#2718)")
 @pytest.mark.parametrize(
     "score_name",
     [
