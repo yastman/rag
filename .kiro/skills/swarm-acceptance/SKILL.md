@@ -170,7 +170,7 @@ Allow a same-worker follow-up only when all conditions are true:
 - Send the follow-up to that same worker's unique tmux window target, such as
   `session:worker-window-name`; do not use `%pane` as route identity.
 - The follow-up prompt must tell the worker to wake the orchestrator through
-  its resolved `ORCH_TARGET=session:unique-orchestrator-window` after writing
+  its resolved `ORCH_TARGET=session:@orchestrator-window-id` after writing
   the fresh artifact.
 
 ## Repair Loop
