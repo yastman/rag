@@ -292,6 +292,7 @@ class TestWriteHistoryScoresContract:
 _CRM_SCORES = ["crm_tool_used", "crm_tools_count", "crm_tools_success", "crm_tools_error"]
 
 
+@pytest.mark.skip(reason="stale: write_crm_scores removed from scoring (#2718)")
 class TestWriteCrmScoresContract:
     """Schema contract: write_crm_scores must write all 4 CRM scores with correct types."""
 

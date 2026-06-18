@@ -49,3 +49,7 @@ bug_classes:
     description: Post-ARCH simplification left duplicate implementations (identical files, parallel graph paths, or dead modules) in the codebase alongside the canonical src/ paths
     canonical_issue: "#2711"
     guardrail: tests/contract/test_duplicate_stale_paths_contract.py
+  - id: test-coverage-drift
+    description: Test files reference removed or renamed modules/symbols (deleted CRM states, removed function params, archived packages), causing collection errors or silent dead coverage
+    canonical_issue: "#2718"
+    guardrail: "stale tests skipped with pytest.mark.skip(reason='stale: ...') or deleted if entirely orphaned; import errors resolved"

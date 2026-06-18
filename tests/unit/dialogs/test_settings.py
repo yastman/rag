@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from telegram_bot.dialogs.settings import settings_dialog
 from telegram_bot.dialogs.states import SettingsSG
 
@@ -24,11 +26,13 @@ def test_settings_has_main_and_language():
 # --- CRM settings expansion (#697 Task 10) ---
 
 
+@pytest.mark.skip(reason="stale: CRM settings section removed from settings dialog (#2718)")
 def test_settings_has_crm_state():
     """SettingsSG has 'crm' state for CRM settings section."""
     assert hasattr(SettingsSG, "crm")
 
 
+@pytest.mark.skip(reason="stale: CRM settings section removed from settings dialog (#2718)")
 def test_settings_dialog_has_crm_window():
     """settings_dialog includes a window for SettingsSG.crm."""
     windows = settings_dialog.windows
@@ -36,6 +40,9 @@ def test_settings_dialog_has_crm_window():
     assert SettingsSG.crm in states
 
 
+@pytest.mark.skip(
+    reason="stale: get_crm_settings removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_get_crm_settings_returns_defaults_when_redis_is_none():
     """get_crm_settings returns defaults when redis is None."""
     from telegram_bot.dialogs.settings import get_crm_settings
@@ -46,6 +53,9 @@ async def test_get_crm_settings_returns_defaults_when_redis_is_none():
     assert settings["card_lang"] == "ru"
 
 
+@pytest.mark.skip(
+    reason="stale: get_crm_settings removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_get_crm_settings_returns_defaults_when_key_absent():
     """get_crm_settings returns defaults when Redis has no key for user."""
     from telegram_bot.dialogs.settings import get_crm_settings
@@ -59,6 +69,9 @@ async def test_get_crm_settings_returns_defaults_when_key_absent():
     assert settings["card_lang"] == "ru"
 
 
+@pytest.mark.skip(
+    reason="stale: save_crm_settings/get_crm_settings removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_save_and_load_crm_settings_roundtrip():
     """save_crm_settings and get_crm_settings round-trip via mock Redis."""
 
@@ -85,6 +98,9 @@ async def test_save_and_load_crm_settings_roundtrip():
     assert loaded["card_lang"] == "en"
 
 
+@pytest.mark.skip(
+    reason="stale: save_crm_settings removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_save_crm_settings_stores_as_json():
     """save_crm_settings stores JSON in Redis with correct key format."""
     import json
@@ -105,6 +121,9 @@ async def test_save_crm_settings_stores_as_json():
     assert json.loads(value) == settings
 
 
+@pytest.mark.skip(
+    reason="stale: _crm_settings_key removed from telegram_bot.dialogs.settings (#2718)"
+)
 def test_crm_settings_key_contains_user_id():
     """CRM settings Redis key includes user tg_id."""
     from telegram_bot.dialogs.settings import _crm_settings_key
@@ -139,6 +158,9 @@ async def test_language_selected_restarts_settings_root():
 # --- get_settings_data ---
 
 
+@pytest.mark.skip(
+    reason="stale: btn_crm removed from get_settings_data after CRM settings removal (#2718)"
+)
 async def test_get_settings_data_without_i18n():
     """get_settings_data returns default Russian labels without i18n."""
     from telegram_bot.dialogs.settings import get_settings_data
@@ -174,6 +196,7 @@ async def test_get_settings_data_with_fake_i18n():
 # --- _get_redis ---
 
 
+@pytest.mark.skip(reason="stale: _get_redis removed from telegram_bot.dialogs.settings (#2718)")
 def test_get_redis_returns_redis():
     """_get_redis returns redis when property_bot and cache exist."""
     from telegram_bot.dialogs.settings import _get_redis
@@ -190,6 +213,7 @@ def test_get_redis_returns_redis():
     assert _get_redis(manager) is redis
 
 
+@pytest.mark.skip(reason="stale: _get_redis removed from telegram_bot.dialogs.settings (#2718)")
 def test_get_redis_returns_none_without_property_bot():
     """_get_redis returns None when property_bot is absent."""
     from telegram_bot.dialogs.settings import _get_redis
@@ -200,6 +224,7 @@ def test_get_redis_returns_none_without_property_bot():
     assert _get_redis(manager) is None
 
 
+@pytest.mark.skip(reason="stale: _get_redis removed from telegram_bot.dialogs.settings (#2718)")
 def test_get_redis_returns_none_without_cache():
     """_get_redis returns None when cache is absent."""
     from telegram_bot.dialogs.settings import _get_redis
@@ -216,6 +241,9 @@ def test_get_redis_returns_none_without_cache():
 # --- get_crm_settings_data ---
 
 
+@pytest.mark.skip(
+    reason="stale: get_crm_settings_data removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_get_crm_settings_data_with_mocked_redis():
     """get_crm_settings_data loads settings from mocked redis."""
     from telegram_bot.dialogs.settings import get_crm_settings_data
@@ -240,6 +268,9 @@ async def test_get_crm_settings_data_with_mocked_redis():
 # --- CRM toggle handlers ---
 
 
+@pytest.mark.skip(
+    reason="stale: on_toggle_notifications removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_on_toggle_notifications():
     """on_toggle_notifications flips notifications setting."""
     from telegram_bot.dialogs.settings import on_toggle_notifications
@@ -265,6 +296,9 @@ async def test_on_toggle_notifications():
     manager.update.assert_awaited_once_with({})
 
 
+@pytest.mark.skip(
+    reason="stale: on_cycle_briefing_time removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_on_cycle_briefing_time():
     """on_cycle_briefing_time cycles to next briefing time."""
     from telegram_bot.dialogs.settings import on_cycle_briefing_time
@@ -294,6 +328,9 @@ async def test_on_cycle_briefing_time():
     assert stored["briefing_time"] == "10:00"
 
 
+@pytest.mark.skip(
+    reason="stale: on_toggle_card_lang removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_on_toggle_card_lang():
     """on_toggle_card_lang toggles between ru and en."""
     from telegram_bot.dialogs.settings import on_toggle_card_lang
@@ -325,6 +362,9 @@ async def test_on_toggle_card_lang():
 # --- Callback without from_user ---
 
 
+@pytest.mark.skip(
+    reason="stale: on_toggle_notifications removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_on_toggle_notifications_no_from_user_returns():
     """on_toggle_notifications returns early when callback.from_user is None."""
     from telegram_bot.dialogs.settings import on_toggle_notifications
@@ -340,6 +380,9 @@ async def test_on_toggle_notifications_no_from_user_returns():
     manager.update.assert_not_called()
 
 
+@pytest.mark.skip(
+    reason="stale: on_cycle_briefing_time removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_on_cycle_briefing_time_no_from_user_returns():
     """on_cycle_briefing_time returns early when callback.from_user is None."""
     from telegram_bot.dialogs.settings import on_cycle_briefing_time
@@ -355,6 +398,9 @@ async def test_on_cycle_briefing_time_no_from_user_returns():
     manager.update.assert_not_called()
 
 
+@pytest.mark.skip(
+    reason="stale: on_toggle_card_lang removed from telegram_bot.dialogs.settings (#2718)"
+)
 async def test_on_toggle_card_lang_no_from_user_returns():
     """on_toggle_card_lang returns early when callback.from_user is None."""
     from telegram_bot.dialogs.settings import on_toggle_card_lang
