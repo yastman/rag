@@ -44,3 +44,8 @@ bug_classes:
     description: Kept tests imported langchain / langchain_core directly after the runtime migration off LangChain, coupling the test environment to an undeclared package
     canonical_issue: "#2619"
     guardrail: tests/contract/test_no_langchain_import_outside_archive_contract.py
+
+  - id: duplicate-stale-code
+    description: Post-ARCH simplification left duplicate implementations (identical files, parallel graph paths, or dead modules) in the codebase alongside the canonical src/ paths
+    canonical_issue: "#2711"
+    guardrail: tests/contract/test_duplicate_stale_paths_contract.py
