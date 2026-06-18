@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from telegram_bot.handlers.command_handlers import (
+    cmd_call,
     cmd_clear,
     cmd_help,
     cmd_metrics,
@@ -147,6 +148,42 @@ class TestCmdStart:
             await cmd_start(mock_bot, message)
 
             mock_show_menu.assert_called_once_with(message, i18n=None)
+
+
+class TestCmdCall:
+    """Test /call handler — stale voice handler graceful degradation (#2709).
+
+    /call depends on archived livekit infrastructure (not in declared deps).
+    It must degrade gracefully when livekit is not configured, which is the
+    standard non-voice deployment path.
+    """
+
+    @pytest.mark.asyncio
+    async def test_returns_early_when_livekit_not_configured(self, mock_bot):
+        """/call answers 'not configured' and returns early when livekit_url is empty."""
+        mock_bot.config.livekit_url = ""
+        mock_bot.config.sip_trunk_id = ""
+        mock_bot._is_admin = MagicMock(return_value=True)
+
+        message = _make_message(text="/call +380501234567")
+        await cmd_call(mock_bot, message)
+
+        message.answer.assert_called_once()
+        text = message.answer.call_args[0][0]
+        assert "не настроен" in text or "Voice service" in text
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_admin(self, mock_bot):
+        """/call rejects non-admin users regardless of config."""
+        mock_bot._is_admin = MagicMock(return_value=False)
+        mock_bot.config.livekit_url = "wss://lk.example.com"
+        mock_bot.config.sip_trunk_id = "trunk-123"
+
+        message = _make_message(text="/call +380501234567")
+        await cmd_call(mock_bot, message)
+
+        message.answer.assert_called_once()
+        assert "администратор" in message.answer.call_args[0][0].lower()
 
 
 class TestCmdClearcache:

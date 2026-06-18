@@ -239,6 +239,7 @@ async def cmd_clearcache(bot: PropertyBot, message: Message) -> None:
 
 
 @observe(name="cmd-call", capture_input=False, capture_output=False)
+# stale: depends on archived livekit voice infrastructure (not in deps); voice surface archived post-arch simplification (#2709)
 async def cmd_call(bot: PropertyBot, message: Message) -> None:
     """Handle /call command - trigger outbound voice call.
 

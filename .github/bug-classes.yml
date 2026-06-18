@@ -53,3 +53,7 @@ bug_classes:
     description: Test files reference removed or renamed modules/symbols (deleted CRM states, removed function params, archived packages), causing collection errors or silent dead coverage
     canonical_issue: "#2718"
     guardrail: "stale tests skipped with pytest.mark.skip(reason='stale: ...') or deleted if entirely orphaned; import errors resolved"
+  - id: stale-post-arch-simplification
+    description: Registered handlers or endpoints that reference archived infrastructure (voice, Mini App, legacy API) remain reachable after architectural simplification, creating dead surface area
+    canonical_issue: "#2709"
+    guardrail: "tests/unit/handlers/test_command_handlers.py — /call handler returns early when livekit not configured"
