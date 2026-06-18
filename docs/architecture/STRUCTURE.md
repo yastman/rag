@@ -77,19 +77,6 @@ Canonical table for every major directory. Answers: what it does, who owns it, w
 | `docs/plans/` | Shared implementation plans | docs | ✅ Active | — | — | — | |
 | `docs/portfolio/` | Portfolio and resume case study | docs | ✅ Active | — | — | `docs/portfolio/README.md` | |
 | `docker/` | Compose helper configs (Qdrant, Postgres, monitoring, ingestion, LiveKit) | infra | ✅ Active | — | — | `docker/README.md` | |
-| `archive/api/` | FastAPI RAG API | adapter | 🗃 Archived | none (must not be imported) | — | `archive/api/README.md` | Use `src/core` directly |
-| `archive/voice/` | LiveKit voice agent | adapter | 🗃 Archived | none | — | `archive/voice/README.md` | |
-| `archive/mini_app/` | Telegram Mini App backend + frontend | adapter | 🗃 Archived | none | — | `archive/mini_app/README.md` | |
-| `archive/k8s/` | k3s manifests for core services | infra | 🗃 Archived | none | — | `archive/k8s/README.md` | Partial parity with Compose; not required |
-| `archive/user-base/` | Telegram user registration sidecar | infra | 🗃 Archived | none | — | `archive/user-base/README.md` | |
-| `archive/telegram_bot/` | Old bot code superseded by current `telegram_bot/` | adapter | 🗃 Archived | none | — | — | |
-| `archive/evaluation/` | Old evaluation scripts superseded by `tests/eval/` and `tests/baseline/` | tests | 🗃 Archived | none | — | `archive/evaluation/README.md` | |
-| `archive/schedulers/` | Lead score sync, nurturing scheduler, session summary worker | infra | 🗃 Archived | none | — | — | |
-| `archive/obs/` | Old Loki/Alertmanager/Promtail configs | infra | 🗃 Archived | none | — | `archive/obs/README.md` | Moved to `docker/monitoring/` |
-| `archive/observability/` | Sentry and Prometheus metrics server stubs | infra | 🗃 Archived | none | — | — | |
-| `archive/services/` | Voyage embeddings service stubs | infra | 🗃 Archived | none | — | — | |
-| `archive/scripts/` | Old eval and audit scripts | infra | 🗃 Archived | none | — | `archive/scripts/README.md` | |
-| `archive/tests/` | Tests for archived code | tests | 🗃 Archived | none | — | — | |
 | `.github/` | CI workflows, issue templates, CODEOWNERS, Dependabot | infra | ✅ Active | — | `tests/unit/test_ci_deploy_workflow.py` | `AGENTS.md` | See #2720 for CI audit |
 | `.kiro/` | Agent skills, steering, and orchestration config | infra | ✅ Active | — | `tests/contract/test_kiro_swarm_skills_contract.py` | `AGENTS.md` | |
 | `data/` | Local test data, demo corpus, Docling output | infra | ✅ Active | — | — | `data/README.md` | Not committed to production |
@@ -161,13 +148,6 @@ rag-fresh/
 ├── services/                   # External sidecar services (Docker images only)
 │   ├── bge-m3-api/             # BGE-M3 embedding + rerank sidecar
 │   └── docling/                # Document parsing / chunking sidecar
-│   # user-base is archived under archive/user-base/
-│
-├── archive/                    # ARCHIVED surfaces — never imported by live code
-│   ├── api/                    # FastAPI RAG API (archived)
-│   ├── voice/                  # LiveKit voice agent (archived)
-│   ├── mini_app/               # Telegram Mini App (archived)
-│   └── k8s/                    # k3s manifests (archived)
 │
 ├── tests/                      # Test tiers
 │   ├── unit/                   # Fast unit tests
@@ -285,22 +265,6 @@ monolith — the Python codebase calls them over HTTP.
 |---|---|
 | `services/bge-m3-api/` | BGE-M3 dense + sparse + ColBERT embedding sidecar |
 | `services/docling/` | Document parsing and chunking sidecar |
-| `archive/user-base/` | Telegram user registration sidecar (archived) |
-
----
-
-### `archive/` — Historical Surfaces
-
-Code that was part of earlier iterations but is no longer part of the active
-runtime. **Archived code must not be imported by any live `src/` or
-`telegram_bot/` module.**
-
-| Path | What was archived |
-|---|---|
-| `archive/api/` | FastAPI RAG API (moved to archive; use `src/core` directly) |
-| `archive/voice/` | LiveKit voice agent (archived) |
-| `archive/mini_app/` | Telegram Mini App backend + frontend (archived) |
-| `archive/k8s/` | k3s manifests for core services (archived) |
 
 ---
 
@@ -325,7 +289,6 @@ telegram_bot  ──►  src/core  ──►  src/runtime  ──►  src/adapte
 - `src/*` → `telegram_bot` (any direction)
 - `src/adapters` → `src/runtime`
 - `src/ingestion` → `src/runtime`
-- anything → `archive/*` (archived code must be dead)
 
 ---
 
@@ -373,11 +336,6 @@ and must shrink over time.
 | `telegram_bot/` | ✅ Active — Telegram adapter (production channel) |
 | `services/bge-m3-api/` | ✅ Active — embedding sidecar |
 | `services/docling/` | ✅ Active — parsing sidecar |
-| `services/user-base/` | 🗃 Archived — user registration sidecar (`archive/user-base/`) |
-| `archive/api/` | 🗃 Archived — FastAPI RAG API |
-| `archive/voice/` | 🗃 Archived — LiveKit voice agent |
-| `archive/mini_app/` | 🗃 Archived — Telegram Mini App |
-| `archive/k8s/` | 🗃 Archived — k3s manifests |
 
 ---
 

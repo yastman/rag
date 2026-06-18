@@ -1,1 +1,0 @@
-# Mini App backend package

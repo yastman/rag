@@ -1,15 +1,13 @@
-"""Contract: canonical project structure and active/archived directory map (#2633).
+"""Contract: canonical project structure and active directory map (#2633).
 
 Pins the desired active architecture documented in
 ``docs/architecture/STRUCTURE.md``:
 
 - Active directories under ``src/`` and ``telegram_bot/`` are present.
-- Archived surfaces live only under ``archive/`` and are NOT imported by
-  any live Python module under ``src/`` or ``telegram_bot/``.
 - ``src/adapters`` does not import ``src/runtime``.
 - ``src/ingestion`` does not import ``src/runtime``.
 
-Refs #2633 (ARCH-19).
+Refs #2633 (ARCH-19). archive/ removed in #2791.
 """
 
 from __future__ import annotations
@@ -37,23 +35,7 @@ REQUIRED_ACTIVE_DIRS = [
     "telegram_bot",
     "services/bge-m3-api",
     "services/docling",
-    "archive",
 ]
-
-# ---------------------------------------------------------------------------
-# Archived directories that must NOT be imported by live code
-# ---------------------------------------------------------------------------
-
-ARCHIVED_PACKAGES = [
-    "archive.api",
-    "archive.voice",
-    "archive.mini_app",
-    "archive.k8s",
-]
-
-# Live roots that must not import archived surfaces
-LIVE_ROOTS = ("src", "telegram_bot")
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -64,24 +46,6 @@ def _py_files(root: Path) -> list[Path]:
     if not root.exists():
         return []
     return sorted(root.rglob("*.py"))
-
-
-def _imports_in_file(path: Path) -> set[str]:
-    """Return all top-level module names imported by *path*."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except SyntaxError:
-        return set()
-    found: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            mod = node.module or ""
-            found.add(mod.split(".")[0] + ("." + mod.split(".", 1)[1] if "." in mod else ""))
-            found.add(mod)
-        elif isinstance(node, ast.Import):
-            for alias in node.names:
-                found.add(alias.name)
-    return found
 
 
 # ---------------------------------------------------------------------------
@@ -96,22 +60,6 @@ def test_active_directory_exists(rel_dir: str) -> None:
     assert path.is_dir(), (
         f"#2633: canonical active directory '{rel_dir}' is missing. "
         "Do not remove active directories without updating STRUCTURE.md and this test."
-    )
-
-
-@pytest.mark.parametrize("archived_pkg", ARCHIVED_PACKAGES)
-def test_archived_package_not_imported_by_live_code(archived_pkg: str) -> None:
-    """Live code under src/ and telegram_bot/ must not import archived packages."""
-    violations: list[str] = []
-    for root_name in LIVE_ROOTS:
-        for path in _py_files(REPO_ROOT / root_name):
-            imports = _imports_in_file(path)
-            if any(imp == archived_pkg or imp.startswith(archived_pkg + ".") for imp in imports):
-                violations.append(path.relative_to(REPO_ROOT).as_posix())
-
-    assert not violations, (
-        f"#2633: live code imports archived package '{archived_pkg}'. "
-        f"Archive code must be dead. Offending files: {violations}"
     )
 
 
