@@ -549,6 +549,23 @@ async def _cache_check(
     }
 
 
+async def _ensure_sparse_vector(
+    query: str,
+    sparse_vector: Any,
+    *,
+    cache: Any,
+    sparse_embeddings: Any,
+) -> Any:
+    """Resolve the sparse vector after a confirmed search-cache miss."""
+    if sparse_vector is not None:
+        return sparse_vector
+    sparse_vector = await cache.get_sparse_embedding(query)
+    if sparse_vector is None:
+        sparse_vector = await sparse_embeddings.aembed_query(query)
+        await cache.store_sparse_embedding(query, sparse_vector)
+    return sparse_vector
+
+
 async def _lookup_search_cache(
     query: str,
     dense_vector: list[float],
@@ -722,11 +739,9 @@ async def _hybrid_retrieve(
         return cached_payload
 
     # Step 3: Get sparse embedding only after a confirmed search-cache miss.
-    if sparse_vector is None:
-        sparse_vector = await cache.get_sparse_embedding(query)
-        if sparse_vector is None:
-            sparse_vector = await sparse_embeddings.aembed_query(query)
-            await cache.store_sparse_embedding(query, sparse_vector)
+    sparse_vector = await _ensure_sparse_vector(
+        query, sparse_vector, cache=cache, sparse_embeddings=sparse_embeddings
+    )
 
     # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
