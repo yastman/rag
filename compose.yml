@@ -142,6 +142,7 @@ services:
     build:
       context: ./services/docling
       dockerfile: Dockerfile
+    profiles: ["ingest", "full"]
     restart: unless-stopped
     logging: *default-logging
     # Docling writes temporary files and HuggingFace caches at runtime.

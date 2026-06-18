@@ -83,7 +83,8 @@ make docker-ingest-up
 make docker-ps
 curl -fsS http://localhost:6333/readyz
 curl -fsS http://localhost:8000/health
-curl -fsS http://localhost:5001/health
+# Optional: Docling (only if started with make local-up-ingest or --profile ingest)
+# curl -fsS http://localhost:5001/health
 ```
 
 Bot environment preflight (checks .env, token validity, port binding):
