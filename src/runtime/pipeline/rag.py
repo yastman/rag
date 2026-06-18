@@ -107,6 +107,18 @@ class _RetrievalFilterPlan:
     sparse_weight: float
 
 
+@dataclass
+class _RetrievalOutcome:
+    results: list[dict[str, Any]]
+    search_meta: dict[str, Any]
+    colbert_search_used: bool
+    final_filters: dict[str, Any] | None
+    initial_results_count: int
+    qdrant_search_attempts: int
+    retrieval_relaxed_from_topic_filter: bool
+    retrieval_relax_stage: str | None
+
+
 def _find_missing_evidence_constraints(
     query: str,
     documents: list[dict[str, Any]],
@@ -549,6 +561,100 @@ async def _cache_check(
     }
 
 
+async def _retrieve_with_relaxation(
+    *,
+    qdrant: Any,
+    dense_vector: list[float],
+    sparse_vector: Any,
+    colbert_query: list[list[float]] | None,
+    plan: _RetrievalFilterPlan,
+    top_k: int,
+) -> _RetrievalOutcome:
+    """Run initial retrieval and up to two topic-filter relaxation stages."""
+    active_filters = plan.active_filters
+    relaxed_filters = plan.relaxed_filters
+    base_filters = plan.base_filters
+    dense_weight, sparse_weight = plan.dense_weight, plan.sparse_weight
+
+    colbert_search_used = False
+    qdrant_search_attempts = 0
+    retrieval_relaxed_from_topic_filter = False
+    retrieval_relax_stage: str | None = None
+
+    if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
+        record_pipeline_event("colbert_rerank_attempted")
+
+    results, search_meta, colbert_used = await _run_initial_retrieval(
+        qdrant=qdrant,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        colbert_query=colbert_query,
+        filters=active_filters,
+        top_k=top_k,
+        dense_weight=dense_weight,
+        sparse_weight=sparse_weight,
+    )
+    colbert_search_used = colbert_search_used or colbert_used
+    qdrant_search_attempts += 1
+    initial_results_count = len(results)
+    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+
+    if active_filters and len(results) < 3 and active_filters != relaxed_filters:
+        record_pipeline_event("topic_filter_fallback")
+        retrieval_relaxed_from_topic_filter = True
+        fallback_filters = relaxed_filters if relaxed_filters is not None else None
+        if plan.prefer_faq_doc_type:
+            retrieval_relax_stage = (
+                "topic_and_doc_type_to_topic"
+                if fallback_filters is not None
+                else "topic_and_doc_type_to_none"
+            )
+        else:
+            retrieval_relax_stage = "topic_to_user_filters" if fallback_filters else "topic_to_none"
+        results, search_meta, colbert_used = await _run_relaxed_retrieval(
+            qdrant=qdrant,
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            colbert_query=colbert_query,
+            filters=fallback_filters,
+            top_k=top_k,
+            dense_weight=dense_weight,
+            sparse_weight=sparse_weight,
+        )
+        colbert_search_used = colbert_search_used or colbert_used
+        qdrant_search_attempts += 1
+        final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
+
+    if relaxed_filters is not None and len(results) < 3 and final_filters != base_filters:
+        retrieval_relax_stage = (
+            "topic_to_user_filters" if base_filters is not None else "topic_to_none"
+        )
+        results, search_meta, colbert_used = await _run_relaxed_retrieval(
+            qdrant=qdrant,
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            colbert_query=colbert_query,
+            filters=base_filters,
+            top_k=top_k,
+            dense_weight=dense_weight,
+            sparse_weight=sparse_weight,
+        )
+        colbert_search_used = colbert_search_used or colbert_used
+        qdrant_search_attempts += 1
+        final_filters = dict(base_filters) if isinstance(base_filters, dict) else None
+
+    return _RetrievalOutcome(
+        results=results,
+        search_meta=search_meta,
+        colbert_search_used=colbert_search_used,
+        final_filters=final_filters,
+        initial_results_count=initial_results_count,
+        qdrant_search_attempts=qdrant_search_attempts,
+        retrieval_relaxed_from_topic_filter=retrieval_relaxed_from_topic_filter,
+        retrieval_relax_stage=retrieval_relax_stage,
+    )
+
+
 async def _ensure_sparse_vector(
     query: str,
     sparse_vector: Any,
@@ -708,19 +814,9 @@ async def _hybrid_retrieve(
         dense_vector = []
 
     # Step 1: Compute retrieval filters before touching the search cache.
-    colbert_search_used = False
     plan = _compute_retrieval_filters(query, filters, topic_hint)
-    active_filters = plan.active_filters
-    relaxed_filters = plan.relaxed_filters
-    base_filters = plan.base_filters
     initial_filters = plan.initial_filters
-    final_filters = plan.final_filters
-    prefer_faq_doc_type = plan.prefer_faq_doc_type
     dense_weight, sparse_weight = plan.dense_weight, plan.sparse_weight
-    initial_results_count: int | None = None
-    retrieval_relaxed_from_topic_filter = False
-    retrieval_relax_stage: str | None = None
-    qdrant_search_attempts = 0
 
     start = time.perf_counter()
 
@@ -744,65 +840,22 @@ async def _hybrid_retrieve(
     )
 
     # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
-    if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
-        record_pipeline_event("colbert_rerank_attempted")
-    results, search_meta, colbert_used = await _run_initial_retrieval(
+    outcome = await _retrieve_with_relaxation(
         qdrant=qdrant,
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
         colbert_query=colbert_query,
-        filters=active_filters,
+        plan=plan,
         top_k=top_k,
-        dense_weight=dense_weight,
-        sparse_weight=sparse_weight,
     )
-    colbert_search_used = colbert_search_used or colbert_used
-    qdrant_search_attempts += 1
-    initial_results_count = len(results)
-
-    if active_filters and len(results) < 3 and active_filters != relaxed_filters:
-        record_pipeline_event("topic_filter_fallback")
-        retrieval_relaxed_from_topic_filter = True
-        fallback_filters = relaxed_filters if relaxed_filters is not None else None
-        if prefer_faq_doc_type:
-            retrieval_relax_stage = (
-                "topic_and_doc_type_to_topic"
-                if fallback_filters is not None
-                else "topic_and_doc_type_to_none"
-            )
-        else:
-            retrieval_relax_stage = "topic_to_user_filters" if fallback_filters else "topic_to_none"
-        results, search_meta, colbert_used = await _run_relaxed_retrieval(
-            qdrant=qdrant,
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            colbert_query=colbert_query,
-            filters=fallback_filters,
-            top_k=top_k,
-            dense_weight=dense_weight,
-            sparse_weight=sparse_weight,
-        )
-        colbert_search_used = colbert_search_used or colbert_used
-        qdrant_search_attempts += 1
-        final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
-
-    if relaxed_filters is not None and len(results) < 3 and final_filters != base_filters:
-        retrieval_relax_stage = (
-            "topic_to_user_filters" if base_filters is not None else "topic_to_none"
-        )
-        results, search_meta, colbert_used = await _run_relaxed_retrieval(
-            qdrant=qdrant,
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            colbert_query=colbert_query,
-            filters=base_filters,
-            top_k=top_k,
-            dense_weight=dense_weight,
-            sparse_weight=sparse_weight,
-        )
-        colbert_search_used = colbert_search_used or colbert_used
-        qdrant_search_attempts += 1
-        final_filters = dict(base_filters) if isinstance(base_filters, dict) else None
+    results = outcome.results
+    search_meta = outcome.search_meta
+    colbert_search_used = outcome.colbert_search_used
+    final_filters = outcome.final_filters
+    initial_results_count = outcome.initial_results_count
+    qdrant_search_attempts = outcome.qdrant_search_attempts
+    retrieval_relaxed_from_topic_filter = outcome.retrieval_relaxed_from_topic_filter
+    retrieval_relax_stage = outcome.retrieval_relax_stage
 
     if not results:
         record_pipeline_event("retrieval_zero_docs")
