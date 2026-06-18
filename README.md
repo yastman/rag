@@ -190,6 +190,7 @@ Choose the path that matches your goal:
 
 | Goal | Start here |
 |---|---|
+| 5-minute product demo | [`docs/demo/5-minute-demo.md`](docs/demo/5-minute-demo.md) |
 | Review safely before running commands | [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) |
 | Run core local services | `make local-up` |
 | Prove the simplified core product path | `make local-up` then `make e2e-core-live` |
