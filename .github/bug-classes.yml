@@ -44,3 +44,8 @@ bug_classes:
     description: Kept tests imported langchain / langchain_core directly after the runtime migration off LangChain, coupling the test environment to an undeclared package
     canonical_issue: "#2619"
     guardrail: tests/contract/test_no_langchain_import_outside_archive_contract.py
+
+  - id: stale-post-arch-simplification
+    description: Service or dependency retained as a hard core dependency (compose, code, docs) after its archival was decided, leaving stale references that imply the service is still active
+    canonical_issue: "#2684"
+    guardrail: "no user-base in compose.yml; archive/user-base/ only; docs/architecture/STRUCTURE.md reflects archived status"
