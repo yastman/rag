@@ -10,7 +10,7 @@ The canonical source of truth for Compose files, profiles, service names, ports,
 
 | Profile | When You Need It |
 |---|---|
-| (default, no profile) | **Dev**: Postgres, Redis, Qdrant, BGE-M3, Docling, user-base, mini-app. **VPS**: Postgres, Redis, Qdrant, BGE-M3, user-base, bot — the minimal RAG chatbot core. |
+| (default, no profile) | **Dev**: Postgres, Redis, Qdrant, BGE-M3, Docling, mini-app. **VPS**: Postgres, Redis, Qdrant, BGE-M3, bot — the minimal RAG chatbot core. |
 | `bot` | Telegram bot runtime using the in-process LiteLLM SDK router |
 | `ingest` | Unified ingestion service |
 | `ml` | Langfuse + ClickHouse + MinIO |
@@ -40,7 +40,6 @@ For per-service build, healthcheck, and test details, see [`../../services/READM
 |---|---|---|
 | `bge-m3` | http://localhost:8000 | Dense + sparse + ColBERT embeddings |
 | `docling` | http://localhost:5001 | PDF/DOCX → markdown parsing |
-| `user-base` | http://localhost:8003 | Russian dense embeddings |
 
 ## Ingestion
 

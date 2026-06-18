@@ -184,7 +184,6 @@ services:
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       # Local embeddings (matches VPS production)
-      RETRIEVAL_DENSE_PROVIDER: bge_m3_api
       BGE_M3_URL: http://bge-m3:8000
       BGE_M3_TIMEOUT: "${BGE_M3_TIMEOUT:-120}"
       GENERATE_MAX_TOKENS: "${GENERATE_MAX_TOKENS:-2048}"
