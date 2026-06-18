@@ -21,6 +21,7 @@ import hashlib
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from src.observability import get_client, observe
@@ -92,6 +93,18 @@ _HARD_EVIDENCE_CONSTRAINTS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], 
     ("airport", ("аэропорт", "airport"), ("аэропорт", "airport")),
     ("helipad", ("вертол", "helipad", "helicopter"), ("вертол", "helipad", "helicopter")),
 )
+
+
+@dataclass(frozen=True)
+class _RetrievalFilterPlan:
+    active_filters: dict[str, Any] | None
+    relaxed_filters: dict[str, Any] | None
+    base_filters: dict[str, Any] | None
+    initial_filters: dict[str, Any] | None
+    final_filters: dict[str, Any] | None
+    prefer_faq_doc_type: bool
+    dense_weight: float
+    sparse_weight: float
 
 
 def _find_missing_evidence_constraints(
@@ -536,6 +549,47 @@ async def _cache_check(
     }
 
 
+def _compute_retrieval_filters(
+    query: str,
+    filters: dict[str, Any] | None,
+    topic_hint: str | None,
+) -> _RetrievalFilterPlan:
+    """Build the filter variants and RRF weights used by hybrid retrieval."""
+    normalized_query = query.strip().lower()
+    query_word_count = len(normalized_query.split()) if normalized_query else 0
+    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
+
+    base_filters = dict(filters) if isinstance(filters, dict) and filters else None
+    topic_filters = dict(base_filters or {})
+    if topic_hint:
+        topic_filters["topic"] = topic_hint
+
+    active_filters = dict(topic_filters) if topic_filters else None
+    relaxed_filters = dict(base_filters) if base_filters else None
+    initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+
+    dense_weight, sparse_weight = _new_query_preprocessor().get_rrf_weights(query)
+
+    if prefer_faq_doc_type and topic_hint:
+        active_filters = dict(topic_filters)
+        active_filters["doc_type"] = "faq"
+        relaxed_filters = dict(topic_filters) if topic_filters else None
+        initial_filters = dict(active_filters)
+        final_filters = dict(active_filters)
+
+    return _RetrievalFilterPlan(
+        active_filters=active_filters,
+        relaxed_filters=relaxed_filters,
+        base_filters=base_filters,
+        initial_filters=initial_filters,
+        final_filters=final_filters,
+        prefer_faq_doc_type=prefer_faq_doc_type,
+        dense_weight=dense_weight,
+        sparse_weight=sparse_weight,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Step 2: Hybrid retrieve
 # ---------------------------------------------------------------------------
@@ -587,29 +641,18 @@ async def _hybrid_retrieve(
 
     # Step 1: Compute retrieval filters before touching the search cache.
     colbert_search_used = False
-    normalized_query = query.strip().lower()
-    query_word_count = len(normalized_query.split()) if normalized_query else 0
-    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
-    base_filters = dict(filters) if isinstance(filters, dict) and filters else None
-    topic_filters = dict(base_filters or {})
-    if topic_hint:
-        topic_filters["topic"] = topic_hint
-
-    active_filters = dict(topic_filters) if topic_filters else None
-    relaxed_filters = dict(base_filters) if base_filters else None
-    initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
-    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+    plan = _compute_retrieval_filters(query, filters, topic_hint)
+    active_filters = plan.active_filters
+    relaxed_filters = plan.relaxed_filters
+    base_filters = plan.base_filters
+    initial_filters = plan.initial_filters
+    final_filters = plan.final_filters
+    prefer_faq_doc_type = plan.prefer_faq_doc_type
+    dense_weight, sparse_weight = plan.dense_weight, plan.sparse_weight
     initial_results_count: int | None = None
     retrieval_relaxed_from_topic_filter = False
     retrieval_relax_stage: str | None = None
     qdrant_search_attempts = 0
-    dense_weight, sparse_weight = _new_query_preprocessor().get_rrf_weights(query)
-    if prefer_faq_doc_type and topic_hint:
-        active_filters = dict(topic_filters)
-        active_filters["doc_type"] = "faq"
-        relaxed_filters = dict(topic_filters) if topic_filters else None
-        initial_filters = dict(active_filters)
-        final_filters = dict(active_filters)
 
     start = time.perf_counter()
 
