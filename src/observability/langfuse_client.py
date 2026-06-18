@@ -97,7 +97,9 @@ except Exception as _e:
         def __init__(self, *args, **kwargs):
             raise _LANGFUSE_IMPORT_ERROR
 
-    def _real_observe(*args, **kwargs):
+    def _real_observe(
+        *args, **kwargs
+    ):  # dead-code-false-positive — assigned to `observe` public export at module level (observe = _real_observe)
         """No-op decorator factory."""
 
         def decorator(func):
@@ -654,7 +656,7 @@ def flush_langfuse() -> None:
         _langfuse_client.flush()
 
 
-def traced_pipeline(
+def traced_pipeline(  # dead-code-false-positive — called via telegram_bot/observability.py and src/observability/__init__.py re-exports; used in tests/smoke/test_langgraph_smoke.py
     *,
     session_id: str,
     user_id: str,

@@ -21,7 +21,9 @@ from __future__ import annotations
 from .services.error_utils import walk_traceback_frames
 
 
-def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
+def _is_post_pipeline_cleanup_error(
+    exc: Exception,
+) -> bool:  # dead-code-false-positive — called via telegram_bot/bot.py delegating wrapper
     """Best-effort detection for cleanup failures after graph nodes completed.
 
     LangGraph checkpointer/storage errors may surface during Pregel loop __aexit__
@@ -58,7 +60,9 @@ def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
     return False
 
 
-def _is_checkpointer_runtime_error(exc: Exception) -> bool:
+def _is_checkpointer_runtime_error(
+    exc: Exception,
+) -> bool:  # dead-code-false-positive — called via telegram_bot/bot.py delegating wrapper
     """Detect runtime checkpointer/storage failures in text agent path."""
     message = str(exc).lower()
     checkpointer_markers = (

@@ -108,7 +108,7 @@ class NativeDoclingAdapter(DoclingClient):
             self._chunker = HybridChunker(max_tokens=self._max_tokens, merge_peers=True)
         return self._chunker
 
-    def chunk_file_sync(
+    def chunk_file_sync(  # dead-code-false-positive — called via src/ingestion/unified/targets/qdrant_hybrid_target.py
         self,
         file_path: Path,
         contextualize: bool = True,
