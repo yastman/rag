@@ -549,6 +549,57 @@ async def _cache_check(
     }
 
 
+async def _lookup_search_cache(
+    query: str,
+    dense_vector: list[float],
+    initial_filters: dict[str, Any] | None,
+    *,
+    cache: Any,
+    colbert_query: list[list[float]] | None,
+    top_k: int,
+    latency_stages: dict[str, float],
+) -> dict[str, Any] | None:
+    """Return a cached retrieval payload on hit, else None. Emits span on hit."""
+    start = time.perf_counter()
+    retrieval_cfg: dict = {"top_k": top_k}
+    cached_results = await cache.get_search_results(
+        dense_vector, initial_filters, retrieval_config=retrieval_cfg
+    )
+    if cached_results is None:
+        return None
+
+    latency = time.perf_counter() - start
+    logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
+    cached_ctx = _build_retrieved_context(cached_results)
+    get_client().update_current_span(
+        output={
+            "results_count": len(cached_results),
+            "search_cache_hit": True,
+            "duration_ms": round(latency * 1000, 1),
+            "initial_filters": initial_filters,
+            "final_filters": initial_filters,
+            "eval_query": query[:2000],
+            "eval_docs": "\n\n".join(
+                f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in cached_ctx
+            ),
+        }
+    )
+    return {
+        "documents": cached_results,
+        "search_results_count": len(cached_results),
+        "search_cache_hit": True,
+        "query_embedding": dense_vector,
+        "latency_stages": {**latency_stages, "retrieve": latency},
+        "retrieval_backend_error": False,
+        "retrieval_error_type": None,
+        "retrieved_context": cached_ctx,
+        "rerank_applied": False,
+        "colbert_query": colbert_query,
+        "initial_filters": initial_filters,
+        "final_filters": initial_filters,
+    }
+
+
 def _compute_retrieval_filters(
     query: str,
     filters: dict[str, Any] | None,
@@ -658,41 +709,17 @@ async def _hybrid_retrieve(
 
     # Step 2: Check search cache
     _retrieval_cfg: dict = {"top_k": top_k}
-    cached_results = await cache.get_search_results(
-        dense_vector, initial_filters, retrieval_config=_retrieval_cfg
+    cached_payload = await _lookup_search_cache(
+        query,
+        dense_vector,
+        initial_filters,
+        cache=cache,
+        colbert_query=colbert_query,
+        top_k=top_k,
+        latency_stages=latency_stages,
     )
-    if cached_results is not None:
-        latency = time.perf_counter() - start
-        logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
-        cached_ctx = _build_retrieved_context(cached_results)
-        lf.update_current_span(
-            output={
-                "results_count": len(cached_results),
-                "search_cache_hit": True,
-                "duration_ms": round(latency * 1000, 1),
-                "initial_filters": initial_filters,
-                "final_filters": initial_filters,
-                "eval_query": query[:2000],
-                "eval_docs": "\n\n".join(
-                    f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
-                    for d in cached_ctx
-                ),
-            }
-        )
-        return {
-            "documents": cached_results,
-            "search_results_count": len(cached_results),
-            "search_cache_hit": True,
-            "query_embedding": dense_vector,
-            "latency_stages": {**latency_stages, "retrieve": latency},
-            "retrieval_backend_error": False,
-            "retrieval_error_type": None,
-            "retrieved_context": cached_ctx,
-            "rerank_applied": False,
-            "colbert_query": colbert_query,
-            "initial_filters": initial_filters,
-            "final_filters": initial_filters,
-        }
+    if cached_payload is not None:
+        return cached_payload
 
     # Step 3: Get sparse embedding only after a confirmed search-cache miss.
     if sparse_vector is None:
