@@ -424,6 +424,99 @@ async def _chat_create_with_optional_name(
         return await create_fn(**kwargs)
 
 
+def _build_streaming_request(
+    llm_messages: list[dict[str, str]],
+    config: Any,
+    lf_client: Any | None,
+    sanitize_response: Callable[[str], str] | None,
+) -> GenerationRequest:
+    """Build a GenerationRequest from llm_messages when no request is provided."""
+    query = ""
+    if llm_messages:
+        last_msg = llm_messages[-1]
+        query = (
+            last_msg.get("content", "")
+            if isinstance(last_msg, dict)
+            else getattr(last_msg, "content", "")
+        )
+        if "Вопрос:" in query:
+            parts = query.split("Вопрос:")
+            if len(parts) > 1:
+                query = parts[1].split("\n")[0].strip()
+    return GenerationRequest(
+        query=query,
+        documents=[],
+        config=config,
+        extra_kwargs={
+            "lf_client": lf_client,
+            "sanitize_response": sanitize_response,
+        },
+    )
+
+
+async def _handle_stream_error(
+    message: Any,
+    accumulated: str,
+    sanitize_response: Callable[[str], str] | None,
+) -> None:
+    """Deliver partial stream on error; raise StreamingPartialDeliveryError if text exists.
+
+    Returns normally (without raising) when accumulated is empty so the caller
+    can re-raise the original exception with a bare ``raise``.
+    """
+    if not accumulated:
+        return
+    final_text = sanitize_response(accumulated) if sanitize_response else accumulated
+    sent_msg = None
+    with contextlib.suppress(Exception):
+        sent_msg = await message.answer(
+            format_answer_html(final_text),
+            parse_mode="HTML",
+            reply_parameters=build_reply_parameters(message, getattr(message, "text", "") or ""),
+        )
+    if sent_msg is not None:
+        record_langfuse_response_output(final_text, 1)
+    raise StreamingPartialDeliveryError(sent_msg, final_text) from None
+
+
+async def _deliver_final_message(message: Any, final_text: str) -> Any:
+    """Send the final streaming message; fall back to plain text on HTML failure."""
+    reply_parameters = build_reply_parameters(message, getattr(message, "text", "") or "")
+    try:
+        return await message.answer(
+            format_answer_html(final_text),
+            parse_mode="HTML",
+            reply_parameters=reply_parameters,
+        )
+    except Exception:
+        try:
+            return await message.answer(final_text, reply_parameters=reply_parameters)
+        except Exception:
+            logger.warning("Failed to send final streaming message")
+            return None
+
+
+def _extract_stream_metadata(
+    metadata_out: dict[str, Any],
+    config: Any,
+) -> tuple[str, float, float | None, dict[str, int] | None, int | None]:
+    """Extract model, timing, and token fields from stream metadata_out."""
+    actual_model: str = metadata_out.get("llm_provider_model", config.llm_model)
+    ttft_ms: float = metadata_out.get("llm_ttft_ms", 0.0)
+    stream_only_ttft_ms: float | None = metadata_out.get("llm_stream_only_ttft_ms")
+    usage_details: dict[str, int] | None = metadata_out.get("usage_details")
+    completion_tokens: int | None = metadata_out.get("token_usage", {}).get("completion_tokens")
+    if completion_tokens is None and usage_details:
+        completion_tokens = usage_details.get("output")
+    return actual_model, ttft_ms, stream_only_ttft_ms, usage_details, completion_tokens
+
+
+def _make_draft_id(chat_id: int) -> int:
+    """Return a positive draft_id unique to this chat and moment."""
+    raw = abs(hash(f"{chat_id}:{time.monotonic_ns()}")) % (2**31)
+    return raw if raw != 0 else 1
+
+
 async def _generate_streaming(
     llm: Any,
     config: Any,
@@ -442,34 +535,13 @@ async def _generate_streaming(
     Sends draft updates as chunks arrive, then finalizes with message.answer().
     """
     if request is None:
-        query = ""
-        if llm_messages:
-            last_msg = llm_messages[-1]
-            query = (
-                last_msg.get("content", "")
-                if isinstance(last_msg, dict)
-                else getattr(last_msg, "content", "")
-            )
-            if "Вопрос:" in query:
-                parts = query.split("Вопрос:")
-                if len(parts) > 1:
-                    query = parts[1].split("\n")[0].strip()
-        request = GenerationRequest(
-            query=query,
-            documents=[],
-            config=config,
-            extra_kwargs={
-                "lf_client": lf_client,
-                "sanitize_response": sanitize_response,
-            },
-        )
+        request = _build_streaming_request(llm_messages, config, lf_client, sanitize_response)
 
     accumulated = ""
     last_draft = 0.0
     chat_id = message.chat.id
     bot = message.bot
-    draft_id = abs(hash(f"{chat_id}:{time.monotonic_ns()}")) % (2**31) or 1
-    sent_msg = None
+    draft_id = _make_draft_id(chat_id)
 
     metadata_out: dict[str, Any] = {}
     if langfuse_prompt is not None and "lf_client" not in request.extra_kwargs:
@@ -483,59 +555,25 @@ async def _generate_streaming(
             if now - last_draft >= _DRAFT_INTERVAL:
                 with contextlib.suppress(Exception):
                     await bot.send_message_draft(
-                        chat_id=chat_id,
-                        draft_id=draft_id,
-                        text=accumulated,
+                        chat_id=chat_id, draft_id=draft_id, text=accumulated
                     )
                 last_draft = now
     except Exception:
-        if accumulated:
-            final_text = sanitize_response(accumulated) if sanitize_response else accumulated
-            sent_msg = None
-            with contextlib.suppress(Exception):
-                sent_msg = await message.answer(
-                    format_answer_html(final_text),
-                    parse_mode="HTML",
-                    reply_parameters=build_reply_parameters(
-                        message,
-                        getattr(message, "text", "") or "",
-                    ),
-                )
-            if sent_msg is not None:
-                record_langfuse_response_output(final_text, 1)
-            raise StreamingPartialDeliveryError(sent_msg, final_text) from None
+        await _handle_stream_error(message, accumulated, sanitize_response)
         raise
 
     if not accumulated:
         raise ValueError("Streaming produced empty response")
 
     final_text = sanitize_response(accumulated) if sanitize_response else accumulated
-    reply_parameters = build_reply_parameters(message, getattr(message, "text", "") or "")
-
-    try:
-        sent_msg = await message.answer(
-            format_answer_html(final_text),
-            parse_mode="HTML",
-            reply_parameters=reply_parameters,
-        )
-    except Exception:
-        try:
-            sent_msg = await message.answer(final_text, reply_parameters=reply_parameters)
-        except Exception:
-            logger.warning("Failed to send final streaming message")
-            sent_msg = None
+    sent_msg = await _deliver_final_message(message, final_text)
 
     if sent_msg is not None:
         record_langfuse_response_output(final_text, 1)
 
-    actual_model = metadata_out.get("llm_provider_model", config.llm_model)
-    ttft_ms = metadata_out.get("llm_ttft_ms", 0.0)
-    stream_only_ttft_ms = metadata_out.get("llm_stream_only_ttft_ms")
-    usage_details = metadata_out.get("usage_details")
-
-    completion_tokens = metadata_out.get("token_usage", {}).get("completion_tokens")
-    if completion_tokens is None and usage_details:
-        completion_tokens = usage_details.get("output")
+    actual_model, ttft_ms, stream_only_ttft_ms, usage_details, completion_tokens = (
+        _extract_stream_metadata(metadata_out, config)
+    )
 
     return (
         final_text,
