@@ -819,6 +819,9 @@ local-up:  ## Start local Docker services (bot runs via make run-bot)
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_SERVICES)
 	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
 
+local-service-health: ## Check health of local services: Qdrant, Redis, BGE-M3, Docling
+	@bash scripts/check_services.sh
+
 local-up-ingest:  ## Start local services + docling for ingestion workflows
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_ALL_SERVICES)
 	@echo "$(GREEN)✓ Local services + docling started$(NC)"
