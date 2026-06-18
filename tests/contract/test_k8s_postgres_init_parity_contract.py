@@ -52,6 +52,8 @@ SYNCED_SCRIPTS = (
 
 def _load_configmap() -> dict:
     """Parse the postgres-init ConfigMap as YAML."""
+    if not K8S_CONFIGMAP.exists():
+        pytest.skip("archive/k8s removed (#2791); k8s ConfigMap parity no longer enforced")
     with open(K8S_CONFIGMAP, encoding="utf-8") as f:
         return yaml.safe_load(f)
 

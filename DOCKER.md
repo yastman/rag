@@ -41,7 +41,7 @@ Optional profiles add scoped services:
 | `bot` | `bot` | Core bot path |
 | `ingest` | `ingestion`, `docling` | Unified ingestion + Docling parser |
 | `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` | Optional Langfuse observability |
-| `obs` | `loki`, `promtail`, `alertmanager` | Archived — see `archive/obs/` |
+| `obs` | `loki`, `promtail`, `alertmanager` | Archived — removed in #2791 |
 | `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
 | `full` | all profile-gated services | |
 
@@ -52,7 +52,7 @@ Optional profiles add scoped services:
 - `ml-local` (BGE-M3 local inference) — `uv sync --extra ml-local` (adds `torch`, `FlagEmbedding`, `sentence-transformers`, `scipy`).
 - `ml` (Langfuse observability stack) — pure Docker containers; no root Python extras required.
 - `obs` (Loki/Promtail/Alertmanager) — pure Docker containers; no root Python extras required.
-- `voice` — archived (ARCH-02); voice agent ran from `archive/api/`; no active Python extras for root project.
+- `voice` — archived (ARCH-02); voice agent and RAG API removed in #2791; no active Python extras for root project.
 
 ### VPS default runtime
 
@@ -119,7 +119,7 @@ still need to be throwaway/dev-only:
 | Loki | `http://localhost:3100` |
 | Alertmanager | `http://localhost:9093` |
 
-> Mini App frontend/API is archived under `archive/mini_app/` and no longer a required runtime surface.
+> Mini App frontend/API is removed from the repo (#2791) and no longer a required runtime surface.
 
 ## Required Environment Variables
 
@@ -143,7 +143,7 @@ still need to be throwaway/dev-only:
 `telegram_bot/pyproject.toml` and `telegram_bot/uv.lock`. The root `uv.lock`
 does not define the bot image dependency set.
 
-### ML profile (archived — see `archive/obs/` and `archive/api/`)
+### ML profile (archived — Langfuse / observability surfaces)
 
 - `NEXTAUTH_SECRET`
 - `SALT`
@@ -164,7 +164,7 @@ Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in 
 | `bot` | `telegram-bot` |
 | `ingestion` | `ingestion` |
 
-The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution. Kubernetes manifests under `archive/k8s/` additionally hard-code the `telegram-bot` identity.
+The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution.
 
 To override, export `OTEL_SERVICE_NAME` in the shell or set it in `.env` before starting services:
 
@@ -331,7 +331,7 @@ Never remove `vps_qdrant_data`, `vps_postgres_data`, `vps_redis_data`, or
 
 ## Internal K3s Images
 
-- Kubernetes manifests under `archive/k8s/` use versioned GitHub Container Registry images instead of local `rag/*:latest` tags.
+- Kubernetes manifests (removed in #2791) used versioned GitHub Container Registry images instead of local `rag/*:latest` tags.
 - Canonical image names:
   - `ghcr.io/yastman/rag-bot`
   - `ghcr.io/yastman/rag-ingestion`
@@ -432,4 +432,4 @@ curl -s http://localhost:6333/collections/gdrive_documents_bge | python3 -m json
 - Images are pinned by tag+digest in compose files; update pins explicitly.
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
 - Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development requires Python 3.12+ (`uv` environment; see [Python matrix](docs/LOCAL-DEVELOPMENT.md#7-python-runtime-note)).
-- The Mini App frontend/runtime is archived under `archive/mini_app/`; its nginx contract is preserved there for reference, but it is not a required runtime surface.
+- The Mini App frontend/runtime was removed from the repo in #2791; it is not a required runtime surface.

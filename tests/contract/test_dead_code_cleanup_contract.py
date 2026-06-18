@@ -34,6 +34,8 @@ REMOVED_SYMBOLS = {
 
 
 def _function_names(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
     tree = ast.parse(path.read_text())
     return {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
 

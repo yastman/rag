@@ -72,13 +72,11 @@ simplification.
 ## Local Overrides
 
 - [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
-- [`archive/k8s/AGENTS.override.md`](archive/k8s/AGENTS.override.md)
 - [`src/ingestion/unified/AGENTS.override.md`](src/ingestion/unified/AGENTS.override.md)
 - [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)
 - [`services/AGENTS.override.md`](services/AGENTS.override.md)
 - [`services/bge-m3-api/AGENTS.override.md`](services/bge-m3-api/AGENTS.override.md)
 - [`services/docling/AGENTS.override.md`](services/docling/AGENTS.override.md)
-- [`archive/mini_app/frontend/src/AGENTS.override.md`](archive/mini_app/frontend/src/AGENTS.override.md)
 
 ## Safety
 

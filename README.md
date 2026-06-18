@@ -71,7 +71,7 @@ Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, and ingest
 | Stateful AI orchestration | Repo-native imperative assistant pipeline routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization; legacy `telegram_bot/graph/` factories are compatibility facades | [`src/runtime/pipeline/assistant_pipeline.py`](src/runtime/pipeline/assistant_pipeline.py) |
 | Typed workflow state | One state contract tracks query, routing, retrieval, filters, cache, scoring, policy, latency, and response metadata | [`src/core/contracts.py`](src/core/contracts.py) |
 | Assistant core entrypoint | Direct Python calls use `run_assistant_request()` and return `AssistantResult` for E2E and adapters | [`src/core/assistant.py`](src/core/assistant.py) |
-| Optional runtime adapters | Telegram is the production adapter; voice, API, and Mini App surfaces are archived optional surfaces | [`telegram_bot/`](telegram_bot/), [`archive/voice/`](archive/voice/), [`archive/api/`](archive/api/), [`archive/mini_app/`](archive/mini_app/) |
+| Optional runtime adapters | Telegram is the production adapter; voice, API, and Mini App surfaces are removed from the repo | [`telegram_bot/`](telegram_bot/) |
 | Self-hosted retrieval | BGE-M3 + Qdrant support dense, sparse, and ColBERT-style retrieval paths | [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) |
 | Deterministic ingestion | CocoIndex and Docling parse, chunk, embed, upsert/delete, retry, and track DLQ state | [`docs/INGESTION.md`](docs/INGESTION.md) |
 | Business tool actions | CRM/domain tools can create workflow actions with HITL confirmation for sensitive writes | [`telegram_bot/agents/`](telegram_bot/agents/) |
@@ -225,7 +225,7 @@ Docker Compose is the primary local/VPS runtime. Profiles split the system by op
 | `bot` | Telegram bot |
 | `ingest` | unified ingestion service |
 | `ml` | Langfuse, ClickHouse, MinIO, Redis Langfuse, worker |
-| `obs` | Loki, Promtail, Alertmanager (archived — see `archive/obs/`) |
+| `obs` | Loki, Promtail, Alertmanager (archived — removed in #2791) |
 | `voice` | RAG API, LiveKit, SIP, voice agent |
 | `full` | all profile-gated services |
 
@@ -246,9 +246,7 @@ High-level entry points:
 | Assistant core entrypoint | [`src/core/assistant.py`](src/core/assistant.py) |
 | Telegram adapter / graph compat facades | [`telegram_bot/graph/`](telegram_bot/graph/) |
 | Business/domain tools | [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) |
-| RAG API and voice (archived) | [`archive/api/`](archive/api/) and [`archive/voice/`](archive/voice/) |
 | Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
-| Mini App | [`archive/mini_app/`](archive/mini_app/) |
 | Runtime | [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), [`DOCKER.md`](DOCKER.md) |
 
 ## Validation
@@ -277,7 +275,7 @@ and budget are available.
 - Monitoring services are local/dev unless production evidence is added.
 - Langfuse, OTel, trace validation, voice, Mini App, and k8s are not required for the core proof.
 - HITL confirmation protects CRM/write workflows, not every possible state transition.
-- The Mini App is archived under `archive/mini_app/` and is not part of the required runtime or CI path.
+- The Mini App and voice adapters were removed from the repo in #2791.
 - Some UI/i18n strings are still being migrated into Fluent bundles.
 - Domain-specific names, prompts, and catalog fields remain in the current implementation and should be replaced for a different customer domain.
 
