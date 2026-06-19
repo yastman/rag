@@ -76,7 +76,7 @@ Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, and ingest
 | Deterministic ingestion | CocoIndex and Docling parse, chunk, embed, upsert/delete, retry, and track DLQ state | [`docs/INGESTION.md`](docs/INGESTION.md) |
 | Business tool actions | CRM/domain tools can create workflow actions with HITL confirmation for sensitive writes | [`telegram_bot/agents/`](telegram_bot/agents/) |
 | Cost and latency controls | Redis caches semantic answers, embeddings, search results, rerank results, and extraction outputs | [`telegram_bot/integrations/cache.py`](telegram_bot/integrations/cache.py) |
-| Observability | Structured product logs are required; Langfuse traces, trace validation, and local monitoring are optional diagnostics | [`src/utils/product_events.py`](src/utils/product_events.py) |
+| Observability | Structured product logs are required; Langfuse traces are removed (#2844); local monitoring is optional | [`src/utils/product_events.py`](src/utils/product_events.py) |
 | Compose-first runtime | Docker Compose profiles cover core services, bot, ingestion, voice, ML observability, monitoring, and full stack | [`DOCKER.md`](DOCKER.md) |
 
 ## Why This Is More Than A Bot
@@ -224,7 +224,7 @@ Docker Compose is the primary local/VPS runtime. Profiles split the system by op
 | default/core | PostgreSQL, Redis, Qdrant, BGE-M3, Docling |
 | `bot` | Telegram bot |
 | `ingest` | unified ingestion service |
-| `ml` | Langfuse, ClickHouse, MinIO, Redis Langfuse, worker |
+| `ml` | *(removed — see #2844)* |
 | `obs` | Loki, Promtail, Alertmanager (archived — removed in #2791) |
 | `voice` | RAG API, LiveKit, SIP, voice agent |
 | `full` | all profile-gated services |

@@ -40,7 +40,7 @@ Optional profiles add scoped services:
 | --- | --- | --- |
 | `bot` | `bot` | Core bot path |
 | `ingest` | `ingestion`, `docling` | Unified ingestion + Docling parser |
-| `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` | Optional Langfuse observability |
+| `ml` | *(removed — see #2844)* | Langfuse stack dropped |
 | `obs` | `loki`, `promtail`, `alertmanager` | Archived — removed in #2791 |
 | `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
 | `full` | all profile-gated services | |
@@ -50,7 +50,7 @@ Optional profiles add scoped services:
 - `bot` — uses `telegram_bot/pyproject.toml` and its own `telegram_bot/uv.lock`; root extras not used.
 - `ingest` — `uv sync --extra ingest` (adds `docling`, `cocoindex`, `fastembed`, `pymupdf`). `Dockerfile.ingestion` uses `--extra ingest`.
 - `ml-local` (BGE-M3 local inference) — `uv sync --extra ml-local` (adds `torch`, `FlagEmbedding`, `sentence-transformers`, `scipy`).
-- `ml` (Langfuse observability stack) — pure Docker containers; no root Python extras required.
+- `ml` (Langfuse observability stack) — removed in #2844.
 - `obs` (Loki/Promtail/Alertmanager) — pure Docker containers; no root Python extras required.
 - `voice` — archived (ARCH-02); voice agent and RAG API removed in #2791; no active Python extras for root project.
 

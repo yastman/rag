@@ -1,8 +1,7 @@
-"""src.observability package — consolidated observability helpers.
+"""src.observability package — observability helpers.
 
-Re-exports all public symbols from submodules for backwards compatibility.
-Consumers can import from ``src.observability`` (shim), ``src.observability.*``
-(new canonical paths), or any of the old ``src.observability_*.py`` shims.
+Langfuse removed (#2844). Public API stubs preserved for backwards compatibility.
+Structured product logs (src/utils/product_events.py) are the canonical observability path.
 """
 
 from src.observability.bootstrap import disable_otel_exporter, is_endpoint_reachable
@@ -35,7 +34,7 @@ from src.observability.scores import (
 )
 
 
-# Legacy aliases that callers imported from langfuse_client (now in bootstrap).
+# Legacy aliases
 _disable_otel_exporter = disable_otel_exporter
 _is_endpoint_reachable = is_endpoint_reachable
 
