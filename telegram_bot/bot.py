@@ -3980,7 +3980,6 @@ class PropertyBot:
         self.dp["pg_pool"] = self._pg_pool
         self.dp["bot_config"] = self.config
         self.dp["property_bot"] = self
-        self.dp["topic_service"] = self._topic_service
         self.dp["apartments_service"] = self._apartments_service
         self.dp["favorites_service"] = self._favorites_service
         self.dp["search_event_store"] = self._search_event_store
@@ -4216,9 +4215,6 @@ class PropertyBot:
         if self._pg_pool is not None:
             await self._pg_pool.close()
             logger.info("PostgreSQL pool closed")
-        if self._topic_redis is not None:
-            await self._topic_redis.aclose()
-            self._topic_redis = None
         if self._deeplink_redis is not None:
             await self._deeplink_redis.aclose()
             self._deeplink_redis = None
