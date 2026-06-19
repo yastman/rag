@@ -49,7 +49,7 @@ These modules have substantively equivalent implementations in both locations. T
 | `services/_retry.py` | 69 | 19 | **Re-export shim** (tg re-exports from src/) | Remove tg copy — callers already import from src/ |
 | `services/vectorizers.py` | 76 | 17 | **Re-export shim** (tg re-exports from src/) | Remove tg copy — callers already use src/ path |
 | `models/__init__.py` | 6 | 1 | **tg/ is minimal** | Remove stub; import from `src.models` |
-| `evaluation/__init__.py` (docstring-only, no logic) | 1 | 5 | **tg/ is actual code** | Move `telegram_bot/evaluation/__init__.py` content to `src/evaluation/` |
+| `evaluation/__init__.py` | 1 | 5 | **Both docstring-only** (judge removed in #386, no code) | None — already collapsed; delete tg copy |
 
 **Action:** For each, migrate internal callers from `telegram_bot/` to `src/`, then remove the duplicate.
 
@@ -77,7 +77,9 @@ These modules exist in both locations with **different implementations**, indica
 Total bytes in parallel modules: ~2.1 KB (small absolute size, but high conceptual debt).
 
 - **Shims** (clearly re-export): `phone_utils.py`, all `services/*.py` except `_retry.py` and `vectorizers.py`
-- **Duplicates** (substantively same): `__init__.py`, `models/__init__.py`, `evaluation/__init__.py` (docstring-only, no logic), `services/_retry.py` (shim), `services/vectorizers.py` (shim)
+- **Duplicates** (substantively same): `__init__.py`, `models/__init__.py`
+- **Docstring-only** (different docstrings, no logic): `evaluation/__init__.py`
+- **Shims**: `services/_retry.py`, `services/vectorizers.py`
 - **Shim chains** (no divergence): `observability_bootstrap.py`, `observability_payloads.py`, `scoring.py`
 - **Diverged** (genuine): `services/__init__.py`
 
@@ -217,7 +219,7 @@ For each module in sequence:
 7. `models/__init__.py`
 8. `services/_retry.py`
 9. `services/vectorizers.py`
-10. `evaluation/__init__.py` (docstring-only, no logic)
+10. `evaluation/__init__.py` (docstring-only — delete tg copy, nothing to migrate)
 
 **Diverged (investigate):**
 11. `observability_bootstrap.py` (audit ownership, then merge or clarify)
