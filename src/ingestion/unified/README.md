@@ -22,7 +22,7 @@ Incremental, resumable document ingestion with stable file identity and hybrid v
 |------|---------|
 | [`config.py`](./config.py) | `UnifiedConfig` — paths, Qdrant, Docling, BGE-M3/Voyage settings |
 | [`flow.py`](./flow.py) | CocoIndex flow: LocalFile source → transforms → QdrantHybridTarget |
-| [`manifest.py`](./manifest.py) | `GDriveManifest` — content-hash → stable UUID mapping (rename/move safe) |
+| [`manifest.py`](./manifest.py) | `FileManifest` — content-hash → stable UUID mapping (rename/move safe) |
 | [`qdrant_writer.py`](./qdrant_writer.py) | Batch hybrid upserts and per-file delete/replace |
 | [`state_manager.py`](./state_manager.py) | File state tracking for resume and idempotency |
 | [`colbert_backfill.py`](./colbert_backfill.py) | Backfill ColBERT multivectors for existing chunks |
