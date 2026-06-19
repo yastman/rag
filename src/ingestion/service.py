@@ -76,8 +76,8 @@ class IngestionService:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-        # Google Drive service account key path
-        self.google_service_account_key = os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
+        # Google Drive ingestion has been removed. The service no longer
+        # initialises a google_service_account_key. See issue #2835.
 
         # Qdrant client for stats
         self._qdrant_client: QdrantClient | None = None
@@ -176,46 +176,13 @@ class IngestionService:
 
         return stats
 
-    async def ingest_gdrive(self, folder_id: str) -> IngestionStats:
-        """Ingest documents from a Google Drive folder.
-
-        Requires GOOGLE_SERVICE_ACCOUNT_KEY environment variable.
-
-        Args:
-            folder_id: Google Drive folder ID
-
-        Returns:
-            IngestionStats with counts and timing
-        """
-        start_time = time.time()
-        stats = IngestionStats()
-
-        if not self.google_service_account_key:
-            stats.errors.append(
-                "GOOGLE_SERVICE_ACCOUNT_KEY environment variable not set. "
-                "Set it to the path of your service account JSON file."
-            )
-            return stats
-
-        if not await anyio.Path(self.google_service_account_key).exists():
-            stats.errors.append(
-                f"Service account key file not found: {self.google_service_account_key}"
-            )
-            return stats
-
-        if not check_cocoindex_available():
-            stats.errors.append("CocoIndex not available. Install with: pip install cocoindex")
-            return stats
-
-        # Note: CocoIndex Google Drive support would need to be added
-        # For now, return an error indicating this is not yet implemented
-        stats.errors.append(
-            "Google Drive ingestion via CocoIndex is not yet implemented. "
-            "Use the DoclingClient with direct file downloads instead."
-        )
-
-        stats.duration_seconds = time.time() - start_time
-        return stats
+    # ingest_gdrive() has been deliberately removed. Historically this service
+    # exposed an ingest_gdrive() coroutine to ingest documents directly from
+    # Google Drive using a service account key. The implementation never
+    # materialised and the stub merely returned a "not yet implemented" error.
+    # As part of cleaning up vestigial Google/GDrive support (see issue #2835),
+    # the google_service_account_key attribute and ingest_gdrive() API have
+    # been removed. Calls to this method will now result in an AttributeError.
 
     async def get_collection_stats(self) -> dict[str, Any]:
         """Get statistics for the target collection.
@@ -295,18 +262,22 @@ async def ingest_from_gdrive(
 ) -> IngestionStats:
     """Convenience function to ingest from Google Drive.
 
+    This helper previously delegated to ``IngestionService.ingest_gdrive`` to
+    ingest documents directly from a Google Drive folder. As part of issue
+    #2835, Google Drive ingestion has been removed and this function is now
+    deprecated. It will raise a ``NotImplementedError`` if called.
+
     Args:
         folder_id: Google Drive folder ID
         collection_name: Target collection name
 
     Returns:
-        IngestionStats
+        IngestionStats (never actually returned; function raises instead)
     """
-    service = IngestionService(collection_name=collection_name)
-    try:
-        return await service.ingest_gdrive(folder_id)
-    finally:
-        await service.close()
+    raise NotImplementedError(
+        "Google Drive ingestion has been removed (see issue #2835). "
+        "Use ingest_from_directory() with a local sync directory instead."
+    )
 
 
 async def get_ingestion_status(collection_name: str = "documents") -> dict[str, Any]:

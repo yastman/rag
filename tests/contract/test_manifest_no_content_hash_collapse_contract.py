@@ -1,7 +1,7 @@
 # tests/contract/test_manifest_no_content_hash_collapse_contract.py
 """Contract test: get_or_create_id must use copy-vs-rename detection (#1603).
 
-AST-based check that the implementation of ``GDriveManifest.get_or_create_id``
+AST-based check that the implementation of ``FileManifest.get_or_create_id``
 in ``manifest.py``:
 1. References ``_path_to_hash`` (or ``path_to_hash``) when deciding whether to
    reuse a file_id — i.e., the active-paths set is consulted (Option B
@@ -26,12 +26,12 @@ _FUNCTION_NAME = "get_or_create_id"
 
 
 def _get_function_source() -> str:
-    """Return the source of GDriveManifest.get_or_create_id."""
+    """Return the source of FileManifest.get_or_create_id."""
     source = MANIFEST_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name == "GDriveManifest":
+        if isinstance(node, ast.ClassDef) and node.name == "FileManifest":
             for item in node.body:
                 if isinstance(item, ast.FunctionDef) and item.name == _FUNCTION_NAME:
                     return ast.get_source_segment(source, item) or ""
@@ -44,7 +44,7 @@ def _get_function_ast() -> ast.FunctionDef | None:
     tree = ast.parse(source)
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name == "GDriveManifest":
+        if isinstance(node, ast.ClassDef) and node.name == "FileManifest":
             for item in node.body:
                 if isinstance(item, ast.FunctionDef) and item.name == _FUNCTION_NAME:
                     return item
@@ -60,10 +60,10 @@ class TestManifestNoCopyCollapse:
         assert MANIFEST_PATH.exists(), f"manifest.py not found at {MANIFEST_PATH}"
 
     def test_get_or_create_id_exists(self) -> None:
-        """GDriveManifest.get_or_create_id method must exist."""
+        """FileManifest.get_or_create_id method must exist."""
         fn = _get_function_ast()
         assert fn is not None, (
-            f"Method '{_FUNCTION_NAME}' not found in GDriveManifest in {MANIFEST_PATH}"
+            f"Method '{_FUNCTION_NAME}' not found in FileManifest in {MANIFEST_PATH}"
         )
 
     def test_function_references_path_to_hash(self) -> None:

@@ -25,7 +25,11 @@ class UnifiedConfig:
     # Paths
     sync_dir: Path = field(
         default_factory=lambda: Path(
-            os.getenv("GDRIVE_SYNC_DIR", os.path.expanduser("~/drive-sync"))
+            # Prefer neutral ``SYNC_DIR``; fall back to legacy ``GDRIVE_SYNC_DIR``
+            os.getenv(
+                "SYNC_DIR",
+                os.getenv("GDRIVE_SYNC_DIR", os.path.expanduser("~/drive-sync")),
+            )
         )
     )
     manifest_dir: Path | None = field(
@@ -41,7 +45,16 @@ class UnifiedConfig:
     )
     qdrant_api_key: str | None = field(default_factory=lambda: os.getenv("QDRANT_API_KEY"))
     collection_name: str = field(
-        default_factory=lambda: os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_bge")
+        default_factory=lambda: (
+            # Prefer neutral collection name env vars; fall back to legacy GDRIVE_COLLECTION_NAME
+            os.getenv(
+                "COLLECTION_NAME",
+                os.getenv(
+                    "UNIFIED_COLLECTION_NAME",
+                    os.getenv("GDRIVE_COLLECTION_NAME", "file_documents_bge"),
+                ),
+            )
+        )
     )
 
     # Docling
