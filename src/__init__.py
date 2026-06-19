@@ -36,11 +36,6 @@ _DEPRECATED_EXPORTS = {
         "Settings",
         "from src.config import Settings",
     ),
-    "UniversalDocumentParser": (
-        "src.ingestion",
-        "UniversalDocumentParser",
-        "from src.ingestion import UniversalDocumentParser",
-    ),
 }
 
 
