@@ -77,7 +77,6 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`INGESTION.md`](INGESTION.md) — Unified ingestion guide and troubleshooting.
 - [`GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
-- [`ALERTING.md`](ALERTING.md) — Loki/Alertmanager setup.
 - [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache troubleshooting guide.
 - [`runbooks/`](runbooks/) — Incident-specific runbooks.
 

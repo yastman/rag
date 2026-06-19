@@ -51,5 +51,4 @@ Docker Compose is the primary local and VPS runtime. The k3s/Kustomize manifests
 - `docs/LOCAL-DEVELOPMENT.md`
 - `docs/QDRANT_STACK.md`
 - `docs/INGESTION.md`
-- `docs/ALERTING.md`
 - `DOCKER.md`
