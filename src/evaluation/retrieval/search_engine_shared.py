@@ -10,6 +10,7 @@ from src.retrieval.search_engine_shared import (
     lexical_weights_to_sparse,
 )
 
+
 __all__ = [
     "AbstractSearchEngine",
     "create_engine_from_registry",
