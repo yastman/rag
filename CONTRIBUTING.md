@@ -44,3 +44,16 @@ This project and everyone participating in it is governed by our [Code of Conduc
 
 - For general questions, open a public discussion or issue.
 - For security concerns, see [`SECURITY.md`](SECURITY.md).
+
+## License headers
+
+The project uses the MIT license.  We do **not** require every source file to carry a
+license header.  SPDX headers are optional; contributors may add
+
+```text
+SPDX-License-Identifier: MIT
+```
+
+to new files if they prefer, but the absence of a header does not change the
+license.  See the root `LICENSE` file for the canonical license text.  Documenting
+this decision here ensures reviewers know that missing headers are not a defect.
