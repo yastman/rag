@@ -20,7 +20,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.config import Settings
-from src.retrieval import DBSFColBERTSearchEngine
+from src.evaluation.retrieval import DBSFColBERTSearchEngine
 
 
 def _run_dbsf_colbert() -> tuple[bool, dict[str, list[dict[str, str | float | None]]] | None]:

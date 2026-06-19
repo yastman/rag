@@ -19,7 +19,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.config import Settings
-from src.retrieval import HybridRRFSearchEngine
+from src.evaluation.retrieval import HybridRRFSearchEngine
 
 
 pytestmark = pytest.mark.requires_services

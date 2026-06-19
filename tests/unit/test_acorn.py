@@ -15,7 +15,7 @@ from qdrant_client import models
 
 from src.config.constants import AcornMode, QuantizationMode
 from src.config.settings import Settings
-from src.retrieval.search_engines import ACORN_AVAILABLE, BaselineSearchEngine
+from src.evaluation.retrieval.search_engines import ACORN_AVAILABLE, BaselineSearchEngine
 
 
 # Skip marker for tests requiring AcornSearchParams
@@ -275,7 +275,9 @@ class TestBaselineSearchEngineAcorn:
     @requires_acorn
     def test_search_with_filter_enables_acorn(self, mock_qdrant_client, mock_settings_acorn_on):
         """Test that search with filter enables ACORN in search params."""
-        with patch("src.retrieval.search_engines.QdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "src.evaluation.retrieval.search_engines.QdrantClient", return_value=mock_qdrant_client
+        ):
             engine = BaselineSearchEngine(mock_settings_acorn_on)
             engine.client = mock_qdrant_client
 
@@ -306,7 +308,9 @@ class TestBaselineSearchEngineAcorn:
     @requires_acorn
     def test_search_without_filter_no_acorn(self, mock_qdrant_client, mock_settings_acorn_on):
         """Test that search without filter does not enable ACORN."""
-        with patch("src.retrieval.search_engines.QdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "src.evaluation.retrieval.search_engines.QdrantClient", return_value=mock_qdrant_client
+        ):
             engine = BaselineSearchEngine(mock_settings_acorn_on)
             engine.client = mock_qdrant_client
 

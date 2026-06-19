@@ -9,8 +9,8 @@ import pytest
 from qdrant_client import models
 
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
-from src.retrieval.search_engine_shared import lexical_weights_to_sparse as shared_sparse
-from src.retrieval.search_engines import (
+from src.evaluation.retrieval.search_engine_shared import lexical_weights_to_sparse as shared_sparse
+from src.evaluation.retrieval.search_engines import (
     BaselineSearchEngine,
     DBSFColBERTSearchEngine,
     HybridRRFColBERTSearchEngine,
@@ -43,7 +43,7 @@ def mock_settings() -> Settings:
 
 @pytest.fixture
 def baseline_engine(mock_settings: Settings) -> BaselineSearchEngine:
-    with patch("src.retrieval.search_engines.QdrantClient"):
+    with patch("src.evaluation.retrieval.search_engines.QdrantClient"):
         engine = BaselineSearchEngine(mock_settings)
         engine.client = MagicMock()
     return engine
@@ -306,8 +306,8 @@ class TestHybridRRFEngineSearch:
     @pytest.fixture
     def hybrid_engine(self, mock_settings: Settings) -> HybridRRFSearchEngine:
         with (
-            patch("src.retrieval.search_engines.QdrantClient"),
-            patch("src.retrieval.search_engines.get_bge_m3_model"),
+            patch("src.evaluation.retrieval.search_engines.QdrantClient"),
+            patch("src.evaluation.retrieval.search_engines.get_bge_m3_model"),
         ):
             engine = HybridRRFSearchEngine(mock_settings)
             engine.client = MagicMock()
@@ -341,14 +341,14 @@ class TestHybridRRFEngineSearch:
 
 class TestEngineNames:
     def test_baseline_engine_name(self, mock_settings: Settings) -> None:
-        with patch("src.retrieval.search_engines.QdrantClient"):
+        with patch("src.evaluation.retrieval.search_engines.QdrantClient"):
             engine = BaselineSearchEngine(mock_settings)
         assert engine.get_name() == "baseline"
 
     def test_hybrid_rrf_engine_name(self, mock_settings: Settings) -> None:
         with (
-            patch("src.retrieval.search_engines.QdrantClient"),
-            patch("src.retrieval.search_engines.get_bge_m3_model"),
+            patch("src.evaluation.retrieval.search_engines.QdrantClient"),
+            patch("src.evaluation.retrieval.search_engines.get_bge_m3_model"),
         ):
             engine = HybridRRFSearchEngine(mock_settings)
         assert engine.get_name() == "hybrid_rrf"
@@ -361,26 +361,26 @@ class TestEngineNames:
 
 class TestCreateSearchEngine:
     def test_creates_baseline_for_baseline_engine_type(self, mock_settings: Settings) -> None:
-        with patch("src.retrieval.search_engines.QdrantClient"):
+        with patch("src.evaluation.retrieval.search_engines.QdrantClient"):
             engine = create_search_engine(SearchEngine.BASELINE, settings=mock_settings)
         assert isinstance(engine, BaselineSearchEngine)
 
     def test_creates_hybrid_rrf_for_hybrid_engine_type(self, mock_settings: Settings) -> None:
         with (
-            patch("src.retrieval.search_engines.QdrantClient"),
-            patch("src.retrieval.search_engines.get_bge_m3_model"),
+            patch("src.evaluation.retrieval.search_engines.QdrantClient"),
+            patch("src.evaluation.retrieval.search_engines.get_bge_m3_model"),
         ):
             engine = create_search_engine(SearchEngine.HYBRID_RRF, settings=mock_settings)
         assert isinstance(engine, HybridRRFSearchEngine)
 
     def test_uses_settings_engine_type_when_none(self, mock_settings: Settings) -> None:
         mock_settings.search_engine = SearchEngine.BASELINE
-        with patch("src.retrieval.search_engines.QdrantClient"):
+        with patch("src.evaluation.retrieval.search_engines.QdrantClient"):
             engine = create_search_engine(None, settings=mock_settings)
         assert isinstance(engine, BaselineSearchEngine)
 
     def test_returns_search_engine_instance(self, mock_settings: Settings) -> None:
-        with patch("src.retrieval.search_engines.QdrantClient"):
+        with patch("src.evaluation.retrieval.search_engines.QdrantClient"):
             engine = create_search_engine(SearchEngine.BASELINE, settings=mock_settings)
         assert engine is not None
         assert hasattr(engine, "search")
@@ -388,11 +388,11 @@ class TestCreateSearchEngine:
 
     def test_unknown_engine_type_falls_back_to_best_engine(self, mock_settings: Settings) -> None:
         with (
-            patch("src.retrieval.search_engines.QdrantClient"),
-            patch("src.retrieval.search_engines.get_bge_m3_model"),
+            patch("src.evaluation.retrieval.search_engines.QdrantClient"),
+            patch("src.evaluation.retrieval.search_engines.get_bge_m3_model"),
         ):
             engine = create_search_engine("unknown", settings=mock_settings)  # type: ignore[arg-type]
-        from src.retrieval.search_engines import HybridRRFColBERTSearchEngine
+        from src.evaluation.retrieval.search_engines import HybridRRFColBERTSearchEngine
 
         assert isinstance(engine, HybridRRFColBERTSearchEngine)
 
@@ -406,8 +406,8 @@ class TestHybridRRFColBERTSearchEngine:
     @pytest.fixture
     def colbert_engine(self, mock_settings: Settings) -> HybridRRFColBERTSearchEngine:
         with (
-            patch("src.retrieval.search_engines.QdrantClient"),
-            patch("src.retrieval.search_engines.get_bge_m3_model"),
+            patch("src.evaluation.retrieval.search_engines.QdrantClient"),
+            patch("src.evaluation.retrieval.search_engines.get_bge_m3_model"),
         ):
             engine = HybridRRFColBERTSearchEngine(mock_settings)
             engine.client = MagicMock()
@@ -415,8 +415,8 @@ class TestHybridRRFColBERTSearchEngine:
 
     def test_colbert_get_name(self, mock_settings: Settings) -> None:
         with (
-            patch("src.retrieval.search_engines.QdrantClient"),
-            patch("src.retrieval.search_engines.get_bge_m3_model"),
+            patch("src.evaluation.retrieval.search_engines.QdrantClient"),
+            patch("src.evaluation.retrieval.search_engines.get_bge_m3_model"),
         ):
             engine = HybridRRFColBERTSearchEngine(mock_settings)
         assert engine.get_name() == "hybrid_rrf_colbert"
@@ -448,7 +448,7 @@ class TestHybridRRFColBERTSearchEngine:
         mock_point.score = 0.95
         colbert_engine.client.query_points.return_value = MagicMock(points=[mock_point])
 
-        with patch("src.retrieval.search_engines.get_client", return_value=MagicMock()):
+        with patch("src.evaluation.retrieval.search_engines.get_client", return_value=MagicMock()):
             results = colbert_engine.search("test query", top_k=5)
 
         call_kwargs = colbert_engine.client.query_points.call_args[1]
@@ -467,8 +467,8 @@ class TestDBSFColBERTSearchEngine:
     @pytest.fixture
     def dbsf_engine(self, mock_settings: Settings) -> DBSFColBERTSearchEngine:
         with (
-            patch("src.retrieval.search_engines.QdrantClient"),
-            patch("src.retrieval.search_engines.get_bge_m3_model"),
+            patch("src.evaluation.retrieval.search_engines.QdrantClient"),
+            patch("src.evaluation.retrieval.search_engines.get_bge_m3_model"),
         ):
             engine = DBSFColBERTSearchEngine(mock_settings)
             engine.client = MagicMock()
@@ -476,8 +476,8 @@ class TestDBSFColBERTSearchEngine:
 
     def test_dbsf_get_name(self, mock_settings: Settings) -> None:
         with (
-            patch("src.retrieval.search_engines.QdrantClient"),
-            patch("src.retrieval.search_engines.get_bge_m3_model"),
+            patch("src.evaluation.retrieval.search_engines.QdrantClient"),
+            patch("src.evaluation.retrieval.search_engines.get_bge_m3_model"),
         ):
             engine = DBSFColBERTSearchEngine(mock_settings)
         assert engine.get_name() == "dbsf_colbert"
@@ -496,7 +496,7 @@ class TestDBSFColBERTSearchEngine:
         mock_point.score = 0.9
         dbsf_engine.client.query_points.return_value = MagicMock(points=[mock_point])
 
-        with patch("src.retrieval.search_engines.get_client", return_value=MagicMock()):
+        with patch("src.evaluation.retrieval.search_engines.get_client", return_value=MagicMock()):
             dbsf_engine.search("test query", top_k=5)
 
         call_kwargs = dbsf_engine.client.query_points.call_args[1]
@@ -522,7 +522,7 @@ class TestDBSFColBERTSearchEngine:
         mock_point.score = 0.9
         dbsf_engine.client.query_points.return_value = MagicMock(points=[mock_point])
 
-        with patch("src.retrieval.search_engines.get_client", return_value=MagicMock()):
+        with patch("src.evaluation.retrieval.search_engines.get_client", return_value=MagicMock()):
             results = dbsf_engine.search("test query", top_k=5)
 
         assert len(results) == 1

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from src.retrieval.search_engine_shared import (
+from src.evaluation.retrieval.search_engine_shared import (
     AbstractSearchEngine,
     create_engine_from_registry,
     lexical_weights_to_sparse,
