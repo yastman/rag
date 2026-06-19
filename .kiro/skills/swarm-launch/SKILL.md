@@ -56,8 +56,10 @@ Launch workers mechanically from an accepted `SWARM_PLAN`.
    - On `pass`, continue with unblocked workers.
    - On `change_required`, stop and route to `swarm-plan`.
    - On `blocked`, stop and route to user approval or recovery.
-3. Build each worker prompt with `WORKER_NAME`, `REPORT_FILE=logs/*.md`, and
-   a plain wake-up line using `[DONE]`, `[FAILED]`, or `[BLOCKED]`; include:
+3. Build each worker prompt with `WORKER_NAME`, the `{{REPORT_FILE}}` /
+   `{{STATUS_FILE}}` placeholders (substituted by the launcher), and the
+   wrapper-owned finish contract (#2820 — the worker writes its report + a
+   one-word status file and stops; it does NOT send tmux keys); include:
    - `Indexed-tool contract`: per `shared/indexed-tool-contract.md` (Code
      Indexer first for broad discovery and compact symbol tracing, CodeGraph for
      exact source-backed symbol context, `rg`/`find` only for exact bytes /
@@ -96,29 +98,28 @@ Launch workers mechanically from an accepted `SWARM_PLAN`.
      KIRO_REQUIRED_SKILLS=executing-plans,test-driven-development,verification-before-completion \
      ./scripts/launch_kiro_worker.sh worker-A logs/prompts/worker-A.md
      ```
-6. Send wake-up action via the shell tool only after the report is written; do not echo it in final text:
+6. Worker finish contract (#2820 — the launcher wrapper owns the wake-up). The
+   worker writes its Markdown report to `{{REPORT_FILE}}` and records a one-word
+   status to `{{STATUS_FILE}}`, then stops. It must NOT run `tmux send-keys`:
 
    ```bash
-   WORKER_NAME="worker-name"
-   REPORT_FILE="logs/REPORT.worker.md"
-   ORCH_TARGET="{{ORCH_TARGET}}"
-   tmux send-keys -t "$ORCH_TARGET" -l "[DONE] $WORKER_NAME $REPORT_FILE"
-   sleep 0.25
-   tmux send-keys -t "$ORCH_TARGET" C-m
+   # after the report is written to {{REPORT_FILE}}:
+   printf 'DONE\n' > "{{STATUS_FILE}}"   # or FAILED / BLOCKED
    ```
 
-   **`{{ORCH_TARGET}}` is substituted by `launch_kiro_worker.sh` at launch time**
-   from the orchestrator marker. Workers must NOT hardcode a window name and must
-   NOT re-read `.signals/orchestrator-window.json` at runtime — the marker may
-   have been refreshed by the time the wake-up runs. The launcher pins the correct
-   value at the moment of launch.
+   **`{{REPORT_FILE}}` and `{{STATUS_FILE}}` are substituted by
+   `launch_kiro_worker.sh` at launch time** (absolute canonical paths). Workers
+   must NOT hardcode paths, must NOT re-read `.signals/orchestrator-window.json`,
+   and must NOT send tmux keys — the wrapper reads the status file after the
+   `kiro-cli` session exits and delivers exactly one
+   `[DONE]|[FAILED]|[BLOCKED] <worker> logs/REPORT.<worker>.md` line to the
+   orchestrator (single-fire, with a timeout failsafe). A worker that only
+   writes its report is still delivered as `[DONE]` via report-file inference.
 
-   Replace `[DONE]` with `[FAILED]` or `[BLOCKED]` when needed. Use only unique
-   `ORCH_TARGET`; avoid pane targets. The orchestrator closes worker windows
-   after processing the report — workers must NOT call `tmux kill-window`.
-   Workers must NOT merge PRs, delete branches, or close issues — those are
-   orchestrator/acceptance decisions. Workers: push → write report → send
-   wake-up → stop. Merge/close stay with the orchestrator.
+   The orchestrator closes worker windows after processing the report — workers
+   must NOT call `tmux kill-window`. Workers must NOT merge PRs, delete branches,
+   or close issues — those are orchestrator/acceptance decisions. Workers:
+   push → write report → write status file → stop.
 
 ## Agent Selection
 

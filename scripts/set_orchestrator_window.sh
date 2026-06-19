@@ -51,10 +51,23 @@ mkdir -p "$SIGNALS_DIR"
 MARKER_FILE="$SIGNALS_DIR/orchestrator-window.json"
 
 SESSION="$(tmux display-message -p '#{session_name}')"
-CURRENT_WINDOW="$(tmux display-message -p '#{window_name}')"
-# Immutable window id (e.g. @7). Stable for the whole life of the window — this is
-# what wake-up routing keys on so a later rename can never misdeliver [DONE].
-WINDOW_ID="$(tmux display-message -p '#{window_id}')"
+# Bug 2 (#2820): anchor on THIS process's pane, not the session's *active*
+# window. `tmux display-message -p '#{window_id}'` with no `-t` returns whatever
+# window is active in the session when the subprocess runs — which, when this
+# script is invoked from an orchestrator that is not the foreground window, is
+# some other window. That claimed the wrong window and wrote a dead ORCH_TARGET,
+# so worker [DONE] wake-ups never reached the orchestrator. $TMUX_PANE is set by
+# tmux in the environment of the calling process, so it always resolves to the
+# pane (and thus window) where the orchestrator actually runs.
+if [[ -n "${TMUX_PANE:-}" ]]; then
+    CURRENT_WINDOW="$(tmux display-message -p -t "$TMUX_PANE" '#{window_name}')"
+    WINDOW_ID="$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}')"
+else
+    CURRENT_WINDOW="$(tmux display-message -p '#{window_name}')"
+    # Immutable window id (e.g. @7). Stable for the whole life of the window — this is
+    # what wake-up routing keys on so a later rename can never misdeliver [DONE].
+    WINDOW_ID="$(tmux display-message -p '#{window_id}')"
+fi
 
 # --- marker readers -----------------------------------------------------------
 marker_get() {
