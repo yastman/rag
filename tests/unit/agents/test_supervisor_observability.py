@@ -231,34 +231,3 @@ async def test_supervisor_curated_span_metadata_on_routing(supervisor_config):
     trace_calls = mock_lf.update_current_span.call_args_list
     assert trace_calls, "update_current_span was never called"
     assert any("input" in c[1] or "metadata" in c[1] for c in trace_calls)
-
-
-@pytest.mark.skip(
-    reason="ARCH-16: agent.ainvoke via create_bot_agent is removed from the text path; "
-    "BotContext is now passed to run_core_text_request via UserContext"
-)
-async def test_agent_ainvoke_receives_bot_context(supervisor_config):
-    """agent.ainvoke receives BotContext in config.configurable (#413)."""
-    bot = _create_bot_patched(supervisor_config)
-    mock_agent = _make_mock_agent()
-    mock_lf = MagicMock()
-
-    with (
-        patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-        patch("telegram_bot.bot.get_client", return_value=mock_lf),
-        patch("telegram_bot.bot.propagate_attributes"),
-        patch("telegram_bot.bot.create_callback_handler", return_value=None),
-    ):
-        message = _make_text_message("test")
-        with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-            mock_cas.typing.return_value = _make_typing_cm()
-            await bot.handle_query(message)
-
-    # Verify agent.ainvoke was called with config containing bot_context
-    call_args = mock_agent.ainvoke.call_args
-    config = call_args[1].get("config") or call_args[0][1] if len(call_args[0]) > 1 else None
-    if config is None:
-        # config passed as keyword
-        config = call_args[1].get("config")
-    assert config is not None
-    assert "bot_context" in config["configurable"]

@@ -94,12 +94,6 @@ class TestSdkDisabledClientResilience:
 
         write_history_scores(self._client(), _TRACE_ID, count=0)
 
-    @pytest.mark.skip(reason="stale: write_crm_scores removed from scoring (#2718)")
-    def test_write_crm_scores_with_sdk_disabled_client_no_raise(self):
-        from telegram_bot.scoring import write_crm_scores
-
-        write_crm_scores(self._client(), [], trace_id=_TRACE_ID)
-
 
 # ---------------------------------------------------------------------------
 # Empty trace_id: all scoring functions silently skip
@@ -123,15 +117,6 @@ class TestEmptyTraceIdSilentSkip:
 
         lf = MagicMock()
         write_history_scores(lf, "", count=5, latency_ms=100.0)
-
-        lf.create_score.assert_not_called()
-
-    @pytest.mark.skip(reason="stale: write_crm_scores removed from scoring (#2718)")
-    def test_write_crm_scores_no_trace_id_no_calls(self):
-        from telegram_bot.scoring import write_crm_scores
-
-        lf = MagicMock()
-        write_crm_scores(lf, [], trace_id="")
 
         lf.create_score.assert_not_called()
 

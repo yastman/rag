@@ -258,36 +258,6 @@ def test_history_search_latency_is_numeric(history_scores: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CRM scores (4) — write_crm_scores
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture()
-def crm_scores() -> dict[str, dict]:
-    from telegram_bot.scoring import write_crm_scores
-
-    lf = MagicMock()
-    write_crm_scores(lf, [], trace_id=_TRACE_ID)
-    return {c.kwargs["name"]: c.kwargs for c in lf.create_score.call_args_list}
-
-
-@pytest.mark.skip(reason="stale: write_crm_scores removed from scoring (#2718)")
-@pytest.mark.parametrize(
-    "score_name",
-    [
-        "crm_tool_used",
-        "crm_tools_count",
-        "crm_tools_success",
-        "crm_tools_error",
-    ],
-)
-def test_crm_score_is_written(score_name: str, crm_scores: dict) -> None:
-    """Each CRM score name must be written (parametrized for individual failure messages)."""
-    assert score_name in crm_scores, f"CRM score '{score_name}' not written"
-    # Type/schema contracts are in test_trace_contracts.py::TestWriteCrmScoresContract
-
-
-# ---------------------------------------------------------------------------
 # Supervisor scores — verify names appear as string literals in bot.py
 # ---------------------------------------------------------------------------
 
