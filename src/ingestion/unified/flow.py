@@ -30,7 +30,7 @@ from cocoindex.flow import flow_by_name, flow_names
 from cocoindex.op import function as cocoindex_function
 
 from src.ingestion.unified.config import UnifiedConfig
-from src.ingestion.unified.manifest import GDriveManifest, compute_content_hash_from_bytes
+from src.ingestion.unified.manifest import FileManifest, compute_content_hash_from_bytes
 from src.ingestion.unified.observability import observe, try_update_ingestion_trace
 from src.ingestion.unified.targets.qdrant_hybrid_target import (
     QdrantHybridTargetConnector,  # noqa: F401 - registers the connector
@@ -55,6 +55,7 @@ MIME_TYPES = {
 }
 
 
+
 def get_mime_type(relative_path: str) -> str:
     """Get MIME type from file extension."""
     ext = Path(relative_path).suffix.lower()
@@ -62,7 +63,7 @@ def get_mime_type(relative_path: str) -> str:
 
 
 # Global manifest instance, initialised in build_flow().
-_manifest: GDriveManifest | None = None
+_manifest: FileManifest | None = None
 
 
 @cocoindex_function()
@@ -103,6 +104,7 @@ def abs_path_from_filename(filename: str) -> str:
     return str(Path(_current_sync_dir) / filename)
 
 
+
 def _flow_name_for(config: UnifiedConfig) -> str:
     # Keep short to stay under 64 char limit for full flow name.
     # Use hash suffix for uniqueness across collections.
@@ -110,10 +112,12 @@ def _flow_name_for(config: UnifiedConfig) -> str:
     return f"ingest_{suffix}"
 
 
+
 def _app_namespace_for(config: UnifiedConfig) -> str:
     # CocoIndex full name = "{app_namespace}.{flow_name}" must be <= 64 chars.
     # Keep namespace short.
     return "unified"
+
 
 
 def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
@@ -126,7 +130,7 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
     # Initialise the manifest in a writable directory (MANIFEST_DIR or sync_dir fallback).
     manifest_dir = config.effective_manifest_dir()
     manifest_dir.mkdir(parents=True, exist_ok=True)
-    _manifest = GDriveManifest(manifest_dir)
+    _manifest = FileManifest(manifest_dir)
 
     # Init CocoIndex with explicit database settings (do not rely on env vars).
     cocoindex.init(
@@ -196,7 +200,7 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
             )
 
         collector.export(
-            "unified_gdrive_export",
+            "unified_file_export",
             QdrantHybridTargetSpec.from_config(config),
             primary_key_fields=["file_id"],
         )
