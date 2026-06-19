@@ -83,7 +83,7 @@ class DocumentChunker:
         """
         if self.strategy == ChunkingStrategy.FIXED_SIZE:
             warnings.warn(
-                "ChunkingStrategy.FIXED_SIZE is deprecated. Use CocoIndex + Docling "
+                "ChunkingStrategy.FIXED_SIZE is deprecated. Use Docling "
                 "HybridChunker for production chunking.",
                 DeprecationWarning,
                 stacklevel=2,
@@ -93,7 +93,7 @@ class DocumentChunker:
             return self._chunk_semantic(text, document_name, article_number)
         if self.strategy == ChunkingStrategy.SLIDING_WINDOW:
             warnings.warn(
-                "ChunkingStrategy.SLIDING_WINDOW is deprecated. Use CocoIndex + Docling "
+                "ChunkingStrategy.SLIDING_WINDOW is deprecated. Use Docling "
                 "HybridChunker for production chunking.",
                 DeprecationWarning,
                 stacklevel=2,

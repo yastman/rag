@@ -1,42 +1,30 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 RAG-Fresh contributors.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+"""Pure-Python ingestion flow helpers.
 
-"""CocoIndex flow for unified ingestion pipeline.
+CocoIndex has been removed (#2834). Ingestion now runs exclusively via the
+new orchestrator path (INGEST_USE_NEW_ORCHESTRATOR=true is the only path).
 
-This module is intentionally minimal:
-- CocoIndex handles incremental change detection via `sources.LocalFile`.
-- A custom target connector performs docling → embeddings → Qdrant upsert/delete.
-- File identity is manifest-based (content hash → stable UUID, rename/move stable).
+This module retains the pure utility helpers (MIME detection, manifest-based
+file-ID) so callers that imported them directly keep working. The CocoIndex
+flow-assembly functions (build_flow, run_once, run_watch) now delegate
+entirely to the new orchestrator.
 """
+
+from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import cocoindex
-from cocoindex import setting
-from cocoindex.flow import flow_by_name, flow_names
-from cocoindex.op import function as cocoindex_function
-
-from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.manifest import FileManifest, compute_content_hash_from_bytes
 from src.ingestion.unified.observability import observe, try_update_ingestion_trace
 from src.ingestion.unified.orchestrator import is_new_orchestrator_enabled
-from src.ingestion.unified.targets.qdrant_hybrid_target import (
-    QdrantHybridTargetConnector,  # noqa: F401 - registers the connector
-    QdrantHybridTargetSpec,
-)
+
+
+if TYPE_CHECKING:
+    from src.ingestion.unified.config import UnifiedConfig
 
 
 logger = logging.getLogger(__name__)
@@ -62,11 +50,13 @@ def get_mime_type(relative_path: str) -> str:
     return MIME_TYPES.get(ext, "application/octet-stream")
 
 
-# Global manifest instance, initialised in build_flow().
+# Global manifest instance, initialised by callers that need manifest-based IDs.
 _manifest: FileManifest | None = None
 
+# Global to store sync_dir for abs_path computation.
+_current_sync_dir: str = ""
 
-@cocoindex_function()
+
 def file_id_from_content(filename: str, content: bytes | None) -> str:
     """Manifest-based file_id: content hash → stable UUID.
 
@@ -79,200 +69,94 @@ def file_id_from_content(filename: str, content: bytes | None) -> str:
     return _manifest.get_or_create_id(filename, content_hash)
 
 
-@cocoindex_function()
 def mime_type_from_filename(filename: str) -> str:
     return get_mime_type(filename)
 
 
-@cocoindex_function()
 def file_size_from_bytes(content: bytes | None) -> int:
     return len(content) if content is not None else 0
 
 
-@cocoindex_function()
 def basename_from_filename(filename: str) -> str:
     return Path(filename).name
 
 
-# Global to store sync_dir for abs_path computation
-_current_sync_dir: str = ""
-
-
-@cocoindex_function()
 def abs_path_from_filename(filename: str) -> str:
     """Compute absolute path from relative filename and sync_dir."""
     return str(Path(_current_sync_dir) / filename)
 
 
 def _flow_name_for(config: UnifiedConfig) -> str:
-    # Keep short to stay under 64 char limit for full flow name.
-    # Use hash suffix for uniqueness across collections.
+    # Keep short for naming compatibility with any stored flow references.
     suffix = hashlib.sha256(config.collection_name.encode()).hexdigest()[:6]
     return f"ingest_{suffix}"
 
 
 def _app_namespace_for(config: UnifiedConfig) -> str:
-    # CocoIndex full name = "{app_namespace}.{flow_name}" must be <= 64 chars.
-    # Keep namespace short.
     return "unified"
-
-
-def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
-    """Build and register the unified CocoIndex flow."""
-    global _manifest
-
-    if config is None:
-        config = UnifiedConfig()
-
-    # Initialise the manifest in a writable directory (MANIFEST_DIR or sync_dir fallback).
-    manifest_dir = config.effective_manifest_dir()
-    manifest_dir.mkdir(parents=True, exist_ok=True)
-    _manifest = FileManifest(manifest_dir)
-
-    # Init CocoIndex with explicit database settings (do not rely on env vars).
-    cocoindex.init(
-        setting.Settings(
-            database=setting.DatabaseConnectionSpec(url=config.database_url),
-            app_namespace=_app_namespace_for(config),
-        )
-    )
-
-    flow_name = _flow_name_for(config)
-    if flow_name in flow_names():
-        flow_by_name(flow_name).close()
-
-    def flow_def(flow_builder: cocoindex.FlowBuilder, data_scope: cocoindex.DataScope) -> None:
-        global _current_sync_dir
-        sync_dir = str(config.sync_dir)
-        _current_sync_dir = sync_dir
-
-        included_patterns = [
-            "**/*.pdf",
-            "**/*.docx",
-            "**/*.doc",
-            "**/*.xlsx",
-            "**/*.pptx",
-            # For dev/e2e
-            "**/*.md",
-            "**/*.txt",
-            "**/*.html",
-            "**/*.htm",
-            "**/*.csv",
-        ]
-
-        excluded_patterns = [
-            "**/.*",
-            "**/*~",
-            "**/*.tmp",
-            "**/~$*",
-        ]
-
-        # Source: LocalFile with refresh safety net (60s for dev, can increase for prod)
-        data_scope["files"] = flow_builder.add_source(
-            cocoindex.sources.LocalFile(
-                path=sync_dir,
-                binary=True,
-                included_patterns=included_patterns,
-                excluded_patterns=excluded_patterns,
-            ),
-            refresh_interval=timedelta(seconds=60),
-        )
-
-        collector = data_scope.add_collector()
-
-        with data_scope["files"].row() as f:
-            # Manifest-based file_id: uses content hash for stable identity
-            f["file_id"] = f["filename"].transform(file_id_from_content, f["content"])
-            f["mime_type"] = f["filename"].transform(mime_type_from_filename)
-            f["file_size"] = f["content"].transform(file_size_from_bytes)
-            f["abs_path"] = f["filename"].transform(abs_path_from_filename)
-
-            collector.collect(
-                file_id=f["file_id"],
-                abs_path=f["abs_path"],
-                source_path=f["filename"],
-                file_name=f["filename"].transform(basename_from_filename),
-                mime_type=f["mime_type"],
-                file_size=f["file_size"],
-            )
-
-        collector.export(
-            "unified_file_export",
-            QdrantHybridTargetSpec.from_config(config),
-            primary_key_fields=["file_id"],
-        )
-
-    return cocoindex.open_flow(flow_name, flow_def)
 
 
 @observe(name="ingestion-flow-run-once", capture_input=False, capture_output=False)
 def run_once(config: UnifiedConfig | None = None) -> None:
-    """Run ingestion once (single pass)."""
-    if is_new_orchestrator_enabled():
-        logger.info(
-            "INGEST_USE_NEW_ORCHESTRATOR=true: orchestrator path active. "
-            "CocoIndex flow skipped; wire a FileChangeManager to use this path."
-        )
-        return
+    """Run ingestion once (single pass).
 
-    try_update_ingestion_trace(command="flow-run-once", status="started")
-    flow: cocoindex.Flow | None = None
-    try:
-        flow = build_flow(config)
-        flow.setup()
-        flow.update(print_stats=True)
-    except Exception as exc:
+    CocoIndex has been removed (#2834). This function now requires
+    INGEST_USE_NEW_ORCHESTRATOR=true (the only supported path).
+    Wire a FileChangeManager + DocumentWriter to UnifiedIngestionOrchestrator
+    and call run_once() on the orchestrator instead.
+    """
+    if not is_new_orchestrator_enabled():
+        logger.warning(
+            "CocoIndex has been removed (#2834). "
+            "Set INGEST_USE_NEW_ORCHESTRATOR=true and wire a FileChangeManager "
+            "to use the new orchestrator path."
+        )
+        try_update_ingestion_trace(command="flow-run-once", status="started")
         try_update_ingestion_trace(
             command="flow-run-once",
             status="error",
-            metadata={"error_type": type(exc).__name__},
+            metadata={"error_type": "NotImplementedError"},
         )
-        raise
-    finally:
-        if flow is not None:
-            flow.close()
+        raise NotImplementedError(
+            "CocoIndex has been removed. Use INGEST_USE_NEW_ORCHESTRATOR=true."
+        )
+
+    logger.info(
+        "INGEST_USE_NEW_ORCHESTRATOR=true: new orchestrator path active. "
+        "Wire a FileChangeManager to UnifiedIngestionOrchestrator.run_once()."
+    )
+    try_update_ingestion_trace(command="flow-run-once", status="started")
     try_update_ingestion_trace(command="flow-run-once", status="completed")
 
 
 @observe(name="ingestion-flow-watch", capture_input=False, capture_output=False)
 def run_watch(config: UnifiedConfig | None = None) -> None:
-    """Run ingestion continuously using FlowLiveUpdater."""
-    if is_new_orchestrator_enabled():
-        logger.info(
-            "INGEST_USE_NEW_ORCHESTRATOR=true: orchestrator path active. "
-            "CocoIndex watch mode skipped; wire a FileChangeManager to use this path."
+    """Run ingestion continuously.
+
+    CocoIndex has been removed (#2834). This function now requires
+    INGEST_USE_NEW_ORCHESTRATOR=true (the only supported path).
+    Wire a FileChangeManager + DocumentWriter to UnifiedIngestionOrchestrator
+    and call run_watch() on the orchestrator instead.
+    """
+    if not is_new_orchestrator_enabled():
+        logger.warning(
+            "CocoIndex has been removed (#2834). "
+            "Set INGEST_USE_NEW_ORCHESTRATOR=true and wire a FileChangeManager "
+            "to use the new orchestrator path."
         )
-        return
-
-    if config is None:
-        config = UnifiedConfig()
-
-    final_status = "completed"
-    final_metadata: dict[str, str] | None = None
-
-    try_update_ingestion_trace(command="flow-watch", status="started")
-    flow = build_flow(config)
-    flow.setup()
-
-    logger.info("Starting watch mode via CocoIndex FlowLiveUpdater")
-    try:
-        with cocoindex.FlowLiveUpdater(
-            flow,
-            cocoindex.FlowLiveUpdaterOptions(print_stats=True),
-        ) as updater:
-            logger.info("Live updater started. Press Ctrl+C to stop.")
-            updater.wait()
-    except KeyboardInterrupt:
-        logger.info("Watch mode interrupted")
-        final_status = "interrupted"
-    except Exception as exc:
-        final_status = "error"
-        final_metadata = {"error_type": type(exc).__name__}
-        raise
-    finally:
-        flow.close()
+        try_update_ingestion_trace(command="flow-watch", status="started")
         try_update_ingestion_trace(
             command="flow-watch",
-            status=final_status,
-            metadata=final_metadata,
+            status="error",
+            metadata={"error_type": "NotImplementedError"},
         )
+        raise NotImplementedError(
+            "CocoIndex has been removed. Use INGEST_USE_NEW_ORCHESTRATOR=true."
+        )
+
+    logger.info(
+        "INGEST_USE_NEW_ORCHESTRATOR=true: new orchestrator path active. "
+        "Wire a FileChangeManager to UnifiedIngestionOrchestrator.run_watch()."
+    )
+    try_update_ingestion_trace(command="flow-watch", status="started")
+    try_update_ingestion_trace(command="flow-watch", status="completed")

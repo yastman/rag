@@ -583,30 +583,28 @@ class TestFileIdentityManifest:
 
 
 # ---------------------------------------------------------------------------
-# 7. cocoindex_flow module — availability guard
+# 7. cocoindex removed — module no longer exists
 # ---------------------------------------------------------------------------
 
 
-class TestCocoindexFlowAvailability:
-    """Characterize cocoindex_flow availability guard."""
+class TestCocoindexFlowRemoved:
+    """Characterize that cocoindex_flow has been removed (#2834)."""
 
-    def test_check_cocoindex_available_returns_bool(self) -> None:
-        from src.ingestion.cocoindex_flow import check_cocoindex_available
+    def test_cocoindex_flow_module_is_gone(self) -> None:
+        """cocoindex_flow.py has been deleted; importing it must raise ModuleNotFoundError."""
+        import importlib.util
 
-        result = check_cocoindex_available()
-        assert isinstance(result, bool)
+        spec = importlib.util.find_spec("src.ingestion.cocoindex_flow")
+        assert spec is None, "src.ingestion.cocoindex_flow should not exist after #2834 removal"
 
-    def test_setup_and_run_flow_returns_error_when_unavailable(self) -> None:
-        from src.ingestion.cocoindex_flow import setup_and_run_flow
+    def test_flow_module_run_once_exists(self) -> None:
+        """run_once is still available in the unified flow module."""
+        from src.ingestion.unified.flow import run_once
 
-        with patch("src.ingestion.cocoindex_flow.COCOINDEX_AVAILABLE", False):
-            result = setup_and_run_flow("/tmp/docs")
-        assert result["success"] is False
-        assert "error" in result
+        assert callable(run_once)
 
-    def test_create_document_flow_returns_none_when_unavailable(self) -> None:
-        from src.ingestion.cocoindex_flow import create_document_flow
+    def test_flow_module_run_watch_exists(self) -> None:
+        """run_watch is still available in the unified flow module."""
+        from src.ingestion.unified.flow import run_watch
 
-        with patch("src.ingestion.cocoindex_flow.COCOINDEX_AVAILABLE", False):
-            result = create_document_flow()
-        assert result is None
+        assert callable(run_watch)

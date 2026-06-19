@@ -77,7 +77,7 @@ class UnifiedConfig:
     )
 
     # Pipeline
-    # NOTE: Watch mode is handled by CocoIndex FlowLiveUpdater (no manual poll loop).
+    # NOTE: Watch mode is handled by UnifiedIngestionOrchestrator polling loop.
     poll_interval_seconds: int = 60
     max_retries: int = 3
     pipeline_version: str = "v3.2.1"
