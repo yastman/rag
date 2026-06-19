@@ -16,11 +16,7 @@ _DEPRECATED_EXPORTS = {
         "ClaudeContextualizer",
         "from src.contextualization import ClaudeContextualizer",
     ),
-    "DBSFColBERTSearchEngine": (
-        "src.retrieval",
-        "DBSFColBERTSearchEngine",
-        "from src.retrieval import DBSFColBERTSearchEngine",
-    ),
+    # Removed deprecated export for DBSFColBERTSearchEngine; evaluation search engines are no longer exported from src
     "DocumentChunker": (
         "src.ingestion",
         "DocumentChunker",
