@@ -201,11 +201,12 @@ class TestPropertyBotStart:
             await bot.start()
         assert bot._agent_checkpointer is not None
 
-    async def test_successful_start_topic_service_set(self):
+    async def test_successful_start_topic_manager_none_when_disabled(self):
         bot = _create_bot()
         with _start_patches(bot):
             await bot.start()
-        assert bot._topic_service is not None
+        # expert_topics_enabled defaults to False, so _topic_manager stays None
+        assert bot._topic_manager is None
 
     async def test_redis_checkpointer_failure_falls_back(self):
         """When create_redis_checkpointer raises, start() falls back to in-memory."""

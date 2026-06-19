@@ -124,7 +124,6 @@ from .services.forum_bridge import ForumBridge
 from .services.handoff_state import HandoffData, HandoffState
 from .services.query_filter_signal import detect_filter_sensitive_query
 from .services.redis_monitor import RedisHealthMonitor
-from .services.topic_service import TopicService
 from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 
@@ -487,9 +486,7 @@ class PropertyBot:
         self._forum_bridge: ForumBridge | None = None
         self._bot_user_id: int | None = None
 
-        # Expert topic service (user+expert → thread_id mapping)
-        self._topic_redis: Any | None = None
-        self._topic_service: TopicService | None = None
+        # Expert topic manager (chat_id+expert_id → thread_id mapping)
         self._topics_enabled: bool = False
         self._deeplink_redis: Any | None = None
         self._topic_manager: Any = None
@@ -1901,9 +1898,9 @@ class PropertyBot:
         _raw_thread_id = message.message_thread_id
         forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
         expert_id: str | None = None
-        if forum_thread_id is not None and self._topic_service is not None and self._topics_enabled:
-            expert_id = await self._topic_service.get_expert_by_thread(
-                user_id=message.from_user.id, thread_id=forum_thread_id
+        if forum_thread_id is not None and self._topic_manager is not None and self._topics_enabled:
+            expert_id = await self._topic_manager.get_expert_for_topic(
+                chat_id=message.chat.id, topic_id=forum_thread_id
             )
 
         root_trace_metadata: dict[str, Any] = {}
@@ -3791,15 +3788,10 @@ class PropertyBot:
                 )
             )
 
-        # Initialize topic service (forum topics mapping — user+expert → thread_id)
-        import redis.asyncio as aioredis
-
-        self._topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
-        self._topic_service = TopicService(redis=self._topic_redis)
-        logger.info("TopicService ready (Redis)")
-
         # Initialize TopicManager + deeplink Redis for Mini App deep link flow
         if self.config.expert_topics_enabled:
+            import redis.asyncio as aioredis
+
             from telegram_bot.services.topic_manager import TopicManager
 
             self._deeplink_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
@@ -3988,7 +3980,6 @@ class PropertyBot:
         self.dp["pg_pool"] = self._pg_pool
         self.dp["bot_config"] = self.config
         self.dp["property_bot"] = self
-        self.dp["topic_service"] = self._topic_service
         self.dp["apartments_service"] = self._apartments_service
         self.dp["favorites_service"] = self._favorites_service
         self.dp["search_event_store"] = self._search_event_store
@@ -4224,9 +4215,6 @@ class PropertyBot:
         if self._pg_pool is not None:
             await self._pg_pool.close()
             logger.info("PostgreSQL pool closed")
-        if self._topic_redis is not None:
-            await self._topic_redis.aclose()
-            self._topic_redis = None
         if self._deeplink_redis is not None:
             await self._deeplink_redis.aclose()
             self._deeplink_redis = None
