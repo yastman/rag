@@ -160,13 +160,6 @@ class TestScannerIsNotVacuous:
         assert INGESTION_DIR.exists(), f"ingestion dir not found: {INGESTION_DIR}"
         assert _iter_ingestion_files(), "scanner found 0 ingestion modules"
 
-    def test_cocoindex_flow_is_scanned(self) -> None:
-        scanned = {p.name for p in _iter_ingestion_files()}
-        assert "cocoindex_flow.py" in scanned, (
-            "cocoindex_flow.py is the canonical raw-thread-hop module; if it "
-            "moved, update this contract."
-        )
-
 
 class TestContractCatchesRegressions:
     """Negative-path tests: feed the AST helpers synthetic snippets and

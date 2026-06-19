@@ -45,7 +45,6 @@ def setup_logging(verbose: bool = False) -> None:
     # Quiet noisy loggers
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("cocoindex").setLevel(logging.INFO)
 
 
 def _inspect_sync_dir(
@@ -82,7 +81,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     try:
         if watch_mode:
-            logging.info("Starting CocoIndex watch mode (FlowLiveUpdater)")
+            logging.info("Starting watch mode via new orchestrator path")
             run_watch(config)
         else:
             run_once(config)

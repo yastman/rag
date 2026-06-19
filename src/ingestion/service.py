@@ -1,9 +1,10 @@
 """Ingestion service for document processing and indexing.
 
 High-level service for ingesting documents from local directories
-and Google Drive into Qdrant using CocoIndex flows.
+into Qdrant via the new orchestrator path.
 
 Milestone J: Document Ingestion Pipeline (2026-02-02)
+CocoIndex removed: #2834.
 """
 
 import logging
@@ -16,12 +17,6 @@ from typing import Any
 import anyio
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
-
-from src.ingestion.cocoindex_flow import (
-    FlowConfig,
-    check_cocoindex_available,
-    setup_and_run_flow,
-)
 
 
 logger = logging.getLogger(__name__)
@@ -103,18 +98,19 @@ class IngestionService:
                 )
         return self._qdrant_client
 
-    def _create_flow_config(self) -> FlowConfig:
-        """Create FlowConfig from service settings."""
-        return FlowConfig(
-            qdrant_url=self.qdrant_url,
-            qdrant_api_key=self.qdrant_api_key,
-            collection_name=self.collection_name,
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
-        )
+    def _create_flow_config(self) -> dict:
+        """Return service settings as a plain dict (CocoIndex removed, #2834)."""
+        return {
+            "qdrant_url": self.qdrant_url,
+            "qdrant_api_key": self.qdrant_api_key,
+            "collection_name": self.collection_name,
+        }
 
     async def ingest_directory(self, directory: Path) -> IngestionStats:
         """Ingest documents from a local directory.
+
+        CocoIndex has been removed (#2834). Use the UnifiedIngestionOrchestrator
+        with INGEST_USE_NEW_ORCHESTRATOR=true for ingestion.
 
         Args:
             directory: Path to directory containing documents
@@ -127,10 +123,6 @@ class IngestionService:
 
         if not await anyio.Path(directory).exists():
             stats.errors.append(f"Directory not found: {directory}")
-            return stats
-
-        if not check_cocoindex_available():
-            stats.errors.append("CocoIndex not available. Install with: pip install cocoindex")
             return stats
 
         # Count documents
@@ -149,31 +141,12 @@ class IngestionService:
             return stats
 
         logger.info(f"Ingesting {stats.total_documents} documents from {directory}")
-
-        # Run CocoIndex flow
-        config = self._create_flow_config()
-        result = setup_and_run_flow(
-            source_path=str(directory),
-            config=config,
-            blocking=True,
+        stats.errors.append(
+            "CocoIndex has been removed (#2834). "
+            "Use UnifiedIngestionOrchestrator with INGEST_USE_NEW_ORCHESTRATOR=true."
         )
-
-        if not result.get("success"):
-            stats.errors.append(result.get("error", "Unknown error"))
-        else:
-            # Get collection stats to determine indexed count
-            try:
-                collection_stats = await self.get_collection_stats()
-                stats.indexed_nodes = collection_stats.get("points_count", 0)
-                stats.total_nodes = stats.indexed_nodes
-            except Exception as e:
-                logger.warning(f"Could not get collection stats: {e}")
 
         stats.duration_seconds = time.time() - start_time
-        logger.info(
-            f"Ingestion complete: {stats.indexed_nodes} nodes in {stats.duration_seconds:.2f}s"
-        )
-
         return stats
 
     # ingest_gdrive() has been deliberately removed. Historically this service

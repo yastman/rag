@@ -1,6 +1,9 @@
 """Document ingestion package.
 
 Use lazy exports to keep imports cheap for unified CLI and other lightweight tools.
+
+CocoIndex has been removed (#2834). The FlowConfig, check_cocoindex_available,
+and create_document_flow exports have been removed.
 """
 
 from importlib import import_module
@@ -14,11 +17,8 @@ __all__ = [
     "ContextualDocument",
     "DocumentChunker",
     "DocumentIndexer",
-    "FlowConfig",
     "IngestionService",
     "IngestionStats",
-    "check_cocoindex_available",
-    "create_document_flow",
     "load_contextual_chunks",
     "load_contextual_json",
 ]
@@ -26,7 +26,6 @@ __all__ = [
 
 if TYPE_CHECKING:
     from .chunker import DocumentChunker
-    from .cocoindex_flow import FlowConfig, check_cocoindex_available, create_document_flow
     from .contextual_loader import load_contextual_chunks, load_contextual_json
     from .contextual_schema import ContextualChunk, ContextualDocument
     from .indexer import DocumentIndexer
@@ -35,9 +34,6 @@ if TYPE_CHECKING:
 
 _LAZY_ATTRS = {
     "DocumentChunker": (".chunker", "DocumentChunker"),
-    "FlowConfig": (".cocoindex_flow", "FlowConfig"),
-    "check_cocoindex_available": (".cocoindex_flow", "check_cocoindex_available"),
-    "create_document_flow": (".cocoindex_flow", "create_document_flow"),
     "load_contextual_chunks": (".contextual_loader", "load_contextual_chunks"),
     "load_contextual_json": (".contextual_loader", "load_contextual_json"),
     "ContextualChunk": (".contextual_schema", "ContextualChunk"),

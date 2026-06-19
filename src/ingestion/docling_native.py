@@ -95,8 +95,7 @@ class NativeDoclingAdapter(DoclingClient):
         """Return the injected chunker, lazily falling back to a default ``HybridChunker``.
 
         Tokenizer download is deferred to first chunk call so module import stays
-        cheap (matters for unit-test collection time and for the cocoindex
-        target connector that eagerly imports this module).
+        cheap (matters for unit-test collection time).
         """
         if self._chunker is None:
             HybridChunker = _load_runtime_hybrid_chunker()
