@@ -22,9 +22,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_DIR = REPO_ROOT / ".kiro" / "skills"
+
+# .kiro/ is gitignored and untracked (#2820): skip on fresh clones with no
+# local .kiro/skills/ tree.
+pytestmark = pytest.mark.skipif(
+    not SKILLS_DIR.exists(),
+    reason=".kiro/skills/ is untracked (gitignored, #2820)",
+)
 
 # Pattern that matches a hardcoded tmux orchestrator window name:
 # e.g. claude:orch-issues-intake-20260617T054509-bfb2ec78
