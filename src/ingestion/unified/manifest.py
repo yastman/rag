@@ -222,10 +222,10 @@ class FileManifest:
                 logger.debug("Manifest: removed path=%s", path)
 
 
-
 def compute_content_hash_from_bytes(content: bytes) -> str:
     """Compute a short SHA-256 hash from raw file bytes."""
     return hashlib.sha256(content).hexdigest()[:16]
+
 
 # Backwards compatibility: alias the old class name to the new implementation.
 # This allows code written against the old ``GDriveManifest`` name to continue

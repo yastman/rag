@@ -55,7 +55,6 @@ MIME_TYPES = {
 }
 
 
-
 def get_mime_type(relative_path: str) -> str:
     """Get MIME type from file extension."""
     ext = Path(relative_path).suffix.lower()
@@ -104,7 +103,6 @@ def abs_path_from_filename(filename: str) -> str:
     return str(Path(_current_sync_dir) / filename)
 
 
-
 def _flow_name_for(config: UnifiedConfig) -> str:
     # Keep short to stay under 64 char limit for full flow name.
     # Use hash suffix for uniqueness across collections.
@@ -112,12 +110,10 @@ def _flow_name_for(config: UnifiedConfig) -> str:
     return f"ingest_{suffix}"
 
 
-
 def _app_namespace_for(config: UnifiedConfig) -> str:
     # CocoIndex full name = "{app_namespace}.{flow_name}" must be <= 64 chars.
     # Keep namespace short.
     return "unified"
-
 
 
 def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
