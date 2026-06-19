@@ -32,6 +32,7 @@ from cocoindex.op import function as cocoindex_function
 from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.manifest import FileManifest, compute_content_hash_from_bytes
 from src.ingestion.unified.observability import observe, try_update_ingestion_trace
+from src.ingestion.unified.orchestrator import is_new_orchestrator_enabled
 from src.ingestion.unified.targets.qdrant_hybrid_target import (
     QdrantHybridTargetConnector,  # noqa: F401 - registers the connector
     QdrantHybridTargetSpec,
@@ -207,6 +208,13 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
 @observe(name="ingestion-flow-run-once", capture_input=False, capture_output=False)
 def run_once(config: UnifiedConfig | None = None) -> None:
     """Run ingestion once (single pass)."""
+    if is_new_orchestrator_enabled():
+        logger.info(
+            "INGEST_USE_NEW_ORCHESTRATOR=true: orchestrator path active. "
+            "CocoIndex flow skipped; wire a FileChangeManager to use this path."
+        )
+        return
+
     try_update_ingestion_trace(command="flow-run-once", status="started")
     flow: cocoindex.Flow | None = None
     try:
@@ -229,6 +237,13 @@ def run_once(config: UnifiedConfig | None = None) -> None:
 @observe(name="ingestion-flow-watch", capture_input=False, capture_output=False)
 def run_watch(config: UnifiedConfig | None = None) -> None:
     """Run ingestion continuously using FlowLiveUpdater."""
+    if is_new_orchestrator_enabled():
+        logger.info(
+            "INGEST_USE_NEW_ORCHESTRATOR=true: orchestrator path active. "
+            "CocoIndex watch mode skipped; wire a FileChangeManager to use this path."
+        )
+        return
+
     if config is None:
         config = UnifiedConfig()
 
