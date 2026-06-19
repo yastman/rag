@@ -104,12 +104,9 @@ PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS := \
 	tests/unit/contextualization \
 	tests/unit/test_claude_contextualizer.py \
 	tests/unit/test_contextualization_batch.py
-# Temporary #2526 partition only: these legacy graph/langgraph tests are owned
-# by the explicit lane below until the #2495 graph/API rewrite retargets them.
-PYTEST_LEGACY_GRAPH_PATHS := \
-	tests/unit/graph \
-	tests/unit/integrations \
-	tests/unit/test_latency_units.py
+# #2818: legacy-graph/langgraph partition closed (#2495/#2526 resolved).
+# Variable kept as an empty list so PYTEST_OPTIONAL_PROVIDER_IGNORE still compiles.
+PYTEST_LEGACY_GRAPH_PATHS :=
 PYTEST_OPTIONAL_ADAPTER_IGNORE := $(addprefix --ignore=,$(PYTEST_TELEGRAM_ADAPTER_PATHS))
 PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB := $(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)
 PYTEST_OPTIONAL_PROVIDER_IGNORE := $(addprefix --ignore=,$(PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS) $(PYTEST_LEGACY_GRAPH_PATHS))
