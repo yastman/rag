@@ -345,25 +345,3 @@ archive/mini_app/frontend/dist/
 
 # Voice test fixture (archived surface — voice archival #2598)
 data/test/voice_note_sample.ogg
-
-# codegraph exclusions — directories that pollute the call graph index
-archive/
-logs/
-tmp/
-drive-sync/
-.mimocode/
-.venv-py312/
-home/
-mini_app/frontend/node_modules/
-mini_app/frontend/dist/
-mini_app/frontend/.next/
-
-# --- codegraph noise control (these dirs stay git-tracked; the rule only hides
-# them from codegraph's .gitignore-based ignore, same trick as archive/) ---
-# CI workflow yaml, docker-compose yaml, and semgrep rule yaml are config, not
-# domain code — keep them out of the code-intelligence graph.
-# NOTE: side effect — `git status` will no longer surface edits here unless you
-# `git add -f`. Remove these lines if you start editing CI/compose frequently.
-.github/
-docker/
-.semgrep/
