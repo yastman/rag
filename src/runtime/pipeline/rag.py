@@ -54,6 +54,10 @@ _T = TypeVar("_T")
 
 
 def _identity_observe(*args: Any, **kwargs: Any) -> Callable[[_T], _T]:
+    """No-op ``@observe`` replacement used when the observability backend is absent.
+
+    Returns a pass-through decorator that leaves the wrapped function unchanged.
+    """
     def decorator(func: _T) -> _T:
         return func
 
@@ -61,22 +65,46 @@ def _identity_observe(*args: Any, **kwargs: Any) -> Callable[[_T], _T]:
 
 
 def _graph_config_from_env() -> Any:
+    """Load ``GraphConfig`` from environment variables.
+
+    Returns:
+        A populated ``GraphConfig`` instance with thresholds and pipeline knobs.
+    """
     return GraphConfig.from_env()
 
 
 def _bge_m3_query_bundle_cls() -> Any:
+    """Return the ``BgeM3QueryVectorBundle`` class.
+
+    Indirected through this shim so tests can swap the bundle constructor
+    without patching the import directly.
+    """
     return BgeM3QueryVectorBundle
 
 
 def _new_query_preprocessor() -> QueryPreprocessor:
+    """Construct a fresh ``QueryPreprocessor`` instance.
+
+    Indirected so tests can override RRF weight computation without monkey-patching
+    the class itself.
+    """
     return QueryPreprocessor()
 
 
 def _build_retrieved_context(*args: Any, **kwargs: Any) -> Any:
+    """Delegate to ``build_retrieved_context`` from the RAG core service.
+
+    Thin shim that allows the import to be swapped in tests.
+    """
     return build_retrieved_context(*args, **kwargs)
 
 
 def _cacheable_query_types() -> set[str]:
+    """Return the set of query types eligible for semantic cache storage.
+
+    Delegates to the canonical ``CACHEABLE_QUERY_TYPES`` constant so callers
+    always read from a single source of truth.
+    """
     return set(CACHEABLE_QUERY_TYPES)
 
 
@@ -137,6 +165,11 @@ def _find_missing_evidence_constraints(
 
 
 def _document_evidence_text(document: dict[str, Any]) -> str:
+    """Concatenate all text fields from a document dict into a single evidence string.
+
+    Includes ``text``, ``content``, and all metadata values to maximise coverage
+    when checking for hard evidence constraints.
+    """
     parts = [str(document.get("text", "")), str(document.get("content", ""))]
     metadata = document.get("metadata")
     if isinstance(metadata, dict):
@@ -155,6 +188,16 @@ async def _execute_qdrant_retrieval(
     dense_weight: float,
     sparse_weight: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
+    """Execute a single hybrid RRF retrieval request against the Qdrant service.
+
+    Detects ColBERT support on the client and falls back to standard RRF when
+    unavailable.
+
+    Returns:
+        Tuple of (results, search_meta, colbert_used) where ``results`` is the
+        ranked document list, ``search_meta`` contains backend error flags, and
+        ``colbert_used`` indicates whether server-side ColBERT reranking was applied.
+    """
     has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     colbert_used = bool(colbert_query and has_colbert_search)
     retrieval = RetrievalService(qdrant=qdrant)
@@ -191,6 +234,14 @@ async def _run_initial_retrieval(
     dense_weight: float,
     sparse_weight: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
+    """Run the first retrieval attempt using the full active filter set.
+
+    Delegates to ``_execute_qdrant_retrieval`` and records a Langfuse span
+    named ``"retrieval.initial"``.
+
+    Returns:
+        Same tuple as ``_execute_qdrant_retrieval``: (results, search_meta, colbert_used).
+    """
     return await _execute_qdrant_retrieval(
         qdrant=qdrant,
         dense_vector=dense_vector,
@@ -215,6 +266,14 @@ async def _run_relaxed_retrieval(
     dense_weight: float,
     sparse_weight: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
+    """Run a fallback retrieval attempt with relaxed (or no) topic filters.
+
+    Called when the initial retrieval returns fewer than 3 documents.
+    Records a Langfuse span named ``"retrieval.relax"``.
+
+    Returns:
+        Same tuple as ``_execute_qdrant_retrieval``: (results, search_meta, colbert_used).
+    """
     return await _execute_qdrant_retrieval(
         qdrant=qdrant,
         dense_vector=dense_vector,

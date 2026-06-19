@@ -36,43 +36,80 @@ class AssistantRequest:
 class CacheProvider(Protocol):
     """Semantic cache dependency used by the runtime RAG path."""
 
-    async def check_semantic(self, *args: Any, **kwargs: Any) -> Any: ...
+    async def check_semantic(self, *args: Any, **kwargs: Any) -> Any:
+        """Check the semantic cache for a matching response."""
+        ...
 
 
 class EmbeddingProvider(Protocol):
     """Dense embedding dependency used by core/runtime."""
 
-    async def aembed_query(self, text: str) -> list[float]: ...
+    async def aembed_query(self, text: str) -> list[float]:
+        """Compute a dense vector embedding for the given text.
+
+        Args:
+            text: Input text to embed.
+
+        Returns:
+            Dense float vector representation.
+        """
+        ...
 
 
 class SparseEmbeddingProvider(Protocol):
     """Sparse embedding dependency used by core/runtime."""
 
-    async def aembed_query(self, text: str) -> dict[str, Any]: ...
+    async def aembed_query(self, text: str) -> dict[str, Any]:
+        """Compute a sparse vector embedding for the given text.
+
+        Args:
+            text: Input text to embed.
+
+        Returns:
+            Sparse vector as a token-weight mapping.
+        """
+        ...
 
 
 class QdrantClientProtocol(Protocol):
     """Vector search dependency used by core/runtime."""
 
-    async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> Any: ...
+    async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> Any:
+        """Perform a hybrid RRF vector search against Qdrant."""
+        ...
 
 
 class RerankerProvider(Protocol):
     """Optional reranking dependency used by core/runtime."""
 
-    async def rerank(self, *args: Any, **kwargs: Any) -> Any: ...
+    async def rerank(self, *args: Any, **kwargs: Any) -> Any:
+        """Rerank a list of candidate documents by relevance to the query."""
+        ...
 
 
 class LLMProvider(Protocol):
     """Optional language-model dependency used by core/runtime."""
 
-    async def generate(self, *args: Any, **kwargs: Any) -> str: ...
+    async def generate(self, *args: Any, **kwargs: Any) -> str:
+        """Generate a text response from the language model.
+
+        Returns:
+            Generated text string.
+        """
+        ...
 
 
 class TelemetryLogger(Protocol):
     """SDK-friendly telemetry callback surface for product events."""
 
-    def log_event(self, event: str, **fields: Any) -> None: ...
+    def log_event(self, event: str, **fields: Any) -> None:
+        """Emit a structured product telemetry event.
+
+        Args:
+            event: Event name identifier.
+            **fields: Arbitrary key-value metadata attached to the event.
+        """
+        ...
 
 
 @dataclass
@@ -113,6 +150,13 @@ class AssistantError(RuntimeError):
     """Unrecoverable error from the core assistant."""
 
     def __init__(self, message: str, *, error_type: str = "internal") -> None:
+        """Initialize AssistantError with a message and categorized error type.
+
+        Args:
+            message: Human-readable description of the error.
+            error_type: Machine-readable error category for routing/logging.
+                Defaults to ``"internal"``.
+        """
         super().__init__(message)
         self.error_type = error_type
 

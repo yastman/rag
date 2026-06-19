@@ -146,10 +146,12 @@ async def run_assistant_pipeline(
 
 
 def _latency_ms(started: float) -> float:
+    """Return elapsed milliseconds since ``started`` (perf_counter timestamp)."""
     return round((time.perf_counter() - started) * 1000, 3)
 
 
 def _coerce_user_id(value: str) -> int:
+    """Convert a string user_id to int, returning 0 when conversion fails."""
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -157,12 +159,24 @@ def _coerce_user_id(value: str) -> int:
 
 
 def _as_document_list(value: Any) -> list[dict[str, Any]]:
+    """Coerce an arbitrary value to a flat list of document dicts.
+
+    Returns an empty list when ``value`` is not a list or contains non-dict items.
+    """
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
 
 
 def _extract_doc_ids(documents: list[dict[str, Any]]) -> list[str]:
+    """Extract stable document identifiers from a list of retrieved document dicts.
+
+    Checks ``metadata.source_id``, ``metadata.doc_id``, ``metadata.id``,
+    ``doc.source_id``, ``doc.doc_id``, and ``doc.id`` in that priority order.
+
+    Returns:
+        List of string document IDs; documents with no resolvable ID are omitted.
+    """
     ids: list[str] = []
     for doc in documents:
         meta_val = doc.get("metadata")
@@ -181,6 +195,15 @@ def _extract_doc_ids(documents: list[dict[str, Any]]) -> list[str]:
 
 
 def _extract_sources(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Build citation-ready source dicts from retrieved document metadata.
+
+    Each entry contains at most ``"title"`` and ``"url"`` keys; documents
+    with neither field are omitted.
+
+    Returns:
+        List of non-empty ``{title?, url?}`` dicts, one per document that has
+        at least one of those fields.
+    """
     sources: list[dict[str, str]] = []
     for doc in documents:
         meta_val = doc.get("metadata")
@@ -198,10 +221,18 @@ def _extract_sources(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _as_usage_dict(value: Any) -> dict[str, Any]:
+    """Return ``value`` if it is already a dict, otherwise return an empty dict."""
     return value if isinstance(value, dict) else {}
 
 
 def _extract_llm_model(generation_result: dict[str, Any]) -> str | None:
+    """Extract the LLM model identifier from a generation result payload.
+
+    Checks ``llm_provider_model`` first, then falls back to ``model``.
+
+    Returns:
+        String model name, or ``None`` when no model field is present.
+    """
     model = generation_result.get("llm_provider_model") or generation_result.get("model")
     return str(model) if model else None
 
