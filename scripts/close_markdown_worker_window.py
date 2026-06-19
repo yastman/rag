@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
+import subprocess  # nosec B404 - internal tmux tooling, fixed argv, no shell
 import sys
 
 
@@ -12,7 +12,7 @@ FORBIDDEN_PREFIXES = ("orch-", "orchestrator")
 
 
 def tmux_output(args: list[str]) -> str:
-    result = subprocess.run(["tmux", *args], text=True, capture_output=True, check=False)
+    result = subprocess.run(["tmux", *args], text=True, capture_output=True, check=False)  # nosec B603 B607 - fixed "tmux" argv, no shell=True, internal use
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout).strip())
     return result.stdout
