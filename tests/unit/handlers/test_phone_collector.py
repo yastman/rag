@@ -4,12 +4,9 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from telegram_bot.handlers.phone_collector import (
     PhoneCollectorStates,
     build_display_name,
-    create_phone_router,
     on_phone_contact,
 )
 from telegram_bot.keyboards.phone_keyboard import normalize_phone, validate_phone
