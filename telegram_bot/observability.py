@@ -1,8 +1,7 @@
-"""Langfuse observability helpers with runtime initialization.
+"""Observability re-exports — Langfuse removed (#2844).
 
 Re-exports from src.observability for backward compatibility.
-create_callback_handler is now implemented in src.observability.langfuse_client
-so that langfuse.langchain is accessed only through the observability kernel.
+All Langfuse symbols are now no-op stubs.
 """
 
 import logging
