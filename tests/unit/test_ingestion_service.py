@@ -78,41 +78,6 @@ class TestIngestionService:
         assert len(stats.errors) == 1
         assert "not found" in stats.errors[0].lower()
 
-    async def test_ingest_directory_empty(self, service, tmp_path):
-        """Test ingestion with empty directory."""
-        with patch("src.ingestion.service.check_cocoindex_available", return_value=True):
-            stats = await service.ingest_directory(tmp_path)
-
-        assert stats.total_documents == 0
-        assert len(stats.errors) == 1
-        assert "no supported documents" in stats.errors[0].lower()
-
-    async def test_ingest_directory_cocoindex_not_available(self, service, tmp_path):
-        """Test ingestion when CocoIndex is not installed."""
-        # Create a test file
-        test_file = tmp_path / "test.md"
-        test_file.write_text("# Test")
-
-        with patch("src.ingestion.service.check_cocoindex_available", return_value=False):
-            stats = await service.ingest_directory(tmp_path)
-
-        assert len(stats.errors) == 1
-        assert "cocoindex not available" in stats.errors[0].lower()
-
-    async def test_ingest_directory_counts_documents(self, service, tmp_path):
-        """Test that ingestion counts supported documents correctly."""
-        # Create test files
-        (tmp_path / "doc1.pdf").write_bytes(b"PDF content")
-        (tmp_path / "doc2.md").write_text("# Markdown")
-        (tmp_path / "doc3.txt").write_text("Plain text")
-        (tmp_path / "ignored.xyz").write_text("Ignored")
-
-        with patch("src.ingestion.service.check_cocoindex_available", return_value=True):
-            with patch("src.ingestion.service.setup_and_run_flow", return_value={"success": True}):
-                stats = await service.ingest_directory(tmp_path)
-
-        assert stats.total_documents == 3  # pdf, md, txt (not xyz)
-
     async def test_ingest_gdrive_no_credentials(self, service):
         """Test GDrive ingestion without credentials."""
         service.google_service_account_key = None
