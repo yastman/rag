@@ -4046,7 +4046,6 @@ class PropertyBot:
         await self._redis_monitor.start()
 
         # Register bot commands in Telegram menu
-        # Note: /call is intentionally excluded — it's admin-only (gated by _is_admin)
         await self.bot.set_my_commands(
             [
                 BotCommand(command="start", description="Начать работу с ботом"),
