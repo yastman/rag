@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from telegram_bot.constants.apartment_constants import (
     APARTMENT_CITY_ALIASES,
     APARTMENT_CITY_ALIASES_SORTED,
+    APARTMENT_CITY_NAMES,
 )
 from telegram_bot.observability import observe
 from telegram_bot.services.apartment_models import ApartmentQueryParseResult, compute_confidence
@@ -273,6 +275,221 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
                 start = text.index(alias)
                 consumed.append((start, start + len(alias)))
                 return APARTMENT_CITY_ALIASES[alias]
+        return None
+
+    # --- Legacy dict-format extraction (replaces FilterExtractor) ---
+
+    def extract_filters(self, query: str) -> dict[str, Any]:
+        """Extract structured filters from natural language query, returning a dict.
+
+        This is the legacy interface previously provided by FilterExtractor.
+        Retained for callers that need a plain dict (e.g. pre-agent semantic cache path).
+        """
+        filters: dict[str, Any] = {}
+
+        price_filter = self._extract_price_dict(query)
+        if price_filter:
+            filters["price"] = price_filter
+
+        rooms = self._extract_rooms_dict(query)
+        if rooms is not None:
+            filters["rooms"] = rooms
+
+        city = self._extract_city_with_names(query)
+        if city:
+            filters["city"] = city
+
+        area_filter = self._extract_area_dict(query)
+        if area_filter:
+            filters["area"] = area_filter
+
+        floor = self._extract_floor_dict(query)
+        if floor is not None:
+            filters["floor"] = floor
+
+        distance_filter = self._extract_distance_to_sea(query)
+        if distance_filter:
+            filters["distance_to_sea"] = distance_filter
+
+        maintenance_filter = self._extract_maintenance(query)
+        if maintenance_filter:
+            filters["maintenance"] = maintenance_filter
+
+        bathrooms = self._extract_bathrooms(query)
+        if bathrooms is not None:
+            filters["bathrooms"] = bathrooms
+
+        furnished = self._extract_furnished(query)
+        if furnished is not None:
+            filters["furnished"] = furnished
+
+        year_round = self._extract_year_round(query)
+        if year_round:
+            filters["year_round"] = year_round
+
+        return filters
+
+    def _extract_rooms_dict(self, query: str) -> int | None:
+        """Extract rooms for legacy dict-format path (supports hyphen notation like '2-комнатная')."""
+        q = query.lower()
+        num_map = {"одно": 1, "дву": 2, "трех": 3, "четырех": 4, "пяти": 5, "студия": 1}
+        patterns = [
+            r"(\d+)[\s-]*комнат",
+            r"(одно|дву|трех|четырех|пяти)комнатн",
+            r"студия",
+        ]
+        for pat in patterns:
+            m = re.search(pat, q)
+            if m:
+                rooms_str = m.group(1) if m.lastindex else m.group(0)
+                if rooms_str.isdigit():
+                    return int(rooms_str)
+                for word, num in num_map.items():
+                    if word in rooms_str:
+                        return num
+        return None
+
+    def _extract_price_dict(self, query: str) -> dict[str, int] | None:
+        """Extract price filter returning legacy dict format {"lt": N} etc."""
+        q = query.lower()
+        m = re.search(r"от\s+(\d+[\s\d]*к?)\s+до\s+(\d+[\s\d]*к?)", q)
+        if m:
+            mn = self._parse_number(m.group(1))
+            mx = self._parse_number(m.group(2))
+            if mn and mx:
+                return {"gte": mn, "lte": mx}
+        for pat in [
+            r"дешевле\s+(\d+[\s\d]*к?)",
+            r"до\s+(\d+[\s\d]*к?)",
+            r"меньше\s+(\d+[\s\d]*к?)",
+            r"<\s*(\d+[\s\d]*к?)",
+            r"не\s+дороже\s+(\d+[\s\d]*к?)",
+        ]:
+            m2 = re.search(pat, q)
+            if m2:
+                val = self._parse_number(m2.group(1))
+                if val:
+                    return {"lt": val}
+        for pat in [
+            r"дороже\s+(\d+[\s\d]*к?)",
+            r"от\s+(\d+[\s\d]*к?)",
+            r"больше\s+(\d+[\s\d]*к?)",
+            r">\s*(\d+[\s\d]*к?)",
+        ]:
+            m3 = re.search(pat, q)
+            if m3:
+                val = self._parse_number(m3.group(1))
+                if val:
+                    return {"gt": val}
+        return None
+
+    def _extract_area_dict(self, query: str) -> dict[str, int] | None:
+        """Extract area filter returning legacy dict format."""
+        q = query.lower()
+        for pat in [
+            r"больше\s+(\d+)\s*(?:м|кв)",
+            r"от\s+(\d+)\s*(?:м|кв)",
+            r"меньше\s+(\d+)\s*(?:м|кв)",
+            r"до\s+(\d+)\s*(?:м|кв)",
+        ]:
+            m = re.search(pat, q)
+            if m:
+                area = int(m.group(1))
+                return {"gte": area} if ("больше" in pat or "от" in pat) else {"lte": area}
+        return None
+
+    def _extract_floor_dict(self, query: str) -> int | None:
+        """Extract floor filter returning a single int."""
+        q = query.lower()
+        for pat in [r"(\d+)\s*этаж", r"на\s+(\d+)"]:
+            m = re.search(pat, q)
+            if m:
+                return int(m.group(1))
+        return None
+
+    def _extract_distance_to_sea(self, query: str) -> dict[str, int] | None:
+        """Extract distance to sea filter."""
+        q = query.lower()
+        if re.search(r"первая\s+линия", q):
+            return {"lte": 200}
+        if re.search(r"у\s+моря", q):
+            return {"lte": 200}
+        for pat in [
+            r"до\s+(\d+)\s*(?:м|метр).*?(?:до\s+)?(?:моря|пляжа)",
+            r"не\s+дальше\s+(\d+)\s*(?:м|метр)",
+            r"в\s+(\d+)\s*(?:м|метр).*?от\s+(?:моря|пляжа)",
+            r"(?:моря|пляжа).*?(\d+)\s*(?:м|метр)",
+        ]:
+            m = re.search(pat, q)
+            if m:
+                try:
+                    return {"lte": int(m.group(1))}
+                except (ValueError, IndexError):
+                    continue
+        return None
+
+    def _extract_maintenance(self, query: str) -> dict[str, float] | None:
+        """Extract maintenance cost filter."""
+        q = query.lower()
+        for pat in [
+            r"(?:поддержка|такса).*?(?:до|меньше)\s+(\d+)",
+            r"(?:до|меньше)\s+(\d+).*?(?:поддержка|такса)",
+            r"низкая\s+(?:поддержка|такса)",
+        ]:
+            m = re.search(pat, q)
+            if m:
+                if "низкая" in pat:
+                    return {"lte": 12.0}
+                try:
+                    return {"lte": float(m.group(1))}
+                except (ValueError, IndexError):
+                    continue
+        return None
+
+    def _extract_bathrooms(self, query: str) -> int | None:
+        """Extract number of bathrooms."""
+        q = query.lower()
+        num_map = {"один": 1, "два": 2, "три": 3}
+        for pat in [
+            r"(\d+)\s*санузл",
+            r"(один|два|три)\s+санузл",
+            r"(один|два|три)\s+санузел",
+        ]:
+            m = re.search(pat, q)
+            if m:
+                val = m.group(1)
+                return int(val) if val.isdigit() else num_map.get(val)
+        return None
+
+    def _extract_furnished(self, query: str) -> bool | None:
+        """Extract furnished requirement."""
+        q = query.lower()
+        for pat in [r"без\s+мебели", r"немеблирован"]:
+            if re.search(pat, q):
+                return False
+        for pat in [r"с\s+мебелью", r"меблирован", r"с\s+мебель", r"обставлен"]:
+            if re.search(pat, q):
+                return True
+        return None
+
+    def _extract_year_round(self, query: str) -> str | None:
+        """Extract year-round requirement."""
+        q = query.lower()
+        for pat in [r"круглогодичн", r"круглый\s+год", r"зимой\s+(?:можно|работает)"]:
+            if re.search(pat, q):
+                return "Да"
+        return None
+
+    # Also expose city extraction via APARTMENT_CITY_NAMES fallback (legacy path)
+    def _extract_city_with_names(self, query: str) -> str | None:
+        """Extract city using both aliases and canonical APARTMENT_CITY_NAMES."""
+        q = query.lower()
+        for alias in APARTMENT_CITY_ALIASES_SORTED:
+            if alias in q:
+                return APARTMENT_CITY_ALIASES[alias]
+        for city in APARTMENT_CITY_NAMES:
+            if city.lower() in q:
+                return city
         return None
 
     # --- Semantic query ---
