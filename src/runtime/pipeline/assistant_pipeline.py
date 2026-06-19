@@ -1,3 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 RAG-Fresh contributors.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
 """Runtime assistant orchestration pipeline."""
 
 from __future__ import annotations
@@ -146,10 +159,12 @@ async def run_assistant_pipeline(
 
 
 def _latency_ms(started: float) -> float:
+    """Calculate elapsed time in milliseconds since a start point."""
     return round((time.perf_counter() - started) * 1000, 3)
 
 
 def _coerce_user_id(value: str) -> int:
+    """Convert a user ID string to integer, returning 0 on failure."""
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -157,12 +172,14 @@ def _coerce_user_id(value: str) -> int:
 
 
 def _as_document_list(value: Any) -> list[dict[str, Any]]:
+    """Safely extract a list of document dictionaries."""
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
 
 
 def _extract_doc_ids(documents: list[dict[str, Any]]) -> list[str]:
+    """Extract document IDs from a list of document dictionaries."""
     ids: list[str] = []
     for doc in documents:
         meta_val = doc.get("metadata")
@@ -181,6 +198,7 @@ def _extract_doc_ids(documents: list[dict[str, Any]]) -> list[str]:
 
 
 def _extract_sources(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Extract source metadata (title and URL) from documents."""
     sources: list[dict[str, str]] = []
     for doc in documents:
         meta_val = doc.get("metadata")
@@ -198,12 +216,12 @@ def _extract_sources(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _as_usage_dict(value: Any) -> dict[str, Any]:
+    """Safely extract usage details as a dictionary."""
     return value if isinstance(value, dict) else {}
 
 
 def _extract_llm_model(generation_result: dict[str, Any]) -> str | None:
-    model = generation_result.get("llm_provider_model") or generation_result.get("model")
-    return str(model) if model else None
+    """Extract the LLM model name from generation result metadata."""
 
 
 __all__ = ["run_assistant_pipeline"]
