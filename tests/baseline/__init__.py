@@ -1,7 +1,6 @@
-"""Baseline metrics collection and comparison via Langfuse."""
+"""Baseline metrics collection and comparison."""
 
-from .collector import LangfuseMetricsCollector
 from .manager import BaselineManager, BaselineSnapshot
 
 
-__all__ = ["BaselineManager", "BaselineSnapshot", "LangfuseMetricsCollector"]
+__all__ = ["BaselineManager", "BaselineSnapshot"]
