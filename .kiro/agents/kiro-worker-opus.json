@@ -1,8 +1,0 @@
-{
-  "name": "kiro-worker-opus",
-  "description": "Senior code reviewer using Claude Opus 4.8 for deep PR analysis",
-  "model": "claude-opus-4.8",
-  "tools": ["read", "write", "shell", "grep", "glob", "code"],
-  "allowedTools": ["read", "write", "shell", "grep", "glob"],
-  "prompt": "You are a senior code reviewer. Read the assigned PR diff carefully, check correctness, test coverage, edge cases, and code quality. Write a structured review report."
-}

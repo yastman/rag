@@ -29,6 +29,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 STEERING = REPO_ROOT / ".kiro" / "steering" / "swarm-worker-contract.md"
 
+# .kiro/ is gitignored and untracked (#2820): skip on fresh clones where the
+# steering contract is absent.
+pytestmark = pytest.mark.skipif(
+    not STEERING.exists(),
+    reason=".kiro/steering/swarm-worker-contract.md is untracked (gitignored, #2820)",
+)
+
 # The six fields acceptance tooling scans verbatim (steering §"Worker Report Schema").
 STEERING_CORE_FIELDS = {
     "superpowers_used",
