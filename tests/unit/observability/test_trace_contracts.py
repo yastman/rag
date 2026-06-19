@@ -282,44 +282,6 @@ class TestWriteHistoryScoresContract:
         lf.create_score.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# write_crm_scores: 4 CRM scores contract
-# NOTE: Behavioural tests (tool message parsing, success/error counting, score_id pattern,
-#       empty trace_id skip) live in tests/unit/test_crm_scores.py.
-#       This class tests SCHEMA contracts only: all 4 names present, value types.
-# ---------------------------------------------------------------------------
-
-_CRM_SCORES = ["crm_tool_used", "crm_tools_count", "crm_tools_success", "crm_tools_error"]
-
-
-@pytest.mark.skip(reason="stale: write_crm_scores removed from scoring (#2718)")
-class TestWriteCrmScoresContract:
-    """Schema contract: write_crm_scores must write all 4 CRM scores with correct types."""
-
-    def _written(self, messages, *, trace_id: str = _TRACE_ID) -> dict[str, dict]:
-        from telegram_bot.scoring import write_crm_scores
-
-        lf = MagicMock()
-        write_crm_scores(lf, messages, trace_id=trace_id)
-        return {c.kwargs["name"]: c.kwargs for c in lf.create_score.call_args_list}
-
-    def test_all_4_scores_present(self):
-        """All 4 CRM score names must always be written (contract: complete schema)."""
-        scores = self._written([])
-        missing = [s for s in _CRM_SCORES if s not in scores]
-        assert not missing, f"Missing CRM scores: {missing}"
-
-    def test_crm_tool_used_is_boolean(self):
-        scores = self._written([])
-        assert scores["crm_tool_used"]["data_type"] == "BOOLEAN"
-
-    def test_counts_are_numeric_float(self):
-        """All three count scores must be float (allows arithmetic in dashboards)."""
-        scores = self._written([])
-        for name in ["crm_tools_count", "crm_tools_success", "crm_tools_error"]:
-            assert isinstance(scores[name]["value"], float), f"{name} value should be float"
-
-
 class TestTracedPipelineContract:
     """traced_pipeline must propagate root tags and metadata contract."""
 
@@ -445,45 +407,6 @@ class TestBuildTraceMetadataContract:
         assert "documents" not in metadata
         assert "query_embedding" not in metadata
         assert "voice_audio" not in metadata
-
-
-@pytest.mark.skip(reason="src.voice archived to archive/voice (ARCH-02 #2598)")
-class TestVoiceLifecycleTraceContract:
-    """Voice lifecycle traces should preserve call/session/status contract (#609)."""
-
-    def test_voice_session_id_has_voice_prefix(self):
-        from src.voice.observability import voice_session_id
-
-        assert voice_session_id("call-123") == "voice-call-123"
-        assert voice_session_id("") == "voice-unknown"
-
-    def test_build_voice_trace_metadata_includes_finalize_duration(self):
-        from src.voice.observability import build_voice_trace_metadata
-
-        payload = build_voice_trace_metadata(
-            call_id="call-123",
-            status="finalized",
-            duration_sec=31,
-        )
-        assert payload["call_id"] == "call-123"
-        assert payload["status"] == "finalized"
-        assert payload["duration_sec"] == 31
-
-    def test_update_voice_trace_writes_answered_status(self):
-        from src.voice.observability import update_voice_trace
-
-        with patch("src.voice.observability.update_lifecycle_trace") as update_trace:
-            update_voice_trace(call_id="call-123", status="answered")
-
-        update_trace.assert_called_once_with(
-            family="voice",
-            span_name="voice-session",
-            session_id="voice-call-123",
-            user_id="voice-agent",
-            tags=["voice", "call-lifecycle"],
-            metadata={"call_id": "call-123", "status": "answered"},
-            trace_id=None,
-        )
 
 
 class TestRewriteNodeSourceContracts:
