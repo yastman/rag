@@ -11,11 +11,8 @@ Tests can import the raw handler functions and pass a mock bot directly.
 from __future__ import annotations
 
 import contextlib
-import json
 import logging
-import re
 import time
-import uuid
 from typing import TYPE_CHECKING, Any
 
 from aiogram import F, Router
@@ -238,101 +235,6 @@ async def cmd_clearcache(bot: PropertyBot, message: Message) -> None:
     await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
 
 
-@observe(name="cmd-call", capture_input=False, capture_output=False)
-# stale: depends on archived livekit voice infrastructure (not in deps); voice surface archived post-arch simplification (#2709)
-async def cmd_call(bot: PropertyBot, message: Message) -> None:
-    """Handle /call command - trigger outbound voice call.
-
-    Usage: /call +380501234567 [lead description]
-    Admin-only command.
-    """
-    assert message.from_user is not None
-    if not bot._is_admin(message.from_user.id):
-        await message.answer("Только администраторы могут инициировать звонки.")
-        return
-
-    if not bot.config.livekit_url or not bot.config.sip_trunk_id:
-        await message.answer("Voice service не настроен (LIVEKIT_URL, SIP_TRUNK_ID).")
-        return
-
-    text = (message.text or "").strip()
-    parts = text.split(maxsplit=2)  # /call +380... description
-    if len(parts) < 2:
-        await message.answer("Использование: /call +380501234567 [описание заявки]")
-        return
-
-    phone = parts[1]
-    if not re.match(r"^\+?\d{10,15}$", phone):
-        await message.answer("Неверный формат номера. Пример: +380501234567")
-        return
-
-    lead_desc = parts[2] if len(parts) > 2 else ""
-    trace_id = ""
-    try:
-        trace_id = get_client().get_current_trace_id() or ""
-    except Exception:
-        logger.debug("Failed to resolve current Langfuse trace id for /call", exc_info=True)
-    if not trace_id:
-        trace_id = f"call-{uuid.uuid4().hex}"
-
-    try:
-        from livekit import api
-
-        lk = api.LiveKitAPI(
-            url=bot.config.livekit_url,
-            api_key=bot.config.livekit_api_key,
-            api_secret=bot.config.livekit_api_secret,
-        )
-
-        try:
-            room_name = f"voice-call-{uuid.uuid4().hex[:8]}"
-            call_id = str(uuid.uuid4())
-
-            # 1. Dispatch voice agent to room
-            await lk.agent_dispatch.create_dispatch(
-                api.CreateAgentDispatchRequest(
-                    agent_name="voice-bot",
-                    room=room_name,
-                    metadata=json.dumps(
-                        {
-                            "call_id": call_id,
-                            "phone": phone,
-                            "lead_data": {
-                                "description": lead_desc,
-                                "triggered_by": message.from_user.id,
-                            },
-                            "callback_chat_id": message.chat.id,
-                            "langfuse_trace_id": trace_id,
-                        }
-                    ),
-                )
-            )
-
-            # 2. Create SIP participant (dials the phone)
-            await lk.sip.create_sip_participant(
-                api.CreateSIPParticipantRequest(
-                    room_name=room_name,
-                    sip_trunk_id=bot.config.sip_trunk_id,
-                    sip_call_to=phone,
-                    participant_identity=f"phone-{phone}",
-                    participant_name="Phone User",
-                    krisp_enabled=True,
-                    wait_until_answered=True,
-                )
-            )
-
-            await message.answer(
-                f"Звонок инициирован!\nID: `{call_id}`\nТелефон: {phone}\nRoom: {room_name}",
-                parse_mode="Markdown",
-            )
-        finally:
-            await lk.aclose()
-
-    except Exception:
-        logger.exception("Failed to initiate call to %s", phone)
-        await message.answer("Ошибка инициации звонка. Попробуйте позже.")
-
-
 @observe(name="telegram-history-search")
 async def cmd_history(bot: PropertyBot, message: Message) -> None:
     """Handle /history command - semantic search in conversation history."""
@@ -477,9 +379,6 @@ def create_commands_router(bot_instance: PropertyBot) -> Router:
     async def _cmd_metrics(message: Message) -> None:
         await cmd_metrics(bot_instance, message)
 
-    async def _cmd_call(message: Message) -> None:
-        await cmd_call(bot_instance, message)
-
     async def _cmd_history(message: Message) -> None:
         await cmd_history(bot_instance, message)
 
@@ -493,7 +392,6 @@ def create_commands_router(bot_instance: PropertyBot) -> Router:
     router.message(Command("clear"))(_cmd_clear)
     router.message(Command("stats"))(_cmd_stats)
     router.message(Command("metrics"))(_cmd_metrics)
-    router.message(Command("call"))(_cmd_call)
     router.message(Command("history"))(_cmd_history)
     router.message(Command("clearcache"))(_cmd_clearcache)
 

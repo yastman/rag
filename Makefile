@@ -89,7 +89,6 @@ PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_*middlewares*.py \
 	tests/unit/test_agent_streaming.py \
 	tests/unit/test_card_context.py \
-	tests/unit/test_cmd_call.py \
 	tests/unit/test_docker_static_validation*.py \
 	tests/unit/test_error_handler.py \
 	tests/unit/test_feedback.py \

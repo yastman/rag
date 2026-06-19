@@ -263,20 +263,6 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("expert_topics_enabled", "EXPERT_TOPICS_ENABLED"),
     )
 
-    # LiveKit (voice calls) (optional-profile: voice; kept because command_handlers.py reads these)
-    livekit_url: str = Field(
-        default="", validation_alias=AliasChoices("LIVEKIT_URL", "livekit_url")
-    )
-    livekit_api_key: str = Field(
-        default="", validation_alias=AliasChoices("LIVEKIT_API_KEY", "livekit_api_key")
-    )
-    livekit_api_secret: str = Field(
-        default="", validation_alias=AliasChoices("LIVEKIT_API_SECRET", "livekit_api_secret")
-    )
-    sip_trunk_id: str = Field(
-        default="", validation_alias=AliasChoices("SIP_TRUNK_ID", "sip_trunk_id")
-    )
-
     # Voice transcription (optional-profile: voice; kept because bot.py reads these)
     show_transcription: bool = Field(
         default=True,
