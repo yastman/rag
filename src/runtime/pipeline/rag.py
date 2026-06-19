@@ -264,6 +264,9 @@ async def _embed_and_cache_query_vectors(
     aembed_hybrid -> dense+sparse gather.
     """
     dense_vector: list[float] | None = None
+    # This function is only entered when query_embedding is None (post-rewrite path).
+    # The sole call site always passes sparse_embedding=None and colbert_query=None,
+    # so re-initializing here is equivalent; downstream _ensure_sparse_vector recomputes anyway.
     sparse_vector: Any = None
     colbert_query: list[list[float]] | None = None
     _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
