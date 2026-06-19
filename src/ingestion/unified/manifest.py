@@ -43,8 +43,18 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-class GDriveManifest:
+class FileManifest:
     """Manages stable file identity with copy-vs-rename detection (#1603).
+
+    This manifest was previously known as ``GDriveManifest`` and the data file
+    persisted as ``.gdrive_manifest.json`` in the sync directory. In order to
+    reflect that the unified ingestion pipeline now operates on local files
+    without any Google Drive semantics, the class has been renamed to
+    ``FileManifest`` and the backing file has been renamed to
+    ``.file_manifest.json``. For backward compatibility, an existing
+    ``.gdrive_manifest.json`` will still be loaded on startup, and a
+    compatibility alias ``GDriveManifest`` is provided at the bottom of this
+    module.
 
     Identity strategy (in priority order):
     1. Exact composite key ``path:content_hash`` — same file, same content.
@@ -64,7 +74,18 @@ class GDriveManifest:
     """
 
     def __init__(self, manifest_dir: Path) -> None:
-        self._path = manifest_dir / ".gdrive_manifest.json"
+        """Initialise the manifest in the given directory.
+
+        The manifest is stored as ``.file_manifest.json``. If an older
+        ``.gdrive_manifest.json`` exists and the new file does not, the
+        legacy file will be used instead for loading data. On save, the
+        manifest always writes to ``.file_manifest.json``.
+        """
+        # Primary and legacy manifest paths
+        self._primary_path = manifest_dir / ".file_manifest.json"
+        self._legacy_path = manifest_dir / ".gdrive_manifest.json"
+        # Effective path used for load/save. Start with primary.
+        self._path = self._primary_path
         self._lock = threading.Lock()
         self._key_to_id: dict[str, str] = {}
         self._hash_to_id: dict[str, str] = {}
@@ -72,7 +93,21 @@ class GDriveManifest:
         self.load()
 
     def load(self) -> None:
-        """Load manifest from disk."""
+        """Load the manifest from disk.
+
+        Preference order:
+        1. If the primary ``.file_manifest.json`` exists, load it.
+        2. Else if the legacy ``.gdrive_manifest.json`` exists, load it and
+           continue using the primary path for future saves.
+        3. If neither exists, start with empty state.
+        """
+        # Determine which file to load: primary takes precedence
+        if not self._primary_path.exists() and self._legacy_path.exists():
+            # Use legacy path for loading but keep primary path for saves
+            self._path = self._legacy_path
+        else:
+            self._path = self._primary_path
+
         if not self._path.exists():
             logger.info("No manifest found at %s, starting fresh", self._path)
             return
@@ -108,15 +143,16 @@ class GDriveManifest:
             self._path_to_hash = {}
 
     def save(self) -> None:
-        """Persist manifest to disk. Must be called with lock held."""
+        """Persist the manifest to disk. Must be called with lock held."""
         data = {
             "hash_to_id": self._hash_to_id,
             "key_to_id": self._key_to_id,
             "path_to_hash": self._path_to_hash,
         }
-        tmp = self._path.with_suffix(".tmp")
+        # Always write to the primary path. Use a temporary file for atomicity.
+        tmp = self._primary_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
-        tmp.replace(self._path)
+        tmp.replace(self._primary_path)
 
     def get_or_create_id(self, path: str, content_hash: str) -> str:
         """Return a stable file_id for the given path and content hash.
@@ -186,6 +222,12 @@ class GDriveManifest:
                 logger.debug("Manifest: removed path=%s", path)
 
 
+
 def compute_content_hash_from_bytes(content: bytes) -> str:
     """Compute a short SHA-256 hash from raw file bytes."""
     return hashlib.sha256(content).hexdigest()[:16]
+
+# Backwards compatibility: alias the old class name to the new implementation.
+# This allows code written against the old ``GDriveManifest`` name to continue
+# functioning while clients migrate. Eventually this alias can be removed.
+GDriveManifest = FileManifest
