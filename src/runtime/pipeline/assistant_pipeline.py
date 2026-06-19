@@ -222,6 +222,8 @@ def _as_usage_dict(value: Any) -> dict[str, Any]:
 
 def _extract_llm_model(generation_result: dict[str, Any]) -> str | None:
     """Extract the LLM model name from generation result metadata."""
+    model = generation_result.get("llm_provider_model") or generation_result.get("model")
+    return str(model) if model else None
 
 
 __all__ = ["run_assistant_pipeline"]
