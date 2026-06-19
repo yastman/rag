@@ -46,8 +46,8 @@ These modules have substantively equivalent implementations in both locations. T
 | Path | src/ lines | tg/ lines | Status | Action |
 |------|-----------|----------|--------|--------|
 | `__init__.py` | 49 | 1 | **tg/ is minimal (just docstring)** | Remove `telegram_bot/__init__.py` stub; bot imports flow through `src` |
-| `services/_retry.py` | 69 | 19 | **src/ is canonical** | Migrate `telegram_bot/services/_retry.py` callers to use `src.services._retry` |
-| `services/vectorizers.py` | 76 | 17 | **src/ is canonical** | Migrate bot callers to `src.services.vectorizers` |
+| `services/_retry.py` | 69 | 19 | **Re-export shim** (tg re-exports from src/) | Remove tg copy — callers already import from src/ |
+| `services/vectorizers.py` | 76 | 17 | **Re-export shim** (tg re-exports from src/) | Remove tg copy — callers already use src/ path |
 | `models/__init__.py` | 6 | 1 | **tg/ is minimal** | Remove stub; import from `src.models` |
 | `evaluation/__init__.py` | 1 | 5 | **tg/ is actual code** | Move `telegram_bot/evaluation/__init__.py` content to `src/evaluation/` |
 
@@ -61,9 +61,9 @@ These modules exist in both locations with **different implementations**, indica
 
 | Path | src/ lines | tg/ lines | Divergence | Action |
 |------|-----------|----------|-----------|--------|
-| `observability_bootstrap.py` | 3 | 9 | Different initialization logic | **Investigate intent:** Is one bootstrap for lib, one for bot? Merge or clarify boundary |
-| `observability_payloads.py` | 3 | 9 | Different payload structure | **Investigate intent:** Merge if compatible, or clarify which is canonical |
-| `scoring.py` | 23 | 29 | Different scoring logic | **Investigate intent:** Bot-specific or shared? If shared, consolidate to `src/` |
+| `observability_bootstrap.py` | 3 | 9 | **Shim chain** (tg → src.observability_bootstrap → src.observability.bootstrap, no divergence) | Remove intermediate shim |
+| `observability_payloads.py` | 3 | 9 | **Shim chain** (tg → src.observability_payloads → src.observability.safe_payloads, no divergence) | Remove intermediate shim |
+| `scoring.py` | 23 | 29 | **Shim chain** (both re-export src.observability.scores, no divergence) | Remove intermediate shims |
 | `services/__init__.py` | 33 | 61 | Different exports and initialization | **Investigate intent:** Bot layer may expose bot-specific services; clarify boundary |
 
 **Action:** Audit each for intent, then converge.
@@ -77,8 +77,8 @@ These modules exist in both locations with **different implementations**, indica
 Total bytes in parallel modules: ~2.1 KB (small absolute size, but high conceptual debt).
 
 - **Shims** (clearly re-export): `phone_utils.py`, all `services/*.py` except `_retry.py` and `vectorizers.py`
-- **Duplicates** (substantively same): `__init__.py`, `models/__init__.py`, `evaluation/__init__.py`, `services/_retry.py`, `services/vectorizers.py`
-- **Diverged** (unclear ownership): `observability_*.py`, `scoring.py`, `services/__init__.py`
+- **Duplicates** (substantively same): `__init__.py`, `models/__init__.py`, `evaluation/__init__.py`, `services/_retry.py` (shim), `services/vectorizers.py` (shim)
+- **Shim chains** (no divergence): `observability_bootstrap.py`, `observability_payloads.py`, `scoring.py`, `services/__init__.py`
 
 ### Layering Contract Status
 
