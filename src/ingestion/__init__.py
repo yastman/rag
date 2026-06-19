@@ -17,7 +17,6 @@ __all__ = [
     "FlowConfig",
     "IngestionService",
     "IngestionStats",
-    "UniversalDocumentParser",
     "check_cocoindex_available",
     "create_document_flow",
     "load_contextual_chunks",
@@ -30,7 +29,6 @@ if TYPE_CHECKING:
     from .cocoindex_flow import FlowConfig, check_cocoindex_available, create_document_flow
     from .contextual_loader import load_contextual_chunks, load_contextual_json
     from .contextual_schema import ContextualChunk, ContextualDocument
-    from .document_parser import UniversalDocumentParser
     from .indexer import DocumentIndexer
     from .service import IngestionService, IngestionStats
 
@@ -44,7 +42,6 @@ _LAZY_ATTRS = {
     "load_contextual_json": (".contextual_loader", "load_contextual_json"),
     "ContextualChunk": (".contextual_schema", "ContextualChunk"),
     "ContextualDocument": (".contextual_schema", "ContextualDocument"),
-    "UniversalDocumentParser": (".document_parser", "UniversalDocumentParser"),
     "DocumentIndexer": (".indexer", "DocumentIndexer"),
     "IngestionService": (".service", "IngestionService"),
     "IngestionStats": (".service", "IngestionStats"),
@@ -61,11 +58,6 @@ _DEPRECATED_EXPORTS = {
         "src.ingestion.docling_client",
         "DoclingConfig",
         "from src.ingestion.docling_client import DoclingConfig",
-    ),
-    "chunk_document": (
-        "src.ingestion.docling_client",
-        "chunk_document",
-        "from src.ingestion.docling_client import chunk_document",
     ),
     "create_text_for_embedding": (
         "src.ingestion.contextual_schema",
@@ -86,11 +78,6 @@ _DEPRECATED_EXPORTS = {
         "src.ingestion.service",
         "ingest_from_gdrive",
         "from src.ingestion.service import ingest_from_gdrive",
-    ),
-    "parse_document": (
-        "src.ingestion.document_parser",
-        "parse_document",
-        "from src.ingestion.document_parser import parse_document",
     ),
 }
 
