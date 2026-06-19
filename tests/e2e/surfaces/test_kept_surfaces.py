@@ -269,9 +269,11 @@ class TestManagerReplySurface:
         self,
     ) -> None:
         """start_qualification falls back to a plain text reply when dialog_manager is None."""
+        from aiogram.types import Message
+
         from telegram_bot.handlers.handoff import start_qualification
 
-        message = AsyncMock()
+        message = AsyncMock(spec=Message)
         message.answer = AsyncMock()
 
         await start_qualification(message, dialog_manager=None)
