@@ -1,4 +1,5 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
+	deps-audit vuln-audit arch-lint complexity docs-coverage audit \
 	test-preflight test-smoke test-load-eviction \
 	test-telegram-adapter test-providers-extra test-ingest-extra \
 	smoke-fast smoke-zoo \
@@ -235,6 +236,36 @@ compile-python: ## Compile all repo-tracked Python files (#2320)
 
 all-checks: lint type-check security ## Run all code quality checks
 	@echo "$(GREEN)✓✓✓ All checks passed! ✓✓✓$(NC)"
+
+deps-audit: ## Check for unused/missing/misplaced deps with deptry
+	@echo "$(BLUE)Running deptry dependency audit...$(NC)"
+	uv run --frozen deptry .
+	@echo "$(GREEN)✓ deptry complete$(NC)"
+
+vuln-audit: ## Audit installed packages in .venv for known CVEs with pip-audit
+	@echo "$(BLUE)Running pip-audit vulnerability scan...$(NC)"
+	uv run --frozen pip-audit --path .venv
+	@echo "$(GREEN)✓ pip-audit complete$(NC)"
+
+arch-lint: ## Enforce module boundary contracts with import-linter
+	@echo "$(BLUE)Running import-linter architecture checks...$(NC)"
+	uv run --frozen lint-imports
+	@echo "$(GREEN)✓ import-linter complete$(NC)"
+
+complexity: ## Report cyclomatic complexity hotspots (C or worse) with radon
+	@echo "$(BLUE)Cyclomatic complexity (grade C+)...$(NC)"
+	uv run --frozen radon cc src telegram_bot -s -n C
+	@echo "$(BLUE)Maintainability index...$(NC)"
+	uv run --frozen radon mi src telegram_bot -s
+	@echo "$(GREEN)✓ radon complete$(NC)"
+
+docs-coverage: ## Check docstring coverage on stable public layers (≥70%)
+	@echo "$(BLUE)Checking docstring coverage...$(NC)"
+	uv run --frozen interrogate src/core src/runtime src/ingestion/unified -v --fail-under 70
+	@echo "$(GREEN)✓ interrogate complete$(NC)"
+
+audit: lint type-check security deps-audit vuln-audit arch-lint complexity ## Full quality + security + architecture audit
+	@echo "$(GREEN)✓✓✓ Full audit complete ✓✓✓$(NC)"
 
 # =============================================================================
 # TESTING

@@ -62,7 +62,7 @@ class ColbertRerankerService:
         if not documents:
             return []
         result = await self._client.rerank(query, documents, top_k)
-        return result.results
+        return result.results  # type: ignore[no-any-return]
 
     async def close(self):
         """Close HTTP client."""

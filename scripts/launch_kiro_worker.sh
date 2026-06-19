@@ -123,6 +123,8 @@ if [[ -n "${WORKER_WORKTREE:-}" && ! -d "$WORKER_WORKTREE" ]]; then
   echo "ERROR: WORKER_WORKTREE is not a directory: $WORKER_WORKTREE" >&2
   exit 2
 fi
+# Normalize to absolute path so wrapper cd works regardless of caller CWD
+WORKER_CWD="$(cd "$WORKER_CWD" && pwd)"
 WORKER_TIMEOUT="${WORKER_TIMEOUT:-1800}"
 SIGNAL_FLAG="$LOG_DIR/.${WORKER_NAME}.signaled"
 rm -f "$SIGNAL_FLAG"

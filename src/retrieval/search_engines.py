@@ -547,7 +547,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
         # If query is a string, use full hybrid + ColBERT rerank
         if isinstance(query_embedding, str):
-            return self._search_hybrid_colbert(
+            return self._search_hybrid_colbert(  # type: ignore[no-any-return]
                 query_embedding,
                 top_k,
                 score_threshold,

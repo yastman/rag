@@ -2128,7 +2128,7 @@ class PropertyBot:
         )
         if result.needs_agent:
             return None  # caller falls through to sdk_agent path
-        return result.answer
+        return result.answer  # type: ignore[no-any-return]
 
     @staticmethod
     def _trace_guard_blocked(

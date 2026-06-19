@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -52,12 +52,12 @@ class BgeM3EmbeddingProvider(EmbeddingProvider):
         if not texts:
             return []
         result = await self._client.encode_dense(texts)
-        return result.vectors
+        return cast(list[list[float]], result.vectors)
 
     async def aembed_query(self, text: str) -> list[float]:
         """Compute a dense query embedding."""
         result = await self._client.encode_dense([text])
-        return result.vectors[0]
+        return cast(list[float], result.vectors[0])
 
     async def aembed_dense_query(self, text: str) -> tuple[list[float], float | None]:
         """Compute a dense query embedding and expose BGE processing time."""
@@ -67,14 +67,14 @@ class BgeM3EmbeddingProvider(EmbeddingProvider):
     async def aembed_sparse_query(self, text: str) -> dict[str, Any]:
         """Compute a sparse query vector."""
         result = await self._client.encode_sparse([text])
-        return result.weights[0]
+        return cast(dict[str, Any], result.weights[0])
 
     async def aembed_sparse_documents(self, texts: list[str]) -> list[dict[str, Any]]:
         """Compute sparse document vectors."""
         if not texts:
             return []
         result = await self._client.encode_sparse(texts)
-        return result.weights
+        return cast(list[dict[str, Any]], result.weights)
 
     async def aembed_hybrid(self, text: str) -> tuple[list[float], dict[str, Any]]:
         """Compute dense and sparse query vectors in one provider call."""
@@ -104,7 +104,7 @@ class BgeM3EmbeddingProvider(EmbeddingProvider):
     async def aembed_colbert_query(self, text: str) -> list[list[float]]:
         """Compute ColBERT query token vectors."""
         result = await self._client.encode_colbert([text])
-        return result.colbert_vecs[0]
+        return cast(list[list[float]], result.colbert_vecs[0])
 
     async def aembed_hybrid_batch(
         self, texts: list[str]

@@ -141,6 +141,12 @@ dev = [
     "telethon>=1.42.0",
     "pytest-split>=0.11.0",
     "fakeredis>=2.26.0",
+    # Code-quality audit layer (added per tooling-enhancement plan)
+    "deptry>=0.23.0",
+    "pip-audit>=2.9.0",
+    "import-linter>=2.3.0",
+    "radon>=6.0.1",
+    "interrogate>=1.7.0",
 ]
 
 # =============================================================================
@@ -214,8 +220,8 @@ exclude = [
 line-length = 100
 indent-width = 4
 
-# Target Python 3.13 (aligned with Docker runtime; #1307)
-target-version = "py313"
+# Target Python 3.12 (aligned with requires-python floor and mypy python_version)
+target-version = "py312"
 
 # =============================================================================
 # LINTING RULES
@@ -321,7 +327,7 @@ docstring-code-line-length = "dynamic"
 # Run: mypy .
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  # Set to true for strict mode
@@ -341,10 +347,72 @@ module = "scripts.archive.*"
 ignore_errors = true
 
 # =============================================================================
+# IMPORT-LINTER CONFIGURATION (Architecture boundary enforcement)
+# =============================================================================
+# Contracts encode the key layering invariants documented in
+# docs/architecture/STRUCTURE.md. Run with: uv run lint-imports
+#
+# Layer model (strict, inner cannot import outer):
+#   src/core  →  src/runtime  →  telegram_bot
+# The archived surfaces (archive/, services/) must never be imported by src/.
+
+[tool.importlinter]
+root_packages = ["src", "telegram_bot"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Core must not import telegram_bot"
+type = "forbidden"
+source_modules = ["src.core"]
+forbidden_modules = ["telegram_bot"]
+
+[[tool.importlinter.contracts]]
+# src.core.assistant is the documented public entrypoint: it orchestrates
+# src.runtime.pipeline by design (see README "Assistant core entrypoint").
+# src.core.contracts and src.core.telemetry are shared contracts consumed by
+# both core and runtime — bidirectional coupling is intentional.
+# The real invariant to guard is that runtime must not import telegram_bot.
+name = "Runtime must not import telegram_bot"
+type = "forbidden"
+source_modules = ["src.runtime"]
+forbidden_modules = ["telegram_bot"]
+
+[[tool.importlinter.contracts]]
+name = "Core contracts layer is import-independent"
+type = "independence"
+modules = ["src.core.contracts"]
+
+[[tool.importlinter.contracts]]
+name = "src must not import archive"
+type = "forbidden"
+source_modules = ["src"]
+forbidden_modules = ["archive"]
+
+# =============================================================================
 # BANDIT CONFIGURATION (Security Linting)
 # =============================================================================
 # Uncomment to enable security checks
 # Run: bandit -r . -c pyproject.toml
+
+# =============================================================================
+# VULTURE CONFIGURATION (Dead-code detection)
+# =============================================================================
+# Moved from Makefile CLI flags so `uv run vulture` picks up config automatically.
+# Whitelist dynamic entry points (handlers, DI hooks, Telegram callbacks) in
+# vulture_whitelist.py at the repo root.
+
+[tool.vulture]
+paths = ["src", "telegram_bot", "services", "scripts", "vulture_whitelist.py"]
+exclude = [
+    ".venv/*",
+    "archive/*",
+    "scripts/archive/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+    "*/dist-info/*",
+]
+min_confidence = 80
+sort_by_size = true
 
 [tool.bandit]
 exclude_dirs = [".venv", "tests", "archive", "scripts/archive", "__pycache__"]
@@ -357,7 +425,7 @@ skips = ["B101"]  # Skip assert_used (common in tests)
 
 [tool.pylint.main]
 # Python version for compatibility checks
-py-version = "3.13"
+py-version = "3.12"
 
 # Files/directories to exclude
 ignore = ["tests", ".venv", "__pycache__"]
