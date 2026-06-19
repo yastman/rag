@@ -2508,6 +2508,27 @@ async def test_hybrid_retrieve_stores_bundle_after_hybrid_colbert(mock_cache, mo
     mock_cache.store_bge_m3_query_bundle.assert_awaited_once()
 
 
+def test_compute_retrieval_filters_finance_short_query_prefers_faq():
+    from src.runtime.pipeline.rag import _compute_retrieval_filters
+
+    plan = _compute_retrieval_filters("ВНЖ", {"city": "X"}, "finance")
+
+    assert plan.prefer_faq_doc_type is True
+    assert plan.active_filters == {"city": "X", "topic": "finance", "doc_type": "faq"}
+    assert plan.relaxed_filters == {"city": "X", "topic": "finance"}
+    assert plan.base_filters == {"city": "X"}
+
+
+def test_compute_retrieval_filters_no_topic_hint_keeps_user_filters():
+    from src.runtime.pipeline.rag import _compute_retrieval_filters
+
+    plan = _compute_retrieval_filters("a longer multi word query here", {"city": "X"}, None)
+
+    assert plan.prefer_faq_doc_type is False
+    assert plan.active_filters == {"city": "X"}
+    assert plan.initial_filters == {"city": "X"}
+
+
 async def test_cache_check_skips_bundle_when_pre_computed(mock_cache):
     """_cache_check skips bundle cache when pre_computed_embedding is provided."""
     from unittest.mock import AsyncMock

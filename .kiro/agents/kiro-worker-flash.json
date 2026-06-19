@@ -1,8 +1,0 @@
-{
-  "name": "kiro-worker-flash",
-  "description": "Secretary and research worker for rapid intake and analysis tasks",
-  "model": "claude-haiku-4.5",
-  "tools": ["read", "write", "shell", "grep", "glob", "code"],
-  "allowedTools": ["read", "write", "shell", "grep", "glob"],
-  "prompt": "You are a swarm secretary/research worker. Analyze issues, write report files, and execute shell commands (including tmux wake-up) as instructed."
-}

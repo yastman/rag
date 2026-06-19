@@ -21,6 +21,7 @@ import hashlib
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from src.observability import get_client, observe
@@ -92,6 +93,30 @@ _HARD_EVIDENCE_CONSTRAINTS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], 
     ("airport", ("аэропорт", "airport"), ("аэропорт", "airport")),
     ("helipad", ("вертол", "helipad", "helicopter"), ("вертол", "helipad", "helicopter")),
 )
+
+
+@dataclass(frozen=True)
+class _RetrievalFilterPlan:
+    active_filters: dict[str, Any] | None
+    relaxed_filters: dict[str, Any] | None
+    base_filters: dict[str, Any] | None
+    initial_filters: dict[str, Any] | None
+    final_filters: dict[str, Any] | None
+    prefer_faq_doc_type: bool
+    dense_weight: float
+    sparse_weight: float
+
+
+@dataclass
+class _RetrievalOutcome:
+    results: list[dict[str, Any]]
+    search_meta: dict[str, Any]
+    colbert_search_used: bool
+    final_filters: dict[str, Any] | None
+    initial_results_count: int
+    qdrant_search_attempts: int
+    retrieval_relaxed_from_topic_filter: bool
+    retrieval_relax_stage: str | None
 
 
 def _find_missing_evidence_constraints(
@@ -199,6 +224,132 @@ async def _run_relaxed_retrieval(
         top_k=top_k,
         dense_weight=dense_weight,
         sparse_weight=sparse_weight,
+    )
+
+
+# ---------------------------------------------------------------------------
+# _hybrid_retrieve helpers
+# ---------------------------------------------------------------------------
+
+
+async def _load_cached_query_bundle(cache: Any, query: str) -> Any | None:
+    """Return a cached BGE-M3 query bundle if the cache exposes one, else None."""
+    if not callable(getattr(cache, "get_bge_m3_query_bundle", None)):
+        return None
+    try:
+        maybe_bundle = await cache.get_bge_m3_query_bundle(query)
+    except Exception:
+        logger.debug("Bundle cache check failed (non-critical), skipping")
+        return None
+    if (
+        maybe_bundle is not None
+        and hasattr(maybe_bundle, "dense")
+        and isinstance(maybe_bundle.dense, list)
+    ):
+        return maybe_bundle
+    return None
+
+
+async def _embed_and_cache_query_vectors(
+    query: str,
+    *,
+    cache: Any,
+    embeddings: Any,
+    sparse_embeddings: Any,
+) -> tuple[list[float] | None, Any, list[list[float]] | None]:
+    """Embed (and cache) dense/sparse/colbert vectors for a rewritten query.
+
+    Preserves the original fallback ordering exactly:
+    embedding-cache -> sparse-cache -> aembed_hybrid_with_colbert ->
+    aembed_hybrid -> dense+sparse gather.
+    """
+    dense_vector: list[float] | None = None
+    # This function is only entered when query_embedding is None (post-rewrite path).
+    # The sole call site always passes sparse_embedding=None and colbert_query=None,
+    # so re-initializing here is equivalent; downstream _ensure_sparse_vector recomputes anyway.
+    sparse_vector: Any = None
+    colbert_query: list[list[float]] | None = None
+    _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
+
+    dense_vector = await cache.get_embedding(query)
+    if dense_vector is not None:
+        return dense_vector, sparse_vector, colbert_query
+
+    sparse_cached = await cache.get_sparse_embedding(query)
+    if sparse_cached is not None:
+        dense_vector = await embeddings.aembed_query(query)
+        await cache.store_embedding(query, dense_vector)
+        return dense_vector, sparse_cached, colbert_query
+
+    if callable(
+        getattr(embeddings, "aembed_hybrid_with_colbert", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert):
+        dense_vector, sparse_vector, colbert_query = await embeddings.aembed_hybrid_with_colbert(
+            query
+        )
+        await cache.store_embedding(query, dense_vector)
+        await cache.store_sparse_embedding(query, sparse_vector)
+        if (
+            _has_bundle_cache
+            and dense_vector is not None
+            and sparse_vector is not None
+            and colbert_query is not None
+        ):
+            try:
+                bundle_cls = _bge_m3_query_bundle_cls()
+                await cache.store_bge_m3_query_bundle(
+                    query,
+                    bundle_cls(dense=dense_vector, sparse=sparse_vector, colbert=colbert_query),
+                )
+            except Exception:
+                logger.debug("Bundle store failed (non-critical), skipping")
+        return dense_vector, sparse_vector, colbert_query
+
+    if callable(getattr(embeddings, "aembed_hybrid", None)) and asyncio.iscoroutinefunction(
+        embeddings.aembed_hybrid
+    ):
+        dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
+        await cache.store_embedding(query, dense_vector)
+        await cache.store_sparse_embedding(query, sparse_vector)
+        return dense_vector, sparse_vector, colbert_query
+
+    async def _get_dense() -> list[float]:
+        vec: list[float] = await embeddings.aembed_query(query)
+        await cache.store_embedding(query, vec)
+        return vec
+
+    async def _get_sparse() -> Any:
+        vec = await sparse_embeddings.aembed_query(query)
+        await cache.store_sparse_embedding(query, vec)
+        return vec
+
+    dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
+    return dense_vector, sparse_vector, colbert_query
+
+
+async def _resolve_query_vectors(
+    query: str,
+    dense_vector: list[float] | None,
+    sparse_vector: Any,
+    colbert_query: list[list[float]] | None,
+    *,
+    cache: Any,
+    embeddings: Any | None,
+    sparse_embeddings: Any,
+) -> tuple[list[float] | None, Any, list[list[float]] | None]:
+    """Resolve dense/sparse/colbert vectors after a query rewrite.
+
+    No-op when dense_vector is already present or embeddings is None.
+    """
+    if dense_vector is not None or embeddings is None:
+        return dense_vector, sparse_vector, colbert_query
+
+    bundle = await _load_cached_query_bundle(cache, query)
+    if bundle is not None:
+        return bundle.dense, bundle.sparse, bundle.colbert
+
+    return await _embed_and_cache_query_vectors(
+        query, cache=cache, embeddings=embeddings, sparse_embeddings=sparse_embeddings
     )
 
 
@@ -413,203 +564,54 @@ async def _cache_check(
     }
 
 
-# ---------------------------------------------------------------------------
-# Step 2: Hybrid retrieve
-# ---------------------------------------------------------------------------
-
-
-@observe(name="hybrid-retrieve", capture_input=False, capture_output=False)
-async def _hybrid_retrieve(
-    query: str,
-    query_embedding: list[float] | None,
+async def _store_search_results(
     *,
     cache: Any,
-    sparse_embeddings: Any,
+    dense_vector: list[float],
+    results: list[dict[str, Any]],
+    search_meta: dict[str, Any],
+    initial_filters: dict[str, Any] | None,
+    final_filters: dict[str, Any] | None,
+    retrieval_config: dict[str, Any],
+) -> None:
+    """Store retrieval results under the de-duplicated filter targets."""
+    if not results or search_meta.get("backend_error", False):
+        return
+    stored_filters: list[dict[str, Any] | None] = []
+    cache_targets = [final_filters] if final_filters != initial_filters else [initial_filters]
+    for cache_filters in cache_targets:
+        normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
+        if normalized_filters in stored_filters:
+            continue
+        await cache.store_search_results(
+            dense_vector, normalized_filters, results, retrieval_config=retrieval_config
+        )
+        stored_filters.append(normalized_filters)
+
+
+async def _retrieve_with_relaxation(
+    *,
     qdrant: Any,
-    embeddings: Any | None = None,
-    colbert_query: list[list[float]] | None = None,
-    sparse_embedding: Any = None,
-    filters: dict[str, Any] | None = None,
-    topic_hint: str | None = None,
-    top_k: int = 20,
-    latency_stages: dict[str, float],
-) -> dict[str, Any]:
-    """Retrieve documents via hybrid RRF search with caching.
+    dense_vector: list[float],
+    sparse_vector: Any,
+    colbert_query: list[list[float]] | None,
+    plan: _RetrievalFilterPlan,
+    top_k: int,
+) -> _RetrievalOutcome:
+    """Run initial retrieval and up to two topic-filter relaxation stages."""
+    active_filters = plan.active_filters
+    relaxed_filters = plan.relaxed_filters
+    base_filters = plan.base_filters
+    dense_weight, sparse_weight = plan.dense_weight, plan.sparse_weight
 
-    Returns dict with documents, search_results_count, sparse_embedding, and latency.
-    """
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "top_k": top_k,
-            "topic_hint": topic_hint,
-        }
-    )
-
-    dense_vector = query_embedding
-    # Initialize with pre-computed sparse from _cache_check to avoid redundant BGE-M3 call (#571)
-    sparse_vector: Any = sparse_embedding
-
-    # After rewrite, query_embedding is None — re-embed the rewritten query
-    if dense_vector is None and embeddings is not None:
-        # Check bundle cache first (avoids redundant BGE-M3 calls #1493)
-        _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
-        bundle = None
-        if _has_bundle_cache:
-            try:
-                maybe_bundle = await cache.get_bge_m3_query_bundle(query)
-                if (
-                    maybe_bundle is not None
-                    and hasattr(maybe_bundle, "dense")
-                    and isinstance(maybe_bundle.dense, list)
-                ):
-                    bundle = maybe_bundle
-            except Exception:
-                logger.debug("Bundle cache check failed (non-critical), skipping")
-
-        if bundle is not None:
-            dense_vector = bundle.dense
-            sparse_vector = bundle.sparse
-            colbert_query = bundle.colbert
-        else:
-            dense_vector = await cache.get_embedding(query)
-            if dense_vector is None:
-                sparse_cached = await cache.get_sparse_embedding(query)
-                if sparse_cached is not None:
-                    dense_vector = await embeddings.aembed_query(query)
-                    await cache.store_embedding(query, dense_vector)
-                    sparse_vector = sparse_cached
-                elif callable(
-                    getattr(embeddings, "aembed_hybrid_with_colbert", None)
-                ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert):
-                    (
-                        dense_vector,
-                        sparse_vector,
-                        colbert_query,
-                    ) = await embeddings.aembed_hybrid_with_colbert(query)
-                    await cache.store_embedding(query, dense_vector)
-                    await cache.store_sparse_embedding(query, sparse_vector)
-                    # Store full bundle for future requests (#1493)
-                    if (
-                        _has_bundle_cache
-                        and dense_vector is not None
-                        and sparse_vector is not None
-                        and colbert_query is not None
-                    ):
-                        try:
-                            bundle_cls = _bge_m3_query_bundle_cls()
-                            await cache.store_bge_m3_query_bundle(
-                                query,
-                                bundle_cls(
-                                    dense=dense_vector,
-                                    sparse=sparse_vector,
-                                    colbert=colbert_query,
-                                ),
-                            )
-                        except Exception:
-                            logger.debug("Bundle store failed (non-critical), skipping")
-                elif callable(
-                    getattr(embeddings, "aembed_hybrid", None)
-                ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
-                    dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
-                    await cache.store_embedding(query, dense_vector)
-                    await cache.store_sparse_embedding(query, sparse_vector)
-                else:
-
-                    async def _get_dense() -> list[float]:
-                        vec: list[float] = await embeddings.aembed_query(query)
-                        await cache.store_embedding(query, vec)
-                        return vec
-
-                    async def _get_sparse() -> Any:
-                        vec = await sparse_embeddings.aembed_query(query)
-                        await cache.store_sparse_embedding(query, vec)
-                        return vec
-
-                    dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
-
-    if not dense_vector:
-        dense_vector = []
-
-    # Step 1: Compute retrieval filters before touching the search cache.
     colbert_search_used = False
-    normalized_query = query.strip().lower()
-    query_word_count = len(normalized_query.split()) if normalized_query else 0
-    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
-    base_filters = dict(filters) if isinstance(filters, dict) and filters else None
-    topic_filters = dict(base_filters or {})
-    if topic_hint:
-        topic_filters["topic"] = topic_hint
-
-    active_filters = dict(topic_filters) if topic_filters else None
-    relaxed_filters = dict(base_filters) if base_filters else None
-    initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
-    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
-    initial_results_count: int | None = None
+    qdrant_search_attempts = 0
     retrieval_relaxed_from_topic_filter = False
     retrieval_relax_stage: str | None = None
-    qdrant_search_attempts = 0
-    dense_weight, sparse_weight = _new_query_preprocessor().get_rrf_weights(query)
-    if prefer_faq_doc_type and topic_hint:
-        active_filters = dict(topic_filters)
-        active_filters["doc_type"] = "faq"
-        relaxed_filters = dict(topic_filters) if topic_filters else None
-        initial_filters = dict(active_filters)
-        final_filters = dict(active_filters)
 
-    start = time.perf_counter()
-
-    # Step 2: Check search cache
-    _retrieval_cfg: dict = {"top_k": top_k}
-    cached_results = await cache.get_search_results(
-        dense_vector, initial_filters, retrieval_config=_retrieval_cfg
-    )
-    if cached_results is not None:
-        latency = time.perf_counter() - start
-        logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
-        cached_ctx = _build_retrieved_context(cached_results)
-        lf.update_current_span(
-            output={
-                "results_count": len(cached_results),
-                "search_cache_hit": True,
-                "duration_ms": round(latency * 1000, 1),
-                "initial_filters": initial_filters,
-                "final_filters": initial_filters,
-                "eval_query": query[:2000],
-                "eval_docs": "\n\n".join(
-                    f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
-                    for d in cached_ctx
-                ),
-            }
-        )
-        return {
-            "documents": cached_results,
-            "search_results_count": len(cached_results),
-            "search_cache_hit": True,
-            "query_embedding": dense_vector,
-            "latency_stages": {**latency_stages, "retrieve": latency},
-            "retrieval_backend_error": False,
-            "retrieval_error_type": None,
-            "retrieved_context": cached_ctx,
-            "rerank_applied": False,
-            "colbert_query": colbert_query,
-            "initial_filters": initial_filters,
-            "final_filters": initial_filters,
-        }
-
-    # Step 3: Get sparse embedding only after a confirmed search-cache miss.
-    if sparse_vector is None:
-        sparse_vector = await cache.get_sparse_embedding(query)
-        if sparse_vector is None:
-            sparse_vector = await sparse_embeddings.aembed_query(query)
-            await cache.store_sparse_embedding(query, sparse_vector)
-
-    # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
         record_pipeline_event("colbert_rerank_attempted")
+
     results, search_meta, colbert_used = await _run_initial_retrieval(
         qdrant=qdrant,
         dense_vector=dense_vector,
@@ -623,12 +625,13 @@ async def _hybrid_retrieve(
     colbert_search_used = colbert_search_used or colbert_used
     qdrant_search_attempts += 1
     initial_results_count = len(results)
+    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
 
     if active_filters and len(results) < 3 and active_filters != relaxed_filters:
         record_pipeline_event("topic_filter_fallback")
         retrieval_relaxed_from_topic_filter = True
         fallback_filters = relaxed_filters if relaxed_filters is not None else None
-        if prefer_faq_doc_type:
+        if plan.prefer_faq_doc_type:
             retrieval_relax_stage = (
                 "topic_and_doc_type_to_topic"
                 if fallback_filters is not None
@@ -668,21 +671,233 @@ async def _hybrid_retrieve(
         qdrant_search_attempts += 1
         final_filters = dict(base_filters) if isinstance(base_filters, dict) else None
 
+    return _RetrievalOutcome(
+        results=results,
+        search_meta=search_meta,
+        colbert_search_used=colbert_search_used,
+        final_filters=final_filters,
+        initial_results_count=initial_results_count,
+        qdrant_search_attempts=qdrant_search_attempts,
+        retrieval_relaxed_from_topic_filter=retrieval_relaxed_from_topic_filter,
+        retrieval_relax_stage=retrieval_relax_stage,
+    )
+
+
+async def _ensure_sparse_vector(
+    query: str,
+    sparse_vector: Any,
+    *,
+    cache: Any,
+    sparse_embeddings: Any,
+) -> Any:
+    """Resolve the sparse vector after a confirmed search-cache miss."""
+    if sparse_vector is not None:
+        return sparse_vector
+    sparse_vector = await cache.get_sparse_embedding(query)
+    if sparse_vector is None:
+        sparse_vector = await sparse_embeddings.aembed_query(query)
+        await cache.store_sparse_embedding(query, sparse_vector)
+    return sparse_vector
+
+
+async def _lookup_search_cache(
+    query: str,
+    dense_vector: list[float],
+    initial_filters: dict[str, Any] | None,
+    *,
+    cache: Any,
+    colbert_query: list[list[float]] | None,
+    top_k: int,
+    latency_stages: dict[str, float],
+) -> dict[str, Any] | None:
+    """Return a cached retrieval payload on hit, else None. Emits span on hit."""
+    start = time.perf_counter()
+    retrieval_cfg: dict = {"top_k": top_k}
+    cached_results = await cache.get_search_results(
+        dense_vector, initial_filters, retrieval_config=retrieval_cfg
+    )
+    if cached_results is None:
+        return None
+
+    latency = time.perf_counter() - start
+    logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
+    cached_ctx = _build_retrieved_context(cached_results)
+    get_client().update_current_span(
+        output={
+            "results_count": len(cached_results),
+            "search_cache_hit": True,
+            "duration_ms": round(latency * 1000, 1),
+            "initial_filters": initial_filters,
+            "final_filters": initial_filters,
+            "eval_query": query[:2000],
+            "eval_docs": "\n\n".join(
+                f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in cached_ctx
+            ),
+        }
+    )
+    return {
+        "documents": cached_results,
+        "search_results_count": len(cached_results),
+        "search_cache_hit": True,
+        "query_embedding": dense_vector,
+        "latency_stages": {**latency_stages, "retrieve": latency},
+        "retrieval_backend_error": False,
+        "retrieval_error_type": None,
+        "retrieved_context": cached_ctx,
+        "rerank_applied": False,
+        "colbert_query": colbert_query,
+        "initial_filters": initial_filters,
+        "final_filters": initial_filters,
+    }
+
+
+def _compute_retrieval_filters(
+    query: str,
+    filters: dict[str, Any] | None,
+    topic_hint: str | None,
+) -> _RetrievalFilterPlan:
+    """Build the filter variants and RRF weights used by hybrid retrieval."""
+    normalized_query = query.strip().lower()
+    query_word_count = len(normalized_query.split()) if normalized_query else 0
+    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
+
+    base_filters = dict(filters) if isinstance(filters, dict) and filters else None
+    topic_filters = dict(base_filters or {})
+    if topic_hint:
+        topic_filters["topic"] = topic_hint
+
+    active_filters = dict(topic_filters) if topic_filters else None
+    relaxed_filters = dict(base_filters) if base_filters else None
+    initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+
+    dense_weight, sparse_weight = _new_query_preprocessor().get_rrf_weights(query)
+
+    if prefer_faq_doc_type and topic_hint:
+        active_filters = dict(topic_filters)
+        active_filters["doc_type"] = "faq"
+        relaxed_filters = dict(topic_filters) if topic_filters else None
+        initial_filters = dict(active_filters)
+        final_filters = dict(active_filters)
+
+    return _RetrievalFilterPlan(
+        active_filters=active_filters,
+        relaxed_filters=relaxed_filters,
+        base_filters=base_filters,
+        initial_filters=initial_filters,
+        final_filters=final_filters,
+        prefer_faq_doc_type=prefer_faq_doc_type,
+        dense_weight=dense_weight,
+        sparse_weight=sparse_weight,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Step 2: Hybrid retrieve
+# ---------------------------------------------------------------------------
+
+
+@observe(name="hybrid-retrieve", capture_input=False, capture_output=False)
+async def _hybrid_retrieve(
+    query: str,
+    query_embedding: list[float] | None,
+    *,
+    cache: Any,
+    sparse_embeddings: Any,
+    qdrant: Any,
+    embeddings: Any | None = None,
+    colbert_query: list[list[float]] | None = None,
+    sparse_embedding: Any = None,
+    filters: dict[str, Any] | None = None,
+    topic_hint: str | None = None,
+    top_k: int = 20,
+    latency_stages: dict[str, float],
+) -> dict[str, Any]:
+    """Retrieve documents via hybrid RRF search with caching.
+
+    Returns dict with documents, search_results_count, sparse_embedding, and latency.
+    """
+    lf = get_client()
+    lf.update_current_span(
+        input={
+            "query_preview": query[:120],
+            "query_len": len(query),
+            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
+            "top_k": top_k,
+            "topic_hint": topic_hint,
+        }
+    )
+
+    dense_vector, sparse_vector, colbert_query = await _resolve_query_vectors(
+        query,
+        query_embedding,
+        sparse_embedding,
+        colbert_query,
+        cache=cache,
+        embeddings=embeddings,
+        sparse_embeddings=sparse_embeddings,
+    )
+
+    if not dense_vector:
+        dense_vector = []
+
+    # Step 1: Compute retrieval filters before touching the search cache.
+    plan = _compute_retrieval_filters(query, filters, topic_hint)
+    initial_filters = plan.initial_filters
+    dense_weight, sparse_weight = plan.dense_weight, plan.sparse_weight
+
+    start = time.perf_counter()
+
+    # Step 2: Check search cache
+    _retrieval_cfg: dict = {"top_k": top_k}
+    cached_payload = await _lookup_search_cache(
+        query,
+        dense_vector,
+        initial_filters,
+        cache=cache,
+        colbert_query=colbert_query,
+        top_k=top_k,
+        latency_stages=latency_stages,
+    )
+    if cached_payload is not None:
+        return cached_payload
+
+    # Step 3: Get sparse embedding only after a confirmed search-cache miss.
+    sparse_vector = await _ensure_sparse_vector(
+        query, sparse_vector, cache=cache, sparse_embeddings=sparse_embeddings
+    )
+
+    # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
+    outcome = await _retrieve_with_relaxation(
+        qdrant=qdrant,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        colbert_query=colbert_query,
+        plan=plan,
+        top_k=top_k,
+    )
+    results = outcome.results
+    search_meta = outcome.search_meta
+    colbert_search_used = outcome.colbert_search_used
+    final_filters = outcome.final_filters
+    initial_results_count = outcome.initial_results_count
+    qdrant_search_attempts = outcome.qdrant_search_attempts
+    retrieval_relaxed_from_topic_filter = outcome.retrieval_relaxed_from_topic_filter
+    retrieval_relax_stage = outcome.retrieval_relax_stage
+
     if not results:
         record_pipeline_event("retrieval_zero_docs")
 
     # Step 5: Cache results
-    if results and not search_meta.get("backend_error", False):
-        stored_filters: list[dict[str, Any] | None] = []
-        cache_targets = [final_filters] if final_filters != initial_filters else [initial_filters]
-        for cache_filters in cache_targets:
-            normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
-            if normalized_filters in stored_filters:
-                continue
-            await cache.store_search_results(
-                dense_vector, normalized_filters, results, retrieval_config=_retrieval_cfg
-            )
-            stored_filters.append(normalized_filters)
+    await _store_search_results(
+        cache=cache,
+        dense_vector=dense_vector,
+        results=results,
+        search_meta=search_meta,
+        initial_filters=initial_filters,
+        final_filters=final_filters,
+        retrieval_config=_retrieval_cfg,
+    )
 
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))

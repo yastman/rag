@@ -14,12 +14,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 
 REPO = Path(__file__).resolve().parents[2]
 
 STEERING_CONTRACT = REPO / ".kiro" / "steering" / "swarm-worker-contract.md"
 SUPERPOWERS_MAP = REPO / ".kiro" / "skills" / "shared" / "superpowers-map.md"
 VALIDATOR = REPO / "scripts" / "validate_worker_prompt.py"
+
+# .kiro/ is gitignored and untracked (#2820): skip on fresh clones where the
+# steering contract and superpowers map are absent.
+pytestmark = pytest.mark.skipif(
+    not (STEERING_CONTRACT.exists() and SUPERPOWERS_MAP.exists()),
+    reason=".kiro/ steering + superpowers-map are untracked (gitignored, #2820)",
+)
 
 # The canonical three-step implementation chain
 REQUIRED_TRIO = [

@@ -18,6 +18,14 @@ import yaml
 
 SKILLS_DIR = Path(__file__).resolve().parents[2] / ".kiro" / "skills"
 
+# .kiro/ is gitignored and untracked (#2820): on a fresh clone the skill files
+# are absent, so this contract can only run where a local .kiro/skills/ exists
+# (developer machines, or after scripts/install_ready_skills.sh).
+pytestmark = pytest.mark.skipif(
+    not SKILLS_DIR.exists(),
+    reason=".kiro/skills/ is untracked (gitignored, #2820); no skills to validate",
+)
+
 SKILL_FILES = sorted(SKILLS_DIR.glob("*/SKILL.md"))
 
 

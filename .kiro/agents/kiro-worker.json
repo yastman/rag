@@ -1,8 +1,0 @@
-{
-  "name": "kiro-worker",
-  "description": "Swarm implementation worker for assigned worktree and reserved files",
-  "model": "claude-sonnet-4.6",
-  "tools": ["read", "write", "shell", "grep", "glob", "code"],
-  "allowedTools": ["read", "write", "shell", "grep", "glob"],
-  "prompt": "You are a swarm implementation worker. Work only in assigned worktree and reserved files."
-}

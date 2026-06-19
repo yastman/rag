@@ -285,6 +285,20 @@ def mock_get_client(isolate_otel_langfuse):
 
 
 @pytest.fixture(autouse=True)
+def mock_rag_pipeline_get_client():
+    """Patch src.runtime.pipeline.rag.get_client for unit tests that use _hybrid_retrieve.
+
+    Uses create=True so the patch is safe even when the module is imported
+    for the first time inside the test body. This avoids get_client()
+    returning None (no active Langfuse trace), which would fail with
+    AttributeError on lf.update_current_span().
+    """
+    mock = MagicMock()
+    with patch("src.runtime.pipeline.rag.get_client", return_value=mock, create=True):
+        yield mock
+
+
+@pytest.fixture(autouse=True)
 def isolate_otel_langfuse(monkeypatch):
     """Block OTEL/Langfuse network calls in unit tests.
 

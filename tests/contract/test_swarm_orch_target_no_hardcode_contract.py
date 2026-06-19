@@ -22,9 +22,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_DIR = REPO_ROOT / ".kiro" / "skills"
+
+# .kiro/ is gitignored and untracked (#2820): skip on fresh clones with no
+# local .kiro/skills/ tree.
+pytestmark = pytest.mark.skipif(
+    not SKILLS_DIR.exists(),
+    reason=".kiro/skills/ is untracked (gitignored, #2820)",
+)
 
 # Pattern that matches a hardcoded tmux orchestrator window name:
 # e.g. claude:orch-issues-intake-20260617T054509-bfb2ec78
@@ -66,29 +75,38 @@ def test_no_hardcoded_orch_target_in_skill_files() -> None:
 
 
 def test_swarm_launch_skill_uses_dynamic_orch_target() -> None:
-    """swarm-launch/SKILL.md wake-up block must use {{ORCH_TARGET}} placeholder.
+    """swarm-launch/SKILL.md must use the wrapper-owned finish contract (#2820).
 
-    The launcher substitutes {{ORCH_TARGET}} at launch time — this is the correct
-    pattern. Workers must NOT hardcode a window name and must NOT re-read the
-    marker file at runtime (it may have changed).
+    The launcher wrapper is the sole wake-up channel: the worker writes its
+    report to {{REPORT_FILE}} and a one-word status to {{STATUS_FILE}}, then
+    stops. The skill must NOT instruct the agent to self-send tmux keys (a
+    printed-but-not-executed wake-up used to forge a false rail signal).
     """
     launch_skill = SKILLS_DIR / "swarm-launch" / "SKILL.md"
     assert launch_skill.exists(), f"Missing: {launch_skill}"
     content = launch_skill.read_text(encoding="utf-8")
 
-    assert "{{ORCH_TARGET}}" in content, (
-        "swarm-launch/SKILL.md must show {{ORCH_TARGET}} placeholder in its "
-        "wake-up block. The launcher substitutes it at launch time."
+    assert "{{STATUS_FILE}}" in content and "{{REPORT_FILE}}" in content, (
+        "swarm-launch/SKILL.md must show the {{REPORT_FILE}} / {{STATUS_FILE}} "
+        "placeholders (substituted by the launcher) for the wrapper-owned wake-up."
+    )
+    assert 'tmux send-keys -t "$ORCH_TARGET"' not in content, (
+        "swarm-launch/SKILL.md must NOT tell the agent to self-send the wake-up "
+        "via tmux (#2820): the wrapper owns delivery."
     )
 
 
 def test_swarm_intake_skill_uses_dynamic_orch_target() -> None:
-    """swarm-intake/SKILL.md wake-up block must use {{ORCH_TARGET}} placeholder."""
+    """swarm-intake/SKILL.md must use the wrapper-owned finish contract (#2820)."""
     intake_skill = SKILLS_DIR / "swarm-intake" / "SKILL.md"
     assert intake_skill.exists(), f"Missing: {intake_skill}"
     content = intake_skill.read_text(encoding="utf-8")
 
-    assert "{{ORCH_TARGET}}" in content, (
-        "swarm-intake/SKILL.md must show {{ORCH_TARGET}} placeholder in its "
-        "wake-up block. The launcher substitutes it at launch time."
+    assert "{{STATUS_FILE}}" in content and "{{REPORT_FILE}}" in content, (
+        "swarm-intake/SKILL.md must show the {{REPORT_FILE}} / {{STATUS_FILE}} "
+        "placeholders for the wrapper-owned wake-up."
+    )
+    assert 'tmux send-keys -t "$ORCH_TARGET"' not in content, (
+        "swarm-intake/SKILL.md must NOT tell the secretary to self-send the "
+        "wake-up via tmux (#2820): the wrapper owns delivery."
     )
