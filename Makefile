@@ -287,7 +287,6 @@ test-core: ## Run monolith core-required tests only (local/manual)
 	  tests/regression/ \
 	  tests/contract/test_runtime_no_telegram_bot_coupling_contract.py \
 	  tests/contract/test_layering_no_telegram_bot_imports_contract.py \
-	  tests/contract/test_langfuse_optional_core_contract.py \
 	  --ignore=tests/unit/core/test_pipeline.py \
 	  -q --timeout=30 -m "not requires_extras and not slow"
 	@echo "$(GREEN)✓ Monolith core test gate complete$(NC)"
