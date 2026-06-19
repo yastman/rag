@@ -1,9 +1,9 @@
 # ADR: Epic #2843 — Strip to 3 Core Surfaces
 
-**Status:** Decided (Epic #2843)  
-**Date:** 2026-06-19  
-**Author:** Architecture Team  
-**Related:** #2043, #2048, #2791 (Voice/Mini App removal), Product Simplification Phase  
+**Status:** Decided (Epic #2843)
+**Date:** 2026-06-19
+**Author:** Architecture Team
+**Related:** #2043, #2048, #2791 (Voice/Mini App removal), Product Simplification Phase
 
 ---
 
@@ -68,7 +68,7 @@ The telegram_bot adapter has accumulated 10 active surfaces over ~2 years of dev
 
 #### Surface 4: **Standalone Voice RAG**
 - **Currently:** `PropertyBot.handle_voice()` registers message handler for F.voice messages
-- **Rationale:** 
+- **Rationale:**
   - Voice via dialog (demo.py MessageInput + Whisper) subsumes this.
   - Standalone voice creates duplicate state machines (RAGState graph).
   - Simplifies pipeline decision tree and handler registration.
@@ -101,8 +101,8 @@ The telegram_bot adapter has accumulated 10 active surfaces over ~2 years of dev
   - `telegram_bot/bot.py`: handle_feedback, handle_feedback_reason methods
   - `telegram_bot/bot.py`: callback registration (lines ~674–676)
   - `telegram_bot/callback_data.py`: FeedbackCB, FeedbackReasonCB classes
-  - `telegram_bot/keyboards/feedback_keyboard.py`: build_feedback_keyboard, etc.
-  - `telegram_bot/handlers/_bot_feedback_handlers.py`: extracted module
+  - `telegram_bot/feedback.py`: build_feedback_keyboard, etc.
+  - `telegram_bot/_bot_feedback_handlers.py`: extracted module
 
 #### Surface 7: **Cache/Admin Callbacks**
 - **Currently:** `handle_clearcache_callback()`, handle_service_callback, handle_cta_callback
@@ -136,7 +136,7 @@ The telegram_bot adapter has accumulated 10 active surfaces over ~2 years of dev
   - `telegram_bot/bot.py`: all handle_fav_* and handle_results_callback methods
   - Callback registration (lines ~679–687)
   - `telegram_bot/callback_data.py`: ResultsCB, FavoriteCB classes
-  - `telegram_bot/keyboards/results_keyboard.py`: build_results_keyboard, etc.
+  - `telegram_bot/dialogs/catalog_transport.py (render_catalog_results_with_keyboard)`: build_results_keyboard, etc.
 
 #### Surface 10: **Deep Link / Mini App** (already archived in #2791)
 - **Status:** Already removed from codebase in #2791.
@@ -151,7 +151,7 @@ The telegram_bot adapter has accumulated 10 active surfaces over ~2 years of dev
 
 ### Handler Registration Simplification
 
-**Before:** 40+ handler decorators across 10 surfaces  
+**Before:** 40+ handler decorators across 10 surfaces
 **After:** ~8 handlers (query catch-all, voice from dialog, menu, group message, admin/debug)
 
 ### Dialog Router Wiring
@@ -293,7 +293,7 @@ The telegram_bot adapter has accumulated 10 active surfaces over ~2 years of dev
 ## References
 
 - **Product Simplification:** `docs/designs/product-simplification-e2e-plan.md`
-- **Voice/Mini App Removal:** #2791, `docs/designs/mini-app-sunset.md`
+- **Voice/Mini App Removal:** #2791, `docs/designs/product-simplification-e2e-plan.md`
 - **PropertyBot Decomposition:** #2048, #2046, #1265
 - **Deterministic Pipeline:** `telegram_bot/pipelines/client.py`, `src/runtime/pipeline/assistant_pipeline.py`
 - **Demo Dialog:** `telegram_bot/dialogs/demo.py`, `telegram_bot/dialogs/filter_dialog.py`
