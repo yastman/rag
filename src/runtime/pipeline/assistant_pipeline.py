@@ -24,7 +24,6 @@ async def run_assistant_pipeline(
     dependencies: CoreDependencies,
 ) -> AssistantResult:
     """Execute the live assistant path and return the public core result."""
-
     started = time.perf_counter()
     rid = request.request_id
     ctx = request.user_context or UserContext()
@@ -146,10 +145,28 @@ async def run_assistant_pipeline(
 
 
 def _latency_ms(started: float) -> float:
+    """Return the elapsed time in milliseconds since the given start time.
+
+    Args:
+        started: Monotonic start time captured from ``time.perf_counter()``.
+
+    Returns:
+        Elapsed milliseconds rounded to three decimal places.
+    """
     return round((time.perf_counter() - started) * 1000, 3)
 
 
 def _coerce_user_id(value: str) -> int:
+    """Coerce a user identifier string to an integer.
+
+    Attempts to convert ``value`` to ``int``, returning 0 on failure.
+
+    Args:
+        value: User identifier value which may be a numeric string.
+
+    Returns:
+        Integer user ID or 0 if conversion fails.
+    """
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -157,12 +174,33 @@ def _coerce_user_id(value: str) -> int:
 
 
 def _as_document_list(value: Any) -> list[dict[str, Any]]:
+    """Normalize the documents payload from the RAG result.
+
+    Ensures the result is a list of dictionaries, filtering out any
+    non-dictionary items when present.
+
+    Args:
+        value: Raw ``documents`` field from the RAG result.
+
+    Returns:
+        A list of document dictionaries.
+    """
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
 
 
 def _extract_doc_ids(documents: list[dict[str, Any]]) -> list[str]:
+    """Extract stable source identifiers from retrieved documents.
+
+    Checks multiple metadata keys for a document identifier.
+
+    Args:
+        documents: Document metadata dictionaries returned by the RAG pipeline.
+
+    Returns:
+        A list of document identifiers as strings (may be empty).
+    """
     ids: list[str] = []
     for doc in documents:
         meta_val = doc.get("metadata")
@@ -181,6 +219,16 @@ def _extract_doc_ids(documents: list[dict[str, Any]]) -> list[str]:
 
 
 def _extract_sources(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Convert document metadata to a simplified list of source dictionaries.
+
+    Each returned dict contains a ``title`` and/or ``url`` when present.
+
+    Args:
+        documents: Document metadata dictionaries.
+
+    Returns:
+        A list of simplified source dictionaries for external presentation.
+    """
     sources: list[dict[str, str]] = []
     for doc in documents:
         meta_val = doc.get("metadata")
@@ -198,10 +246,28 @@ def _extract_sources(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _as_usage_dict(value: Any) -> dict[str, Any]:
+    """Ensure usage details are returned as a dictionary.
+
+    Args:
+        value: Raw usage details which may be None or another type.
+
+    Returns:
+        The original dict if ``value`` is a dict, else an empty dict.
+    """
     return value if isinstance(value, dict) else {}
 
 
 def _extract_llm_model(generation_result: dict[str, Any]) -> str | None:
+    """Determine the LLM model name from a generation result payload.
+
+    Looks for ``llm_provider_model`` and ``model`` keys.
+
+    Args:
+        generation_result: Generation result payload from the LLM call.
+
+    Returns:
+        Model identifier string or ``None`` when unavailable.
+    """
     model = generation_result.get("llm_provider_model") or generation_result.get("model")
     return str(model) if model else None
 
