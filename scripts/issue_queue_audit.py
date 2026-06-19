@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime

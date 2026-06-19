@@ -1,5 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	deps-audit vuln-audit arch-lint complexity docs-coverage audit \
+	dead-code-check deps-check \
 	test-preflight test-smoke test-load-eviction \
 	test-telegram-adapter test-providers-extra test-ingest-extra \
 	smoke-fast smoke-zoo \
@@ -221,6 +222,10 @@ dead-code: ## Find dead code with Vulture (alias for security)
 	@echo "$(BLUE)Checking for dead code...$(NC)"
 	uv run vulture $(LINT_PATHS) --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Dead code check complete$(NC)"
+
+dead-code-check: dead-code ## Alias: find dead code with Vulture (pre-push gate)
+
+deps-check: deps-audit ## Alias: check dep hygiene with deptry (pre-push gate)
 
 compile-python: ## Compile all repo-tracked Python files (#2320)
 	@echo "$(BLUE)Checking repo-tracked Python syntax...$(NC)"

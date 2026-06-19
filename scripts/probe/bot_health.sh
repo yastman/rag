@@ -6,10 +6,6 @@ fail() {
   exit 1
 }
 
-strip_trailing_slash() {
-  printf '%s' "${1%/}"
-}
-
 # Load runtime env: .env first (user override), then safe local fallback.
 # Docker Compose uses the same tests/fixtures/compose.ci.env fallback.
 # This bridge prevents BotConfig() from missing REDIS_PASSWORD when .env is absent.

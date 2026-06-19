@@ -109,13 +109,13 @@ def generate_description(prop: Property) -> str:
         f"Построено в {prop.year_built} году.",
     ]
 
-    return random.choice(templates)
+    return random.choice(templates)  # nosec B311
 
 
 def generate_property(city: str, rooms: int) -> Property:
     """Generate single property."""
     complexes = COMPLEXES.get(city, ["Центральный"])
-    district = random.choice(complexes)
+    district = random.choice(complexes)  # nosec B311
 
     # Price correlates with rooms, city, distance to sea
     base_price = 35000 + rooms * 20000
@@ -127,21 +127,21 @@ def generate_property(city: str, rooms: int) -> Property:
         "Поморие": 1.0,
         "Равда": 0.95,
     }.get(city, 1.0)
-    price = int(base_price * city_multiplier * random.uniform(0.8, 1.5))
+    price = int(base_price * city_multiplier * random.uniform(0.8, 1.5))  # nosec B311
 
     # Area correlates with rooms
-    area = 25 + rooms * 20 + random.randint(-5, 15)
+    area = 25 + rooms * 20 + random.randint(-5, 15)  # nosec B311
 
     # Distance to sea (lognormal - more close ones)
     distance_to_sea = int(50 + random.lognormvariate(5, 1))
     distance_to_sea = min(distance_to_sea, 2000)
 
     # Floors
-    total_floors = random.randint(4, 12)
-    floor = random.randint(1, total_floors)
+    total_floors = random.randint(4, 12)  # nosec B311
+    floor = random.randint(1, total_floors)  # nosec B311
 
     # Features (2-6 random)
-    features = random.sample(FEATURES, random.randint(2, 6))
+    features = random.sample(FEATURES, random.randint(2, 6))  # nosec B311
 
     prop = Property(
         id=str(uuid.uuid4()),
@@ -155,7 +155,7 @@ def generate_property(city: str, rooms: int) -> Property:
         floor=floor,
         total_floors=total_floors,
         distance_to_sea=distance_to_sea,
-        year_built=random.randint(2005, 2024),
+        year_built=random.randint(2005, 2024),  # nosec B311
         features=features,
     )
     prop.description = generate_description(prop)
@@ -183,7 +183,7 @@ def generate_all_properties(count: int = 100) -> list[Property]:
     for city, city_count in city_distribution.items():
         for _ in range(city_count):
             # Pick rooms according to distribution
-            rooms = random.choices(
+            rooms = random.choices(  # nosec B311
                 list(room_distribution.keys()),
                 weights=list(room_distribution.values()),
             )[0]

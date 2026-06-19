@@ -21,6 +21,7 @@ fi
 # Single source of truth: scripts/lib/vps_noncore_services.sh (#1611).
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # shellcheck source=lib/vps_noncore_services.sh
+# shellcheck disable=SC1091
 . "${SCRIPT_DIR}/lib/vps_noncore_services.sh"
 
 removable_volumes=(
