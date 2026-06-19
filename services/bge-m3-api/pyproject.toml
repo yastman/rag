@@ -12,7 +12,7 @@ dependencies = [
     "uvicorn[standard]==0.49.0",
     "python-multipart==0.0.31",
     "pydantic==2.13.4",
-    "pydantic-settings==2.14.1",
+    "pydantic-settings==2.14.2",
     # Monitoring & Metrics
     "prometheus-client==0.25.0",
     # Observability
