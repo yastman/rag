@@ -82,24 +82,25 @@ For routine worker-backed read-only issue/PR/queue intake:
    (`WORKER_AGENT=kiro-worker-flash WORKER_MODEL=claude-haiku-4.5`) with
    `KIRO_REQUIRED_SKILLS=swarm-secretary-intake` and prompt it with
    `MARKDOWN_ONLY_INTAKE`. The secretary writes only a compact unique Markdown
-   brief and wakes the unique orchestrator window with the Markdown path by
-   executing this shell/tool sequence after report write:
+   brief, then records its terminal status — the launcher wrapper delivers the
+   wake-up (#2820). The secretary writes the report to `{{REPORT_FILE}}` and a
+   one-word status to `{{STATUS_FILE}}`, then stops; it must NOT run tmux:
    ```bash
    Worker type: research
-   WORKER_NAME="secretary-worker-name"
-   REPORT_FILE="logs/INTAKE.${WORKER_NAME}.md"
-   ORCH_TARGET="{{ORCH_TARGET}}"
-   tmux send-keys -t "$ORCH_TARGET" -l "[DONE] $WORKER_NAME $REPORT_FILE"
-   sleep 0.25
-   tmux send-keys -t "$ORCH_TARGET" C-m
+   # after writing the Markdown brief to {{REPORT_FILE}}:
+   printf 'DONE\n' > "{{STATUS_FILE}}"   # or FAILED / BLOCKED
    ```
+   `{{REPORT_FILE}}` / `{{STATUS_FILE}}` are substituted by
+   `launch_kiro_worker.sh` at launch time. The wrapper reads the status file
+   after the session exits and sends one
+   `[DONE]|[FAILED]|[BLOCKED] <worker> logs/REPORT.<worker>.md` line.
    Do not use `Worker type: secretary`; use `Worker agent: secretary-flash`
    or `secretary-pro` for the role and a task worker type such as `research`,
    `issue-audit`, `artifact-check`, or `dependency-verify`.
-   Use `FAILED` or `BLOCKED` when the worker did not complete normally.
-   The prompt must explicitly say not to print or summarize the wake-up commands
-   as final text. Do not use pane targets, and do not use `C-j` as submit; in
-   the orchestrator TUI it inserts a newline.
+   Write `FAILED` or `BLOCKED` to the status file when the worker did not
+   complete normally.
+   The prompt must explicitly say the worker must NOT send tmux keys and must NOT
+   print wake-up commands as final text.
    Do not require `.signals/secretary*.json`, `accept_worker_signal.py`, or
    `swarm-plan`.
 6. For explicit legacy handoff, launch the selected secretary with
@@ -185,7 +186,9 @@ or skill drift.
    Secretary prompts must include validator-required markers:
    `## SECRETARY PROMPT PAYLOAD`, `Task kind:`, `Expected artifacts:`,
    `Recommended route fields:`, and `Confidence policy:`, plus
-   `Worker model:` and a wake-up block using `ORCH_TARGET="{{ORCH_TARGET}}"`.
+   `Worker model:` and the wrapper-owned finish contract (#2820): write the
+   report to `{{REPORT_FILE}}` and a one-word status to `{{STATUS_FILE}}`; the
+   launcher delivers the wake-up.
    Focused checks must name verified existing commands/targets; otherwise mark
    them as proposed follow-ups, not required validation.
 5. For automated legacy handoff only, set `SWARM_CONTRACT=strict_json` when explicitly requested.
