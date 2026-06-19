@@ -10,9 +10,13 @@ Enable with: INGEST_USE_NEW_ORCHESTRATOR=true
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import hashlib
 import logging
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 
@@ -108,6 +112,105 @@ class UnifiedIngestionOrchestrator:
 
         return result
 
-    async def run_watch(self, collection_name: str) -> None:
-        """Run ingestion continuously (delegates to change_manager for loop control)."""
-        raise NotImplementedError("run_watch is change-manager-specific; implement in subclass")
+    async def run_watch(
+        self,
+        collection_name: str,
+        stop_event: asyncio.Event | None = None,
+        poll_interval: float = 30.0,
+    ) -> None:
+        """Run ingestion in a polling loop until stop_event is set.
+
+        Args:
+            collection_name: Qdrant collection to ingest into.
+            stop_event: When set, the loop exits after the current pass.
+                If already set on entry, exits immediately without running.
+            poll_interval: Seconds to wait between passes.
+        """
+        if stop_event is None:
+            stop_event = asyncio.Event()
+
+        while not stop_event.is_set():
+            result = await self.run_once(collection_name)
+            logger.info(
+                "run_watch pass: processed=%d deleted=%d errors=%d",
+                result.processed,
+                result.deleted,
+                result.errors,
+            )
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop_event.wait(), timeout=poll_interval)
+
+
+# ---------------------------------------------------------------------------
+# FilePollingChangeManager — filesystem-based FileChangeManager
+# ---------------------------------------------------------------------------
+
+#: File extensions scanned by the polling manager (mirrors flow.py patterns).
+_POLLING_EXTENSIONS: frozenset[str] = frozenset(
+    {".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".md", ".txt", ".html", ".htm", ".csv"}
+)
+
+
+def _compute_file_hash(path: Path) -> str:
+    """Return a 16-char sha256 hex digest of the file's bytes."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+
+
+class FilePollingChangeManager:
+    """FileChangeManager that polls the filesystem for changes.
+
+    Compares on-disk files against Postgres ingestion state to detect
+    added, modified, and deleted files. Does not require CocoIndex.
+
+    Delete-sweep: any file_id in state with status='indexed' whose
+    source_path no longer exists on disk is emitted as 'deleted'.
+    """
+
+    def __init__(
+        self,
+        sync_dir: Path,
+        state_manager: UnifiedStateManager,
+    ) -> None:
+        self.sync_dir = sync_dir
+        self.state_manager = state_manager
+
+    async def detect_changes(self, collection_name: str) -> list[FileChange]:
+        changes: list[FileChange] = []
+
+        # --- Delete sweep: indexed files whose source_path is missing ---
+        indexed_ids = await self.state_manager.get_all_indexed_file_ids()
+        indexed_paths: dict[str, str] = {}  # source_path → content_hash
+
+        for file_id in indexed_ids:
+            state = await self.state_manager.get_state(file_id)
+            if state is None or not state.source_path:
+                continue
+            if not Path(state.source_path).exists():
+                changes.append(FileChange(file_path=state.source_path, kind="deleted"))
+            elif state.content_hash:
+                indexed_paths[state.source_path] = state.content_hash
+
+        # --- Scan disk for added / modified ---
+        for path in self.sync_dir.rglob("*"):
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in _POLLING_EXTENSIONS:
+                continue
+            path_str = str(path)
+            if path_str in indexed_paths:
+                current_hash = _compute_file_hash(path)
+                if current_hash != indexed_paths[path_str]:
+                    changes.append(FileChange(file_path=path_str, kind="modified"))
+            else:
+                changes.append(FileChange(file_path=path_str, kind="added"))
+
+        return changes
+
+    async def record_state(
+        self,
+        file_path: str,
+        collection_name: str,
+        state: FileState,
+    ) -> None:
+        """Persist file state after successful write."""
+        await self.state_manager.upsert_state(state)
