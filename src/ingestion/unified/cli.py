@@ -730,21 +730,21 @@ def main() -> int:
     # clean atexit). flush_ingestion_traces() is a no-op when tracing is off.
     try:
         if args.command == "run":
-            return cmd_run(args)
+            return cmd_run(args)  # type: ignore[no-any-return]
         if args.command == "status":
-            return asyncio.run(cmd_status(args))
+            return asyncio.run(cmd_status(args))  # type: ignore[no-any-return]
         if args.command == "preflight":
-            return asyncio.run(cmd_preflight(args))
+            return asyncio.run(cmd_preflight(args))  # type: ignore[no-any-return]
         if args.command == "bootstrap":
-            return asyncio.run(cmd_bootstrap(args))
+            return asyncio.run(cmd_bootstrap(args))  # type: ignore[no-any-return]
         if args.command == "schema-check":
-            return asyncio.run(cmd_schema_check(args))
+            return asyncio.run(cmd_schema_check(args))  # type: ignore[no-any-return]
         if args.command == "coverage-check":
-            return asyncio.run(cmd_coverage_check(args))
+            return asyncio.run(cmd_coverage_check(args))  # type: ignore[no-any-return]
         if args.command == "backfill-colbert":
             return cmd_backfill_colbert(args)
         if args.command == "reprocess":
-            return asyncio.run(cmd_reprocess(args))
+            return asyncio.run(cmd_reprocess(args))  # type: ignore[no-any-return]
 
         return 1
     finally:

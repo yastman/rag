@@ -83,12 +83,12 @@ class RetrievalService:
 
         has_colbert_search = callable(getattr(self._qdrant, "hybrid_search_rrf_colbert", None))
         if request.colbert_query and has_colbert_search:
-            return await self._qdrant.hybrid_search_rrf_colbert(
+            return await self._qdrant.hybrid_search_rrf_colbert(  # type: ignore[no-any-return]
                 **search_kwargs,
                 colbert_query=request.colbert_query,
             )
 
-        return await self._qdrant.hybrid_search_rrf(**search_kwargs)
+        return await self._qdrant.hybrid_search_rrf(**search_kwargs)  # type: ignore[no-any-return]
 
     async def retrieve(self, request: RetrievalRequest) -> SearchReturn:
         """Retrieve documents for a query without invoking answer generation.

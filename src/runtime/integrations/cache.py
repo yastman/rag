@@ -658,7 +658,7 @@ class CacheLayerManager:
             output={"hit": result is not None},
             metadata={"model": model},
         )
-        return result
+        return result  # type: ignore[no-any-return]
 
     @observe(name="cache-sparse-store", capture_input=False, capture_output=False)
     async def store_sparse_embedding(
@@ -856,7 +856,7 @@ class CacheLayerManager:
         lf.update_current_span(
             output={"hit": result is not None, "results_count": len(result or [])}
         )
-        return result
+        return result  # type: ignore[no-any-return]
 
     @observe(name="cache-search-store", capture_input=False, capture_output=False)
     async def store_search_results(
@@ -915,7 +915,7 @@ class CacheLayerManager:
         lf.update_current_span(
             output={"hit": result is not None, "results_count": len(result or [])}
         )
-        return result
+        return result  # type: ignore[no-any-return]
 
     @observe(name="cache-rerank-store", capture_input=False, capture_output=False)
     async def store_rerank_results(

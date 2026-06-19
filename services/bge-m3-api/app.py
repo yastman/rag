@@ -287,7 +287,7 @@ def get_model():
 
         # Load tokenizer from HuggingFace (model config only, no weights)
         logger.info("Loading tokenizer for %s", settings.MODEL_NAME)
-        _tokenizer = AutoTokenizer.from_pretrained(
+        _tokenizer = AutoTokenizer.from_pretrained(  # nosec B615 — revision is always pinned (config default SHA)
             settings.MODEL_NAME,
             cache_dir=settings.MODEL_CACHE_DIR,
             revision=settings.MODEL_REVISION,

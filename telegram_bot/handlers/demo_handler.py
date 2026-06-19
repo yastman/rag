@@ -105,9 +105,9 @@ async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
             file=data,
             language="ru",
         )
-        return transcript.text or None
+        return transcript.text or None  # type: ignore[no-any-return]
 
-    return await _run()
+    return await _run()  # type: ignore[no-any-return]
 
 
 def create_demo_router() -> Router:

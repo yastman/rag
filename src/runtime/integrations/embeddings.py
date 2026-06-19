@@ -9,7 +9,7 @@ BGE-M3 endpoint work is delegated to ``BgeM3EmbeddingProvider``.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -141,11 +141,11 @@ class BGEM3HybridEmbeddings:
 
     async def aembed_query(self, text: str) -> list[float]:
         dense, _ = await self.aembed_hybrid(text)
-        return dense
+        return cast(list[float], dense)
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         dense_vecs, _ = await self.aembed_hybrid_batch(texts)
-        return dense_vecs
+        return cast(list[list[float]], dense_vecs)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return asyncio.get_event_loop().run_until_complete(self.aembed_documents(texts))

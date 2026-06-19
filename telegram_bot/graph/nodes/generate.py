@@ -224,7 +224,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
             },
         )
 
-    return await _generate_response_service(
+    return await _generate_response_service(  # type: ignore[no-any-return]
         query=query,
         needs_coverage=bool(state.get("needs_coverage")),
         documents=documents,

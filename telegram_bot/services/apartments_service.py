@@ -102,7 +102,7 @@ class ApartmentsService:
             top_k=top_k,
             rrf_k=rrf_k,
         )
-        return results
+        return results  # type: ignore[no-any-return]
 
     @observe(name="apartments-filtered-search")
     async def search_with_filters(
