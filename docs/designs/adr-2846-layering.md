@@ -1,7 +1,7 @@
 # ADR #2846: Layering Violation Resolution
 
-**Status:** Architecture Review  
-**Owner:** Architecture Team  
+**Status:** Architecture Review
+**Owner:** Architecture Team
 **Related:** Epic #2846, #2855 (module tree collapse), #1948 (reverse-layering), #2045–#2049 (migration phases)
 
 ## Problem Statement
@@ -91,14 +91,14 @@ Once all modules are in their permanent homes, enforce via:
 1. **import-linter** (Python tool):
    ```toml
    [tool:importlinter]
-   
+
    [importlinter:checker:layering]
    layers =
        HIGH: src.core | src.utils
        MID:  src.runtime | src.ingestion
        BOT:  telegram_bot
        APP:  mini_app
-   
+
    unallowed =
        src -> telegram_bot
        src -> mini_app

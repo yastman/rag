@@ -1,7 +1,7 @@
 # Epic #2836: Ingest Decouple
 
-**Status:** Architecture Review  
-**Owner:** Ingestion Team  
+**Status:** Architecture Review
+**Owner:** Ingestion Team
 **Related:** Epic #2846 (layering), #2831–#2835 (implementation slices)
 
 ## Problem Statement
@@ -55,14 +55,14 @@ Decouple the workflow orchestrator from CocoIndex via two stable interfaces:
 ```python
 class FileChangeManager(Protocol):
     """Detects file changes and provides file identity."""
-    
+
     async def detect_changes(
         self,
         collection_name: str,
     ) -> list[FileChange]:
         """Emit file paths and metadata (added, modified, deleted)."""
         ...
-    
+
     async def record_state(
         self,
         file_path: str,
@@ -85,7 +85,7 @@ The writer is already mostly decoupled; clarify the contract:
 ```python
 class DocumentWriter(Protocol):
     """Writes parsed documents to vector store."""
-    
+
     async def write_file(
         self,
         file_path: str,
@@ -94,7 +94,7 @@ class DocumentWriter(Protocol):
     ) -> FileState:
         """Parse, embed, upsert to Qdrant. Return state metadata."""
         ...
-    
+
     async def delete_file(
         self,
         file_path: str,
@@ -111,7 +111,7 @@ class DocumentWriter(Protocol):
 ```python
 class UnifiedIngestionOrchestrator:
     """High-level ingestion loop, agnostic to change detection backend."""
-    
+
     def __init__(
         self,
         change_manager: FileChangeManager,
@@ -121,11 +121,11 @@ class UnifiedIngestionOrchestrator:
         self.change_manager = change_manager
         self.writer = writer
         self.state_manager = state_manager
-    
+
     async def run_once(self, collection_name: str) -> IngestionResult:
         """Detect changes, process files, update state."""
         changes = await self.change_manager.detect_changes(collection_name)
-        
+
         for change in changes:
             if change.kind == "added" or change.kind == "modified":
                 state = await self.writer.write_file(
@@ -136,7 +136,7 @@ class UnifiedIngestionOrchestrator:
                 )
             elif change.kind == "deleted":
                 await self.writer.delete_file(change.file_path, collection_name)
-    
+
     async def run_watch(self, collection_name: str) -> None:
         """Run ingestion in a loop (implementation detail per change manager)."""
         ...
