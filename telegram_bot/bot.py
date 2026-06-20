@@ -58,6 +58,7 @@ from aiogram.types import (
 )
 from aiogram.utils.chat_action import ChatActionSender
 
+from src.observability_payloads import build_safe_input_payload, build_safe_output_payload
 from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY, RedisPollingLock
 from src.services.handoff_state import HandoffData, HandoffState
 
@@ -97,7 +98,6 @@ from .observability import (
     observe,
     propagate_attributes,
 )
-from .observability_payloads import build_safe_input_payload, build_safe_output_payload
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     write_langfuse_scores,
