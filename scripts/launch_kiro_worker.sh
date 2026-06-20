@@ -201,6 +201,7 @@ _watchdog=\$!
 # Full kiro-cli session. The agent writes its report + status file and exits;
 # the wrapper (below) delivers the single authoritative wake-up.
 kiro-cli chat \\
+  --no-interactive \\
   --trust-all-tools \\
   ${WORKER_MODEL:+--model "$WORKER_MODEL"} \\
   ${WORKER_AGENT:+--agent "$WORKER_AGENT"} \\
