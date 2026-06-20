@@ -14,6 +14,8 @@ dependencies = [
     # [tool.uv.sources], uv resolves PyTorch from PyPI and pulls CUDA packages.
     "torch>=2.0.0",
     "torchvision>=0.15.0",
+    # Security pin: aiohttp pulled transitively by docling-serve (#2901, 11 CVEs).
+    "aiohttp>=3.14.1",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +27,7 @@ docling = [
     "docling-serve[ui]>=1.0.0",
     "torch>=2.0.0",
     "torchvision>=0.15.0",
+    "aiohttp>=3.14.1",
 ]
 
 [[tool.uv.index]]

@@ -24,7 +24,7 @@ dependencies = [
     # transitively (aiohttp by litellm/openai; requests by docling, fastembed,
     # and mkdocs-material). Declaring them explicitly prevents resolver surprises
     # when optional extras are co-installed.
-    "aiohttp",
+    "aiohttp>=3.14.1",
     "requests",
     "phonenumbers>=9.0.25",
 ]
@@ -50,14 +50,14 @@ core = [
     "python-dotenv",
     "typing-extensions>=4.0.0",
     "numpy",
-    "aiohttp",
+    "aiohttp>=3.14.1",
     "requests",
     "phonenumbers>=9.0.25",
 ]
 
 # Telegram production adapter and bot-local runtime dependencies.
 telegram = [
-    "aiogram==3.28.2",
+    "aiogram>=3.29.0",
     "aiogram-dialog==2.6.0",
     "fluentogram>=1.2.0",
     "cachetools>=5.0.0",
