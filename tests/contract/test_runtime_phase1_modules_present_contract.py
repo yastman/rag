@@ -34,8 +34,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # helper (``create_callback_handler``) local because it depends on
 # ``langfuse.langchain`` which is not part of the shared runtime.
 PHASE1_MODULES: tuple[tuple[str, str, int], ...] = (
-    ("telegram_bot/graph/state.py", "src/runtime/graph/state.py", 30),
-    ("telegram_bot/graph/config.py", "src/runtime/graph/config.py", 30),
     ("telegram_bot/scoring.py", "src/scoring.py", 50),
     ("telegram_bot/phone_utils.py", "src/phone_utils.py", 30),
     ("telegram_bot/services/content_loader.py", "src/services/content_loader.py", 50),

@@ -164,21 +164,21 @@ def create_bot_agent(*args: Any, **kwargs: Any) -> Any:
 
 def build_graph(*args: Any, **kwargs: Any) -> Any:
     """Lazy wrapper that keeps module-level patchability for tests."""
-    from .graph.graph import build_graph as _build_graph
+    from .pipelines.graph_compat import build_graph as _build_graph
 
     return _build_graph(*args, **kwargs)
 
 
 def classify_query(*args: Any, **kwargs: Any) -> Any:
     """Lazy wrapper that keeps module-level patchability for tests."""
-    from .graph.nodes.classify import classify_query as _classify_query
+    from src.runtime.graph.nodes.classify import classify_query as _classify_query
 
     return _classify_query(*args, **kwargs)
 
 
 def detect_injection(*args: Any, **kwargs: Any) -> Any:
     """Lazy wrapper that keeps module-level patchability for tests."""
-    from .graph.nodes.guard import detect_injection as _detect_injection
+    from src.runtime.graph.nodes.guard import detect_injection as _detect_injection
 
     return _detect_injection(*args, **kwargs)
 
@@ -356,7 +356,7 @@ class PropertyBot:
 
     def __init__(self, config: BotConfig):
         """Initialize bot with services."""
-        from .graph.config import GraphConfig
+        from src.runtime.graph.config import GraphConfig
 
         self.config = config
         self.bot = Bot(token=config.telegram_token)
@@ -3151,7 +3151,7 @@ class PropertyBot:
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
         """Handle voice message via Whisper STT + imperative RAG pipeline."""
-        from .graph.state import make_initial_state
+        from src.runtime.graph.state import make_initial_state
 
         pipeline_start = time.perf_counter()
         assert message.bot is not None

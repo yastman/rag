@@ -2,6 +2,8 @@
 
 ``build_graph`` is retained as a compatibility factory for callers that still
 expect an object with ``ainvoke``.
+
+Moved from ``telegram_bot/graph/graph.py`` (removed in #2889).
 """
 
 from __future__ import annotations

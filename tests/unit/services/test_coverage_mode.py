@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from telegram_bot.graph.state import make_initial_state
+from src.runtime.graph.state import make_initial_state
 from telegram_bot.services.coverage_mode import cap_results_per_doc, detect_coverage_mode
 
 

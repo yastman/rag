@@ -5,11 +5,10 @@
 - Extends root `AGENTS.md` with bot-specific constraints.
 
 ## Local Rules
-- Preserve LangGraph node contract shapes (`state` fields, routing assumptions).
 - Keep service boundaries intact:
   - `telegram_bot/services/` for business logic.
   - `telegram_bot/integrations/` for wrappers/adapters.
-  - `telegram_bot/graph/nodes/` for pipeline steps.
+  - `telegram_bot/pipelines/` for pipeline entrypoints and compat facades.
 - Avoid mixing transport-layer Telegram handling with retrieval/domain logic.
 
 ## Required Validation

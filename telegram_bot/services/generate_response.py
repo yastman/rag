@@ -165,7 +165,7 @@ def _extract_sent_message_ref(sent_msg: Any) -> dict[str, int] | None:
 
 def _get_graph_config() -> Any:
     """Get GraphConfig from environment."""
-    from telegram_bot.graph.config import GraphConfig
+    from src.runtime.graph.config import GraphConfig
 
     return GraphConfig.from_env()
 

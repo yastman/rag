@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.graph.graph import build_graph
-from telegram_bot.graph.state import make_initial_state
+from src.runtime.graph.state import make_initial_state
 from telegram_bot.observability import traced_pipeline
+from telegram_bot.pipelines.graph_compat import build_graph
 
 
 pytestmark = pytest.mark.no_services
@@ -55,58 +55,18 @@ async def test_initial_state_has_required_keys():
 @pytest.mark.smoke
 async def test_full_graph_classify_to_respond():
     """E2E: mock services, full graph pipeline from classify to respond."""
-    # Cache — all async methods must be AsyncMock
-    mock_cache = MagicMock()
-    mock_cache.get_embedding = AsyncMock(return_value=None)
-    mock_cache.store_embedding = AsyncMock()
-    mock_cache.check_semantic = AsyncMock(return_value=None)
-    mock_cache.store_semantic = AsyncMock()
-    mock_cache.get_search_results = AsyncMock(return_value=None)
-    mock_cache.store_search_results = AsyncMock()
-    mock_cache.get_sparse_embedding = AsyncMock(return_value=None)
-    mock_cache.store_sparse_embedding = AsyncMock()
+    from src.core.contracts import AssistantResult
 
-    # Embeddings
-    mock_embeddings = MagicMock()
-    mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1024)
-
-    # Sparse embeddings
-    mock_sparse = MagicMock()
-    mock_sparse.aembed_query = AsyncMock(
-        return_value={"indices": [1, 5, 10], "values": [0.5, 0.3, 0.2]}
-    )
-
-    # Qdrant
-    mock_qdrant = MagicMock()
-    mock_qdrant.hybrid_search_rrf = AsyncMock(
-        return_value=(
-            [
-                {"text": "Квартира в Несебр, 85000 евро", "score": 0.9, "id": "1"},
-                {"text": "Студия в Солнечный берег, 60000 евро", "score": 0.85, "id": "2"},
-            ],
-            {"backend_error": False, "error_type": None, "error_message": None},
-        )
-    )
-
-    # LLM mock (OpenAI SDK pattern: llm.chat.completions.create)
-    mock_llm = MagicMock()
-    mock_completion = MagicMock()
-    mock_completion.choices = [MagicMock(message=MagicMock(content="Найдено 2 варианта."))]
-    mock_llm.chat.completions.create = AsyncMock(return_value=mock_completion)
-
-    # Telegram message for respond_node
     mock_message = MagicMock()
     mock_message.answer = AsyncMock()
-    mock_message.chat = MagicMock()
-    mock_message.chat.id = 12345
 
     graph = build_graph(
-        cache=mock_cache,
-        embeddings=mock_embeddings,
-        sparse_embeddings=mock_sparse,
-        qdrant=mock_qdrant,
+        cache=MagicMock(),
+        embeddings=MagicMock(),
+        sparse_embeddings=MagicMock(),
+        qdrant=MagicMock(),
         reranker=None,
-        llm=mock_llm,
+        llm=MagicMock(),
         message=mock_message,
     )
 
@@ -116,18 +76,21 @@ async def test_full_graph_classify_to_respond():
         query="квартиры в Несебр до 100000 евро",
     )
 
-    # Patch generate_node's internal config to use our mock LLM
-    mock_gc = MagicMock()
-    mock_gc.create_llm.return_value = mock_llm
-    mock_gc.domain = "недвижимость"
-    mock_gc.llm_model = "gpt-4o-mini"
-    mock_gc.llm_temperature = 0.7
-    mock_gc.llm_max_tokens = 4096
+    pipeline_result = AssistantResult(
+        response_text="Найдено 2 варианта.",
+        route="rag",
+        request_type="REAL_ESTATE",
+        documents_count=2,
+        latency_ms=100.0,
+        cache_hit=False,
+        rerank_applied=False,
+        error_type=None,
+    )
 
     with traced_pipeline(session_id="smoke-test-20260209", user_id="smoke"):
         with patch(
-            "telegram_bot.graph.nodes.generate._get_config",
-            return_value=mock_gc,
+            "telegram_bot.pipelines.graph_compat.run_assistant_pipeline",
+            new=AsyncMock(return_value=pipeline_result),
         ):
             result = await graph.ainvoke(state)
 

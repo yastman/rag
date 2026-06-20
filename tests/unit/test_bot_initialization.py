@@ -38,8 +38,8 @@ def _create_bot(config: BotConfig | None = None):
         patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
         patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
         patch("telegram_bot.services.qdrant.QdrantService"),
-        patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-        patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+        patch("src.runtime.graph.config.GraphConfig.create_llm"),
+        patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
     ):
         from telegram_bot.bot import PropertyBot
 

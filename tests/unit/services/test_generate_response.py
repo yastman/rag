@@ -1086,7 +1086,7 @@ async def test_partial_stream_recovery_edits_existing_message_instead_of_sending
 @pytest.mark.asyncio
 async def test_ttft_drift_warn_ms_config() -> None:
     """TTFT drift warning threshold is read from config.ttft_drift_warn_ms (#675)."""
-    from telegram_bot.graph.config import GraphConfig
+    from src.runtime.graph.config import GraphConfig
 
     # Default value
     gc = GraphConfig()

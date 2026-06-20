@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.graph.config import GraphConfig
+from src.runtime.graph.config import GraphConfig
 from telegram_bot.services.generate_response import (
     _chat_create_with_optional_name as _svc_chat_create,
 )
