@@ -24,7 +24,6 @@ def _ctx(**kwargs) -> BotContext:
         "session_id": "s-test",
         "language": "ru",
         "kommo_client": None,
-        "history_service": AsyncMock(),
         "embeddings": AsyncMock(),
         "sparse_embeddings": AsyncMock(),
         "qdrant": AsyncMock(),

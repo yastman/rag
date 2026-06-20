@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 from aiogram import F, Router
@@ -24,9 +23,7 @@ from aiogram.types import (
     Message,
 )
 
-from src.scoring import write_history_scores
-from telegram_bot.observability import get_client, observe, propagate_attributes
-from telegram_bot.tracing_context import make_session_id
+from telegram_bot.observability import observe
 
 
 if TYPE_CHECKING:
@@ -142,7 +139,6 @@ async def cmd_clear(
             )
             dialog_reset_failed = True
     checkpointer_cleared = True
-    history_cleared = True
     text_thread_id = _supervisor_thread_id(message.chat.id)
     voice_thread_id = str(user_id)
     seen_checkpointers: set[int] = set()
@@ -170,16 +166,9 @@ async def cmd_clear(
 
     await bot._cache.clear_conversation(user_id)
 
-    if bot._history_service is not None:
-        try:
-            history_cleared = bool(await bot._history_service.delete_user_history(user_id))
-        except Exception:
-            logger.warning("Failed to clear Qdrant history for user_id=%s", user_id, exc_info=True)
-            history_cleared = False
-
-    if checkpointer_cleared and history_cleared and not dialog_reset_failed:
+    if checkpointer_cleared and not dialog_reset_failed:
         await message.answer("\u2705 История диалога очищена.")
-    elif dialog_reset_failed and checkpointer_cleared and history_cleared:
+    elif dialog_reset_failed and checkpointer_cleared:
         await message.answer(
             "\u26a0\ufe0f История очищена, но не удалось сбросить состояние активного диалога. "
             "Используйте /start, если бот продолжает отвечать в режиме поиска."
@@ -237,96 +226,8 @@ async def cmd_clearcache(bot: PropertyBot, message: Message) -> None:
 
 @observe(name="telegram-history-search")
 async def cmd_history(bot: PropertyBot, message: Message) -> None:
-    """Handle /history command - semantic search in conversation history."""
-    search_start = time.perf_counter()
-    assert message.from_user is not None
-    user_id = message.from_user.id
-    session_id = make_session_id("history", message.chat.id)
-
-    text = (message.text or "").strip()
-    parts = text.split(maxsplit=1)
-
-    if len(parts) < 2:
-        await message.answer("Использование: /history <запрос>\nПример: /history цены на квартиры")
-        return
-
-    query = parts[1]
-
-    with propagate_attributes(
-        session_id=session_id,
-        user_id=str(user_id),
-        tags=["telegram", "history"],
-    ):
-        lf = get_client()
-        tid = lf.get_current_trace_id() or ""
-
-        if bot._history_service is None:
-            lf.update_current_span(
-                input={"command": "/history", "query": query},
-                output={"error": "service_unavailable"},
-                metadata={"user_id": user_id},
-            )
-            write_history_scores(lf, tid, count=0)
-            await message.answer("История диалогов временно недоступна.")
-            return
-
-        try:
-            results = await bot._history_service.search_user_history(
-                user_id=user_id,
-                query=query,
-                limit=5,
-            )
-        except Exception:
-            logger.exception("History search failed for user %s", user_id)
-            lf.update_current_span(
-                input={"command": "/history", "query": query},
-                output={"error": "backend_exception"},
-                metadata={"user_id": user_id},
-            )
-            write_history_scores(lf, tid, count=0)
-            await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
-            return
-
-        search_ms = (time.perf_counter() - search_start) * 1000
-
-        valid = []
-        for r in results:
-            if not isinstance(r, dict):
-                continue
-            q = r.get("query")
-            resp = r.get("response")
-            if not isinstance(q, str) or not isinstance(resp, str):
-                continue
-            valid.append(r)
-
-        lf.update_current_span(
-            input={"command": "/history", "query": query},
-            output={"results_count": len(results), "valid_count": len(valid)},
-            metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
-        )
-        write_history_scores(
-            lf,
-            tid,
-            count=len(valid),
-            latency_ms=search_ms,
-        )
-
-        if not valid:
-            await message.answer(f"По запросу \u00ab{query}\u00bb ничего не найдено в истории.")
-            return
-
-        lines = [f"\U0001f4cb Найдено {len(valid)} записей:\n"]
-        for i, r in enumerate(valid, 1):
-            ts = r.get("timestamp", "")
-            ts = ts[:16].replace("T", " ") if isinstance(ts, str) else ""
-            lines.append(f"{i}. [{ts}]")
-            lines.append(f"   В: {r['query']}")
-            resp_preview = r["response"][:150]
-            if len(r["response"]) > 150:
-                resp_preview += "..."
-            lines.append(f"   О: {resp_preview}\n")
-
-        await message.answer("\n".join(lines))
+    """Handle /history command — removed (history service removed in #2843)."""
+    await message.answer("История диалогов недоступна.")
 
 
 # ---------------------------------------------------------------------------

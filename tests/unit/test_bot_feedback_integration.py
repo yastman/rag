@@ -178,86 +178,13 @@ class TestHandleFeedback:
 
 # ---------------------------------------------------------------------------
 # TestHandleHitlCallback
-# ---------------------------------------------------------------------------
-
-
 class TestHandleHitlCallback:
-    """Tests for handle_hitl_callback (approve/cancel button handling)."""
+    """handle_hitl_callback is now a no-op stub that answers Устарело (#2843)."""
 
-    async def test_approve_answers_accepted(self):
-        """hitl:approve answers 'Принято', removes keyboard, and invokes agent."""
+    @pytest.mark.asyncio
+    async def test_handle_hitl_callback_answers_ustarelo(self) -> None:
+        callback = AsyncMock()
+        state = AsyncMock()
         bot = _create_bot()
-        callback = _make_callback(data="hitl:approve")
-
-        mock_agent = AsyncMock()
-        mock_agent.ainvoke = AsyncMock(
-            return_value={"messages": [MagicMock(content="Approved action completed")]}
-        )
-
-        bot._resolve_user_role = AsyncMock(return_value="client")
-        bot._agent_checkpointer = MagicMock()
-
-        with (
-            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
-        ):
-            mock_prop.return_value.__enter__ = MagicMock(return_value=None)
-            mock_prop.return_value.__exit__ = MagicMock(return_value=False)
-            mock_lf = MagicMock()
-            mock_get_client.return_value = mock_lf
-
-            await bot.handle_hitl_callback(callback)
-
-        callback.answer.assert_awaited_once_with("Принято")
-        callback.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
-        mock_agent.ainvoke.assert_awaited_once()
-
-    async def test_cancel_answers_cancelled(self):
-        """hitl:cancel answers 'Отменено', removes keyboard, and invokes agent."""
-        bot = _create_bot()
-        callback = _make_callback(data="hitl:cancel")
-
-        mock_agent = AsyncMock()
-        mock_agent.ainvoke = AsyncMock(return_value={"messages": [MagicMock(content="Cancelled")]})
-
-        bot._resolve_user_role = AsyncMock(return_value="client")
-        bot._agent_checkpointer = MagicMock()
-
-        with (
-            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
-        ):
-            mock_prop.return_value.__enter__ = MagicMock(return_value=None)
-            mock_prop.return_value.__exit__ = MagicMock(return_value=False)
-            mock_lf = MagicMock()
-            mock_get_client.return_value = mock_lf
-
-            await bot.handle_hitl_callback(callback)
-
-        callback.answer.assert_awaited_once_with("Отменено")
-        callback.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
-        mock_agent.ainvoke.assert_awaited_once()
-
-    async def test_missing_from_user_answers_and_returns(self):
-        """Missing from_user gracefully answers callback without error."""
-        bot = _create_bot()
-        callback = _make_callback(data="hitl:approve")
-        callback.from_user = None
-
-        await bot.handle_hitl_callback(callback)
-
-        callback.answer.assert_awaited_once_with()
-
-    async def test_missing_message_answers_and_returns(self):
-        """Missing message gracefully answers callback without error."""
-        bot = _create_bot()
-        callback = _make_callback(data="hitl:approve")
-        callback.message = None
-
-        await bot.handle_hitl_callback(callback)
-
-        callback.answer.assert_awaited_once_with()
+        await bot.handle_hitl_callback(callback, state)
+        callback.answer.assert_awaited_once_with("Устарело")

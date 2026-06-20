@@ -25,9 +25,7 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "src/runtime/graph/nodes/transcribe.py": ["ERROR"],
     # Agent tools — pipeline wrapper error paths
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
-    "telegram_bot/agents/history_tool.py": ["ERROR"],
     "telegram_bot/agents/rag_pipeline.py": ["ERROR"],
-    "telegram_bot/agents/history_graph/nodes.py": ["ERROR"],
     # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
     "src/runtime/integrations/cache.py": ["ERROR", "WARNING"],
@@ -48,7 +46,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # SDK-native generation service — ERROR span on the LLM-failure fallback
     # path (CORE-004 split). Mirrors telegram_bot/services/generate_response.py.
     "src/runtime/generation/service.py": ["ERROR"],
-    "telegram_bot/services/history_service.py": ["ERROR"],
     "telegram_bot/middlewares/error_handler.py": ["ERROR"],
     # CRM callback handlers — archived in #2625 (CRM archival).
     # "telegram_bot/handlers/crm_callbacks.py": ["ERROR"],

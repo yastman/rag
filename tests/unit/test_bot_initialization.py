@@ -86,10 +86,6 @@ class TestPropertyBotInit:
         bot = _create_bot()
         assert bot._agent_checkpointer is None
 
-    def test_history_service_is_none_before_start(self):
-        bot = _create_bot()
-        assert bot._history_service is None
-
     def test_user_service_is_none_before_start(self):
         bot = _create_bot()
         assert bot._user_service is None
@@ -114,11 +110,6 @@ class TestPropertyBotInit:
         bot = _create_bot()
         assert bot._cache_initialized is False
 
-    def test_history_save_tasks_is_empty_set(self):
-        bot = _create_bot()
-        assert bot._history_save_tasks == set()
-        assert isinstance(bot._history_save_tasks, set)
-
 
 def _start_patches(bot):
     """Context manager stack that mocks all externals needed by start()."""
@@ -128,11 +119,6 @@ def _start_patches(bot):
     mock_me = MagicMock()
     mock_me.id = 12345
     mock_me.has_topics_enabled = False
-
-    mock_history_cls = MagicMock()
-    mock_history_instance = MagicMock()
-    mock_history_instance.ensure_collection = AsyncMock()
-    mock_history_cls.return_value = mock_history_instance
 
     from contextlib import ExitStack
 
@@ -167,7 +153,6 @@ def _start_patches(bot):
     )
     stack.enter_context(patch.object(bot.bot, "set_my_commands", new_callable=AsyncMock))
     stack.enter_context(patch.object(bot.bot, "set_chat_menu_button", new_callable=AsyncMock))
-    stack.enter_context(patch("telegram_bot.bot.HistoryService", mock_history_cls))
     # Prevent dialog router attachment errors (singletons already attached)
     stack.enter_context(patch.object(bot.dp, "include_router", MagicMock()))
     stack.enter_context(patch("telegram_bot.middlewares.i18n.setup_i18n_middleware", MagicMock()))
@@ -227,17 +212,6 @@ class TestPropertyBotStart:
                 await bot.start()
 
         assert bot._checkpointer is mock_fallback
-
-    async def test_history_service_failure_remains_none(self):
-        """When HistoryService raises, _history_service stays None."""
-        bot = _create_bot()
-        mock_history_cls = MagicMock(side_effect=Exception("Qdrant unavailable"))
-
-        with _start_patches(bot):
-            with patch("telegram_bot.bot.HistoryService", mock_history_cls):
-                await bot.start()
-
-        assert bot._history_service is None
 
     async def test_preflight_failure_propagates(self):
         """When check_dependencies raises PreflightError, start() re-raises."""

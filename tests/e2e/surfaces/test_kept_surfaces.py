@@ -131,7 +131,6 @@ class TestTextRagChatSurface:
                     get_collection_name=MagicMock(return_value="test_col"),
                     langfuse_env="test",
                 ),
-                history_service=None,
             )
 
         assert result is not None

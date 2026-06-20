@@ -45,7 +45,6 @@ import logging
 import os
 import socket
 import time
-from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any
 
 from aiogram import Bot, Dispatcher, F
@@ -59,6 +58,7 @@ from aiogram.types import (
 )
 from aiogram.utils.chat_action import ChatActionSender
 
+from src.observability_payloads import build_safe_input_payload, build_safe_output_payload
 from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY, RedisPollingLock
 from src.services.handoff_state import HandoffData, HandoffState
 
@@ -98,7 +98,6 @@ from .observability import (
     observe,
     propagate_attributes,
 )
-from .observability_payloads import build_safe_input_payload, build_safe_output_payload
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     write_langfuse_scores,
@@ -115,12 +114,10 @@ class GraphRecursionError(RuntimeError):
 if TYPE_CHECKING:
     from .agents.context import BotContext as BotContextType
     from .pipelines.state_contract import PreAgentStateContract
-    from .services.history_service import HistoryService
 else:
     BotContextType = Any
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
-HistoryService: Any = None  # type: ignore[no-redef]
 AsyncQdrantClient: Any = None
 BotContext: Any = Any
 
@@ -433,10 +430,6 @@ class PropertyBot:
         # HumanMessage serialization fixed in langgraph-checkpoint-redis>=0.3.6 (#420).
         self._agent_checkpointer: Any = None
 
-        # History service (initialized in start())
-        self._history_service: HistoryService | None = None
-        self._history_rest_client: Any = None
-
         # i18n hub (fluentogram) — initialize early for localized menu filters.
         self._i18n_hub: Any = None
         try:
@@ -477,19 +470,6 @@ class PropertyBot:
         self._polling_lock_consecutive_failures: int = 0
         self._polling_lock_owner: str | None = None
 
-        # Bounded fan-out for fire-and-forget history persistence (#1600).
-        # Without a bound the text path could accumulate unbounded background
-        # tasks under burst traffic / slow DB writes. Track every spawned save
-        # so shutdown can drain them; reject new saves with a Langfuse signal
-        # once the in-flight count reaches `_history_save_max_concurrency`.
-        self._history_save_tasks: set[asyncio.Task[None]] = set()
-        self._history_save_max_concurrency: int = int(
-            os.getenv("HISTORY_SAVE_MAX_CONCURRENCY", "32")
-        )
-        self._history_save_drain_timeout_s: float = float(
-            os.getenv("HISTORY_SAVE_DRAIN_TIMEOUT_S", "5.0")
-        )
-
         # Track initialization state
         self._cache_initialized = False
         self._pre_agent_filter_extractor: Any | None = None
@@ -499,53 +479,6 @@ class PropertyBot:
 
         # Register handlers
         self._register_handlers()
-
-    def _spawn_history_save(
-        self, coro: Coroutine[Any, Any, None], *, user_id: int | str
-    ) -> asyncio.Task[None] | None:
-        """Track and bound fan-out for fire-and-forget history persistence (#1600).
-
-        Without a bound the text path could accumulate unbounded background
-        tasks under burst traffic / slow DB writes. This helper:
-
-        * rejects the save and logs/scores ``history_save_dropped=1`` once the
-          in-flight count reaches ``_history_save_max_concurrency``;
-        * tracks every spawned task in ``_history_save_tasks`` so ``stop()``
-          can drain them with a bounded timeout.
-
-        Returns the spawned task on success, ``None`` if dropped.
-        """
-        if len(self._history_save_tasks) >= self._history_save_max_concurrency:
-            logger.warning(
-                "history-save fan-out at limit (%d in flight); dropping save for user_id=%s",
-                self._history_save_max_concurrency,
-                user_id,
-            )
-            lf = get_client()
-            if lf is not None:
-                try:
-                    tid = lf.get_current_trace_id() or ""
-                    if tid:
-                        lf.create_score(
-                            trace_id=tid,
-                            name="history_save_dropped",
-                            value=1,
-                            data_type="BOOLEAN",
-                            score_id=f"{tid}-history_save_dropped",
-                        )
-                except Exception:
-                    logger.warning("Failed to write history-save drop score", exc_info=True)
-            # Close the unscheduled coroutine so we do not leak a "never awaited" warning.
-            close = getattr(coro, "close", None)
-            if callable(close):
-                with contextlib.suppress(Exception):
-                    close()
-            return None
-
-        task = asyncio.create_task(coro, name=f"history-save-{user_id}")
-        self._history_save_tasks.add(task)
-        task.add_done_callback(self._history_save_tasks.discard)
-        return task
 
     def _get_pre_agent_filter_extractor(self) -> Any:
         """Lazily construct the deterministic extractor used on pre-agent semantic misses."""
@@ -1601,36 +1534,6 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to write Langfuse voice scores", exc_info=True)
 
-            # Persist Q&A to history (fail-soft)
-            if self._history_service and result.get("response"):
-                try:
-                    query_text = result.get("stt_text") or state.get("query", "")
-                    saved = await self._history_service.save_turn(
-                        user_id=message.from_user.id,
-                        session_id=state["session_id"],
-                        query=query_text,
-                        response=result["response"],
-                        input_type=result.get("input_type", "voice"),
-                        query_embedding=result.get("query_embedding"),
-                    )
-                    if tid:
-                        lf.create_score(
-                            trace_id=tid,
-                            name="history_save_success",
-                            value=1 if saved else 0,
-                            data_type="BOOLEAN",
-                            score_id=f"{tid}-history_save_success",
-                        )
-                        lf.create_score(
-                            trace_id=tid,
-                            name="history_backend",
-                            value="qdrant",
-                            data_type="CATEGORICAL",
-                            score_id=f"{tid}-history_backend",
-                        )
-                except Exception:
-                    logger.warning("Failed to save voice history turn", exc_info=True)
-
     async def _send_hitl_confirmation(
         self,
         message: Message,
@@ -1664,115 +1567,8 @@ class PropertyBot:
         )
 
     @observe(name="telegram-hitl-callback", as_type="agent")
-    async def handle_hitl_callback(self, callback: CallbackQuery) -> None:
-        """Handle HITL approve/cancel button click (#443)."""
-        from .agents.context import BotContext
-
-        if callback.from_user is None or callback.message is None:
-            await callback.answer()
-            return
-
-        data = callback.data or ""
-        action = "approve" if data == "hitl:approve" else "cancel"
-        user_id = callback.from_user.id
-        chat_id = callback.message.chat.id
-        _raw_thread_id = getattr(callback.message, "message_thread_id", None)
-        forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
-        thread_id = _supervisor_thread_id(chat_id, forum_thread_id)
-
-        # #2224: link this resume trace back to the interrupt trace stored at
-        # confirmation time. Langfuse trace metadata values are strings.
-        from .agents.hitl import pop_pending_resume_trace_id
-
-        _parent_trace_id = pop_pending_resume_trace_id(thread_id)
-        _resume_trace_metadata = (
-            {"resumes_trace_id": _parent_trace_id} if _parent_trace_id else None
-        )
-
-        await callback.answer("Принято" if action == "approve" else "Отменено")
-
-        with contextlib.suppress(Exception):
-            await callback.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
-
-        # Rebuild agent with same tools and checkpointer (mirrors _handle_query_supervisor)
-        from .agents.tool_assembly import build_agent_tools
-
-        role = await self._resolve_user_role(user_id)
-        session_id = make_session_id("chat", chat_id)
-
-        tools = build_agent_tools(
-            role=role,
-            config=self.config,
-            history_service=self._history_service,
-        )
-
-        agent = create_bot_agent(
-            model=self.config.supervisor_model,
-            tools=tools,
-            checkpointer=self._agent_checkpointer,
-            language=self.config.domain_language,
-            base_url=self.config.llm_base_url,
-            api_key=self.config.llm_api_key,
-            role=role,
-            max_history_messages=self.config.agent_max_history_messages,
-            max_tokens=self.config.supervisor_max_tokens,
-        )
-
-        ctx = BotContext(
-            telegram_user_id=user_id,
-            session_id=session_id,
-            language=self.config.domain_language,
-            history_service=self._history_service,
-            embeddings=self._embeddings,
-            sparse_embeddings=self._sparse,
-            qdrant=self._qdrant,
-            cache=self._cache,
-            reranker=self._reranker,
-            llm=self._llm,
-            content_filter_enabled=self.config.content_filter_enabled,
-            guard_mode=self.config.guard_mode,
-            role=role,
-            apartments_service=self._apartments_service,
-            search_event_store=self._search_event_store,
-            config=self.config,
-        )
-
-        with propagate_attributes(
-            session_id=session_id,
-            user_id=str(user_id),
-            tags=["telegram", "hitl", "resume"],
-            metadata=_resume_trace_metadata,
-        ):
-            langfuse_handler = create_callback_handler()
-            callbacks = [langfuse_handler] if langfuse_handler else []
-
-            result = await agent.ainvoke(
-                {"resume": {"action": action}},
-                config={
-                    "callbacks": callbacks,
-                    "configurable": {
-                        "thread_id": thread_id,
-                        "bot_context": ctx,
-                    },
-                },
-            )
-
-        messages = result.get("messages", [])
-        response_text = ""
-        if messages:
-            last_msg = messages[-1]
-            response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-
-        if response_text:
-            bot = callback.message.bot  # type: ignore[union-attr]
-            for chunk in _split_telegram_response(response_text):
-                send_kwargs: dict[str, Any] = {"chat_id": chat_id, "text": chunk}
-                if forum_thread_id is not None:
-                    send_kwargs["message_thread_id"] = forum_thread_id
-                await bot.send_message(**send_kwargs)  # type: ignore[union-attr]
-
-        lf = get_client()
-        lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
+    async def handle_hitl_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+        await callback.answer("Устарело")
 
     @observe(name="cb-feedback", capture_input=False, capture_output=False)
     async def handle_feedback(
@@ -1892,7 +1688,6 @@ class PropertyBot:
         tools = build_agent_tools(
             role=role,
             config=self.config,
-            history_service=self._history_service,
         )
 
         agent = create_bot_agent(
@@ -1911,7 +1706,6 @@ class PropertyBot:
             telegram_user_id=user_id,
             session_id=session_id,
             language=language,
-            history_service=self._history_service,
             embeddings=self._embeddings,
             sparse_embeddings=self._sparse,
             qdrant=self._qdrant,
@@ -2055,49 +1849,6 @@ class PropertyBot:
             self._deeplink_redis = None
             self._topic_manager = None
         self._miniapp_subscriber_task: asyncio.Task[None] | None = None
-        # Initialize history service (Qdrant-backed Q&A history)
-        try:
-            history_service_cls = HistoryService
-            if history_service_cls is None:
-                from .services.history_service import HistoryService as history_service_cls
-
-            # REST-only client for collection admin ops: the shared retrieval
-            # client is prefer_grpc=True, and gRPC collection calls hit a
-            # grpc.aio + OTel interceptor NotImplementedError (#2346).
-            from urllib.parse import urlparse
-
-            # Strip api_key for http:// to avoid insecure-connection warning (#570).
-            async_qdrant_client_cls = AsyncQdrantClient
-            if async_qdrant_client_cls is None:
-                from qdrant_client import AsyncQdrantClient as async_qdrant_client_cls
-
-            _hist_scheme = urlparse(self.config.qdrant_url).scheme.lower()
-            _hist_api_key = self.config.qdrant_api_key if _hist_scheme == "https" else None
-            self._history_rest_client = async_qdrant_client_cls(
-                url=self.config.qdrant_url,
-                api_key=_hist_api_key,
-                timeout=self.config.qdrant_timeout,
-                prefer_grpc=False,
-            )
-            self._history_service = history_service_cls(
-                client=self._qdrant.client,
-                embeddings=self._embeddings,
-                collection_name=self.config.qdrant_history_collection,
-                rest_client=self._history_rest_client,
-            )
-            await self._history_service.ensure_collection()
-            logger.info("History service ready (%s)", self.config.qdrant_history_collection)
-        except Exception:
-            logger.warning("History service init failed, /history disabled", exc_info=True)
-            self._history_service = None
-            startup_report.add(
-                StartupSignal(
-                    source="history",
-                    severity=StartupSeverity.DEGRADED,
-                    summary="/history disabled because history service initialization failed",
-                    remediation="restore Qdrant history collection and embeddings dependencies",
-                )
-            )
 
         # Initialize PostgreSQL pool for realestate DB
         postgres_available = (
@@ -2392,28 +2143,6 @@ class PropertyBot:
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
 
-        # Drain pending fire-and-forget history saves before tearing services down
-        # so in-flight DB writes are not lost on shutdown (#1600). Bounded by
-        # _history_save_drain_timeout_s so a stuck DB cannot block shutdown.
-        if self._history_save_tasks:
-            in_flight = list(self._history_save_tasks)
-            logger.info("Draining %d in-flight history-save tasks...", len(in_flight))
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(*in_flight, return_exceptions=True),
-                    timeout=self._history_save_drain_timeout_s,
-                )
-            except TimeoutError:
-                logger.warning(
-                    "history-save drain timed out after %.1fs; cancelling %d task(s)",
-                    self._history_save_drain_timeout_s,
-                    sum(1 for t in in_flight if not t.done()),
-                )
-                for task in in_flight:
-                    if not task.done():
-                        task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await asyncio.gather(*in_flight, return_exceptions=True)
         if self._miniapp_subscriber_task is not None:
             self._miniapp_subscriber_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -2435,10 +2164,6 @@ class PropertyBot:
         await self._redis_monitor.stop()
         await self._cache.close()
         await self._qdrant.close()
-        if self._history_rest_client is not None:
-            with contextlib.suppress(Exception):
-                await self._history_rest_client.close()
-            self._history_rest_client = None
         if hasattr(self._embeddings, "aclose"):
             await self._embeddings.aclose()
         if hasattr(self._sparse, "aclose"):
