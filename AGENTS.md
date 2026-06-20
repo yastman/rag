@@ -6,6 +6,24 @@ This file is the repo gateway for agents. Keep it short. Do not duplicate
 runbooks, Docker contracts, test policy, subsystem ownership, docs maintenance
 rules, or worker-specific workflows here.
 
+## What This Is
+
+A single-process **Python monolith**: one entry point (a Telegram bot,
+`telegram_bot/`), one RAG pipeline (`src/runtime/pipeline/`). It answers from a
+private corpus (Qdrant + BGE-M3 hybrid retrieval) and prepares CRM actions
+behind human confirmation. It is **not** a multi-surface "AI platform" — voice /
+Mini App / HTTP-API / the `telegram_bot/graph/` LangGraph layer are removed or
+inert legacy under active cleanup. Don't reintroduce platform/adapter
+abstractions that have no live caller.
+
+**Direction (where this is going):** converge ON exactly this shape — one
+process, one Telegram entry point, one RAG pipeline. Every change should move
+toward fewer surfaces, not more: delete leftover platform/adapter/duplicate
+layers rather than grow new ones (legacy `telegram_bot/graph/`, the parallel
+`src/` ↔ `telegram_bot/` trees, dead provider abstractions). When a change adds
+a new entry point, adapter, or abstraction layer, that is the signal to stop and
+question it.
+
 ## Priority
 
 1. Nearest `AGENTS.override.md`
@@ -20,6 +38,16 @@ here.
 Use additional skills only when the user explicitly names them, the task clearly
 matches their trigger, or an accepted artifact requires that next step. Do not
 cascade into unrelated skills or workflows on your own.
+
+## Engineering Principle
+
+Default to the laziest correct change: before writing code, stop at the first
+rung that holds — does it need to exist (YAGNI) → stdlib → native platform
+feature → installed dependency → one line → only then minimal new code.
+Deletion over addition, fewest files, no unrequested abstractions. Never cut
+validation, error handling, security, or accessibility. Mark deliberate
+shortcuts with a `ponytail:` comment naming the ceiling and upgrade path.
+Source: [`ponytail`](https://github.com/DietrichGebert/ponytail).
 
 ## Start Here
 
