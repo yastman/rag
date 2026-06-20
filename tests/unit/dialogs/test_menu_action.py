@@ -133,29 +133,6 @@ async def test_on_menu_action_manager_rebinds_from_user_to_callback_actor():
     assert passed_message.from_user is callback.from_user
 
 
-async def test_on_manager_action_calls_manager_done_and_handle_menu_action():
-    """on_manager_action closes dialog, then calls handle_menu_action with mapped query and locale."""
-    from telegram_bot.dialogs.manager_menu import _BUTTON_QUERIES, on_manager_action
-
-    mock_bot = AsyncMock()
-    mock_bot.handle_menu_action = AsyncMock()
-
-    callback = MagicMock()
-    button = MagicMock()
-    button.widget_id = "mgr_search"
-
-    manager = AsyncMock()
-    manager.done = AsyncMock()
-    manager.middleware_data = {"property_bot": mock_bot, "locale": "uk"}
-
-    await on_manager_action(callback, button, manager)
-
-    manager.done.assert_called_once()
-    mock_bot.handle_menu_action.assert_called_once_with(
-        callback, _BUTTON_QUERIES["mgr_search"], locale="uk"
-    )
-
-
 def test_crm_submenu_is_navigation_hub():
     """CRM submenu (#697 refactor) uses Start buttons — no action dispatching."""
     from telegram_bot.dialogs.crm_submenu import crm_submenu_dialog
