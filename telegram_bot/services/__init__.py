@@ -12,7 +12,6 @@ from .generate_response import generate_response
 
 if TYPE_CHECKING:
     from .bge_m3_client import BGEM3Client, BGEM3SyncClient
-    from .colbert_reranker import ColbertRerankerService
     from .history_service import HistoryService
     from .metrics import PipelineMetrics
     from .qdrant import QdrantService
@@ -24,7 +23,6 @@ if TYPE_CHECKING:
 __all__ = [
     "BGEM3Client",
     "BGEM3SyncClient",
-    "ColbertRerankerService",
     "ExpandedChunk",
     "HistoryService",
     "HyDEGenerator",
@@ -39,7 +37,6 @@ __all__ = [
 _IMPORT_MAP = {
     "BGEM3Client": ".bge_m3_client",
     "BGEM3SyncClient": ".bge_m3_client",
-    "ColbertRerankerService": ".colbert_reranker",
     "ExpandedChunk": ".small_to_big",
     "HistoryService": ".history_service",
     "HyDEGenerator": ".query_preprocessor",

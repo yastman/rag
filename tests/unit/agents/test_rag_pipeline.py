@@ -802,29 +802,6 @@ async def test_grade_or_rerank_drops_weak_tail_when_gap_is_small():
     assert all("ВНЖ" not in d["text"] for d in result["documents"])
 
 
-async def test_rerank_ignores_deprecated_colbert_service():
-    from telegram_bot.agents.rag_pipeline import _rerank
-    from telegram_bot.services.colbert_reranker import ColbertRerankerService
-
-    docs = [
-        {"text": "Doc A", "score": 0.3},
-        {"text": "Doc B", "score": 0.8},
-    ]
-    client = MagicMock()
-    client.rerank = AsyncMock(return_value=[{"index": 0, "score": 0.99}])
-
-    with pytest.deprecated_call(match="deprecated"):
-        reranker = ColbertRerankerService(client=client)
-
-    result = await _rerank("query", docs, reranker=reranker, latency_stages={})
-
-    assert result["rerank_applied"] is False
-    assert result["rerank_cache_hit"] is False
-    assert result["documents"][0]["text"] == "Doc B"
-    assert result["documents"][1]["text"] == "Doc A"
-    client.rerank.assert_not_awaited()
-
-
 # ---------------------------------------------------------------------------
 # _rewrite_query tests
 # ---------------------------------------------------------------------------

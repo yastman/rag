@@ -62,19 +62,6 @@ def _update_current_span(**kwargs: Any) -> None:
             lf.update_current_span(**kwargs)
 
 
-def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
-    """Return True when caller passed the deprecated client-side ColBERT service."""
-    if reranker is None:
-        return False
-
-    try:
-        from src.runtime.services.colbert_reranker import ColbertRerankerService
-    except (ImportError, ModuleNotFoundError):
-        return False
-
-    return isinstance(reranker, ColbertRerankerService)
-
-
 # ---------------------------------------------------------------------------
 # H2: Context builder
 # ---------------------------------------------------------------------------
@@ -188,7 +175,6 @@ async def perform_rerank(
         documents: Retrieved document dicts with "text" and "score" keys.
         cache: Optional cache instance with get_rerank_results / store_rerank_results.
         reranker: Optional reranker instance with .rerank() method.
-            Deprecated ColbertRerankerService inputs are ignored.
         top_k: Number of documents to return.
 
     Returns:
@@ -209,13 +195,6 @@ async def perform_rerank(
             output={"docs_out": 0, "rerank_applied": False, "rerank_cache_hit": False},
         )
         return ([], False, False)
-
-    if _is_deprecated_colbert_reranker(reranker):
-        logger.warning(
-            "perform_rerank: ignoring deprecated ColbertRerankerService; "
-            "server-side Qdrant ColBERT is the only supported ColBERT path"
-        )
-        reranker = None
 
     if reranker is not None:
         _cache_get = getattr(cache, "get_rerank_results", None) if cache is not None else None
