@@ -66,10 +66,8 @@ telegram = [
 ]
 
 # Optional non-OpenAI provider/contextualization adapters.
-providers = [
-    "anthropic",
-    "groq",
-]
+# #2893: anthropic and groq removed (only used by dead contextualization module).
+providers = []
 
 # Local ML models (torch, FlagEmbedding, sentence-transformers)
 # Only needed when running local model inference (BGE-M3, cross-encoder, etc.)

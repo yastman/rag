@@ -100,11 +100,8 @@ PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_thread_routing.py \
 	tests/unit/test_topic_service_init.py
 PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB := $(addprefix --ignore-glob=,$(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS))
-PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS := \
-	tests/unit/contextualization \
-	tests/unit/test_claude_contextualizer.py \
-	tests/unit/test_contextualization_batch.py
-# #2818: legacy-graph/langgraph partition closed (#2495/#2526 resolved).
+PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS :=
+# #2893: contextualization 3-provider strategy removed (dead code, 0 prod callers).
 # Variable kept as an empty list so PYTEST_OPTIONAL_PROVIDER_IGNORE still compiles.
 PYTEST_LEGACY_GRAPH_PATHS :=
 PYTEST_OPTIONAL_ADAPTER_IGNORE := $(addprefix --ignore=,$(PYTEST_TELEGRAM_ADAPTER_PATHS))
@@ -303,11 +300,9 @@ test-telegram-adapter: ## Run Telegram adapter unit tests explicitly
 	@echo "$(GREEN)✓ Telegram adapter tests complete$(NC)"
 
 
-test-providers-extra: ## Run optional provider/contextualization tests explicitly
-	@echo "$(BLUE)Running providers-extra tests...$(NC)"
-	uv sync --extra providers --all-groups
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS) -q --timeout=30 -m "not legacy_api and not slow"
-	@echo "$(GREEN)✓ Providers-extra tests complete$(NC)"
+test-providers-extra: ## Run optional provider/contextualization tests explicitly (no-op: #2893 removed)
+	@echo "$(BLUE)No provider/contextualization tests remain after #2893 removal.$(NC)"
+	@echo "$(GREEN)✓ Providers-extra tests complete (no tests)$(NC)"
 
 
 test-ingest-extra: ## Run optional ingestion-extra tests explicitly
