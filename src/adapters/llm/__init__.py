@@ -7,7 +7,6 @@ from src.adapters.llm.base import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
-from src.adapters.llm.factory import get_llm_provider
 from src.adapters.llm.litellm_provider import LiteLlmProvider
 
 
@@ -18,5 +17,4 @@ __all__ = [
     "LLMRateLimitError",
     "LLMTimeoutError",
     "LiteLlmProvider",
-    "get_llm_provider",
 ]
