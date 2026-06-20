@@ -1,4 +1,4 @@
-from telegram_bot.services.bge_m3_query_bundle import (
+from src.services.bge_m3_query_bundle import (
     BGE_M3_QUERY_BUNDLE_VERSION,
     BgeM3QueryVectorBundle,
     make_bge_m3_query_bundle_key_material,

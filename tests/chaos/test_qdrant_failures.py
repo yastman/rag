@@ -24,7 +24,7 @@ class TestQdrantExceptionHandling:
     )
     async def test_exception_returns_empty_results(self, exc_class, exc_msg):
         """Verify search returns empty list on any exception."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
         service = QdrantService(
             url="http://localhost:6333",
@@ -55,7 +55,7 @@ class TestQdrantRecovery:
         - the underlying client is invoked exactly 3 times
         """
 
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
         service = QdrantService(
             url="http://localhost:6333",
@@ -122,7 +122,7 @@ class TestQdrantServiceInitialization:
     )
     def test_qdrant_service_init_with_different_modes(self, mode, expected_suffix):
         """Verify QdrantService initializes correctly with different modes."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
         service = QdrantService(
             url="http://localhost:6333",
@@ -133,7 +133,7 @@ class TestQdrantServiceInitialization:
 
     def test_qdrant_mode_switching(self):
         """Verify mode switching updates collection name."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
         service = QdrantService(
             url="http://localhost:6333",

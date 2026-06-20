@@ -65,6 +65,15 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
+from src.runtime.services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    is_contextual_query,
+    maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
+)
+from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
+from src.services.handoff_state import HandoffData, HandoffState
 
 from . import (
     _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
@@ -113,16 +122,7 @@ from .scoring import (
     write_langfuse_scores,
 )
 from .services.business_hours import is_business_hours
-from .services.cache_policy import (
-    SEMANTIC_CACHE_SCHEMA_VERSION,
-    build_cacheability_decision,
-    is_contextual_query,
-    maybe_store_semantic_response,
-    resolve_semantic_cache_signature,
-)
 from .services.forum_bridge import ForumBridge
-from .services.handoff_state import HandoffData, HandoffState
-from .services.query_filter_signal import detect_filter_sensitive_query
 from .services.redis_monitor import RedisHealthMonitor
 from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
@@ -377,9 +377,9 @@ class PropertyBot:
         )
 
         # Initialize legacy graph service dependencies
-        from .integrations.cache import CacheLayerManager
-        from .integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
-        from .services.qdrant import QdrantService
+        from src.runtime.integrations.cache import CacheLayerManager
+        from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
+        from src.runtime.services.qdrant import QdrantService
 
         self._cache = CacheLayerManager(redis_url=config.redis_url)
         self._hybrid = BGEM3HybridEmbeddings(
@@ -755,7 +755,7 @@ class PropertyBot:
         expert_id = payload.get("expert_id", "")
         user_message = payload.get("message") or ""
 
-        from .services.content_loader import load_mini_app_config
+        from src.services.content_loader import load_mini_app_config
 
         config_data = load_mini_app_config()
         expert = next((e for e in config_data.get("experts", []) if e["id"] == expert_id), None)
@@ -1408,12 +1408,13 @@ class PropertyBot:
     @observe(name="cb-service", capture_input=False, capture_output=False)
     async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
         """Handle service menu inline button clicks (#628)."""
+        from src.services.content_loader import get_service_card
+
         from .keyboards.services_keyboard import (
             build_service_card_buttons,
             build_services_menu,
             parse_service_callback,
         )
-        from .services.content_loader import get_service_card
 
         parsed = parse_service_callback(callback.data or "")
         if parsed is None:

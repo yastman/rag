@@ -1,5 +1,5 @@
-from telegram_bot.integrations.cache import BGE_M3_QUERY_BUNDLE_MODEL_NAME, CacheLayerManager
-from telegram_bot.services.bge_m3_query_bundle import (
+from src.runtime.integrations.cache import BGE_M3_QUERY_BUNDLE_MODEL_NAME, CacheLayerManager
+from src.services.bge_m3_query_bundle import (
     BgeM3QueryVectorBundle,
     make_bge_m3_query_bundle_key_material,
 )

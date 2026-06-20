@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.rag_core import (
+from src.runtime.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
     build_retrieved_context,
     check_semantic_cache,
@@ -250,7 +250,7 @@ class TestPerformRerank:
 
     async def test_deprecated_colbert_reranker_is_ignored(self):
         """Deprecated client-side ColBERT service must not run in rerank core."""
-        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+        from src.runtime.services.colbert_reranker import ColbertRerankerService
 
         documents = [{"text": "doc0", "score": 0.5}]
         client = MagicMock()

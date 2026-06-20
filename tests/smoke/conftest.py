@@ -15,8 +15,8 @@ import httpx
 import pytest
 import redis.asyncio as redis
 
-from telegram_bot.integrations.cache import CacheLayerManager
-from telegram_bot.services.qdrant import QdrantService
+from src.runtime.integrations.cache import CacheLayerManager
+from src.runtime.services.qdrant import QdrantService
 
 
 @pytest.fixture(scope="module")

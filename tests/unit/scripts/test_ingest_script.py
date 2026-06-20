@@ -2,7 +2,7 @@
 
 from unittest import mock
 
-from telegram_bot.services.bge_m3_client import HybridResult
+from src.services.bge_m3_client import HybridResult
 
 
 class TestLegacyIngestUsesHybrid:

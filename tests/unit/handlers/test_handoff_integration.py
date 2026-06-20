@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.services.handoff_state import HandoffData, HandoffState
 from telegram_bot.services.forum_bridge import ForumBridge
-from telegram_bot.services.handoff_state import HandoffData, HandoffState
 
 
 @pytest.mark.asyncio

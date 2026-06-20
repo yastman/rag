@@ -159,12 +159,12 @@ async def test_results_getter_degraded_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_on_text_input_calls_pipeline_and_searches() -> None:
-    from telegram_bot.dialogs.demo import on_text_input
-    from telegram_bot.services.apartment_models import (
+    from src.models.apartment import (
         ApartmentSearchFilters,
         ExtractionMeta,
         HardFilters,
     )
+    from telegram_bot.dialogs.demo import on_text_input
 
     message = AsyncMock()
     message.text = "двушка до 100к"
@@ -221,12 +221,12 @@ async def test_on_text_input_no_pipeline_shows_error() -> None:
 
 @pytest.mark.asyncio
 async def test_on_voice_input_transcribes_then_searches() -> None:
-    from telegram_bot.dialogs.demo import on_voice_input
-    from telegram_bot.services.apartment_models import (
+    from src.models.apartment import (
         ApartmentSearchFilters,
         ExtractionMeta,
         HardFilters,
     )
+    from telegram_bot.dialogs.demo import on_voice_input
 
     message = AsyncMock()
     message.voice = MagicMock()
@@ -288,12 +288,12 @@ async def test_on_voice_input_failed_stt_shows_error() -> None:
 
 @pytest.mark.asyncio
 async def test_on_example_selected_runs_search() -> None:
-    from telegram_bot.dialogs.demo import on_example_selected
-    from telegram_bot.services.apartment_models import (
+    from src.models.apartment import (
         ApartmentSearchFilters,
         ExtractionMeta,
         HardFilters,
     )
+    from telegram_bot.dialogs.demo import on_example_selected
 
     callback = AsyncMock()
     callback.message = AsyncMock()

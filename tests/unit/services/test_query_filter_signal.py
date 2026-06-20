@@ -1,6 +1,6 @@
 import pytest
 
-from telegram_bot.services.query_filter_signal import (
+from src.runtime.services.query_filter_signal import (
     QueryFilterSignal,
     build_filter_signature,
     detect_filter_sensitive_query,

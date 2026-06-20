@@ -15,7 +15,7 @@ from src.retrieval.topic_classifier import (
     detect_score_gap,
     get_query_topic_hint,
 )
-from telegram_bot.services.grounding_policy import (
+from src.runtime.grounding.policy import (
     get_grounding_mode,
     semantic_cache_safe_reuse_allowed,
     should_safe_fallback,

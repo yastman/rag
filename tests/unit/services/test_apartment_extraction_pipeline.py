@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from telegram_bot.services.apartment_extraction_pipeline import ApartmentExtractionPipeline
-from telegram_bot.services.apartment_models import (
+from src.models.apartment import (
     ApartmentSearchFilters,
     ExtractionMeta,
     HardFilters,
     SoftPreferences,
 )
+from telegram_bot.services.apartment_extraction_pipeline import ApartmentExtractionPipeline
 
 
 def _make_filters(confidence: str = "HIGH", source: str = "regex") -> ApartmentSearchFilters:

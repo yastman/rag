@@ -11,7 +11,7 @@ from typing import Any
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from telegram_bot.services.content_loader import load_services_config
+from src.services.content_loader import load_services_config
 
 
 _SVC_PREFIX = "svc:"

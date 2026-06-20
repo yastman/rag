@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.services.qdrant import QdrantService
+from src.runtime.services.qdrant import QdrantService
 
 
 pytestmark = pytest.mark.xdist_group("qdrant_service")
@@ -17,7 +17,7 @@ def _make_service(*, validated: bool = False) -> QdrantService:
     If ``validated``, set ``_client`` to AsyncMock and ``_collection_validated`` to True
     so search methods work without real Qdrant.
     """
-    with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+    with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
         svc = QdrantService(url="http://localhost:6333", collection_name="test_collection")
         if validated:
             svc._client = AsyncMock()
@@ -468,7 +468,7 @@ class TestQdrantServiceTimeout:
     )
     def test_timeout_passed_to_client(self, kwargs, expected_timeout):
         """Verify AsyncQdrantClient receives correct timeout."""
-        import telegram_bot.services.qdrant as qdrant_mod
+        import src.runtime.services.qdrant as qdrant_mod
 
         with patch.object(qdrant_mod, "AsyncQdrantClient") as mock_client:
             qdrant_mod.QdrantService(url="http://localhost:6333", **kwargs)
@@ -864,7 +864,7 @@ class TestQdrantServiceClose:
 
     async def test_close_calls_client_close(self):
         """Test close method calls client.close()."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test_collection",
@@ -900,7 +900,7 @@ class TestQdrantServiceInit:
     @pytest.mark.filterwarnings("ignore:Api key is used with an insecure connection.")
     def test_init(self, extra_kwargs, expected):
         """Test initialization with various configurations."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="my_collection",
@@ -922,21 +922,21 @@ class TestQdrantApiKeySafety:
 
     def test_api_key_stripped_for_http(self):
         """HTTP URL + api_key -> api_key=None (no insecure warning)."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as MockClient:
             QdrantService(url="http://localhost:6333", api_key="test-key")
             call_kwargs = MockClient.call_args[1]
             assert call_kwargs["api_key"] is None
 
     def test_api_key_kept_for_https(self):
         """HTTPS URL + api_key -> api_key passed through."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as MockClient:
             QdrantService(url="https://qdrant.example.com:6333", api_key="test-key")
             call_kwargs = MockClient.call_args[1]
             assert call_kwargs["api_key"] == "test-key"
 
     def test_no_api_key_no_change(self):
         """No api_key -> None regardless of scheme."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as MockClient:
             QdrantService(url="http://localhost:6333", api_key=None)
             call_kwargs = MockClient.call_args[1]
             assert call_kwargs["api_key"] is None

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationError
 
-from telegram_bot.integrations.cache import (
+from src.runtime.integrations.cache import (
     CACHE_VERSION,
     SEMANTIC_CACHE_VERSION,
     CacheLayerManager,

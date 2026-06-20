@@ -9,13 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
-from telegram_bot.services.qdrant import QdrantService
+from src.runtime.services.qdrant import QdrantService
 
 
 @pytest.fixture
 def service():
     """Create QdrantService with mocked client."""
-    with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+    with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
         svc = QdrantService(
             url="http://localhost:6333",
             collection_name="test_collection",

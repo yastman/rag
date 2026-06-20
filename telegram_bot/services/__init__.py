@@ -2,7 +2,7 @@
 
 Uses lazy imports to avoid loading heavy dependencies at import time.
 Import specific services directly for best performance:
-    from telegram_bot.services.qdrant import QdrantService
+    from src.runtime.services.qdrant import QdrantService
 """
 
 from typing import TYPE_CHECKING
@@ -11,14 +11,15 @@ from .generate_response import generate_response
 
 
 if TYPE_CHECKING:
-    from .bge_m3_client import BGEM3Client, BGEM3SyncClient
-    from .colbert_reranker import ColbertRerankerService
+    from src.runtime.services.colbert_reranker import ColbertRerankerService
+    from src.runtime.services.metrics import PipelineMetrics
+    from src.runtime.services.qdrant import QdrantService
+    from src.runtime.services.query_preprocessor import HyDEGenerator, QueryPreprocessor
+    from src.runtime.services.small_to_big import ExpandedChunk, SmallToBigService
+    from src.services.bge_m3_client import BGEM3Client, BGEM3SyncClient
+
     from .history_service import HistoryService
-    from .metrics import PipelineMetrics
-    from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
-    from .query_preprocessor import HyDEGenerator, QueryPreprocessor
-    from .small_to_big import ExpandedChunk, SmallToBigService
 
 
 __all__ = [
@@ -37,17 +38,17 @@ __all__ = [
 ]
 
 _IMPORT_MAP = {
-    "BGEM3Client": ".bge_m3_client",
-    "BGEM3SyncClient": ".bge_m3_client",
-    "ColbertRerankerService": ".colbert_reranker",
-    "ExpandedChunk": ".small_to_big",
-    "HistoryService": ".history_service",
-    "HyDEGenerator": ".query_preprocessor",
-    "PipelineMetrics": ".metrics",
-    "QdrantService": ".qdrant",
-    "QueryAnalyzer": ".query_analyzer",
-    "QueryPreprocessor": ".query_preprocessor",
-    "SmallToBigService": ".small_to_big",
+    "BGEM3Client": "src.services.bge_m3_client",
+    "BGEM3SyncClient": "src.services.bge_m3_client",
+    "ColbertRerankerService": "src.runtime.services.colbert_reranker",
+    "ExpandedChunk": "src.runtime.services.small_to_big",
+    "HistoryService": "telegram_bot.services.history_service",
+    "HyDEGenerator": "src.runtime.services.query_preprocessor",
+    "PipelineMetrics": "src.runtime.services.metrics",
+    "QdrantService": "src.runtime.services.qdrant",
+    "QueryAnalyzer": "telegram_bot.services.query_analyzer",
+    "QueryPreprocessor": "src.runtime.services.query_preprocessor",
+    "SmallToBigService": "src.runtime.services.small_to_big",
 }
 
 
@@ -56,6 +57,6 @@ def __getattr__(name: str):
     if name in _IMPORT_MAP:
         import importlib
 
-        module = importlib.import_module(_IMPORT_MAP[name], __package__)
+        module = importlib.import_module(_IMPORT_MAP[name])
         return getattr(module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

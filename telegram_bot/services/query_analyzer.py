@@ -6,8 +6,8 @@ from typing import Any
 import openai
 from pydantic import BaseModel, Field
 
+from src.runtime.integrations.prompt_manager import get_prompt_with_object
 from src.runtime.llm import create_litellm_chat_client
-from telegram_bot.integrations.prompt_manager import get_prompt_with_object
 from telegram_bot.observability import get_client, observe
 
 

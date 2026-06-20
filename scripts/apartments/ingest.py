@@ -7,8 +7,8 @@ import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, SparseVector
 
-from telegram_bot.services.apartment_models import ApartmentRecord
-from telegram_bot.services.bge_m3_client import BGEM3SyncClient
+from src.models.apartment import ApartmentRecord
+from src.services.bge_m3_client import BGEM3SyncClient
 
 
 COLLECTION = "apartments"

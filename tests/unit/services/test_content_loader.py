@@ -1,6 +1,6 @@
 """Tests for content_loader."""
 
-from telegram_bot.services.content_loader import get_service_card, load_services_config
+from src.services.content_loader import get_service_card, load_services_config
 
 
 def test_load_services_config():

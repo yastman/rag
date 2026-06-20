@@ -8,8 +8,8 @@ from uuid import UUID
 
 from qdrant_client import models
 
+from src.runtime.services.qdrant import QdrantService
 from telegram_bot.observability import get_client, observe
-from telegram_bot.services.qdrant import QdrantService
 
 
 logger = logging.getLogger(__name__)

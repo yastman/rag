@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from src.adapters.embeddings.bge_m3 import BgeM3EmbeddingProvider
-from telegram_bot.integrations.embeddings import (
+from src.runtime.integrations.embeddings import (
     BGEM3Embeddings,
     BGEM3HybridEmbeddings,
     BGEM3SparseEmbeddings,
@@ -213,7 +213,7 @@ class TestBGEM3HybridEmbeddings:
         assert result == [0.1, 0.2]
 
     async def test_aembed_dense_query_uses_dense_endpoint_and_returns_processing_time(self):
-        from telegram_bot.services.bge_m3_client import BGEM3Client, DenseResult
+        from src.services.bge_m3_client import BGEM3Client, DenseResult
 
         mock_client = AsyncMock(spec=BGEM3Client)
         mock_client.encode_dense = AsyncMock(
@@ -229,7 +229,7 @@ class TestBGEM3HybridEmbeddings:
 
     async def test_aembed_hybrid_with_colbert(self):
         """aembed_hybrid_with_colbert returns 3-tuple (dense, sparse, colbert)."""
-        from telegram_bot.services.bge_m3_client import BGEM3Client, HybridResult
+        from src.services.bge_m3_client import BGEM3Client, HybridResult
 
         mock_client = AsyncMock(spec=BGEM3Client)
         mock_client.encode_hybrid = AsyncMock(
@@ -251,7 +251,7 @@ class TestBGEM3HybridEmbeddings:
 
     async def test_aembed_hybrid_with_colbert_fallback_to_encode_colbert(self):
         """When encode_hybrid returns no colbert_vecs, falls back to encode_colbert."""
-        from telegram_bot.services.bge_m3_client import BGEM3Client, ColbertResult, HybridResult
+        from src.services.bge_m3_client import BGEM3Client, ColbertResult, HybridResult
 
         mock_client = AsyncMock(spec=BGEM3Client)
         mock_client.encode_hybrid = AsyncMock(
@@ -282,7 +282,7 @@ class TestBGEM3HybridRetry:
     @pytest.fixture(autouse=True)
     def _disable_retry_sleep(self, monkeypatch: pytest.MonkeyPatch):
         """Keep retry attempts deterministic without real backoff waits."""
-        from telegram_bot.services.bge_m3_client import BGEM3Client
+        from src.services.bge_m3_client import BGEM3Client
 
         async def _noop_sleep(_seconds: float) -> None:
             return None

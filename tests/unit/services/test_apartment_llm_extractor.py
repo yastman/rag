@@ -6,17 +6,17 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.models.apartment import (
+    ApartmentSearchFilters,
+    ExtractionMeta,
+    HardFilters,
+    SoftPreferences,
+)
 from telegram_bot.services.apartment_llm_extractor import (
     EXTRACTION_SYSTEM_PROMPT,
     ApartmentLlmExtractor,
     _get_system_prompt,
     merge_extraction_results,
-)
-from telegram_bot.services.apartment_models import (
-    ApartmentSearchFilters,
-    ExtractionMeta,
-    HardFilters,
-    SoftPreferences,
 )
 
 

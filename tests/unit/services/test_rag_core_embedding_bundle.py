@@ -5,8 +5,8 @@ Covers the bundle-first path in telegram_bot.services.rag_core.
 
 from unittest.mock import AsyncMock, MagicMock
 
-from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
-from telegram_bot.services.rag_core import compute_query_embedding
+from src.runtime.services.rag_core import compute_query_embedding
+from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
 
 class TestComputeQueryEmbeddingBundle:

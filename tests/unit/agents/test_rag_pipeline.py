@@ -88,7 +88,7 @@ def _metric_records(caplog, metric_name: str):
 
 
 async def test_cache_check_miss(mock_cache, mock_embeddings):
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     result = await _cache_check(
         "квартиры в Несебре",
@@ -105,7 +105,7 @@ async def test_cache_check_miss(mock_cache, mock_embeddings):
 
 
 async def test_cache_check_hit(mock_cache, mock_embeddings):
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
     mock_cache.check_semantic = AsyncMock(return_value="Cached answer about apartments")
@@ -126,7 +126,7 @@ async def test_cache_check_hit(mock_cache, mock_embeddings):
 
 
 async def test_cache_check_skips_semantic_when_already_checked(mock_cache, mock_embeddings):
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
     mock_cache.check_semantic = AsyncMock(return_value="should not be used")
@@ -146,7 +146,7 @@ async def test_cache_check_skips_semantic_when_already_checked(mock_cache, mock_
 
 
 async def test_cache_check_embedding_error(mock_cache, mock_embeddings):
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_embeddings.aembed_hybrid = AsyncMock(side_effect=RuntimeError("BGE-M3 down"))
 
@@ -166,7 +166,7 @@ async def test_cache_check_embedding_error(mock_cache, mock_embeddings):
 
 async def test_cache_check_uses_semantic_for_general(mock_cache, mock_embeddings):
     """GENERAL query type participates in semantic cache lookup."""
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
 
@@ -189,7 +189,7 @@ async def test_cache_check_uses_semantic_for_general(mock_cache, mock_embeddings
 
 async def test_cache_check_passes_rag_scope(mock_cache, mock_embeddings):
     """_cache_check passes cache_scope='rag' to check_semantic."""
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
     mock_cache.check_semantic = AsyncMock(return_value=None)
@@ -209,7 +209,7 @@ async def test_cache_check_passes_rag_scope(mock_cache, mock_embeddings):
 
 async def test_cache_check_passes_filter_signature(mock_cache, mock_embeddings):
     """_cache_check forwards exact filter_signature to semantic cache lookup."""
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
     mock_cache.check_semantic = AsyncMock(return_value=None)
@@ -229,7 +229,7 @@ async def test_cache_check_passes_filter_signature(mock_cache, mock_embeddings):
 
 
 async def test_cache_check_skips_contextual_follow_up_lookup(mock_cache, mock_embeddings):
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
     mock_cache.check_semantic = AsyncMock(return_value="cached answer")
@@ -254,7 +254,7 @@ async def test_cache_check_skips_contextual_follow_up_lookup(mock_cache, mock_em
 
 
 async def test_hybrid_retrieve(mock_cache, mock_sparse, mock_qdrant):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     result = await _hybrid_retrieve(
         "квартиры",
@@ -271,7 +271,7 @@ async def test_hybrid_retrieve(mock_cache, mock_sparse, mock_qdrant):
 
 
 async def test_hybrid_retrieve_search_cache_hit(mock_cache, mock_sparse, mock_qdrant):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_cache.get_search_results = AsyncMock(
         return_value=[{"text": "cached doc", "score": 0.9, "metadata": {}}]
@@ -296,7 +296,7 @@ async def test_hybrid_retrieve_search_cache_hit(mock_cache, mock_sparse, mock_qd
 async def test_hybrid_retrieve_does_not_store_relaxed_results_under_strict_filters(
     mock_cache, mock_sparse
 ):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     user_filters = {"city": "Несебр", "price": {"lte": 80000}}
     mock_qdrant = AsyncMock()
@@ -347,7 +347,7 @@ async def test_hybrid_retrieve_does_not_store_relaxed_results_under_strict_filte
 async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(
     mock_cache, mock_sparse
 ):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     user_filters = {"city": "Несебр", "price": {"lte": 80000}}
     mock_qdrant = AsyncMock()
@@ -375,7 +375,7 @@ async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(
 
 
 async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock_qdrant):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     await _hybrid_retrieve(
         "какие есть варианты рассрочки",
@@ -392,7 +392,7 @@ async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock
 
 
 async def test_hybrid_retrieve_applies_exact_query_rrf_weights(mock_cache, mock_sparse):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf = AsyncMock(
@@ -417,7 +417,7 @@ async def test_hybrid_retrieve_applies_exact_query_rrf_weights(mock_cache, mock_
 
 
 async def test_hybrid_retrieve_applies_exact_query_rrf_weights_to_colbert(mock_cache, mock_sparse):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -445,7 +445,7 @@ async def test_hybrid_retrieve_applies_exact_query_rrf_weights_to_colbert(mock_c
 async def test_hybrid_retrieve_prefers_faq_candidates_for_short_finance_query(
     mock_cache, mock_sparse
 ):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf = AsyncMock(
@@ -471,7 +471,7 @@ async def test_hybrid_retrieve_prefers_faq_candidates_for_short_finance_query(
 
 
 async def test_hybrid_retrieve_omits_topic_filter_by_default(mock_cache, mock_sparse, mock_qdrant):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     await _hybrid_retrieve(
         "квартиры",
@@ -488,7 +488,7 @@ async def test_hybrid_retrieve_omits_topic_filter_by_default(mock_cache, mock_sp
 async def test_hybrid_retrieve_retries_without_topic_filter_when_results_too_small(
     mock_cache, mock_sparse
 ):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf = AsyncMock(
@@ -524,7 +524,7 @@ async def test_hybrid_retrieve_retries_without_topic_filter_when_results_too_sma
 
 
 async def test_hybrid_retrieve_emits_topic_relax_trace_markers(mock_cache, mock_sparse):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -580,7 +580,7 @@ async def test_hybrid_retrieve_emits_topic_relax_trace_markers(mock_cache, mock_
 
 
 async def test_relaxed_retrieval_emits_second_stage_only_when_needed(mock_cache, mock_sparse):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf = AsyncMock(
@@ -614,7 +614,7 @@ async def test_relaxed_retrieval_emits_second_stage_only_when_needed(mock_cache,
 
 
 async def test_hybrid_retrieve_relaxes_topic_layers_but_keeps_user_filters(mock_cache, mock_sparse):
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     user_filters = {"city": "Несебр", "price": {"lte": 80000}}
     mock_qdrant = AsyncMock()
@@ -675,7 +675,7 @@ async def test_hybrid_retrieve_relaxes_topic_layers_but_keeps_user_filters(mock_
 
 
 async def test_grade_documents_relevant():
-    from telegram_bot.agents.rag_pipeline import _grade_documents
+    from src.runtime.pipeline.rag import _grade_documents
 
     docs = [{"score": 0.015}, {"score": 0.010}]
     result = await _grade_documents(docs, 0.0, latency_stages={})
@@ -685,7 +685,7 @@ async def test_grade_documents_relevant():
 
 
 async def test_grade_documents_empty():
-    from telegram_bot.agents.rag_pipeline import _grade_documents
+    from src.runtime.pipeline.rag import _grade_documents
 
     result = await _grade_documents([], 0.0, latency_stages={})
 
@@ -694,7 +694,7 @@ async def test_grade_documents_empty():
 
 
 async def test_grade_documents_irrelevant():
-    from telegram_bot.agents.rag_pipeline import _grade_documents
+    from src.runtime.pipeline.rag import _grade_documents
 
     docs = [{"score": 0.001}]
     result = await _grade_documents(docs, 0.0, latency_stages={})
@@ -703,7 +703,7 @@ async def test_grade_documents_irrelevant():
 
 
 async def test_grade_documents_includes_score_gap_confident():
-    from telegram_bot.agents.rag_pipeline import _grade_documents
+    from src.runtime.pipeline.rag import _grade_documents
 
     docs = [{"score": 0.0164}, {"score": 0.0160}, {"score": 0.0158}]
     result = await _grade_documents(docs, 0.0, latency_stages={})
@@ -712,7 +712,7 @@ async def test_grade_documents_includes_score_gap_confident():
 
 
 async def test_grade_documents_records_score_gap_counter(caplog):
-    from telegram_bot.agents.rag_pipeline import _grade_documents
+    from src.runtime.pipeline.rag import _grade_documents
 
     caplog.set_level(logging.INFO, logger="src.utils.product_events")
     docs = [{"score": 0.020}, {"score": 0.010}, {"score": 0.005}]
@@ -728,7 +728,7 @@ async def test_grade_documents_records_score_gap_counter(caplog):
 
 
 async def test_rerank_with_colbert(mock_reranker):
-    from telegram_bot.agents.rag_pipeline import _rerank
+    from src.runtime.pipeline.rag import _rerank
 
     docs = [
         {"text": "Doc A", "score": 0.5},
@@ -750,7 +750,7 @@ async def test_rerank_with_colbert(mock_reranker):
 
 
 async def test_rerank_fallback_no_reranker():
-    from telegram_bot.agents.rag_pipeline import _rerank
+    from src.runtime.pipeline.rag import _rerank
 
     docs = [{"text": "A", "score": 0.3}, {"text": "B", "score": 0.8}]
 
@@ -762,7 +762,7 @@ async def test_rerank_fallback_no_reranker():
 
 
 async def test_rerank_empty_docs():
-    from telegram_bot.agents.rag_pipeline import _rerank
+    from src.runtime.pipeline.rag import _rerank
 
     result = await _rerank("query", [], reranker=None, latency_stages={})
 
@@ -772,7 +772,7 @@ async def test_rerank_empty_docs():
 
 
 async def test_rerank_uses_cache_hit(mock_reranker):
-    from telegram_bot.agents.rag_pipeline import _rerank
+    from src.runtime.pipeline.rag import _rerank
 
     docs = [{"text": "A", "score": 0.1}, {"text": "B", "score": 0.2}]
     cached = [{"text": "B", "score": 0.9}]
@@ -789,7 +789,7 @@ async def test_rerank_uses_cache_hit(mock_reranker):
 
 
 async def test_grade_or_rerank_drops_weak_tail_when_gap_is_small():
-    from telegram_bot.agents.rag_pipeline import _rerank
+    from src.runtime.pipeline.rag import _rerank
 
     docs = [
         {"score": 1.0, "text": "finance faq"},
@@ -803,8 +803,8 @@ async def test_grade_or_rerank_drops_weak_tail_when_gap_is_small():
 
 
 async def test_rerank_ignores_deprecated_colbert_service():
-    from telegram_bot.agents.rag_pipeline import _rerank
-    from telegram_bot.services.colbert_reranker import ColbertRerankerService
+    from src.runtime.pipeline.rag import _rerank
+    from src.runtime.services.colbert_reranker import ColbertRerankerService
 
     docs = [
         {"text": "Doc A", "score": 0.3},
@@ -831,7 +831,7 @@ async def test_rerank_ignores_deprecated_colbert_service():
 
 
 async def test_rewrite_query_success():
-    from telegram_bot.agents.rag_pipeline import _rewrite_query
+    from src.runtime.pipeline.rag import _rewrite_query
 
     mock_llm = MagicMock()
     mock_response = MagicMock()
@@ -853,7 +853,7 @@ async def test_rewrite_query_success():
 
 
 async def test_rewrite_query_llm_fails():
-    from telegram_bot.agents.rag_pipeline import _rewrite_query
+    from src.runtime.pipeline.rag import _rewrite_query
 
     mock_llm = MagicMock()
     mock_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM down"))
@@ -871,7 +871,7 @@ async def test_rewrite_query_llm_fails():
 
 
 async def test_short_finance_query_expands_before_rewrite_loop():
-    from telegram_bot.agents.rag_pipeline import _rewrite_query
+    from src.runtime.pipeline.rag import _rewrite_query
 
     fake_llm = MagicMock()
     fake_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM should not be used"))
@@ -892,7 +892,7 @@ async def test_short_finance_query_expands_before_rewrite_loop():
 
 
 async def test_cache_store_semantic(mock_cache):
-    from telegram_bot.agents.rag_pipeline import _cache_store
+    from src.runtime.pipeline.rag import _cache_store
 
     result = await _cache_store(
         "квартиры",
@@ -911,7 +911,7 @@ async def test_cache_store_semantic(mock_cache):
 
 
 async def test_cache_store_skips_non_cacheable(mock_cache):
-    from telegram_bot.agents.rag_pipeline import _cache_store
+    from src.runtime.pipeline.rag import _cache_store
 
     result = await _cache_store(
         "hi",
@@ -928,7 +928,7 @@ async def test_cache_store_skips_non_cacheable(mock_cache):
 
 
 async def test_cache_store_skips_contextual_follow_up(mock_cache):
-    from telegram_bot.agents.rag_pipeline import _cache_store
+    from src.runtime.pipeline.rag import _cache_store
 
     result = await _cache_store(
         "расскажи подробнее",
@@ -948,11 +948,11 @@ async def test_cache_store_exception_preserves_response_and_logs_warning(mock_ca
     """store_semantic raises Exception → response not lost, warning is logged (#524)."""
     import logging
 
-    from telegram_bot.agents.rag_pipeline import _cache_store
+    from src.runtime.pipeline.rag import _cache_store
 
     mock_cache.store_semantic = AsyncMock(side_effect=Exception("Redis gone"))
 
-    with caplog.at_level(logging.WARNING, logger="telegram_bot.agents.rag_pipeline"):
+    with caplog.at_level(logging.WARNING, logger="src.runtime.pipeline.rag"):
         result = await _cache_store(
             "квартира у моря",
             "Ответ про квартиры",
@@ -979,7 +979,7 @@ async def test_cache_store_exception_preserves_response_and_logs_warning(mock_ca
 
 
 async def test_pipeline_cache_hit(mock_cache, mock_embeddings, mock_sparse, mock_qdrant):
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
     mock_cache.check_semantic = AsyncMock(return_value="Cached answer")
@@ -1003,7 +1003,7 @@ async def test_pipeline_cache_hit(mock_cache, mock_embeddings, mock_sparse, mock
 async def test_pipeline_happy_path(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
 ):
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     result = await rag_pipeline(
         "квартиры в Несебре",
@@ -1027,7 +1027,7 @@ async def test_pipeline_rewrite_loop(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
 ):
     """Pipeline retries with rewrite when documents are irrelevant."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     # First retrieve returns low scores, second returns high scores
     call_count = 0
@@ -1078,7 +1078,7 @@ async def test_pipeline_returns_empty_docs_when_retrieval_is_irrelevant(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
 ):
     """Irrelevant retrieved docs must not leak into answer context."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     mock_qdrant.hybrid_search_rrf = AsyncMock(
         return_value=(
@@ -1108,7 +1108,7 @@ async def test_pipeline_clears_high_score_docs_missing_hard_constraints(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
 ):
     """High RRF score is not enough when hard query constraints are absent."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     mock_qdrant.hybrid_search_rrf = AsyncMock(
         return_value=(
@@ -1154,7 +1154,7 @@ async def test_pipeline_cache_hit_via_original_query(
     Russian text. After the fix, the pipeline checks the cache with original_query
     and returns the cached response without going to retrieval.
     """
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     # Cache has an entry stored under the original query
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
@@ -1190,7 +1190,7 @@ async def test_pipeline_cache_uses_original_query_as_key(
     (not the reformulated query) so the hit rate is consistent regardless of
     how the agent chose to reformulate the user's question.
     """
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     # Cache miss — proceed to retrieval
     mock_cache.get_embedding = AsyncMock(return_value=None)
@@ -1220,7 +1220,7 @@ async def test_pipeline_fallback_to_query_when_original_query_empty(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant
 ):
     """When original_query is empty (voice path / direct call), cache key falls back to query."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     mock_cache.get_embedding = AsyncMock(return_value=None)
     mock_cache.check_semantic = AsyncMock(return_value=None)
@@ -1246,7 +1246,7 @@ async def test_pipeline_cache_miss_when_different_original_query(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant
 ):
     """Cache miss when a different original_query doesn't match the stored key."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     # Cache returns None (miss) regardless of which key we check
     mock_cache.get_embedding = AsyncMock(return_value=None)
@@ -1278,7 +1278,7 @@ async def test_pipeline_reformulation_skips_embed_on_warm_cache(
     On the second+ request the reformulated embedding is also cached — aembed_hybrid
     must NOT be called (no 'bge-m3-hybrid-embed' span).
     """
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     original_emb = [0.1] * 1024
     reform_emb = [0.2] * 1024  # distinct embedding for reformulated query
@@ -1318,7 +1318,7 @@ async def test_pipeline_reformulation_skips_embed_on_warm_cache(
 
 
 async def test_pipeline_embedding_error(mock_cache, mock_sparse, mock_qdrant):
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     bad_embeddings = AsyncMock()
     bad_embeddings.aembed_hybrid = AsyncMock(side_effect=RuntimeError("BGE-M3 down"))
@@ -1348,7 +1348,7 @@ async def test_skip_rewrite_bypasses_rewrite_loop(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
 ):
     """skip_rewrite=True prevents _rewrite_query from being called."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     # Return irrelevant docs so the rewrite check is reached
     mock_qdrant.hybrid_search_rrf = AsyncMock(
@@ -1385,7 +1385,7 @@ async def test_skip_rewrite_false_allows_rewrite(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
 ):
     """skip_rewrite=False (default) allows the rewrite loop to execute."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     # Return irrelevant docs so rewrite condition is reached
     mock_qdrant.hybrid_search_rrf = AsyncMock(
@@ -1429,7 +1429,7 @@ async def test_skip_rewrite_in_result(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
 ):
     """result dict contains 'skip_rewrite' key reflecting the passed value."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     result_true = await rag_pipeline(
         "квартиры",
@@ -1471,7 +1471,7 @@ async def test_cache_check_returns_colbert_query(mock_cache):
     """_cache_check returns colbert_query when embeddings has aembed_hybrid_with_colbert."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid = None
@@ -1502,7 +1502,7 @@ async def test_cache_check_returns_colbert_query(mock_cache):
 
 async def test_cache_check_colbert_query_none_without_hybrid_colbert(mock_cache, mock_embeddings):
     """_cache_check returns colbert_query=None when only aembed_hybrid is available."""
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     result = await _cache_check(
         "test query",
@@ -1520,7 +1520,7 @@ async def test_cache_check_computes_colbert_when_embedding_cached(mock_cache):
     """_cache_check computes ColBERT vectors even when dense embedding is cached."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  # cached!
 
@@ -1553,7 +1553,7 @@ async def test_hybrid_retrieve_recomputes_colbert_after_rewrite(mock_cache, mock
     """_hybrid_retrieve re-embeds with ColBERT when dense_vector is None (post-rewrite)."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -1595,7 +1595,7 @@ async def test_hybrid_retrieve_uses_colbert_search(mock_cache, mock_sparse):
     """_hybrid_retrieve calls hybrid_search_rrf_colbert when colbert_query is provided."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -1626,7 +1626,7 @@ async def test_hybrid_retrieve_uses_colbert_search(mock_cache, mock_sparse):
 
 async def test_hybrid_retrieve_fallback_without_colbert_query(mock_cache, mock_sparse, mock_qdrant):
     """_hybrid_retrieve falls back to hybrid_search_rrf when colbert_query is None."""
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     result = await _hybrid_retrieve(
         "test",
@@ -1647,7 +1647,7 @@ async def test_rag_pipeline_uses_colbert_search(mock_cache, mock_sparse):
     """rag_pipeline uses hybrid_search_rrf_colbert when embeddings supports it."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
@@ -1689,7 +1689,7 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
     """When hybrid_search_rrf_colbert is used, _rerank is NOT called."""
     from unittest.mock import AsyncMock, patch
 
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
@@ -1741,7 +1741,7 @@ async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache
     Instead set query_embedding=None and let _hybrid_retrieve do one combined call."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid = AsyncMock(
@@ -1785,7 +1785,7 @@ async def test_cache_check_uses_pre_computed_sparse(mock_cache):
     """_cache_check reuses pre_computed_sparse without re-storing (pre-agent already stored)."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     dense = [0.1] * 1024
     sparse = {"indices": [1, 2], "values": [0.5, 0.3]}
@@ -1817,7 +1817,7 @@ async def test_cache_check_uses_pre_computed_colbert_skips_reencode(mock_cache):
     """_cache_check uses pre_computed_colbert and does NOT call aembed_hybrid_with_colbert."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     dense = [0.1] * 1024
     colbert = [[0.2] * 1024] * 3
@@ -1847,7 +1847,7 @@ async def test_cache_check_uses_pre_computed_colbert_skips_reencode(mock_cache):
 
 async def test_cache_check_prefers_hybrid_colbert_over_standalone(mock_cache):
     """When both APIs exist, prefer one-pass hybrid_with_colbert."""
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     dense = [0.1] * 1024
     sparse = {"indices": [2], "values": [0.9]}
@@ -1878,7 +1878,7 @@ async def test_cache_check_no_redundant_stores_or_embeds_with_all_precomputed(mo
     """_cache_check with all three pre-computed skips stores AND extra BGE-M3 calls (#633)."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     dense = [0.1] * 1024
     sparse = {"indices": [1, 2], "values": [0.5, 0.3]}
@@ -1917,7 +1917,7 @@ async def test_cache_check_no_redundant_stores_or_embeds_with_all_precomputed(mo
 
 async def test_cache_check_stores_sparse_when_not_pre_computed(mock_cache):
     """When pre_computed_sparse is None, store_sparse_embedding IS called after hybrid_with_colbert."""
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     dense = [0.1] * 1024
     sparse_from_hybrid = {"indices": [2], "values": [0.9]}
@@ -1946,7 +1946,7 @@ async def test_cache_check_stores_sparse_when_not_pre_computed(mock_cache):
 
 async def test_cache_check_skips_sparse_store_when_pre_computed(mock_cache):
     """When pre_computed_sparse is truthy, store_sparse_embedding is NOT called."""
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     dense = [0.1] * 1024
     existing_sparse = {"indices": [1], "values": [0.5]}
@@ -1978,7 +1978,7 @@ async def test_cache_check_returns_sparse_embedding_in_all_paths(mock_cache):
     """_cache_check returns sparse_embedding key in result for both HIT and MISS."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     dense = [0.1] * 1024
     sparse = {"indices": [1], "values": [0.5]}
@@ -2018,7 +2018,7 @@ async def test_cache_check_returns_sparse_embedding_in_all_paths(mock_cache):
 
 async def test_hybrid_retrieve_uses_pre_computed_sparse(mock_cache, mock_sparse, mock_qdrant):
     """_hybrid_retrieve uses sparse_embedding param and skips cache fetch + recompute."""
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     pre_sparse = {"indices": [5], "values": [0.9]}
     dense = [0.1] * 1024
@@ -2041,7 +2041,7 @@ async def test_hybrid_retrieve_uses_pre_computed_sparse(mock_cache, mock_sparse,
 
 async def test_hybrid_retrieve_counts_colbert_rerank_attempted(mock_cache, mock_sparse, caplog):
     """_hybrid_retrieve counts colbert_rerank_attempted when ColBERT path is taken."""
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     caplog.set_level(logging.INFO, logger="src.utils.product_events")
 
@@ -2068,7 +2068,7 @@ async def test_hybrid_retrieve_counts_colbert_rerank_attempted(mock_cache, mock_
 
 async def test_hybrid_retrieve_counts_retrieval_zero_docs(mock_cache, mock_sparse, caplog):
     """_hybrid_retrieve counts retrieval_zero_docs when search returns empty list."""
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     caplog.set_level(logging.INFO, logger="src.utils.product_events")
 
@@ -2097,7 +2097,7 @@ async def test_rag_pipeline_passes_pre_computed_sparse_to_retrieve(mock_cache, m
     """rag_pipeline passes pre_computed_sparse through _cache_check to _hybrid_retrieve."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     dense = [0.1] * 1024
     sparse = {"indices": [3], "values": [0.7]}
@@ -2143,7 +2143,7 @@ async def test_rag_pipeline_skips_semantic_cache_when_state_contract_already_che
     """state_contract miss path should skip a second semantic cache lookup."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     dense = [0.1] * 1024
     sparse = {"indices": [3], "values": [0.7]}
@@ -2199,7 +2199,7 @@ async def test_rag_pipeline_skips_semantic_cache_when_state_contract_already_che
 async def test_rag_pipeline_passes_state_contract_filters_to_retrieval(mock_cache, mock_sparse):
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     dense = [0.1] * 1024
     sparse = {"indices": [3], "values": [0.7]}
@@ -2262,7 +2262,7 @@ async def test_rag_pipeline_passes_state_contract_filter_signature_to_semantic_l
 ):
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     dense = [0.1] * 1024
     sparse = {"indices": [3], "values": [0.7]}
@@ -2321,7 +2321,7 @@ async def test_rag_pipeline_skips_blind_semantic_lookup_for_filter_sensitive_que
 ):
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     dense = [0.1] * 1024
     sparse = {"indices": [3], "values": [0.7]}
@@ -2369,8 +2369,8 @@ async def test_cache_check_uses_bundle_cache_hit(mock_cache):
     """_cache_check uses bundle cache and skips compute_query_embedding."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
-    from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+    from src.runtime.pipeline.rag import _cache_check
+    from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
     bundle = BgeM3QueryVectorBundle(
         dense=[0.1] * 1024,
@@ -2405,7 +2405,7 @@ async def test_cache_check_stores_bundle_after_colbert_compute(mock_cache):
     """_cache_check stores bundle after computing colbert via aembed_hybrid_with_colbert."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
+    from src.runtime.pipeline.rag import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=None)
     mock_cache.check_semantic = AsyncMock(return_value=None)
@@ -2436,8 +2436,8 @@ async def test_hybrid_retrieve_uses_bundle_after_rewrite(mock_cache, mock_sparse
     """_hybrid_retrieve uses bundle cache after rewrite to avoid redundant BGE-M3 call."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
-    from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+    from src.runtime.pipeline.rag import _hybrid_retrieve
+    from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
     bundle = BgeM3QueryVectorBundle(
         dense=[0.3] * 1024,
@@ -2478,7 +2478,7 @@ async def test_hybrid_retrieve_stores_bundle_after_hybrid_colbert(mock_cache, mo
     """_hybrid_retrieve stores bundle after aembed_hybrid_with_colbert computes vectors."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -2533,8 +2533,8 @@ async def test_cache_check_skips_bundle_when_pre_computed(mock_cache):
     """_cache_check skips bundle cache when pre_computed_embedding is provided."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.agents.rag_pipeline import _cache_check
-    from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+    from src.runtime.pipeline.rag import _cache_check
+    from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
     bundle = BgeM3QueryVectorBundle(
         dense=[0.1] * 1024,

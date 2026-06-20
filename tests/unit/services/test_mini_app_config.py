@@ -1,6 +1,6 @@
 """Tests for Mini App YAML config loading."""
 
-from telegram_bot.services.content_loader import load_mini_app_config
+from src.services.content_loader import load_mini_app_config
 
 
 def test_load_mini_app_config_returns_questions_and_experts():
