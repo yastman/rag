@@ -3,13 +3,12 @@
 The audit in ``docs/engineering/script-native-migration-matrix.md`` made
 two destructive decisions that are easy to regress accidentally:
 
-1. ``scripts/git_hygiene.py`` was archived under
-   ``scripts/archive/git_hygiene.py``. The Makefile target
-   ``git-hygiene`` is now native git (``git fetch --prune``,
-   ``git branch --merged``, ``git for-each-ref``,
+1. ``scripts/git_hygiene.py`` was removed outright (closes #2891). The
+   ``scripts/archive/`` directory was deleted too — git history is the
+   archive. The Makefile target ``git-hygiene`` is now native git
+   (``git fetch --prune``, ``git branch --merged``, ``git for-each-ref``,
    ``git worktree list --porcelain``, ``git ls-files --others``).
-2. ``scripts/repo_cleanup.sh`` was archived under
-   ``scripts/archive/repo_cleanup.sh`` for the same reason.
+2. ``scripts/repo_cleanup.sh`` was removed for the same reason.
 
 A future PR that "fixes" git-hygiene by reintroducing a python helper
 would silently restart the audit cycle. These locks prevent that.
@@ -53,17 +52,17 @@ def _make_target_body(target: str) -> str:
         (SCRIPTS / "repo_cleanup.sh", "repo_cleanup.sh"),
     ],
 )
-def test_audited_script_archived(active_path: Path, archived_name: str) -> None:
-    """Both scripts moved to ``scripts/archive/`` per the audit matrix."""
+def test_audited_script_deleted(active_path: Path, archived_name: str) -> None:
+    """Both scripts deleted outright; git history is the archive (#2891)."""
     assert not active_path.exists(), (
         f"{active_path.relative_to(REPO_ROOT)} reappeared at the active path. "
         f"Per docs/engineering/script-native-migration-matrix.md, this script "
-        f"is archived. Use the native-git path or a new audit decision."
+        f"is deleted. Use the native-git path or a new audit decision."
     )
     archived = ARCHIVE / archived_name
-    assert archived.exists(), (
-        f"scripts/archive/{archived_name} missing. The audit matrix declares "
-        f"this script 'archived as scripts/archive/{archived_name}'."
+    assert not archived.exists(), (
+        f"scripts/archive/{archived_name} reappeared. Per #2891 the "
+        f"scripts/archive/ directory is deleted and git history is the archive."
     )
 
 

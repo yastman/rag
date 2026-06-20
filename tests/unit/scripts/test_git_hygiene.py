@@ -2,11 +2,13 @@ import subprocess
 from pathlib import Path
 
 
-def test_legacy_hygiene_scripts_are_archived() -> None:
+def test_legacy_hygiene_scripts_are_deleted() -> None:
+    # Per #2891 the scripts are deleted outright; git history is the archive,
+    # so scripts/archive/ must not exist either.
     assert not Path("scripts/git_hygiene.py").exists()
     assert not Path("scripts/repo_cleanup.sh").exists()
-    assert Path("scripts/archive/git_hygiene.py").exists()
-    assert Path("scripts/archive/repo_cleanup.sh").exists()
+    assert not Path("scripts/archive/git_hygiene.py").exists()
+    assert not Path("scripts/archive/repo_cleanup.sh").exists()
 
 
 def test_makefile_hygiene_targets_use_native_git_commands() -> None:
