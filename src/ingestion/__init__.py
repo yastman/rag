@@ -15,7 +15,6 @@ from src._compat import load_deprecated_package_export
 __all__ = [
     "ContextualChunk",
     "ContextualDocument",
-    "DocumentChunker",
     "DocumentIndexer",
     "IngestionService",
     "IngestionStats",
@@ -25,7 +24,6 @@ __all__ = [
 
 
 if TYPE_CHECKING:
-    from .chunker import DocumentChunker
     from .contextual_loader import load_contextual_chunks, load_contextual_json
     from .contextual_schema import ContextualChunk, ContextualDocument
     from .indexer import DocumentIndexer
@@ -33,7 +31,6 @@ if TYPE_CHECKING:
 
 
 _LAZY_ATTRS = {
-    "DocumentChunker": (".chunker", "DocumentChunker"),
     "load_contextual_chunks": (".contextual_loader", "load_contextual_chunks"),
     "load_contextual_json": (".contextual_loader", "load_contextual_json"),
     "ContextualChunk": (".contextual_schema", "ContextualChunk"),
