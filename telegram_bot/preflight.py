@@ -15,8 +15,9 @@ import redis.asyncio as aioredis
 from qdrant_client import AsyncQdrantClient, models
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
+
 from .config import BotConfig
-from .integrations.polling_lock import POLLING_LOCK_KEY
 from .startup_status import DependencyCheckResult, StartupReport, StartupSeverity, StartupSignal
 
 

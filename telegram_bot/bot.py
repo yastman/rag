@@ -59,6 +59,7 @@ from aiogram.types import (
 )
 from aiogram.utils.chat_action import ChatActionSender
 
+from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY, RedisPollingLock
 from src.services.handoff_state import HandoffData, HandoffState
 
 from . import (
@@ -84,7 +85,6 @@ from .integrations.memory import (
     end_checkpoint_overhead_capture,
     sum_checkpoint_overhead_ms,
 )
-from .integrations.polling_lock import POLLING_LOCK_KEY, RedisPollingLock
 from .keyboards.client_keyboard import (
     parse_menu_button,
 )
