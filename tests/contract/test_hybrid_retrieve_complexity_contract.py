@@ -1,5 +1,6 @@
 """#2802 keeps _hybrid_retrieve a thin retrieval orchestrator.
 
+Updated for #2900: functions are now split across pipeline submodules.
 Mirrors tests/contract/test_generate_response_complexity_contract.py.
 """
 
@@ -10,7 +11,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-TARGET = ROOT / "src" / "runtime" / "pipeline" / "rag.py"
+PIPELINE_DIR = ROOT / "src" / "runtime" / "pipeline"
+# _hybrid_retrieve lives in _cache_stage.py after #2900 split
+TARGET_CACHE_STAGE = PIPELINE_DIR / "_cache_stage.py"
+TARGET_RETRIEVE = PIPELINE_DIR / "_retrieve.py"
 MAX_HYBRID_RETRIEVE_COMPLEXITY = 15
 MAX_HELPER_COMPLEXITY = 20
 
@@ -30,8 +34,8 @@ def _function_complexity(function: ast.AsyncFunctionDef | ast.FunctionDef) -> in
     return 1 + sum(isinstance(node, _COMPLEXITY_NODES) for node in ast.walk(function))
 
 
-def _module_functions() -> dict[str, ast.AsyncFunctionDef | ast.FunctionDef]:
-    module = ast.parse(TARGET.read_text())
+def _file_functions(path: Path) -> dict[str, ast.AsyncFunctionDef | ast.FunctionDef]:
+    module = ast.parse(path.read_text())
     return {
         node.name: node
         for node in ast.walk(module)
@@ -39,14 +43,21 @@ def _module_functions() -> dict[str, ast.AsyncFunctionDef | ast.FunctionDef]:
     }
 
 
+def _all_pipeline_functions() -> dict[str, ast.AsyncFunctionDef | ast.FunctionDef]:
+    result = {}
+    result.update(_file_functions(TARGET_CACHE_STAGE))
+    result.update(_file_functions(TARGET_RETRIEVE))
+    return result
+
+
 def test_hybrid_retrieve_is_thin_orchestrator() -> None:
-    functions = _module_functions()
+    functions = _file_functions(TARGET_CACHE_STAGE)
     assert "_hybrid_retrieve" in functions
     assert _function_complexity(functions["_hybrid_retrieve"]) < MAX_HYBRID_RETRIEVE_COMPLEXITY
 
 
 def test_extracted_retrieval_helpers_stay_simple() -> None:
-    functions = _module_functions()
+    functions = _all_pipeline_functions()
     expected_helpers = [
         "_resolve_query_vectors",
         "_load_cached_query_bundle",
