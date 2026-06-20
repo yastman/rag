@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import inspect
 import io
 import json
 import logging
@@ -56,45 +55,29 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
     CallbackQuery,
-    FSInputFile,
-    InaccessibleMessage,
-    InputMediaPhoto,
     Message,
 )
 from aiogram.utils.chat_action import ChatActionSender
 
-from src.retrieval.topic_classifier import get_query_topic_hint
-from src.runtime.grounding.policy import get_grounding_mode
-from src.runtime.services.cache_policy import (
-    SEMANTIC_CACHE_SCHEMA_VERSION,
-    build_cacheability_decision,
-    is_contextual_query,
-    maybe_store_semantic_response,
-    resolve_semantic_cache_signature,
-)
-from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
 from src.services.handoff_state import HandoffData, HandoffState
 
 from . import (
+    _bot_catalog,  # #2816 Slice 2: extracted catalog/card handlers
     _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
+    _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
     _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
+    _bot_handoff,  # #2816 Slice 2: extracted handoff handlers
     _bot_lifecycle,  # #1265 Slice 2 PR-8 / #2048: extracted lifecycle helpers
     _bot_observability,  # #1265 Slice 1 PR-2: extracted observability helpers
     _bot_pre_agent,  # #1265 Slice 1 PR-5: extracted pre-agent helpers
+    _bot_query_pipeline,  # #2816 Slice 2: extracted query pipeline handlers
     _bot_state_helpers,  # #1265 Slice 1 PR-1: extracted state-shape helpers
     _bot_streaming,  # #1265 Slice 1 PR-4: extracted streaming helpers
 )
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
 from .constants import (
-    STALE_RESULTS_CALLBACK_TEXT as _STALE_RESULTS_CALLBACK_TEXT,
-)
-from .constants import (
     split_telegram_response as _split_telegram_response,
-)
-from .handlers.handoff import (
-    HandoffStates,
-    start_qualification,
 )
 from .integrations.memory import (
     begin_checkpoint_overhead_capture,
@@ -118,10 +101,8 @@ from .observability import (
 from .observability_payloads import build_safe_input_payload, build_safe_output_payload
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
-    score,
     write_langfuse_scores,
 )
-from .services.business_hours import is_business_hours
 from .services.forum_bridge import ForumBridge
 from .services.redis_monitor import RedisHealthMonitor
 from .startup_status import StartupReport, StartupSeverity, StartupSignal
@@ -1015,42 +996,17 @@ class PropertyBot:
 
     @observe(name="menu-search", capture_input=False, capture_output=False)
     async def _handle_search(self, message: Message, dialog_manager: Any = None) -> None:
-        """Start property search funnel via aiogram-dialog (#628, #658)."""
-        if dialog_manager is not None:
-            from aiogram_dialog import StartMode
-
-            from .dialogs.states import FunnelSG
-
-            await dialog_manager.start(FunnelSG.city, mode=StartMode.RESET_STACK)
-        else:
-            # Fallback when dialog_manager not available (e.g., tests)
-            await self.handle_menu_action_text(message, "Подбери апартаменты")
+        return await _bot_catalog._handle_search(self, message, dialog_manager)
 
     @observe(name="menu-services", capture_input=False, capture_output=False)
     async def _handle_services(self, message: Message, i18n: Any = None) -> None:
-        """Show services inline menu (#628)."""
-        from .keyboards.services_keyboard import build_services_menu
-
-        if i18n is not None:
-            text = i18n.get("services-menu-text")
-        else:
-            text = "Выберите услугу, чтобы узнать подробнее:"
-        kb = build_services_menu(i18n=i18n)
-        await message.answer(text, reply_markup=kb)
+        return await _bot_catalog._handle_services(self, message, i18n)
 
     @observe(name="menu-viewing", capture_input=False, capture_output=False)
     async def _handle_viewing(
         self, message: Message, state: FSMContext, dialog_manager: Any = None
     ) -> None:
-        """Start viewing appointment wizard via aiogram-dialog (#719)."""
-        if dialog_manager is not None:
-            from aiogram_dialog import StartMode
-
-            from .dialogs.states import ViewingSG
-
-            await dialog_manager.start(ViewingSG.date, mode=StartMode.RESET_STACK)
-        else:
-            await message.answer("📅 Для записи на осмотр используйте кнопку меню.")
+        return await _bot_catalog._handle_viewing(self, message, state, dialog_manager)
 
     async def _send_property_card(
         self,
@@ -1058,98 +1014,11 @@ class PropertyBot:
         result: dict,
         telegram_id: int,
     ) -> Message:
-        """Send a single property card with preview photo and action buttons (#722)."""
-        from .keyboards.property_card import (
-            build_card_buttons,
-            format_property_card,
-            get_demo_photo_paths,
-        )
-
-        p = result.get("payload", {})
-        card = format_property_card(
-            property_id=result["id"],
-            complex_name=p.get("complex_name", ""),
-            location=p.get("city", ""),
-            property_type=p.get("property_type", ""),
-            floor=p.get("floor", 0),
-            area_m2=p.get("area_m2", 0),
-            view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-            price_eur=p.get("price_eur", 0),
-            section=p.get("section", ""),
-            apartment_number=p.get("apartment_number", ""),
-        )
-        favorites_service = getattr(self, "_favorites_service", None)
-        is_fav = False
-        if favorites_service is not None:
-            is_fav = await favorites_service.is_favorited(telegram_id, result["id"])
-        demo_photos = get_demo_photo_paths()
-        reply_markup = build_card_buttons(
-            result["id"],
-            is_favorited=is_fav,
-        )
-        photo_message_ids: list[int] = []
-        if demo_photos:
-            try:
-                media = [InputMediaPhoto(media=FSInputFile(path)) for path in demo_photos]
-                sent_photos = await message.answer_media_group(media=media)  # type: ignore[arg-type]
-                photo_message_ids = [m.message_id for m in sent_photos]
-            except Exception:
-                logger.warning("Failed to send photo album, falling back to text", exc_info=True)
-
-        card_msg = await message.answer(card, reply_markup=reply_markup)
-        card_msg._photo_message_ids = photo_message_ids  # type: ignore[attr-defined]
-        return card_msg
+        return await _bot_catalog._send_property_card(self, message, result, telegram_id)
 
     @observe(name="menu-bookmarks", capture_input=False, capture_output=False)
     async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
-        """Show user's saved favorites (#628)."""
-        if not message.from_user:
-            return
-
-        favorites_service = getattr(self, "_favorites_service", None)
-        if favorites_service is None:
-            await message.answer("Закладки временно недоступны.")
-            return
-
-        items = await favorites_service.list(telegram_id=message.from_user.id)
-        if not items:
-            await message.answer(
-                "📌 У вас пока нет закладок.\n\n"
-                "Нажмите «🏠 Подбор апартаментов» чтобы найти квартиру."
-            )
-            return
-
-        bookmark_message_ids: list[int] = []
-        bookmark_photo_ids: dict[int, list[int]] = {}
-        for fav in items:
-            d = fav.property_data
-            result_like = {
-                "id": fav.property_id,
-                "payload": {
-                    "complex_name": d.get("complex_name", ""),
-                    "city": d.get("location", ""),
-                    "property_type": d.get("property_type", ""),
-                    "floor": d.get("floor", 0),
-                    "area_m2": d.get("area_m2", 0),
-                    "view_tags": [],
-                    "view_primary": d.get("view", ""),
-                    "price_eur": d.get("price_eur", 0),
-                },
-            }
-            sent = await self._send_property_card(message, result_like, message.from_user.id)
-            msg_id = getattr(sent, "message_id", None)
-            if isinstance(msg_id, int):
-                bookmark_message_ids.append(msg_id)
-                photo_ids = getattr(sent, "_photo_message_ids", [])
-                if photo_ids:
-                    bookmark_photo_ids[msg_id] = photo_ids
-
-        if state is not None:
-            await state.update_data(
-                bookmarks_context=True,
-                bookmark_message_ids=bookmark_message_ids,
-                bookmark_photo_ids=bookmark_photo_ids,
-            )
+        return await _bot_favorites._handle_bookmarks(self, message, state)
 
     # Mapping callback_data -> query text for RAG pipeline
     _ASK_QUERIES: dict[str, str] = {
@@ -1161,61 +1030,11 @@ class PropertyBot:
 
     @observe(name="menu-ask", capture_input=False, capture_output=False)
     async def _handle_ask(self, message: Message, i18n: Any = None) -> None:
-        """Show FAQ inline menu with popular questions."""
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-        if i18n is not None:
-            prompt = i18n.get("ask-prompt")
-            buttons = [
-                [InlineKeyboardButton(text=i18n.get("ask-docs"), callback_data="ask:docs")],
-                [InlineKeyboardButton(text=i18n.get("ask-costs"), callback_data="ask:costs")],
-                [InlineKeyboardButton(text=i18n.get("ask-vnzh"), callback_data="ask:vnzh")],
-                [
-                    InlineKeyboardButton(
-                        text=i18n.get("ask-installment"),
-                        callback_data="ask:installment",
-                    )
-                ],
-            ]
-        else:
-            prompt = "💬 Напишите вопрос — мы с радостью ответим!\n\nИли выберите популярную тему:"
-            buttons = [
-                [
-                    InlineKeyboardButton(
-                        text="📋 Какие документы нужны для покупки?",
-                        callback_data="ask:docs",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="💰 Сколько стоит оформление сделки?",
-                        callback_data="ask:costs",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="📋 Как получить ВНЖ в Болгарии?",
-                        callback_data="ask:vnzh",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="💳 Какие условия рассрочки?",
-                        callback_data="ask:installment",
-                    )
-                ],
-            ]
-        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
-        await message.answer(prompt, reply_markup=kb)
+        return await _bot_catalog._handle_ask(self, message, i18n)
 
     @observe(name="cb-ask", capture_input=False, capture_output=False)
     async def handle_ask_callback(self, callback: CallbackQuery) -> None:
-        """Handle ask:* callback — route FAQ question to RAG pipeline."""
-        await callback.answer()
-        query_text = self._ASK_QUERIES.get(callback.data or "")
-        if not query_text or callback.message is None:
-            return
-        await self.handle_menu_action_text(callback.message, query_text)  # type: ignore[arg-type]
+        return await _bot_catalog.handle_ask_callback(self, callback)
 
     @observe(name="menu-manager", capture_input=False, capture_output=False)
     async def _handle_manager(
@@ -1225,58 +1044,10 @@ class PropertyBot:
         state: FSMContext | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handoff to manager (#628, #730)."""
-        if self._forum_bridge is not None:
-            await start_qualification(
-                message,
-                i18n=i18n,
-                state=state,
-                dialog_manager=dialog_manager,
-            )
-        elif state is not None:
-            from .handlers.phone_collector import start_phone_collection
-
-            await start_phone_collection(message, state, service_key="manager")
-        else:
-            await self.handle_menu_action_text(message, "Соедини с менеджером")
+        return await _bot_handoff._handle_manager(self, message, i18n, state, dialog_manager)
 
     async def _handle_group_message(self, message: Message) -> None:
-        """Handle messages in managers group — relay to client (#730)."""
-        if not message.message_thread_id:
-            return
-        if message.from_user and self._bot_user_id and message.from_user.id == self._bot_user_id:
-            return  # Skip own messages (echo).
-
-        if self._handoff_state is None:
-            return
-        handoff = await self._handoff_state.get_by_topic(message.message_thread_id)
-        if not handoff:
-            return
-
-        # /close command — return client to bot.
-        if message.text and message.text.strip().lower() == "/close":
-            await self._close_handoff(handoff)
-            return
-
-        # First manager message — transition human_waiting → human.
-        if handoff.mode == "human_waiting":
-            await self._handoff_state.update_mode(handoff.client_id, "human")
-            manager_name = message.from_user.full_name if message.from_user else "Менеджер"
-            await self.bot.send_message(
-                chat_id=handoff.client_id,
-                text=f"🟢 {manager_name} подключился к чату",
-            )
-
-        # Relay manager message to client.
-        if self._forum_bridge is not None:
-            try:
-                await self._forum_bridge.relay_to_client(
-                    topic_id=message.message_thread_id,
-                    message_id=message.message_id,
-                    client_chat_id=handoff.client_id,
-                )
-            except TelegramBadRequest:
-                logger.warning("Failed to relay message to client %s", handoff.client_id)
+        return await _bot_handoff._handle_group_message(self, message)
 
     async def _complete_handoff(
         self,
@@ -1288,170 +1059,16 @@ class PropertyBot:
         message: Any,
         state: FSMContext | None = None,
     ) -> None:
-        """Create forum topic and set handoff state (#730)."""
-        if self._forum_bridge is None:
-            return
-
-        # Stale topic cleanup: if Redis has data but topic is deleted — clean up.
-        if self._handoff_state is not None:
-            existing = await self._handoff_state.get_by_client(user_id)
-            if existing is not None:
-                topic_alive = await self._forum_bridge.send_to_topic(
-                    topic_id=existing.topic_id,
-                    text="⚡ Клиент повторно запросил связь с менеджером.",
-                )
-                if topic_alive:
-                    # Topic still exists — FSM guard should have caught this, but just in case.
-                    if state is not None:
-                        await state.set_state(HandoffStates.active)
-                    return
-                logger.info("Stale handoff topic %s — recreating", existing.topic_id)
-                await self._handoff_state.delete(user_id)
-
-        goal_map = {"buy": "Покупка", "rent": "Аренда", "consult": "Консультация"}
-        goal_text = goal_map.get(qualification.get("goal", ""), "Консультация")
-
-        # 1. Create forum topic.
-        try:
-            topic_id = await self._forum_bridge.create_topic(
-                client_name=display_name,
-                goal=goal_text,
-            )
-        except TelegramBadRequest:
-            logger.exception("Forum Topics unavailable — bot lacks can_manage_topics")
-            if message and hasattr(message, "answer"):
-                await message.answer("Менеджер скоро свяжется с вами!")
-            return
-
-        # 2. AI summary (if sufficient history).
-        summary = None
-        history: list[dict[str, str]] = []
-        if self._cache.redis is not None:
-            try:
-                raw = await self._cache.redis.lrange(f"conversation:{user_id}", 0, -1)  # type: ignore[misc]
-                for item in raw:
-                    entry = json.loads(item) if isinstance(item, str) else item
-                    if isinstance(entry, dict) and "role" in entry and "content" in entry:
-                        history.append({"role": entry["role"], "content": entry["content"]})
-            except Exception:
-                logger.warning("Failed to fetch chat history for handoff summary")
-        if len(history) >= self.config.handoff_summary_min_messages:
-            from .services.handoff_summary import generate_handoff_summary
-
-            summary = await generate_handoff_summary(history, llm=self._llm)
-
-        # 3. Post context pack.
-        await self._forum_bridge.post_context_pack(
-            topic_id=topic_id,
-            client_name=display_name,
-            username=username,
-            locale=locale,
-            qualification=qualification,
-            summary=summary,
-            lead_url=None,
+        return await _bot_handoff._complete_handoff(
+            self, user_id, username, display_name, locale, qualification, message, state
         )
-
-        # 4. Set Redis state + FSM.
-        data = HandoffData(
-            client_id=user_id,
-            topic_id=topic_id,
-            lead_id=None,
-            mode="human_waiting",
-            qualification=qualification,
-        )
-        if self._handoff_state is not None:
-            await self._handoff_state.set(data)
-        if state is not None:
-            await state.set_state(HandoffStates.active)
-
-        # 6. Business hours notice.
-        in_hours = is_business_hours(
-            start=self.config.business_hours_start,
-            end=self.config.business_hours_end,
-            tz=self.config.business_hours_tz,
-        )
-        if not in_hours:
-            start_h = self.config.business_hours_start
-            end_h = self.config.business_hours_end
-            await message.answer(
-                "📨 Ваш запрос принят!\n\n"
-                "Менеджер ответит в рабочее время:\n"
-                f"Пн–Пт, {start_h}:00–{end_h}:00 (🇧🇬 София)\n\n"
-                "Мы пришлём уведомление, когда менеджер подключится."
-            )
 
     async def _close_handoff(self, handoff: HandoffData) -> None:
-        """Manager sends /close — return client to bot (#730)."""
-        # Notify topic.
-        if self._forum_bridge is not None:
-            await self._forum_bridge.send_to_topic(
-                topic_id=handoff.topic_id,
-                text="✅ Диалог закрыт, клиент возвращён боту.",
-            )
-            await self._forum_bridge.close_topic(topic_id=handoff.topic_id)
-
-        # Notify client.
-        await self.bot.send_message(
-            chat_id=handoff.client_id,
-            text="Диалог с менеджером завершён.\n\n🤖 Вы снова общаетесь с ботом. Задавайте вопросы — помогу!",
-        )
-
-        # Cleanup Redis + FSM state.
-        if self._handoff_state is not None:
-            await self._handoff_state.delete(handoff.client_id)
-        # Clear client's FSM state from group context via storage key.
-        from aiogram.fsm.storage.base import StorageKey
-
-        key = StorageKey(bot_id=self.bot.id, chat_id=handoff.client_id, user_id=handoff.client_id)
-        await self.dp.storage.set_state(key, state=None)
+        return await _bot_handoff._close_handoff(self, handoff)
 
     @observe(name="cb-service", capture_input=False, capture_output=False)
     async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
-        """Handle service menu inline button clicks (#628)."""
-        from src.services.content_loader import get_service_card
-
-        from .keyboards.services_keyboard import (
-            build_service_card_buttons,
-            build_services_menu,
-            parse_service_callback,
-        )
-
-        parsed = parse_service_callback(callback.data or "")
-        if parsed is None:
-            await callback.answer()
-            return
-
-        action, param = parsed
-
-        if action == "back":
-            if callback.message:
-                await callback.message.delete()  # type: ignore[union-attr]
-            await callback.answer()
-
-        elif action == "menu":
-            if i18n is not None:
-                text = i18n.get("services-menu-text")
-            else:
-                text = "Выберите услугу, чтобы узнать подробнее:"
-            kb = build_services_menu(i18n=i18n)
-            if callback.message:
-                await callback.message.edit_text(text, reply_markup=kb)  # type: ignore[union-attr]
-            await callback.answer()
-
-        elif action == "service" and param:
-            svc = get_service_card(param)
-            if svc:
-                kb = build_service_card_buttons(param, i18n=i18n)
-                ftl_key = f"svc-{param.replace('_', '-')}-card"
-                card_text = (i18n.get(ftl_key) if i18n is not None else None) or svc.get(
-                    "card_text", ""
-                )
-                if callback.message:
-                    await callback.message.edit_text(card_text, reply_markup=kb)  # type: ignore[union-attr]
-            await callback.answer()
-
-        else:
-            await callback.answer()
+        return await _bot_catalog.handle_service_callback(self, callback, i18n)
 
     @observe(name="cb-cta", capture_input=False, capture_output=False)
     async def handle_cta_callback(
@@ -1460,32 +1077,7 @@ class PropertyBot:
         state: FSMContext,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle CTA button clicks (get_offer, manager) (#628)."""
-        from .handlers.phone_collector import start_phone_collection
-        from .keyboards.services_keyboard import parse_service_callback
-
-        parsed = parse_service_callback(callback.data or "")
-        if parsed is None:
-            await callback.answer()
-            return
-
-        action, param = parsed
-
-        if action == "get_offer":
-            await start_phone_collection(callback, state, service_key=param or "unknown")
-        elif action == "manager":
-            if self._forum_bridge is not None:
-                # Forum Topics enabled — skip goal step, context already known (#730).
-                await start_qualification(
-                    callback,
-                    state=state,
-                    dialog_manager=dialog_manager,
-                    goal="services",
-                )
-            else:
-                await start_phone_collection(callback, state, service_key="manager")
-        else:
-            await callback.answer()
+        return await _bot_catalog.handle_cta_callback(self, callback, state, dialog_manager)
 
     async def handle_fav_add(
         self,
@@ -1494,59 +1086,9 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle fav:add:{property_id} — add to favorites (#628)."""
-        if not callback.from_user:
-            await callback.answer()
-            return
-        property_id = callback_data.apartment_id if callback_data is not None else ""
-        if not property_id:
-            await callback.answer()
-            return
-
-        favorites_service = getattr(self, "_favorites_service", None)
-        if favorites_service is None:
-            await callback.answer("Закладки недоступны")
-            return
-
-        state_data = await state.get_data()
-        apt_results = _state_apartment_results(state_data)
-        matched = next(
-            (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
-            None,
+        return await _bot_favorites.handle_fav_add(
+            self, callback, state, callback_data, dialog_manager
         )
-        if matched:
-            payload = matched.get("payload")
-            if not isinstance(payload, dict):
-                property_data: dict[str, Any] = {}
-            else:
-                p = payload
-                property_data = {
-                    "complex_name": p.get("complex_name", ""),
-                    "location": p.get("city", ""),
-                    "property_type": p.get("property_type", ""),
-                    "floor": p.get("floor", 0),
-                    "area_m2": p.get("area_m2", 0),
-                    "view": ", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-                    "price_eur": p.get("price_eur", 0),
-                }
-        else:
-            property_data = {}
-        result = await favorites_service.add(
-            telegram_id=callback.from_user.id,
-            property_id=property_id,
-            property_data=property_data,
-        )
-        if result:
-            await callback.answer("Добавлено в закладки")
-            if callback.message:
-                from .keyboards.property_card import build_card_buttons
-
-                with contextlib.suppress(Exception):
-                    await callback.message.edit_reply_markup(  # type: ignore[union-attr]
-                        reply_markup=build_card_buttons(property_id, is_favorited=True)
-                    )
-        else:
-            await callback.answer("Уже в закладках")
 
     async def handle_fav_remove(
         self,
@@ -1555,62 +1097,9 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle fav:remove:{property_id} — remove from favorites (#628)."""
-        if not callback.from_user:
-            await callback.answer()
-            return
-        property_id = callback_data.apartment_id if callback_data is not None else ""
-        if not property_id:
-            await callback.answer()
-            return
-
-        favorites_service = getattr(self, "_favorites_service", None)
-        if favorites_service is None:
-            await callback.answer("Закладки недоступны")
-            return
-
-        await favorites_service.remove(telegram_id=callback.from_user.id, property_id=property_id)
-        state_data = await state.get_data()
-        apt_results = _state_apartment_results(state_data)
-        in_search_results = any(
-            isinstance(r, dict) and r.get("id") == property_id for r in apt_results
+        return await _bot_favorites.handle_fav_remove(
+            self, callback, state, callback_data, dialog_manager
         )
-        raw_bookmark_ids = state_data.get("bookmark_message_ids")
-        bookmark_message_ids = (
-            {mid for mid in raw_bookmark_ids if isinstance(mid, int)}
-            if isinstance(raw_bookmark_ids, list)
-            else set()
-        )
-        callback_message_id = getattr(callback.message, "message_id", None)
-        is_bookmark_message = (
-            isinstance(callback_message_id, int) and callback_message_id in bookmark_message_ids
-        )
-        if in_search_results and not is_bookmark_message and callback.message:
-            from .keyboards.property_card import build_card_buttons
-
-            with contextlib.suppress(Exception):
-                await callback.message.edit_reply_markup(  # type: ignore[union-attr]
-                    reply_markup=build_card_buttons(property_id, is_favorited=False)
-                )
-            await callback.answer("Удалено из закладок")
-        else:
-            if callback.message:
-                # Delete photo album messages linked to this card
-                raw_photo_ids = state_data.get("bookmark_photo_ids", {})
-                photo_ids = (
-                    raw_photo_ids.get(callback_message_id, [])
-                    if isinstance(raw_photo_ids, dict) and isinstance(callback_message_id, int)
-                    else []
-                )
-                chat_id = callback.message.chat.id
-                for pid in photo_ids:
-                    with contextlib.suppress(Exception):
-                        await callback.message.bot.delete_message(  # type: ignore[union-attr]
-                            chat_id=chat_id,
-                            message_id=pid,
-                        )
-                await callback.message.delete()  # type: ignore[union-attr]
-            await callback.answer("Удалено из закладок")
 
     async def handle_fav_viewing(
         self,
@@ -1619,49 +1108,9 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle fav:viewing:{property_id} — book viewing for one favorite (#628)."""
-        if not callback.from_user:
-            await callback.answer()
-            return
-        property_id = callback_data.apartment_id if callback_data is not None else ""
-
-        favorites_service = getattr(self, "_favorites_service", None)
-        if favorites_service is None:
-            await callback.answer("Закладки недоступны")
-            return
-
-        fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
-        viewing_objs = []
-        for fav in fav_items:
-            if fav.property_id == property_id:
-                d = fav.property_data
-                viewing_objs.append(
-                    {
-                        "id": fav.property_id,
-                        "complex_name": d.get("complex_name", ""),
-                        "property_type": d.get("property_type", ""),
-                        "area_m2": d.get("area_m2", 0),
-                        "price_eur": d.get("price_eur", 0),
-                    }
-                )
-                break
-        if dialog_manager is not None:
-            from aiogram_dialog import ShowMode, StartMode
-
-            from .dialogs.states import ViewingSG
-
-            await dialog_manager.start(
-                ViewingSG.date,
-                mode=StartMode.RESET_STACK,
-                show_mode=ShowMode.DELETE_AND_SEND,
-                data={"selected_objects": viewing_objs},
-            )
-        else:
-            from .handlers.phone_collector import start_phone_collection
-
-            await start_phone_collection(
-                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
-            )
+        return await _bot_favorites.handle_fav_viewing(
+            self, callback, state, callback_data, dialog_manager
+        )
 
     async def handle_fav_viewing_all(
         self,
@@ -1670,46 +1119,9 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle fav:viewing_all — book viewing for all favorites (#628)."""
-        if not callback.from_user:
-            await callback.answer()
-            return
-
-        favorites_service = getattr(self, "_favorites_service", None)
-        if favorites_service is None:
-            await callback.answer("Закладки недоступны")
-            return
-
-        fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
-        viewing_objs = []
-        for fav in fav_items:
-            d = fav.property_data
-            viewing_objs.append(
-                {
-                    "id": fav.property_id,
-                    "complex_name": d.get("complex_name", ""),
-                    "property_type": d.get("property_type", ""),
-                    "area_m2": d.get("area_m2", 0),
-                    "price_eur": d.get("price_eur", 0),
-                }
-            )
-        if dialog_manager is not None:
-            from aiogram_dialog import ShowMode, StartMode
-
-            from .dialogs.states import ViewingSG
-
-            await dialog_manager.start(
-                ViewingSG.date,
-                mode=StartMode.RESET_STACK,
-                show_mode=ShowMode.DELETE_AND_SEND,
-                data={"selected_objects": viewing_objs},
-            )
-        else:
-            from .handlers.phone_collector import start_phone_collection
-
-            await start_phone_collection(
-                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
-            )
+        return await _bot_favorites.handle_fav_viewing_all(
+            self, callback, state, callback_data, dialog_manager
+        )
 
     @observe(name="cb-favorite", capture_input=False, capture_output=False)
     async def handle_favorite_callback(
@@ -1719,31 +1131,9 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Backward-compat dispatcher for fav: callbacks — delegates to per-action handlers (#628).
-
-        Kept for test compatibility; production routing uses per-action CallbackData filters.
-        """
-        if callback_data is None:
-            # Parse from raw string (legacy / test path)
-            data = callback.data or ""
-            parts = data.split(":", 2)
-            if len(parts) < 2 or not callback.from_user:
-                await callback.answer()
-                return
-            action = parts[1]
-            apt_id = parts[2] if len(parts) > 2 else ""
-            callback_data = FavoriteCB(action=action, apartment_id=apt_id)
-
-        if callback_data.action == "add":
-            await self.handle_fav_add(callback, state, callback_data, dialog_manager)
-        elif callback_data.action == "remove":
-            await self.handle_fav_remove(callback, state, callback_data, dialog_manager)
-        elif callback_data.action == "viewing":
-            await self.handle_fav_viewing(callback, state, callback_data, dialog_manager)
-        elif callback_data.action == "viewing_all":
-            await self.handle_fav_viewing_all(callback, state, callback_data, dialog_manager)
-        else:
-            await callback.answer()
+        return await _bot_favorites.handle_favorite_callback(
+            self, callback, state, callback_data, dialog_manager
+        )
 
     @observe(name="cb-results", capture_input=False, capture_output=False)
     async def handle_results_callback(
@@ -1753,13 +1143,9 @@ class PropertyBot:
         callback_data: ResultsCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle property results callbacks (more/refine/viewing) (#654)."""
-        message = callback.message
-        if message is not None and not isinstance(message, InaccessibleMessage):
-            with contextlib.suppress(Exception):
-                await message.edit_reply_markup(reply_markup=None)
-            await message.answer(_STALE_RESULTS_CALLBACK_TEXT)
-        await callback.answer()
+        return await _bot_catalog.handle_results_callback(
+            self, callback, state, callback_data, dialog_manager
+        )
 
     @observe(name="cb-card", capture_input=False, capture_output=False)
     async def handle_card_callback(
@@ -1768,96 +1154,7 @@ class PropertyBot:
         state: FSMContext,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle card action callbacks: card:viewing, card:ask (#722)."""
-        from .handlers.phone_collector import start_phone_collection
-
-        data = callback.data or ""
-        parts = data.split(":", 2)
-        if len(parts) < 3 or not callback.from_user:
-            await callback.answer()
-            return
-
-        action = parts[1]  # "viewing" or "ask"
-        property_id = parts[2]
-
-        state_data = await state.get_data()
-        apt_results = _state_apartment_results(state_data)
-        matched = next(
-            (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
-            None,
-        )
-        viewing_objects: list[dict] = []
-        if matched:
-            p = matched.get("payload", {})
-            viewing_objects.append(
-                {
-                    "id": property_id,
-                    "complex_name": p.get("complex_name", ""),
-                    "property_type": p.get("property_type", ""),
-                    "area_m2": p.get("area_m2", 0),
-                    "price_eur": p.get("price_eur", 0),
-                }
-            )
-        else:
-            favorites_service = getattr(self, "_favorites_service", None)
-            if favorites_service is not None:
-                fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
-                for fav in fav_items:
-                    if fav.property_id == property_id:
-                        d = fav.property_data
-                        viewing_objects.append(
-                            {
-                                "id": fav.property_id,
-                                "complex_name": d.get("complex_name", ""),
-                                "property_type": d.get("property_type", ""),
-                                "area_m2": d.get("area_m2", 0),
-                                "price_eur": d.get("price_eur", 0),
-                            }
-                        )
-                        break
-
-        if action == "viewing":
-            if dialog_manager is not None:
-                from aiogram_dialog import ShowMode, StartMode
-
-                from .dialogs.states import ViewingSG
-
-                control_message_id = _state_control_message_id(state_data)
-                bot = callback.bot
-                if (
-                    control_message_id
-                    and bot is not None
-                    and callback.message
-                    and callback.message.chat
-                ):
-                    with contextlib.suppress(Exception):
-                        await bot.delete_message(
-                            callback.message.chat.id,
-                            control_message_id,
-                        )
-
-                await dialog_manager.start(
-                    ViewingSG.date,
-                    mode=StartMode.RESET_STACK,
-                    show_mode=ShowMode.DELETE_AND_SEND,
-                    data={"selected_objects": viewing_objects},
-                )
-            else:
-                await start_phone_collection(
-                    callback,
-                    state,
-                    service_key="viewing",
-                    viewing_objects=viewing_objects or None,
-                )
-        elif action == "ask":
-            await start_phone_collection(
-                callback,
-                state,
-                service_key="manager_question",
-                viewing_objects=viewing_objects or None,
-            )
-        else:
-            await callback.answer()
+        return await _bot_catalog.handle_card_callback(self, callback, state, dialog_manager)
 
     @observe(name="telegram-rag-query", capture_input=False, capture_output=False)
     async def handle_query(
@@ -1867,58 +1164,7 @@ class PropertyBot:
         state: FSMContext | None = None,
         dialog_manager: Any = None,
     ):
-        """Handle user query via supervisor graph (#310: supervisor-only)."""
-        pipeline_start = time.perf_counter()
-        assert message.bot is not None
-        assert message.from_user is not None
-        bot = message.bot
-
-        # Handoff mode check (#730): relay to topic or skip bot response.
-        if self._handoff_state is not None:
-            handoff = await self._handoff_state.get_by_client(message.from_user.id)
-            if handoff and handoff.mode == "human":
-                # Full handoff: relay only, no bot response.
-                if self._forum_bridge is not None:
-                    await self._forum_bridge.relay_to_topic(
-                        from_chat_id=message.chat.id,
-                        message_id=message.message_id,
-                        topic_id=handoff.topic_id,
-                    )
-                return
-            if handoff and handoff.mode == "human_waiting" and self._forum_bridge is not None:
-                # Waiting for manager: relay + continue with normal RAG response.
-                await self._forum_bridge.relay_to_topic(
-                    from_chat_id=message.chat.id,
-                    message_id=message.message_id,
-                    topic_id=handoff.topic_id,
-                )
-
-        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-
-        # Resolve expert from forum topic thread (int check guards against mock objects in tests)
-        _raw_thread_id = message.message_thread_id
-        forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
-        expert_id: str | None = None
-        if forum_thread_id is not None and self._topic_manager is not None and self._topics_enabled:
-            expert_id = await self._topic_manager.get_expert_for_topic(
-                chat_id=message.chat.id, topic_id=forum_thread_id
-            )
-
-        root_trace_metadata: dict[str, Any] = {}
-        response_text = await self._handle_query_supervisor(
-            message,
-            pipeline_start,
-            locale=locale,
-            root_trace_metadata=root_trace_metadata,
-            state=state,
-            forum_thread_id=forum_thread_id,
-            expert_id=expert_id,
-            dialog_manager=dialog_manager,
-        )
-        update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
-        if root_trace_metadata:
-            update_kwargs["metadata"] = root_trace_metadata
-        get_client().update_current_span(**update_kwargs)
+        return await _bot_query_pipeline.handle_query(self, message, locale, state, dialog_manager)
 
     async def _send_markdown_chunks(
         self,
@@ -1940,136 +1186,9 @@ class PropertyBot:
         state: FSMContext | None = None,
         dialog_manager: Any = None,
     ) -> str | None:
-        """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
-        from .services.apartments_service import check_escalation
-
-        result = await self._apartment_pipeline.extract(user_text)
-
-        if result.meta.confidence == "LOW":
-            return None  # escalate to agent
-
-        semantic_query = result.meta.semantic_remainder or user_text
-        dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(semantic_query)
-        await self._cache.store_embedding(semantic_query, dense)
-        await self._cache.store_sparse_embedding(semantic_query, sparse)
-
-        # --- Implicit retry detection (#756) ---
-        if self._cache.redis is not None and message.from_user is not None:
-            try:
-                from .implicit_feedback import is_reformulation
-
-                _uid = message.from_user.id
-                _ikey = f"implicit_retry:{_uid}"
-                _prev_raw = await self._cache.redis.get(_ikey)
-                if _prev_raw:
-                    _prev = json.loads(_prev_raw)
-                    _time_delta = time.time() - float(_prev["ts"])
-                    if is_reformulation(list(dense), _prev["vec"], _time_delta):
-                        lf = get_client()
-                        tid = lf.get_current_trace_id() or ""
-                        if tid:
-                            score(lf, tid, name="implicit_retry", value=1, data_type="BOOLEAN")
-                # Always update state so the next query can compare against this one
-                await self._cache.redis.set(
-                    _ikey,
-                    json.dumps({"vec": list(dense), "ts": time.time()}),
-                    ex=60,
-                )
-            except Exception:
-                logger.debug("Implicit retry check failed", exc_info=True)
-
-        filters = result.hard.to_filters_dict()
-        results, returned_count = await self._apartments_service.search_with_filters(
-            dense_vector=dense,
-            colbert_query=colbert or None,
-            sparse_vector=sparse,
-            filters=filters or None,
-            top_k=10,
+        return await _bot_query_pipeline._handle_apartment_fast_path(
+            self, user_text=user_text, message=message, state=state, dialog_manager=dialog_manager
         )
-
-        score_spread = (results[0]["score"] - results[-1]["score"]) if len(results) > 1 else 0
-        escalation = check_escalation(
-            returned_count=returned_count,
-            top_k=10,
-            score_spread=score_spread,
-            confidence=result.meta.confidence,
-        )
-        if escalation:
-            return None  # escalate to agent
-
-        from .services.apartment_formatter import format_apartment_text
-        from .services.generate_response import generate_response
-
-        context = format_apartment_text(results)
-
-        generated = await generate_response(
-            query=user_text,
-            documents=[],
-            retrieved_context=[{"content": context, "source": "apartments_catalog"}],
-            raw_messages=[{"role": "user", "content": user_text}],
-            config=self._graph_config,
-            message=message,
-        )
-
-        response_text = str(generated.get("response", "") or context)
-        if not generated.get("response_sent"):
-            await self._send_markdown_chunks(message, response_text)
-
-        # Cut over free-text apartment sessions to the shared dialog-owned catalog runtime.
-        if state is not None and results:
-            from .dialogs.catalog import activate_catalog_state, show_catalog_controls
-            from .dialogs.states import CatalogSG
-            from .services.catalog_rendering import send_catalog_results
-            from .services.catalog_session import (
-                build_catalog_runtime,
-                clear_legacy_catalog_state,
-            )
-
-            runtime = build_catalog_runtime(
-                query=user_text,
-                source="free_text",
-                filters=filters or {},
-                view_mode="cards",
-                results=results,
-                total=len(results),
-                next_offset=None,
-            )
-            state_data = await state.get_data()
-            control_message_id = _state_control_message_id(state_data)
-            if control_message_id is not None and message.bot is not None:
-                with contextlib.suppress(Exception):
-                    await message.bot.delete_message(message.chat.id, control_message_id)
-            cleaned_state = clear_legacy_catalog_state(state_data)
-            cleaned_state["catalog_runtime"] = runtime
-
-            maybe_set_data = getattr(state, "set_data", None)
-            if inspect.iscoroutinefunction(maybe_set_data):
-                await maybe_set_data(cleaned_state)
-            await state.update_data(**cleaned_state)
-
-            telegram_id = message.from_user.id if message.from_user else 0
-            await send_catalog_results(
-                message=message,
-                property_bot=self,
-                results=results,
-                total_count=len(results),
-                view_mode=runtime.get("view_mode", "cards"),
-                shown_start=1,
-                telegram_id=telegram_id,
-            )
-            if dialog_manager is not None:
-                dialog_manager.middleware_data.setdefault("state", state)
-                await show_catalog_controls(
-                    message=message,
-                    dialog_manager=dialog_manager,
-                    runtime=runtime,
-                )
-                await activate_catalog_state(
-                    dialog_manager=dialog_manager,
-                    state=CatalogSG.results,
-                )
-
-        return response_text
 
     async def _handle_client_direct_pipeline(
         self,
@@ -2084,49 +1203,18 @@ class PropertyBot:
         state: FSMContext | None = None,
         dialog_manager: Any = None,
     ) -> str | None:
-        """Thin wrapper: delegates to run_client_pipeline (see pipelines/client.py).
-
-        Returns:
-            Response text if the pipeline handled the request.
-            None if the pipeline signals needs_agent=True (caller falls through to sdk_agent).
-        """
-        # Apartment fast path: intent check → regex filters → hybrid search → generate (#629)
-        from .pipelines.client import infer_agent_intent, run_client_pipeline
-
-        # Pre-agent branch selection should not emit an extra detect-agent-intent span.
-        agent_intent = infer_agent_intent(user_text)
-        if agent_intent == "apartment":
-            apt_answer = await self._handle_apartment_fast_path(
-                user_text=user_text,
-                message=message,
-                state=state,
-                dialog_manager=dialog_manager,
-            )
-            if apt_answer is not None:
-                return apt_answer
-            return None  # escalate to agent path
-
-        result = await run_client_pipeline(
+        return await _bot_query_pipeline._handle_client_direct_pipeline(
+            self,
+            message=message,
             user_text=user_text,
             user_id=user_id,
             session_id=session_id,
-            message=message,
-            cache=self._cache,
-            embeddings=self._embeddings,
-            sparse_embeddings=self._sparse,
-            qdrant=self._qdrant,
-            reranker=self._reranker,
-            llm=self._llm,
-            config=self._graph_config,
-            history_service=self._history_service,
-            rag_result_store=rag_result_store,
             role=role,
             query_type=query_type,
-            agent_intent=agent_intent,
+            rag_result_store=rag_result_store,
+            state=state,
+            dialog_manager=dialog_manager,
         )
-        if result.needs_agent:
-            return None  # caller falls through to sdk_agent path
-        return result.answer  # type: ignore[no-any-return]
 
     @staticmethod
     def _trace_guard_blocked(
@@ -2138,63 +1226,14 @@ class PropertyBot:
         pattern: str | None,
         root_trace_metadata: dict[str, Any] | None,
     ) -> None:
-        """Write Langfuse trace + scores for a hard-blocked injection (#1368)."""
-        wall_ms = (time.perf_counter() - pipeline_start) * 1000
-        lf = get_client()
-        tid = lf.get_current_trace_id() or ""
-        lf.update_current_span(
-            input={"query": user_text},
-            output={"response": "BLOCKED"},
-            metadata={
-                "pipeline_mode": "sdk_agent",
-                "pipeline_wall_ms": wall_ms,
-                "e2e_latency_ms": wall_ms,
-                "guard_blocked": True,
-                "injection_pattern": pattern,
-                "injection_risk_score": risk_score,
-            },
+        return _bot_query_pipeline._trace_guard_blocked(
+            user_text=user_text,
+            query_type=query_type,
+            pipeline_start=pipeline_start,
+            risk_score=risk_score,
+            pattern=pattern,
+            root_trace_metadata=root_trace_metadata,
         )
-        if tid:
-            score(lf, tid, name="guard_blocked", value=1, data_type="BOOLEAN")
-            score(
-                lf,
-                tid,
-                name="injection_pattern",
-                value=pattern or "unknown",
-                data_type="CATEGORICAL",
-            )
-            try:
-                write_langfuse_scores(
-                    lf,
-                    {
-                        "query_type": query_type,
-                        "pipeline_wall_ms": wall_ms,
-                        "e2e_latency_ms": wall_ms,
-                        "cache_hit": False,
-                        "input_type": "text",
-                        "search_results_count": 0,
-                        "grade_confidence": 0.0,
-                        "injection_detected": True,
-                        "injection_risk_score": risk_score,
-                        "injection_pattern": pattern,
-                    },
-                    trace_id=tid,
-                )
-            except Exception:
-                logger.warning(
-                    "Failed to write Langfuse scores in guard-blocked path", exc_info=True
-                )
-        if root_trace_metadata is not None:
-            root_trace_metadata.update(
-                {
-                    "pipeline_mode": "sdk_agent",
-                    "pipeline_wall_ms": wall_ms,
-                    "e2e_latency_ms": wall_ms,
-                    "guard_blocked": True,
-                    "injection_pattern": pattern,
-                    "injection_risk_score": risk_score,
-                }
-            )
 
     async def _handle_pre_agent_cache_hit(
         self,
@@ -2210,60 +1249,19 @@ class PropertyBot:
         root_trace_metadata: dict[str, Any] | None,
         dense: list[float],
     ) -> str:
-        """Send cached response and write Langfuse trace for cache-hit path."""
-        logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
-        rag_result_store["cache_hit"] = True
-        rag_result_store["query_type"] = query_type
-        rag_result_store["cache_key_embedding"] = dense
-        lf = get_client()
-        pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
-        rag_result_store["pre_agent_ms"] = pre_agent_ms
-        _raw_tid = lf.get_current_trace_id()
-        tid = _raw_tid if isinstance(_raw_tid, str) else ""
-        reply_markup = None
-        if tid and query_type not in _NO_RAG_QUERY_TYPES:
-            from telegram_bot.feedback import build_feedback_keyboard
-
-            reply_markup = build_feedback_keyboard(tid)
-        await self._send_markdown_chunks(message, str(cached), reply_markup=reply_markup)
-        wall_ms = (time.perf_counter() - pipeline_start) * 1000
-        cache_trace_metadata: dict[str, Any] = {
-            "pipeline_mode": "pre_agent_cache",
-            "pipeline_wall_ms": wall_ms,
-            "pre_agent_ms": pre_agent_ms,
-            "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-            "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
-            "e2e_latency_ms": wall_ms,
-            "topic_hint": rag_result_store.get("topic_hint", ""),
-            "grounding_mode": rag_result_store.get("grounding_mode", ""),
-            "filter_signature": rag_result_store.get("semantic_cache_filter_signature", ""),
-            "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
-            "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-            "grounded": bool(rag_result_store.get("grounded", True)),
-            "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
-            "semantic_cache_safe_reuse": bool(
-                rag_result_store.get("semantic_cache_safe_reuse", True)
-            ),
-            "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
-        }
-        lf.update_current_span(
-            input={"query": user_text},
-            output={"response": cached},
-            metadata=cache_trace_metadata,
+        return await _bot_query_pipeline._handle_pre_agent_cache_hit(
+            self,
+            message=message,
+            cached=cached,
+            user_text=user_text,
+            query_type=query_type,
+            role=role,
+            pipeline_start=pipeline_start,
+            pre_agent_start=pre_agent_start,
+            rag_result_store=rag_result_store,
+            root_trace_metadata=root_trace_metadata,
+            dense=dense,
         )
-        if tid:
-            score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
-            score(lf, tid, name="query_type", value=query_type, data_type="CATEGORICAL")
-            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
-            try:
-                write_langfuse_scores(lf, rag_result_store, trace_id=tid)
-            except Exception:
-                logger.warning(
-                    "Failed to write Langfuse scores in pre-agent cache hit", exc_info=True
-                )
-        if root_trace_metadata is not None:
-            root_trace_metadata.update(cache_trace_metadata)
-        return cached
 
     async def _send_core_response(
         self,
@@ -2276,86 +1274,16 @@ class PropertyBot:
         ctx: Any,
         forum_thread_id: int | None,
     ) -> None:
-        """Send response with feedback keyboard and source attribution."""
-        lf = get_client()
-        _raw_trace_id = lf.get_current_trace_id()
-        trace_id = _raw_trace_id if isinstance(_raw_trace_id, str) else ""
-
-        reply_markup = None
-        if trace_id and query_type and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
-            from telegram_bot.feedback import build_feedback_keyboard
-
-            reply_markup = build_feedback_keyboard(trace_id)
-        if reply_markup is None and ctx.history_reply_markup is not None:
-            reply_markup = ctx.history_reply_markup
-
-        sources_html = ""
-        documents = rag_result_store.get("documents", [])
-        if (
-            self._graph_config.show_sources
-            and documents
-            and query_type not in {"CHITCHAT", "OFF_TOPIC"}
-        ):
-            from telegram_bot.services.telegram_formatting import format_sources_html
-
-            _MAX_SOURCES = 5
-            sources_html = format_sources_html(documents, max_sources=_MAX_SOURCES)
-            rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
-
-        from telegram_bot.services.telegram_formatting import (
-            build_html_messages,
-            record_langfuse_response_output,
-            send_html_messages,
+        return await _bot_query_pipeline._send_core_response(
+            self,
+            message=message,
+            response_text=response_text,
+            user_text=user_text,
+            query_type=query_type,
+            rag_result_store=rag_result_store,
+            ctx=ctx,
+            forum_thread_id=forum_thread_id,
         )
-
-        html_messages = build_html_messages(response_text, sources_html=sources_html)
-
-        if message.chat.type == "private":
-            draft_state = rag_result_store.get("_draft_state")
-            try:
-                if draft_state is None and len(html_messages) == 1:
-                    draft_state = {
-                        "chat_id": message.chat.id,
-                        "thread_id": forum_thread_id,
-                        "draft_id": _new_draft_id(),
-                    }
-                if draft_state is not None and len(html_messages) == 1:
-                    send_kwargs: dict[str, Any] = {
-                        "chat_id": draft_state["chat_id"],
-                        "text": html_messages[0],
-                        "parse_mode": "HTML",
-                        "reply_markup": reply_markup,
-                    }
-                    thread_id = draft_state.get("thread_id")
-                    if thread_id is not None:
-                        send_kwargs["message_thread_id"] = thread_id
-                    await self.bot.send_message(**send_kwargs)
-                    record_langfuse_response_output(response_text, len(html_messages))
-                else:
-                    await send_html_messages(
-                        message, response_text, sources_html=sources_html, reply_markup=reply_markup
-                    )
-                ctx.response_sent = True
-            except Exception:
-                logger.warning(
-                    "Draft finalize via bot.send_message failed, falling back to send_html_messages"
-                )
-                try:
-                    await send_html_messages(
-                        message, response_text, sources_html=sources_html, reply_markup=reply_markup
-                    )
-                    ctx.response_sent = True
-                except Exception:
-                    logger.exception("Failed to send text response")
-                    if response_text:
-                        await message.answer(response_text)
-                    ctx.response_sent = True
-        else:
-            await send_html_messages(
-                message, response_text, sources_html=sources_html, reply_markup=reply_markup
-            )
-            if html_messages:
-                ctx.response_sent = True
 
     @staticmethod
     def _write_final_pipeline_trace(
@@ -2367,54 +1295,14 @@ class PropertyBot:
         rag_result_store: dict[str, Any],
         root_trace_metadata: dict[str, Any] | None,
     ) -> None:
-        """Write end-of-pipeline Langfuse span metadata and root trace metadata."""
-        lf = get_client()
-        lf.update_current_span(
-            input={"query": user_text},
-            metadata={
-                "pipeline_mode": "sdk_agent",
-                "query_type": rag_result_store.get("query_type", ""),
-                "topic_hint": rag_result_store.get("topic_hint", ""),
-                "grounding_mode": rag_result_store.get("grounding_mode", ""),
-                "filter_signature": filter_signature or "",
-                "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
-                "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-                "grounded": bool(rag_result_store.get("grounded", True)),
-                "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
-                "semantic_cache_safe_reuse": bool(
-                    rag_result_store.get("semantic_cache_safe_reuse", True)
-                ),
-                "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
-                "pipeline_wall_ms": wall_ms,
-                "pre_agent_ms": pre_agent_ms,
-                "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-                "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
-                "e2e_latency_ms": wall_ms,
-            },
+        return _bot_query_pipeline._write_final_pipeline_trace(
+            user_text=user_text,
+            wall_ms=wall_ms,
+            pre_agent_ms=pre_agent_ms,
+            filter_signature=filter_signature,
+            rag_result_store=rag_result_store,
+            root_trace_metadata=root_trace_metadata,
         )
-        if root_trace_metadata is not None:
-            root_trace_metadata.update(
-                {
-                    "pipeline_mode": "sdk_agent",
-                    "query_type": rag_result_store.get("query_type", ""),
-                    "topic_hint": rag_result_store.get("topic_hint", ""),
-                    "grounding_mode": rag_result_store.get("grounding_mode", ""),
-                    "filter_signature": filter_signature or "",
-                    "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
-                    "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-                    "grounded": bool(rag_result_store.get("grounded", True)),
-                    "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
-                    "semantic_cache_safe_reuse": bool(
-                        rag_result_store.get("semantic_cache_safe_reuse", True)
-                    ),
-                    "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
-                    "pipeline_wall_ms": wall_ms,
-                    "pre_agent_ms": pre_agent_ms,
-                    "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-                    "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
-                    "e2e_latency_ms": wall_ms,
-                }
-            )
 
     @observe(
         name="telegram-rag-supervisor",
@@ -2432,483 +1320,17 @@ class PropertyBot:
         expert_id: str | None = None,
         dialog_manager: Any = None,
     ) -> str:
-        """Handle query via imperative adapter SDK (#413 — replaces build_supervisor_graph)."""
-
-        from src.runtime.services.rag_core import BLOCKED_RESPONSE, CACHEABLE_QUERY_TYPES
-
-        from .agents.agent import LOCALE_TO_LANGUAGE
-
-        assert message.bot is not None
-        assert message.from_user is not None
-        bot = message.bot
-        user_id = message.from_user.id
-        session_id = make_session_id("chat", message.chat.id)
-        role = await self._resolve_user_role(user_id)
-        language = LOCALE_TO_LANGUAGE.get(locale, self.config.domain_language)
-
-        rag_result_store: dict[str, Any] = {}
-        pre_agent_start = time.perf_counter()
-        langgraph_thread_id = _supervisor_thread_id(message.chat.id, forum_thread_id)
-
-        with propagate_attributes(
-            session_id=session_id,
-            user_id=str(user_id),
-            metadata={"langgraph_thread_id": langgraph_thread_id},
-            tags=["telegram", "rag", "agent"],
-        ):
-            # --- Pre-agent content filter (#439) ---
-            # Text path must run guard BEFORE agent.ainvoke() so that
-            # injection attempts never reach the LLM at all.
-            user_text = message.text or ""
-            query_type = classify_query(user_text)
-            if self.config.content_filter_enabled:
-                detected, risk_score, pattern = detect_injection(user_text)
-                if detected:
-                    if self.config.guard_mode == "hard":
-                        logger.warning(
-                            "Pre-agent guard blocked (score=%.2f, pattern=%s): %.80s",
-                            risk_score,
-                            pattern,
-                            user_text,
-                        )
-                        await message.answer(BLOCKED_RESPONSE)
-                        self._trace_guard_blocked(
-                            user_text=user_text,
-                            query_type=query_type,
-                            pipeline_start=pipeline_start,
-                            risk_score=risk_score,
-                            pattern=pattern,
-                            root_trace_metadata=root_trace_metadata,
-                        )
-                        return BLOCKED_RESPONSE
-                    # soft/log mode: log but don't block
-                    logger.warning(
-                        "Pre-agent guard detected (mode=%s, score=%.2f, pattern=%s): %.80s",
-                        self.config.guard_mode,
-                        risk_score,
-                        pattern,
-                        user_text,
-                    )
-
-            # Pre-agent semantic cache check (#563) — skip agent entirely on HIT.
-            # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
-            extracted_filters: dict[str, Any] = {}
-            filter_signature: str | None = None
-            if query_type in CACHEABLE_QUERY_TYPES:
-                try:
-                    # 1. Dense embedding for semantic lookup only (#1501)
-                    dense = await _get_or_compute_pre_agent_dense(
-                        self._cache, self._embeddings, user_text, rag_result_store
-                    )
-                    # In production embeddings always expose aembed_query; this
-                    # guards the theoretical edge case where dense is unavailable.
-                    if dense is None:
-                        raise RuntimeError("Pre-agent dense embedding unavailable")
-
-                    # 2. Topic hint, grounding mode, filters, contextual query
-                    topic_hint_label = get_query_topic_hint(user_text)
-                    topic_hint = topic_hint_label.value if topic_hint_label is not None else None
-                    grounding_mode = get_grounding_mode(
-                        query_type=query_type,
-                        topic_hint=topic_hint,
-                    )
-                    filter_signal = detect_filter_sensitive_query(user_text)
-                    contextual_query = is_contextual_query(user_text)
-                    rag_result_store["filter_sensitive"] = filter_signal.is_filter_sensitive
-                    rag_result_store["filter_signal_reasons"] = list(filter_signal.reasons)
-                    rag_result_store["contextual_query"] = contextual_query
-                    rag_result_store["topic_hint"] = topic_hint or ""
-                    rag_result_store["grounding_mode"] = grounding_mode
-                    if grounding_mode == "strict":
-                        # Strict-mode cache hits are only allowed for reusable safe answers,
-                        # so keep those observability fields on the early-return path too.
-                        rag_result_store.setdefault("grounded", True)
-                        rag_result_store.setdefault("legal_answer_safe", True)
-                        rag_result_store.setdefault("semantic_cache_safe_reuse", True)
-                        rag_result_store.setdefault("safe_fallback_used", False)
-                    filter_signature = None
-                    if filter_signal.is_filter_sensitive:
-                        extracted_filters = await self._extract_pre_agent_filters(user_text)
-                        if extracted_filters:
-                            rag_result_store["filters"] = extracted_filters
-                            filter_signature = resolve_semantic_cache_signature(
-                                filters=extracted_filters
-                            )
-                            rag_result_store["semantic_cache_filter_signature"] = filter_signature
-                    cache_obs_input = {
-                        "query_len": len(user_text),
-                        "query_type": query_type,
-                        "cache_scope": "rag",
-                        "agent_role": role,
-                        "filter_sensitive": filter_signal.is_filter_sensitive,
-                        "has_filter_signature": filter_signature is not None,
-                        "contextual_query": contextual_query,
-                    }
-                    cached = None
-                    try:
-                        with get_client().start_as_current_observation(
-                            as_type="span",
-                            name="cache-check",
-                            input=cache_obs_input,
-                        ) as cache_obs:
-                            if contextual_query or (
-                                filter_signal.is_filter_sensitive and filter_signature is None
-                            ):
-                                rag_result_store["semantic_cache_already_checked"] = True
-                                cache_obs.update(output={"cache_hit": False, "skipped": True})
-                            else:
-                                check_start = time.perf_counter()
-                                cached = await self._cache.check_semantic(
-                                    query=user_text,
-                                    vector=dense,
-                                    query_type=query_type,
-                                    cache_scope="rag",
-                                    agent_role=role,
-                                    grounding_mode=grounding_mode
-                                    if grounding_mode == "strict"
-                                    else None,
-                                    require_safe_reuse=grounding_mode == "strict",
-                                    filter_signature=filter_signature,
-                                )
-                                rag_result_store["pre_agent_cache_check_ms"] = (
-                                    time.perf_counter() - check_start
-                                ) * 1000
-                                rag_result_store["semantic_cache_already_checked"] = True
-                                if cached:
-                                    cache_obs.update(output={"cache_hit": True})
-                                else:
-                                    cache_obs.update(output={"cache_hit": False})
-                    except Exception:
-                        logger.warning(
-                            "cache-check observation failed, proceeding without it",
-                            exc_info=True,
-                        )
-                        cached = None
-                        if contextual_query or (
-                            filter_signal.is_filter_sensitive and filter_signature is None
-                        ):
-                            rag_result_store["semantic_cache_already_checked"] = True
-                        else:
-                            check_start = time.perf_counter()
-                            cached = await self._cache.check_semantic(
-                                query=user_text,
-                                vector=dense,
-                                query_type=query_type,
-                                cache_scope="rag",
-                                agent_role=role,
-                                grounding_mode=grounding_mode
-                                if grounding_mode == "strict"
-                                else None,
-                                require_safe_reuse=grounding_mode == "strict",
-                                filter_signature=filter_signature,
-                            )
-                            rag_result_store["pre_agent_cache_check_ms"] = (
-                                time.perf_counter() - check_start
-                            ) * 1000
-                            rag_result_store["semantic_cache_already_checked"] = True
-                    if cached:
-                        return await self._handle_pre_agent_cache_hit(
-                            message=message,
-                            cached=cached,
-                            user_text=user_text,
-                            query_type=query_type,
-                            role=role,
-                            pipeline_start=pipeline_start,
-                            pre_agent_start=pre_agent_start,
-                            rag_result_store=rag_result_store,
-                            root_trace_metadata=root_trace_metadata,
-                            dense=dense,
-                        )
-                    # MISS: prepare retrieval vectors, then build state contract (#1501)
-                    logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
-                    rag_result_store["query_type"] = query_type
-                    await _prepare_pre_agent_retrieval_vectors(
-                        self._cache, self._embeddings, user_text, dense, rag_result_store
-                    )
-                    topic_hint = get_query_topic_hint(user_text)
-                    grounding_mode_value = rag_result_store.get("grounding_mode", "normal")
-                    rag_result_store["state_contract"] = _build_pre_agent_state_contract(
-                        rag_result_store=rag_result_store,
-                        query_type=query_type,
-                        topic_hint=topic_hint.value if topic_hint is not None else None,
-                        dense_vector=dense,
-                        sparse_vector=rag_result_store.get("cache_key_sparse")
-                        if isinstance(rag_result_store.get("cache_key_sparse"), dict)
-                        else None,
-                        colbert_query=rag_result_store.get("cache_key_colbert"),
-                        grounding_mode=grounding_mode_value,
-                        filters=extracted_filters or None,
-                    )
-                except Exception:
-                    logger.warning(
-                        "Pre-agent cache check failed, proceeding to agent", exc_info=True
-                    )
-
-            rag_result_store.setdefault(
-                "pre_agent_ms", (time.perf_counter() - pre_agent_start) * 1000
-            )
-
-            if role == "client" and self.config.client_direct_pipeline_enabled:
-                try:
-                    async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                        rag_result_store["pre_agent_ms"] = (
-                            time.perf_counter() - pre_agent_start
-                        ) * 1000
-                        pipeline_answer = await self._handle_client_direct_pipeline(
-                            message=message,
-                            user_text=user_text,
-                            user_id=user_id,
-                            session_id=session_id,
-                            role=role,
-                            query_type=query_type,
-                            rag_result_store=rag_result_store,
-                            state=state,
-                            dialog_manager=dialog_manager,
-                        )
-                        if pipeline_answer is not None:
-                            return pipeline_answer
-                        # needs_agent=True: fall through to sdk_agent path below
-                except Exception:
-                    logger.exception(
-                        "Client direct pipeline failed; falling back to sdk_agent",
-                    )
-
-            from src.core import CoreDependencies
-
-            from .assistant_core_adapter import build_user_context, run_core_text_request
-
-            user_context = build_user_context(
-                user_id=user_id,
-                session_id=session_id,
-                role=role,
-                filters=extracted_filters or None,
-                language=language,
-            )
-            dependencies = CoreDependencies(
-                cache=self._cache,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                reranker=self._reranker,
-                llm=self._llm,
-                config=self.config,
-            )
-            async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                core_result = await run_core_text_request(
-                    query=user_text,
-                    collection=self.config.qdrant_collection,
-                    user_context=user_context,
-                    dependencies=dependencies,
-                )
-            response_text = core_result.response_text
-            rag_result_store["query_type"] = core_result.request_type or query_type
-            rag_result_store["cache_hit"] = core_result.cache_hit
-            rag_result_store["rerank_applied"] = core_result.rerank_applied
-            rag_result_store["sources_count"] = core_result.documents_count
-            rag_result_store["grade_confidence"] = 1.0 if core_result.documents_count > 0 else 0.0
-            rag_result_store["grounded"] = True
-            rag_result_store["legal_answer_safe"] = True
-            rag_result_store["semantic_cache_safe_reuse"] = True
-            rag_result_store["documents"] = [
-                {
-                    "metadata": {
-                        "title": src.get("title", ""),
-                        "url": src.get("url", ""),
-                    },
-                    "score": 1.0,
-                }
-                for src in core_result.retrieved_sources
-            ]
-
-            class DummyContext:
-                response_sent = False
-                history_reply_markup = None
-
-            ctx: Any = DummyContext()
-            messages: list[Any] = []
-
-            # Extract LLM metrics from supervisor agent response (#515)
-            if messages:
-                last_ai = next(
-                    (
-                        m
-                        for m in reversed(messages)
-                        if hasattr(m, "response_metadata") and m.response_metadata
-                    ),
-                    None,
-                )
-                if last_ai:
-                    token_usage = last_ai.response_metadata.get("token_usage", {}) or {}
-                    decode_time = token_usage.get("completion_time")
-                    if decode_time is not None and float(decode_time) > 0:
-                        rag_result_store["llm_decode_ms"] = round(float(decode_time) * 1000, 1)
-                        completion_tokens = token_usage.get("completion_tokens")
-                        if completion_tokens and int(completion_tokens) > 0:
-                            rag_result_store["llm_tps"] = round(
-                                float(completion_tokens) / float(decode_time), 1
-                            )
-                    queue_time = token_usage.get("queue_time")
-                    if queue_time is not None:
-                        rag_result_store["llm_queue_ms"] = round(float(queue_time) * 1000, 1)
-
-            # Send response with feedback buttons, sources, and Markdown (#426).
-            # Skip if a tool already delivered the response via streaming (#428).
-            if response_text and not ctx.response_sent:
-                query_type = rag_result_store.get("query_type", "")
-                await self._send_core_response(
-                    message=message,
-                    response_text=response_text,
-                    user_text=user_text,
-                    query_type=query_type,
-                    rag_result_store=rag_result_store,
-                    ctx=ctx,
-                    forum_thread_id=forum_thread_id,
-                )
-
-            # Store final agent response in semantic cache for cacheable query types.
-            # Use cache_key_embedding (original query embedding) so that future
-            # check_semantic calls with the same user text can hit the cache
-            # even when the agent reformulated the query for retrieval (#504).
-            if self._cache and response_text:
-                query_type = str(rag_result_store.get("query_type", "") or "")
-                grounding_mode_value = str(
-                    rag_result_store.get("grounding_mode", "normal") or "normal"
-                )
-                raw_threshold = getattr(self.config, "relevance_threshold_rrf", 0.005)
-                confidence_threshold = (
-                    float(raw_threshold) if isinstance(raw_threshold, int | float) else 0.005
-                )
-                decision = build_cacheability_decision(
-                    result={
-                        **rag_result_store,
-                        "response": response_text,
-                    },
-                    query_type=query_type,
-                    grounding_mode=grounding_mode_value,
-                    documents=rag_result_store.get("documents", []),
-                    cache_hit=bool(rag_result_store.get("cache_hit", False)),
-                    contextual=is_contextual_query(user_text),
-                    grade_confidence=float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
-                    confidence_threshold=confidence_threshold,
-                    schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
-                )
-                rag_result_store["response_state"] = decision.response_state
-                rag_result_store["degraded_reason"] = decision.degraded_reason
-                rag_result_store["cache_eligible"] = decision.cache_eligible
-                rag_result_store["store_reason"] = decision.store_reason
-                # Prefer cache_key_embedding (original query vector) over query_embedding
-                # (retrieval/rewritten vector) to avoid check/store vector mismatch.
-                store_vector = rag_result_store.get("cache_key_embedding") or rag_result_store.get(
-                    "query_embedding"
-                )
-                result_filters = rag_result_store.get("filters")
-                if not isinstance(result_filters, dict) or not result_filters:
-                    state_contract = rag_result_store.get("state_contract")
-                    if isinstance(state_contract, dict):
-                        contract_filters = state_contract.get("filters")
-                        if isinstance(contract_filters, dict) and contract_filters:
-                            result_filters = contract_filters
-                filter_signature = resolve_semantic_cache_signature(filters=result_filters)
-                if (
-                    query_type in CACHEABLE_QUERY_TYPES
-                    and isinstance(store_vector, list)
-                    and bool(store_vector)
-                ):
-                    try:
-                        await maybe_store_semantic_response(
-                            cache=self._cache,
-                            query=message.text or "",
-                            response=response_text,
-                            vector=store_vector,
-                            query_type=query_type,
-                            cache_scope="rag",
-                            decision=decision,
-                            agent_role=role,
-                            filter_signature=filter_signature,
-                        )
-                    except Exception:
-                        logger.warning("Failed to store semantic cache in text path", exc_info=True)
-
-            # Wall-time for the full pipeline
-            wall_ms = (time.perf_counter() - pipeline_start) * 1000
-            pre_agent_ms = float(rag_result_store.get("pre_agent_ms", 0.0) or 0.0)
-
-            # Write Langfuse trace metadata
-            self._write_final_pipeline_trace(
-                user_text=user_text,
-                wall_ms=wall_ms,
-                pre_agent_ms=pre_agent_ms,
-                filter_signature=filter_signature,
-                rag_result_store=rag_result_store,
-                root_trace_metadata=root_trace_metadata,
-            )
-            lf = get_client()
-            tid = lf.get_current_trace_id() or ""
-            if tid:
-                lf.create_score(
-                    trace_id=tid,
-                    name="supervisor_model",
-                    value=self.config.supervisor_model,
-                    data_type="CATEGORICAL",
-                    score_id=f"{tid}-supervisor_model",
-                )
-                # User role score (#388)
-                lf.create_score(
-                    trace_id=tid,
-                    name="user_role",
-                    value=role,
-                    data_type="CATEGORICAL",
-                    score_id=f"{tid}-user_role",
-                )
-                current_turn_msgs = _extract_current_turn(messages)
-                # Tool call count (#374): count actual tool calls, not just messages.
-                tool_calls = sum(
-                    len(m.tool_calls)
-                    for m in current_turn_msgs
-                    if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
-                )
-                if tool_calls > 0:
-                    lf.create_score(
-                        trace_id=tid,
-                        name="tool_calls_total",
-                        value=float(tool_calls),
-                        score_id=f"{tid}-tool_calls_total",
-                    )
-
-                # Overwrite sources_shown/sources_count with actual post-send values (#514)
-                sources_count_actual = int(rag_result_store.get("sources_count", 0) or 0)
-                if sources_count_actual > 0:
-                    score(lf, tid, name="sources_shown", value=1, data_type="BOOLEAN")
-                    score(lf, tid, name="sources_count", value=float(sources_count_actual))
-
-            # Persist Q&A to history (fire-and-forget — response already sent)
-            history_service = self._history_service
-            if history_service and response_text:
-
-                async def _bg_save_history() -> None:
-                    try:
-                        saved = await history_service.save_turn(
-                            user_id=user_id,
-                            session_id=session_id,
-                            query=message.text or "",
-                            response=response_text,
-                            input_type="text",
-                            query_embedding=rag_result_store.get("query_embedding"),
-                        )
-                        if tid:
-                            lf.create_score(
-                                trace_id=tid,
-                                name="history_save_success",
-                                value=1 if saved else 0,
-                                data_type="BOOLEAN",
-                                score_id=f"{tid}-history_save_success",
-                            )
-                    except Exception:
-                        logger.warning("Failed to save history turn", exc_info=True)
-
-                self._spawn_history_save(_bg_save_history(), user_id=user_id)
-
-        return response_text
+        return await _bot_query_pipeline._handle_query_supervisor(
+            self,
+            message,
+            pipeline_start,
+            locale,
+            root_trace_metadata,
+            state,
+            forum_thread_id,
+            expert_id,
+            dialog_manager,
+        )
 
     @observe(
         name="telegram-rag-agent-stream",
@@ -2930,133 +1352,19 @@ class PropertyBot:
         forum_thread_id: int | None = None,
         use_streaming: bool = True,
     ) -> tuple[str, dict[str, Any]]:
-        """Stream supervisor agent output and retry once on checkpointer runtime errors."""
-        payload = {"messages": [{"role": "user", "content": user_text}]}
-        config = {
-            "callbacks": callbacks,
-            "configurable": {
-                "thread_id": _supervisor_thread_id(chat_id, forum_thread_id),
-                "bot_context": bot_context,
-                "rag_result_store": rag_result_store,
-                "role": role,
-                "user_id": bot_context.telegram_user_id,
-                "session_id": bot_context.session_id,
-            },
-        }
-
-        async def _run_once(current_agent: Any) -> tuple[str, dict[str, Any]]:
-            can_stream = use_streaming and callable(getattr(current_agent, "astream", None))
-            if not can_stream:
-                result: dict[str, Any] = await current_agent.ainvoke(payload, config=config)
-                messages = result.get("messages", [])
-                response_text = ""
-                if messages:
-                    last_msg = messages[-1]
-                    response_text = (
-                        last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                    )
-                return response_text, result
-
-            draft_state: dict[str, Any] = {
-                "chat_id": chat_id,
-                "thread_id": forum_thread_id,
-                "draft_id": _new_draft_id(),
-            }
-
-            accumulated = ""
-            stream_messages: list[Any] = []
-            latest_state: dict[str, Any] | None = None
-            # Throttle ``send_message_draft`` to at most one call per
-            # ``_AGENT_DRAFT_INTERVAL`` (#2159). The supervisor stream path
-            # was rewired to ``astream(..., stream_mode=['messages', 'values'],
-            # version='v2')`` in #952 and lost the throttle that the sibling
-            # helper ``_stream_agent_to_draft`` still uses. Without it every
-            # text-bearing chunk produces one Telegram Bot API round-trip,
-            # serializing into 3-6 s of tail latency on a 150-200 token
-            # answer. ``time.monotonic`` is the canonical clock for
-            # interval throttling — wall-clock jumps cannot starve drafts.
-            last_draft_at = 0.0
-            stream = current_agent.astream(
-                payload,
-                config=config,
-                stream_mode=["messages", "values"],
-                version="v2",
-            )
-            async for part in stream:
-                if isinstance(part, dict) and "type" in part:
-                    part_type = part.get("type")
-                    part_data = part.get("data")
-                    if part_type == "values":
-                        if isinstance(part_data, dict):
-                            latest_state = part_data
-                        continue
-                    if part_type != "messages" or not isinstance(part_data, tuple):
-                        continue
-                    message_chunk, metadata = part_data
-                else:
-                    message_chunk, metadata = part
-                if isinstance(metadata, dict):
-                    langgraph_node = metadata.get("langgraph_node")
-                    if isinstance(langgraph_node, str) and langgraph_node != "model":
-                        continue
-
-                text = _extract_stream_chunk_text(message_chunk)
-                if not text:
-                    continue
-                accumulated += text
-                stream_messages.append(message_chunk)
-                now = time.monotonic()
-                if now - last_draft_at < _AGENT_DRAFT_INTERVAL:
-                    continue
-                with contextlib.suppress(Exception):
-                    draft_kwargs: dict[str, Any] = {
-                        "chat_id": draft_state["chat_id"],
-                        "draft_id": draft_state["draft_id"],
-                        "text": accumulated,
-                    }
-                    if draft_state["thread_id"] is not None:
-                        draft_kwargs["message_thread_id"] = draft_state["thread_id"]
-                    await self.bot.send_message_draft(**draft_kwargs)
-                last_draft_at = now
-
-            if accumulated:
-                # Finalize later in _handle_query_supervisor after feedback/sources assembly.
-                rag_result_store["_draft_state"] = draft_state
-
-            return accumulated, latest_state or {"messages": stream_messages}
-
-        try:
-            return await _run_once(agent)
-        except Exception as exc:
-            if not _is_checkpointer_runtime_error(exc):
-                raise
-            if role in {"manager", "admin"}:
-                # Manager toolsets include write-side effects (CRM/nurturing).
-                # Retrying the full agent run can duplicate external actions.
-                logger.exception(
-                    "Supervisor stream failed with checkpointer runtime error; "
-                    "skip retry for role=%s to avoid duplicate side effects",
-                    role,
-                )
-                raise
-            logger.exception(
-                "Supervisor stream failed due to checkpointer runtime error; "
-                "retrying once with MemorySaver"
-            )
-
-        from .integrations.memory import create_fallback_checkpointer
-
-        self._agent_checkpointer = create_fallback_checkpointer()
-        fallback_agent = create_bot_agent(
-            model=self.config.supervisor_model,
+        return await _bot_query_pipeline._astream_supervisor_with_recovery(
+            self,
+            agent=agent,
             tools=tools,
-            checkpointer=self._agent_checkpointer,
-            language=self.config.domain_language,
-            base_url=self.config.llm_base_url,
-            api_key=self.config.llm_api_key,
-            max_tokens=self.config.supervisor_max_tokens,
+            role=role,
+            user_text=user_text,
+            chat_id=chat_id,
+            callbacks=callbacks,
+            bot_context=bot_context,
+            rag_result_store=rag_result_store,
+            forum_thread_id=forum_thread_id,
+            use_streaming=use_streaming,
         )
-        return await _run_once(fallback_agent)
 
     @observe(
         name="telegram-rag-agent-invoke",
@@ -3078,76 +1386,19 @@ class PropertyBot:
         forum_thread_id: int | None = None,
         message: Any | None = None,
     ) -> dict[str, Any]:
-        """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures.
-
-        When *message* is provided and STREAMING_ENABLED is True, uses agent.astream()
-        to forward token chunks to Telegram via sendMessageDraft during generation (#952).
-        Falls back to ainvoke() on streaming errors.
-        """
-        payload = {"messages": [{"role": "user", "content": user_text}]}
-        config = {
-            "callbacks": callbacks,
-            "configurable": {
-                "thread_id": _supervisor_thread_id(chat_id, forum_thread_id),
-                "bot_context": bot_context,
-                "rag_result_store": rag_result_store,
-                "role": role,
-                "user_id": bot_context.telegram_user_id,
-                "session_id": bot_context.session_id,
-            },
-        }
-
-        # --- Streaming path (#952) ---
-        streaming_enabled = bool(getattr(self._graph_config, "streaming_enabled", False))
-        if message is not None and streaming_enabled:
-            bot = getattr(message, "bot", None)
-            if bot is not None:
-                try:
-                    return await _stream_agent_to_draft(
-                        agent=agent,
-                        payload=payload,
-                        config=config,
-                        bot=bot,
-                        chat_id=chat_id,
-                        thread_id=forum_thread_id,
-                    )
-                except Exception:
-                    logger.warning("Agent streaming failed; falling back to ainvoke", exc_info=True)
-
-        try:
-            result: dict[str, Any] = await agent.ainvoke(payload, config=config)
-            return result
-        except Exception as exc:
-            if not _is_checkpointer_runtime_error(exc):
-                raise
-            if role in {"manager", "admin"}:
-                # Manager toolsets include write-side effects (CRM/nurturing).
-                # Retrying the full agent run can duplicate external actions.
-                logger.exception(
-                    "Supervisor ainvoke failed with checkpointer runtime error; "
-                    "skip retry for role=%s to avoid duplicate side effects",
-                    role,
-                )
-                raise
-            logger.exception(
-                "Supervisor ainvoke failed due to checkpointer runtime error; "
-                "retrying once with MemorySaver"
-            )
-
-        from .integrations.memory import create_fallback_checkpointer
-
-        self._agent_checkpointer = create_fallback_checkpointer()
-        fallback_agent = create_bot_agent(
-            model=self.config.supervisor_model,
+        return await _bot_query_pipeline._ainvoke_supervisor_with_recovery(
+            self,
+            agent=agent,
             tools=tools,
-            checkpointer=self._agent_checkpointer,
-            language=self.config.domain_language,
-            base_url=self.config.llm_base_url,
-            api_key=self.config.llm_api_key,
-            max_tokens=self.config.supervisor_max_tokens,
+            role=role,
+            user_text=user_text,
+            chat_id=chat_id,
+            callbacks=callbacks,
+            bot_context=bot_context,
+            rag_result_store=rag_result_store,
+            forum_thread_id=forum_thread_id,
+            message=message,
         )
-        fallback_result: dict[str, Any] = await fallback_agent.ainvoke(payload, config=config)
-        return fallback_result
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):

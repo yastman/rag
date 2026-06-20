@@ -166,10 +166,14 @@ def test_streaming_path_still_uses_send_message_draft_directly() -> None:
     SDK path is `agent.astream(..., stream_mode=["messages", "values"])`
     plus `bot.send_message_draft(...)` — nothing in between.
     """
-    bot_py = (REPO_ROOT / "telegram_bot" / "bot.py").read_text(encoding="utf-8")
-    assert "bot.send_message_draft" in bot_py, (
+    # Pattern may live in bot.py or in a _bot_*.py split module (#2816)
+    bot_pkg = REPO_ROOT / "telegram_bot"
+    bot_sources = "\n".join(
+        p.read_text(encoding="utf-8") for p in bot_pkg.glob("bot.py")
+    ) + "\n".join(p.read_text(encoding="utf-8") for p in bot_pkg.glob("_bot_*.py"))
+    assert "bot.send_message_draft" in bot_sources, (
         "Streaming path must call `bot.send_message_draft(...)` directly (#1671)."
     )
-    assert "DraftStreamer" not in bot_py, (
+    assert "DraftStreamer" not in bot_sources, (
         "`DraftStreamer` class is gone; do not reintroduce it (#1671)."
     )
