@@ -14,7 +14,7 @@ import re
 
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
-from telegram_bot.phone_utils import normalize_phone, validate_phone
+from src.phone_utils import normalize_phone, validate_phone
 
 
 __all__ = [

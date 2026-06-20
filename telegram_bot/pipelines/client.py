@@ -21,9 +21,9 @@ from src.runtime.services.cache_policy import (
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
+from src.scoring import score, write_langfuse_scores
 from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
-from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.history_service import HistoryService
 from telegram_bot.services.telegram_formatting import format_sources_html, send_html_messages

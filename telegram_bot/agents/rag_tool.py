@@ -17,11 +17,11 @@ from typing import Any, cast
 
 from src.runtime.pipeline.rag import rag_pipeline
 from src.runtime.services.query_services import classify_query, guard_node
+from src.scoring import write_langfuse_scores
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
 from telegram_bot.observability import get_client, observe
 from telegram_bot.pipelines.state_contract import PreAgentStateContract
-from telegram_bot.scoring import write_langfuse_scores
 
 
 logger = logging.getLogger(__name__)

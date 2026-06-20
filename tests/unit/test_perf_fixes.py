@@ -237,7 +237,7 @@ def test_start_calls_warmup_bge():
 
 def test_write_langfuse_scores_voice_fields():
     """#955: write_langfuse_scores writes voice-specific scores when present."""
-    from telegram_bot.scoring import write_langfuse_scores
+    from src.scoring import write_langfuse_scores
 
     lf = MagicMock()
     lf.get_current_trace_id.return_value = "test-trace-id"
@@ -278,7 +278,7 @@ def test_write_langfuse_scores_voice_fields():
 
 def test_write_langfuse_scores_llm_used_when_generate_in_stages():
     """#955: llm_used=1.0 when 'generate' key exists in latency_stages."""
-    from telegram_bot.scoring import write_langfuse_scores
+    from src.scoring import write_langfuse_scores
 
     lf = MagicMock()
     result = {
@@ -299,7 +299,7 @@ def test_write_langfuse_scores_llm_used_when_generate_in_stages():
 
 def test_write_langfuse_scores_results_count():
     """#955: results_count reflects search_results_count from state."""
-    from telegram_bot.scoring import write_langfuse_scores
+    from src.scoring import write_langfuse_scores
 
     lf = MagicMock()
     result = {
@@ -319,7 +319,7 @@ def test_write_langfuse_scores_results_count():
 
 def test_write_langfuse_scores_no_results_flag():
     """#955: no_results=1 when search_results_count is 0."""
-    from telegram_bot.scoring import write_langfuse_scores
+    from src.scoring import write_langfuse_scores
 
     lf = MagicMock()
     result = {
@@ -339,7 +339,7 @@ def test_write_langfuse_scores_no_results_flag():
 
 def test_write_langfuse_scores_cache_hit_voice():
     """#955: Voice cache hit path still records scores correctly."""
-    from telegram_bot.scoring import write_langfuse_scores
+    from src.scoring import write_langfuse_scores
 
     lf = MagicMock()
     result = {

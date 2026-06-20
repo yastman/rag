@@ -206,12 +206,12 @@ async def handle_service_callback(
     i18n: Any = None,
 ) -> None:
     """Handle service menu inline button clicks (#628)."""
+    from src.services.content_loader import get_service_card
     from telegram_bot.keyboards.services_keyboard import (
         build_service_card_buttons,
         build_services_menu,
         parse_service_callback,
     )
-    from telegram_bot.services.content_loader import get_service_card
 
     parsed = parse_service_callback(callback.data or "")
     if parsed is None:

@@ -6,9 +6,9 @@ import html
 import logging
 from typing import Any
 
+from src.observability.safe_payloads import build_safe_output_payload
 from telegram_bot.constants import TELEGRAM_MESSAGE_LIMIT as _TELEGRAM_MESSAGE_LIMIT
 from telegram_bot.observability import get_client
-from telegram_bot.observability_payloads import build_safe_output_payload
 
 
 logger = logging.getLogger(__name__)

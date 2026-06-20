@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .scoring import score
+from src.scoring import score
 
 
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
