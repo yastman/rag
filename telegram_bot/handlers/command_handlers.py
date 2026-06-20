@@ -24,8 +24,8 @@ from aiogram.types import (
     Message,
 )
 
+from src.scoring import write_history_scores
 from telegram_bot.observability import get_client, observe, propagate_attributes
-from telegram_bot.scoring import write_history_scores
 from telegram_bot.tracing_context import make_session_id
 
 

@@ -9,8 +9,8 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
+from src.observability.safe_payloads import build_safe_input_payload
 from telegram_bot.observability import get_client, propagate_attributes
-from telegram_bot.observability_payloads import build_safe_input_payload
 from telegram_bot.tracing_context import classify_action, make_session_id
 
 

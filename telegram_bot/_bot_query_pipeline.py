@@ -29,6 +29,7 @@ from src.runtime.services.cache_policy import (
     resolve_semantic_cache_signature,
 )
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
+from src.scoring import score, write_langfuse_scores
 from telegram_bot._bot_error_classification import _is_checkpointer_runtime_error
 from telegram_bot._bot_pre_agent import (
     _build_pre_agent_state_contract,
@@ -42,7 +43,6 @@ from telegram_bot._bot_streaming import (
     _new_draft_id,
 )
 from telegram_bot.observability import get_client, propagate_attributes
-from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.tracing_context import make_session_id
 
 
