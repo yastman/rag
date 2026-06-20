@@ -27,7 +27,6 @@ def test_handle_query_supervisor_imports_available():
     """Verify new imports are available in bot module."""
     from telegram_bot.agents.agent import create_bot_agent
     from telegram_bot.agents.context import BotContext
-    from telegram_bot.agents.crm_tools import get_crm_tools
     from telegram_bot.agents.history_tool import history_search
     from telegram_bot.agents.rag_tool import rag_search
     from telegram_bot.observability import create_callback_handler
@@ -35,7 +34,6 @@ def test_handle_query_supervisor_imports_available():
     assert callable(create_bot_agent)
     assert callable(rag_search)
     assert callable(history_search)
-    assert callable(get_crm_tools)
     assert callable(create_callback_handler)
     assert BotContext is not None
 
@@ -61,18 +59,6 @@ def test_bot_context_has_required_fields():
     )
     assert ctx.telegram_user_id == 42
     assert ctx.language == "ru"
-
-
-def test_get_crm_tools_returns_list():
-    """get_crm_tools returns list of tool objects."""
-    from telegram_bot.agents.crm_tools import get_crm_tools
-
-    tools = get_crm_tools()
-    assert isinstance(tools, list)
-    assert len(tools) == 12
-    names = {t.name for t in tools}
-    assert "crm_get_deal" in names
-    assert "crm_create_lead" in names
 
 
 def test_bot_local_lock_imports_create_agent_sdk():
