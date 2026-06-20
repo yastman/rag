@@ -9,6 +9,7 @@ dependencies = [
     # the service-local lockfile and the root extra resolve to the same
     # docling-serve generation. Keep these in sync.
     "docling-serve[ui]>=1.0.0",
+    "starlette>=1.3.1",  # CVE-2026-48817/48818 SSRF fix
     # Keep the Docker image CPU-only. Without explicit direct deps plus
     # [tool.uv.sources], uv resolves PyTorch from PyPI and pulls CUDA packages.
     "torch>=2.0.0",
