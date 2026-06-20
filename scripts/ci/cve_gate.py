@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
+import subprocess  # nosec B404
 import sys
 import urllib.error
 import urllib.request
@@ -31,7 +31,7 @@ def osv_severity(ghsa_id: str) -> str | None:
     """Return database_specific.severity from OSV API, or None on failure."""
     url = f"https://api.osv.dev/v1/vulns/{ghsa_id}"
     try:
-        with urllib.request.urlopen(url, timeout=10) as r:
+        with urllib.request.urlopen(url, timeout=10) as r:  # nosec B310 - URL is a hardcoded https constant
             data: dict[str, object] = json.loads(r.read())
             db_specific = data.get("database_specific")
             if isinstance(db_specific, dict):
@@ -54,7 +54,7 @@ def get_severity(vuln: dict) -> str:
 
 def run_pip_audit() -> Any:
     """Run pip-audit with OSV service and return parsed JSON."""
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 B607 - fixed uvx command, no user input
         ["uvx", "pip-audit", "-f", "json", "-s", "osv", "--progress-spinner", "off", "."],
         capture_output=True,
         text=True,
