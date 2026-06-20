@@ -313,7 +313,6 @@ async def _handle_client_direct_pipeline(
         reranker=bot._reranker,
         llm=bot._llm,
         config=bot._graph_config,
-        history_service=None,
         rag_result_store=rag_result_store,
         role=role,
         query_type=query_type,
