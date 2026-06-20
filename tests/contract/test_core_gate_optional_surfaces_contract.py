@@ -43,9 +43,9 @@ OPTIONAL_SURFACE_TOKENS = (
     "test-ingest-extra",
 )
 # Remaining explicit opt-in targets after #2638 cleanup.
+# test-providers-extra is kept as a no-op stub after #2893 removed contextualization tests.
 OPTIONAL_TARGETS = (
     "test-telegram-adapter",
-    "test-providers-extra",
     "test-ingest-extra",
 )
 OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS: tuple[str, ...] = ()
