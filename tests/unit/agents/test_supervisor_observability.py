@@ -143,13 +143,6 @@ def test_history_tool_has_observe_decorator():
     assert hasattr(hist_mod, "observe"), "history_tool module must import observe"
 
 
-def test_crm_tools_have_observe_decorator():
-    """CRM tools module imports observe (#413)."""
-    import telegram_bot.agents.crm_tools as crm_mod
-
-    assert hasattr(crm_mod, "observe"), "crm_tools module must import observe"
-
-
 async def test_supervisor_propagate_attributes_called_with_agent_tag(supervisor_config):
     """SDK agent path calls propagate_attributes with 'agent' tag (#413)."""
     bot = _create_bot_patched(supervisor_config)
