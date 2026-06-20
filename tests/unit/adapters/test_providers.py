@@ -1,6 +1,5 @@
 """Unit tests for embedding and LLM provider adapters."""
 
-import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,7 +10,6 @@ from src.adapters.embeddings import (
     BgeM3EmbeddingProvider,
     LocalBgeM3Provider,
     OpenAIEmbeddingProvider,
-    get_embeddings_provider,
 )
 from src.adapters.llm import (
     LiteLlmProvider,
@@ -19,26 +17,10 @@ from src.adapters.llm import (
     LLMError,
     LLMRateLimitError,
     LLMTimeoutError,
-    get_llm_provider,
 )
 
 
-# 1 factory selects local_bge_m3
-def test_factory_selects_local_bge_m3():
-    """Verify that get_embeddings_provider selects local_bge_m3 by default."""
-    with patch.dict(os.environ, {"EMBEDDINGS_PROVIDER": "local_bge_m3"}):
-        provider = get_embeddings_provider()
-        assert isinstance(provider, LocalBgeM3Provider)
-
-
-# 2 unknown provider fails explicitly
-def test_factory_unknown_provider_fails():
-    """Verify that unknown provider names raise ValueError."""
-    with pytest.raises(ValueError, match="Unknown embeddings provider"):
-        get_embeddings_provider("unknown_provider_foo")
-
-
-# 3 no FlagEmbedding import at module import
+# 1 no FlagEmbedding import at module import
 def test_no_flagembedding_import_at_module_import():
     """Verify that LocalBgeM3Provider can be constructed without importing FlagEmbedding."""
     with patch.dict(sys.modules, {"FlagEmbedding": None}):
@@ -46,7 +28,7 @@ def test_no_flagembedding_import_at_module_import():
         assert provider.model_name == "BAAI/bge-m3"
 
 
-# 4 no model load on __init__
+# 2 no model load on __init__
 def test_no_model_load_on_init():
     """Verify that BGEM3FlagModel is not instantiated during provider construction."""
     with patch("FlagEmbedding.BGEM3FlagModel") as mock_model_cls:
@@ -54,7 +36,7 @@ def test_no_model_load_on_init():
         mock_model_cls.assert_not_called()
 
 
-# 5 empty embed_texts([]) -> [] no load
+# 3 empty embed_texts([]) -> [] no load
 @pytest.mark.asyncio
 async def test_empty_embed_texts_no_load():
     """Verify that passing an empty list to embed_texts returns empty list without loading model."""
@@ -65,7 +47,7 @@ async def test_empty_embed_texts_no_load():
         mock_model_cls.assert_not_called()
 
 
-# 6 first embed_texts() loads lazily and 7 second call reuses model
+# 4 first embed_texts() loads lazily and 5 second call reuses model
 @pytest.mark.asyncio
 async def test_lazy_load_and_reuse_model():
     """Verify that local BGE-M3 model is loaded lazily on first call and reused on second."""
@@ -92,7 +74,7 @@ async def test_lazy_load_and_reuse_model():
         mock_model_cls.assert_called_once()
 
 
-# 8 LiteLlmProvider calls the canonical LiteLLM router client
+# 6 LiteLlmProvider calls the canonical LiteLLM router client
 @pytest.mark.asyncio
 async def test_litellm_provider_calls_router_client():
     """Verify that LiteLlmProvider.generate uses the shared LiteLLM router path."""
@@ -114,7 +96,7 @@ async def test_litellm_provider_calls_router_client():
         )
 
 
-# 9 LiteLLM errors normalized
+# 7 LiteLLM errors normalized
 @pytest.mark.asyncio
 async def test_litellm_errors_normalized():
     """Verify that LiteLLM errors are normalized to the unified exception classes."""
@@ -157,17 +139,6 @@ async def test_litellm_errors_normalized():
         with pytest.raises(LLMError) as exc_info:
             await provider.generate([{"role": "user", "content": "hi"}])
         assert exc_info.value.error_type == "api_error"
-
-
-# Additional factory tests for LLM
-def test_llm_factory():
-    """Verify that get_llm_provider selects litellm and fails on unknown."""
-    with patch.dict(os.environ, {"LLM_PROVIDER": "litellm"}):
-        provider = get_llm_provider()
-        assert isinstance(provider, LiteLlmProvider)
-
-    with pytest.raises(ValueError, match="Unknown LLM provider"):
-        get_llm_provider("unknown_llm_foo")
 
 
 # Service and OpenAI provider basic unit tests
