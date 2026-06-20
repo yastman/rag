@@ -54,27 +54,6 @@ def pop_pending_resume_trace_id(thread_id: str) -> str | None:
         return _PENDING_RESUME_TRACE_IDS.pop(thread_id, None)
 
 
-def hitl_guard(
-    tool_name: str,
-    preview: str,
-    args: dict,
-) -> dict:
-    """Pause graph execution for HITL confirmation.
-
-    Calls interrupt() with a structured payload. LangGraph saves graph state
-    via checkpointer; the caller receives result["__interrupt__"][0].value.
-
-    Args:
-        tool_name: Name of the tool requiring confirmation.
-        preview: Human-readable description of the pending operation.
-        args: Raw tool arguments (for audit / display).
-
-    Returns:
-        The resume value dict (with "action" key: "approve" or "cancel").
-    """
-    return {"tool": tool_name, "preview": preview, "args": args, "action": "pending"}
-
-
 _TOOL_LABELS: dict[str, str] = {}
 
 

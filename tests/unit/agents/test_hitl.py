@@ -95,35 +95,6 @@ def test_format_hitl_preview_unknown_tool():
     assert "some_unknown_tool" in preview
 
 
-# --- hitl_guard calls interrupt ---
-
-
-def test_hitl_guard_calls_interrupt_with_payload():
-    """hitl_guard returns structured payload for HITL confirmation."""
-    from telegram_bot.agents.hitl import hitl_guard
-
-    result = hitl_guard(
-        "crm_create_lead",
-        "Создать сделку:\n  name: Test",
-        {"name": "Test"},
-    )
-    assert result["tool"] == "crm_create_lead"
-    assert result["preview"] == "Создать сделку:\n  name: Test"
-    assert result["args"] == {"name": "Test"}
-
-
-def test_hitl_guard_returns_cancel():
-    """hitl_guard returns pending action in result dict."""
-    from telegram_bot.agents.hitl import hitl_guard
-
-    result = hitl_guard("crm_create_lead", "preview", {})
-    assert result["action"] == "pending"
-
-
-# --- HITL-wrapped CRM tools (archived #2689) ---
-# crm_tools module has been archived. Tests for CRM tool execution removed.
-
-
 # --- pending resume trace-id store (#2224) ---
 
 

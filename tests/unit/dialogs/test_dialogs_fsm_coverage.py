@@ -54,7 +54,6 @@ _NOISE_PARTS: frozenset[str] = frozenset(
 # (StatesGroup class name, expected state attribute names) — locked from #1093
 EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
     "ClientMenuSG": ("main",),
-    "ManagerMenuSG": ("main",),
     "SettingsSG": ("main", "language", "crm"),
     "FunnelSG": (
         "city",

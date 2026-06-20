@@ -2254,13 +2254,11 @@ class PropertyBot:
         from .dialogs.filter_dialog import filter_dialog
         from .dialogs.funnel import funnel_dialog
         from .dialogs.handoff import handoff_dialog
-        from .dialogs.manager_menu import manager_menu_dialog
         from .dialogs.settings import settings_dialog
         from .dialogs.viewing import viewing_dialog
 
         self.dp.include_router(client_menu_dialog)
         self.dp.include_router(catalog_dialog)
-        self.dp.include_router(manager_menu_dialog)
         self.dp.include_router(settings_dialog)
         self.dp.include_router(demo_dialog)
         self.dp.include_router(funnel_dialog)

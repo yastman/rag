@@ -52,35 +52,6 @@ async def test_cmd_start_client_shows_reply_keyboard_even_with_dialog_manager(mo
     assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
 
 
-async def test_cmd_start_manager_with_kommo_starts_manager_menu(mock_config):
-    """cmd_start routes manager (kommo_enabled) to ManagerMenuSG.main."""
-    from telegram_bot.dialogs.states import ManagerMenuSG
-
-    mock_config.kommo_enabled = True
-    dialog_manager = AsyncMock()
-    message = MagicMock()
-    message.from_user.id = 99
-    message.answer = AsyncMock()
-
-    with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
-        from telegram_bot.bot import PropertyBot
-
-        bot = PropertyBot.__new__(PropertyBot)
-        bot.config = mock_config
-        bot._user_service = None
-
-        async def fake_resolve_role(user_id: int) -> str:
-            return "manager"
-
-        bot._resolve_user_role = fake_resolve_role
-
-        await cmd_start(bot, message, dialog_manager=dialog_manager)
-
-    dialog_manager.start.assert_called_once()
-    call_args = dialog_manager.start.call_args
-    assert call_args.args[0] == ManagerMenuSG.main
-
-
 async def test_cmd_start_manager_without_kommo_shows_client_reply_keyboard(mock_config):
     """Managers without CRM mode should also land in the lower client root."""
     from aiogram.types import ReplyKeyboardMarkup

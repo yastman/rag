@@ -9,12 +9,6 @@ class ClientMenuSG(StatesGroup):
     main = State()
 
 
-class ManagerMenuSG(StatesGroup):
-    """Manager main menu."""
-
-    main = State()
-
-
 class SettingsSG(StatesGroup):
     """User settings dialog."""
 
