@@ -10,7 +10,7 @@ Start with the runbook, then search related code:
 
 ```bash
 # Runbook
-cat docs/archive/runbooks/LANGFUSE_TRACING_GAPS.md
+cat docs/runbooks/LITEllm_FAILURE.md  # Langfuse tracing gaps doc was removed in #2938
 
 # Trace spans and scoring in source
 rg -n "Langfuse|trace|observation|score" telegram_bot/graph/ telegram_bot/services/

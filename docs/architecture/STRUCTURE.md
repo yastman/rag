@@ -63,18 +63,17 @@ Canonical table for every major directory. Answers: what it does, who owns it, w
 | `scripts/archive/` | Superseded scripts (eval, quantization A/B, Kommo seed) | infra | 🗃 Archived | none | — | `scripts/archive/README.md` | Do not use; kept for reference |
 | `docs/` | All project documentation | docs | ✅ Active | — | — | `docs/README.md` | |
 | `docs/architecture/` | THIS document and architecture artifacts | docs | ✅ Active | — | — | `docs/README.md` | Canonical structure map lives here |
-| `docs/designs/` | Active product simplification design docs and Stage 0 decisions | docs | ✅ Active | — | — | `docs/designs/README.md` | Source of truth for simplification work |
+| `docs/designs/` | Active product simplification design docs and Stage 0 decisions | docs | ✅ Active | — | — | — | Source of truth for simplification work (README deleted in #2938) |
 | `docs/adr/` | Architecture decision records | docs | ✅ Active | — | — | `docs/adr/README.md` | |
 | `docs/engineering/` | Engineering process: test-writing, SDK registry, issue triage, playbooks | docs | ✅ Active | — | — | `docs/engineering/README.md` | |
 | `docs/runbooks/` | Operational runbooks: bot failure, Redis cache, Qdrant, PostgreSQL WAL | docs | ✅ Active | — | — | `docs/runbooks/README.md` | |
 | `docs/indexes/` | Task-oriented lookup indexes | docs | ✅ Active | — | — | `docs/indexes/README.md` | |
 | `docs/review/` | Reviewer and portfolio entry points | docs | ✅ Active | — | — | `docs/review/README.md` | |
 | `docs/audits/` | Point-in-time audit artifacts (config drift, endpoint inventory, etc.) | docs | ✅ Active | — | — | — | See #2719 for docs truthfulness audit |
-| `docs/audit/` | Public exports audit | docs | ✅ Active | — | — | — | |
-| `docs/archive/` | Archived docs (voice, API, Mini App, observability) | docs | 🗃 Archived | — | — | `docs/archive/README.md` | |
+| `docs/audit/` | Public exports audit | docs | 🗃 Deleted | — | — | — | Contents deleted in #2938 |
+| `docs/plans/` | Shared implementation plans | docs | 🗃 Deleted | — | — | — | Completed plans deleted in #2938 |
 | `docs/observability/` | Trace coverage audit and cross-service tracing contract | docs | ✅ Active | — | — | — | |
 | `docs/security/` | Secret scanning runbooks, filter patterns | docs | ✅ Active | — | — | — | |
-| `docs/plans/` | Shared implementation plans | docs | ✅ Active | — | — | — | |
 | `docs/portfolio/` | Portfolio and resume case study | docs | ✅ Active | — | — | `docs/portfolio/README.md` | |
 | `docker/` | Compose helper configs (Qdrant, Postgres, monitoring, ingestion, LiveKit) | infra | ✅ Active | — | — | `docker/README.md` | |
 | `.github/` | CI workflows, issue templates, CODEOWNERS, Dependabot | infra | ✅ Active | — | `tests/unit/test_ci_deploy_workflow.py` | `AGENTS.md` | See #2720 for CI audit |

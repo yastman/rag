@@ -97,7 +97,7 @@ Defined in `telegram_bot/handlers/handoff.py`:
 
 ## Graph Integration
 
-**Voice path:** `PropertyBot` calls `build_graph()` from the compat façade in `telegram_bot/graph/` (ARCH-16 decision, #2697). The façade wraps `run_assistant_pipeline()` in `src/runtime/pipeline/`; it is **not** an active LangGraph/StateGraph path. Voice is an optional surface — see `docs/archive/adr/0010-voice-path-create-agent-migration-plan.md` for the archived migration plan.
+**Voice path:** `PropertyBot` calls `build_graph()` from the compat façade in `telegram_bot/graph/` (ARCH-16 decision, #2697). The façade wraps `run_assistant_pipeline()` in `src/runtime/pipeline/`; it is **not** an active LangGraph/StateGraph path. Voice is an optional surface (removed in #2791).
 
 **Text path:** uses `create_agent` for conversational shell behavior, calling `run_assistant_request()` for core RAG (ADR-0019).
 

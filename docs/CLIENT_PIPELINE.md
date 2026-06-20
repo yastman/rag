@@ -4,7 +4,7 @@
 >
 > See also: [`PIPELINE_OVERVIEW.md`](PIPELINE_OVERVIEW.md) for the operational overview of all flows (ingestion / query / voice) and [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) for the StateGraph routing rules used by the voice path and the text-path `rag_search` tool.
 >
-> Voice migration plan (archived): [`docs/archive/adr/0010-voice-path-create-agent-migration-plan.md`](archive/adr/0010-voice-path-create-agent-migration-plan.md).
+> Voice path removed in #2791.
 
 The Telegram bot uses a **dual-path architecture** to route queries efficiently based on role and query complexity. The two paths use **different orchestrators**:
 

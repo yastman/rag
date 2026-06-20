@@ -30,8 +30,8 @@ closed cleanly.
 
 | Concern | Canonical doc | Last refresh |
 |---------|---------------|--------------|
-| RAG API contract | `docs/RAG_API.md` → `docs/archive/RAG_API.md` (archived, ARCH-10 #2606) | 2026-05-26 |
-| API reference | `docs/API_REFERENCE.md` → `docs/archive/API_REFERENCE.md` (archived, ARCH-10 #2606) | 2026-05-26 |
+| RAG API contract | `docs/RAG_API.md` → removed (archived, ARCH-10 #2606; deleted #2938) | 2026-05-26 |
+| API reference | `docs/API_REFERENCE.md` → removed (archived, ARCH-10 #2606; deleted #2938) | 2026-05-26 |
 | Pipeline routing | `docs/PIPELINE_ROUTING.md` (127 lines) | 2026-05-26 |
 | Pipeline overview | `docs/PIPELINE_OVERVIEW.md` | 2026-05-26 |
 | HITL flow | `docs/HITL.md` (139 lines), `docs/HITL_CRM_FLOW.md` (98 lines) | 2026-05-26 |
