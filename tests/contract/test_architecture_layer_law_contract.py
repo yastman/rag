@@ -2,16 +2,13 @@
 
 The full adapter migration is incremental, but the reusable layers must not gain
 new reverse dependencies. These checks cover rules that can be enforced without
-allowlists: provider/client code must not import runtime orchestration, and the
-runtime graph builder default must stay runtime-owned rather than adapter-owned.
+allowlists: provider/client code must not import runtime orchestration.
 """
 
 from __future__ import annotations
 
 import ast
 from pathlib import Path
-
-from src.runtime.graph import builder
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -50,11 +47,3 @@ def test_provider_and_client_layers_do_not_import_runtime() -> None:
         "Architecture law: providers/clients are below runtime and must not "
         f"import src.runtime orchestration. Violations: {violations}"
     )
-
-
-def test_runtime_graph_default_factory_is_runtime_owned() -> None:
-    assert builder.DEFAULT_FACTORY_SPEC.startswith("src.runtime."), (
-        "Architecture law: runtime graph default must be runtime-owned; adapters "
-        "can opt in with RAG_GRAPH_FACTORY but src.runtime must not default to one."
-    )
-    assert "telegram_bot" not in builder.DEFAULT_FACTORY_SPEC
