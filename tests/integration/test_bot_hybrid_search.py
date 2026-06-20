@@ -50,7 +50,7 @@ class TestBotHybridSearch:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
         ):
             bot = PropertyBot(_make_config())
 
@@ -73,7 +73,7 @@ class TestBotHybridSearch:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
             patch("telegram_bot.services.qdrant.QdrantService"),
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
         ):
             PropertyBot(_make_config())
 
@@ -90,7 +90,7 @@ class TestBotHybridSearch:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings") as mock_hybrid,
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService"),
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
         ):
             bot = PropertyBot(_make_config())
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.graph.tools.retrieve import make_retrieve_tool
+from telegram_bot.agents.retrieve_tool import make_retrieve_tool
 
 
 class _BoolRaising:
@@ -42,7 +42,7 @@ class TestRetrieveToolArrayEmbeddings:
         service = MagicMock()
         service.retrieve_vectors = AsyncMock(return_value=[])
 
-        with patch("telegram_bot.graph.tools.retrieve.RetrievalService", return_value=service):
+        with patch("telegram_bot.agents.retrieve_tool.RetrievalService", return_value=service):
             tool = make_retrieve_tool(qdrant=qdrant, embed_query=embed_query)
             await tool(query="test", k=5)
 
@@ -66,12 +66,10 @@ class TestRetrieveToolArrayEmbeddings:
         service = MagicMock()
         service.retrieve_vectors = AsyncMock(return_value=[])
 
-        with patch("telegram_bot.graph.tools.retrieve.RetrievalService", return_value=service):
+        with patch("telegram_bot.agents.retrieve_tool.RetrievalService", return_value=service):
             tool = make_retrieve_tool(qdrant=qdrant, embed_query=embed_query)
             await tool(query="test", k=5)
 
         service.retrieve_vectors.assert_awaited_once()
         request = service.retrieve_vectors.await_args.args[0]
-        assert request.dense_vector == [], (
-            "None dense must fall back to [] via explicit None check"
-        )
+        assert request.dense_vector == [], "None dense must fall back to [] via explicit None check"

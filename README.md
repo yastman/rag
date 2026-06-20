@@ -68,7 +68,7 @@ Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, and ingest
 
 | Capability | What it means in this repo | Evidence |
 |---|---|---|
-| Stateful AI orchestration | Repo-native imperative assistant pipeline routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization; legacy `telegram_bot/graph/` factories are compatibility facades | [`src/runtime/pipeline/assistant_pipeline.py`](src/runtime/pipeline/assistant_pipeline.py) |
+| Stateful AI orchestration | Repo-native imperative assistant pipeline routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization | [`src/runtime/pipeline/assistant_pipeline.py`](src/runtime/pipeline/assistant_pipeline.py) |
 | Typed workflow state | One state contract tracks query, routing, retrieval, filters, cache, scoring, policy, latency, and response metadata | [`src/core/contracts.py`](src/core/contracts.py) |
 | Assistant core entrypoint | Direct Python calls use `run_assistant_request()` and return `AssistantResult` for E2E and adapters | [`src/core/assistant.py`](src/core/assistant.py) |
 | Optional runtime adapters | Telegram is the production adapter; voice, API, and Mini App surfaces are removed from the repo | [`telegram_bot/`](telegram_bot/) |
@@ -157,10 +157,9 @@ If you are evaluating the project for collaboration, hiring, or client work, rea
 
 1. [`docs/portfolio/resume-case-study.md`](docs/portfolio/resume-case-study.md) - concise narrative, feature cards, trade-offs, and limitations.
 2. [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) - folder map and high-signal files.
-3. [`telegram_bot/graph/`](telegram_bot/graph/) - compatibility adapter facades over the imperative assistant pipeline.
-4. [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) - tools, business logic, cache, search, CRM, scoring, handoff.
-5. [`src/ingestion/unified/`](src/ingestion/unified/) - deterministic ingestion and Qdrant writes.
-6. [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), and [`DOCKER.md`](DOCKER.md) - runtime architecture.
+3. [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) - tools, business logic, cache, search, CRM, scoring, handoff.
+4. [`src/ingestion/unified/`](src/ingestion/unified/) - deterministic ingestion and Qdrant writes.
+5. [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), and [`DOCKER.md`](DOCKER.md) - runtime architecture.
 
 Safe review notes:
 
@@ -244,7 +243,6 @@ High-level entry points:
 | Telegram assistant runtime | [`telegram_bot/`](telegram_bot/) |
 | Imperative assistant pipeline | [`src/runtime/pipeline/`](src/runtime/pipeline/) |
 | Assistant core entrypoint | [`src/core/assistant.py`](src/core/assistant.py) |
-| Telegram adapter / graph compat facades | [`telegram_bot/graph/`](telegram_bot/graph/) |
 | Business/domain tools | [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) |
 | Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
 | Runtime | [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), [`DOCKER.md`](DOCKER.md) |

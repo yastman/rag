@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.core.contracts import AssistantRequest, AssistantResult, CoreDependencies
-from telegram_bot.graph.graph import ImperativeGraph, build_graph
-from telegram_bot.graph.state import make_initial_state
+from src.runtime.graph.state import make_initial_state
+from telegram_bot.pipelines.graph_compat import ImperativeGraph, build_graph
 
 
 pytestmark = pytest.mark.no_services
@@ -94,7 +94,7 @@ async def test_ainvoke_maps_text_state_through_imperative_pipeline() -> None:
 
     pipeline_result = _assistant_result(response_text="Нашёл варианты в Варне")
     with patch(
-        "telegram_bot.graph.graph.run_assistant_pipeline",
+        "telegram_bot.pipelines.graph_compat.run_assistant_pipeline",
         new=AsyncMock(return_value=pipeline_result),
     ) as run_pipeline:
         result = await graph.ainvoke(state, config={"request_id": "req-text"})
@@ -142,7 +142,7 @@ async def test_ainvoke_uses_trace_id_as_request_id_when_config_omits_one() -> No
     state["trace_id"] = "trace-123"
 
     with patch(
-        "telegram_bot.graph.graph.run_assistant_pipeline",
+        "telegram_bot.pipelines.graph_compat.run_assistant_pipeline",
         new=AsyncMock(return_value=_assistant_result()),
     ) as run_pipeline:
         await graph.ainvoke(state)
@@ -167,9 +167,9 @@ async def test_ainvoke_transcribes_voice_before_pipeline_request() -> None:
 
     make_transcribe = MagicMock(return_value=fake_transcribe)
     with (
-        patch("telegram_bot.graph.graph.make_transcribe_node", new=make_transcribe),
+        patch("telegram_bot.pipelines.graph_compat.make_transcribe_node", new=make_transcribe),
         patch(
-            "telegram_bot.graph.graph.run_assistant_pipeline",
+            "telegram_bot.pipelines.graph_compat.run_assistant_pipeline",
             new=AsyncMock(return_value=_assistant_result(response_text="Голос обработан")),
         ) as run_pipeline,
     ):

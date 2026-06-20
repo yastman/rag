@@ -223,7 +223,7 @@ async def history_rewrite_node(
     rewrite_count = state.get("rewrite_count", 0)
 
     try:
-        from telegram_bot.graph.config import GraphConfig
+        from src.runtime.graph.config import GraphConfig
 
         config = GraphConfig.from_env()
         if llm is None:
@@ -348,7 +348,7 @@ async def history_summarize_node(
 
     used_llm = False
     try:
-        from telegram_bot.graph.config import GraphConfig
+        from src.runtime.graph.config import GraphConfig
 
         config = GraphConfig.from_env()
         if llm is None:
