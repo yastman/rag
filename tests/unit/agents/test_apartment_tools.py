@@ -233,7 +233,6 @@ def test_bot_context_has_apartment_pipeline_field() -> None:
         session_id="s",
         language="ru",
         kommo_client=None,
-        history_service=MagicMock(),
         embeddings=MagicMock(),
         sparse_embeddings=MagicMock(),
         qdrant=MagicMock(),

@@ -26,7 +26,6 @@ def mock_bot():
     bot._cache = MagicMock()
     bot._cache.clear_conversation = AsyncMock()
     bot._cache.get_metrics = MagicMock(return_value={})
-    bot._history_service = None
     bot._checkpointer = None
     bot._agent_checkpointer = None
     bot._resolve_user_role = AsyncMock(return_value="client")

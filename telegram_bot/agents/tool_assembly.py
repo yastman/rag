@@ -1,7 +1,7 @@
 """Shared tool assembly helper for the bot agent pipeline.
 
-Consolidates the duplicated tool-list construction from _handle_query_supervisor,
-handle_hitl_callback, and handle_menu_action into a single reusable function.
+Consolidates the duplicated tool-list construction from _handle_query_supervisor
+and handle_menu_action into a single reusable function.
 """
 
 from __future__ import annotations
@@ -46,7 +46,6 @@ def build_agent_tools(
     *,
     role: str,
     config: Any,
-    history_service: Any | None,
 ) -> list[Any]:
     """Build the full tools list for a bot agent invocation.
 
@@ -56,8 +55,6 @@ def build_agent_tools(
         User role ("client" or "manager").
     config:
         BotConfig instance.
-    history_service:
-        History service instance (None if unavailable).
 
     Returns
     -------
@@ -74,17 +71,10 @@ def build_agent_tools(
     base_tools: list[Any] = [rag_search, apartment_search]
 
     if role == "manager":
-        manager_tools: list[Any] = []
-
-        if history_service is not None:
-            from .history_tool import history_search
-
-            manager_tools.append(history_search)
-
         tools = build_tools_for_role(
             role=role,
             base_tools=base_tools,
-            manager_tools=manager_tools,
+            manager_tools=[],
         )
     else:
         tools = base_tools

@@ -25,7 +25,6 @@ from src.scoring import score, write_langfuse_scores
 from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.services.generate_response import generate_response
-from telegram_bot.services.history_service import HistoryService
 from telegram_bot.services.telegram_formatting import format_sources_html, send_html_messages
 from telegram_bot.services.types import PipelineResult
 
@@ -412,7 +411,6 @@ async def _pipeline_postprocess(
     pre_agent_ms: float,
     pipeline_start: float,
     cache: Any,
-    history_service: Any | None,
     lf: Any,
     trace_id: str,
     config: Any,
@@ -538,27 +536,6 @@ async def _pipeline_postprocess(
         except Exception:
             logger.warning("Failed to write Langfuse scores in client pipeline", exc_info=True)
 
-    if history_service and response_text:
-        try:
-            saved = await history_service.save_turn(
-                user_id=user_id,
-                session_id=session_id,
-                query=user_text,
-                response=response_text,
-                input_type="text",
-                query_embedding=result.get("query_embedding"),
-            )
-            if tid:
-                lf.create_score(
-                    trace_id=tid,
-                    name="history_save_success",
-                    value=1 if saved else 0,
-                    data_type="BOOLEAN",
-                    score_id=f"{tid}-history_save_success",
-                )
-        except Exception:
-            logger.warning("Failed to save history turn in client pipeline", exc_info=True)
-
     sources: list[dict[str, str]] = []
     for doc in documents_list[:_MAX_SOURCES]:
         if isinstance(doc, dict):
@@ -606,7 +583,6 @@ async def run_client_pipeline(
     reranker: Any | None,
     llm: Any | None,
     config: Any,
-    history_service: HistoryService | None = None,
     rag_result_store: dict[str, Any] | None = None,
     role: str = "client",
     query_type: str = "GENERAL",
@@ -620,7 +596,7 @@ async def run_client_pipeline(
         c) RAG pipeline — retrieve + grade + rerank + optional rewrite.
         d) Generate — LLM answer if RAG cache missed.
         e) Send — response + sources to Telegram.
-        f) Post-process — cache store (with guards), history save, Langfuse scores.
+        f) Post-process — cache store (with guards), Langfuse scores.
 
     Args:
         user_text: Raw user message.
@@ -634,7 +610,6 @@ async def run_client_pipeline(
         reranker: Reranker service or None.
         llm: LLM client or None (generate_response uses its own via config).
         config: GraphConfig instance.
-        history_service: Optional HistoryService for saving turns.
         rag_result_store: Dict with pre-computed embeddings from pre-agent cache check.
         role: User role ("client" or "manager").
         query_type: Pre-classified query type from classify_query().
@@ -784,7 +759,6 @@ async def run_client_pipeline(
         pre_agent_ms=ctx["pre_agent_ms"],
         pipeline_start=pipeline_start,
         cache=cache,
-        history_service=history_service,
         lf=lf,
         trace_id=trace_id,
         config=config,

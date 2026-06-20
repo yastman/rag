@@ -23,7 +23,6 @@ class TestBuildAgentTools:
         tools = build_agent_tools(
             role="client",
             config=mock_config,
-            history_service=None,
         )
 
         tool_names = [getattr(t, "name", str(t)) for t in tools]
@@ -36,23 +35,11 @@ class TestBuildAgentTools:
         tools = build_agent_tools(
             role="manager",
             config=mock_config,
-            history_service=MagicMock(),
         )
 
         tool_names = [getattr(t, "name", str(t)) for t in tools]
         assert "rag_search" in tool_names
         assert "apartment_search" in tool_names
-        assert "history_search" in tool_names
-
-    def test_manager_without_history_service_omits_history_search(self, mock_config):
-        """Manager without history_service should not have history_search tool."""
-        tools = build_agent_tools(
-            role="manager",
-            config=mock_config,
-            history_service=None,
-        )
-
-        tool_names = [getattr(t, "name", str(t)) for t in tools]
         assert "history_search" not in tool_names
 
     def test_invalid_role_raises_value_error(self, mock_config):
@@ -61,5 +48,4 @@ class TestBuildAgentTools:
             build_agent_tools(
                 role="managr",
                 config=mock_config,
-                history_service=None,
             )

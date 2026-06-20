@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from src.runtime.services.small_to_big import ExpandedChunk, SmallToBigService
     from src.services.bge_m3_client import BGEM3Client, BGEM3SyncClient
 
-    from .history_service import HistoryService
     from .query_analyzer import QueryAnalyzer
 
 
@@ -27,7 +26,6 @@ __all__ = [
     "BGEM3SyncClient",
     "ColbertRerankerService",
     "ExpandedChunk",
-    "HistoryService",
     "HyDEGenerator",
     "PipelineMetrics",
     "QdrantService",
@@ -42,7 +40,6 @@ _IMPORT_MAP = {
     "BGEM3SyncClient": "src.services.bge_m3_client",
     "ColbertRerankerService": "src.runtime.services.colbert_reranker",
     "ExpandedChunk": "src.runtime.services.small_to_big",
-    "HistoryService": "telegram_bot.services.history_service",
     "HyDEGenerator": "src.runtime.services.query_preprocessor",
     "PipelineMetrics": "src.runtime.services.metrics",
     "QdrantService": "src.runtime.services.qdrant",

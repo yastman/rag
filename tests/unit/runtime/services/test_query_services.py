@@ -71,21 +71,3 @@ def test_rag_tool_does_not_import_from_graph_nodes():
                 f"rag_tool.py imports from graph node internals: {mod} — "
                 "route through src.runtime.services instead"
             )
-
-
-def test_history_graph_nodes_does_not_import_from_graph_nodes():
-    """telegram_bot/agents/history_graph/nodes.py must not import from src.runtime.graph.nodes.*"""
-    import ast
-    from pathlib import Path
-
-    nodes_path = (
-        Path(__file__).parents[4] / "telegram_bot" / "agents" / "history_graph" / "nodes.py"
-    )
-    tree = ast.parse(nodes_path.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            mod = node.module or ""
-            assert not mod.startswith("src.runtime.graph.nodes"), (
-                f"history_graph/nodes.py imports from graph node internals: {mod} — "
-                "route through src.runtime.services instead"
-            )

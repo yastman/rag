@@ -313,7 +313,7 @@ async def _handle_client_direct_pipeline(
         reranker=bot._reranker,
         llm=bot._llm,
         config=bot._graph_config,
-        history_service=bot._history_service,
+        history_service=None,
         rag_result_store=rag_result_store,
         role=role,
         query_type=query_type,
@@ -1013,36 +1013,9 @@ async def _supervisor_store_cache_and_trace(
         root_trace_metadata=root_trace_metadata,
     )
 
-    lf = get_client()
-    tid = _supervisor_write_langfuse_scores(
+    _supervisor_write_langfuse_scores(
         bot, role=role, rag_result_store=rag_result_store, messages=messages
     )
-
-    history_service = bot._history_service
-    if history_service and response_text:
-
-        async def _bg_save_history() -> None:
-            try:
-                saved = await history_service.save_turn(
-                    user_id=user_id,
-                    session_id=session_id,
-                    query=message.text or "",
-                    response=response_text,
-                    input_type="text",
-                    query_embedding=rag_result_store.get("query_embedding"),
-                )
-                if tid:
-                    lf.create_score(
-                        trace_id=tid,
-                        name="history_save_success",
-                        value=1 if saved else 0,
-                        data_type="BOOLEAN",
-                        score_id=f"{tid}-history_save_success",
-                    )
-            except Exception:
-                logger.warning("Failed to save history turn", exc_info=True)
-
-        bot._spawn_history_save(_bg_save_history(), user_id=user_id)
 
 
 async def _handle_query_supervisor(

@@ -21,7 +21,6 @@ def _make_bot_context(**kwargs) -> BotContext:
         "telegram_user_id": 42,
         "session_id": "s-test",
         "language": "ru",
-        "history_service": AsyncMock(),
         "embeddings": AsyncMock(),
         "sparse_embeddings": AsyncMock(),
         "qdrant": AsyncMock(),

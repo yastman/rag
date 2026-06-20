@@ -22,7 +22,6 @@ class BotContext:
     telegram_user_id: int
     session_id: str
     language: str
-    history_service: Any  # HistoryService
     embeddings: Any  # BGEM3HybridEmbeddings
     sparse_embeddings: Any  # BGEM3SparseEmbeddings
     qdrant: Any  # QdrantService

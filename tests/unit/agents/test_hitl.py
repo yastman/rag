@@ -17,7 +17,6 @@ def _make_ctx(mock_kommo=None) -> BotContext:
         telegram_user_id=42,
         session_id="s-1",
         language="ru",
-        history_service=AsyncMock(),
         embeddings=AsyncMock(),
         sparse_embeddings=AsyncMock(),
         qdrant=AsyncMock(),
