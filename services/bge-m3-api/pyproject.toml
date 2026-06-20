@@ -45,3 +45,41 @@ test = [
     # Removed: qdrant-client, aiogram, langchain-core — no test files exist
     # in this service directory; these were stale deps (#2710).
 ]
+
+[tool.uv]
+# Version unification (#2902): pin transitive packages to consistent minimums.
+constraint-dependencies = [
+    "anyio>=4.13.0",
+    "certifi>=2026.5.20",
+    "charset-normalizer>=3.4.7",
+    "click>=8.4.1",
+    "filelock>=3.29.3",
+    "fsspec>=2026.4.0",
+    "hf-xet>=1.5.1",
+    "httptools>=0.8.0",
+    "huggingface-hub>=1.19.0",
+    "idna>=3.16",
+    "importlib-metadata>=8.9.0",
+    "markdown-it-py>=4.2.0",
+    "onnxruntime>=1.27.0",
+    "opentelemetry-api>=1.41.1",
+    "opentelemetry-exporter-otlp-proto-common>=1.41.1",
+    "opentelemetry-exporter-otlp-proto-http>=1.41.1",
+    "opentelemetry-instrumentation>=0.62b1",
+    "opentelemetry-instrumentation-asgi>=0.62b1",
+    "opentelemetry-instrumentation-fastapi>=0.62b1",
+    "opentelemetry-proto>=1.41.1",
+    "opentelemetry-sdk>=1.41.1",
+    "opentelemetry-semantic-conventions>=0.62b1",
+    "opentelemetry-util-http>=0.62b1",
+    "packaging>=26.2",
+    "pytest-asyncio>=1.4.0",
+    "regex>=2026.5.9",
+    "requests>=2.34.2",
+    "rich>=15.0.0",
+    "safetensors>=0.8.0",
+    "typer>=0.25.1",
+    "watchfiles>=1.2.0",
+    "zipp>=4.1.0",
+    "cachetools>=7.1.4",
+]

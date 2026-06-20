@@ -6,9 +6,45 @@ resolution-markers = [
     "sys_platform == 'darwin'",
 ]
 
+[manifest]
+constraints = [
+    { name = "accelerate", specifier = ">=1.14.0" },
+    { name = "aiohappyeyeballs", specifier = ">=2.6.2" },
+    { name = "anyio", specifier = ">=4.13.0" },
+    { name = "attrs", specifier = ">=26.1.0" },
+    { name = "beautifulsoup4", specifier = ">=4.15.0" },
+    { name = "certifi", specifier = ">=2026.5.20" },
+    { name = "charset-normalizer", specifier = ">=3.4.7" },
+    { name = "click", specifier = ">=8.4.1" },
+    { name = "dill", specifier = ">=0.4.1" },
+    { name = "fastapi", specifier = ">=0.136.1" },
+    { name = "filelock", specifier = ">=3.29.0" },
+    { name = "fsspec", specifier = ">=2026.2.0" },
+    { name = "hf-xet", specifier = ">=1.5.0" },
+    { name = "httptools", specifier = ">=0.7.1" },
+    { name = "idna", specifier = ">=3.16" },
+    { name = "importlib-metadata", specifier = ">=8.7.1" },
+    { name = "markdown-it-py", specifier = ">=4.2.0" },
+    { name = "marko", specifier = ">=2.2.2" },
+    { name = "msgpack", specifier = ">=1.1.2" },
+    { name = "multiprocess", specifier = ">=0.70.19" },
+    { name = "numpy", specifier = ">=2.4.6" },
+    { name = "packaging", specifier = ">=26.2" },
+    { name = "propcache", specifier = ">=0.5.2" },
+    { name = "protobuf", specifier = ">=6.33.6" },
+    { name = "regex", specifier = ">=2026.5.9" },
+    { name = "requests", specifier = ">=2.34.2" },
+    { name = "rich", specifier = ">=15.0.0" },
+    { name = "safetensors", specifier = ">=0.7.0" },
+    { name = "tokenizers", specifier = ">=0.22.2" },
+    { name = "watchfiles", specifier = ">=1.2.0" },
+    { name = "yarl", specifier = ">=1.24.2" },
+    { name = "zipp", specifier = ">=4.1.0" },
+]
+
 [[package]]
 name = "accelerate"
-version = "1.13.0"
+version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub" },
@@ -20,9 +56,9 @@ dependencies = [
     { name = "torch", version = "2.12.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.12.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ca/14/787e5498cd062640f0f3d92ef4ae4063174f76f9afd29d13fc52a319daae/accelerate-1.13.0.tar.gz", hash = "sha256:d631b4e0f5b3de4aff2d7e9e6857d164810dfc3237d54d017f075122d057b236", size = 402835, upload-time = "2026-03-04T19:34:12.359Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/75/94cd5d389649578aca399e5aa822637eec18319a1dadc400ffe2f9a7493f/accelerate-1.14.0.tar.gz", hash = "sha256:41b9c4377a54e0b460a959b0defa1b736e4ca0a2373252d9a539964c2afe3c8d", size = 412167, upload-time = "2026-06-11T13:45:52.326Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7e/46/02ac5e262d4af18054b3e922b2baedbb2a03289ee792162de60a865defc5/accelerate-1.13.0-py3-none-any.whl", hash = "sha256:cf1a3efb96c18f7b152eb0fa7490f3710b19c3f395699358f08decca2b8b62e0", size = 383744, upload-time = "2026-03-04T19:34:10.313Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/db/253133d7e7cb40d3af384bb2f5c0b4a2b7fdcffbc95c688cc67a20a3c103/accelerate-1.14.0-py3-none-any.whl", hash = "sha256:e94390c2863b873be18f623f9df48a0d8fe5eff13ea7f1a00092b0a7904888c6", size = 389246, upload-time = "2026-06-11T13:45:50.477Z" },
 ]
 
 [[package]]
@@ -224,15 +260,15 @@ wheels = [
 
 [[package]]
 name = "beautifulsoup4"
-version = "4.14.3"
+version = "4.15.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "soupsieve" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c3/b0/1c6a16426d389813b48d95e26898aff79abbde42ad353958ad95cc8c9b21/beautifulsoup4-4.14.3.tar.gz", hash = "sha256:6292b1c5186d356bba669ef9f7f051757099565ad9ada5dd630bd9de5fa7fb86", size = 627737, upload-time = "2025-11-30T15:08:26.084Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/43/65/318323f98dbee45d42dff61d8f047181bc6f2268a9068cfad035a46be5af/beautifulsoup4-4.15.0.tar.gz", hash = "sha256:288e3ca7d54b06f2ac191970bc275c1939cb46d450b255bf6718b04aa37ab4f7", size = 632571, upload-time = "2026-06-07T16:44:20.453Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1a/39/47f9197bdd44df24d67ac8893641e16f386c984a0619ef2ee4c51fbbc019/beautifulsoup4-4.14.3-py3-none-any.whl", hash = "sha256:0918bfe44902e6ad8d57732ba310582e98da931428d231a5ecb9e7c703a735bb", size = 107721, upload-time = "2025-11-30T15:08:24.087Z" },
+    { url = "https://files.pythonhosted.org/packages/88/c6/92fcd42f1ba33e1184263f25bfabf3d27c383410470f169e4b8163bf9c17/beautifulsoup4-4.15.0-py3-none-any.whl", hash = "sha256:d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9", size = 109924, upload-time = "2026-06-07T16:44:21.566Z" },
 ]
 
 [[package]]
