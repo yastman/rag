@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = ROOT / "telegram_bot" / "services" / "generate_response.py"
 MAX_GENERATE_RESPONSE_COMPLEXITY = 20
-
+MAX_STREAMING_STAGE_COMPLEXITY = 25  # #2926: _generate_streaming_response decomposed
 
 _COMPLEXITY_NODES = (
     ast.If,
@@ -36,3 +36,27 @@ def test_generate_response_is_thin_wrapper() -> None:
     ]
     assert len(functions) == 1
     assert _function_complexity(functions[0]) < MAX_GENERATE_RESPONSE_COMPLEXITY
+
+
+def test_streaming_stages_within_complexity_budget() -> None:
+    """#2926: each stage helper extracted from _generate_streaming_response stays under CC 25."""
+    module = ast.parse(TARGET.read_text())
+    stage_names = {
+        "_generate_streaming_response",
+        "_prepare_streaming_context",
+        "_run_stream_with_recovery",
+        "_emit_generation_span",
+        "_compute_latency_metrics",
+        "_build_generation_signal",
+    }
+    found = {
+        node.name: _function_complexity(node)
+        for node in ast.walk(module)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in stage_names
+    }
+    missing = stage_names - found.keys()
+    assert not missing, f"Stage functions not found: {missing}"
+    over_budget = {name: cc for name, cc in found.items() if cc >= MAX_STREAMING_STAGE_COMPLEXITY}
+    assert not over_budget, (
+        f"Stage functions over CC {MAX_STREAMING_STAGE_COMPLEXITY}: {over_budget}"
+    )

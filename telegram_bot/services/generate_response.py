@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import hashlib
 import inspect
 import logging
@@ -660,49 +661,47 @@ async def _non_streaming_llm_call(
     return answer, actual_model, ttft_ms, completion_tokens, usage_details
 
 
-async def _generate_streaming_response(
+@dataclasses.dataclass
+class _StreamingContext:
+    """Prepared context for a streaming LLM call."""
+
+    docs: list[dict[str, Any]]
+    effective_query: str
+    style_info: Any  # ResponseStyleInfo
+    coverage_decision: Any  # CoverageDecision
+    effective_needs_coverage: bool
+    sources_enabled: bool
+    legal_answer_safe: bool
+    prompt_name: str
+    style_enabled: bool
+    shadow_mode: bool
+    system_prompt: str
+    max_tokens: int
+    prompt_obj: Any | None
+    effective_temperature: float
+    llm_messages: list[dict[str, str]]
+    context: str
+
+
+def _prepare_streaming_context(
     *,
-    req: GenerationRequest,
-    t0: float,
     query: str,
     needs_coverage: bool,
     documents: list[dict[str, Any]],
-    retrieved_context: list[dict[str, Any]] | None,
     raw_messages: list[Any] | None,
-    latency_stages: dict[str, float] | None,
-    llm_call_count: int,
     grounding_mode: str,
     grade_confidence: float | None,
-    message: Any,
     config: Any,
-    lf_client: Any | None,
     max_context_docs: int,
     format_context: Callable[..., str],
     select_recent_history: Callable[[list[Any], int], list[Any]],
-    build_system_prompt: Callable[[str], str],
     ensure_history_instruction: Callable[[str], str],
-    build_fallback_response: Callable[[list[dict[str, Any]]], str],
-    generate_streaming: Callable[..., Any],
     style_detector: ResponseStyleDetector | None,
     style_prompt_builder: Callable[..., str],
     style_token_limit: Callable[[Any, str], int],
-    extract_queue_ms: Callable[[Any | None], float | None],
-    extract_sent_message_ref: Callable[[Any], dict[str, int] | None],
     citation_instruction: str,
-) -> dict[str, Any]:
-    """Generate and deliver a streaming Telegram response."""
-    _ = build_system_prompt
-    _ = build_fallback_response
-    response_sent = False
-    actual_model = config.llm_model
-    ttft_ms = 0.0
-    stream_only_ttft_ms: float | None = None
-    completion_tokens: float | None = None
-    usage_details: dict[str, int] | None = None
-    stream_recovery = False
-    hard_timeout = False
-    sent_msg: Any = None
-
+) -> _StreamingContext:
+    """Stage 1: Resolve query, style, coverage, prompt, messages."""
     docs = documents or []
     effective_query = query
     if not effective_query and raw_messages:
@@ -723,9 +722,7 @@ async def _generate_streaming_response(
         sources_enabled=sources_enabled,
         grade_confidence=grade_confidence,
     )
-    prompt_name = "generate"
-    if effective_needs_coverage:
-        prompt_name = "generate_exhaustive_list"
+    prompt_name = "generate_exhaustive_list" if effective_needs_coverage else "generate"
 
     legacy_max_tokens = int(config.generate_max_tokens)
     style_enabled = bool(getattr(config, "response_style_enabled", False))
@@ -771,7 +768,7 @@ async def _generate_streaming_response(
     if sources_enabled and docs:
         system_prompt = f"{system_prompt}\n\n{citation_instruction}"
 
-    llm_messages = [{"role": "system", "content": system_prompt}]
+    llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
     for msg in select_recent_history(raw_messages or [], _MAX_HISTORY_MESSAGES)[:-1]:
         role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
         content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
@@ -786,21 +783,63 @@ async def _generate_streaming_response(
         }
     )
 
-    # Curated span metadata
-    _update_current_span(
-        lf_client,
-        input={
-            "query_preview": effective_query[:120],
-            "query_len": len(effective_query),
-            "query_hash": hashlib.sha256(effective_query.encode()).hexdigest()[:8],
-            "context_docs_count": len(docs),
-            "streaming_enabled": True,
-            "grounding_mode": grounding_mode,
-            "needs_coverage": effective_needs_coverage,
-            "coverage_reason": coverage_decision.reason
-            or ("state:needs_coverage" if effective_needs_coverage else None),
-        },
+    return _StreamingContext(
+        docs=docs,
+        effective_query=effective_query,
+        style_info=style_info,
+        coverage_decision=coverage_decision,
+        effective_needs_coverage=effective_needs_coverage,
+        sources_enabled=sources_enabled,
+        legal_answer_safe=legal_answer_safe,
+        prompt_name=prompt_name,
+        style_enabled=style_enabled,
+        shadow_mode=shadow_mode,
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
+        prompt_obj=prompt_obj,
+        effective_temperature=effective_temperature,
+        llm_messages=llm_messages,
+        context=context,
     )
+
+
+@dataclasses.dataclass
+class _StreamResult:
+    """Result of streaming LLM execution (happy path or recovery)."""
+
+    answer: str
+    actual_model: str
+    ttft_ms: float
+    completion_tokens: float | None
+    stream_only_ttft_ms: float | None
+    usage_details: dict[str, int] | None
+    sent_msg: Any
+    response_sent: bool
+    stream_recovery: bool
+    hard_timeout: bool
+
+
+async def _run_stream_with_recovery(
+    *,
+    req: GenerationRequest,
+    ctx: _StreamingContext,
+    config: Any,
+    message: Any,
+    lf_client: Any | None,
+    build_fallback_response: Callable[[list[dict[str, Any]]], str],
+    generate_streaming: Callable[..., Any],
+) -> _StreamResult:
+    """Stage 2: Execute stream, handle partial-delivery and full-failure recovery."""
+    answer = ""
+    actual_model = config.llm_model
+    ttft_ms = 0.0
+    stream_only_ttft_ms: float | None = None
+    completion_tokens: float | None = None
+    usage_details: dict[str, int] | None = None
+    stream_recovery = False
+    hard_timeout = False
+    response_sent = False
+    sent_msg: Any = None
 
     try:
         llm = config.create_llm(auto_trace=False)
@@ -811,20 +850,20 @@ async def _generate_streaming_response(
         if "lf_client" in params:
             stream_kwargs["lf_client"] = lf_client
         if "temperature" in params:
-            stream_kwargs["temperature"] = effective_temperature
+            stream_kwargs["temperature"] = ctx.effective_temperature
         if "sanitize_response" in params:
             stream_kwargs["sanitize_response"] = lambda text: _sanitize_response_text(
-                text, sources_enabled=sources_enabled
+                text, sources_enabled=ctx.sources_enabled
             )
-        if "langfuse_prompt" in params and prompt_obj is not None:
-            stream_kwargs["langfuse_prompt"] = prompt_obj
+        if "langfuse_prompt" in params and ctx.prompt_obj is not None:
+            stream_kwargs["langfuse_prompt"] = ctx.prompt_obj
 
         stream_result = await generate_streaming(
             llm,
             config,
-            llm_messages,
+            ctx.llm_messages,
             message,
-            max_tokens,
+            ctx.max_tokens,
             **stream_kwargs,
         )
 
@@ -841,7 +880,6 @@ async def _generate_streaming_response(
 
     except Exception as stream_exc:
         try:
-            # Error recovery path (identical to original)
             if hasattr(stream_exc, "sent_msg") and hasattr(stream_exc, "partial_text"):
                 _partial_len = len(getattr(stream_exc, "partial_text", ""))
                 if _is_connection_error(stream_exc.__cause__ or stream_exc):
@@ -865,11 +903,11 @@ async def _generate_streaming_response(
                 ) = await _non_streaming_llm_call(
                     llm=llm,
                     config=config,
-                    llm_messages=llm_messages,
-                    effective_temperature=effective_temperature,
-                    max_tokens=max_tokens,
-                    prompt_obj=prompt_obj,
-                    sources_enabled=sources_enabled,
+                    llm_messages=ctx.llm_messages,
+                    effective_temperature=ctx.effective_temperature,
+                    max_tokens=ctx.max_tokens,
+                    prompt_obj=ctx.prompt_obj,
+                    sources_enabled=ctx.sources_enabled,
                 )
                 stream_recovery = True
                 delivered = False
@@ -892,7 +930,7 @@ async def _generate_streaming_response(
                             format_answer_html(answer),
                             parse_mode="HTML",
                             reply_parameters=build_reply_parameters(
-                                message, getattr(message, "text", "") or effective_query
+                                message, getattr(message, "text", "") or ctx.effective_query
                             ),
                         )
                         delivered = True
@@ -922,11 +960,11 @@ async def _generate_streaming_response(
                 ) = await _non_streaming_llm_call(
                     llm=llm,
                     config=config,
-                    llm_messages=llm_messages,
-                    effective_temperature=effective_temperature,
-                    max_tokens=max_tokens,
-                    prompt_obj=prompt_obj,
-                    sources_enabled=sources_enabled,
+                    llm_messages=ctx.llm_messages,
+                    effective_temperature=ctx.effective_temperature,
+                    max_tokens=ctx.max_tokens,
+                    prompt_obj=ctx.prompt_obj,
+                    sources_enabled=ctx.sources_enabled,
                 )
                 stream_recovery = True
         except Exception as e:
@@ -942,7 +980,7 @@ async def _generate_streaming_response(
                 level="ERROR",
                 status_message=f"LLM failed: {str(e)[:200]}",
             )
-            answer = build_fallback_response(docs)
+            answer = build_fallback_response(ctx.docs)
             actual_model = "fallback"
             ttft_ms = 0.0
             completion_tokens = None
@@ -952,132 +990,274 @@ async def _generate_streaming_response(
             hard_timeout = True
             stream_recovery = False
 
-    elapsed = time.monotonic() - t0
-    PipelineMetrics.get().record("generate", elapsed * 1000)
+    return _StreamResult(
+        answer=answer,
+        actual_model=actual_model,
+        ttft_ms=ttft_ms,
+        completion_tokens=completion_tokens,
+        stream_only_ttft_ms=stream_only_ttft_ms,
+        usage_details=usage_details,
+        sent_msg=sent_msg,
+        response_sent=response_sent,
+        stream_recovery=stream_recovery,
+        hard_timeout=hard_timeout,
+    )
 
-    if actual_model != "fallback":
-        generation_payload: dict[str, Any] = {"model": actual_model}
-        if usage_details:
-            generation_payload["usage_details"] = usage_details
-        elif completion_tokens is not None:
-            generation_payload["usage_details"] = {"output": int(completion_tokens)}
-        if prompt_obj is not None:
-            generation_payload["prompt"] = prompt_obj
+
+def _emit_generation_span(
+    *,
+    ctx: _StreamingContext,
+    sr: _StreamResult,
+    elapsed_ms: float,
+    retrieved_context: list[dict[str, Any]] | None,
+    lf_client: Any | None,
+) -> None:
+    """Update Langfuse generation and span output."""
+    if sr.actual_model != "fallback":
+        generation_payload: dict[str, Any] = {"model": sr.actual_model}
+        if sr.usage_details:
+            generation_payload["usage_details"] = sr.usage_details
+        elif sr.completion_tokens is not None:
+            generation_payload["usage_details"] = {"output": int(sr.completion_tokens)}
+        if ctx.prompt_obj is not None:
+            generation_payload["prompt"] = ctx.prompt_obj
         with contextlib.suppress(Exception):
             _update_current_generation(lf_client, **generation_payload)
 
-    # Build eval context for managed evaluators
     retrieved_ctx = retrieved_context or []
     eval_context = "\n\n".join(
         f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
         for d in retrieved_ctx[:5]
         if isinstance(d, dict)
     )
-
-    span_output = {
-        "response_length": len(answer),
-        "llm_provider_model": actual_model,
-        "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
-        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
-        "llm_response_duration_ms": round(elapsed * 1000, 1),
-        "fallback_used": actual_model == "fallback",
-        "response_sent": response_sent,
-        "eval_query": effective_query[:2000],
-        "eval_answer": answer[:3000],
+    span_output: dict[str, Any] = {
+        "response_length": len(sr.answer),
+        "llm_provider_model": sr.actual_model,
+        "llm_ttft_ms": sr.ttft_ms if sr.ttft_ms > 0 else None,
+        "llm_stream_only_ttft_ms": sr.stream_only_ttft_ms,
+        "llm_response_duration_ms": round(elapsed_ms, 1),
+        "fallback_used": sr.actual_model == "fallback",
+        "response_sent": sr.response_sent,
+        "eval_query": ctx.effective_query[:2000],
+        "eval_answer": sr.answer[:3000],
         "eval_context": eval_context,
-        "needs_coverage": effective_needs_coverage,
-        "coverage_mode": "exhaustive_list" if effective_needs_coverage else "default",
-        "coverage_reason": coverage_decision.reason
-        or ("state:needs_coverage" if effective_needs_coverage else None),
-        "prompt_name": prompt_name if effective_needs_coverage or style_enabled else "generate",
-        "documents_count": len(docs),
+        "needs_coverage": ctx.effective_needs_coverage,
+        "coverage_mode": "exhaustive_list" if ctx.effective_needs_coverage else "default",
+        "coverage_reason": ctx.coverage_decision.reason
+        or ("state:needs_coverage" if ctx.effective_needs_coverage else None),
+        "prompt_name": ctx.prompt_name
+        if ctx.effective_needs_coverage or ctx.style_enabled
+        else "generate",
+        "documents_count": len(ctx.docs),
         "distinct_doc_count": len(
             {
                 str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
-                for doc in docs
+                for doc in ctx.docs
             }
         ),
     }
-    if usage_details:
+    if sr.usage_details:
         span_output["token_usage"] = {
-            "prompt_tokens": usage_details.get("input"),
-            "completion_tokens": usage_details.get("output"),
-            "total_tokens": usage_details.get("total"),
+            "prompt_tokens": sr.usage_details.get("input"),
+            "completion_tokens": sr.usage_details.get("output"),
+            "total_tokens": sr.usage_details.get("total"),
         }
     _update_current_span(lf_client, output=span_output)
 
-    llm_decode_ms = elapsed * 1000 - ttft_ms if ttft_ms > 0 else None
+
+def _compute_latency_metrics(
+    *,
+    sr: _StreamResult,
+    elapsed_ms: float,
+    config: Any,
+    lf_client: Any | None,
+) -> tuple[float | None, float | None, float | None]:
+    """Return (llm_decode_ms, llm_tps, llm_ttft_drift_ms) and warn on drift."""
+    llm_decode_ms: float | None = elapsed_ms - sr.ttft_ms if sr.ttft_ms > 0 else None
     if llm_decode_ms is not None and llm_decode_ms < 0:
         llm_decode_ms = 0.0
-    llm_tps = None
-    if completion_tokens is not None and llm_decode_ms is not None and llm_decode_ms > 0:
-        llm_tps = completion_tokens / (llm_decode_ms / 1000)
-
-    llm_ttft_drift_ms = (
-        max(0.0, ttft_ms - stream_only_ttft_ms)
-        if (stream_only_ttft_ms is not None and ttft_ms > 0)
+    llm_tps: float | None = None
+    if sr.completion_tokens is not None and llm_decode_ms is not None and llm_decode_ms > 0:
+        llm_tps = sr.completion_tokens / (llm_decode_ms / 1000)
+    llm_ttft_drift_ms: float | None = (
+        max(0.0, sr.ttft_ms - sr.stream_only_ttft_ms)
+        if (sr.stream_only_ttft_ms is not None and sr.ttft_ms > 0)
         else None
     )
     if llm_ttft_drift_ms is not None:
-        _drift_warn_threshold = getattr(config, "ttft_drift_warn_ms", None)
-        if not isinstance(_drift_warn_threshold, (int, float)):
-            _drift_warn_threshold = 500
-        if llm_ttft_drift_ms > _drift_warn_threshold:
+        threshold = getattr(config, "ttft_drift_warn_ms", None)
+        if not isinstance(threshold, (int, float)):
+            threshold = 500
+        if llm_ttft_drift_ms > threshold:
             with contextlib.suppress(Exception):
                 _update_current_span(
                     lf_client,
                     level="WARNING",
                     status_message=f"TTFT drift detected: {llm_ttft_drift_ms:.1f}ms",
                 )
+    return llm_decode_ms, llm_tps, llm_ttft_drift_ms
 
-    answer_words = len(answer.split())
-    answer_chars = len(answer)
-    ratio = answer_words / max(style_info.word_count, 1)
 
+def _build_generation_signal(
+    *,
+    ctx: _StreamingContext,
+    sr: _StreamResult,
+    t0: float,
+    retrieved_context: list[dict[str, Any]] | None,
+    latency_stages: dict[str, float] | None,
+    llm_call_count: int,
+    grounding_mode: str,
+    config: Any,
+    lf_client: Any | None,
+    extract_sent_message_ref: Callable[[Any], dict[str, int] | None],
+) -> dict[str, Any]:
+    """Stage 3: Compute metrics, update spans, build and return result dict."""
+    elapsed = time.monotonic() - t0
+    PipelineMetrics.get().record("generate", elapsed * 1000)
+    _emit_generation_span(
+        ctx=ctx,
+        sr=sr,
+        elapsed_ms=elapsed * 1000,
+        retrieved_context=retrieved_context,
+        lf_client=lf_client,
+    )
+    llm_decode_ms, llm_tps, llm_ttft_drift_ms = _compute_latency_metrics(
+        sr=sr, elapsed_ms=elapsed * 1000, config=config, lf_client=lf_client
+    )
+    answer_words = len(sr.answer.split())
+    answer_chars = len(sr.answer)
+    ratio = answer_words / max(ctx.style_info.word_count, 1)
     sent_message_ref = (
-        extract_sent_message_ref(sent_msg) if response_sent and sent_msg is not None else None
+        extract_sent_message_ref(sr.sent_msg)
+        if sr.response_sent and sr.sent_msg is not None
+        else None
     )
     current_latency = latency_stages or {}
     current_llm_calls = max(0, int(llm_call_count))
-
     return _ensure_generation_signal_defaults(
         {
-            "response": answer,
-            "response_sent": response_sent,
+            "response": sr.answer,
+            "response_sent": sr.response_sent,
             "sent_message": sent_message_ref,
-            "llm_provider_model": actual_model,
-            "llm_ttft_ms": ttft_ms,
+            "llm_provider_model": sr.actual_model,
+            "llm_ttft_ms": sr.ttft_ms,
             "llm_response_duration_ms": elapsed * 1000,
-            "llm_stream_only_ttft_ms": stream_only_ttft_ms,
+            "llm_stream_only_ttft_ms": sr.stream_only_ttft_ms,
             "llm_ttft_drift_ms": llm_ttft_drift_ms,
             "llm_call_count": current_llm_calls + 1,
             "latency_stages": {**current_latency, "generate": elapsed},
             "llm_decode_ms": llm_decode_ms,
             "llm_tps": llm_tps,
             "llm_queue_ms": None,
-            "llm_timeout": hard_timeout,
-            "llm_stream_recovery": stream_recovery,
+            "llm_timeout": sr.hard_timeout,
+            "llm_stream_recovery": sr.stream_recovery,
             "streaming_enabled": True,
-            "response_style": style_info.style,
-            "response_difficulty": style_info.difficulty,
-            "response_style_reasoning": style_info.reasoning,
+            "response_style": ctx.style_info.style,
+            "response_difficulty": ctx.style_info.difficulty,
+            "response_style_reasoning": ctx.style_info.reasoning,
             "answer_words": answer_words,
             "answer_chars": answer_chars,
             "answer_to_question_ratio": ratio,
             "response_policy_mode": "coverage"
-            if effective_needs_coverage
+            if ctx.effective_needs_coverage
             else (
                 "enforced"
-                if (style_enabled and not shadow_mode)
-                else ("shadow" if shadow_mode else "disabled")
+                if (ctx.style_enabled and not ctx.shadow_mode)
+                else ("shadow" if ctx.shadow_mode else "disabled")
             ),
             "grounding_mode": grounding_mode,
             "safe_fallback_used": False,
             "grounded": True,
-            "legal_answer_safe": legal_answer_safe,
-            "semantic_cache_safe_reuse": legal_answer_safe,
-            "needs_coverage": effective_needs_coverage,
+            "legal_answer_safe": ctx.legal_answer_safe,
+            "semantic_cache_safe_reuse": ctx.legal_answer_safe,
+            "needs_coverage": ctx.effective_needs_coverage,
         }
+    )
+
+
+async def _generate_streaming_response(
+    *,
+    req: GenerationRequest,
+    t0: float,
+    query: str,
+    needs_coverage: bool,
+    documents: list[dict[str, Any]],
+    retrieved_context: list[dict[str, Any]] | None,
+    raw_messages: list[Any] | None,
+    latency_stages: dict[str, float] | None,
+    llm_call_count: int,
+    grounding_mode: str,
+    grade_confidence: float | None,
+    message: Any,
+    config: Any,
+    lf_client: Any | None,
+    max_context_docs: int,
+    format_context: Callable[..., str],
+    select_recent_history: Callable[[list[Any], int], list[Any]],
+    build_system_prompt: Callable[[str], str],
+    ensure_history_instruction: Callable[[str], str],
+    build_fallback_response: Callable[[list[dict[str, Any]]], str],
+    generate_streaming: Callable[..., Any],
+    style_detector: ResponseStyleDetector | None,
+    style_prompt_builder: Callable[..., str],
+    style_token_limit: Callable[[Any, str], int],
+    extract_queue_ms: Callable[[Any | None], float | None],
+    extract_sent_message_ref: Callable[[Any], dict[str, int] | None],
+    citation_instruction: str,
+) -> dict[str, Any]:
+    """Generate and deliver a streaming Telegram response."""
+    _ = build_system_prompt
+    ctx = _prepare_streaming_context(
+        query=query,
+        needs_coverage=needs_coverage,
+        documents=documents,
+        raw_messages=raw_messages,
+        grounding_mode=grounding_mode,
+        grade_confidence=grade_confidence,
+        config=config,
+        max_context_docs=max_context_docs,
+        format_context=format_context,
+        select_recent_history=select_recent_history,
+        ensure_history_instruction=ensure_history_instruction,
+        style_detector=style_detector,
+        style_prompt_builder=style_prompt_builder,
+        style_token_limit=style_token_limit,
+        citation_instruction=citation_instruction,
+    )
+    _update_current_span(
+        lf_client,
+        input={
+            "query_preview": ctx.effective_query[:120],
+            "query_len": len(ctx.effective_query),
+            "query_hash": hashlib.sha256(ctx.effective_query.encode()).hexdigest()[:8],
+            "context_docs_count": len(ctx.docs),
+            "streaming_enabled": True,
+            "grounding_mode": grounding_mode,
+            "needs_coverage": ctx.effective_needs_coverage,
+            "coverage_reason": ctx.coverage_decision.reason
+            or ("state:needs_coverage" if ctx.effective_needs_coverage else None),
+        },
+    )
+    sr = await _run_stream_with_recovery(
+        req=req,
+        ctx=ctx,
+        config=config,
+        message=message,
+        lf_client=lf_client,
+        build_fallback_response=build_fallback_response,
+        generate_streaming=generate_streaming,
+    )
+    return _build_generation_signal(
+        ctx=ctx,
+        sr=sr,
+        t0=t0,
+        retrieved_context=retrieved_context,
+        latency_stages=latency_stages,
+        llm_call_count=llm_call_count,
+        grounding_mode=grounding_mode,
+        config=config,
+        lf_client=lf_client,
+        extract_sent_message_ref=extract_sent_message_ref,
     )
 
 
