@@ -3,7 +3,7 @@
 import pytest
 
 from src.ingestion.apartments.flow import format_apartment_text
-from telegram_bot.services.apartment_models import ApartmentRecord
+from src.models.apartment import ApartmentRecord
 
 
 pytestmark = pytest.mark.requires_extras

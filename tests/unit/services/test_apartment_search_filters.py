@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from telegram_bot.services.apartment_models import (
+from src.models.apartment import (
     ApartmentSearchFilters,
     ExtractionMeta,
     HardFilters,

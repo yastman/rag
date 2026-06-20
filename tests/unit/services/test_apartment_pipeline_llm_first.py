@@ -13,13 +13,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from telegram_bot.services.apartment_extraction_pipeline import ApartmentExtractionPipeline
-from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
-from telegram_bot.services.apartment_models import (
+from src.models.apartment import (
     ApartmentSearchFilters,
     ExtractionMeta,
     HardFilters,
 )
+from telegram_bot.services.apartment_extraction_pipeline import ApartmentExtractionPipeline
+from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
 
 
 @pytest.fixture

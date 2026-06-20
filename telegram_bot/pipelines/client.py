@@ -14,16 +14,16 @@ from src.observability_payloads import build_safe_input_payload
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.rag import rag_pipeline
-from telegram_bot.observability import get_client, observe, propagate_attributes
-from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
-from telegram_bot.scoring import score, write_langfuse_scores
-from telegram_bot.services.cache_policy import (
+from src.runtime.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
     is_contextual_query,
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
+from telegram_bot.observability import get_client, observe, propagate_attributes
+from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
+from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.history_service import HistoryService
 from telegram_bot.services.telegram_formatting import format_sources_html, send_html_messages

@@ -11,14 +11,14 @@ import pytest
 
 @pytest.fixture
 def client():
-    from telegram_bot.services.bge_m3_client import BGEM3Client
+    from src.services.bge_m3_client import BGEM3Client
 
     return BGEM3Client(base_url="http://localhost:8000")
 
 
 @pytest.fixture
 def sync_client():
-    from telegram_bot.services.bge_m3_client import BGEM3SyncClient
+    from src.services.bge_m3_client import BGEM3SyncClient
 
     return BGEM3SyncClient(base_url="http://localhost:8000")
 
@@ -286,7 +286,7 @@ class TestBGEM3Client:
 
     async def test_encode_dense_batching(self, client):
         """batch_size is passed as server hint in a single request."""
-        from telegram_bot.services.bge_m3_client import BGEM3Client
+        from src.services.bge_m3_client import BGEM3Client
 
         small_client = BGEM3Client(base_url="http://localhost:8000", batch_size=2)
 

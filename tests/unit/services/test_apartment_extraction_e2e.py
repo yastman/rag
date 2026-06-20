@@ -57,7 +57,7 @@ class TestE2ERegexOnlyPipeline:
     async def test_returns_apartment_search_filters_type(
         self, pipeline: ApartmentExtractionPipeline
     ) -> None:
-        from telegram_bot.services.apartment_models import ApartmentSearchFilters
+        from src.models.apartment import ApartmentSearchFilters
 
         result = await pipeline.extract("двушка")
         assert isinstance(result, ApartmentSearchFilters)

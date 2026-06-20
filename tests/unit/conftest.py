@@ -307,7 +307,7 @@ def isolate_otel_langfuse(monkeypatch):
     tests running in the same xdist worker process.
     """
     # Reset prompt_manager singleton so it uses fresh env vars each test
-    from telegram_bot.integrations.prompt_manager import _reset_client
+    from src.runtime.integrations.prompt_manager import _reset_client
 
     _reset_client()
 

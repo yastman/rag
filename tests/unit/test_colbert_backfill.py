@@ -134,7 +134,7 @@ class _FakeBgeClient:
 
 async def test_backfill_enables_server_side_colbert_search(tmp_path):
     from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
-    from telegram_bot.services.qdrant import QdrantService
+    from src.runtime.services.qdrant import QdrantService
 
     storage = _FakeQdrantStorage()
     storage.points[1] = _StoredPoint(
@@ -152,7 +152,7 @@ async def test_backfill_enables_server_side_colbert_search(tmp_path):
         retry_backoff_seconds=0.0,
     )
 
-    with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+    with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
         service = QdrantService(
             url="http://localhost:6333",
             collection_name=storage.collection_name,

@@ -6,13 +6,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from src.models.apartment import ApartmentQueryParseResult, compute_confidence
 from telegram_bot.constants.apartment_constants import (
     APARTMENT_CITY_ALIASES,
     APARTMENT_CITY_ALIASES_SORTED,
     APARTMENT_CITY_NAMES,
 )
 from telegram_bot.observability import observe
-from telegram_bot.services.apartment_models import ApartmentQueryParseResult, compute_confidence
 from telegram_bot.services.base_filter_extractor import BaseFilterExtractor
 
 

@@ -1,6 +1,6 @@
 import pytest
 
-from telegram_bot.services.handoff_state import HandoffData, HandoffState
+from src.services.handoff_state import HandoffData, HandoffState
 
 
 def test_handoff_data_creation():

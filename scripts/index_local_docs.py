@@ -117,7 +117,7 @@ def load_document_chunks(md_file: Path) -> list[dict]:
 def _create_bge_client(bge_url: str):
     """Create BGEM3SyncClient from project SDK."""
     try:
-        from telegram_bot.services.bge_m3_client import BGEM3SyncClient
+        from src.services.bge_m3_client import BGEM3SyncClient
 
         return BGEM3SyncClient(base_url=bge_url)
     except ImportError:

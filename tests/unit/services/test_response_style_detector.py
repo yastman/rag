@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from telegram_bot.services.response_style_detector import ResponseStyleDetector, StyleInfo
+from src.runtime.services.response_style_detector import ResponseStyleDetector, StyleInfo
 
 
 class TestExplicitTriggers:

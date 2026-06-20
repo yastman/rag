@@ -21,7 +21,7 @@ def _load_cases() -> list[dict[str, str]]:
 
 def main() -> int:
     from src.retrieval.topic_classifier import get_query_topic_hint
-    from telegram_bot.services.grounding_policy import (
+    from src.runtime.grounding.policy import (
         get_grounding_mode,
         should_safe_fallback,
     )

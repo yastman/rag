@@ -42,6 +42,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
+from src.services.content_loader import get_phone_config
 from telegram_bot.keyboards.phone_keyboard import (
     build_phone_keyboard,
     is_phone_attempt,
@@ -49,7 +50,6 @@ from telegram_bot.keyboards.phone_keyboard import (
     validate_phone,
 )
 from telegram_bot.observability import observe
-from telegram_bot.services.content_loader import get_phone_config
 
 
 logger = logging.getLogger(__name__)

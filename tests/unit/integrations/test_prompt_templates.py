@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from telegram_bot.integrations.prompt_templates import (
+from src.runtime.integrations.prompt_templates import (
     CONTRACT_PROMPTS,
     build_system_prompt,
     build_system_prompt_with_manager,

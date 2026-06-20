@@ -1,6 +1,6 @@
 """Tests for get_phone_config and get_entry_point_config in content_loader."""
 
-from telegram_bot.services.content_loader import get_entry_point_config, get_phone_config
+from src.services.content_loader import get_entry_point_config, get_phone_config
 
 
 def test_get_phone_config_returns_service() -> None:

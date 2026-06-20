@@ -79,7 +79,7 @@ async def test_agent_rewrite_no_separate_colbert_call(
 ):
     """#951: When agent reformulates query (cache_key != query), should NOT call
     aembed_colbert_query separately — let _hybrid_retrieve handle it in one call."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     # Pre-computed embeddings for original query (cache_key)
     pre_embedding = [0.5] * 1024
@@ -113,7 +113,7 @@ async def test_same_query_reuses_precomputed(
     _cache_951, _embeddings_951, _sparse_951, _qdrant_951, _reranker_951
 ):
     """When cache_key == query, pre-computed embeddings are reused."""
-    from telegram_bot.agents.rag_pipeline import rag_pipeline
+    from src.runtime.pipeline.rag import rag_pipeline
 
     pre_embedding = [0.5] * 1024
     pre_sparse = {"indices": [2], "values": [0.8]}

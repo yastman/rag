@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from telegram_bot.services.apartment_models import (
+from src.models.apartment import (
     ApartmentQueryParseResult,
     ApartmentRecord,
     HardFilters,

@@ -6,15 +6,15 @@ import hashlib
 import logging
 from typing import TYPE_CHECKING
 
-from telegram_bot.observability import observe
-from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
-from telegram_bot.services.apartment_llm_extractor import merge_extraction_results
-from telegram_bot.services.apartment_models import (
+from src.models.apartment import (
     ApartmentSearchFilters,
     ExtractionMeta,
     HardFilters,
     SoftPreferences,
 )
+from telegram_bot.observability import observe
+from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
+from telegram_bot.services.apartment_llm_extractor import merge_extraction_results
 
 
 if TYPE_CHECKING:

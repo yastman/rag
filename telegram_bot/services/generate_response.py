@@ -19,19 +19,19 @@ from src.runtime.generation import (
 from src.runtime.grounding.policy import (
     is_strict_grounding_safe,
 )
-from telegram_bot.integrations.prompt_manager import (
+from src.runtime.integrations.prompt_manager import (
     get_prompt,
     get_prompt_with_config,
     get_prompt_with_object,
 )
-from telegram_bot.integrations.prompt_templates import (
+from src.runtime.integrations.prompt_templates import (
     build_system_prompt_with_manager,
     get_token_limit,
 )
+from src.runtime.services.coverage_mode import detect_coverage_mode
+from src.runtime.services.metrics import PipelineMetrics
+from src.runtime.services.response_style_detector import ResponseStyleDetector
 from telegram_bot.observability import get_client, observe
-from telegram_bot.services.coverage_mode import detect_coverage_mode
-from telegram_bot.services.metrics import PipelineMetrics
-from telegram_bot.services.response_style_detector import ResponseStyleDetector
 from telegram_bot.services.telegram_formatting import (
     build_reply_parameters,
     format_answer_html,

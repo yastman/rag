@@ -11,7 +11,7 @@ class TestColbertRerankerService:
 
     @pytest.fixture
     def service(self):
-        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+        from src.runtime.services.colbert_reranker import ColbertRerankerService
 
         return ColbertRerankerService(base_url="http://localhost:8000")
 

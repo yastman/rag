@@ -1,4 +1,4 @@
-from telegram_bot.services.cache_policy import build_cacheability_decision
+from src.runtime.services.cache_policy import build_cacheability_decision
 
 
 def _cacheable_result() -> dict:

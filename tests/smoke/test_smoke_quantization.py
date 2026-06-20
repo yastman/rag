@@ -35,7 +35,7 @@ async def voyage_service():
 
 @pytest.fixture
 async def qdrant_service():
-    from telegram_bot.services.qdrant import QdrantService
+    from src.runtime.services.qdrant import QdrantService
 
     url = os.getenv("QDRANT_URL", "http://localhost:6333")
     api_key = os.getenv("QDRANT_API_KEY", "")

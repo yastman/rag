@@ -1,0 +1,114 @@
+"""rewrite_node — LLM query reformulation for improved retrieval.
+
+Rewrites the user query to improve search relevance.
+Increments rewrite_count and resets query_embedding to force re-embedding.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+import time
+from typing import Any
+
+from src.runtime.graph.state import Message
+from src.runtime.services.rag_core import rewrite_query_via_llm
+from telegram_bot.observability import get_client, observe
+
+
+logger = logging.getLogger(__name__)
+
+
+@observe(name="node-rewrite", capture_input=False, capture_output=False)
+async def rewrite_node(
+    state: dict[str, Any],
+    runtime: Any,
+) -> dict[str, Any]:
+    """LangGraph node: rewrite the user query for better retrieval.
+
+    Calls LLM to reformulate the query. Increments rewrite_count and
+    resets query_embedding to None so cache_check/retrieve will re-embed.
+
+    Args:
+        state: RAGState dict
+        runtime: LangGraph Runtime with GraphContext (llm)
+
+    Returns:
+        State update with rewritten message, incremented rewrite_count,
+        reset query_embedding, and latency.
+    """
+    import contextlib
+
+    llm: Any | None = runtime.context.get("llm")
+    t0 = time.perf_counter()
+
+    messages = state.get("messages", [])
+    original_query = (
+        messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
+    )
+    rewrite_count = state.get("rewrite_count", 0)
+    rewrite_failed = False
+
+    try:
+        from src.runtime.graph.config import GraphConfig
+
+        config = GraphConfig.from_env()
+        if llm is None:
+            llm = config.create_llm()
+        rewritten, effective, rewrite_actual_model = await rewrite_query_via_llm(
+            original_query, llm=llm
+        )
+        with contextlib.suppress(Exception):
+            get_client().update_current_generation(model=rewrite_actual_model)
+        # Safe span input with query metadata
+        with contextlib.suppress(Exception):
+            get_client().update_current_span(
+                input={
+                    "query_preview": str(original_query)[:120],
+                    "query_hash": hashlib.sha256(str(original_query).encode()).hexdigest()[:8],
+                    "query_len": len(str(original_query)),
+                },
+            )
+    except Exception as e:
+        rewrite_failed = True
+        logger.exception("rewrite_node: LLM rewrite failed, keeping original query")
+        get_client().update_current_span(
+            level="ERROR",
+            status_message=f"Rewrite LLM failed: {str(e)[:200]}",
+        )
+        rewritten = original_query
+        effective = False
+        rewrite_actual_model = "fallback"
+
+    elapsed = time.perf_counter() - t0
+    logger.info(
+        "rewrite: attempt %d, '%.50s' → '%.50s' (%.3fs)",
+        rewrite_count + 1,
+        original_query,
+        rewritten,
+        elapsed,
+    )
+
+    if not rewrite_failed:
+        # Safe span output with rewritten query metadata.
+        with contextlib.suppress(Exception):
+            client = get_client()
+            client.update_current_span(
+                output={
+                    "rewritten_preview": str(rewritten)[:240],
+                    "rewrite_effective": effective,
+                    "rewrite_provider_model": rewrite_actual_model,
+                    "rewrite_latency_sec": round(elapsed, 3),
+                },
+            )
+
+    return {
+        "messages": [Message(content=rewritten)],
+        "rewrite_count": rewrite_count + 1,
+        "rewrite_effective": effective,
+        "query_embedding": None,
+        "sparse_embedding": None,
+        "rewrite_provider_model": rewrite_actual_model,
+        "llm_call_count": state.get("llm_call_count", 0) + 1,
+        "latency_stages": {**state.get("latency_stages", {}), "rewrite": elapsed},
+    }

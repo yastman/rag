@@ -36,7 +36,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PHASE1_MODULES: tuple[tuple[str, str, int], ...] = (
     ("telegram_bot/scoring.py", "src/scoring.py", 50),
     ("telegram_bot/phone_utils.py", "src/phone_utils.py", 30),
-    ("telegram_bot/services/content_loader.py", "src/services/content_loader.py", 50),
     # observability was converted to a package in ARCH-13; pin the __init__.py
     ("telegram_bot/observability.py", "src/observability/__init__.py", 100),
 )

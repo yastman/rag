@@ -1,6 +1,6 @@
 """Tests for get_promotions in content_loader (#628)."""
 
-from telegram_bot.services.content_loader import get_promotions
+from src.services.content_loader import get_promotions
 
 
 def test_get_promotions_returns_list() -> None:

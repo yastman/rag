@@ -40,9 +40,9 @@ class TestHybridSearchRRFQuantization:
     @pytest.mark.asyncio
     async def test_search_with_quantization_ignore_true(self):
         """Test quantization_ignore=True skips quantization."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_col = MagicMock()
@@ -68,9 +68,9 @@ class TestHybridSearchRRFQuantization:
     @pytest.mark.asyncio
     async def test_search_with_quantization_ignore_false(self):
         """Test quantization_ignore=False forces quantization."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_col = MagicMock()
@@ -100,9 +100,9 @@ class TestHybridSearchRRFQuantization:
     @pytest.mark.asyncio
     async def test_search_without_quantization_override(self):
         """Test quantization_ignore=None means no search_params quantization."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_col = MagicMock()
@@ -136,9 +136,9 @@ class TestQdrantServiceUnit:
 
     def test_init_creates_async_client(self):
         """HTTP URL should strip api_key and create AsyncQdrantClient with gRPC."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_client_class:
             service = QdrantService(
                 url="http://localhost:6333",
                 api_key="test-key",
@@ -156,9 +156,9 @@ class TestQdrantServiceUnit:
     @pytest.mark.asyncio
     async def test_hybrid_search_rrf_builds_prefetch(self):
         """Test hybrid_search_rrf builds correct prefetch queries."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             _mc = MagicMock()
@@ -191,9 +191,9 @@ class TestQdrantServiceUnit:
     @pytest.mark.asyncio
     async def test_hybrid_search_rrf_without_sparse(self):
         """Test hybrid_search_rrf works with only dense vector."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             _mc = MagicMock()
@@ -219,9 +219,9 @@ class TestQdrantServiceUnit:
     @pytest.mark.asyncio
     async def test_search_returns_formatted_results(self):
         """Test search returns properly formatted results."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_client_class:
             mock_client = AsyncMock()
 
             # Mock point
@@ -261,9 +261,9 @@ class TestFilterBuilding:
 
     def test_build_filter_with_exact_match(self):
         """Test filter building with exact match values."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -276,9 +276,9 @@ class TestFilterBuilding:
 
     def test_build_filter_with_range(self):
         """Test filter building with range values."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -291,9 +291,9 @@ class TestFilterBuilding:
 
     def test_build_filter_returns_none_for_empty(self):
         """Test filter building returns None for empty filters."""
-        from telegram_bot.services.qdrant import QdrantService
+        from src.runtime.services.qdrant import QdrantService
 
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+        with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",

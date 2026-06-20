@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.services.small_to_big import (
+from src.runtime.services.small_to_big import (
     ExpandedChunk,
     SmallToBigMode,
     SmallToBigService,
@@ -378,7 +378,7 @@ class TestRagPipelineSmallToBig:
     async def test_expand_small_to_big_no_inplace_mutation(self):
         """Test that _expand_small_to_big does not mutate the input dictionaries in-place."""
         from src.runtime.pipeline.rag import _expand_small_to_big
-        from telegram_bot.services.small_to_big import ExpandedChunk
+        from src.runtime.services.small_to_big import ExpandedChunk
 
         # Setup mocks
         mock_qdrant = MagicMock()
@@ -420,7 +420,7 @@ class TestRagPipelineSmallToBig:
         ]
 
         with patch(
-            "telegram_bot.services.small_to_big.SmallToBigService.expand_context",
+            "src.runtime.services.small_to_big.SmallToBigService.expand_context",
             new_callable=AsyncMock,
         ) as mock_expand:
             mock_expand.return_value = mock_expanded

@@ -6,8 +6,8 @@ import logging
 from typing import Any, cast
 
 from src.core import CoreDependencies
+from src.runtime.integrations.prompt_manager import get_prompt
 from telegram_bot.assistant_core_adapter import build_user_context, run_core_text_request
-from telegram_bot.integrations.prompt_manager import get_prompt
 
 
 logger = logging.getLogger(__name__)

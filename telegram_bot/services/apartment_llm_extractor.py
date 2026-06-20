@@ -6,12 +6,12 @@ import contextlib
 import logging
 from typing import Any, cast
 
-from telegram_bot.integrations.prompt_manager import get_prompt, get_prompt_with_object
-from telegram_bot.observability import get_client, observe
-from telegram_bot.services.apartment_models import (
+from src.models.apartment import (
     ApartmentSearchFilters,
     HardFilters,
 )
+from src.runtime.integrations.prompt_manager import get_prompt, get_prompt_with_object
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)

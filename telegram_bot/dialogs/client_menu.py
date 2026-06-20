@@ -11,7 +11,7 @@ from aiogram_dialog import Dialog, DialogManager, LaunchMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Group, Start
 from aiogram_dialog.widgets.text import Format
 
-from telegram_bot.services.content_loader import load_services_config
+from src.services.content_loader import load_services_config
 
 from .states import ClientMenuSG, FunnelSG, ViewingSG
 
