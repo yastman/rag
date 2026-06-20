@@ -248,6 +248,16 @@ vuln-audit: ## Audit installed packages in .venv for known CVEs with pip-audit
 	uv run --frozen pip-audit --path .venv
 	@echo "$(GREEN)✓ pip-audit complete$(NC)"
 
+audit-deps-refresh: ## Refresh OSV advisory cache by running pip-audit against the project (populates HTTP cache)
+	@echo "$(BLUE)Refreshing OSV advisory cache via pip-audit...$(NC)"
+	uvx pip-audit -s osv --progress-spinner off . >/dev/null 2>&1 || true
+	@echo "$(GREEN)✓ OSV cache refreshed$(NC)"
+
+cve-gate: ## Severity-filtered CVE gate (critical/high only, allow-list supported); fails on empty scan
+	@echo "$(BLUE)Running CVE gate (critical/high)...$(NC)"
+	uv run --frozen python scripts/ci/cve_gate.py
+	@echo "$(GREEN)✓ CVE gate passed$(NC)"
+
 arch-lint: ## Enforce module boundary contracts with import-linter
 	@echo "$(BLUE)Running import-linter architecture checks...$(NC)"
 	uv run --frozen lint-imports
