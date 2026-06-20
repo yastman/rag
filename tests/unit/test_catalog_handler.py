@@ -39,7 +39,11 @@ def test_bot_no_longer_registers_catalog_reply_keyboard_path() -> None:
 
 
 def test_results_callback_route_is_compat_only_not_primary_catalog_owner() -> None:
-    source = Path("telegram_bot/bot.py").read_text()
+    # Pattern may live in bot.py or in a _bot_*.py split module (#2816)
+    bot_pkg = Path("telegram_bot")
+    source = "\n".join(p.read_text() for p in bot_pkg.glob("bot.py")) + "\n".join(
+        p.read_text() for p in bot_pkg.glob("_bot_*.py")
+    )
     assert "handle_results_callback" in source
     assert "CatalogSG.results" in source
 
