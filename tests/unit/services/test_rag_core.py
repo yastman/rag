@@ -501,7 +501,7 @@ class TestRagCoreObserveContract:
         import inspect
         import textwrap
 
-        from telegram_bot.services import rag_core as rag_core_mod
+        from src.runtime.services import rag_core as rag_core_mod
 
         src = textwrap.dedent(inspect.getsource(getattr(rag_core_mod, func_name)))
         # The decorator line MUST appear in the source above the def line.
@@ -526,8 +526,8 @@ class TestRagCoreObserveContract:
         """
         from unittest.mock import patch
 
+        from src.runtime.services import rag_core as rag_core_mod
         from src.runtime.services import rag_core as src_rag_core
-        from telegram_bot.services import rag_core as rag_core_mod
 
         with patch.object(src_rag_core, "_update_current_span") as mock_update:
             rag_core_mod.build_retrieved_context(
@@ -551,8 +551,8 @@ class TestRagCoreObserveContract:
         """``check_semantic_cache`` must NOT include the raw query in span metadata."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
+        from src.runtime.services import rag_core as rag_core_mod
         from src.runtime.services import rag_core as src_rag_core
-        from telegram_bot.services import rag_core as rag_core_mod
 
         cache = MagicMock()
         cache.check_semantic = AsyncMock(return_value=None)
