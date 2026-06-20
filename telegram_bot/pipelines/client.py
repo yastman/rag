@@ -181,6 +181,413 @@ async def _send_markdown_chunks(
 
 
 # ---------------------------------------------------------------------------
+# Pipeline stage helpers
+# ---------------------------------------------------------------------------
+
+
+def _pipeline_setup(
+    *,
+    user_text: str,
+    query_type: str,
+    rag_result_store: dict[str, Any] | None,
+    config: Any,
+) -> dict[str, Any]:
+    """Stage a): Prepare RAG input state from pre-agent store and config.
+
+    Returns a context dict passed to subsequent stages.
+    """
+    _store = rag_result_store or {}
+    semantic_cache_already_checked = bool(_store.get("semantic_cache_already_checked"))
+    contract_topic_hint = _store.get("state_contract", {}).get("topic_hint")
+    if not isinstance(contract_topic_hint, str):
+        topic_hint_label = get_query_topic_hint(user_text)
+        contract_topic_hint = topic_hint_label.value if topic_hint_label is not None else None
+    grounding_mode = get_grounding_mode(query_type=query_type, topic_hint=contract_topic_hint)
+    state_contract = coerce_pre_agent_state_contract(
+        _store,
+        query_type=query_type,
+        topic_hint=contract_topic_hint,
+        grounding_mode=grounding_mode,
+    )
+    if state_contract is not None:
+        state_contract["grounding_mode"] = grounding_mode
+        state_contract["topic_hint"] = contract_topic_hint
+        _store["state_contract"] = state_contract
+
+    pre_computed = (
+        state_contract.get("dense_vector")
+        if state_contract is not None
+        else _store.get("cache_key_embedding")
+    )
+    pre_computed_sparse = (
+        state_contract.get("sparse_vector")
+        if state_contract is not None
+        else _store.get("cache_key_sparse")
+    )
+    pre_computed_colbert = (
+        state_contract.get("colbert_query")
+        if state_contract is not None
+        else _store.get("cache_key_colbert")
+    )
+    pre_agent_ms = float(_store.get("pre_agent_ms", 0.0) or 0.0)
+
+    result: dict[str, Any] = {
+        "query_type": query_type,
+        "cache_hit": False,
+        "llm_call_count": 0,
+        "messages": [{"role": "user", "content": user_text}],
+        "topic_hint": contract_topic_hint,
+        "grounding_mode": grounding_mode,
+    }
+    pre_agent_embed_ms = _store.get("pre_agent_embed_ms")
+    pre_agent_cache_check_ms = _store.get("pre_agent_cache_check_ms")
+    bge_model_processing_ms = _store.get("bge_model_processing_ms")
+    if pre_agent_ms > 0:
+        result["pre_agent_ms"] = pre_agent_ms
+    if isinstance(pre_agent_embed_ms, Real):
+        result["pre_agent_embed_ms"] = float(pre_agent_embed_ms)
+    if isinstance(pre_agent_cache_check_ms, Real):
+        result["pre_agent_cache_check_ms"] = float(pre_agent_cache_check_ms)
+    if isinstance(bge_model_processing_ms, Real) and not isinstance(bge_model_processing_ms, bool):
+        result["bge_model_processing_ms"] = float(bge_model_processing_ms)
+
+    return {
+        "result": result,
+        "_store": _store,
+        "state_contract": state_contract,
+        "pre_agent_ms": pre_agent_ms,
+        "pre_computed": pre_computed,
+        "pre_computed_sparse": pre_computed_sparse,
+        "pre_computed_colbert": pre_computed_colbert,
+        "grounding_mode": grounding_mode,
+        "contract_topic_hint": contract_topic_hint,
+        "semantic_cache_already_checked": semantic_cache_already_checked,
+    }
+
+
+async def _pipeline_retrieve(
+    *,
+    user_text: str,
+    user_id: int,
+    session_id: str,
+    query_type: str,
+    cache: Any,
+    embeddings: Any,
+    sparse_embeddings: Any,
+    qdrant: Any,
+    reranker: Any | None,
+    llm: Any | None,
+    role: str,
+    ctx: dict[str, Any],
+) -> tuple[dict[str, Any], str]:
+    """Stage b): Run rag_pipeline and merge results.
+
+    Returns (result, response_text).
+    """
+    result: dict[str, Any] = ctx["result"]
+    pipeline_result = await rag_pipeline(
+        user_text,
+        user_id=user_id,
+        session_id=session_id,
+        query_type=query_type,
+        original_query=user_text,
+        cache=cache,
+        embeddings=embeddings,
+        sparse_embeddings=sparse_embeddings,
+        qdrant=qdrant,
+        reranker=reranker,
+        llm=llm,
+        agent_role=role,
+        state_contract=cast(dict[str, Any] | None, ctx["state_contract"]),
+        pre_computed_embedding=ctx["pre_computed"],
+        pre_computed_sparse=ctx["pre_computed_sparse"],
+        pre_computed_colbert=ctx["pre_computed_colbert"],
+        semantic_cache_already_checked=ctx["semantic_cache_already_checked"],
+    )
+    result.update(pipeline_result)
+    return result, str(pipeline_result.get("response", "") or "")
+
+
+async def _pipeline_generate(
+    *,
+    user_text: str,
+    result: dict[str, Any],
+    response_text: str,
+    grounding_mode: str,
+    config: Any,
+    message: Any,
+) -> tuple[dict[str, Any], str]:
+    """Stage c): Generate answer via LLM if RAG returned no cached response.
+
+    Returns (result, response_text).
+    """
+    if not response_text:
+        generated = await generate_response(
+            query=user_text,
+            documents=result.get("documents", []),
+            retrieved_context=result.get("retrieved_context", []),
+            raw_messages=[{"role": "user", "content": user_text}],
+            latency_stages=result.get("latency_stages", {}),
+            llm_call_count=int(result.get("llm_call_count", 0) or 0),
+            grounding_mode=grounding_mode,
+            grade_confidence=(
+                float(result["grade_confidence"])
+                if isinstance(result.get("grade_confidence"), Real)
+                else None
+            ),
+            config=config,
+            message=message,
+        )
+        result.update(generated)
+        response_text = str(generated.get("response", "") or "")
+    result["response"] = response_text
+    return result, response_text
+
+
+async def _pipeline_respond(
+    *,
+    message: Any,
+    result: dict[str, Any],
+    response_text: str,
+    user_text: str,
+    config: Any,
+    trace_id: str,
+) -> None:
+    """Stage d): Send response and optional sources to Telegram."""
+    reply_markup = None
+    if trace_id:
+        from telegram_bot.feedback import build_feedback_keyboard
+
+        reply_markup = build_feedback_keyboard(trace_id)
+
+    sources_html = ""
+    documents_list: list[Any] = result.get("documents", [])
+    sources_required = bool(getattr(config, "show_sources", False))
+    if sources_required and documents_list:
+        sources_html = format_sources_html(documents_list)
+        result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
+
+    response_already_sent = result.get("response_sent", False)
+    if response_already_sent:
+        if sources_html:
+            await send_html_messages(
+                message, "", sources_html=sources_html, reply_markup=reply_markup
+            )
+        elif reply_markup:
+            ref = result.get("sent_message")
+            if ref and isinstance(ref, dict):
+                try:
+                    await message.bot.edit_message_reply_markup(
+                        chat_id=ref["chat_id"],
+                        message_id=ref["message_id"],
+                        reply_markup=reply_markup,
+                    )
+                except Exception:
+                    logger.debug(
+                        "Failed to attach feedback keyboard to streamed message",
+                        exc_info=True,
+                    )
+    else:
+        await send_html_messages(
+            message,
+            response_text,
+            sources_html=sources_html,
+            reply_markup=reply_markup,
+            reply_to_user_text=user_text,
+        )
+
+
+async def _pipeline_postprocess(
+    *,
+    user_text: str,
+    user_id: int,
+    session_id: str,
+    query_type: str,
+    role: str,
+    result: dict[str, Any],
+    response_text: str,
+    _store: dict[str, Any],
+    state_contract: dict[str, Any] | None,
+    grounding_mode: str,
+    pre_agent_ms: float,
+    pipeline_start: float,
+    cache: Any,
+    history_service: Any | None,
+    lf: Any,
+    trace_id: str,
+    config: Any,
+) -> PipelineResult:
+    """Stage e): Cache store, Langfuse scores, history save. Returns PipelineResult."""
+    wall_ms = (time.perf_counter() - pipeline_start) * 1000
+    e2e_wall_ms = wall_ms + pre_agent_ms
+    topic_hint = result.get("topic_hint")
+    topic_hint_value = topic_hint if isinstance(topic_hint, str) else ""
+    result_grounding_mode: Any = result.get("grounding_mode")
+    grounding_mode_value = result_grounding_mode if isinstance(result_grounding_mode, str) else ""
+    store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
+    grade_confidence = float(result.get("grade_confidence", 0.0))
+    raw_threshold = getattr(config, "relevance_threshold_rrf", _CONFIDENCE_THRESHOLD)
+    confidence_threshold = (
+        float(raw_threshold) if isinstance(raw_threshold, Real) else _CONFIDENCE_THRESHOLD
+    )
+    documents_list: list[Any] = result.get("documents", [])
+    decision = build_cacheability_decision(
+        result=result,
+        query_type=query_type,
+        grounding_mode=grounding_mode_value,
+        documents=documents_list,
+        cache_hit=bool(result.get("cache_hit", False)),
+        contextual=_is_contextual_query(user_text),
+        grade_confidence=grade_confidence,
+        confidence_threshold=confidence_threshold,
+        schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+    )
+    result["response_state"] = decision.response_state
+    result["degraded_reason"] = decision.degraded_reason
+    result["cache_eligible"] = decision.cache_eligible
+    result["store_reason"] = decision.store_reason
+
+    result_filters = _store.get("filters")
+    if not isinstance(result_filters, dict) or not result_filters:
+        contract_filters = state_contract.get("filters") if state_contract is not None else None
+        if isinstance(contract_filters, dict) and contract_filters:
+            result_filters = contract_filters
+    filter_signature = resolve_semantic_cache_signature(filters=result_filters)
+    if filter_signature is not None:
+        result["semantic_cache_filter_signature"] = filter_signature
+        _store["semantic_cache_filter_signature"] = filter_signature
+
+    trace_metadata = {
+        "route": "client_direct",
+        "pipeline_mode": "client_direct",
+        "query_type": query_type,
+        "topic_hint": topic_hint_value,
+        "grounding_mode": grounding_mode_value,
+        "filter_signature": filter_signature or "",
+        "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
+        "sources_count": int(result.get("sources_count", 0) or 0),
+        "grounded": bool(result.get("grounded", True)),
+        "legal_answer_safe": bool(result.get("legal_answer_safe", True)),
+        "semantic_cache_safe_reuse": bool(result.get("semantic_cache_safe_reuse", True)),
+        "safe_fallback_used": bool(result.get("safe_fallback_used", False)),
+        "response_state": decision.response_state,
+        "degraded_reason": decision.degraded_reason,
+        "cache_eligible": decision.cache_eligible,
+        "collection": _safe_collection_name(config),
+        "environment": _safe_langfuse_env(config),
+        "pipeline_wall_ms": wall_ms,
+        "pre_agent_ms": pre_agent_ms,
+        "bge_model_processing_ms": result.get("bge_model_processing_ms"),
+        "e2e_latency_ms": e2e_wall_ms,
+    }
+    _store.update(trace_metadata)
+
+    if cache and isinstance(store_vector, list) and bool(store_vector):
+        try:
+            await maybe_store_semantic_response(
+                cache=cache,
+                query=user_text,
+                response=response_text,
+                vector=store_vector,
+                query_type=query_type,
+                cache_scope="rag",
+                decision=decision,
+                agent_role=role,
+                filter_signature=filter_signature,
+            )
+        except Exception:
+            logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
+
+    try:
+        with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
+            lf.update_current_span(
+                input=build_safe_input_payload(content_type="text", text=user_text),
+                output={
+                    "response_preview": str(response_text)[:240],
+                    "response_len": len(str(response_text)),
+                },
+                metadata=trace_metadata,
+            )
+    except Exception:
+        logger.warning(
+            "Failed to update Langfuse trace metadata in client-direct RAG path",
+            exc_info=True,
+        )
+
+    tid = trace_id or (lf.get_current_trace_id() or "")
+    if tid:
+        result.update(
+            {
+                "pipeline_wall_ms": wall_ms,
+                "user_perceived_wall_ms": e2e_wall_ms,
+                "e2e_latency_ms": e2e_wall_ms,
+                "query_type": query_type,
+                "input_type": "text",
+                "messages": [
+                    *result.get("messages", []),
+                    {"role": "assistant", "content": response_text},
+                ],
+            }
+        )
+        try:
+            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
+        except Exception:
+            logger.warning("Failed to write user_role score in client pipeline", exc_info=True)
+        try:
+            write_langfuse_scores(lf, result, trace_id=tid)
+        except Exception:
+            logger.warning("Failed to write Langfuse scores in client pipeline", exc_info=True)
+
+    if history_service and response_text:
+        try:
+            saved = await history_service.save_turn(
+                user_id=user_id,
+                session_id=session_id,
+                query=user_text,
+                response=response_text,
+                input_type="text",
+                query_embedding=result.get("query_embedding"),
+            )
+            if tid:
+                lf.create_score(
+                    trace_id=tid,
+                    name="history_save_success",
+                    value=1 if saved else 0,
+                    data_type="BOOLEAN",
+                    score_id=f"{tid}-history_save_success",
+                )
+        except Exception:
+            logger.warning("Failed to save history turn in client pipeline", exc_info=True)
+
+    sources: list[dict[str, str]] = []
+    for doc in documents_list[:_MAX_SOURCES]:
+        if isinstance(doc, dict):
+            meta = doc.get("metadata", {}) if isinstance(doc.get("metadata"), dict) else {}
+            sources.append(
+                {
+                    "url": str(meta.get("url", "")),
+                    "title": str(meta.get("title", meta.get("source", ""))),
+                }
+            )
+
+    return PipelineResult(
+        answer=response_text,
+        sources=sources,
+        query_type=query_type,
+        cache_hit=bool(result.get("cache_hit", False)),
+        needs_agent=False,
+        latency_ms=wall_ms,
+        llm_call_count=int(result.get("llm_call_count", 0) or 0),
+        scores={
+            k: float(v) for k, v in result.get("scores", {}).items() if isinstance(v, (int, float))
+        },
+        pipeline_mode="client_direct",
+        sent_message=result.get("sent_message"),
+        response_sent=True,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
 
@@ -325,321 +732,60 @@ async def run_client_pipeline(
             latency_ms=latency_ms,
         )
 
-    # --- Step c) RAG pipeline ---
-    result: dict[str, Any] = {
-        "query_type": query_type,
-        "cache_hit": False,
-        "llm_call_count": 0,
-        "messages": [{"role": "user", "content": user_text}],
-    }
-
-    _store = rag_result_store or {}
-    semantic_cache_already_checked = bool(_store.get("semantic_cache_already_checked"))
-    contract_topic_hint = _store.get("state_contract", {}).get("topic_hint")
-    if not isinstance(contract_topic_hint, str):
-        topic_hint_label = get_query_topic_hint(user_text)
-        contract_topic_hint = topic_hint_label.value if topic_hint_label is not None else None
-    grounding_mode = get_grounding_mode(query_type=query_type, topic_hint=contract_topic_hint)
-    state_contract = coerce_pre_agent_state_contract(
-        _store,
+    # --- Steps c–f) via named stage helpers ---
+    ctx = _pipeline_setup(
+        user_text=user_text,
         query_type=query_type,
-        topic_hint=contract_topic_hint,
-        grounding_mode=grounding_mode,
+        rag_result_store=rag_result_store,
+        config=config,
     )
-    if state_contract is not None:
-        state_contract["grounding_mode"] = grounding_mode
-        state_contract["topic_hint"] = contract_topic_hint
-        _store["state_contract"] = state_contract
-    result["topic_hint"] = contract_topic_hint
-    result["grounding_mode"] = grounding_mode
-    pre_computed = (
-        state_contract.get("dense_vector")
-        if state_contract is not None
-        else _store.get("cache_key_embedding")
-    )
-    pre_computed_sparse = (
-        state_contract.get("sparse_vector")
-        if state_contract is not None
-        else _store.get("cache_key_sparse")
-    )
-    pre_computed_colbert = (
-        state_contract.get("colbert_query")
-        if state_contract is not None
-        else _store.get("cache_key_colbert")
-    )
-    pre_agent_ms = float(_store.get("pre_agent_ms", 0.0) or 0.0)
-    pre_agent_embed_ms = _store.get("pre_agent_embed_ms")
-    pre_agent_cache_check_ms = _store.get("pre_agent_cache_check_ms")
-    bge_model_processing_ms = _store.get("bge_model_processing_ms")
-    if pre_agent_ms > 0:
-        result["pre_agent_ms"] = pre_agent_ms
-    if isinstance(pre_agent_embed_ms, Real):
-        result["pre_agent_embed_ms"] = float(pre_agent_embed_ms)
-    if isinstance(pre_agent_cache_check_ms, Real):
-        result["pre_agent_cache_check_ms"] = float(pre_agent_cache_check_ms)
-    if isinstance(bge_model_processing_ms, Real) and not isinstance(bge_model_processing_ms, bool):
-        result["bge_model_processing_ms"] = float(bge_model_processing_ms)
-
-    pipeline_result = await rag_pipeline(
-        user_text,
+    result, response_text = await _pipeline_retrieve(
+        user_text=user_text,
         user_id=user_id,
         session_id=session_id,
         query_type=query_type,
-        original_query=user_text,
         cache=cache,
         embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
         reranker=reranker,
         llm=llm,
-        agent_role=role,
-        state_contract=cast(dict[str, Any] | None, state_contract),
-        pre_computed_embedding=pre_computed,
-        pre_computed_sparse=pre_computed_sparse,
-        pre_computed_colbert=pre_computed_colbert,
-        semantic_cache_already_checked=semantic_cache_already_checked,
+        role=role,
+        ctx=ctx,
     )
-    result.update(pipeline_result)
-    response_text = str(pipeline_result.get("response", "") or "")
-
-    # --- Step d) Generate if RAG did not return cached response ---
-    if not response_text:
-        generated = await generate_response(
-            query=user_text,
-            documents=result.get("documents", []),
-            retrieved_context=result.get("retrieved_context", []),
-            raw_messages=[{"role": "user", "content": user_text}],
-            latency_stages=result.get("latency_stages", {}),
-            llm_call_count=int(result.get("llm_call_count", 0) or 0),
-            grounding_mode=grounding_mode,
-            grade_confidence=(
-                float(result["grade_confidence"])
-                if isinstance(result.get("grade_confidence"), Real)
-                else None
-            ),
-            config=config,
-            message=message,
-        )
-        result.update(generated)
-        response_text = str(generated.get("response", "") or "")
-
-    result["response"] = response_text
-
-    # --- Step e) Send ---
-    trace_id = lf.get_current_trace_id() or ""
-    reply_markup = None
-    if trace_id:
-        from telegram_bot.feedback import build_feedback_keyboard
-
-        reply_markup = build_feedback_keyboard(trace_id)
-
-    sources_html = ""
-    documents_list: list[Any] = result.get("documents", [])
-    sources_required = bool(getattr(config, "show_sources", False))
-    if sources_required and documents_list:
-        sources_html = format_sources_html(documents_list)
-        result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
-
-    response_already_sent = result.get("response_sent", False)
-    if response_already_sent:
-        # Streaming already delivered the main response; only send sources if applicable.
-        if sources_html:
-            await send_html_messages(
-                message, "", sources_html=sources_html, reply_markup=reply_markup
-            )
-        elif reply_markup:
-            # Attach feedback keyboard to the streamed message (#745).
-            ref = result.get("sent_message")
-            if ref and isinstance(ref, dict):
-                try:
-                    await message.bot.edit_message_reply_markup(
-                        chat_id=ref["chat_id"],
-                        message_id=ref["message_id"],
-                        reply_markup=reply_markup,
-                    )
-                except Exception:
-                    logger.debug(
-                        "Failed to attach feedback keyboard to streamed message",
-                        exc_info=True,
-                    )
-    else:
-        await send_html_messages(
-            message,
-            response_text,
-            sources_html=sources_html,
-            reply_markup=reply_markup,
-            reply_to_user_text=user_text,
-        )
-
-    # --- Step f) Post-process ---
-    wall_ms = (time.perf_counter() - pipeline_start) * 1000
-    e2e_wall_ms = wall_ms + pre_agent_ms
-    topic_hint = result.get("topic_hint")
-    topic_hint_value = topic_hint if isinstance(topic_hint, str) else ""
-    result_grounding_mode: Any = result.get("grounding_mode")
-    grounding_mode_value = result_grounding_mode if isinstance(result_grounding_mode, str) else ""
-    store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
-    grade_confidence = float(result.get("grade_confidence", 0.0))
-    raw_threshold = getattr(config, "relevance_threshold_rrf", _CONFIDENCE_THRESHOLD)
-    confidence_threshold = (
-        float(raw_threshold) if isinstance(raw_threshold, Real) else _CONFIDENCE_THRESHOLD
-    )
-    decision = build_cacheability_decision(
+    result, response_text = await _pipeline_generate(
+        user_text=user_text,
         result=result,
-        query_type=query_type,
-        grounding_mode=grounding_mode_value,
-        documents=documents_list,
-        cache_hit=bool(result.get("cache_hit", False)),
-        contextual=_is_contextual_query(user_text),
-        grade_confidence=grade_confidence,
-        confidence_threshold=confidence_threshold,
-        schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+        response_text=response_text,
+        grounding_mode=ctx["grounding_mode"],
+        config=config,
+        message=message,
     )
-    result["response_state"] = decision.response_state
-    result["degraded_reason"] = decision.degraded_reason
-    result["cache_eligible"] = decision.cache_eligible
-    result["store_reason"] = decision.store_reason
-
-    result_filters = _store.get("filters")
-    if not isinstance(result_filters, dict) or not result_filters:
-        contract_filters = state_contract.get("filters") if state_contract is not None else None
-        if isinstance(contract_filters, dict) and contract_filters:
-            result_filters = contract_filters
-    filter_signature = resolve_semantic_cache_signature(filters=result_filters)
-    if filter_signature is not None:
-        result["semantic_cache_filter_signature"] = filter_signature
-        _store["semantic_cache_filter_signature"] = filter_signature
-
-    trace_metadata = {
-        "route": "client_direct",
-        "pipeline_mode": "client_direct",
-        "query_type": query_type,
-        "topic_hint": topic_hint_value,
-        "grounding_mode": grounding_mode_value,
-        "filter_signature": filter_signature or "",
-        "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
-        "sources_count": int(result.get("sources_count", 0) or 0),
-        "grounded": bool(result.get("grounded", True)),
-        "legal_answer_safe": bool(result.get("legal_answer_safe", True)),
-        "semantic_cache_safe_reuse": bool(result.get("semantic_cache_safe_reuse", True)),
-        "safe_fallback_used": bool(result.get("safe_fallback_used", False)),
-        "response_state": decision.response_state,
-        "degraded_reason": decision.degraded_reason,
-        "cache_eligible": decision.cache_eligible,
-        "collection": _safe_collection_name(config),
-        "environment": _safe_langfuse_env(config),
-        "pipeline_wall_ms": wall_ms,
-        "pre_agent_ms": pre_agent_ms,
-        "bge_model_processing_ms": result.get("bge_model_processing_ms"),
-        "e2e_latency_ms": e2e_wall_ms,
-    }
-    _store.update(trace_metadata)
-
-    if cache and isinstance(store_vector, list) and bool(store_vector):
-        try:
-            await maybe_store_semantic_response(
-                cache=cache,
-                query=user_text,
-                response=response_text,
-                vector=store_vector,
-                query_type=query_type,
-                cache_scope="rag",
-                decision=decision,
-                agent_role=role,
-                filter_signature=filter_signature,
-            )
-        except Exception:
-            logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
-
-    # Langfuse update + scores.
-    try:
-        with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
-            lf.update_current_span(
-                input=build_safe_input_payload(
-                    content_type="text",
-                    text=user_text,
-                ),
-                output={
-                    "response_preview": str(response_text)[:240],
-                    "response_len": len(str(response_text)),
-                },
-                metadata=trace_metadata,
-            )
-    except Exception:
-        logger.warning(
-            "Failed to update Langfuse trace metadata in client-direct RAG path",
-            exc_info=True,
-        )
-    tid = trace_id or (lf.get_current_trace_id() or "")
-    if tid:
-        result.update(
-            {
-                "pipeline_wall_ms": wall_ms,
-                "user_perceived_wall_ms": e2e_wall_ms,
-                "e2e_latency_ms": e2e_wall_ms,
-                "query_type": query_type,
-                "input_type": "text",
-                "messages": [
-                    *result.get("messages", []),
-                    {"role": "assistant", "content": response_text},
-                ],
-            }
-        )
-        try:
-            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
-        except Exception:
-            logger.warning("Failed to write user_role score in client pipeline", exc_info=True)
-        try:
-            write_langfuse_scores(lf, result, trace_id=tid)
-        except Exception:
-            logger.warning("Failed to write Langfuse scores in client pipeline", exc_info=True)
-
-    # History save.
-    if history_service and response_text:
-        try:
-            saved = await history_service.save_turn(
-                user_id=user_id,
-                session_id=session_id,
-                query=user_text,
-                response=response_text,
-                input_type="text",
-                query_embedding=result.get("query_embedding"),
-            )
-            if tid:
-                lf.create_score(
-                    trace_id=tid,
-                    name="history_save_success",
-                    value=1 if saved else 0,
-                    data_type="BOOLEAN",
-                    score_id=f"{tid}-history_save_success",
-                )
-        except Exception:
-            logger.warning("Failed to save history turn in client pipeline", exc_info=True)
-
-    # Build sources list for PipelineResult.
-    sources: list[dict[str, str]] = []
-    for doc in documents_list[:_MAX_SOURCES]:
-        if isinstance(doc, dict):
-            meta = doc.get("metadata", {}) if isinstance(doc.get("metadata"), dict) else {}
-            sources.append(
-                {
-                    "url": str(meta.get("url", "")),
-                    "title": str(meta.get("title", meta.get("source", ""))),
-                }
-            )
-
-    return PipelineResult(
-        answer=response_text,
-        sources=sources,
+    trace_id = lf.get_current_trace_id() or ""
+    await _pipeline_respond(
+        message=message,
+        result=result,
+        response_text=response_text,
+        user_text=user_text,
+        config=config,
+        trace_id=trace_id,
+    )
+    return await _pipeline_postprocess(
+        user_text=user_text,
+        user_id=user_id,
+        session_id=session_id,
         query_type=query_type,
-        cache_hit=bool(result.get("cache_hit", False)),
-        needs_agent=False,
-        latency_ms=wall_ms,
-        llm_call_count=int(result.get("llm_call_count", 0) or 0),
-        scores={
-            k: float(v) for k, v in result.get("scores", {}).items() if isinstance(v, (int, float))
-        },
-        pipeline_mode="client_direct",
-        sent_message=result.get("sent_message"),
-        response_sent=True,
+        role=role,
+        result=result,
+        response_text=response_text,
+        _store=ctx["_store"],
+        state_contract=ctx["state_contract"],
+        grounding_mode=ctx["grounding_mode"],
+        pre_agent_ms=ctx["pre_agent_ms"],
+        pipeline_start=pipeline_start,
+        cache=cache,
+        history_service=history_service,
+        lf=lf,
+        trace_id=trace_id,
+        config=config,
     )
