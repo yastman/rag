@@ -21,6 +21,14 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
+from src.runtime.services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    is_contextual_query,
+    maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
+)
+from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot._bot_error_classification import _is_checkpointer_runtime_error
 from telegram_bot._bot_pre_agent import (
     _build_pre_agent_state_contract,
@@ -35,14 +43,6 @@ from telegram_bot._bot_streaming import (
 )
 from telegram_bot.observability import get_client, propagate_attributes
 from telegram_bot.scoring import score, write_langfuse_scores
-from telegram_bot.services.cache_policy import (
-    SEMANTIC_CACHE_SCHEMA_VERSION,
-    build_cacheability_decision,
-    is_contextual_query,
-    maybe_store_semantic_response,
-    resolve_semantic_cache_signature,
-)
-from telegram_bot.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.tracing_context import make_session_id
 
 

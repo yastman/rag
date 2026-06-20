@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any
 
 from aiogram.exceptions import TelegramBadRequest
 
+from src.services.handoff_state import HandoffData
 from telegram_bot.handlers.handoff import HandoffStates, start_qualification
 from telegram_bot.services.business_hours import is_business_hours
-from telegram_bot.services.handoff_state import HandoffData
 
 
 if TYPE_CHECKING:  # pragma: no cover
