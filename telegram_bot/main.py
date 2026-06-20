@@ -19,9 +19,10 @@ from tenacity import (
     wait_exponential,
 )
 
+from src.runtime.integrations.polling_lock import PollingLockBusy
+
 from .bot import PropertyBot
 from .config import BotConfig
-from .integrations.polling_lock import PollingLockBusy
 from .logging_config import setup_logging
 from .observability import initialize_langfuse
 
