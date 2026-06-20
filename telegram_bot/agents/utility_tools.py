@@ -19,8 +19,6 @@ from telegram_bot.observability import get_client, observe
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SUMMARY_MODEL = "claude-haiku-4-5"
-
 
 def _get_ctx(config: RunnableConfig) -> Any | None:
     """Get BotContext via the SDK-native helper (runtime.context preferred)."""
@@ -94,31 +92,6 @@ async def mortgage_calculator(
         lines.append(f"Первоначальный взнос: {_fmt(down_payment)} EUR (LTV: {ltv:.0f}%)")
 
     return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Internal helper for daily_summary
-# ---------------------------------------------------------------------------
-
-
-async def _summarize_with_llm(data: str, llm: Any, model: str = _DEFAULT_SUMMARY_MODEL) -> str:
-    """Call LLM to summarize CRM activity."""
-    response = await llm.chat.completions.create(
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Summarize CRM activity for a real estate manager. "
-                    "Be concise, use bullet points."
-                ),
-            },
-            {"role": "user", "content": data},
-        ],
-        max_tokens=500,
-        name="daily-summary",
-    )
-    return response.choices[0].message.content or "Нет данных."
 
 
 # ---------------------------------------------------------------------------
