@@ -80,11 +80,11 @@ make ingest-unified-watch
 make ingest-unified-status
 ```
 
-## 4) Voice Flow
+## 4) Voice Flow (Archived)
 
-Source code: `archive/voice/agent.py` + `archive/api/main.py`. This is an archived optional surface; off by default.
+Source code: `archive/voice/agent.py` + `archive/api/main.py`. This surface was removed in #2791 and is archived.
 
-Runtime path:
+Runtime path (for reference only):
 1. LiveKit session starts voice agent.
 2. `/call` dispatch metadata carries `langfuse_trace_id` for continuity.
 3. Voice agent calls RAG API (`POST /query`) with the same `langfuse_trace_id`.
