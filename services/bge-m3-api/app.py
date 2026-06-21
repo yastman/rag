@@ -13,7 +13,6 @@ from typing import Annotated, Any
 import numpy as np
 import onnxruntime
 from fastapi import FastAPI, Header, HTTPException, Request
-from langfuse import get_client, observe
 from opentelemetry import propagate
 from opentelemetry.context import attach, detach
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
@@ -21,6 +20,22 @@ from pydantic import BaseModel, Field
 from transformers import AutoTokenizer
 
 from config import settings
+
+
+# Langfuse removed (#2844, #2951) — no-op stubs
+def get_client():  # type: ignore[override]
+    """No-op stub — Langfuse removed (#2844, #2951)."""
+
+
+def observe(*args, **kwargs):  # type: ignore[override]
+    """No-op decorator — Langfuse removed (#2844, #2951)."""
+
+    def decorator(f):
+        return f
+
+    if args and callable(args[0]) and not kwargs:
+        return args[0]
+    return decorator
 
 
 # Logging

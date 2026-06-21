@@ -24,7 +24,6 @@ from src.runtime.integrations.polling_lock import PollingLockBusy
 from .bot import PropertyBot
 from .config import BotConfig
 from .logging_config import setup_logging
-from .observability import initialize_langfuse
 
 
 # Startup retry settings
@@ -81,17 +80,6 @@ async def main():
 
     # Load config
     config = BotConfig()
-
-    # Initialize Langfuse after BotConfig loaded .env / env vars
-    _langfuse = initialize_langfuse(
-        public_key=config.langfuse_public_key,
-        secret_key=config.langfuse_secret_key,
-        host=config.langfuse_host,
-    )
-    if _langfuse:
-        logger.info("Langfuse client initialized with PII masking")
-    else:
-        logger.info("Langfuse disabled (missing LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY)")
 
     if not config.telegram_token:
         logger.error("TELEGRAM_BOT_TOKEN not set in .env")
