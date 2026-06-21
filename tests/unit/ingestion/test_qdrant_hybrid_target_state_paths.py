@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -10,13 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-pytestmark = [
-    pytest.mark.requires_extras,
-    pytest.mark.skipif(
-        importlib.util.find_spec("cocoindex") is None,
-        reason="cocoindex not installed (ingest extra)",
-    ),
-]
+pytestmark = pytest.mark.requires_extras
 
 
 def _mutation(tmp_path: Path):
@@ -50,7 +43,8 @@ def test_handle_delete_deletes_points_and_marks_deleted() -> None:
     state_manager.mark_deleted_sync.assert_called_once_with("file-1")
 
 
-def test_handle_upsert_skips_unchanged_file_before_parsing(tmp_path: Path) -> None:
+def test_handle_upsert_skips_when_claim_returns_none(tmp_path: Path) -> None:
+    """When claim_processing_sync returns None (already claimed/up-to-date), skip."""
     from src.ingestion.unified.targets.qdrant_hybrid_target import (
         QdrantHybridTargetConnector,
         QdrantHybridTargetSpec,
@@ -59,7 +53,7 @@ def test_handle_upsert_skips_unchanged_file_before_parsing(tmp_path: Path) -> No
     writer = MagicMock()
     docling = MagicMock()
     state_manager = MagicMock()
-    state_manager.should_process_sync.return_value = False
+    state_manager.claim_processing_sync.return_value = None
     mutation = _mutation(tmp_path)
     spec = QdrantHybridTargetSpec(collection_name="target_collection")
 
@@ -75,25 +69,25 @@ def test_handle_upsert_skips_unchanged_file_before_parsing(tmp_path: Path) -> No
             spec, "file-1", mutation, state_manager
         )
 
-    state_manager.should_process_sync.assert_called_once_with(
+    state_manager.claim_processing_sync.assert_called_once_with(
         "file-1",
-        "hash-1",
-        embedding_model="voyage-4-large",
+        content_hash="hash-1",
+        embedding_model="bge-m3-api",
         pipeline_version="v3.2.1",
     )
-    state_manager.upsert_state_sync.assert_not_called()
     docling.chunk_file_sync.assert_not_called()
     writer.upsert_chunks_sync.assert_not_called()
 
 
-def test_handle_upsert_skip_uses_local_embedding_fingerprint(tmp_path: Path) -> None:
+def test_handle_upsert_claim_uses_local_embedding_fingerprint(tmp_path: Path) -> None:
+    """claim_processing_sync must pass bge-m3-api and the spec pipeline_version."""
     from src.ingestion.unified.targets.qdrant_hybrid_target import (
         QdrantHybridTargetConnector,
         QdrantHybridTargetSpec,
     )
 
     state_manager = MagicMock()
-    state_manager.should_process_sync.return_value = False
+    state_manager.claim_processing_sync.return_value = None
     mutation = _mutation(tmp_path)
     spec = QdrantHybridTargetSpec(use_local_embeddings=True, pipeline_version="v-test")
 
@@ -109,13 +103,12 @@ def test_handle_upsert_skip_uses_local_embedding_fingerprint(tmp_path: Path) -> 
             spec, "file-1", mutation, state_manager
         )
 
-    state_manager.should_process_sync.assert_called_once_with(
+    state_manager.claim_processing_sync.assert_called_once_with(
         "file-1",
-        "hash-1",
+        content_hash="hash-1",
         embedding_model="bge-m3-api",
         pipeline_version="v-test",
     )
-    state_manager.upsert_state_sync.assert_not_called()
 
 
 def test_handle_upsert_empty_chunks_marks_indexed_zero(tmp_path: Path) -> None:
@@ -128,7 +121,7 @@ def test_handle_upsert_empty_chunks_marks_indexed_zero(tmp_path: Path) -> None:
     docling = MagicMock()
     docling.chunk_file_sync.return_value = []
     state_manager = MagicMock()
-    state_manager.should_process_sync.return_value = True
+    state_manager.claim_processing_sync.return_value = MagicMock()
     mutation = _mutation(tmp_path)
     spec = QdrantHybridTargetSpec(collection_name="target_collection")
 
@@ -144,7 +137,6 @@ def test_handle_upsert_empty_chunks_marks_indexed_zero(tmp_path: Path) -> None:
             spec, "file-1", mutation, state_manager
         )
 
-    state_manager.upsert_state_sync.assert_called_once()
     state_manager.mark_indexed_sync.assert_called_once_with("file-1", 0, "hash-1")
     writer.upsert_chunks_sync.assert_not_called()
 
@@ -162,7 +154,7 @@ def test_handle_upsert_writer_error_marks_error(tmp_path: Path) -> None:
     docling.chunk_file_sync.return_value = [object()]
     docling.to_ingestion_chunks.return_value = [MagicMock()]
     state_manager = MagicMock()
-    state_manager.should_process_sync.return_value = True
+    state_manager.claim_processing_sync.return_value = MagicMock()
     state_manager.get_state_sync.return_value = SimpleNamespace(retry_count=0)
     mutation = _mutation(tmp_path)
     spec = QdrantHybridTargetSpec(collection_name="target_collection")
@@ -196,7 +188,7 @@ def test_handle_upsert_moves_to_dlq_after_max_retries(tmp_path: Path) -> None:
     docling.chunk_file_sync.return_value = [object()]
     docling.to_ingestion_chunks.return_value = [MagicMock()]
     state_manager = MagicMock()
-    state_manager.should_process_sync.return_value = True
+    state_manager.claim_processing_sync.return_value = MagicMock()
     state_manager.get_state_sync.return_value = SimpleNamespace(retry_count=3)
     mutation = _mutation(tmp_path)
     spec = QdrantHybridTargetSpec(collection_name="target_collection", max_retries=3)

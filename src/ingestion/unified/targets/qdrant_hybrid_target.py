@@ -23,7 +23,7 @@ from src.ingestion.docling_client import DoclingClient, DoclingConfig
 from src.ingestion.docling_native import NativeDoclingAdapter
 from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
-from src.ingestion.unified.state_manager import FileState, UnifiedStateManager
+from src.ingestion.unified.state_manager import UnifiedStateManager
 
 
 logger = logging.getLogger(__name__)
@@ -276,29 +276,15 @@ class QdrantHybridTargetConnector:
         current_embedding_model = "bge-m3-api"
         current_pipeline_version = spec.pipeline_version
 
-        if not state_manager.should_process_sync(
+        claimed = state_manager.claim_processing_sync(
             file_id,
-            content_hash,
+            content_hash=content_hash,
             embedding_model=current_embedding_model,
             pipeline_version=current_pipeline_version,
-        ):
-            logger.debug(f"Skipping unchanged: {source_path}")
-            return
-
-        state_manager.upsert_state_sync(
-            FileState(
-                file_id=file_id,
-                source_path=source_path,
-                file_name=mutation.file_name,
-                mime_type=mutation.mime_type,
-                file_size=mutation.file_size,
-                content_hash=content_hash,
-                embedding_model=current_embedding_model,
-                collection_name=spec.collection_name,
-                pipeline_version=current_pipeline_version,
-                status="processing",
-            )
         )
+        if claimed is None:
+            logger.debug(f"Skipping (already claimed or up-to-date): {source_path}")
+            return
 
         try:
             docling_chunks = docling.chunk_file_sync(abs_path)

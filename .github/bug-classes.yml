@@ -110,3 +110,8 @@ bug_classes:
     description: Dead references to removed surfaces (Mini App, voice, deeplink) remain in active source files — config fields, handler attributes, docstrings, test helpers — after the surface was archived
     canonical_issue: "#2963"
     guardrail: "rg -r 'mini_app|MINI_APP|webapp|deeplink' telegram_bot/ src/ returns 0 hits; make test-core passes"
+
+  - id: non-atomic-state-claim
+    description: should_process + mark_processing was a non-atomic read-then-write; two workers could claim the same file for ingestion simultaneously
+    canonical_issue: "#2941"
+    guardrail: "tests/unit/ingestion/test_state_manager_reliability.py::TestAtomicClaim — claim_processing uses single UPDATE ... WHERE status NOT IN (...) RETURNING"

@@ -230,6 +230,71 @@ class UnifiedStateManager:
             file_id,
         )
 
+    async def claim_processing(
+        self,
+        file_id: str,
+        content_hash: str | None = None,
+        embedding_model: str | None = None,
+        pipeline_version: str | None = None,
+    ) -> FileState | None:
+        """Atomically claim a file for processing.
+
+        Returns the FileState row if claimed, None if already processing or
+        up-to-date (indexed with matching fingerprint and within backoff).
+        Uses a single UPDATE ... RETURNING to prevent two workers from
+        claiming the same file simultaneously.
+
+        When content_hash/embedding_model/pipeline_version are provided the
+        WHERE clause skips rows that are already up-to-date indexed, so
+        changed files are re-claimed even from 'indexed' status.
+        """
+        pool = await self._get_pool()
+        row = await pool.fetchrow(
+            """
+            UPDATE ingestion_state
+            SET status = 'processing', updated_at = NOW()
+            WHERE file_id = $1
+              AND status != 'processing'
+              AND NOT (
+                    status = 'indexed'
+                    AND ($2 IS NULL OR content_hash = $2)
+                    AND ($3 IS NULL OR embedding_model = $3)
+                    AND ($4 IS NULL OR pipeline_version = $4)
+              )
+              AND NOT (status = 'error' AND retry_after IS NOT NULL AND retry_after > NOW())
+              AND retry_count < 3
+            RETURNING *
+            """,
+            file_id,
+            content_hash,
+            embedding_model,
+            pipeline_version,
+        )
+        return FileState.from_row(row) if row else None
+
+    async def reap_stuck_processing(self, threshold_minutes: int) -> None:
+        """Reset stale processing rows back to pending.
+
+        Rows with status='processing' older than threshold_minutes are considered
+        stuck (crashed worker) and reset so they can be retried.
+
+        ponytail: threshold assumes processing completes in < threshold_minutes;
+        a legitimately slow file (large PDF via Docling) could be reaped mid-flight.
+        Recommended threshold: 60 min (well above worst-case ~10-50s per batch on
+        CPU-only VPS). Upgrade path: bump updated_at as a heartbeat during
+        processing so the reaper only catches truly stuck rows.
+        """
+        pool = await self._get_pool()
+        await pool.execute(
+            """
+            UPDATE ingestion_state
+            SET status = 'pending', updated_at = NOW()
+            WHERE status = 'processing'
+              AND updated_at < NOW() - ($1 * INTERVAL '1 minute')
+            """,
+            threshold_minutes,
+        )
+
     async def mark_indexed(self, file_id: str, chunk_count: int, content_hash: str) -> None:
         pool = await self._get_pool()
         await pool.execute(
@@ -248,14 +313,14 @@ class UnifiedStateManager:
 
     async def mark_error(self, file_id: str, error: str) -> None:
         pool = await self._get_pool()
-        # Exponential backoff: 1min, 5min, 30min
+        # Exponential backoff: 1min, 5min, 25min (POWER(5,0)=1, POWER(5,1)=5, POWER(5,2)=25)
         await pool.execute(
             """
             UPDATE ingestion_state
             SET status = 'error',
                 error_message = $2,
                 retry_count = retry_count + 1,
-                retry_after = NOW() + (INTERVAL '1 minute' * POWER(5, LEAST(retry_count, 3))),
+                retry_after = NOW() + (INTERVAL '1 minute' * POWER(5, LEAST(retry_count, 2))),
                 updated_at = NOW()
             WHERE file_id = $1
             """,
@@ -422,6 +487,22 @@ class UnifiedStateManager:
     def mark_processing_sync(self, file_id: str) -> None:
         """Sync version of mark_processing()."""
         self._run_sync(self.mark_processing(file_id))
+
+    def claim_processing_sync(
+        self,
+        file_id: str,
+        content_hash: str | None = None,
+        embedding_model: str | None = None,
+        pipeline_version: str | None = None,
+    ) -> FileState | None:
+        """Sync version of claim_processing()."""
+        return self._run_sync(
+            self.claim_processing(file_id, content_hash, embedding_model, pipeline_version)
+        )
+
+    def reap_stuck_processing_sync(self, threshold_minutes: int) -> None:
+        """Sync version of reap_stuck_processing()."""
+        self._run_sync(self.reap_stuck_processing(threshold_minutes))
 
     def mark_indexed_sync(self, file_id: str, chunk_count: int, content_hash: str) -> None:
         """Sync version of mark_indexed()."""
