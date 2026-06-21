@@ -58,6 +58,7 @@ from src.services.handoff_state import HandoffData, HandoffState
 
 from . import (
     _bot_catalog,  # #2816 Slice 2: extracted catalog/card handlers
+    _bot_crm_callbacks,  # #2980: extracted clearcache callback handler
     _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
     _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
     _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
@@ -538,26 +539,22 @@ class PropertyBot:
 
         self.dp.include_router(create_demo_router())
 
+        # Feedback callbacks (class-method wrappers preserved for Langfuse observe decorators)
         self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
         # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
         self.dp.callback_query(F.data == "fb:done")(self.handle_feedback)
         self.dp.callback_query(FeedbackReasonCB.filter())(self.handle_feedback_reason)
-        self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
-        self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
-        # Client menu inline callbacks (#628)
-        self.dp.callback_query(F.data.startswith("svc:"))(self.handle_service_callback)
-        self.dp.callback_query(F.data.startswith("cta:"))(self.handle_cta_callback)
-        self.dp.callback_query(FavoriteCB.filter(F.action == "add"))(self.handle_fav_add)
-        self.dp.callback_query(FavoriteCB.filter(F.action == "remove"))(self.handle_fav_remove)
-        self.dp.callback_query(FavoriteCB.filter(F.action == "viewing"))(self.handle_fav_viewing)
-        self.dp.callback_query(FavoriteCB.filter(F.action == "viewing_all"))(
-            self.handle_fav_viewing_all
-        )
-        # Legacy buttons in old chat history may contain "fav:viewing_all" (without id part).
-        self.dp.callback_query(F.data == "fav:viewing_all")(self.handle_favorite_callback)
-        self.dp.callback_query(ResultsCB.filter())(self.handle_results_callback)
-        self.dp.callback_query(F.data.startswith("card:"))(self.handle_card_callback)
-        self.dp.callback_query(F.data.startswith("ask:"))(self.handle_ask_callback)
+
+        # Per-feature handler routers (#2980: decompose PropertyBot god-object)
+        from .handlers.crm_callbacks import create_crm_router
+        from .handlers.favorites_callbacks import create_favorites_router
+        from .handlers.results_callbacks import create_results_router
+        from .handlers.service_callbacks import create_service_router
+
+        self.dp.include_router(create_crm_router(self))
+        self.dp.include_router(create_service_router(self))
+        self.dp.include_router(create_favorites_router(self))
+        self.dp.include_router(create_results_router(self))
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -1090,72 +1087,8 @@ class PropertyBot:
 
     @observe(name="cb-clearcache", capture_input=False, capture_output=False)
     async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
-        """Handle /clearcache inline keyboard callbacks (cc: prefix)."""
-        _TIER_NAMES = {
-            "semantic": "Semantic cache",
-            "embeddings": "Embeddings cache",
-            "sparse": "Sparse embeddings cache",
-            "search": "Search + Rerank cache",
-            "rerank": "Rerank cache",
-            "all": "Все кеши",
-            "history": "История диалога",
-            "all_and_history": "Все кеши + История диалога",
-        }
-        data = (callback_query.data or "").removeprefix("cc:")
-        tier_name = _TIER_NAMES.get(data, data)
-        try:
-            if data in ("history", "all_and_history"):
-                # Clear agent conversation history (checkpoints) for this user
-                from telegram_bot.services.checkpointer_utils import (
-                    _delete_checkpointer_thread,
-                    _supervisor_thread_id,
-                )
-
-                assert callback_query.from_user is not None
-                user_id = callback_query.from_user.id
-                chat_id = callback_query.message.chat.id if callback_query.message else user_id
-                text_thread_id = _supervisor_thread_id(chat_id)
-                seen: set[int] = set()
-                for checkpointer in (self._checkpointer, self._agent_checkpointer):
-                    if checkpointer is None or id(checkpointer) in seen:
-                        continue
-                    seen.add(id(checkpointer))
-                    for thread_id in (text_thread_id,):
-                        try:
-                            await _delete_checkpointer_thread(checkpointer, thread_id)
-                        except Exception:
-                            logger.warning(
-                                "Failed to clear checkpointer thread %s", thread_id, exc_info=True
-                            )
-                if data == "history":
-                    text = "Очищено: История диалога"
-                else:
-                    # Also clear all caches
-                    result = await self._cache.clear_all_caches()
-                    lines = [
-                        f"Очищено: {_TIER_NAMES.get(t, t)} — {n} ключей" for t, n in result.items()
-                    ]
-                    lines.append("Очищено: История диалога")
-                    text = "\n".join(lines)
-            elif data == "all":
-                result = await self._cache.clear_all_caches()
-                lines = [
-                    f"Очищено: {_TIER_NAMES.get(t, t)} — {n} ключей" for t, n in result.items()
-                ]
-                text = "\n".join(lines)
-            elif data == "semantic":
-                deleted = await self._cache.clear_semantic_cache()
-                text = f"Очищено: {tier_name} — {deleted} ключей"
-            else:
-                deleted = await self._cache.clear_by_tier(data)
-                text = f"Очищено: {tier_name} — {deleted} ключей"
-        except Exception:
-            logger.warning("Failed to clear cache tier: %s", data, exc_info=True)
-            text = "Ошибка очистки кеша"
-
-        await callback_query.answer()
-        if callback_query.message is not None:
-            await callback_query.message.edit_text(text)  # type: ignore[union-attr]
+        """Thin wrapper — see ``_bot_crm_callbacks`` (#2980)."""
+        await _bot_crm_callbacks.handle_clearcache_callback(self, callback_query)
 
     async def handle_menu_action(
         self, callback: CallbackQuery, query_text: str, locale: str = "ru"
