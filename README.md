@@ -62,7 +62,7 @@ make core-up      # compatibility alias for docker-core-up
 make docker-up    # existing alias for docker-core-up
 ```
 
-Optional surfaces (BGE-M3, Docling, ingestion) remain behind their dedicated compose profiles or targets. Voice, Mini App, API, Langfuse, and monitoring are archived.
+Optional active surfaces such as BGE-M3, Docling, and ingestion remain behind their dedicated compose profiles or targets. Archived surfaces (Mini App, voice) were removed in #2791; the Langfuse/ml observability stack was removed in #2844.
 
 ## Core Capabilities
 
@@ -189,7 +189,6 @@ Choose the path that matches your goal:
 
 | Goal | Start here |
 |---|---|
-| 5-minute product demo | [`docs/demo/5-minute-demo.md`](docs/demo/5-minute-demo.md) |
 | Review safely before running commands | [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) |
 | Run core local services | `make local-up` |
 | Prove the simplified core product path | `make local-up` then `make e2e-core-live` |
