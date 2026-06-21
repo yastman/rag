@@ -42,8 +42,8 @@ Optional profiles add scoped services:
 | `ingest` | `ingestion`, `docling` | Unified ingestion + Docling parser |
 | `ml` | *(removed — see #2844)* | Langfuse stack dropped |
 | `obs` | `loki`, `promtail`, `alertmanager` | Archived — removed in #2791 |
-| `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Optional surface; off by default |
-| `full` | all profile-gated services | |
+| `voice` | `livekit`, `sip`, `voice-agent`, `rag-api` | Archived — removed in #2791 |
+| `full` | all profile-gated services | — |
 
 **Python extras per profile** (root `pyproject.toml`, for native / non-Docker use):
 - `default/core` — no extra needed; base `[project.dependencies]` are the lean core set.
@@ -52,7 +52,7 @@ Optional profiles add scoped services:
 - `ml-local` (BGE-M3 local inference) — `uv sync --extra ml-local` (adds `torch`, `FlagEmbedding`, `sentence-transformers`, `scipy`).
 - `ml` (Langfuse observability stack) — removed in #2844.
 - `obs` (Loki/Promtail/Alertmanager) — pure Docker containers; no root Python extras required.
-- `voice` — archived (ARCH-02); voice agent and RAG API removed in #2791; no active Python extras for root project.
+- `voice` (archived in #2791) — voice agent and RAG API removed; no active Python extras for root project.
 
 ### VPS default runtime
 
@@ -119,7 +119,7 @@ still need to be throwaway/dev-only:
 | Loki | `http://localhost:3100` |
 | Alertmanager | `http://localhost:9093` |
 
-> Mini App frontend/API is removed from the repo (#2791) and no longer a required runtime surface.
+> Mini App frontend/API was removed from the repo in #2791 and is no longer a required runtime surface.
 
 ## Required Environment Variables
 
@@ -426,4 +426,4 @@ curl -s http://localhost:6333/collections/gdrive_documents_bge | python3 -m json
 - Images are pinned by tag+digest in compose files; update pins explicitly.
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
 - Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development requires Python 3.12+ (`uv` environment; see [Python matrix](docs/LOCAL-DEVELOPMENT.md#7-python-runtime-note)).
-- The Mini App frontend/runtime was removed from the repo in #2791; it is not a required runtime surface.
+- The Mini App frontend/runtime and voice adapters were removed from the repo in #2791; they are not required runtime surfaces.
