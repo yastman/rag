@@ -26,7 +26,6 @@ Canonical table for every major directory. Answers: what it does, who owns it, w
 | `src/config/` | Settings (Pydantic), constants, Qdrant policy | infra | ✅ Active | none | `tests/unit/config/`, `tests/unit/test_settings*.py` | `src/config/README.md` | |
 | `src/security/` | PII redaction utilities | infra | ✅ Active | `src/config` | `tests/unit/security/` | `src/security/README.md` | |
 | `src/utils/` | Product events (structured logs), serialization helpers | infra | ✅ Active | `src/config` | `tests/unit/utils/` | `src/utils/README.md` | `product_events.py` is the required observability path |
-| `src/contextualization/` | Contextual embedding providers (OpenAI, Groq, Claude) | ingestion | ✅ Active | `src/config`, `src/services` | `tests/unit/contextualization/` | `docs/CONTEXTUALIZED_EMBEDDINGS.md` | |
 | `src/observability/` | Langfuse client wrapper, safe payloads, scores, OTel bootstrap | infra | ✅ Active (optional at runtime) | `src/config` | `tests/unit/observability/`, `tests/unit/test_observability*.py` | `docs/PIPELINE_OVERVIEW.md` | Langfuse is optional; core runs without it |
 | `telegram_bot/` | Telegram adapter — the only production channel | adapter | ✅ Active | `src/*` freely | `tests/unit/` (broad), `tests/integration/`, `tests/smoke/` | `telegram_bot/README.md`, `docs/BOT_ARCHITECTURE.md` | `src/` must never import back |
 | `telegram_bot/agents/` | CRM tools, domain search tools, HITL interrupt, agent factory | adapter | ✅ Active | `src/*`, `telegram_bot/services/`, `telegram_bot/graph/` | `tests/unit/agents/` | `telegram_bot/agents/README.md` | HITL wraps all sensitive CRM writes |
@@ -121,7 +120,6 @@ rag-fresh/
 │   ├── ingestion/              # Ingestion infrastructure
 │   │   └── unified/            # CANONICAL ingestion pipeline (CocoIndex + Docling)
 │   ├── retrieval/              # Search engines, reranker, topic classifier
-│   ├── contextualization/      # Contextual embedding providers
 │   ├── models/                 # Shared data models (apartment, embedding model)
 │   ├── services/               # Shared service clients (BGE-M3, Kommo, vectorizers…)
 │   ├── config/                 # Settings, constants, Qdrant policy
