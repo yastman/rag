@@ -109,21 +109,54 @@ class TestAtomicClaim:
 
         assert result is None
 
-    async def test_claim_processing_uses_single_atomic_update(
+    async def test_claim_processing_uses_single_atomic_insert_on_conflict(
         self, manager: UnifiedStateManager, mock_pool: AsyncMock
     ) -> None:
-        """Must be a single UPDATE ... WHERE status NOT IN (...) RETURNING — no SELECT first."""
+        """Must be a single INSERT ... ON CONFLICT DO UPDATE ... RETURNING — no SELECT first."""
         mock_pool.fetchrow.return_value = None
 
         await manager.claim_processing("f1")
 
-        # Only fetchrow was called (the atomic UPDATE ... RETURNING)
+        # Only fetchrow was called (the atomic INSERT ... ON CONFLICT ... RETURNING)
         mock_pool.fetch.assert_not_called()
         assert mock_pool.fetchrow.call_count == 1
         sql = mock_pool.fetchrow.call_args[0][0].strip().upper()
-        assert sql.startswith("UPDATE")
+        assert sql.startswith("INSERT")
+        assert "ON CONFLICT" in sql
         assert "RETURNING" in sql
-        assert "NOT IN" in sql or "!=" in sql
+
+    async def test_claim_processing_new_file_returns_file_state(
+        self, manager: UnifiedStateManager, mock_pool: AsyncMock
+    ) -> None:
+        """New file (no existing row) → INSERT path → returns FileState with status=processing."""
+        mock_pool.fetchrow.return_value = {
+            "file_id": "new-file-1",
+            "source_path": None,
+            "file_name": None,
+            "mime_type": None,
+            "file_size": None,
+            "modified_time": None,
+            "content_hash": "h_new",
+            "parser_version": None,
+            "chunker_version": None,
+            "embedding_model": "bge-m3",
+            "chunk_count": 0,
+            "collection_name": None,
+            "pipeline_version": "v3",
+            "indexed_at": None,
+            "status": "processing",
+            "error_message": None,
+            "retry_count": 0,
+            "retry_after": None,
+        }
+
+        result = await manager.claim_processing("new-file-1", "h_new", "bge-m3", "v3")
+
+        # Must not be None — new files must be claimed on first call
+        assert result is not None, "claim_processing must return FileState for new files, not None"
+        assert isinstance(result, FileState)
+        assert result.file_id == "new-file-1"
+        assert result.status == "processing"
 
     async def test_claim_processing_excludes_processing_and_indexed(
         self, manager: UnifiedStateManager, mock_pool: AsyncMock

@@ -241,8 +241,8 @@ class UnifiedStateManager:
 
         Returns the FileState row if claimed, None if already processing or
         up-to-date (indexed with matching fingerprint and within backoff).
-        Uses a single UPDATE ... RETURNING to prevent two workers from
-        claiming the same file simultaneously.
+        Uses INSERT ... ON CONFLICT DO UPDATE WHERE ... RETURNING to atomically
+        create a row for new files OR claim an existing row if the guard passes.
 
         When content_hash/embedding_model/pipeline_version are provided the
         WHERE clause skips rows that are already up-to-date indexed, so
@@ -251,18 +251,19 @@ class UnifiedStateManager:
         pool = await self._get_pool()
         row = await pool.fetchrow(
             """
-            UPDATE ingestion_state
+            INSERT INTO ingestion_state (file_id, status, content_hash, embedding_model, pipeline_version, updated_at)
+            VALUES ($1, 'processing', $2, $3, $4, NOW())
+            ON CONFLICT (file_id) DO UPDATE
             SET status = 'processing', updated_at = NOW()
-            WHERE file_id = $1
-              AND status != 'processing'
-              AND NOT (
-                    status = 'indexed'
-                    AND ($2 IS NULL OR content_hash = $2)
-                    AND ($3 IS NULL OR embedding_model = $3)
-                    AND ($4 IS NULL OR pipeline_version = $4)
-              )
-              AND NOT (status = 'error' AND retry_after IS NOT NULL AND retry_after > NOW())
-              AND retry_count < 3
+            WHERE ingestion_state.status != 'processing'
+              AND NOT (ingestion_state.status = 'indexed'
+                       AND ($2 IS NULL OR ingestion_state.content_hash = $2)
+                       AND ($3 IS NULL OR ingestion_state.embedding_model = $3)
+                       AND ($4 IS NULL OR ingestion_state.pipeline_version = $4))
+              AND NOT (ingestion_state.status = 'error'
+                       AND ingestion_state.retry_after IS NOT NULL
+                       AND ingestion_state.retry_after > NOW())
+              AND ingestion_state.retry_count < 3
             RETURNING *
             """,
             file_id,
