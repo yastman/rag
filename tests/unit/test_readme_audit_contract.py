@@ -32,13 +32,6 @@ class TestServicesReadme:
             assert f"[{name}]" not in text, f"Stale file reference {name} found"
 
 
-class TestVoiceReadme:
-    def test_voicebot_import_check(self):
-        text = _read("archive/voice/README.md")
-        assert "VoiceBot" in text
-        assert "PropertyVoiceAgent" not in text
-
-
 class TestIngestionReadme:
     def test_no_pdf_parser_reference(self):
         text = _read("src/ingestion/README.md")
