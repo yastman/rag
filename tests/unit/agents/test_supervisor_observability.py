@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.config import BotConfig
+from tests.unit._bot_config_factory import make_full_bot_config
 
 
 @pytest.fixture(autouse=True)
@@ -19,19 +19,7 @@ def _isolate_env(monkeypatch):
 @pytest.fixture
 def supervisor_config():
     """BotConfig for supervisor tests (#310: supervisor-only)."""
-    return BotConfig(
-        telegram_token="test-token",
-        voyage_api_key="voyage-key",
-        llm_api_key="llm-key",
-        llm_base_url="https://api.example.com/v1",
-        llm_model="gpt-4o-mini",
-        qdrant_url="http://localhost:6333",
-        qdrant_api_key="qdrant-key",
-        qdrant_collection="test_collection",
-        redis_url="redis://localhost:6379",
-        rerank_provider="none",
-        _env_file=None,
-    )
+    return make_full_bot_config()
 
 
 def _create_bot_patched(config):
