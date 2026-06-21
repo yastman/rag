@@ -78,3 +78,7 @@ bug_classes:
     description: Function silently returns a no-op/stub implementation while logging a success message, hiding that the intended feature is disabled or broken
     canonical_issue: "#2944"
     guardrail: tests/unit/integrations/test_memory_checkpointer.py
+  - id: incomplete-removal
+    description: Half-done feature removal leaves dead shim or real SDK imports behind — callers still compile against stubs while the feature is considered removed
+    canonical_issue: "#2951"
+    guardrail: tests/contract/test_no_langfuse_sdk_import_contract.py

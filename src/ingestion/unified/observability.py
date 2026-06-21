@@ -19,7 +19,6 @@ from contextlib import suppress
 from typing import Any
 
 from src.observability import (
-    flush_langfuse,
     make_lifecycle_session_id,
     observe,
     update_lifecycle_trace,
@@ -37,13 +36,7 @@ __all__ = [
 
 
 def flush_ingestion_traces() -> None:
-    """Flush buffered ingestion traces on shutdown (best-effort, #2214).
-
-    Wraps :func:`src.observability.flush_langfuse` so CLI entry points can call
-    a single ingestion-scoped helper in a ``finally`` block without reaching
-    across module boundaries. No-op when tracing was never initialized.
-    """
-    flush_langfuse()
+    """No-op — Langfuse removed (#2844, #2951)."""
 
 
 def ingestion_session_id(command: str) -> str:
