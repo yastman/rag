@@ -69,3 +69,7 @@ bug_classes:
     description: Exception handlers use contextlib.suppress(Exception) or bare except without logging or user feedback, silently hiding errors from users and operators
     canonical_issue: "#2950"
     guardrail: "tests/unit/dialogs/test_filter_dialog.py::TestOnApply::test_search_error_is_surfaced_not_swallowed"
+  - id: dead-code-silent-disable
+    description: HITL confirmation path (_send_hitl_confirmation + agents/hitl.py) had no live callers after #2843 stubbed handle_hitl_callback; dead code remained silently in the codebase
+    canonical_issue: "#2943"
+    guardrail: "telegram_bot/agents/hitl.py deleted; _send_hitl_confirmation removed from bot.py"
