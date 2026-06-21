@@ -100,3 +100,8 @@ bug_classes:
     description: Config/settings validation used assert statements, which are silently removed when Python runs with -O, causing invisible failures in optimised environments
     canonical_issue: "#2959"
     guardrail: "no bare assert in config/settings/startup paths; src/runtime/generation/service.py uses explicit raise ValueError"
+
+  - id: stream-connection-error-unhandled
+    description: generate_answer_stream propagated raw litellm.APIConnectionError to the caller instead of raising a domain-specific LLMConnectionError, making connection failures indistinguishable from other exceptions
+    canonical_issue: "#2947"
+    guardrail: tests/unit/runtime/test_generation_service_stream.py::test_generate_answer_stream_connection_error_yields_structured_fallback
