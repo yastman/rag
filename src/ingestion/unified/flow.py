@@ -2,17 +2,16 @@
 # Copyright (c) 2025 RAG-Fresh contributors.
 """Pure-Python ingestion flow helpers.
 
-CocoIndex has been removed (#2834). Ingestion now runs exclusively via the
-new orchestrator path (INGEST_USE_NEW_ORCHESTRATOR=true is the only path).
+CocoIndex has been removed (#2834). Ingestion runs via UnifiedIngestionOrchestrator
+with FilePollingChangeManager and QdrantHybridTargetConnector.
 
 This module retains the pure utility helpers (MIME detection, manifest-based
-file-ID) so callers that imported them directly keep working. The CocoIndex
-flow-assembly functions (build_flow, run_once, run_watch) now delegate
-entirely to the new orchestrator.
+file-ID) so callers that imported them directly keep working.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from pathlib import Path
@@ -20,11 +19,12 @@ from typing import TYPE_CHECKING
 
 from src.ingestion.unified.manifest import FileManifest, compute_content_hash_from_bytes
 from src.ingestion.unified.observability import observe, try_update_ingestion_trace
-from src.ingestion.unified.orchestrator import is_new_orchestrator_enabled
 
 
 if TYPE_CHECKING:
     from src.ingestion.unified.config import UnifiedConfig
+    from src.ingestion.unified.orchestrator import UnifiedIngestionOrchestrator
+    from src.ingestion.unified.state_manager import FileState
 
 
 logger = logging.getLogger(__name__)
@@ -96,67 +96,111 @@ def _app_namespace_for(config: UnifiedConfig) -> str:
     return "unified"
 
 
+def _build_orchestrator(config: UnifiedConfig) -> UnifiedIngestionOrchestrator:
+    """Construct a wired UnifiedIngestionOrchestrator from config."""
+    from src.ingestion.unified.orchestrator import (
+        FilePollingChangeManager,
+        UnifiedIngestionOrchestrator,
+    )
+    from src.ingestion.unified.state_manager import UnifiedStateManager
+    from src.ingestion.unified.targets.qdrant_hybrid_target import (
+        QdrantHybridTargetConnector,
+        QdrantHybridTargetSpec,
+        QdrantHybridTargetValues,
+    )
+
+    spec = QdrantHybridTargetSpec.from_config(config)
+    state_manager = UnifiedStateManager(database_url=config.database_url)
+
+    class _TargetDocumentWriter:
+        """DocumentWriter bridge to QdrantHybridTargetConnector (sync → async)."""
+
+        async def write_file(self, file_path: str, collection_name: str) -> FileState:
+            from src.ingestion.unified.flow import (
+                file_id_from_content,
+                get_mime_type,
+            )
+            from src.ingestion.unified.state_manager import FileState as _FileState
+
+            path = Path(file_path)
+            content = path.read_bytes() if path.exists() else None
+            file_id = file_id_from_content(str(path.name), content)
+            values = QdrantHybridTargetValues(
+                abs_path=file_path,
+                source_path=file_path,
+                file_name=path.name,
+                mime_type=get_mime_type(file_path),
+                file_size=len(content) if content is not None else 0,
+            )
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: QdrantHybridTargetConnector.mutate((spec, {file_id: values})),
+            )
+            return _FileState(file_id=file_id, source_path=file_path, status="indexed")
+
+        async def delete_file(self, file_path: str, collection_name: str) -> None:
+            from src.ingestion.unified.flow import file_id_from_content
+
+            path = Path(file_path)
+            file_id = file_id_from_content(str(path.name), None)
+            # ponytail: mutate() treats None value as delete; type stub is too narrow
+            mutations: dict[str, QdrantHybridTargetValues] = {file_id: None}  # type: ignore[dict-item]
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: QdrantHybridTargetConnector.mutate((spec, mutations)),
+            )
+
+    change_manager = FilePollingChangeManager(
+        sync_dir=config.sync_dir,
+        state_manager=state_manager,
+    )
+    return UnifiedIngestionOrchestrator(
+        change_manager=change_manager,
+        writer=_TargetDocumentWriter(),
+        state_manager=state_manager,
+    )
+
+
 @observe(name="ingestion-flow-run-once", capture_input=False, capture_output=False)
 def run_once(config: UnifiedConfig | None = None) -> None:
-    """Run ingestion once (single pass).
+    """Run ingestion once (single pass) via UnifiedIngestionOrchestrator."""
+    from src.ingestion.unified.config import UnifiedConfig as _Cfg
 
-    CocoIndex has been removed (#2834). This function now requires
-    INGEST_USE_NEW_ORCHESTRATOR=true (the only supported path).
-    Wire a FileChangeManager + DocumentWriter to UnifiedIngestionOrchestrator
-    and call run_once() on the orchestrator instead.
-    """
-    if not is_new_orchestrator_enabled():
-        logger.warning(
-            "CocoIndex has been removed (#2834). "
-            "Set INGEST_USE_NEW_ORCHESTRATOR=true and wire a FileChangeManager "
-            "to use the new orchestrator path."
-        )
-        try_update_ingestion_trace(command="flow-run-once", status="started")
+    if config is None:
+        config = _Cfg()
+    try_update_ingestion_trace(command="flow-run-once", status="started")
+    try:
+        orchestrator = _build_orchestrator(config)
+        asyncio.run(orchestrator.run_once(config.collection_name))
+    except Exception as exc:
         try_update_ingestion_trace(
             command="flow-run-once",
             status="error",
-            metadata={"error_type": "NotImplementedError"},
+            metadata={"error_type": type(exc).__name__},
         )
-        raise NotImplementedError(
-            "CocoIndex has been removed. Use INGEST_USE_NEW_ORCHESTRATOR=true."
-        )
-
-    logger.info(
-        "INGEST_USE_NEW_ORCHESTRATOR=true: new orchestrator path active. "
-        "Wire a FileChangeManager to UnifiedIngestionOrchestrator.run_once()."
-    )
-    try_update_ingestion_trace(command="flow-run-once", status="started")
+        raise
     try_update_ingestion_trace(command="flow-run-once", status="completed")
 
 
 @observe(name="ingestion-flow-watch", capture_input=False, capture_output=False)
-def run_watch(config: UnifiedConfig | None = None) -> None:
-    """Run ingestion continuously.
+def run_watch(
+    config: UnifiedConfig | None = None,
+    stop_event: asyncio.Event | None = None,
+) -> None:
+    """Run ingestion continuously via UnifiedIngestionOrchestrator."""
+    from src.ingestion.unified.config import UnifiedConfig as _Cfg
 
-    CocoIndex has been removed (#2834). This function now requires
-    INGEST_USE_NEW_ORCHESTRATOR=true (the only supported path).
-    Wire a FileChangeManager + DocumentWriter to UnifiedIngestionOrchestrator
-    and call run_watch() on the orchestrator instead.
-    """
-    if not is_new_orchestrator_enabled():
-        logger.warning(
-            "CocoIndex has been removed (#2834). "
-            "Set INGEST_USE_NEW_ORCHESTRATOR=true and wire a FileChangeManager "
-            "to use the new orchestrator path."
-        )
-        try_update_ingestion_trace(command="flow-watch", status="started")
+    if config is None:
+        config = _Cfg()
+    try_update_ingestion_trace(command="flow-watch", status="started")
+    try:
+        orchestrator = _build_orchestrator(config)
+        asyncio.run(orchestrator.run_watch(config.collection_name, stop_event=stop_event))
+    except Exception as exc:
         try_update_ingestion_trace(
             command="flow-watch",
             status="error",
-            metadata={"error_type": "NotImplementedError"},
+            metadata={"error_type": type(exc).__name__},
         )
-        raise NotImplementedError(
-            "CocoIndex has been removed. Use INGEST_USE_NEW_ORCHESTRATOR=true."
-        )
-
-    logger.info(
-        "INGEST_USE_NEW_ORCHESTRATOR=true: new orchestrator path active. "
-        "Wire a FileChangeManager to UnifiedIngestionOrchestrator.run_watch()."
-    )
-    try_update_ingestion_trace(command="flow-watch", status="started")
+        raise
     try_update_ingestion_trace(command="flow-watch", status="completed")
