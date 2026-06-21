@@ -132,10 +132,18 @@ def _build_orchestrator(config: UnifiedConfig) -> UnifiedIngestionOrchestrator:
                 mime_type=get_mime_type(file_path),
                 file_size=len(content) if content is not None else 0,
             )
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: QdrantHybridTargetConnector.mutate((spec, {file_id: values})),
             )
+            # mutate() persists the authoritative state (content_hash,
+            # embedding_model, pipeline_version) via its own sync state_manager.
+            # Read it back so record_state() doesn't clobber that row with a
+            # stripped FileState(content_hash=None), which would force every
+            # poll to re-classify the file as 'added' and re-ingest (#2940).
+            persisted = await state_manager.get_state(file_id)
+            if persisted is not None:
+                return persisted
             return _FileState(file_id=file_id, source_path=file_path, status="indexed")
 
         async def delete_file(self, file_path: str, collection_name: str) -> None:
@@ -145,7 +153,7 @@ def _build_orchestrator(config: UnifiedConfig) -> UnifiedIngestionOrchestrator:
             file_id = file_id_from_content(str(path.name), None)
             # ponytail: mutate() treats None value as delete; type stub is too narrow
             mutations: dict[str, QdrantHybridTargetValues] = {file_id: None}  # type: ignore[dict-item]
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: QdrantHybridTargetConnector.mutate((spec, mutations)),
             )
