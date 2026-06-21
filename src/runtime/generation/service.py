@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
+from src.adapters.llm.base import LLMConnectionError
 from src.observability import get_client
 from src.runtime.grounding.policy import (
     is_strict_grounding_safe,
@@ -906,45 +907,57 @@ async def generate_answer_stream(
         **config.get_reasoning_kwargs(),
     }
 
-    stream = await _chat_create_with_optional_name(
-        llm,
-        observation_name="generate-answer",
-        **stream_create_kwargs,
-    )
-    t_stream_start = time.monotonic()
+    try:
+        stream = await _chat_create_with_optional_name(
+            llm,
+            observation_name="generate-answer",
+            **stream_create_kwargs,
+        )
+        t_stream_start = time.monotonic()
 
-    async for chunk in stream:
-        if hasattr(chunk, "usage") and chunk.usage is not None:
-            chunk_usage = _extract_usage_details(chunk.usage)
-            if chunk_usage:
-                usage_details = {**(usage_details or {}), **chunk_usage}
-            maybe_tokens = _coerce_positive_number(getattr(chunk.usage, "completion_tokens", None))
-            if maybe_tokens is not None:
-                completion_tokens = maybe_tokens
+        async for chunk in stream:
+            if hasattr(chunk, "usage") and chunk.usage is not None:
+                chunk_usage = _extract_usage_details(chunk.usage)
+                if chunk_usage:
+                    usage_details = {**(usage_details or {}), **chunk_usage}
+                maybe_tokens = _coerce_positive_number(
+                    getattr(chunk.usage, "completion_tokens", None)
+                )
+                if maybe_tokens is not None:
+                    completion_tokens = maybe_tokens
 
-        if not getattr(chunk, "choices", None):
-            continue
+            if not getattr(chunk, "choices", None):
+                continue
 
-        delta = chunk.choices[0].delta
-        text = delta.content if delta else None
-        if not text:
-            text = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+            delta = chunk.choices[0].delta
+            text = delta.content if delta else None
+            if not text:
+                text = getattr(delta, "reasoning_content", None) or getattr(
+                    delta, "reasoning", None
+                )
 
-        if text:
-            if ttft_ms == 0.0:
-                first_token_at = time.monotonic()
-                ttft_ms = (first_token_at - t_request_start) * 1000
-                stream_only_ttft_ms = (first_token_at - t_stream_start) * 1000
-                if lf_client is not None:
-                    with contextlib.suppress(Exception):
-                        _update_current_generation(
-                            lf_client, completion_start_time=datetime.now(UTC)
-                        )
-            accumulated += text
-            yield text
+            if text:
+                if ttft_ms == 0.0:
+                    first_token_at = time.monotonic()
+                    ttft_ms = (first_token_at - t_request_start) * 1000
+                    stream_only_ttft_ms = (first_token_at - t_stream_start) * 1000
+                    if lf_client is not None:
+                        with contextlib.suppress(Exception):
+                            _update_current_generation(
+                                lf_client, completion_start_time=datetime.now(UTC)
+                            )
+                accumulated += text
+                yield text
 
-        if hasattr(chunk, "model") and chunk.model:
-            actual_model = chunk.model
+            if hasattr(chunk, "model") and chunk.model:
+                actual_model = chunk.model
+    except Exception as exc:
+        from litellm.exceptions import APIConnectionError as _LiteLLMConnErr
+
+        if isinstance(exc, _LiteLLMConnErr):
+            logger.exception("LLM connection error during streaming: %s", exc)
+            raise LLMConnectionError(str(exc), raw_error=exc) from exc
+        raise
 
     if not accumulated:
         raise ValueError("Streaming produced empty response")

@@ -40,6 +40,13 @@ class LLMTimeoutError(LLMError):
         super().__init__(message, error_type="timeout_error", raw_error=raw_error)
 
 
+class LLMConnectionError(LLMError):
+    """Connection or network error raised by LLM providers."""
+
+    def __init__(self, message: str, raw_error: Exception | None = None) -> None:
+        super().__init__(message, error_type="connection_error", raw_error=raw_error)
+
+
 class LLMProvider(ABC):
     """Abstract base class for LLM text generation providers."""
 
