@@ -236,17 +236,6 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     dd = dialog_manager.dialog_data
 
     active_filters = build_active_filters_summary(dd)
-    if lf is not None:
-        lf.update_current_span(
-            output=mask_pii(
-                {
-                    "count": count,
-                    "active_filters": active_filters,
-                    "context": _snapshot_filter_context(dialog_manager),
-                }
-            )
-        )
-
     return {
         "count": count,
         "active_filters": active_filters,
