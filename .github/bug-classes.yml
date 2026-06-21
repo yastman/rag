@@ -73,3 +73,8 @@ bug_classes:
     description: HITL confirmation path (_send_hitl_confirmation + agents/hitl.py) had no live callers after #2843 stubbed handle_hitl_callback; dead code remained silently in the codebase
     canonical_issue: "#2943"
     guardrail: "telegram_bot/agents/hitl.py deleted; _send_hitl_confirmation removed from bot.py"
+
+  - id: silent-no-op-with-success-log
+    description: Function silently returns a no-op/stub implementation while logging a success message, hiding that the intended feature is disabled or broken
+    canonical_issue: "#2944"
+    guardrail: tests/unit/integrations/test_memory_checkpointer.py

@@ -313,37 +313,27 @@ def create_redis_checkpointer(
     ttl_minutes: int | None = None,
     refresh_on_read: bool = True,
 ) -> InstrumentedCheckpointer:
-    """Create AsyncRedisSaver for persistent conversation memory (SDK).
+    """Raise NotImplementedError — Redis checkpointer disabled after LangGraph removal (#2843).
 
-    Returns an :class:`InstrumentedCheckpointer` wrapping the SDK saver so
-    callers can opt into direct checkpoint overhead measurement (#1258) via
-    :func:`begin_checkpoint_overhead_capture` /
-    :func:`end_checkpoint_overhead_capture`. The wrapper subclasses
-    :class:`BaseCheckpointSaver` (#2147) so LangGraph's
-    ``ensure_valid_checkpointer`` accepts it; all other behaviour is
-    identical to the underlying SDK saver.
+    AsyncRedisSaver was removed with LangGraph. This function raises so callers
+    can detect the failure and fall back to :func:`create_fallback_checkpointer`
+    rather than silently receiving a no-op MemorySaver (#2944).
 
     Args:
         redis_url: Redis connection string.
         ttl_minutes: Checkpoint TTL in minutes. None = no expiry.
         refresh_on_read: Sliding expiration for active threads.
-
-    Caller must: ``await checkpointer.asetup()`` before use.
     """
-    kwargs: dict[str, Any] = {"redis_url": redis_url}
-    if ttl_minutes is not None:
-        kwargs["ttl"] = {
-            "default_ttl": ttl_minutes,
-            "refresh_on_read": refresh_on_read,
-        }
-
-    logger.info(
-        "Creating AsyncRedisSaver (ttl_minutes=%s, refresh_on_read=%s)",
+    logger.warning(
+        "Redis checkpointer disabled — AsyncRedisSaver removed with LangGraph (#2843); "
+        "persistence is off (redis_url=%s, ttl_minutes=%s)",
+        redis_url,
         ttl_minutes,
-        refresh_on_read,
     )
-    _ = kwargs
-    return InstrumentedCheckpointer(MemorySaver())
+    raise NotImplementedError(
+        "Redis checkpointer is not implemented: AsyncRedisSaver was removed with LangGraph (#2843). "
+        "Caller should fall back to MemorySaver."
+    )
 
 
 def create_fallback_checkpointer() -> MemorySaver:
