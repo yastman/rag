@@ -90,3 +90,8 @@ bug_classes:
     description: README Honest Scope claimed voice and Mini App were removed in #2791, but handle_voice and Mini App handlers were still fully present and wired in bot.py
     canonical_issue: "#2942"
     guardrail: "handle_voice, _handle_deeplink_start, _process_miniapp_start, _run_miniapp_rag, _miniapp_subscriber_loop deleted from bot.py; tests/unit/test_bot_deeplink.py and test_bot_mini_app.py deleted"
+
+  - id: pipeline-exception-suppression
+    description: The assistant pipeline caught all exceptions with a bare except block, returning an error result instead of re-raising, which swallowed tracebacks and hid downstream bugs from tests and operators
+    canonical_issue: "#2967"
+    guardrail: tests/unit/runtime/test_assistant_pipeline.py::test_run_assistant_pipeline_propagates_exception

@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 import types
 
+import pytest
+
 from src.runtime.generation import GenerationResult
 
 
@@ -72,3 +74,39 @@ async def test_run_assistant_pipeline_returns_assistant_result(monkeypatch) -> N
     assert result.retrieved_doc_ids == ["doc-1"]
     assert result.retrieved_sources == [{"title": "Doc 1", "url": "fixture://doc-1"}]
     assert result.llm_model == "fake-model"
+
+
+# Regression test for #2967: pipeline must not swallow exceptions
+async def test_run_assistant_pipeline_propagates_exception(monkeypatch) -> None:
+    """Exceptions raised inside the pipeline must propagate, not be swallowed."""
+    from src.core import AssistantRequest, CoreDependencies, UserContext
+    from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
+
+    classify_mod = types.ModuleType("src.runtime.graph.nodes.classify")
+    classify_mod.classify_query = lambda _: "GENERAL"
+    monkeypatch.setitem(sys.modules, "src.runtime.graph.nodes.classify", classify_mod)
+
+    async def exploding_rag_pipeline(**kwargs):
+        raise RuntimeError("deliberate-test-explosion")
+
+    monkeypatch.setattr(
+        "src.runtime.pipeline.assistant_pipeline.rag_pipeline",
+        exploding_rag_pipeline,
+    )
+
+    with pytest.raises(RuntimeError, match="deliberate-test-explosion"):
+        await run_assistant_pipeline(
+            AssistantRequest(
+                query="q",
+                collection="c",
+                user_context=UserContext(user_id="42", session_id="s"),
+                request_id="req-1",
+            ),
+            dependencies=CoreDependencies(
+                cache=object(),
+                embeddings=object(),
+                sparse_embeddings=object(),
+                qdrant=object(),
+                config=object(),
+            ),
+        )

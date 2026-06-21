@@ -136,26 +136,13 @@ async def run_assistant_pipeline(
             llm_call_count=1,
             rerank_applied=bool(rag_result.get("rerank_applied", False)),
         )
-    except Exception as exc:
-        result = AssistantResult(
-            response_text="Сервис временно недоступен. Пожалуйста, повторите через минуту.",
-            route="error",
-            request_type="",
-            latency_ms=_latency_ms(started),
-            error_type="dependency_failed",
-            error_message=str(exc),
-            request_id=rid,
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "assistant_pipeline: unhandled exception for request_id=%s", rid
         )
-        emit_product_event(
-            dependencies.telemetry,
-            "dependency_failed",
-            request_id=rid,
-            route=result.route,
-            request_type=result.request_type,
-            latency_ms=result.latency_ms,
-            error_type=result.error_type,
-        )
-        return result
+        raise
 
 
 def _latency_ms(started: float) -> float:
