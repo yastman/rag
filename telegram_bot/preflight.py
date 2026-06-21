@@ -114,7 +114,6 @@ DEP_CLASSIFICATION: dict[str, DepLevel] = {
     "qdrant": DepLevel.CRITICAL,
     "bge_m3": DepLevel.CRITICAL,
     "postgres": DepLevel.OPTIONAL,
-    "langfuse": DepLevel.OPTIONAL,
 }
 
 _DEP_REMEDIATION: dict[str, str] = {
@@ -123,7 +122,6 @@ _DEP_REMEDIATION: dict[str, str] = {
     "qdrant": "Run `make local-up` to start Qdrant, then verify collection configuration",
     "bge_m3": "start the repo-local BGE-M3 service and verify /health and /encode/dense",
     "postgres": "start PostgreSQL or accept degraded user-feature mode",
-    "langfuse": "restore Langfuse credentials/connectivity or accept disabled tracing",
 }
 
 
@@ -648,12 +646,6 @@ async def _check_single_dep(
             else:
                 logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
             return False
-
-    if name == "langfuse":
-        from .observability import get_langfuse_client
-
-        lf = get_langfuse_client()
-        return lf is not None
 
     logger.warning("Preflight: unknown dependency %r", name)
     return False

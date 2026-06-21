@@ -16,8 +16,6 @@ import logging
 import time
 from typing import Any
 
-from src.observability import get_client, observe
-
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +38,6 @@ def make_transcribe_node(
         message: aiogram Message for sending preview.
     """
 
-    @observe(name="transcribe", capture_input=False, capture_output=False)
     async def transcribe_node(state: dict[str, Any]) -> dict[str, Any]:
         start = time.perf_counter()
 
@@ -49,31 +46,9 @@ def make_transcribe_node(
             raise ValueError("voice_audio is None — transcribe_node requires audio data")
 
         # Curated span input (no raw bytes!)
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "audio_size_bytes": len(voice_audio),
-                "voice_language": voice_language,
-                "stt_model": stt_model,
-                "voice_duration_s": state.get("voice_duration_s"),
-            }
-        )
 
         buf = io.BytesIO(voice_audio)
         buf.name = "voice.ogg"
-
-        # Best-effort Langfuse generation observation — must not break STT
-        import contextlib
-
-        gen_obs_ctx = None
-        gen_obs = None
-        with contextlib.suppress(Exception):
-            gen_obs_ctx = lf.start_as_current_observation(
-                name="transcribe-audio",
-                as_type="generation",
-                model=stt_model,
-            )
-            gen_obs = gen_obs_ctx.__enter__()
 
         try:
             transcript = await llm.audio.transcriptions.create(
@@ -82,19 +57,8 @@ def make_transcribe_node(
                 language=voice_language,
             )
             text = transcript.text.strip()
-            if gen_obs is not None:
-                with contextlib.suppress(Exception):
-                    gen_obs.update(output={"text": text[:120]})
-        except Exception as exc:
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"Transcription failed: {str(exc)[:200]}",
-            )
+        except Exception:
             raise
-        finally:
-            if gen_obs_ctx is not None:
-                with contextlib.suppress(Exception):
-                    gen_obs_ctx.__exit__(None, None, None)
 
         stt_duration_ms = (time.perf_counter() - start) * 1000
 
@@ -109,13 +73,6 @@ def make_transcribe_node(
         )
 
         # Curated span output
-        lf.update_current_span(
-            output={
-                "stt_duration_ms": round(stt_duration_ms, 1),
-                "text_length": len(text),
-                "text_preview": text[:120],
-            }
-        )
 
         # Send transcription preview (optional)
         if show_transcription and message is not None:

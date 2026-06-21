@@ -177,21 +177,14 @@ def _build_system_prompt(domain: str) -> str:
 
 
 def _build_system_prompt_with_config(domain: str) -> tuple[str, dict[str, Any]]:
-    """Build system prompt and return Langfuse prompt config (temperature, max_tokens, etc.)."""
+    """Build system prompt and return prompt config (temperature, max_tokens, etc.)."""
     return get_prompt_with_config(
         "generate", fallback=_GENERATE_FALLBACK, variables={"domain": domain}
     )
 
 
 def _get_linkable_prompt_object(name: str, fallback: str, variables: dict[str, str]) -> Any | None:
-    """Return the raw Langfuse Prompt object (or None) for #1666 generation linking.
-
-    Companion to ``get_prompt_with_config``: fetches the same prompt and returns
-    only the raw object suitable for ``langfuse_prompt=`` linking. Langfuse's
-    SDK internal cache (cache_ttl_seconds) deduplicates the underlying network
-    call, so this is effectively free when called immediately after
-    ``get_prompt_with_config`` for the same name.
-    """
+    """Return the raw prompt object (or None) for generation linking (removed in #2844)."""
     _, prompt_obj = get_prompt_with_object(name, fallback=fallback, variables=variables)
     return prompt_obj
 
@@ -314,7 +307,7 @@ def _coerce_positive_number(value: Any) -> float | None:
 
 
 def _extract_usage_details(usage: Any | None) -> dict[str, int] | None:
-    """Extract Langfuse-compatible usage_details from provider usage object."""
+    """Extract usage_details from provider usage object."""
     if usage is None:
         return None
 

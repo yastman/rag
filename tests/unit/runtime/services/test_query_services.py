@@ -31,13 +31,9 @@ def test_guard_node_importable_from_services():
 
 def test_classify_query_behaves_correctly():
     """classify_query from services returns a string query type."""
-    from unittest.mock import MagicMock, patch
-
     from src.runtime.services.query_services import classify_query
 
-    mock_lf = MagicMock()
-    with patch("src.runtime.graph.nodes.classify.get_client", return_value=mock_lf):
-        result = classify_query("какие документы нужны для покупки квартиры")
+    result = classify_query("какие документы нужны для покупки квартиры")
     assert isinstance(result, str)
     assert result == "FAQ"
 

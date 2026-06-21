@@ -8,11 +8,11 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Annotated, Any
+from typing import Any
 
 import numpy as np
 import onnxruntime
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from opentelemetry import propagate
 from opentelemetry.context import attach, detach
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
@@ -20,22 +20,6 @@ from pydantic import BaseModel, Field
 from transformers import AutoTokenizer
 
 from config import settings
-
-
-# Langfuse removed (#2844, #2951) — no-op stubs
-def get_client():  # type: ignore[override]
-    """No-op stub — Langfuse removed (#2844, #2951)."""
-
-
-def observe(*args, **kwargs):  # type: ignore[override]
-    """No-op decorator — Langfuse removed (#2844, #2951)."""
-
-    def decorator(f):
-        return f
-
-    if args and callable(args[0]) and not kwargs:
-        return args[0]
-    return decorator
 
 
 # Logging
@@ -59,35 +43,6 @@ model_loaded = Gauge("bge_model_loaded", "Model loaded status (1=loaded, 0=not l
 _onnx_session = None
 _tokenizer = None
 _warmed_up = False
-
-LangfuseTraceIdHeader = Annotated[str | None, Header(alias="x-langfuse-trace-id")]
-LangfuseParentObservationIdHeader = Annotated[
-    str | None, Header(alias="x-langfuse-parent-observation-id")
-]
-
-
-def _update_current_bge_span(
-    *,
-    input: dict[str, Any] | None = None,
-    output: dict[str, Any] | None = None,
-    encode_type: str,
-) -> None:
-    """Attach curated BGE service metadata to the active Langfuse observation."""
-    payload: dict[str, Any] = {
-        "metadata": {
-            "model": settings.MODEL_NAME,
-            "runtime": "onnx-int8",
-            "encode_type": encode_type,
-        }
-    }
-    if input is not None:
-        payload["input"] = input
-    if output is not None:
-        payload["output"] = output
-    try:
-        get_client().update_current_span(**payload)
-    except Exception:
-        logger.debug("Langfuse BGE span update skipped", exc_info=True)
 
 
 class ONNXEmbeddingModel:
@@ -455,14 +410,6 @@ async def _run_encode(
     """
     encode_requests_total.labels(encode_type=encode_type).inc()
     encode_batch_size.observe(len(request.texts))
-    _update_current_bge_span(
-        input={
-            "texts_count": len(request.texts),
-            "batch_size": request.batch_size,
-            "max_length": request.max_length,
-        },
-        encode_type=encode_type,
-    )
 
     valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
     partial_failures = [
@@ -547,17 +494,7 @@ async def health():
 
 
 @app.post("/encode/dense", response_model=DenseResponse)
-@observe(
-    name="bge-m3-service-encode-dense",
-    as_type="embedding",
-    capture_input=False,
-    capture_output=False,
-)
-async def encode_dense(
-    request: EncodeRequest,
-    langfuse_trace_id: LangfuseTraceIdHeader = None,
-    langfuse_parent_observation_id: LangfuseParentObservationIdHeader = None,
-):
+async def encode_dense(request: EncodeRequest):
     """
     Encode texts to dense vectors (1024-dim)
 
@@ -571,15 +508,6 @@ async def encode_dense(
             return_sparse=False,
             return_colbert_vecs=False,
         )
-        _update_current_bge_span(
-            output={
-                "vectors_count": len(dense_vecs),
-                "vector_dim": len(dense_vecs[0]) if dense_vecs else 0,
-                "processing_time": processing_time,
-                "partial_failures": len(partial_failures),
-            },
-            encode_type="dense",
-        )
         return DenseResponse(
             dense_vecs=dense_vecs,
             processing_time=processing_time,
@@ -591,17 +519,7 @@ async def encode_dense(
 
 
 @app.post("/encode/sparse", response_model=SparseResponse)
-@observe(
-    name="bge-m3-service-encode-sparse",
-    as_type="embedding",
-    capture_input=False,
-    capture_output=False,
-)
-async def encode_sparse(
-    request: EncodeRequest,
-    langfuse_trace_id: LangfuseTraceIdHeader = None,
-    langfuse_parent_observation_id: LangfuseParentObservationIdHeader = None,
-):
+async def encode_sparse(request: EncodeRequest):
     """
     Encode texts to sparse vectors (BM25-style)
 
@@ -615,14 +533,6 @@ async def encode_sparse(
             return_sparse=True,
             return_colbert_vecs=False,
         )
-        _update_current_bge_span(
-            output={
-                "weights_count": len(lexical_weights),
-                "processing_time": processing_time,
-                "partial_failures": len(partial_failures),
-            },
-            encode_type="sparse",
-        )
         return SparseResponse(
             lexical_weights=lexical_weights,
             processing_time=processing_time,
@@ -634,17 +544,7 @@ async def encode_sparse(
 
 
 @app.post("/encode/colbert", response_model=ColbertResponse)
-@observe(
-    name="bge-m3-service-encode-colbert",
-    as_type="embedding",
-    capture_input=False,
-    capture_output=False,
-)
-async def encode_colbert(
-    request: EncodeRequest,
-    langfuse_trace_id: LangfuseTraceIdHeader = None,
-    langfuse_parent_observation_id: LangfuseParentObservationIdHeader = None,
-):
+async def encode_colbert(request: EncodeRequest):
     """
     Encode texts to ColBERT multivectors
 
@@ -658,15 +558,6 @@ async def encode_colbert(
             return_sparse=False,
             return_colbert_vecs=True,
         )
-        _update_current_bge_span(
-            output={
-                "colbert_count": len(colbert_vecs),
-                "colbert_vector_count": len(colbert_vecs[0]) if colbert_vecs else 0,
-                "processing_time": processing_time,
-                "partial_failures": len(partial_failures),
-            },
-            encode_type="colbert",
-        )
         return ColbertResponse(
             colbert_vecs=colbert_vecs,
             processing_time=processing_time,
@@ -678,17 +569,7 @@ async def encode_colbert(
 
 
 @app.post("/encode/hybrid", response_model=HybridResponse)
-@observe(
-    name="bge-m3-service-encode-hybrid",
-    as_type="embedding",
-    capture_input=False,
-    capture_output=False,
-)
-async def encode_hybrid(
-    request: EncodeRequest,
-    langfuse_trace_id: LangfuseTraceIdHeader = None,
-    langfuse_parent_observation_id: LangfuseParentObservationIdHeader = None,
-):
+async def encode_hybrid(request: EncodeRequest):
     """
     Encode texts to all three representations at once
 
@@ -707,16 +588,6 @@ async def encode_hybrid(
             return_sparse=True,
             return_colbert_vecs=True,
         )
-        _update_current_bge_span(
-            output={
-                "dense_count": len(dense_vecs),
-                "sparse_count": len(lexical_weights),
-                "colbert_count": len(colbert_vecs),
-                "processing_time": processing_time,
-                "partial_failures": len(partial_failures),
-            },
-            encode_type="hybrid",
-        )
         return HybridResponse(
             dense_vecs=dense_vecs,
             lexical_weights=lexical_weights,
@@ -730,32 +601,13 @@ async def encode_hybrid(
 
 
 @app.post("/rerank", response_model=RerankResponse)
-@observe(
-    name="bge-m3-service-rerank",
-    as_type="embedding",
-    capture_input=False,
-    capture_output=False,
-)
-async def rerank(
-    request: RerankRequest,
-    langfuse_trace_id: LangfuseTraceIdHeader = None,
-    langfuse_parent_observation_id: LangfuseParentObservationIdHeader = None,
-):
+async def rerank(request: RerankRequest):
     """
     Rerank documents using ColBERT MaxSim.
 
     Returns documents sorted by relevance score (highest first).
     """
     encode_requests_total.labels(encode_type="rerank").inc()
-    _update_current_bge_span(
-        input={
-            "query_length": len(request.query),
-            "documents_count": len(request.documents),
-            "top_k": request.top_k,
-            "max_length": request.max_length,
-        },
-        encode_type="rerank",
-    )
 
     # Validate limits
     if len(request.documents) > settings.RERANK_MAX_DOCS:
@@ -770,10 +622,6 @@ async def rerank(
 
     documents = [d for d in (doc.strip() for doc in request.documents) if d]
     if not documents:
-        _update_current_bge_span(
-            output={"results_count": 0, "processing_time": 0.0},
-            encode_type="rerank",
-        )
         return RerankResponse(results=[], processing_time=0.0)
 
     try:
@@ -809,14 +657,6 @@ async def rerank(
 
         results = [RerankResult(index=idx, score=score) for idx, score in top_results]
 
-        _update_current_bge_span(
-            output={
-                "results_count": len(results),
-                "top_score": results[0].score if results else None,
-                "processing_time": processing_time,
-            },
-            encode_type="rerank",
-        )
         return RerankResponse(results=results, processing_time=processing_time)
 
     except Exception as e:

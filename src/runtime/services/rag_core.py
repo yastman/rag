@@ -20,7 +20,6 @@ Observability (#2162):
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from typing import Any
 
@@ -40,11 +39,7 @@ CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED"
 
 
 def _update_current_span(**kwargs: Any) -> None:
-    """Best-effort ``update_current_span`` wrapper; no-op when no client."""
-    lf = get_client()
-    if lf is not None:
-        with contextlib.suppress(Exception):
-            lf.update_current_span(**kwargs)
+    """No-op stub — Langfuse removed (#2844)."""
 
 
 def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
@@ -65,7 +60,6 @@ def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-build-context", capture_input=False, capture_output=False)
 def build_retrieved_context(
     results: list[dict[str, Any]],
     limit: int = 5,
@@ -100,7 +94,6 @@ def build_retrieved_context(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-rewrite-query", capture_input=False, capture_output=False)
 async def rewrite_query_via_llm(
     query: str,
     *,
@@ -157,7 +150,6 @@ async def rewrite_query_via_llm(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-perform-rerank", capture_input=False, capture_output=False)
 async def perform_rerank(
     query: str,
     documents: list[dict[str, Any]],
@@ -262,7 +254,6 @@ async def perform_rerank(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-compute-query-embedding", capture_input=False, capture_output=False)
 async def compute_query_embedding(
     query: str,
     *,
@@ -421,7 +412,6 @@ async def compute_query_embedding(
     return (dense, sparse, None, False)
 
 
-@observe(name="rag-core-check-semantic-cache", capture_input=False, capture_output=False)
 async def check_semantic_cache(
     query: str,
     vector: list[float],

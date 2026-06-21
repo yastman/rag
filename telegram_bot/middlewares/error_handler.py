@@ -74,30 +74,6 @@ async def _handle_stale_dialog(callback_query: Any) -> None:
             logger.debug("Unexpected failure while deleting stale dialog message", exc_info=True)
 
 
-def _update_langfuse_span_on_error(exception: BaseException) -> None:
-    """Report error to Langfuse if a trace is active."""
-    try:
-        from telegram_bot.observability import get_client
-
-        lf = get_client()
-        if lf is None or not lf.get_current_trace_id():
-            return
-        status_message = f"{type(exception).__name__}: {str(exception)[:200]}"
-        update_observation = getattr(lf, "update_current_observation", None)
-        if callable(update_observation):
-            update_observation(level="ERROR", status_message=status_message)
-        else:
-            update_span = getattr(lf, "update_current_span", None)
-            if callable(update_span):
-                update_span(level="ERROR", status_message=status_message)
-            else:
-                update_generation = getattr(lf, "update_current_generation", None)
-                if callable(update_generation):
-                    update_generation(level="ERROR", status_message=status_message)
-    except Exception:
-        logger.debug("Failed to report error to Langfuse", exc_info=True)
-
-
 def _resolve_reply_message(update: Any, callback_query: Any) -> Any:
     """Return the message to reply to, or None."""
     if update.message is not None:
@@ -132,7 +108,6 @@ async def handle_error(event: ErrorEvent) -> None:
         exception,
         exc_info=exception,
     )
-    _update_langfuse_span_on_error(exception)
 
     if callback_query is not None:
         await _answer_callback_safe(callback_query)

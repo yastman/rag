@@ -123,11 +123,7 @@ class TestQueryPreprocessorLogsErrorType:
 
         gen = HyDEGenerator(model="test-model")
 
-        with patch("src.runtime.services.query_preprocessor.get_client") as mock_get_client:
-            mock_lf = MagicMock()
-            mock_get_client.return_value = mock_lf
-
-            result = await gen.generate_hypothetical_document("test query")
+        result = await gen.generate_hypothetical_document("test query")
 
         assert result == "test query"  # Falls back to original query
         mock_logger.error.assert_called()

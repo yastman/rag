@@ -11,8 +11,6 @@ message.answer() for chat history persistence.
 
 from __future__ import annotations
 
-import contextlib
-import hashlib
 import logging
 from typing import Any
 
@@ -23,7 +21,7 @@ from src.runtime.integrations.prompt_templates import (
     get_token_limit,
 )
 from src.runtime.services.response_style_detector import ResponseStyleDetector
-from telegram_bot.observability import get_client, observe
+from telegram_bot.observability import get_client
 from telegram_bot.services.generate_response import (
     StreamingPartialDeliveryError as StreamingPartialDeliveryError,  # re-export for compat
 )
@@ -196,7 +194,6 @@ def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float |
     return None
 
 
-@observe(name="node-generate", capture_input=False, capture_output=False)
 async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[str, Any]:
     """Adapter: delegates generation core to shared service with node defaults."""
     documents = state.get("documents", [])
@@ -209,19 +206,6 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
             last_msg.get("content", "")
             if isinstance(last_msg, dict)
             else getattr(last_msg, "content", "")
-        )
-
-    # Safe span input with query/context metadata
-    with contextlib.suppress(Exception):
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "query_preview": str(query)[:120],
-                "query_hash": hashlib.sha256(str(query).encode()).hexdigest()[:8],
-                "query_len": len(str(query)),
-                "context_docs_count": len(documents),
-                "style": "default",
-            },
         )
 
     return await _generate_response_service(  # type: ignore[no-any-return]

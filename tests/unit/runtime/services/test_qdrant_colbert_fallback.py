@@ -31,7 +31,7 @@ extracted seam only.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -51,11 +51,6 @@ async def test_colbert_fallback_forwards_search_kwargs(monkeypatch: pytest.Monke
     service = _make_service()
     expected_results = [{"id": "doc-1", "score": 0.91, "text": "hit"}]
     service.hybrid_search_rrf = AsyncMock(return_value=expected_results)
-    fake_lf = MagicMock()
-    monkeypatch.setattr(
-        "src.runtime.services.qdrant.get_client",
-        lambda: fake_lf,
-    )
 
     fallback, flat = await service._colbert_fallback_to_rrf(
         dense_vector=[0.1, 0.2],
@@ -89,10 +84,6 @@ async def test_colbert_fallback_unwraps_return_meta_tuple(monkeypatch: pytest.Mo
     flat_results = [{"id": "doc-1", "score": 0.5}]
     raw_meta = {"backend_error": False}
     service.hybrid_search_rrf = AsyncMock(return_value=(flat_results, raw_meta))
-    monkeypatch.setattr(
-        "src.runtime.services.qdrant.get_client",
-        lambda: MagicMock(),
-    )
 
     fallback, flat = await service._colbert_fallback_to_rrf(
         dense_vector=[0.0],
@@ -114,16 +105,12 @@ async def test_colbert_fallback_unwraps_return_meta_tuple(monkeypatch: pytest.Mo
 async def test_colbert_fallback_emits_canonical_span_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """_colbert_fallback_to_rrf returns results correctly (Langfuse span removed in #2844)."""
     service = _make_service()
     flat_results = [{"id": "a", "score": 0.7}, {"id": "b", "score": 0.3}]
     service.hybrid_search_rrf = AsyncMock(return_value=flat_results)
-    fake_lf = MagicMock()
-    monkeypatch.setattr(
-        "src.runtime.services.qdrant.get_client",
-        lambda: fake_lf,
-    )
 
-    await service._colbert_fallback_to_rrf(
+    fallback, flat = await service._colbert_fallback_to_rrf(
         dense_vector=[],
         sparse_vector=None,
         filters=None,
@@ -135,33 +122,18 @@ async def test_colbert_fallback_emits_canonical_span_payload(
         fallback_reason="colbert_error:RuntimeError",
     )
 
-    fake_lf.update_current_span.assert_called_once()
-    payload = fake_lf.update_current_span.call_args.kwargs
-    assert payload["output"] == {
-        "fallback_reason": "colbert_error:RuntimeError",
-        "results_count": 2,
-        "top_score": 0.7,
-    }
-    assert payload["metadata"] == {
-        "collection": "unit-collection",
-        "quantization_mode": "binary",
-    }
+    assert fallback is flat_results
+    assert flat is flat_results
+    assert len(flat) == 2
 
 
 @pytest.mark.asyncio
 async def test_colbert_fallback_handles_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``top_score`` must be ``None`` when fallback returns no docs — the
-    existing call sites all rely on this exact shape, so we pin it here.
-    """
+    """``_colbert_fallback_to_rrf`` handles empty fallback results gracefully."""
     service = _make_service()
     service.hybrid_search_rrf = AsyncMock(return_value=[])
-    fake_lf = MagicMock()
-    monkeypatch.setattr(
-        "src.runtime.services.qdrant.get_client",
-        lambda: fake_lf,
-    )
 
-    await service._colbert_fallback_to_rrf(
+    _fallback, flat = await service._colbert_fallback_to_rrf(
         dense_vector=[],
         sparse_vector=None,
         filters=None,
@@ -173,9 +145,7 @@ async def test_colbert_fallback_handles_empty_results(monkeypatch: pytest.Monkey
         fallback_reason="colbert_empty",
     )
 
-    payload = fake_lf.update_current_span.call_args.kwargs
-    assert payload["output"]["results_count"] == 0
-    assert payload["output"]["top_score"] is None
+    assert flat == []
 
 
 def test_colbert_fallback_pattern_is_extracted_from_inline_callsites() -> None:

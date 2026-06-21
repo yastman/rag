@@ -22,8 +22,7 @@ from src.runtime.services.cache_policy import (
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
-from src.scoring import score, write_langfuse_scores
-from telegram_bot.observability import get_client, observe, propagate_attributes
+from telegram_bot.observability import propagate_attributes
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.telegram_formatting import format_sources_html, send_html_messages
@@ -50,7 +49,6 @@ _MAX_SOURCES = 5
 # ---------------------------------------------------------------------------
 
 
-@observe(name="detect-agent-intent", capture_input=False, capture_output=False)
 def detect_agent_intent(user_text: str) -> str:
     """Detect if the user intent requires agent routing.
 
@@ -60,11 +58,7 @@ def detect_agent_intent(user_text: str) -> str:
     Returns:
         Intent string: "mortgage" | "handoff" | "daily_summary" | "apartment" | "".
     """
-    intent = infer_agent_intent(user_text)
-    lf = get_client()
-    lf.update_current_span(input={"query_length": len(user_text)})
-    lf.update_current_span(output={"intent": intent or "none"})
-    return intent
+    return infer_agent_intent(user_text)
 
 
 def infer_agent_intent(user_text: str) -> str:
@@ -497,45 +491,22 @@ async def _pipeline_postprocess(
         except Exception:
             logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
 
-    try:
-        with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
-            lf.update_current_span(
-                input=build_safe_input_payload(content_type="text", text=user_text),
-                output={
-                    "response_preview": str(response_text)[:240],
-                    "response_len": len(str(response_text)),
-                },
-                metadata=trace_metadata,
-            )
-    except Exception:
-        logger.warning(
-            "Failed to update Langfuse trace metadata in client-direct RAG path",
-            exc_info=True,
-        )
+    with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
+        pass  # Langfuse trace context propagation removed (#2844)
 
-    tid = trace_id or (lf.get_current_trace_id() or "")
-    if tid:
-        result.update(
-            {
-                "pipeline_wall_ms": wall_ms,
-                "user_perceived_wall_ms": e2e_wall_ms,
-                "e2e_latency_ms": e2e_wall_ms,
-                "query_type": query_type,
-                "input_type": "text",
-                "messages": [
-                    *result.get("messages", []),
-                    {"role": "assistant", "content": response_text},
-                ],
-            }
-        )
-        try:
-            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
-        except Exception:
-            logger.warning("Failed to write user_role score in client pipeline", exc_info=True)
-        try:
-            write_langfuse_scores(lf, result, trace_id=tid)
-        except Exception:
-            logger.warning("Failed to write Langfuse scores in client pipeline", exc_info=True)
+    result.update(
+        {
+            "pipeline_wall_ms": wall_ms,
+            "user_perceived_wall_ms": e2e_wall_ms,
+            "e2e_latency_ms": e2e_wall_ms,
+            "query_type": query_type,
+            "input_type": "text",
+            "messages": [
+                *result.get("messages", []),
+                {"role": "assistant", "content": response_text},
+            ],
+        }
+    )
 
     sources: list[dict[str, str]] = []
     for doc in documents_list[:_MAX_SOURCES]:
@@ -570,7 +541,6 @@ async def _pipeline_postprocess(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="client-direct-pipeline", capture_input=False, capture_output=False)
 async def run_client_pipeline(
     *,
     user_text: str,
@@ -621,56 +591,12 @@ async def run_client_pipeline(
         PipelineResult with answer, metadata, and routing signals.
     """
     pipeline_start = time.perf_counter()
-    lf = get_client()
 
     # --- Step a) Classify gate ---
     if query_type in _NO_RAG_QUERY_TYPES:
         response_text = _build_non_rag_response(query_type)
         await _send_html_chunks(message, response_text, reply_to_user_text=user_text)
         latency_ms = (time.perf_counter() - pipeline_start) * 1000
-        try:
-            with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
-                lf.update_current_span(
-                    input=build_safe_input_payload(
-                        content_type="text",
-                        text=user_text,
-                    ),
-                    output={
-                        "response_preview": str(response_text)[:240],
-                        "response_len": len(str(response_text)),
-                    },
-                    metadata={
-                        "route": "client_direct",
-                        "pipeline_mode": "client_direct",
-                        "query_type": query_type,
-                        "pipeline_wall_ms": latency_ms,
-                        "e2e_latency_ms": latency_ms,
-                    },
-                )
-        except Exception:
-            logger.warning(
-                "Failed to update Langfuse trace metadata in client-direct non-RAG path",
-                exc_info=True,
-            )
-        # Write minimal scores for non-RAG early-return paths (#1368)
-        tid = lf.get_current_trace_id() or ""
-        if tid:
-            try:
-                minimal_result = {
-                    "query_type": query_type,
-                    "pipeline_wall_ms": latency_ms,
-                    "e2e_latency_ms": latency_ms,
-                    "cache_hit": False,
-                    "input_type": "text",
-                    "search_results_count": 0,
-                    "grade_confidence": 0.0,
-                }
-                write_langfuse_scores(lf, minimal_result, trace_id=tid)
-            except Exception:
-                logger.warning(
-                    "Failed to write Langfuse scores in client-direct non-RAG path",
-                    exc_info=True,
-                )
         return PipelineResult(
             answer=response_text,
             query_type=query_type,
@@ -682,25 +608,6 @@ async def run_client_pipeline(
     resolved_intent = agent_intent or detect_agent_intent(user_text)
     if resolved_intent:
         latency_ms = (time.perf_counter() - pipeline_start) * 1000
-        # Write minimal scores for agent-intent early-return paths (#1368)
-        tid = lf.get_current_trace_id() or ""
-        if tid:
-            try:
-                minimal_result = {
-                    "query_type": query_type,
-                    "pipeline_wall_ms": latency_ms,
-                    "e2e_latency_ms": latency_ms,
-                    "cache_hit": False,
-                    "input_type": "text",
-                    "search_results_count": 0,
-                    "grade_confidence": 0.0,
-                }
-                write_langfuse_scores(lf, minimal_result, trace_id=tid)
-            except Exception:
-                logger.warning(
-                    "Failed to write Langfuse scores in client-direct intent gate",
-                    exc_info=True,
-                )
         return PipelineResult(
             needs_agent=True,
             agent_intent=resolved_intent,
@@ -737,7 +644,7 @@ async def run_client_pipeline(
         config=config,
         message=message,
     )
-    trace_id = lf.get_current_trace_id() or ""
+    trace_id = ""
     await _pipeline_respond(
         message=message,
         result=result,
@@ -760,7 +667,7 @@ async def run_client_pipeline(
         pre_agent_ms=ctx["pre_agent_ms"],
         pipeline_start=pipeline_start,
         cache=cache,
-        lf=lf,
+        lf=None,
         trace_id=trace_id,
         config=config,
     )

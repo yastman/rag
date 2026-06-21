@@ -29,14 +29,13 @@ from src.runtime.services.cache_policy import (
     resolve_semantic_cache_signature,
 )
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
-from src.scoring import score, write_langfuse_scores
 from telegram_bot._bot_error_classification import _is_checkpointer_runtime_error
 from telegram_bot._bot_pre_agent import (
     _build_pre_agent_state_contract,
     _get_or_compute_pre_agent_dense,
     _prepare_pre_agent_retrieval_vectors,
 )
-from telegram_bot._bot_state_helpers import _extract_current_turn, _state_control_message_id
+from telegram_bot._bot_state_helpers import _state_control_message_id
 from telegram_bot._bot_streaming import (
     _AGENT_DRAFT_INTERVAL,
     _extract_stream_chunk_text,
@@ -163,10 +162,7 @@ async def _handle_apartment_fast_path(
                 _prev = json.loads(_prev_raw)
                 _time_delta = time.time() - float(_prev["ts"])
                 if is_reformulation(list(dense), _prev["vec"], _time_delta):
-                    lf = get_client()
-                    tid = lf.get_current_trace_id() or ""
-                    if tid:
-                        score(lf, tid, name="implicit_retry", value=1, data_type="BOOLEAN")
+                    pass  # implicit retry detected (Langfuse scoring removed in #2844)
             await bot._cache.redis.set(
                 _ikey,
                 json.dumps({"vec": list(dense), "ts": time.time()}),
@@ -328,50 +324,8 @@ def _trace_guard_blocked(
     pattern: str | None,
     root_trace_metadata: dict[str, Any] | None,
 ) -> None:
-    """Write Langfuse trace + scores for a hard-blocked injection (#1368)."""
+    """Write scores for a hard-blocked injection (#1368) — Langfuse removed (#2844)."""
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
-    lf = get_client()
-    tid = lf.get_current_trace_id() or ""
-    lf.update_current_span(
-        input={"query": user_text},
-        output={"response": "BLOCKED"},
-        metadata={
-            "pipeline_mode": "sdk_agent",
-            "pipeline_wall_ms": wall_ms,
-            "e2e_latency_ms": wall_ms,
-            "guard_blocked": True,
-            "injection_pattern": pattern,
-            "injection_risk_score": risk_score,
-        },
-    )
-    if tid:
-        score(lf, tid, name="guard_blocked", value=1, data_type="BOOLEAN")
-        score(
-            lf,
-            tid,
-            name="injection_pattern",
-            value=pattern or "unknown",
-            data_type="CATEGORICAL",
-        )
-        try:
-            write_langfuse_scores(
-                lf,
-                {
-                    "query_type": query_type,
-                    "pipeline_wall_ms": wall_ms,
-                    "e2e_latency_ms": wall_ms,
-                    "cache_hit": False,
-                    "input_type": "text",
-                    "search_results_count": 0,
-                    "grade_confidence": 0.0,
-                    "injection_detected": True,
-                    "injection_risk_score": risk_score,
-                    "injection_pattern": pattern,
-                },
-                trace_id=tid,
-            )
-        except Exception:
-            logger.warning("Failed to write Langfuse scores in guard-blocked path", exc_info=True)
     if root_trace_metadata is not None:
         root_trace_metadata.update(
             {
@@ -404,11 +358,10 @@ async def _handle_pre_agent_cache_hit(
     rag_result_store["cache_hit"] = True
     rag_result_store["query_type"] = query_type
     rag_result_store["cache_key_embedding"] = dense
-    lf = get_client()
     pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
     rag_result_store["pre_agent_ms"] = pre_agent_ms
-    _raw_tid = lf.get_current_trace_id()
-    tid = _raw_tid if isinstance(_raw_tid, str) else ""
+    _raw_tid = ""
+    tid = ""
     reply_markup = None
     if tid and query_type not in _NO_RAG_QUERY_TYPES:
         from telegram_bot.feedback import build_feedback_keyboard
@@ -433,19 +386,6 @@ async def _handle_pre_agent_cache_hit(
         "semantic_cache_safe_reuse": bool(rag_result_store.get("semantic_cache_safe_reuse", True)),
         "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
     }
-    lf.update_current_span(
-        input={"query": user_text},
-        output={"response": cached},
-        metadata=cache_trace_metadata,
-    )
-    if tid:
-        score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
-        score(lf, tid, name="query_type", value=query_type, data_type="CATEGORICAL")
-        score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
-        try:
-            write_langfuse_scores(lf, rag_result_store, trace_id=tid)
-        except Exception:
-            logger.warning("Failed to write Langfuse scores in pre-agent cache hit", exc_info=True)
     if root_trace_metadata is not None:
         root_trace_metadata.update(cache_trace_metadata)
     return cached
@@ -463,9 +403,8 @@ async def _send_core_response(
     forum_thread_id: int | None,
 ) -> None:
     """Send response with feedback keyboard and source attribution."""
-    lf = get_client()
-    _raw_trace_id = lf.get_current_trace_id()
-    trace_id = _raw_trace_id if isinstance(_raw_trace_id, str) else ""
+    _raw_trace_id = ""
+    trace_id = ""
 
     reply_markup = None
     if trace_id and query_type and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
@@ -550,30 +489,6 @@ def _write_final_pipeline_trace(
     root_trace_metadata: dict[str, Any] | None,
 ) -> None:
     """Write end-of-pipeline Langfuse span metadata and root trace metadata."""
-    lf = get_client()
-    lf.update_current_span(
-        input={"query": user_text},
-        metadata={
-            "pipeline_mode": "sdk_agent",
-            "query_type": rag_result_store.get("query_type", ""),
-            "topic_hint": rag_result_store.get("topic_hint", ""),
-            "grounding_mode": rag_result_store.get("grounding_mode", ""),
-            "filter_signature": filter_signature or "",
-            "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
-            "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-            "grounded": bool(rag_result_store.get("grounded", True)),
-            "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
-            "semantic_cache_safe_reuse": bool(
-                rag_result_store.get("semantic_cache_safe_reuse", True)
-            ),
-            "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
-            "pipeline_wall_ms": wall_ms,
-            "pre_agent_ms": pre_agent_ms,
-            "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-            "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
-            "e2e_latency_ms": wall_ms,
-        },
-    )
     if root_trace_metadata is not None:
         root_trace_metadata.update(
             {
@@ -889,43 +804,8 @@ def _supervisor_write_langfuse_scores(
     rag_result_store: dict[str, Any],
     messages: list[Any],
 ) -> str:
-    """Write Langfuse scores for supervisor model, role, tool calls, sources. Returns trace_id."""
-    lf = get_client()
-    tid = lf.get_current_trace_id() or ""
-    if not tid:
-        return tid
-    lf.create_score(
-        trace_id=tid,
-        name="supervisor_model",
-        value=bot.config.supervisor_model,
-        data_type="CATEGORICAL",
-        score_id=f"{tid}-supervisor_model",
-    )
-    lf.create_score(
-        trace_id=tid,
-        name="user_role",
-        value=role,
-        data_type="CATEGORICAL",
-        score_id=f"{tid}-user_role",
-    )
-    current_turn_msgs = _extract_current_turn(messages)
-    tool_calls = sum(
-        len(m.tool_calls)
-        for m in current_turn_msgs
-        if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
-    )
-    if tool_calls > 0:
-        lf.create_score(
-            trace_id=tid,
-            name="tool_calls_total",
-            value=float(tool_calls),
-            score_id=f"{tid}-tool_calls_total",
-        )
-    sources_count_actual = int(rag_result_store.get("sources_count", 0) or 0)
-    if sources_count_actual > 0:
-        score(lf, tid, name="sources_shown", value=1, data_type="BOOLEAN")
-        score(lf, tid, name="sources_count", value=float(sources_count_actual))
-    return tid
+    """No-op stub — Langfuse scores removed (#2844). Returns empty trace_id."""
+    return ""
 
 
 async def _supervisor_store_cache_and_trace(

@@ -24,7 +24,6 @@ cache_store_node: store response in semantic cache (allowlisted types only).
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import time
 from typing import Any
@@ -43,7 +42,6 @@ from src.runtime.services.rag_core import (
     check_semantic_cache,
     compute_query_embedding,
 )
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -58,7 +56,6 @@ def _resolve_graph_filter_signature(state: dict[str, Any], query: str) -> tuple[
     return filter_sensitive, filter_signature
 
 
-@observe(name="node-cache-check", capture_input=False, capture_output=False)
 async def cache_check_node(
     state: dict[str, Any],
     runtime: Any,
@@ -83,16 +80,6 @@ async def cache_check_node(
     )
     query_type = state.get("query_type", "GENERAL")
 
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "query_type": query_type,
-        }
-    )
-
     start = time.perf_counter()
 
     # Step 1: Get or compute dense embedding via shared core.
@@ -105,15 +92,6 @@ async def cache_check_node(
         embedding_error_type = type(exc).__name__
         logger.error("Embedding failed after retries: %s: %s", embedding_error_type, exc)
         latency = time.perf_counter() - start
-        lf.update_current_span(
-            level="ERROR",
-            output={
-                "embedding_error": True,
-                "embedding_error_type": embedding_error_type,
-                "error_message": str(exc)[:200],
-                "duration_ms": round(latency * 1000, 1),
-            },
-        )
         return {
             "cache_hit": False,
             "cached_response": None,
@@ -149,14 +127,6 @@ async def cache_check_node(
     if hit:
         PipelineMetrics.get().inc("cache_hit")
         logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
-        lf.update_current_span(
-            output={
-                "cache_hit": True,
-                "embeddings_cache_hit": embeddings_cache_hit,
-                "hit_layer": "semantic",
-                "duration_ms": round(latency * 1000, 1),
-            }
-        )
         return {
             "cache_hit": True,
             "cached_response": cached,
@@ -185,14 +155,6 @@ async def cache_check_node(
 
     PipelineMetrics.get().inc("cache_miss")
     logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
-    lf.update_current_span(
-        output={
-            "cache_hit": False,
-            "embeddings_cache_hit": embeddings_cache_hit,
-            "hit_layer": "none",
-            "duration_ms": round(latency * 1000, 1),
-        }
-    )
     return {
         "cache_hit": False,
         "cached_response": None,
@@ -205,7 +167,6 @@ async def cache_check_node(
     }
 
 
-@observe(name="node-cache-store", capture_input=False, capture_output=False)
 async def cache_store_node(
     state: dict[str, Any],
     runtime: Any,
@@ -236,16 +197,6 @@ async def cache_store_node(
     )
     user_id = state.get("user_id")
 
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "response_length": len(response),
-            "search_results_count": state.get("search_results_count", 0),
-        }
-    )
     start = time.perf_counter()
 
     # Store in semantic cache if we have both response and embedding.
@@ -319,13 +270,6 @@ async def cache_store_node(
                     "cache_store: event_stream.log_event failed: %s: %s", type(exc).__name__, exc
                 )
 
-    latency = time.perf_counter() - start
-    lf.update_current_span(
-        output={
-            "stored": stored_semantic,
-            "stored_semantic": stored_semantic,
-            "duration_ms": round(latency * 1000, 1),
-        }
-    )
+    time.perf_counter() - start
 
     return {"response": response}

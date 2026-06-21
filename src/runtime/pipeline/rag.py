@@ -33,7 +33,6 @@ import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from src.observability import get_client, observe
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from src.runtime.graph.config import GraphConfig
 from src.runtime.pipeline._cache_stage import (
@@ -129,7 +128,6 @@ _CONFIDENT_TRIM_TOP_K = 3
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-pipeline", capture_input=False, capture_output=False)
 async def rag_pipeline(
     query: str,
     *,
@@ -168,17 +166,6 @@ async def rag_pipeline(
     # cache_key: use original user query for semantic cache so repeated queries hit
     # even when the agent reformulates them. Falls back to query when not provided.
     cache_key = original_query or query
-
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "original_query_preview": cache_key[:120] if cache_key != query else None,
-            "user_id": user_id,
-            "session_id": session_id,
-            "query_type": query_type,
-        }
-    )
 
     latency_stages: dict[str, float] = {}
     rewrite_count = 0
@@ -404,17 +391,6 @@ async def rag_pipeline(
                 )
                 result["skip_rewrite"] = skip_rewrite
                 result["semantic_cache_already_checked"] = semantic_cache_already_checked
-                lf.update_current_span(
-                    output={
-                        "cache_hit": False,
-                        "documents_count": 0,
-                        "rerank_applied": rerank_applied,
-                        "rewrite_count": rewrite_count,
-                        "fallback": True,
-                        "fallback_reason": "missing_evidence_constraints",
-                        "missing_evidence_constraints": missing_evidence,
-                    }
-                )
                 return result
 
             # Small-to-big context expansion
@@ -444,14 +420,6 @@ async def rag_pipeline(
             )
             result["skip_rewrite"] = skip_rewrite
             result["semantic_cache_already_checked"] = semantic_cache_already_checked
-            lf.update_current_span(
-                output={
-                    "cache_hit": False,
-                    "documents_count": len(final_docs),
-                    "rerank_applied": rerank_applied,
-                    "rewrite_count": rewrite_count,
-                }
-            )
             return result
 
         # Check if we should rewrite
@@ -507,16 +475,6 @@ async def rag_pipeline(
     )
     result["skip_rewrite"] = skip_rewrite
     result["semantic_cache_already_checked"] = semantic_cache_already_checked
-    lf.update_current_span(
-        output={
-            "cache_hit": False,
-            "documents_count": 0,
-            "rerank_applied": False,
-            "rewrite_count": rewrite_count,
-            "fallback": True,
-            "fallback_reason": "no_relevant_documents",
-        }
-    )
     return result
 
 

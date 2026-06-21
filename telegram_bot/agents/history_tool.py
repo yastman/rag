@@ -13,14 +13,12 @@ import logging
 
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
 
 
 @tool
-@observe(name="tool-history-search", capture_input=False, capture_output=False, as_type="tool")
 async def history_search(
     query: str,
     config: RunnableConfig,
@@ -38,9 +36,6 @@ async def history_search(
         scope: 'all' | 'deal' | 'chat' — filter scope.
     """
     ctx = get_bot_context(None, config)
-    lf = get_client()
-    if lf is not None:
-        lf.update_current_span(input={"query_preview": query[:120], "deal_id": deal_id})
 
     cache = ctx.cache if ctx else None
     embeddings_svc = ctx.embeddings if ctx else None
@@ -69,12 +64,8 @@ async def history_search(
                 filter_signature=filter_signature,
             )
             if cached:
-                if lf is not None:
-                    lf.update_current_span(output={"history_cache_hit": True})
                 return str(cached)
 
     # ponytail: history_graph removed in #2843; restore sub-graph when history
     # retrieval is re-implemented (track under a new issue).
-    if lf is not None:
-        lf.update_current_span(output={"history_cache_hit": False, "graph_unavailable": True})
     return f"По запросу «{query}» ничего не найдено в истории диалогов."

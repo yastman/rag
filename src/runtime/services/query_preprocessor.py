@@ -27,10 +27,8 @@ from src.runtime.llm import create_litellm_chat_client
 logger = logging.getLogger(__name__)
 
 
-def _update_current_span(lf: Any, **kwargs: Any) -> None:
-    """Update the current Langfuse span when tracing is available."""
-    if lf is not None:
-        lf.update_current_span(**kwargs)
+def _update_current_span(**kwargs: Any) -> None:
+    """No-op stub — Langfuse removed (#2844)."""
 
 
 _SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = _DOMAIN_SHORT_FINANCE
@@ -74,7 +72,6 @@ class HyDEGenerator:
         _ = self.api_key, self.base_url  # Compatibility fields; routing reads provider env.
         self.client = create_litellm_chat_client(model=model, timeout=30.0)
 
-    @observe(name="hyde-generate-document", capture_input=False, capture_output=False)
     async def generate_hypothetical_document(self, query: str) -> str:
         """Generate a hypothetical document that would answer the query.
 
@@ -88,9 +85,7 @@ class HyDEGenerator:
         Returns:
             Hypothetical document text for embedding
         """
-        lf = get_client()
         _update_current_span(
-            lf,
             input={
                 "query_preview": query[:120],
                 "model": self.model,
@@ -116,7 +111,6 @@ class HyDEGenerator:
             logger.info("HyDE generated doc for '%s': %s...", query, hypothetical_doc[:100])
 
             _update_current_span(
-                lf,
                 output={
                     "document_preview": hypothetical_doc[:200],
                     "tokens_estimated": len(hypothetical_doc.split()),
@@ -131,7 +125,6 @@ class HyDEGenerator:
         ) as e:
             logger.error("HyDE generation API error: %s", e)
             _update_current_span(
-                lf,
                 level="ERROR",
                 status_message=f"HyDE API error: {str(e)[:200]}",
             )
@@ -139,7 +132,6 @@ class HyDEGenerator:
         except Exception as e:
             logger.error("HyDE generation failed (%s): %s", type(e).__name__, e)
             _update_current_span(
-                lf,
                 level="ERROR",
                 status_message=str(e)[:200],
             )

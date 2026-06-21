@@ -53,17 +53,11 @@ logger = logging.getLogger(__name__)
 
 
 def _update_current_span(lf_client: Any | None, **kwargs: Any) -> None:
-    """Update the current Langfuse span when tracing is available."""
-    if lf_client is not None:
-        with contextlib.suppress(Exception):
-            lf_client.update_current_span(**kwargs)
+    """No-op stub — Langfuse removed (#2844)."""
 
 
 def _update_current_generation(lf_client: Any | None, **kwargs: Any) -> None:
-    """Update the current Langfuse generation when tracing is available."""
-    if lf_client is not None:
-        with contextlib.suppress(Exception):
-            lf_client.update_current_generation(**kwargs)
+    """No-op stub — Langfuse removed (#2844)."""
 
 
 def _select_recent_history(
@@ -90,15 +84,9 @@ def _ensure_history_instruction(system_prompt: str) -> str:
 
 
 def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
-    """Return True if client rejected Langfuse-specific `name` kwarg."""
+    """Return True if client rejected unexpected `name` kwarg."""
     message = str(exc)
     return "unexpected keyword argument" in message and "'name'" in message
-
-
-def _is_unsupported_langfuse_prompt_kwarg(exc: TypeError) -> bool:
-    """Return True if client rejected Langfuse-specific `langfuse_prompt` kwarg."""
-    message = str(exc)
-    return "unexpected keyword argument" in message and "'langfuse_prompt'" in message
 
 
 async def _chat_create_with_optional_name(
@@ -107,29 +95,9 @@ async def _chat_create_with_optional_name(
     observation_name: str,
     **kwargs: Any,
 ) -> Any:
-    """Call chat.completions.create with Langfuse `name` when supported."""
-    create_fn = llm.chat.completions.create
-    if getattr(llm, "_langfuse_auto_trace", True) is False:
-        kwargs.pop("langfuse_prompt", None)
-        return await create_fn(**kwargs)
-    try:
-        return await create_fn(name=observation_name, **kwargs)
-    except TypeError as exc:
-        if _is_unsupported_langfuse_prompt_kwarg(exc):
-            logger.debug("LLM client does not support `langfuse_prompt`; retrying without it")
-            kwargs.pop("langfuse_prompt", None)
-            try:
-                return await create_fn(name=observation_name, **kwargs)
-            except TypeError as exc2:
-                if not _is_unsupported_name_kwarg(exc2):
-                    raise
-                logger.debug("LLM client does not support `name`; retrying without it")
-                return await create_fn(**kwargs)
-        if not _is_unsupported_name_kwarg(exc):
-            raise
-        logger.debug("LLM client does not support `name`; retrying without it")
-        kwargs.pop("langfuse_prompt", None)
-        return await create_fn(**kwargs)
+    """Call chat.completions.create, stripping Langfuse-specific kwargs (removed in #2844)."""
+    kwargs.pop("langfuse_prompt", None)
+    return await llm.chat.completions.create(**kwargs)
 
 
 def _get_dynamic_modules(extra: dict[str, Any] | None = None) -> dict[str, Any]:

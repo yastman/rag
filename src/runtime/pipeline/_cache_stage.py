@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import time
 from typing import Any
 
-from src.observability import get_client, observe
+from src.observability import get_client
 from src.runtime.pipeline._retrieve import (
     _compute_retrieval_filters,
     _ensure_sparse_vector,
@@ -112,7 +111,6 @@ async def _lookup_search_cache(
     }
 
 
-@observe(name="cache-check", capture_input=False, capture_output=False)
 async def _cache_check(
     query: str,
     query_type: str,
@@ -134,15 +132,6 @@ async def _cache_check(
     Returns dict with cache_hit, cached_response, query_embedding, sparse_embedding,
     colbert_query, and latency.
     """
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "query_type": query_type,
-        }
-    )
 
     start = time.perf_counter()
 
@@ -186,15 +175,6 @@ async def _cache_check(
             embedding_error_type = type(exc).__name__
             logger.error("Embedding failed: %s: %s", embedding_error_type, exc)
             latency = time.perf_counter() - start
-            lf.update_current_span(
-                level="ERROR",
-                output={
-                    "embedding_error": True,
-                    "embedding_error_type": embedding_error_type,
-                    "error_message": str(exc)[:200],
-                    "duration_ms": round(latency * 1000, 1),
-                },
-            )
             return {
                 "cache_hit": False,
                 "cached_response": None,
@@ -230,14 +210,6 @@ async def _cache_check(
 
     if hit:
         logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
-        lf.update_current_span(
-            output={
-                "cache_hit": True,
-                "embeddings_cache_hit": embeddings_cache_hit,
-                "hit_layer": "semantic",
-                "duration_ms": round(latency * 1000, 1),
-            }
-        )
         return {
             "cache_hit": True,
             "cached_response": cached,
@@ -296,15 +268,6 @@ async def _cache_check(
                 logger.debug("ColBERT query encode failed (non-critical), skipping")
 
     logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
-    lf.update_current_span(
-        output={
-            "cache_hit": False,
-            "embeddings_cache_hit": embeddings_cache_hit,
-            "hit_layer": "none",
-            "semantic_cache_prechecked": semantic_cache_already_checked,
-            "duration_ms": round(latency * 1000, 1),
-        }
-    )
     return {
         "cache_hit": False,
         "cached_response": None,
@@ -318,7 +281,6 @@ async def _cache_check(
     }
 
 
-@observe(name="hybrid-retrieve", capture_input=False, capture_output=False)
 async def _hybrid_retrieve(
     query: str,
     query_embedding: list[float] | None,
@@ -338,16 +300,6 @@ async def _hybrid_retrieve(
 
     Returns dict with documents, search_results_count, sparse_embedding, and latency.
     """
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "top_k": top_k,
-            "topic_hint": topic_hint,
-        }
-    )
 
     dense_vector, sparse_vector, colbert_query = await _resolve_query_vectors(
         query,
@@ -364,7 +316,7 @@ async def _hybrid_retrieve(
 
     plan = _compute_retrieval_filters(query, filters, topic_hint)
     initial_filters = plan.initial_filters
-    dense_weight, sparse_weight = plan.dense_weight, plan.sparse_weight
+    _dense_weight, _sparse_weight = plan.dense_weight, plan.sparse_weight
 
     start = time.perf_counter()
 
@@ -397,10 +349,8 @@ async def _hybrid_retrieve(
     search_meta = outcome.search_meta
     colbert_search_used = outcome.colbert_search_used
     final_filters = outcome.final_filters
-    initial_results_count = outcome.initial_results_count
     qdrant_search_attempts = outcome.qdrant_search_attempts
     retrieval_relaxed_from_topic_filter = outcome.retrieval_relaxed_from_topic_filter
-    retrieval_relax_stage = outcome.retrieval_relax_stage
 
     if not results:
         record_pipeline_event("retrieval_zero_docs")
@@ -418,31 +368,8 @@ async def _hybrid_retrieve(
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
 
-    scores = [d.get("score", 0) for d in results if isinstance(d, dict)]
+    [d.get("score", 0) for d in results if isinstance(d, dict)]
     result_ctx = _build_retrieved_context(results)
-    lf.update_current_span(
-        output={
-            "results_count": len(results),
-            "top_score": round(scores[0], 4) if scores else None,
-            "min_score": round(scores[-1], 4) if scores else None,
-            "search_cache_hit": False,
-            "retrieval_backend_error": search_meta.get("backend_error", False),
-            "retrieval_error_type": search_meta.get("error_type"),
-            "duration_ms": round(latency * 1000, 1),
-            "initial_filters": initial_filters,
-            "final_filters": final_filters,
-            "initial_results_count": initial_results_count,
-            "retrieval_relaxed_from_topic_filter": retrieval_relaxed_from_topic_filter,
-            "retrieval_relax_stage": retrieval_relax_stage,
-            "qdrant_search_attempts": qdrant_search_attempts,
-            "rrf_dense_weight": dense_weight,
-            "rrf_sparse_weight": sparse_weight,
-            "eval_query": query[:2000],
-            "eval_docs": "\n\n".join(
-                f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in result_ctx
-            ),
-        }
-    )
 
     return {
         "documents": results,

@@ -9,7 +9,6 @@ from uuid import UUID
 from qdrant_client import models
 
 from src.runtime.services.qdrant import QdrantService
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -81,7 +80,6 @@ class ApartmentsService:
     def __init__(self, qdrant: QdrantService) -> None:
         self._qdrant = qdrant
 
-    @observe(name="apartments-hybrid-search", capture_input=False, capture_output=False)
     async def search(
         self,
         dense_vector: list[float],
@@ -92,8 +90,6 @@ class ApartmentsService:
         rrf_k: int = 60,
     ) -> list[dict]:
         """Hybrid search on apartments collection with apartment-specific filters."""
-        lf = get_client()
-        lf.update_current_span(input={"filters": filters, "top_k": top_k})
         results, _ = await self.search_with_filters(
             dense_vector=dense_vector,
             colbert_query=colbert_query,
@@ -104,7 +100,6 @@ class ApartmentsService:
         )
         return results  # type: ignore[no-any-return]
 
-    @observe(name="apartments-filtered-search")
     async def search_with_filters(
         self,
         dense_vector: list[float],
@@ -188,7 +183,6 @@ class ApartmentsService:
 
         return formatted, len(result.points)
 
-    @observe(name="apartments-scroll", capture_input=False, capture_output=False)
     async def scroll_with_filters(
         self,
         filters: dict | None = None,
@@ -241,7 +235,6 @@ class ApartmentsService:
 
         return formatted, count_result.count, next_start_from_val, page_ids
 
-    @observe(name="apartments-count")
     async def count_with_filters(self, filters: dict | None = None) -> int:
         """Count apartments matching payload filters (no vector search)."""
         qdrant_filter = _build_apartment_filter(filters)
