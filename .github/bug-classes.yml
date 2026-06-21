@@ -95,3 +95,8 @@ bug_classes:
     description: The assistant pipeline caught all exceptions with a bare except block, returning an error result instead of re-raising, which swallowed tracebacks and hid downstream bugs from tests and operators
     canonical_issue: "#2967"
     guardrail: tests/unit/runtime/test_assistant_pipeline.py::test_run_assistant_pipeline_propagates_exception
+
+  - id: assert-stripped-under-optimization
+    description: Config/settings validation used assert statements, which are silently removed when Python runs with -O, causing invisible failures in optimised environments
+    canonical_issue: "#2959"
+    guardrail: "no bare assert in config/settings/startup paths; src/runtime/generation/service.py uses explicit raise ValueError"

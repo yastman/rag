@@ -364,7 +364,8 @@ async def generate_answer(
 
     config = request.config
     extra = request.extra_kwargs or {}
-    assert config is not None, "GenerationRequest.config must be set"
+    if config is None:
+        raise ValueError("GenerationRequest.config must be set")
 
     if generate is not None:
         res = await generate(
@@ -779,7 +780,8 @@ async def generate_answer_stream(
     t0 = time.monotonic()
     config = request.config
     extra = request.extra_kwargs or {}
-    assert config is not None, "GenerationRequest.config must be set"
+    if config is None:
+        raise ValueError("GenerationRequest.config must be set")
 
     extra.get("logger") or logging.getLogger(__name__)
     lf_client = extra.get("lf_client")
