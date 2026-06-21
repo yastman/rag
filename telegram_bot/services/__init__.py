@@ -7,7 +7,7 @@ Import specific services directly for best performance:
 
 from typing import TYPE_CHECKING
 
-from .generate_response import generate_response
+from .generate_response import GenerationDeps, generate_response
 
 
 if TYPE_CHECKING:
@@ -26,6 +26,7 @@ __all__ = [
     "BGEM3SyncClient",
     "ColbertRerankerService",
     "ExpandedChunk",
+    "GenerationDeps",
     "HyDEGenerator",
     "PipelineMetrics",
     "QdrantService",

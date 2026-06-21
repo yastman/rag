@@ -1266,6 +1266,47 @@ def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float |
     return None
 
 
+@dataclasses.dataclass
+class GenerationDeps:
+    """Grouped injectable dependencies for generate_response (#2958).
+
+    All fields default to module-level implementations so generate_response
+    needs no inline fallback resolution.
+    """
+
+    max_context_docs: int = _MAX_CONTEXT_DOCS
+    format_context: Callable[..., str] = dataclasses.field(default_factory=lambda: _format_context)
+    select_recent_history: Callable[[list[Any], int], list[Any]] = dataclasses.field(
+        default_factory=lambda: _select_recent_history
+    )
+    build_system_prompt: Callable[[str], str] = dataclasses.field(
+        default_factory=lambda: _build_system_prompt
+    )
+    ensure_history_instruction: Callable[[str], str] = dataclasses.field(
+        default_factory=lambda: _ensure_history_instruction
+    )
+    build_fallback_response: Callable[[list[dict[str, Any]]], str] = dataclasses.field(
+        default_factory=lambda: _build_fallback_response
+    )
+    generate_streaming: Callable[..., Any] = dataclasses.field(
+        default_factory=lambda: _generate_streaming
+    )
+    style_detector: ResponseStyleDetector | None = None
+    style_prompt_builder: Callable[..., str] = dataclasses.field(
+        default_factory=lambda: build_system_prompt_with_manager
+    )
+    style_token_limit: Callable[[Any, str], int] = dataclasses.field(
+        default_factory=lambda: get_token_limit
+    )
+    extract_queue_ms: Callable[[Any | None], float | None] = dataclasses.field(
+        default_factory=lambda: _extract_queue_ms_from_provider_headers
+    )
+    extract_sent_message_ref: Callable[[Any], dict[str, int] | None] = dataclasses.field(
+        default_factory=lambda: _extract_sent_message_ref
+    )
+    citation_instruction: str = _CITATION_INSTRUCTION
+
+
 @observe(name="service-generate-response", capture_input=False, capture_output=False)
 async def generate_response(
     *,
@@ -1283,25 +1324,11 @@ async def generate_response(
     get_config: Callable[[], Any] | None = None,
     lf_client: Any | None = None,
     get_lf_client: Callable[[], Any] | None = None,
-    max_context_docs: int = _MAX_CONTEXT_DOCS,
-    format_context: Callable[..., str] = _format_context,
-    select_recent_history: Callable[[list[Any], int], list[Any]] = _select_recent_history,
-    build_system_prompt: Callable[[str], str] = _build_system_prompt,
-    ensure_history_instruction: Callable[[str], str] = _ensure_history_instruction,
-    build_fallback_response: Callable[[list[dict[str, Any]]], str] = _build_fallback_response,
-    generate_streaming: Callable[..., Any] = _generate_streaming,
-    style_detector: ResponseStyleDetector | None = None,
-    style_prompt_builder: Callable[..., str] = build_system_prompt_with_manager,
-    style_token_limit: Callable[[Any, str], int] = get_token_limit,
-    extract_queue_ms: Callable[
-        [Any | None], float | None
-    ] = _extract_queue_ms_from_provider_headers,
-    extract_sent_message_ref: Callable[[Any], dict[str, int] | None] = _extract_sent_message_ref,
-    citation_instruction: str = _CITATION_INSTRUCTION,
+    deps: GenerationDeps | None = None,
 ) -> dict[str, Any]:
     """Generate an LLM answer from retrieved context with optional Telegram streaming."""
     t0 = time.monotonic()
-    _ = build_system_prompt
+    d = deps if deps is not None else GenerationDeps()
 
     if config is None:
         config = get_config() if get_config is not None else _get_graph_config()
@@ -1321,17 +1348,17 @@ async def generate_response(
         extra_kwargs={
             "lf_client": lf_client,
             "needs_coverage": needs_coverage,
-            "max_context_docs": max_context_docs,
-            "format_context": format_context,
-            "select_recent_history": select_recent_history,
-            "build_system_prompt": build_system_prompt,
-            "ensure_history_instruction": ensure_history_instruction,
-            "build_fallback_response": build_fallback_response,
-            "style_detector": style_detector,
-            "style_prompt_builder": style_prompt_builder,
-            "style_token_limit": style_token_limit,
-            "extract_queue_ms": extract_queue_ms,
-            "citation_instruction": citation_instruction,
+            "max_context_docs": d.max_context_docs,
+            "format_context": d.format_context,
+            "select_recent_history": d.select_recent_history,
+            "build_system_prompt": d.build_system_prompt,
+            "ensure_history_instruction": d.ensure_history_instruction,
+            "build_fallback_response": d.build_fallback_response,
+            "style_detector": d.style_detector,
+            "style_prompt_builder": d.style_prompt_builder,
+            "style_token_limit": d.style_token_limit,
+            "extract_queue_ms": d.extract_queue_ms,
+            "citation_instruction": d.citation_instruction,
             "get_client": get_client,
             "get_prompt": get_prompt,
             "get_prompt_with_config": get_prompt_with_config,
@@ -1357,19 +1384,19 @@ async def generate_response(
             message=message,
             config=config,
             lf_client=lf_client,
-            max_context_docs=max_context_docs,
-            format_context=format_context,
-            select_recent_history=select_recent_history,
-            build_system_prompt=build_system_prompt,
-            ensure_history_instruction=ensure_history_instruction,
-            build_fallback_response=build_fallback_response,
-            generate_streaming=generate_streaming,
-            style_detector=style_detector,
-            style_prompt_builder=style_prompt_builder,
-            style_token_limit=style_token_limit,
-            extract_queue_ms=extract_queue_ms,
-            extract_sent_message_ref=extract_sent_message_ref,
-            citation_instruction=citation_instruction,
+            max_context_docs=d.max_context_docs,
+            format_context=d.format_context,
+            select_recent_history=d.select_recent_history,
+            build_system_prompt=d.build_system_prompt,
+            ensure_history_instruction=d.ensure_history_instruction,
+            build_fallback_response=d.build_fallback_response,
+            generate_streaming=d.generate_streaming,
+            style_detector=d.style_detector,
+            style_prompt_builder=d.style_prompt_builder,
+            style_token_limit=d.style_token_limit,
+            extract_queue_ms=d.extract_queue_ms,
+            extract_sent_message_ref=d.extract_sent_message_ref,
+            citation_instruction=d.citation_instruction,
         )
 
     # Non-streaming path: directly call generate_answer()
