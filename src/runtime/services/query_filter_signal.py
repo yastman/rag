@@ -4,22 +4,9 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from src.runtime.domain_defaults import _CITY_RE
 
-_CITY_RE = re.compile(
-    r"\b("
-    r"несеб\w*"
-    r"|варн\w*"
-    r"|бургас\w*"
-    r"|солнечн\w*\s+берег\w*"
-    r"|свети\s+влас\w*"
-    r"|свят\w+\s+влас\w*"
-    r"|эленит\w*"
-    r"|помори\w*"
-    r"|созопол\w*"
-    r"|софи\w*"
-    r")\b",
-    re.IGNORECASE,
-)
+
 _PRICE_RE = re.compile(r"\b(до|от|дешевле|дороже|меньше|больше)\s*\d", re.IGNORECASE)
 _ROOMS_RE = re.compile(
     r"\b("

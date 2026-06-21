@@ -17,6 +17,7 @@ from secrets import choice
 from typing import Any
 
 from src.observability import get_client, observe
+from src.runtime.domain_defaults import CHITCHAT_RESPONSES, OFF_TOPIC_RESPONSES
 
 
 logger = logging.getLogger(__name__)
@@ -145,44 +146,8 @@ _STRUCTURED_COMPILED = [re.compile(p, re.IGNORECASE) for p in STRUCTURED_PATTERN
 _FAQ_COMPILED = [re.compile(p, re.IGNORECASE) for p in FAQ_PATTERNS]
 _ENTITY_COMPILED = [re.compile(p, re.IGNORECASE) for p in ENTITY_PATTERNS]
 
-# --- Canned responses ---
-
-CHITCHAT_RESPONSES: dict[str, list[str]] = {
-    "greeting": [
-        "Привет! 👋 Я помогу найти недвижимость. Что вас интересует?",
-        "Здравствуйте! Чем могу помочь? Ищете квартиру или дом?",
-    ],
-    "thanks": [
-        "Пожалуйста! Если будут ещё вопросы — обращайтесь.",
-        "Рад помочь! Нужно что-то ещё?",
-    ],
-    "bot_info": [
-        "Я бот-помощник по недвижимости. Могу найти квартиры, "
-        "дома, апартаменты по вашим критериям (город, бюджет, количество комнат).",
-    ],
-    "farewell": [
-        "До свидания! Удачи в поиске! 🏠",
-        "Всего доброго! Обращайтесь, если понадобится помощь.",
-    ],
-}
-
-OFF_TOPIC_RESPONSES = [
-    (
-        "Я специализируюсь только на недвижимости. 🏠\n\n"
-        "Могу помочь найти:\n"
-        "• Квартиры и апартаменты\n"
-        "• Дома и виллы\n"
-        "• Коммерческую недвижимость\n\n"
-        "Что из этого вас интересует?"
-    ),
-    (
-        "Извините, но я могу помочь только с вопросами о недвижимости.\n\n"
-        "Напишите, например:\n"
-        "• «Квартира в Несебре до 50000€»\n"
-        "• «Дом у моря с 3 спальнями»\n"
-        "• «Что есть в Солнечном берегу?»"
-    ),
-]
+# --- Canned responses (domain-specific; sourced from domain_defaults) ---
+# CHITCHAT_RESPONSES and OFF_TOPIC_RESPONSES are imported above.
 
 
 def _match_any(patterns: list[re.Pattern[str]], text: str) -> bool:

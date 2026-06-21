@@ -25,6 +25,8 @@ import logging
 from typing import Any
 
 from src.observability import get_client, observe
+from src.runtime.domain_defaults import _REWRITE_PROMPT
+from src.runtime.domain_defaults import BLOCKED_RESPONSE as BLOCKED_RESPONSE  # re-export
 from src.runtime.services.cache_policy import is_contextual_query
 from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
@@ -35,23 +37,6 @@ _MAX_CONTEXT_SNIPPET = 500  # chars per doc for judge evaluation
 
 # Query types eligible for semantic cache. Shared between agent SDK and LangGraph paths.
 CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED", "GENERAL"})
-
-# Public constant for the guard-blocked response message.
-# Exposed here so adapter layers (e.g. telegram_bot/bot.py) do not need to
-# reach into private src.runtime.graph.nodes.guard symbols.
-BLOCKED_RESPONSE: str = (
-    "Извините, ваш запрос не может быть обработан.\n\n"
-    "Я помощник по недвижимости. Пожалуйста, задайте вопрос о квартирах, "
-    "домах или другой недвижимости."
-)
-
-_REWRITE_PROMPT = (
-    "Ты — помощник по поиску недвижимости. "
-    "Пользователь задал вопрос, но результаты поиска оказались нерелевантными.\n\n"
-    "Переформулируй запрос так, чтобы он лучше подходил для поиска по базе недвижимости.\n"
-    "Верни ТОЛЬКО переформулированный запрос, без пояснений.\n\n"
-    "Оригинальный запрос: {query}"
-)
 
 
 def _update_current_span(**kwargs: Any) -> None:
