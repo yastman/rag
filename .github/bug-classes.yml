@@ -60,3 +60,8 @@ bug_classes:
     description: Stale references (docs, Makefile, config fields, env vars) to services removed during ARCH simplification remain in the active runtime surface
     canonical_issue: "#2684"
     guardrail: "compose config validates; make test-core passes; no user-base in REMOTE_CORE_SERVICES, config.py, or runtime docs"
+
+  - id: cache-key-missing-scope
+    description: history_search cache key omitted deal_id scope, causing different deals/contexts to share cached search results
+    canonical_issue: "#2945"
+    guardrail: tests/unit/agents/test_history_tool.py::test_different_deal_ids_produce_different_cache_scopes
