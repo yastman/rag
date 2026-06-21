@@ -121,35 +121,7 @@ class TestTraceLinkage:
         )
 
 
-class TestHitlResumeTraceLinkage:
-    """Interrupt -> resume traces must be linked via metadata (#2224).
-
-    A HITL interrupt emits one Langfuse trace; the later
-    ``Command(resume=...)`` click emits a *separate* trace. Without a link an
-    operator cannot tell the resume continued an earlier interrupted run. The
-    bot stores the interrupt trace id at confirmation time
-    (``set_pending_resume_trace_id``) and back-links it on the resume trace as
-    ``resumes_trace_id`` metadata (``pop_pending_resume_trace_id`` +
-    ``propagate_attributes``).
-    """
-
-    def test_bot_py_links_resume_trace_to_parent(self) -> None:
-        source = BOT_PY.read_text(encoding="utf-8")
-        assert _records_resume_trace_link(source), (
-            "telegram_bot/bot.py must store the interrupt trace id "
-            "(set_pending_resume_trace_id) and record resumes_trace_id metadata "
-            "on the resume trace (pop_pending_resume_trace_id + "
-            "propagate_attributes) so interrupted/resumed runs are linked (#2224)."
-        )
-
-    def test_hitl_callback_uses_topic_scoped_thread_id(self) -> None:
-        source = BOT_PY.read_text(encoding="utf-8")
-        assert _resume_preserves_forum_thread_id(source), (
-            "handle_hitl_callback must recover callback.message.message_thread_id "
-            "and call _supervisor_thread_id(chat_id, forum_thread_id). Otherwise "
-            "forum-topic HITL resumes pop a different pending-resume key than "
-            "the interrupt stored, so resumes_trace_id is lost (#2224)."
-        )
+# TestHitlResumeTraceLinkage removed — HITL confirmation path deleted (#2943)
 
 
 class TestDetectorSelfChecks:

@@ -1534,37 +1534,7 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to write Langfuse voice scores", exc_info=True)
 
-    async def _send_hitl_confirmation(
-        self,
-        message: Message,
-        payload: dict,
-        thread_id: str,
-    ) -> None:
-        """Send inline keyboard for HITL confirmation (#443)."""
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-        from .agents.hitl import set_pending_resume_trace_id
-
-        # #2224: remember the trace that raised this interrupt so the later
-        # Command(resume=...) trace can back-link to it via resumes_trace_id.
-        with contextlib.suppress(Exception):
-            set_pending_resume_trace_id(thread_id, get_client().get_current_trace_id())
-
-        preview = payload.get("preview", "Подтвердите операцию")
-
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(text="Подтвердить", callback_data="hitl:approve"),
-                    InlineKeyboardButton(text="Отменить", callback_data="hitl:cancel"),
-                ]
-            ]
-        )
-
-        await message.answer(
-            f"Подтвердите действие:\n\n{preview}",
-            reply_markup=keyboard,
-        )
+    # _send_hitl_confirmation removed — dead code, no live callers (#2943)
 
     @observe(name="telegram-hitl-callback", as_type="agent")
     async def handle_hitl_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
