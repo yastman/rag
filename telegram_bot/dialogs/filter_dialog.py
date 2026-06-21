@@ -176,14 +176,6 @@ def _trace_filter_output(
     return cast(dict[str, Any], mask_pii(payload))
 
 
-def _string_filter_value(value: object) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    return str(value)
-
-
 def _start_filter_observation(
     *,
     name: str,
