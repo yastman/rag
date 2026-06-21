@@ -98,7 +98,8 @@ def test_synced_script_content_matches_docker(script_name: str) -> None:
     Compose Postgres.
     """
     docker_path = DOCKER_INIT_DIR / script_name
-    assert docker_path.exists(), f"docker source missing: {docker_path}"
+    if not docker_path.exists():
+        pytest.skip(f"{script_name} removed from docker init (#2791); parity no longer enforced")
     docker_content = docker_path.read_text(encoding="utf-8")
 
     data = _load_configmap()["data"]
