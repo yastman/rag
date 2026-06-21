@@ -49,7 +49,6 @@ from telegram_bot.keyboards.phone_keyboard import (
     normalize_phone,
     validate_phone,
 )
-from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -102,7 +101,6 @@ async def start_phone_collection(
         await message_or_callback.answer(text, reply_markup=kb)  # type: ignore[union-attr]
 
 
-@observe(name="phone-lead-capture", capture_input=False, capture_output=False)
 async def _process_valid_phone(
     phone: str,
     message: Message,

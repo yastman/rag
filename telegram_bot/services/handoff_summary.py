@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from src.runtime.llm import create_litellm_chat_client
-from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +23,6 @@ _SYSTEM_PROMPT = """\
 Максимум 5 строк. Без приветствий. Только факты."""
 
 
-@observe(name="handoff-generate-summary")
 async def generate_handoff_summary(
     history: list[dict[str, str]],
     *,

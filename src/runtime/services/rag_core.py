@@ -8,8 +8,7 @@ Core functions are pure computation (no Langfuse spans, no PipelineMetrics).
 Adapters (pipeline / nodes) handle span tracking, metrics, and state wrapping.
 
 Observability (#2162):
-    Each orchestration helper carries an ``@observe`` decorator with
-    ``capture_input=False`` and ``capture_output=False`` so that the trace tree
+    Each orchestration helper carries an ``    ``capture_input=False`` and ``capture_output=False`` so that the trace tree
     contains a stable ``rag-core-*`` span for every helper without leaking raw
     user query text, embedding vectors, or document text. Curated
     high-signal metadata (cache hit, query type, top-k, vector dim) is added
@@ -23,7 +22,6 @@ import asyncio
 import logging
 from typing import Any
 
-from src.observability import get_client, observe
 from src.runtime.domain_defaults import _REWRITE_PROMPT
 from src.runtime.domain_defaults import BLOCKED_RESPONSE as BLOCKED_RESPONSE  # re-export
 from src.runtime.services.cache_policy import is_contextual_query

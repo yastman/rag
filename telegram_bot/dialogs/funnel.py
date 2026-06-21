@@ -27,7 +27,7 @@ from telegram_bot.dialogs.root_nav import (
     get_main_menu_label,
     root_menu_button,
 )
-from telegram_bot.observability import observe
+from telegram_bot.dialogs.catalog import run_catalog_search_and_render
 
 from .filter_constants import (
     AREA_DISPLAY as _AREA_DISPLAY,
@@ -785,7 +785,6 @@ async def on_pref_section_selected(
     await manager.switch_to(FunnelSG.preferences)
 
 
-@observe(name="dialog-funnel-search", capture_input=False, capture_output=False)
 async def on_summary_search(
     callback: CallbackQuery,
     button: Button,

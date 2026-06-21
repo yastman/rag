@@ -12,7 +12,7 @@ from typing import Any
 
 from src.runtime.services.metrics import PipelineMetrics
 from src.runtime.services.rag_core import perform_rerank
-from telegram_bot.observability import get_client, observe
+from telegram_bot.observability import get_client
 
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TOP_K = 5
 
 
-@observe(name="node-rerank")
 async def rerank_node(
     state: dict[str, Any],
     runtime: Any,

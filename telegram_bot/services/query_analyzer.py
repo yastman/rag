@@ -70,8 +70,7 @@ class QueryAnalyzer:
     async def analyze(self, query: str) -> dict[str, Any]:
         """Analyze query and extract filters + semantic query.
 
-        Wrapped in ``@observe`` (#1659) so the analyzer remains a named span
-        around the LiteLLM SDK-router structured-output call. Curated
+        Wrapped in ``        around the LiteLLM SDK-router structured-output call. Curated
         ``update_current_span`` payloads avoid leaking the full
         query or the full LLM response into Langfuse:
 

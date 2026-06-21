@@ -23,8 +23,6 @@ from aiogram.types import (
     Message,
 )
 
-from telegram_bot.observability import observe
-
 
 if TYPE_CHECKING:
     from telegram_bot.bot import PropertyBot
@@ -82,7 +80,6 @@ async def cmd_help(bot: PropertyBot, message: Message) -> None:
     )
 
 
-@observe(name="cmd-clear", capture_input=False, capture_output=False)
 async def cmd_clear(
     bot: PropertyBot,
     message: Message,
@@ -189,7 +186,6 @@ async def cmd_metrics(bot: PropertyBot, message: Message) -> None:
     )
 
 
-@observe(name="cmd-clearcache", capture_input=False, capture_output=False)
 async def cmd_clearcache(bot: PropertyBot, message: Message) -> None:
     """Handle /clearcache command - show inline keyboard to select cache tier."""
     keyboard = InlineKeyboardMarkup(
@@ -210,7 +206,6 @@ async def cmd_clearcache(bot: PropertyBot, message: Message) -> None:
     await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
 
 
-@observe(name="telegram-history-search")
 async def cmd_history(bot: PropertyBot, message: Message) -> None:
     """Handle /history command — removed (history service removed in #2843)."""
     await message.answer("История диалогов недоступна.")

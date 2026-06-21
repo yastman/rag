@@ -10,7 +10,6 @@ from typing import Any
 
 import openai
 
-from src.observability import get_client, observe
 from src.runtime.domain_defaults import (
     HYDE_SYSTEM_PROMPT as _DOMAIN_HYDE_SYSTEM_PROMPT,
 )
@@ -75,8 +74,7 @@ class HyDEGenerator:
     async def generate_hypothetical_document(self, query: str) -> str:
         """Generate a hypothetical document that would answer the query.
 
-        Wrapped in ``@observe`` so optional edge observability can attach a
-        named span. Curated ``update_current_span`` payloads avoid leaking full
+        Wrapped in ``        named span. Curated ``update_current_span`` payloads avoid leaking full
         prompts/documents into telemetry backends.
 
         Args:

@@ -13,13 +13,12 @@ from typing import Any
 
 from src.runtime.graph.state import Message
 from src.runtime.services.rag_core import rewrite_query_via_llm
-from telegram_bot.observability import get_client, observe
+from telegram_bot.observability import get_client
 
 
 logger = logging.getLogger(__name__)
 
 
-@observe(name="node-rewrite", capture_input=False, capture_output=False)
 async def rewrite_node(
     state: dict[str, Any],
     runtime: Any,

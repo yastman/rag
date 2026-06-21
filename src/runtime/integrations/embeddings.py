@@ -14,7 +14,6 @@ from typing import Any, cast
 import httpx
 
 from src.adapters.embeddings.bge_m3 import BgeM3EmbeddingProvider
-from src.observability import observe
 from src.services.bge_m3_client import BGEM3Client
 
 
@@ -41,7 +40,6 @@ class BGEM3Embeddings:
             batch_size=batch_size,
         )
 
-    @observe(name="bge-m3-dense-embed", capture_input=False, capture_output=False)
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         return await self._provider.aembed_documents(texts)
 
@@ -79,11 +77,9 @@ class BGEM3SparseEmbeddings:
             max_length=max_length,
         )
 
-    @observe(name="bge-m3-sparse-embed", capture_input=False, capture_output=False)
     async def aembed_query(self, text: str) -> dict[str, Any]:
         return await self._provider.aembed_sparse_query(text)
 
-    @observe(name="bge-m3-sparse-embed-batch", capture_input=False, capture_output=False)
     async def aembed_documents(self, texts: list[str]) -> list[dict[str, Any]]:
         return await self._provider.aembed_sparse_documents(texts)
 
@@ -110,29 +106,24 @@ class BGEM3HybridEmbeddings:
             max_length=max_length,
         )
 
-    @observe(name="bge-m3-dense-query-embed", capture_input=False, capture_output=False)
     async def aembed_dense_query(self, text: str) -> tuple[list[float], float | None]:
         """Embed query text via BGE-M3, returning ``(dense_vector, processing_time)``."""
         return await self._provider.aembed_dense_query(text)
 
-    @observe(name="bge-m3-hybrid-embed", capture_input=False, capture_output=False)
     async def aembed_hybrid(self, text: str) -> tuple[list[float], dict[str, Any]]:
         """Embed text, returning ``(dense, sparse)``."""
         return await self._provider.aembed_hybrid(text)
 
-    @observe(name="bge-m3-hybrid-colbert-embed", capture_input=False, capture_output=False)
     async def aembed_hybrid_with_colbert(
         self, text: str
     ) -> tuple[list[float], dict[str, Any], list[list[float]]]:
         """Embed text, returning ``(dense, sparse, colbert_query_vectors)``."""
         return await self._provider.aembed_hybrid_with_colbert(text)
 
-    @observe(name="bge-m3-colbert-query-embed", capture_input=False, capture_output=False)
     async def aembed_colbert_query(self, text: str) -> list[list[float]]:
         """Embed text, returning ColBERT query token vectors only."""
         return await self._provider.aembed_colbert_query(text)
 
-    @observe(name="bge-m3-hybrid-embed-batch", capture_input=False, capture_output=False)
     async def aembed_hybrid_batch(
         self, texts: list[str]
     ) -> tuple[list[list[float]], list[dict[str, Any]]]:

@@ -16,7 +16,6 @@ import time
 from secrets import choice
 from typing import Any
 
-from src.observability import get_client, observe
 from src.runtime.domain_defaults import CHITCHAT_RESPONSES, OFF_TOPIC_RESPONSES
 
 

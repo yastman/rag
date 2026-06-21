@@ -12,7 +12,6 @@ from telegram_bot.constants.apartment_constants import (
     APARTMENT_CITY_ALIASES_SORTED,
     APARTMENT_CITY_NAMES,
 )
-from telegram_bot.observability import observe
 from telegram_bot.services.base_filter_extractor import BaseFilterExtractor
 
 
@@ -52,7 +51,6 @@ _COMPLEX_ALIASES_SORTED = sorted(_COMPLEX_ALIASES, key=len, reverse=True)
 class ApartmentFilterExtractor(BaseFilterExtractor):
     """Extract apartment filters from natural language (regex-only, 0 LLM calls)."""
 
-    @observe(name="apartment-filter-parse", capture_input=False, capture_output=False)
     def parse(self, query: str) -> ApartmentQueryParseResult:
         """Parse query into ApartmentQueryParseResult with confidence score."""
         q = query.lower()

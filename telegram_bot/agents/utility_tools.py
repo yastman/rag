@@ -1,7 +1,6 @@
 """Utility tools: mortgage_calculator, daily_summary, handoff (#445).
 
-All tools follow the @tool + @observe + RunnableConfig DI pattern from crm_tools.py.
-Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
+All tools follow the @tool +Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
 (SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
 — see #1252).
 """

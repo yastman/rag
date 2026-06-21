@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any
 
-from src.observability import get_client, observe
+from src.observability import get_client
 from src.retrieval.topic_classifier import detect_score_gap
 from src.runtime.services.metrics import record_pipeline_event
 from src.runtime.services.rag_core import perform_rerank
@@ -32,7 +32,6 @@ def _graph_config_from_env() -> Any:
 # ---------------------------------------------------------------------------
 
 
-@observe(name="grade-documents", as_type="evaluator")
 async def _grade_documents(
     documents: list[dict[str, Any]],
     prev_confidence: float,
@@ -109,7 +108,6 @@ async def _grade_documents(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rerank")
 async def _rerank(
     query: str,
     documents: list[dict[str, Any]],

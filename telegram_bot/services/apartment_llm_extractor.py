@@ -11,7 +11,7 @@ from src.models.apartment import (
     HardFilters,
 )
 from src.runtime.integrations.prompt_manager import get_prompt, get_prompt_with_object
-from telegram_bot.observability import get_client, observe
+from telegram_bot.observability import get_client
 
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,6 @@ class ApartmentLlmExtractor:
         self._client = llm
         self._model = model
 
-    @observe(name="apartment-llm-extract", capture_input=False, capture_output=False)
     async def extract(
         self,
         query: str,

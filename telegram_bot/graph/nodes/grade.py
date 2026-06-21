@@ -10,13 +10,10 @@ import logging
 import time
 from typing import Any
 
-from telegram_bot.observability import observe
-
 
 logger = logging.getLogger(__name__)
 
 
-@observe(name="node-grade")
 async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
     """LangGraph node: grade retrieved documents by relevance.
 

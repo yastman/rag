@@ -32,7 +32,7 @@ from src.runtime.integrations.prompt_templates import (
 from src.runtime.services.coverage_mode import detect_coverage_mode
 from src.runtime.services.metrics import PipelineMetrics
 from src.runtime.services.response_style_detector import ResponseStyleDetector
-from telegram_bot.observability import get_client, observe
+from telegram_bot.observability import get_client
 from telegram_bot.services.telegram_formatting import (
     build_reply_parameters,
     format_answer_html,
@@ -1300,7 +1300,6 @@ class GenerationDeps:
     citation_instruction: str = _CITATION_INSTRUCTION
 
 
-@observe(name="service-generate-response", capture_input=False, capture_output=False)
 async def generate_response(
     *,
     query: str,
