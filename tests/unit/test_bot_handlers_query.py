@@ -11,7 +11,7 @@ import pytest
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
 from telegram_bot.bot import PropertyBot
-from telegram_bot.config import BotConfig
+from tests.unit._bot_config_factory import make_full_bot_config
 
 
 @pytest.fixture
@@ -19,20 +19,7 @@ def mock_config(monkeypatch):
     """Create mock bot config."""
     monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
     monkeypatch.delenv("KOMMO_ACCESS_TOKEN", raising=False)
-    return BotConfig(
-        _env_file=None,
-        telegram_token="test-token",
-        voyage_api_key="voyage-key",
-        llm_api_key="llm-key",
-        llm_base_url="https://api.example.com/v1",
-        llm_model="gpt-4o-mini",
-        qdrant_url="http://localhost:6333",
-        qdrant_api_key="qdrant-key",
-        qdrant_collection="test_collection",
-        redis_url="redis://localhost:6379",
-        realestate_database_url="postgresql://postgres:postgres@127.0.0.1:1/realestate",
-        rerank_provider="none",
-    )
+    return make_full_bot_config()
 
 
 def _create_bot(mock_config):
