@@ -13,6 +13,7 @@ from typing import Any, cast
 from src.observability_payloads import build_safe_input_payload
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
+from src.runtime.pipeline.context import PipelineContext
 from src.runtime.pipeline.rag import rag_pipeline
 from src.runtime.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
@@ -297,7 +298,7 @@ async def _pipeline_retrieve(
         reranker=reranker,
         llm=llm,
         agent_role=role,
-        state_contract=cast(dict[str, Any] | None, ctx["state_contract"]),
+        state_contract=cast(PipelineContext | None, ctx["state_contract"]),
         pre_computed_embedding=ctx["pre_computed"],
         pre_computed_sparse=ctx["pre_computed_sparse"],
         pre_computed_colbert=ctx["pre_computed_colbert"],
@@ -406,7 +407,7 @@ async def _pipeline_postprocess(
     result: dict[str, Any],
     response_text: str,
     _store: dict[str, Any],
-    state_contract: dict[str, Any] | None,
+    state_contract: PipelineContext | None,
     grounding_mode: str,
     pre_agent_ms: float,
     pipeline_start: float,

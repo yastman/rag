@@ -65,6 +65,7 @@ from src.runtime.pipeline._retrieve import (
     _run_relaxed_retrieval,  # noqa: F401
 )
 from src.runtime.pipeline._rewrite_cache import _cache_store, _rewrite_query  # noqa: F401
+from src.runtime.pipeline.context import PipelineContext
 from src.runtime.services.cache_policy import (
     resolve_semantic_cache_signature,
 )
@@ -143,7 +144,7 @@ async def rag_pipeline(
     reranker: Any | None = None,
     llm: Any | None = None,
     agent_role: str | None = None,
-    state_contract: dict[str, Any] | None = None,
+    state_contract: PipelineContext | None = None,
     pre_computed_embedding: list[float] | None = None,
     pre_computed_sparse: Any = None,
     pre_computed_colbert: list[list[float]] | None = None,

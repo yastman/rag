@@ -28,6 +28,7 @@ from src.core.telemetry import emit_product_event
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.generation import GenerationRequest, generate_answer
 from src.runtime.grounding.policy import get_grounding_mode
+from src.runtime.pipeline.context import PipelineContext
 from src.runtime.pipeline.rag import rag_pipeline
 
 
@@ -46,7 +47,9 @@ async def run_assistant_pipeline(
         from src.runtime.graph.nodes.classify import classify_query
 
         request_type = classify_query(request.query)
-        state_contract: dict[str, Any] | None = {"filters": ctx.filters} if ctx.filters else None
+        state_contract: PipelineContext | None = (
+            PipelineContext(filters=ctx.filters) if ctx.filters else None
+        )
 
         rag_result = await rag_pipeline(
             query=request.query,
