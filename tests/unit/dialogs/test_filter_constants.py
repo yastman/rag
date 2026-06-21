@@ -215,3 +215,113 @@ class TestBuildFiltersDict:
         assert "complex" not in result
         assert "view" not in result
         assert "budget" not in result
+
+
+# ============================================================
+# build_active_filters_summary
+# ============================================================
+
+
+class TestBuildActiveFiltersSummary:
+    def test_empty_returns_no_filters_set(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        assert build_active_filters_summary({}) == "Фильтры не заданы"
+
+    def test_city_shown(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"city": "Варна"})
+        assert "📍 Город: Варна" in result
+
+    def test_rooms_shown_with_display_label(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"rooms": "3"})
+        assert "🛏 Комнаты: 2-спальни" in result
+
+    def test_budget_shown_with_display_label(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"budget": "mid"})
+        assert "💰 Бюджет: 50 000 – 100 000 €" in result
+
+    def test_view_shown_with_display_label(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"view": "sea"})
+        assert "🌅 Вид: Море" in result
+
+    def test_area_shown_with_display_label(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"area": "large"})
+        assert "📐 Площадь: 60–80 m²" in result
+
+    def test_floor_shown_with_display_label(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"floor": "high"})
+        assert "🏢 Этаж: 4-5 этаж" in result
+
+    def test_complex_shown(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"complex": "Crown Fort Club"})
+        assert "🏘 Комплекс: Crown Fort Club" in result
+
+    def test_furnished_true_shown(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"furnished": "true"})
+        assert "🛋 Мебель: Да" in result
+
+    def test_furnished_false_shown(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"furnished": "false"})
+        assert "🛋 Мебель: Нет" in result
+
+    def test_promotion_true_shown(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"promotion": "true"})
+        assert "🏷 Только акции" in result
+
+    def test_any_sentinel_excluded(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"city": "any", "budget": "any"})
+        assert result == "Фильтры не заданы"
+
+    def test_none_sentinel_excluded(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary({"city": None, "rooms": "None"})
+        assert result == "Фильтры не заданы"
+
+    def test_all_fields_together(self):
+        from telegram_bot.dialogs.filter_constants import build_active_filters_summary
+
+        result = build_active_filters_summary(
+            {
+                "city": "Бургас",
+                "rooms": "2",
+                "budget": "mid",
+                "view": "pool",
+                "area": "xlarge",
+                "floor": "high",
+                "complex": "Crown Fort Club",
+                "furnished": "true",
+                "promotion": "true",
+            }
+        )
+        assert "Бургас" in result
+        assert "1-спальня" in result
+        assert "50 000" in result
+        assert "Бассейн" in result
+        assert "80–120 m²" in result
+        assert "4-5 этаж" in result
+        assert "Crown Fort Club" in result
+        assert "Да" in result
+        assert "акции" in result.lower()

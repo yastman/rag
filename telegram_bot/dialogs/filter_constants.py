@@ -188,6 +188,65 @@ def coerce_filter_value(field: str, value: str) -> Any:
 # ============================================================
 
 
+def build_active_filters_summary(data: dict[str, Any]) -> str:
+    """Build human-readable active-filters summary from dialog_data field names.
+
+    Accepts the filter_dialog field naming convention:
+      city, rooms (str int key), budget, view, area, floor,
+      complex, furnished ("true"/"false"), promotion ("true").
+    Returns "Фильтры не заданы" when no active filters are found.
+    """
+    _SKIP = (None, "", "any", "None")
+    lines: list[str] = []
+
+    city = data.get("city")
+    if city not in _SKIP:
+        lines.append(f"📍 Город: {city}")
+
+    rooms = data.get("rooms")
+    if rooms not in _SKIP:
+        try:
+            label = ROOMS_DISPLAY.get(int(str(rooms)), str(rooms))
+        except (ValueError, TypeError):
+            label = str(rooms)
+        lines.append(f"🛏 Комнаты: {label}")
+
+    budget = data.get("budget")
+    if budget not in _SKIP:
+        bk = str(budget)
+        lines.append(f"💰 Бюджет: {BUDGET_DISPLAY.get(bk, bk)}")
+
+    view = data.get("view")
+    if view not in _SKIP:
+        vk = str(view)
+        lines.append(f"🌅 Вид: {VIEW_DISPLAY.get(vk, vk)}")
+
+    area = data.get("area")
+    if area not in _SKIP:
+        ak = str(area)
+        lines.append(f"📐 Площадь: {AREA_DISPLAY.get(ak, ak)}")
+
+    floor = data.get("floor")
+    if floor not in _SKIP:
+        fk = str(floor)
+        lines.append(f"🏢 Этаж: {FLOOR_DISPLAY.get(fk, fk)}")
+
+    complex_val = data.get("complex")
+    if complex_val not in _SKIP:
+        lines.append(f"🏘 Комплекс: {complex_val}")
+
+    furnished = data.get("furnished")
+    if furnished not in _SKIP:
+        furn_label = {"true": "Да", "false": "Нет"}.get(str(furnished), str(furnished))
+        lines.append(f"🛋 Мебель: {furn_label}")
+
+    promotion = data.get("promotion")
+    if promotion == "true":
+        lines.append("🏷 Только акции")
+
+    return "\n".join(lines) if lines else "Фильтры не заданы"
+
+
 def build_filters_dict(raw: dict[str, Any]) -> dict[str, Any]:
     """Convert raw filter data to apartment_filters dict.
 
