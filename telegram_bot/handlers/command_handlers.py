@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-@observe(name="cmd-start", capture_input=False, capture_output=False)
 async def cmd_start(
     bot: PropertyBot,
     message: Message,

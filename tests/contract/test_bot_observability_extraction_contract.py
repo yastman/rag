@@ -3,7 +3,8 @@
 ``_build_trace_metadata`` was moved from ``telegram_bot/bot.py`` into
 ``telegram_bot/_bot_observability.py``.
 
-``_write_voice_error_scores`` was removed in #2942 along with the voice handler.
+``_write_voice_error_scores`` was removed in #2942 when the voice handlers and
+their Langfuse score paths were deleted from the bot.
 
 Pinned properties:
 
