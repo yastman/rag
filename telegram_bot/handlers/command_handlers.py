@@ -14,8 +14,8 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from aiogram import F, Router
-from aiogram.filters import Command, CommandObject, CommandStart
+from aiogram import Router
+from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     InlineKeyboardButton,
@@ -39,18 +39,6 @@ logger = logging.getLogger(__name__)
 
 
 @observe(name="cmd-start", capture_input=False, capture_output=False)
-async def cmd_start_deeplink(
-    bot: PropertyBot,
-    message: Message,
-    command: CommandObject,
-) -> None:
-    """Handle /start q_<uuid> - Mini App deep link flow."""
-    assert message.from_user is not None
-    assert command.args is not None
-    uuid_str = command.args[2:]  # strip "q_" prefix
-    await bot._handle_deeplink_start(message, uuid_str)
-
-
 async def cmd_start(
     bot: PropertyBot,
     message: Message,
@@ -140,7 +128,6 @@ async def cmd_clear(
             dialog_reset_failed = True
     checkpointer_cleared = True
     text_thread_id = _supervisor_thread_id(message.chat.id)
-    voice_thread_id = str(user_id)
     seen_checkpointers: set[int] = set()
     for cp_name, checkpointer in (
         ("conversation", bot._checkpointer),
@@ -152,7 +139,7 @@ async def cmd_clear(
         if cp_id in seen_checkpointers:
             continue
         seen_checkpointers.add(cp_id)
-        for thread_id in (text_thread_id, voice_thread_id):
+        for thread_id in (text_thread_id,):
             try:
                 await _delete_checkpointer_thread(checkpointer, thread_id)
             except Exception:
@@ -251,9 +238,6 @@ def create_commands_router(bot_instance: PropertyBot) -> Router:
     router = Router(name="commands")
 
     # Wrap each handler to pre-fill the bot argument
-    async def _cmd_start_deeplink(message: Message, command: CommandObject) -> None:
-        await cmd_start_deeplink(bot_instance, message, command)
-
     async def _cmd_start(
         message: Message,
         command: CommandObject | None = None,
@@ -287,7 +271,6 @@ def create_commands_router(bot_instance: PropertyBot) -> Router:
         await cmd_clearcache(bot_instance, message)
 
     # Register on the router
-    router.message(CommandStart(deep_link=True, magic=F.args.startswith("q_")))(_cmd_start_deeplink)
     router.message(Command("start"))(_cmd_start)
     router.message(Command("help"))(_cmd_help)
     router.message(Command("clear"))(_cmd_clear)

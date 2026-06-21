@@ -112,10 +112,6 @@ async def handle_query(
     _raw_thread_id = message.message_thread_id
     forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
     expert_id: str | None = None
-    if forum_thread_id is not None and bot._topic_manager is not None and bot._topics_enabled:
-        expert_id = await bot._topic_manager.get_expert_for_topic(
-            chat_id=message.chat.id, topic_id=forum_thread_id
-        )
 
     root_trace_metadata: dict[str, Any] = {}
     response_text = await _handle_query_supervisor(

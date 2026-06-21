@@ -86,3 +86,7 @@ bug_classes:
     description: After CocoIndex removal (#2834), run_once/run_watch in flow.py raised NotImplementedError or silently returned without ingesting anything; the CLI appeared to work but was a no-op
     canonical_issue: "#2940"
     guardrail: "tests/unit/ingestion/test_flow_orchestrator_wiring.py — asserts run_once/run_watch call orchestrator.run_once/run_watch"
+  - id: doc-code-drift
+    description: README Honest Scope claimed voice and Mini App were removed in #2791, but handle_voice and Mini App handlers were still fully present and wired in bot.py
+    canonical_issue: "#2942"
+    guardrail: "handle_voice, _handle_deeplink_start, _process_miniapp_start, _run_miniapp_rag, _miniapp_subscriber_loop deleted from bot.py; tests/unit/test_bot_deeplink.py and test_bot_mini_app.py deleted"

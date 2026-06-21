@@ -125,25 +125,3 @@ class TestTranscribeVoice:
 
         result = await transcribe_voice(message, llm=AsyncMock())
         assert result is None
-
-
-class TestHandleVoiceStateFilter:
-    """``handle_voice`` registration must keep ``StateFilter(None)``.
-
-    aiogram-dialog manages FSM state under the hood (when the user is in
-    ``DemoSG.intro`` the FSM state is set). ``StateFilter(None)`` on the
-    catch-all ``handle_voice`` is what prevents the bot from intercepting
-    voice messages while the user is inside ``demo_dialog`` — the
-    dialog's ``MessageInput(on_voice_input, ...)`` resolves first.
-    """
-
-    def test_handle_voice_has_state_filter(self) -> None:
-        import inspect
-
-        from telegram_bot.bot import PropertyBot
-
-        source = inspect.getsource(PropertyBot._register_handlers)
-        assert "StateFilter(None)" in source and "F.voice" in source, (
-            "handle_voice must be registered with StateFilter(None) so the "
-            "demo_dialog MessageInput can intercept voice messages first."
-        )

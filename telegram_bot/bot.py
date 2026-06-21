@@ -11,8 +11,7 @@ Slice 1 extraction map:
   message-id reads (``_state_apartment_results``,
   ``_state_control_message_id``, ``_extract_current_turn``).
 * ``_bot_observability`` (#1265 PR-2) — Langfuse trace metadata builder
-  and voice error-score writer (``_build_trace_metadata``,
-  ``_write_voice_error_scores``).
+  (``_build_trace_metadata``).
 * ``_bot_error_classification`` (#1265 PR-3) — post-pipeline cleanup and
   checkpointer error guards (``_is_post_pipeline_cleanup_error``,
   ``_is_checkpointer_runtime_error``).
@@ -39,16 +38,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import io
-import json
 import logging
 import os
 import socket
-import time
 from typing import TYPE_CHECKING, Any
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -58,7 +53,6 @@ from aiogram.types import (
 )
 from aiogram.utils.chat_action import ChatActionSender
 
-from src.observability_payloads import build_safe_input_payload, build_safe_output_payload
 from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY, RedisPollingLock
 from src.services.handoff_state import HandoffData, HandoffState
 
@@ -80,11 +74,6 @@ from .config import BotConfig
 from .constants import (
     split_telegram_response as _split_telegram_response,
 )
-from .integrations.memory import (
-    begin_checkpoint_overhead_capture,
-    end_checkpoint_overhead_capture,
-    sum_checkpoint_overhead_ms,
-)
 from .keyboards.client_keyboard import (
     parse_menu_button,
 )
@@ -93,14 +82,9 @@ from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
     create_callback_handler,
-    get_client,
     get_langfuse_client,  # noqa: F401 — re-export kept so legacy tests can patch telegram_bot.bot.get_langfuse_client (#2048 PR-9a)
     observe,
     propagate_attributes,
-)
-from .scoring import (
-    compute_checkpointer_overhead_proxy_ms,
-    write_langfuse_scores,
 )
 from .services.forum_bridge import ForumBridge
 from .services.redis_monitor import RedisHealthMonitor
@@ -125,7 +109,6 @@ BotContext: Any = Any
 logger = logging.getLogger(__name__)
 
 # --- Checkpoint namespace constants (versioned for safe migration) ---
-_CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
@@ -295,25 +278,6 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     return _bot_observability._build_trace_metadata(result)
 
 
-def _write_voice_error_scores(
-    lf: Any,
-    *,
-    trace_id: str = "",
-    voice_duration_s: float | None = None,
-    error_reason: str = "pipeline_error",
-) -> None:
-    """Write minimal Langfuse scores for voice traces that exit early (error paths).
-
-    Re-exported from :mod:`telegram_bot._bot_observability` (#1265 Slice 1 PR-2).
-    """
-    _bot_observability._write_voice_error_scores(
-        lf,
-        trace_id=trace_id,
-        voice_duration_s=voice_duration_s,
-        error_reason=error_reason,
-    )
-
-
 def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
     """Thin wrapper — see ``_bot_error_classification`` (#1265 Slice 1 PR-3)."""
     return _bot_error_classification._is_post_pipeline_cleanup_error(exc)
@@ -460,11 +424,6 @@ class PropertyBot:
         self._forum_bridge: ForumBridge | None = None
         self._bot_user_id: int | None = None
 
-        # Expert topic manager (chat_id+expert_id → thread_id mapping)
-        self._topics_enabled: bool = False
-        self._deeplink_redis: Any | None = None
-        self._topic_manager: Any = None
-        self._miniapp_subscriber_task: asyncio.Task[None] | None = None
         self._polling_lock: RedisPollingLock | None = None
         self._polling_lock_task: asyncio.Task[None] | None = None
         self._polling_lock_consecutive_failures: int = 0
@@ -563,11 +522,6 @@ class PropertyBot:
         from .handlers.command_handlers import create_commands_router
 
         self.dp.include_router(create_commands_router(self))
-        self.dp.message(
-            StateFilter(None),
-            F.voice,
-            flags={"rate_limit": {"rate": 3.5, "key": "voice"}},
-        )(self.handle_voice)
         from .keyboards.client_keyboard import get_menu_button_texts
 
         menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
@@ -623,231 +577,6 @@ class PropertyBot:
         if user_id in self.config.manager_ids:
             return "manager"
         return db_role or "client"
-
-    async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
-        """Handle Mini App deep link: /start q_<uuid>.
-
-        Delegates to _process_miniapp_start with message for handle_query support.
-        """
-        await self._process_miniapp_start(
-            chat_id=message.chat.id, uuid_str=uuid_str, message=message
-        )
-
-    async def _process_miniapp_start(
-        self,
-        chat_id: int,
-        uuid_str: str,
-        message: Message | None = None,
-    ) -> None:
-        """Process Mini App expert start request.
-
-        Core logic shared by deep link handler and Redis pub/sub subscriber.
-        When called from pub/sub (no message), RAG runs without streaming.
-        """
-        if self._deeplink_redis is None or self._topic_manager is None:
-            logger.warning("Mini App start received but TopicManager not initialized")
-            return
-
-        key = f"miniapp:q:{uuid_str}"
-        raw = await self._deeplink_redis.getdel(key)
-        if raw is None:
-            if message:
-                await message.answer("Ссылка устарела. Пожалуйста, вернитесь в приложение.")
-            else:
-                logger.warning("Mini App payload expired: %s", uuid_str)
-            return
-
-        try:
-            payload = json.loads(raw)
-        except (ValueError, TypeError):
-            if message:
-                await message.answer("Ошибка обработки ссылки.")
-            else:
-                logger.error("Invalid Mini App payload: %s", uuid_str)
-            return
-
-        expert_id = payload.get("expert_id", "")
-        user_message = payload.get("message") or ""
-
-        from src.services.content_loader import load_mini_app_config
-
-        config_data = load_mini_app_config()
-        expert = next((e for e in config_data.get("experts", []) if e["id"] == expert_id), None)
-        if not expert:
-            if message:
-                await message.answer("Эксперт не найден.")
-            else:
-                logger.warning("Expert not found: %s", expert_id)
-            return
-
-        # Note: answerWebAppQuery не поддерживает message_thread_id —
-        # сообщение попало бы в General topic, дублируя контент в треде.
-        # Поэтому пишем напрямую в forum topic через send_message.
-
-        try:
-            topic_id = await self._topic_manager.get_or_create_topic(
-                chat_id=chat_id,
-                expert_id=expert_id,
-                expert_name=expert["name"],
-                expert_emoji=expert.get("emoji", "💬"),
-            )
-        except TelegramBadRequest as exc:
-            logger.error("Failed to create forum topic: %s", exc)
-            if message:
-                await message.answer("Не удалось создать тему. Попробуйте позже.")
-            return
-
-        if not user_message:
-            return
-
-        # Echo user question in the topic (retry on stale cache — deleted topic)
-        try:
-            await self.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=topic_id,
-                text=f"❝ {user_message} ❞",
-            )
-        except TelegramBadRequest:
-            logger.warning("Stale topic %d, invalidating and recreating", topic_id)
-            await self._topic_manager.invalidate_topic(chat_id, expert_id)
-            try:
-                topic_id = await self._topic_manager.get_or_create_topic(
-                    chat_id=chat_id,
-                    expert_id=expert_id,
-                    expert_name=expert["name"],
-                    expert_emoji=expert.get("emoji", "💬"),
-                )
-                await self.bot.send_message(
-                    chat_id=chat_id,
-                    message_thread_id=topic_id,
-                    text=f"❝ {user_message} ❞",
-                )
-            except TelegramBadRequest as exc2:
-                logger.error("Failed to recreate topic: %s", exc2)
-                return
-
-        if message:
-            # Deep link path: full handle_query with streaming support
-            topic_msg = message.model_copy(
-                update={"text": user_message, "message_thread_id": topic_id}
-            )
-            await self.handle_query(topic_msg)
-        else:
-            # Pub/sub path: direct RAG pipeline + send result
-            await self._run_miniapp_rag(chat_id, topic_id, user_message)
-
-    async def _run_miniapp_rag(self, chat_id: int, topic_id: int, user_message: str) -> None:
-        """Run RAG pipeline for Mini App request (no aiogram Message available)."""
-        try:
-            from src.runtime.pipeline.rag import rag_pipeline
-            from telegram_bot.services.generate_response import generate_response
-
-            rag_result = await rag_pipeline(
-                query=user_message,
-                user_id=chat_id,
-                session_id=f"miniapp:{chat_id}",
-                cache=self._cache,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                reranker=self._reranker,
-            )
-
-            documents = rag_result.get("documents", [])
-            if not documents:
-                await self.bot.send_message(
-                    chat_id=chat_id,
-                    message_thread_id=topic_id,
-                    text="К сожалению, я не нашёл информации по вашему запросу.",
-                )
-                return
-
-            gen_result = await generate_response(
-                query=user_message,
-                documents=documents,
-                config=self._graph_config,
-            )
-            answer = gen_result.get("response", "")
-            if answer:
-                await self.bot.send_message(
-                    chat_id=chat_id,
-                    message_thread_id=topic_id,
-                    text=answer,
-                )
-        except Exception:
-            logger.exception("RAG pipeline failed for miniapp (chat=%s)", chat_id)
-            await self.bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=topic_id,
-                text="Произошла ошибка при обработке запроса. Попробуйте ещё раз.",
-            )
-
-    async def _miniapp_subscriber_loop(self) -> None:
-        """Subscribe to Redis miniapp:start channel and process requests.
-
-        Redis-py handles transient reconnect/resubscribe through its SDK retry
-        strategy; authentication errors remain permanent.
-        """
-        import redis.asyncio as aioredis
-        from redis.backoff import ExponentialBackoff
-        from redis.exceptions import AuthenticationError
-        from redis.exceptions import ConnectionError as RedisConnectionError
-        from redis.exceptions import TimeoutError as RedisTimeoutError
-        from redis.retry import Retry
-
-        pubsub = None
-        sub_redis = None
-        try:
-            sub_redis = aioredis.from_url(
-                self.config.redis_url,
-                decode_responses=True,
-                health_check_interval=30,
-                retry=Retry(ExponentialBackoff(cap=60, base=1), 10),
-                retry_on_error=[RedisConnectionError, RedisTimeoutError],
-            )
-            pubsub = sub_redis.pubsub()
-            await pubsub.subscribe("miniapp:start")
-            logger.info("Mini App pub/sub subscriber started")
-
-            async for raw_msg in pubsub.listen():
-                if raw_msg["type"] != "message":
-                    continue
-                try:
-                    data = json.loads(raw_msg["data"])
-                    uuid_str = data["uuid"]
-                    user_id = int(data["user_id"])
-                except (ValueError, TypeError, KeyError):
-                    logger.warning("Invalid miniapp:start message: %s", raw_msg["data"])
-                    continue
-
-                logger.info("Mini App pub/sub: user=%s uuid=%s", user_id, uuid_str)
-                await self._process_miniapp_start(chat_id=user_id, uuid_str=uuid_str)
-        except asyncio.CancelledError:
-            logger.info("Mini App pub/sub subscriber stopped")
-            raise
-        except AuthenticationError:
-            logger.error("Mini App pub/sub: permanent Redis auth error, not retrying")
-            raise
-        except Exception:
-            logger.exception("Mini App pub/sub subscriber crashed")
-            raise
-        finally:
-            if pubsub is not None:
-                try:
-                    await pubsub.unsubscribe("miniapp:start")
-                except Exception:
-                    logger.debug(
-                        "Failed to unsubscribe during cleanup",
-                        exc_info=True,
-                    )
-            if sub_redis is not None:
-                try:
-                    await sub_redis.aclose()
-                except Exception:
-                    logger.debug(
-                        "Failed to close Redis connection during cleanup",
-                        exc_info=True,
-                    )
 
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is an admin."""
@@ -1333,207 +1062,6 @@ class PropertyBot:
             message=message,
         )
 
-    @observe(name="telegram-rag-voice")
-    async def handle_voice(self, message: Message):
-        """Handle voice message via Whisper STT + imperative RAG pipeline."""
-        from src.runtime.graph.state import make_initial_state
-
-        pipeline_start = time.perf_counter()
-        assert message.bot is not None
-        assert message.from_user is not None
-        assert message.voice is not None
-        bot = message.bot
-        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-
-        # Download voice file into memory
-        voice = message.voice
-        file = await bot.get_file(voice.file_id)
-        assert file.file_path is not None
-        buf = io.BytesIO()
-        await bot.download_file(file.file_path, destination=buf)
-        voice_bytes = buf.getvalue()
-
-        # Guard: Whisper API limit is 25 MB
-        if len(voice_bytes) > 25 * 1024 * 1024:
-            await message.answer("Голосовое сообщение слишком длинное. Максимум ~16 минут.")
-            return
-
-        state = make_initial_state(
-            user_id=message.from_user.id,
-            session_id=make_session_id("chat", message.chat.id),
-            query="",  # will be set by transcribe_node
-        )
-        state["voice_audio"] = voice_bytes
-        state["voice_duration_s"] = float(voice.duration)
-        state["input_type"] = "voice"
-        state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
-        state["show_sources"] = self._graph_config.show_sources
-        state["max_llm_calls"] = self.config.max_llm_calls
-
-        with propagate_attributes(
-            session_id=state["session_id"],
-            user_id=str(state["user_id"]),
-            tags=["telegram", "rag", "voice"],
-        ):
-            # Inject Langfuse trace_id INSIDE propagate_attributes (#277)
-            lf_pre = get_client()
-            state["trace_id"] = lf_pre.get_current_trace_id() or ""
-
-            graph = build_graph(
-                cache=self._cache,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                reranker=self._reranker,
-                llm=self._llm,
-                message=message,
-                checkpointer=self._agent_checkpointer,
-                show_transcription=self.config.show_transcription,
-                voice_language=self.config.voice_language,
-                stt_model=self.config.stt_model,
-                content_filter_enabled=self.config.content_filter_enabled,
-                guard_mode=self.config.guard_mode,
-            )
-
-            invoke_config = {
-                "configurable": {
-                    "thread_id": str(message.from_user.id),
-                    "checkpoint_ns": _CHECKPOINT_NS_VOICE,
-                }
-            }
-            result: dict[str, Any] | None = None
-            try:
-                async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                    invoke_start = time.perf_counter()
-                    # Direct checkpoint overhead measurement (#1258): the
-                    # checkpointer wrapper accumulates per-method I/O times
-                    # into a ContextVar bucket while this capture is active.
-                    # Falls back to the proxy when the checkpointer is not
-                    # instrumented (e.g. MemorySaver in tests).
-                    overhead_bucket: dict[str, float] | None = begin_checkpoint_overhead_capture()
-                    try:
-                        result = await graph.ainvoke(state, config=invoke_config)
-                    finally:
-                        overhead_bucket = end_checkpoint_overhead_capture()
-                    ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
-                    if overhead_bucket and overhead_bucket.get("calls", 0):
-                        result["checkpointer_overhead_ms"] = sum_checkpoint_overhead_ms(
-                            overhead_bucket
-                        )
-                        result["checkpointer_op_count"] = int(overhead_bucket.get("calls", 0))
-                    result["checkpointer_overhead_proxy_ms"] = (
-                        compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
-                    )
-            except ValueError as e:
-                if "Empty transcription" in str(e):
-                    await message.answer("Голосовое сообщение не содержит речи.")
-                    try:
-                        _write_voice_error_scores(
-                            get_client(),
-                            trace_id=state.get("trace_id", ""),
-                            voice_duration_s=voice.duration,
-                            error_reason="empty_transcription",
-                        )
-                    except Exception:
-                        logger.debug("Failed to write voice error scores", exc_info=True)
-                    return
-                raise
-            except GraphRecursionError:
-                logger.warning(
-                    "Voice pipeline recursion limit exceeded (user=%s, session=%s)",
-                    state.get("user_id"),
-                    state.get("session_id"),
-                    exc_info=True,
-                )
-                await message.answer(
-                    "Запрос слишком сложный — достигнут лимит обработки. "
-                    "Попробуйте упростить его или отправить текстом."
-                )
-                try:
-                    _write_voice_error_scores(
-                        get_client(),
-                        trace_id=state.get("trace_id", ""),
-                        voice_duration_s=voice.duration,
-                        error_reason="recursion_limit",
-                    )
-                except Exception:
-                    logger.debug("Failed to write voice error scores", exc_info=True)
-                return
-            except Exception as e:
-                if result is None:
-                    # Checkpointer/storage cleanup can fail after nodes complete.
-                    # In that case avoid sending a false "recognition failed" message.
-                    if _is_post_pipeline_cleanup_error(e):
-                        logger.warning(
-                            "Voice pipeline cleanup failed after execution (no extra user error)",
-                            exc_info=True,
-                        )
-                        # Preserve observability even without returned graph state.
-                        result = {
-                            "response": state.get("response", ""),
-                            "stt_text": state.get("stt_text", ""),
-                            "stt_duration_ms": state.get("stt_duration_ms"),
-                            "input_type": "voice",
-                            "voice_duration_s": float(voice.duration),
-                            "latency_stages": state.get("latency_stages", {}),
-                            "messages": state.get("messages", []),
-                            "pipeline_cleanup_error": True,
-                            "pipeline_cleanup_error_type": type(e).__name__,
-                        }
-                    # Pipeline never returned — genuine failure
-                    else:
-                        logger.exception("Voice pipeline failed (no result)")
-                        await message.answer(
-                            "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
-                        )
-                        try:
-                            _write_voice_error_scores(
-                                get_client(),
-                                trace_id=state.get("trace_id", ""),
-                                voice_duration_s=voice.duration,
-                                error_reason="pipeline_failure",
-                            )
-                        except Exception:
-                            logger.debug("Failed to write voice error scores", exc_info=True)
-                        return
-                # Pipeline succeeded but post-invoke cleanup failed (#201)
-                # Answer already delivered via streaming/respond — don't confuse user
-                else:
-                    logger.warning(
-                        "Post-pipeline error in voice handler (answer already delivered)",
-                        exc_info=True,
-                    )
-
-            result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
-            result["e2e_latency_ms"] = result["pipeline_wall_ms"]
-            # User-perceived latency excludes post-respond summarization
-            summarize_s = result.get("latency_stages", {}).get("summarize", 0)
-            result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
-
-            lf = get_client()
-            tid = lf.get_current_trace_id() or ""
-            try:
-                lf.update_current_span(
-                    input=build_safe_input_payload(
-                        content_type="voice",
-                        text=result.get("stt_text", ""),
-                        extra={"voice_duration_s": voice.duration},
-                    ),
-                    output=build_safe_output_payload(
-                        answer_text=result.get("response", ""),
-                        chunks_count=1,
-                        sources_count=result.get("sources_count")
-                        or result.get("search_results_count", 0),
-                    ),
-                    metadata=_build_trace_metadata(result),
-                )
-            except Exception:
-                logger.warning("Failed to update Langfuse voice trace metadata", exc_info=True)
-            try:
-                write_langfuse_scores(lf, result, trace_id=tid)
-            except Exception:
-                logger.warning("Failed to write Langfuse voice scores", exc_info=True)
-
     # _send_hitl_confirmation removed — dead code, no live callers (#2943)
 
     @observe(name="telegram-hitl-callback", as_type="agent")
@@ -1587,13 +1115,12 @@ class PropertyBot:
                 user_id = callback_query.from_user.id
                 chat_id = callback_query.message.chat.id if callback_query.message else user_id
                 text_thread_id = _supervisor_thread_id(chat_id)
-                voice_thread_id = str(user_id)
                 seen: set[int] = set()
                 for checkpointer in (self._checkpointer, self._agent_checkpointer):
                     if checkpointer is None or id(checkpointer) in seen:
                         continue
                     seen.add(id(checkpointer))
-                    for thread_id in (text_thread_id, voice_thread_id):
+                    for thread_id in (text_thread_id,):
                         try:
                             await _delete_checkpointer_thread(checkpointer, thread_id)
                         except Exception:
@@ -1804,22 +1331,6 @@ class PropertyBot:
                 )
             )
 
-        # Initialize TopicManager + deeplink Redis for Mini App deep link flow
-        if self.config.expert_topics_enabled:
-            import redis.asyncio as aioredis
-
-            from telegram_bot.services.topic_manager import TopicManager
-
-            self._deeplink_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
-            self._topic_manager: TopicManager | None = TopicManager(
-                bot=self.bot, redis=self._deeplink_redis
-            )
-            logger.info("TopicManager ready (expert deep link flow)")
-        else:
-            self._deeplink_redis = None
-            self._topic_manager = None
-        self._miniapp_subscriber_task: asyncio.Task[None] | None = None
-
         # Initialize PostgreSQL pool for realestate DB
         postgres_available = (
             preflight_result.get("postgres", True) if isinstance(preflight_result, dict) else True
@@ -2020,30 +1531,12 @@ class PropertyBot:
             ]
         )
 
-        # Set Menu Button: WebApp when MINI_APP_URL is configured, else commands list (#883)
-        if self.config.mini_app_url:
-            from aiogram.types import MenuButtonWebApp, WebAppInfo
+        from aiogram.types import MenuButtonCommands
 
-            await self.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(
-                    text="Открыть",
-                    web_app=WebAppInfo(url=self.config.mini_app_url),
-                )
-            )
-            logger.info("Mini App menu button set: %s", self.config.mini_app_url)
-        else:
-            from aiogram.types import MenuButtonCommands
-
-            await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
         # Warm up BGE-M3 connection pool (#953)
         await self._warmup_bge()
-
-        # Start Mini App pub/sub subscriber (Redis → bot, bypasses openTelegramLink bug)
-        if self._topic_manager is not None:
-            self._miniapp_subscriber_task = asyncio.create_task(
-                self._miniapp_subscriber_loop(), name="miniapp-pubsub"
-            )
 
         if startup_report.final_severity is StartupSeverity.FAILED:
             logger.error(startup_report.render())
