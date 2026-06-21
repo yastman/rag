@@ -354,6 +354,168 @@ def _build_llm_messages(
     return llm_messages
 
 
+def _format_generation_context(
+    docs: list[dict[str, Any]],
+    *,
+    needs_coverage: bool,
+    sources_enabled: bool,
+    extra: dict[str, Any],
+) -> str:
+    """Format retrieved documents into the context string for the LLM prompt."""
+    format_context = extra.get("format_context") or _format_context
+    format_params = inspect.signature(format_context).parameters
+    effective_max_context_docs = (
+        len(docs) if needs_coverage else extra.get("max_context_docs", _MAX_CONTEXT_DOCS)
+    )
+    if "sources_enabled" in format_params:
+        return format_context(  # type: ignore[call-arg]
+            docs,
+            effective_max_context_docs,
+            sources_enabled=sources_enabled,
+        )
+    return format_context(docs, effective_max_context_docs)
+
+
+class _PromptAndMessages:
+    """Resolved prompt, temperature, and LLM messages for a generation call."""
+
+    __slots__ = (
+        "effective_temperature",
+        "llm_messages",
+        "max_tokens",
+        "prompt_name",
+        "response_policy_mode",
+    )
+
+    def __init__(
+        self,
+        *,
+        effective_temperature: float,
+        llm_messages: list[dict[str, str]],
+        max_tokens: int,
+        prompt_name: str,
+        response_policy_mode: str,
+    ) -> None:
+        self.effective_temperature = effective_temperature
+        self.llm_messages = llm_messages
+        self.max_tokens = max_tokens
+        self.prompt_name = prompt_name
+        self.response_policy_mode = response_policy_mode
+
+
+def _build_prompt_and_messages(
+    *,
+    config: Any,
+    needs_coverage: bool,
+    sources_enabled: bool,
+    docs: list[dict[str, Any]],
+    style_info: Any,
+    raw_history: list[Any],
+    effective_query: str,
+    context: str,
+    dyn: dict[str, Any],
+    extra: dict[str, Any],
+) -> _PromptAndMessages:
+    """Select prompt config, build system prompt with citation, and construct LLM messages."""
+    style_enabled = bool(getattr(config, "response_style_enabled", False))
+    shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
+    use_style = style_enabled and not shadow_mode
+
+    pc = _select_prompt_config(
+        config=config,
+        needs_coverage=needs_coverage,
+        use_style=use_style,
+        style_info=style_info,
+        dyn=dyn,
+        extra=extra,
+    )
+
+    effective_temperature: float = pc.prompt_config.get("temperature", config.llm_temperature)
+    ensure_history_instruction = (
+        extra.get("ensure_history_instruction") or _ensure_history_instruction
+    )
+    system_prompt = ensure_history_instruction(pc.system_prompt)
+
+    if sources_enabled and docs:
+        citation_instruction = extra.get("citation_instruction", _CITATION_INSTRUCTION)
+        separator = "\n" if system_prompt.endswith("\n") else "\n\n"
+        system_prompt = f"{system_prompt}{separator}{citation_instruction}"
+
+    llm_messages = _build_llm_messages(
+        system_prompt=system_prompt,
+        raw_history=raw_history,
+        effective_query=effective_query,
+        context=context,
+        extra=extra,
+    )
+
+    return _PromptAndMessages(
+        effective_temperature=effective_temperature,
+        llm_messages=llm_messages,
+        max_tokens=pc.max_tokens,
+        prompt_name=pc.prompt_name,
+        response_policy_mode=pc.response_policy_mode,
+    )
+
+
+def _build_span_output(
+    *,
+    answer: str,
+    actual_model: str,
+    ttft_ms: float,
+    stream_only_ttft_ms: float | None,
+    elapsed: float,
+    fallback_used: bool,
+    effective_query: str,
+    eval_context: str,
+    needs_coverage: bool,
+    coverage_reason: str | None,
+    prompt_name: str,
+    docs: list[dict[str, Any]],
+    usage_details: dict[str, int] | None,
+    response_obj: Any | None,
+) -> dict[str, Any]:
+    """Build the span output dict for Langfuse tracing (shared by both generation paths)."""
+    span_output: dict[str, Any] = {
+        "response_length": len(answer),
+        "llm_provider_model": actual_model,
+        "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
+        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
+        "llm_response_duration_ms": round(elapsed * 1000, 1),
+        "fallback_used": fallback_used,
+        "response_sent": False,
+        "eval_query": effective_query[:2000],
+        "eval_answer": answer[:3000],
+        "eval_context": eval_context,
+        "needs_coverage": needs_coverage,
+        "coverage_mode": "exhaustive_list" if needs_coverage else "default",
+        "coverage_reason": coverage_reason,
+        "prompt_name": prompt_name,
+        "documents_count": len(docs),
+        "distinct_doc_count": len(
+            {
+                str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
+                for doc in docs
+            }
+        ),
+    }
+    if usage_details:
+        span_output["token_usage"] = {
+            "prompt_tokens": usage_details.get("input"),
+            "completion_tokens": usage_details.get("output"),
+            "total_tokens": usage_details.get("total"),
+        }
+    elif response_obj is not None:
+        usage = getattr(response_obj, "usage", None)
+        if usage is not None:
+            span_output["token_usage"] = {
+                "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                "completion_tokens": getattr(usage, "completion_tokens", None),
+                "total_tokens": getattr(usage, "total_tokens", None),
+            }
+    return span_output
+
+
 async def generate_answer(
     request: GenerationRequest,
     *,
@@ -402,19 +564,9 @@ async def generate_answer(
     sources_enabled = setup.sources_enabled
     legal_answer_safe = setup.legal_answer_safe
 
-    format_context = extra.get("format_context") or _format_context
-    format_params = inspect.signature(format_context).parameters
-    effective_max_context_docs = (
-        len(docs) if needs_coverage else extra.get("max_context_docs", _MAX_CONTEXT_DOCS)
+    context = _format_generation_context(
+        docs, needs_coverage=needs_coverage, sources_enabled=sources_enabled, extra=extra
     )
-    if "sources_enabled" in format_params:
-        context = format_context(
-            docs,
-            effective_max_context_docs,
-            sources_enabled=sources_enabled,  # type: ignore[call-arg]
-        )
-    else:
-        context = format_context(docs, effective_max_context_docs)
 
     # Update Langfuse span input
     _update_current_span(
@@ -493,41 +645,23 @@ async def generate_answer(
             )
         )
 
-    style_enabled = bool(getattr(config, "response_style_enabled", False))
-    shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
-    use_style = style_enabled and not shadow_mode
-
-    pc = _select_prompt_config(
+    pm = _build_prompt_and_messages(
         config=config,
         needs_coverage=needs_coverage,
-        use_style=use_style,
+        sources_enabled=sources_enabled,
+        docs=docs,
         style_info=style_info,
-        dyn=dyn,
-        extra=extra,
-    )
-    prompt_config = pc.prompt_config
-    prompt_name = pc.prompt_name
-    max_tokens = pc.max_tokens
-    response_policy_mode = pc.response_policy_mode
-
-    effective_temperature: float = prompt_config.get("temperature", config.llm_temperature)
-    ensure_history_instruction = (
-        extra.get("ensure_history_instruction") or _ensure_history_instruction
-    )
-    system_prompt = ensure_history_instruction(pc.system_prompt)
-
-    if sources_enabled and docs:
-        citation_instruction = extra.get("citation_instruction", _CITATION_INSTRUCTION)
-        separator = "\n" if system_prompt.endswith("\n") else "\n\n"
-        system_prompt = f"{system_prompt}{separator}{citation_instruction}"
-
-    llm_messages = _build_llm_messages(
-        system_prompt=system_prompt,
         raw_history=raw_history,
         effective_query=effective_query,
         context=context,
+        dyn=dyn,
         extra=extra,
     )
+    prompt_name = pm.prompt_name
+    max_tokens = pm.max_tokens
+    response_policy_mode = pm.response_policy_mode
+    effective_temperature = pm.effective_temperature
+    llm_messages = pm.llm_messages
 
     actual_model = config.llm_model
     ttft_ms = 0.0
@@ -606,45 +740,22 @@ async def generate_answer(
         if isinstance(d, dict)
     )
 
-    span_output: dict[str, Any] = {
-        "response_length": len(answer),
-        "llm_provider_model": actual_model,
-        "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
-        "llm_stream_only_ttft_ms": None,
-        "llm_response_duration_ms": round(elapsed * 1000, 1),
-        "fallback_used": actual_model == "fallback",
-        "response_sent": False,
-        "eval_query": effective_query[:2000],
-        "eval_answer": answer[:3000],
-        "eval_context": eval_context,
-        "needs_coverage": needs_coverage,
-        "coverage_mode": "exhaustive_list" if needs_coverage else "default",
-        "coverage_reason": coverage_reason,
-        "prompt_name": prompt_name,
-        "documents_count": len(docs),
-        "distinct_doc_count": len(
-            {
-                str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
-                for doc in docs
-            }
-        ),
-    }
-
-    if usage_details:
-        span_output["token_usage"] = {
-            "prompt_tokens": usage_details.get("input"),
-            "completion_tokens": usage_details.get("output"),
-            "total_tokens": usage_details.get("total"),
-        }
-    elif response_obj is not None:
-        usage = getattr(response_obj, "usage", None)
-        if usage is not None:
-            span_output["token_usage"] = {
-                "prompt_tokens": getattr(usage, "prompt_tokens", None),
-                "completion_tokens": getattr(usage, "completion_tokens", None),
-                "total_tokens": getattr(usage, "total_tokens", None),
-            }
-
+    span_output = _build_span_output(
+        answer=answer,
+        actual_model=actual_model,
+        ttft_ms=ttft_ms,
+        stream_only_ttft_ms=None,
+        elapsed=elapsed,
+        fallback_used=actual_model == "fallback",
+        effective_query=effective_query,
+        eval_context=eval_context,
+        needs_coverage=needs_coverage,
+        coverage_reason=coverage_reason,
+        prompt_name=prompt_name,
+        docs=docs,
+        usage_details=usage_details,
+        response_obj=response_obj,
+    )
     _update_current_span(lf_client, output=span_output)
 
     llm_tps: float | None = None
@@ -837,55 +948,26 @@ async def generate_answer_stream(
         yield answer
         return
 
-    style_enabled = bool(getattr(config, "response_style_enabled", False))
-    shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
-    use_style = style_enabled and not shadow_mode
-
-    pc = _select_prompt_config(
+    context = _format_generation_context(
+        docs, needs_coverage=needs_coverage, sources_enabled=sources_enabled, extra=extra
+    )
+    pm = _build_prompt_and_messages(
         config=config,
         needs_coverage=needs_coverage,
-        use_style=use_style,
+        sources_enabled=sources_enabled,
+        docs=docs,
         style_info=style_info,
-        dyn=dyn,
-        extra=extra,
-    )
-    prompt_config = pc.prompt_config
-    prompt_name = pc.prompt_name
-    max_tokens = pc.max_tokens
-    response_policy_mode = pc.response_policy_mode
-
-    effective_temperature: float = prompt_config.get("temperature", config.llm_temperature)
-    ensure_history_instruction = (
-        extra.get("ensure_history_instruction") or _ensure_history_instruction
-    )
-    system_prompt = ensure_history_instruction(pc.system_prompt)
-
-    if sources_enabled and docs:
-        citation_instruction = extra.get("citation_instruction", _CITATION_INSTRUCTION)
-        separator = "\n" if system_prompt.endswith("\n") else "\n\n"
-        system_prompt = f"{system_prompt}{separator}{citation_instruction}"
-
-    format_context = extra.get("format_context") or _format_context
-    format_params = inspect.signature(format_context).parameters
-    effective_max_context_docs = (
-        len(docs) if needs_coverage else extra.get("max_context_docs", _MAX_CONTEXT_DOCS)
-    )
-    if "sources_enabled" in format_params:
-        context = format_context(
-            docs,
-            effective_max_context_docs,
-            sources_enabled=sources_enabled,  # type: ignore[call-arg]
-        )
-    else:
-        context = format_context(docs, effective_max_context_docs)
-
-    llm_messages = _build_llm_messages(
-        system_prompt=system_prompt,
         raw_history=raw_history,
         effective_query=effective_query,
         context=context,
+        dyn=dyn,
         extra=extra,
     )
+    prompt_name = pm.prompt_name
+    max_tokens = pm.max_tokens
+    response_policy_mode = pm.response_policy_mode
+    effective_temperature = pm.effective_temperature
+    llm_messages = pm.llm_messages
 
     actual_model = config.llm_model
     ttft_ms = 0.0
@@ -969,37 +1051,22 @@ async def generate_answer_stream(
         if isinstance(d, dict)
     )
 
-    span_output: dict[str, Any] = {
-        "response_length": len(accumulated),
-        "llm_provider_model": actual_model,
-        "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
-        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
-        "llm_response_duration_ms": round(elapsed * 1000, 1),
-        "fallback_used": False,
-        "response_sent": False,
-        "eval_query": effective_query[:2000],
-        "eval_answer": accumulated[:3000],
-        "eval_context": eval_context,
-        "needs_coverage": needs_coverage,
-        "coverage_mode": "exhaustive_list" if needs_coverage else "default",
-        "coverage_reason": coverage_reason,
-        "prompt_name": prompt_name,
-        "documents_count": len(docs),
-        "distinct_doc_count": len(
-            {
-                str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
-                for doc in docs
-            }
-        ),
-    }
-
-    if usage_details:
-        span_output["token_usage"] = {
-            "prompt_tokens": usage_details.get("input"),
-            "completion_tokens": usage_details.get("output"),
-            "total_tokens": usage_details.get("total"),
-        }
-
+    span_output = _build_span_output(
+        answer=accumulated,
+        actual_model=actual_model,
+        ttft_ms=ttft_ms,
+        stream_only_ttft_ms=stream_only_ttft_ms,
+        elapsed=elapsed,
+        fallback_used=False,
+        effective_query=effective_query,
+        eval_context=eval_context,
+        needs_coverage=needs_coverage,
+        coverage_reason=coverage_reason,
+        prompt_name=prompt_name,
+        docs=docs,
+        usage_details=usage_details,
+        response_obj=None,
+    )
     _update_current_span(lf_client, output=span_output)
 
     llm_decode_ms = (elapsed * 1000) - ttft_ms if ttft_ms > 0 else None
