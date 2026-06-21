@@ -1,8 +1,8 @@
 # Pipeline Overview
 
-> Operational overview of ingestion, query, and voice flows. The core text RAG path is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). Telegram/voice adapters use `create_agent` for conversational shell behavior. See [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) and [`docs/adr/0019-core-text-path-procedural-runtime.md`](adr/0019-core-text-path-procedural-runtime.md) for implementation detail.
+> Operational overview of ingestion and query flows. The core text RAG path is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). Telegram adapter uses `create_agent` for conversational shell behavior. Voice adapter is archived. See [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) and [`docs/adr/0019-core-text-path-procedural-runtime.md`](adr/0019-core-text-path-procedural-runtime.md) for implementation detail.
 
-Operational overview of ingestion, query, and voice flows.
+Operational overview of ingestion and query flows.
 
 ## 1) Query Pipeline (Telegram Bot / API)
 
@@ -10,9 +10,9 @@ The bot has **two paths** for queries (see [`CLIENT_PIPELINE.md`](CLIENT_PIPELIN
 
 - **Core text path** is procedural via `src.core.run_assistant_request()` → `src.runtime.pipeline.run_assistant_pipeline()` (ADR-0019). This is the canonical product path.
 - **Telegram adapter** uses `create_agent` for conversational shell behavior (streaming, tools, history trimming). It calls `run_assistant_request()` for product RAG.
-- **Voice path** uses `build_graph()` from the compat façade ([`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py)), which wraps `run_assistant_pipeline()` — **not** an active StateGraph (ARCH-16 decision, #2697). Voice is an optional surface (see `docs/archive/adr/0010-voice-path-create-agent-migration-plan.md`).
+- **Voice path** (archived in #2791): previously used `build_graph()` from a compat façade. See `docs/archive/adr/0010-voice-path-create-agent-migration-plan.md` for archived design documentation.
 
-The node list below describes the **voice-path façade stages** and the inner stages reused by the text path's `rag_search` tool. Routing rules and conditional edges between these nodes live in [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md).
+The node list below describes the **archived voice-path stages** and the stages reused by the text path's `rag_search` tool. Routing rules live in [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md).
 
 Main nodes:
 - `transcribe` (voice input only)

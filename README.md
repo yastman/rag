@@ -20,7 +20,7 @@
 
 This repository now centers on one product path: user intent enters the assistant core, the core retrieves context from Qdrant, generates a grounded answer, and prepares CRM/workflow actions only behind human confirmation.
 
-Telegram remains the production adapter. Voice, Mini App, API, Langfuse, trace validation, k8s, and monitoring surfaces remain useful but optional around the core proof. The current sales/catalog automation domain is the first implementation of the assistant, not a requirement that every deployment become a broad platform.
+Telegram is the production adapter. Voice, Mini App, API, and k8s are archived; Langfuse, trace validation, and monitoring are removed or optional. The core proof runs with Telegram, Qdrant, Redis, and Docker Compose. The current sales/catalog automation domain is the first implementation of the assistant, not a requirement that every deployment become a broad platform.
 
 ## Why It Exists
 
@@ -62,7 +62,7 @@ make core-up      # compatibility alias for docker-core-up
 make docker-up    # existing alias for docker-core-up
 ```
 
-Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, and ingestion remain behind their dedicated compose profiles or targets.
+Optional surfaces (BGE-M3, Docling, ingestion) remain behind their dedicated compose profiles or targets. Voice, Mini App, API, Langfuse, and monitoring are archived.
 
 ## Core Capabilities
 
@@ -77,7 +77,7 @@ Optional surfaces such as BGE-M3, Docling, Mini App, Langfuse, voice, and ingest
 | Business tool actions | CRM/domain tools can create workflow actions with HITL confirmation for sensitive writes | [`telegram_bot/agents/`](telegram_bot/agents/) |
 | Cost and latency controls | Redis caches semantic answers, embeddings, search results, rerank results, and extraction outputs | [`telegram_bot/integrations/cache.py`](telegram_bot/integrations/cache.py) |
 | Observability | Structured product logs are required; Langfuse traces are removed (#2844); local monitoring is optional | [`src/utils/product_events.py`](src/utils/product_events.py) |
-| Compose-first runtime | Docker Compose profiles cover core services, bot, ingestion, voice, ML observability, monitoring, and full stack | [`DOCKER.md`](DOCKER.md) |
+| Compose-first runtime | Docker Compose profiles cover core services, bot, and ingestion; archived profiles (voice, ml, obs) remain in compose config for reference | [`DOCKER.md`](DOCKER.md) |
 
 ## Why This Is More Than A Bot
 
@@ -225,7 +225,7 @@ Docker Compose is the primary local/VPS runtime. Profiles split the system by op
 | `ingest` | unified ingestion service |
 | `ml` | *(removed — see #2844)* |
 | `obs` | Loki, Promtail, Alertmanager (archived — removed in #2791) |
-| `voice` | RAG API, LiveKit, SIP, voice agent |
+| `voice` | RAG API, LiveKit, SIP, voice agent (archived — removed in #2791) |
 | `full` | all profile-gated services |
 
 The repo also includes remote Docker helpers for running Compose on a remote host. Treat this as a development convenience, not a required public setup path; see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and [`DOCKER.md`](DOCKER.md) for details.
