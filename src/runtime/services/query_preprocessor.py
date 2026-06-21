@@ -11,6 +11,15 @@ from typing import Any
 import openai
 
 from src.observability import get_client, observe
+from src.runtime.domain_defaults import (
+    HYDE_SYSTEM_PROMPT as _DOMAIN_HYDE_SYSTEM_PROMPT,
+)
+from src.runtime.domain_defaults import (
+    SHORT_FINANCE_QUERY_EXPANSIONS as _DOMAIN_SHORT_FINANCE,
+)
+from src.runtime.domain_defaults import (
+    TRANSLIT_MAP as _DOMAIN_TRANSLIT_MAP,
+)
 from src.runtime.integrations.prompt_manager import get_prompt
 from src.runtime.llm import create_litellm_chat_client
 
@@ -24,10 +33,7 @@ def _update_current_span(lf: Any, **kwargs: Any) -> None:
         lf.update_current_span(**kwargs)
 
 
-_SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = {
-    "рассрочки": "какие варианты рассрочки при покупке квартиры",
-    "рассрочка": "какие варианты рассрочки при покупке квартиры",
-}
+_SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = _DOMAIN_SHORT_FINANCE
 
 
 def expand_short_query(query: str, *, topic_hint: str | None = None) -> str:
@@ -54,20 +60,7 @@ class HyDEGenerator:
     Not recommended for: Exact queries (IDs, corpus numbers), long queries.
     """
 
-    HYDE_SYSTEM_PROMPT = """Ты - эксперт по недвижимости.
-Твоя задача: написать короткий гипотетический ответ на вопрос пользователя,
-как если бы ты описывал идеальный результат поиска.
-
-ПРАВИЛА:
-1. Пиши 2-3 предложения, описывающих типичный объект недвижимости
-2. Включай релевантные детали: город, тип, цена, площадь, особенности
-3. Пиши на русском языке
-4. НЕ задавай уточняющих вопросов
-5. НЕ пиши вступление типа "Вот пример..."
-
-Пример вопроса: "квартира у моря"
-Пример ответа: "Уютная двухкомнатная квартира в Несебре, 50м², в 200 метрах от пляжа. Полностью меблирована, с балконом и видом на море. Цена 65,000 евро, поддержка 8 евро/м² в год."
-"""
+    HYDE_SYSTEM_PROMPT = _DOMAIN_HYDE_SYSTEM_PROMPT
 
     def __init__(
         self,
@@ -169,35 +162,9 @@ class QueryPreprocessor:
     QueryPreprocessor is rule-based and runs before QueryAnalyzer.
     """
 
-    # Transliteration map: Latin -> Cyrillic (Bulgarian cities and resorts)
-    TRANSLIT_MAP = {
-        # Cities
-        "Burgas": "Бургас",
-        "Varna": "Варна",
-        "Sofia": "София",
-        "Plovdiv": "Пловдив",
-        # Resorts
-        "Nesebar": "Несебър",
-        "Nessebar": "Несебър",
-        "Sozopol": "Созопол",
-        "Pomorie": "Поморие",
-        "Sunny Beach": "Солнечный берег",
-        "Sveti Vlas": "Святой Влас",
-        "Svyati Vlas": "Святой Влас",
-        "St Vlas": "Святой Влас",
-        "Elenite": "Елените",
-        "Ravda": "Равда",
-        "Sarafovo": "Сарафово",
-        "Primorsko": "Приморско",
-        "Tsarevo": "Царево",
-        "Lozenets": "Лозенец",
-        "Golden Sands": "Золотые пески",
-        "Albena": "Албена",
-        "Balchik": "Балчик",
-        "Kavarna": "Каварна",
-        "Obzor": "Обзор",
-        "Byala": "Бяла",
-    }
+    # Transliteration map: Latin -> Cyrillic (Bulgarian cities and resorts).
+    # Sourced from domain_defaults to isolate domain-specific content (#2949).
+    TRANSLIT_MAP = _DOMAIN_TRANSLIT_MAP
 
     # Precompiled (pattern, replacement) pairs derived from TRANSLIT_MAP.
     #
