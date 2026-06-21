@@ -341,6 +341,30 @@ class TestOnApply:
             show_mode=ShowMode.NO_UPDATE,
         )
 
+    async def test_search_error_is_surfaced_not_swallowed(self):
+        """Regression: #2950 — search error must not be silently swallowed.
+
+        When svc.scroll_with_filters raises, on_apply must send a user-facing
+        error message and not close the dialog (manager.done must not be called).
+        """
+        from telegram_bot.dialogs.filter_dialog import on_apply
+
+        svc = AsyncMock()
+        svc.scroll_with_filters = AsyncMock(side_effect=RuntimeError("search backend down"))
+        callback, _state, manager = _make_apply_mocks(
+            {"city": "Варна"},
+            apartments_service=svc,
+        )
+
+        await on_apply(callback, MagicMock(), manager)
+
+        # Error must be surfaced to user
+        callback.message.answer.assert_awaited_once()
+        answered_text: str = callback.message.answer.await_args[0][0]
+        assert answered_text  # non-empty error message was sent
+        # Dialog must remain open — done() must NOT be called on error
+        manager.done.assert_not_awaited()
+
 
 # ============================================================
 # on_reset — clears dialog_data filters
