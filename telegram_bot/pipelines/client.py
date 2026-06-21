@@ -10,7 +10,7 @@ import time
 from numbers import Real
 from typing import Any, cast
 
-from src.observability_payloads import build_safe_input_payload
+from src.observability.safe_payloads import build_safe_input_payload
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.context import PipelineContext

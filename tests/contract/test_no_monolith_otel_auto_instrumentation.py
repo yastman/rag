@@ -12,7 +12,6 @@ ROOT = Path(__file__).resolve().parents[2]
 _AUTO_INSTRUMENTATION_PREFIX = "opentelemetry-instrumentation-"
 _ALLOWED_SRC_OTEL_ENV_FILES = {
     Path("src/observability.py"),
-    Path("src/observability_bootstrap.py"),
 }
 _SCAN_ROOTS = [ROOT / "src", ROOT / "telegram_bot"]
 
