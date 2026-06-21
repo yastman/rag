@@ -34,6 +34,7 @@ from telegram_bot.dialogs.filter_constants import (
     FLOOR_OPTIONS,
     ROOMS_OPTIONS,
     VIEW_OPTIONS,
+    build_active_filters_summary,
     build_filters_dict,
 )
 from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
@@ -262,65 +263,7 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
 
     dd = dialog_manager.dialog_data
 
-    from telegram_bot.dialogs.filter_constants import (
-        AREA_DISPLAY,
-        BUDGET_DISPLAY,
-        FLOOR_DISPLAY,
-        ROOMS_DISPLAY,
-        VIEW_DISPLAY,
-    )
-
-    # Build dynamic active filters summary — only show selected (non-default) filters
-    lines: list[str] = []
-
-    city_val = dd.get("city")
-    if _has_filter_value(city_val):
-        lines.append(f"📍 Город: {city_val}")
-
-    rooms_val = dd.get("rooms")
-    if _has_filter_value(rooms_val):
-        try:
-            rooms_key = _string_filter_value(rooms_val)
-            label = ROOMS_DISPLAY.get(int(rooms_key or "0"), str(rooms_key or ""))
-        except (ValueError, TypeError):
-            label = str(rooms_val)
-        lines.append(f"🛏 Комнаты: {label}")
-
-    budget_val = dd.get("budget")
-    if _has_filter_value(budget_val):
-        budget_key = _string_filter_value(budget_val) or ""
-        lines.append(f"💰 Бюджет: {BUDGET_DISPLAY.get(budget_key, budget_key)}")
-
-    view_val = dd.get("view")
-    if _has_filter_value(view_val):
-        view_key = _string_filter_value(view_val) or ""
-        lines.append(f"🌅 Вид: {VIEW_DISPLAY.get(view_key, view_key)}")
-
-    area_val = dd.get("area")
-    if _has_filter_value(area_val):
-        area_key = _string_filter_value(area_val) or ""
-        lines.append(f"📐 Площадь: {AREA_DISPLAY.get(area_key, area_key)}")
-
-    floor_val = dd.get("floor")
-    if _has_filter_value(floor_val):
-        floor_key = _string_filter_value(floor_val) or ""
-        lines.append(f"🏢 Этаж: {FLOOR_DISPLAY.get(floor_key, floor_key)}")
-
-    complex_val = dd.get("complex")
-    if _has_filter_value(complex_val):
-        lines.append(f"🏘 Комплекс: {complex_val}")
-
-    furnished_val = dd.get("furnished")
-    if _has_filter_value(furnished_val):
-        furnished_key = _string_filter_value(furnished_val) or ""
-        label = {"true": "Да", "false": "Нет"}.get(furnished_key, furnished_key)
-        lines.append(f"🛋 Мебель: {label}")
-
-    promotion_val = dd.get("promotion")
-    if promotion_val == "true":
-        lines.append("🏷 Только акции")
-
-    active_filters = "\n".join(lines) if lines else "Фильтры не заданы"
+    active_filters = build_active_filters_summary(dd)
     if lf is not None:
         lf.update_current_span(
             output=mask_pii(
