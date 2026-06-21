@@ -16,6 +16,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from uuid import uuid4
 
 from src.core.contracts import (
@@ -44,6 +46,7 @@ async def run_assistant_request(
     """
 
     rid = request_id or str(uuid4())
+    started = time.perf_counter()
 
     telemetry = dependencies.telemetry if dependencies is not None else None
     emit_product_event(telemetry, "assistant_request_started", request_id=rid, route="unknown")
@@ -78,7 +81,21 @@ async def run_assistant_request(
         user_context=user_context or UserContext(),
         request_id=rid,
     )
-    result = await run_assistant_pipeline(request, dependencies=dependencies)
+    try:
+        result = await run_assistant_pipeline(request, dependencies=dependencies)
+    except Exception as exc:
+        logging.getLogger(__name__).exception(
+            "run_assistant_request: unhandled exception for request_id=%s", rid
+        )
+        result = AssistantResult(
+            response_text="Сервис временно недоступен. Пожалуйста, повторите через минуту.",
+            route="error",
+            request_type="",
+            latency_ms=round((time.perf_counter() - started) * 1000, 3),
+            error_type="dependency_failed",
+            error_message=str(exc),
+            request_id=rid,
+        )
 
     emit_product_event(
         telemetry,
