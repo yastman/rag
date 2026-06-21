@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import telegram_bot.services as services
-from telegram_bot.services.generate_response import generate_response
+from telegram_bot.services.generate_response import GenerationDeps, generate_response
 
 
 def _make_non_streaming_config(answer: str = "Ответ модели") -> tuple[MagicMock, MagicMock]:
@@ -264,7 +264,7 @@ async def test_generate_response_coverage_mode_bypasses_style_prompt_builder() -
         documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
         config=config,
         lf_client=lf,
-        style_prompt_builder=style_prompt_builder,
+        deps=GenerationDeps(style_prompt_builder=style_prompt_builder),
         raw_messages=[{"role": "user", "content": "перечисли все виды внж"}],
     )
 
