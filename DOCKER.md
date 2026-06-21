@@ -145,6 +145,8 @@ does not define the bot image dependency set.
 
 ### ML profile (archived — Langfuse / observability surfaces)
 
+> **Archived** — Langfuse observability stack removed in #2844. Configuration kept for reference only.
+
 - `NEXTAUTH_SECRET`
 - `SALT`
 - `ENCRYPTION_KEY`
@@ -156,7 +158,9 @@ does not define the bot image dependency set.
 
 ### OpenTelemetry Service Identity (`OTEL_SERVICE_NAME`)
 
-Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in Compose so traces and observations are consistently attributed. The variable is optional — every service falls back to its default when `OTEL_SERVICE_NAME` is unset.
+> **Archived** — OpenTelemetry and Langfuse instrumentation were optional dependencies. Configuration kept for reference only.
+
+Each service that was instrumented set a stable `OTEL_SERVICE_NAME` default in Compose so traces and observations could be consistently attributed. The variable is optional — every service falls back to its default when `OTEL_SERVICE_NAME` is unset.
 
 | Service | Default `OTEL_SERVICE_NAME` |
 | --- | --- |
@@ -175,14 +179,9 @@ make docker-bot-up
 
 ### OpenTelemetry Propagation (`OTEL_PROPAGATORS`)
 
-Each Compose service that initializes the OpenTelemetry SDK declares
-`OTEL_PROPAGATORS=${OTEL_PROPAGATORS:-tracecontext,baggage}`. This keeps W3C
-TraceContext and Baggage propagation explicit for cross-service trace
-continuity; Langfuse user, session, and tag attributes rely on Baggage when
-requests cross service boundaries.
+> **Archived** — OpenTelemetry was optional and configuration is preserved for reference only.
 
-Leave the default in place unless a deployment needs an additional propagator,
-for example `b3` for Zipkin interoperability:
+For services that initialized the OpenTelemetry SDK, `OTEL_PROPAGATORS` was used to declare propagation style. This configuration is kept for reference only if deploying optional tracing extensions:
 
 ```bash
 export OTEL_PROPAGATORS=tracecontext,baggage,b3
@@ -191,13 +190,12 @@ make docker-bot-up
 
 ### Local Langfuse Headless Initialization
 
-`compose.yml` keeps Langfuse credentials secret-free: it declares traced service
-environment variables but does not provide predictable key defaults.
+> **Archived** — Langfuse observability was removed in #2844. This section is kept for reference only.
 
-`compose.dev.yml` is the local convenience layer. It provides dev-only
-`LANGFUSE_INIT_*` defaults for the `langfuse` service so an empty local
-Langfuse database creates a development organization, project, and API key that
-match the traced service defaults:
+`compose.yml` previously kept Langfuse credentials secret-free: it declared traced service
+environment variables but did not provide predictable key defaults.
+
+`compose.dev.yml` provided dev-only `LANGFUSE_INIT_*` defaults for the `langfuse` service (now removed):
 
 | Variable | Dev default |
 | --- | --- |
@@ -208,16 +206,12 @@ match the traced service defaults:
 | `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | `[REDACTED-LANGFUSE-KEY] |
 | `LANGFUSE_INIT_PROJECT_SECRET_KEY` | `[REDACTED-LANGFUSE-KEY] |
 
-These non-password defaults are local-only. Override them from `.env` when a dev
-stack should use a different local Langfuse project. Production and VPS
-environments must provide real Langfuse keys and must not rely on the dev
+These non-password defaults were local-only (now archived). If you were using Langfuse, they were overridden from `.env` when needed. Production and VPS
+environments that previously used Langfuse required real Langfuse keys and did not rely on the dev
 defaults.
 
-If `bot` logs show OTLP `401` or Langfuse logs show `No key found for public
-key`, the local Langfuse database likely lacks the project key currently
-injected into traced services. Recreate `langfuse`, `langfuse-worker`, and the
-traced service with the same env file so headless initialization and service
-credentials line up.
+If `bot` previously logged OTLP `401` or Langfuse logs showed `No key found for public
+key`, the local Langfuse database lacked the project key. This issue no longer applies after Langfuse removal.
 
 ## Health Checks
 

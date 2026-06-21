@@ -37,7 +37,9 @@ E2E judge routing defaults:
 - for transport-only Telethon checks without LLM judge: run `uv run python scripts/e2e/runner.py --no-judge`
 
 Voice-note fixture for E2E:
-- `E2E_VOICE_NOTE_PATH` — path to a local `.ogg` or `.oga` voice-note fixture
+> **Archived** — Voice surface removed in #2791. This section kept for reference only.
+
+- `E2E_VOICE_NOTE_PATH` — (archived) path to a local `.ogg` or `.oga` voice-note fixture
 - keep a short, non-sensitive query recording in an ignored local path such as `tmp/e2e/` (e.g., *"найди квартиру у моря до 120 тысяч"*)
 - do not commit personal voice recordings to the repo
 
@@ -48,16 +50,15 @@ Secret model by compose file:
   Stateful passwords use `${VAR:?VAR is required}` — they must come from `.env`
   or an explicit `--env-file`.
 - `compose.dev.yml` overrides stateful password variables with the same required
-  pattern and provides local-only non-password defaults for Langfuse headless
-  init (`LANGFUSE_INIT_*`) and traced-service keys (`LANGFUSE_PUBLIC_KEY`,
-  `LANGFUSE_SECRET_KEY`). `LIVEKIT_API_KEY` defaults to `devkey` as a documented
-  dev identifier.
+  pattern and provides local-only non-password defaults for services. `LIVEKIT_API_KEY` was set to `devkey` as a documented dev identifier (archived with voice surface).
 - Production/VPS stacks must set real secret values via environment management or file-backed secret patterns (`*_FILE` / `secrets:`) when available.
 
-Langfuse local development:
-- `compose.dev.yml` uses Langfuse headless initialization defaults to create a local dev organization/project/API key (`[REDACTED-LANGFUSE-KEY] / `[REDACTED-LANGFUSE-KEY] when the Langfuse database is empty.
-- Traced dev services use the same local keys, so a fresh local Langfuse database should accept OTLP ingestion after `langfuse` is recreated.
-- If `bot` logs show OTLP `401` / `No key found for public key`, recreate `langfuse`, `langfuse-worker`, and the traced service with the same env file, then confirm the local Langfuse DB has an organization, project, and API key before debugging application tracing.
+Langfuse local development (archived):
+> **Archived** — Langfuse observability removed in #2844. Configuration kept for reference only.
+
+- `compose.dev.yml` previously used Langfuse headless initialization defaults to create a local dev organization/project/API key when the Langfuse database was empty.
+- Traced dev services previously used the same local keys, so a fresh local Langfuse database would accept OTLP ingestion after `langfuse` was recreated.
+- If `bot` logs previously showed OTLP `401` / `No key found for public key`, users would recreate `langfuse`, `langfuse-worker`, and the traced service with the same env file. This is no longer applicable after Langfuse removal.
 
 ## 2. Start Services
 

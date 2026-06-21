@@ -11,7 +11,7 @@ PropertyBot
 ├── _setup_dialogs()        # Include aiogram-dialog routers before catch-all text routing
 ├── _setup_middlewares()    # Configure middleware chain
 ├── handle_query()          # Main entry point for text queries
-├── handle_voice()          # Entry point for voice messages
+├── handle_voice()          # (archived) Entry point for voice messages
 └── start()                 # Startup preflight, service init, polling
 ```
 
@@ -45,9 +45,11 @@ Find it with:
 rg -n "async def handle_query|_handle_client_direct_pipeline|_handle_query_supervisor" telegram_bot/bot.py
 ```
 
-### `handle_voice()`
+### `handle_voice()` (Archived)
 
-Processes voice messages through LangGraph:
+> **Archived** — Voice surface removed in #2791. This section kept for reference only.
+
+Previously processed voice messages through LangGraph:
 
 ```
 1. Download .ogg → bytes
@@ -55,7 +57,7 @@ Processes voice messages through LangGraph:
 3. build_graph().ainvoke(state)
 ```
 
-Find it with:
+Find references with:
 
 ```bash
 rg -n "async def handle_voice|voice_audio|make_initial_state|build_graph\\(" telegram_bot/bot.py
