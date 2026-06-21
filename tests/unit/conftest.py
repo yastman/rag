@@ -60,6 +60,10 @@ def pytest_configure(config):
             def __set_name__(self, owner: type, name: str) -> None:
                 self._state = f"{owner.__name__}:{name}"
 
+            @property
+            def state(self) -> str:
+                return self._state
+
             def __repr__(self) -> str:
                 return f"<State {self._state!r}>"
 
@@ -76,7 +80,11 @@ def pytest_configure(config):
         _fsm_state_mod.State = _State
         _fsm_state_mod.StatesGroup = _StatesGroup
 
+        class _FSMContext:
+            """Minimal FSMContext stub for isinstance() checks."""
+
         _fsm_context_mod = MagicMock()
+        _fsm_context_mod.FSMContext = _FSMContext
         _fsm_mod = MagicMock()
         _fsm_mod.state = _fsm_state_mod
         _fsm_mod.context = _fsm_context_mod
@@ -95,8 +103,14 @@ def pytest_configure(config):
             def __init__(self, *exception_types: type) -> None:
                 self.exception_types = exception_types
 
+        class _InaccessibleMessage:
+            """Minimal InaccessibleMessage stub for isinstance() checks."""
+
         _aiogram_exceptions_mod = MagicMock()
         _aiogram_exceptions_mod.TelegramBadRequest = _TelegramBadRequest
+
+        _aiogram_types_mod = MagicMock()
+        _aiogram_types_mod.InaccessibleMessage = _InaccessibleMessage
 
         _aiogram_filters_mod = MagicMock()
         _aiogram_filters_mod.ExceptionTypeFilter = _ExceptionTypeFilter
@@ -107,7 +121,6 @@ def pytest_configure(config):
             "aiogram.dispatcher.flags",
             "aiogram.enums",
             "aiogram.filters.callback_data",
-            "aiogram.types",
             "aiogram.utils",
             "aiogram.utils.callback_answer",
             "aiogram.utils.chat_action",
@@ -118,11 +131,12 @@ def pytest_configure(config):
             _saved_modules[mod_name] = sys.modules.get(mod_name)
             sys.modules[mod_name] = MagicMock()
         # Register modules with real stubs where isinstance() checks are needed
-        for mod_name in ("aiogram.exceptions", "aiogram.filters"):
+        for mod_name in ("aiogram.exceptions", "aiogram.filters", "aiogram.types"):
             _saved_modules[mod_name] = sys.modules.get(mod_name)
         sys.modules["aiogram.exceptions"] = _aiogram_exceptions_mod
         sys.modules["aiogram.filters"] = _aiogram_filters_mod
-        _aiogram_submodules.extend(["aiogram.exceptions", "aiogram.filters"])
+        sys.modules["aiogram.types"] = _aiogram_types_mod
+        _aiogram_submodules.extend(["aiogram.exceptions", "aiogram.filters", "aiogram.types"])
         # Register fsm submodules with proper stubs
         for mod_name in ("aiogram.fsm", "aiogram.fsm.context", "aiogram.fsm.state"):
             _saved_modules[mod_name] = sys.modules.get(mod_name)
@@ -150,7 +164,9 @@ def pytest_configure(config):
             "aiogram_dialog.api.entities",
             "aiogram_dialog.api.entities.events",
             "aiogram_dialog.api.protocols",
+            "aiogram_dialog.utils",
             "aiogram_dialog.widgets",
+            "aiogram_dialog.widgets.input",
             "aiogram_dialog.widgets.kbd",
             "aiogram_dialog.widgets.text",
         ]

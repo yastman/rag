@@ -606,11 +606,17 @@ async def on_apply(
         next_start: float | None = None
         page_ids: list[str] | None = None
         if svc is not None:
-            with contextlib.suppress(Exception):
+            try:
                 results, total_count, next_start, page_ids = await svc.scroll_with_filters(
                     filters=filters,
                     limit=10,
                 )
+            except Exception:
+                logger.exception("on_apply: search failed for filters=%r", filters)
+                msg = callback.message
+                if msg is not None and not isinstance(msg, InaccessibleMessage):
+                    await msg.answer("Не удалось выполнить поиск. Попробуйте ещё раз.")
+                return
 
         runtime = build_catalog_runtime(
             query=current_runtime.get("query", ""),
