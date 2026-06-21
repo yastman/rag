@@ -9,6 +9,7 @@ telegram_bot/handlers
 
 ## Contents
 - __init__.py
+- command_handlers.py
 - crm_callbacks.py
 - demo_handler.py
 - favorites_callbacks.py
