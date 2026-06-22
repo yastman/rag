@@ -43,7 +43,7 @@ async def _send_property_card(
     message: Message,
     result: dict,
     telegram_id: int,
-) -> Any:
+) -> Message:
     """Send a single property card with preview photo and action buttons (#722)."""
     from aiogram.types import FSInputFile, InputMediaPhoto
 
