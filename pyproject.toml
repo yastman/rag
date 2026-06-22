@@ -246,6 +246,7 @@ exclude = [
     "site-packages",
     "venv",
     "archive",
+    "vulture_whitelist.py",
 ]
 
 # Line length: 100 (slightly longer than Black's 88 for readability)
