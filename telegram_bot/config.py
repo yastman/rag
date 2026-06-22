@@ -239,16 +239,6 @@ class BotConfig(BaseSettings):
         default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
     )
 
-    # Mini App (Telegram Web App) (optional-profile: mini_app; kept because bot.py reads these)
-    mini_app_url: str = Field(
-        default="",
-        validation_alias=AliasChoices("mini_app_url", "MINI_APP_URL"),
-    )
-    expert_topics_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("expert_topics_enabled", "EXPERT_TOPICS_ENABLED"),
-    )
-
     # Voice transcription (optional-profile: voice; kept because bot.py reads these)
     show_transcription: bool = Field(
         default=True,

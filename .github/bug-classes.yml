@@ -105,3 +105,8 @@ bug_classes:
     description: generate_answer_stream propagated raw litellm.APIConnectionError to the caller instead of raising a domain-specific LLMConnectionError, making connection failures indistinguishable from other exceptions
     canonical_issue: "#2947"
     guardrail: tests/unit/runtime/test_generation_service_stream.py::test_generate_answer_stream_connection_error_yields_structured_fallback
+
+  - id: dead-code-ref-purge
+    description: Dead references to removed surfaces (Mini App, voice, deeplink) remain in active source files — config fields, handler attributes, docstrings, test helpers — after the surface was archived
+    canonical_issue: "#2963"
+    guardrail: "rg -r 'mini_app|MINI_APP|webapp|deeplink' telegram_bot/ src/ returns 0 hits; make test-core passes"

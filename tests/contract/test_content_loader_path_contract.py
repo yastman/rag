@@ -34,11 +34,8 @@ def test_content_loader_config_dir_uses_src_config() -> None:
 
 
 def test_src_config_yaml_files_exist() -> None:
-    """services.yaml and mini_app.yaml must exist in src/config/."""
+    """services.yaml must exist in src/config/."""
     src_config = REPO_ROOT / "src" / "config"
     assert (src_config / "services.yaml").exists(), (
         "#2747: src/config/services.yaml missing — move it from telegram_bot/config/"
-    )
-    assert (src_config / "mini_app.yaml").exists(), (
-        "#2747: src/config/mini_app.yaml missing — move it from telegram_bot/config/"
     )

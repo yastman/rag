@@ -3,13 +3,9 @@
 Single source of truth for phone validation/normalization. Used by:
 
 - ``telegram_bot/keyboards/phone_keyboard.py`` (bot reply-keyboard flow)
-- ``mini_app/phone.py`` (Mini App ``/api/phone`` Pydantic validator)
-- any future ``src/api`` consumer
 
-Closes the duplication called out in #1614 — Mini App previously redeclared a
-``_PHONE_RE = ^\\+?\\d{7,15}$`` regex that accepted impossible numbers like
-``+11111111111`` and never normalized to E.164. This module routes both
-consumers through ``phonenumbers.is_valid_number`` and E.164 formatting.
+Closes the duplication called out in #1614. This module routes consumers
+through ``phonenumbers.is_valid_number`` and E.164 formatting.
 
 This module is intentionally UI-free (no aiogram / no FastAPI) so it can be
 imported from any context without side-effects. The original location at

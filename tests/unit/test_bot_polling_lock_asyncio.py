@@ -23,7 +23,6 @@ def _make_bot_with_polling_lock() -> Any:
     bot._history_save_tasks = set()
     bot._history_save_max_concurrency = 32
     bot._history_save_drain_timeout_s = 5.0
-    bot._miniapp_subscriber_task = None
     bot._polling_lock_task = None
     bot._polling_lock = None
     bot._polling_lock_owner = None
