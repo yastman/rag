@@ -25,6 +25,7 @@ from aiogram_dialog.utils import remove_intent_id
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
+from telegram_bot.dialogs.catalog import run_catalog_search_and_render
 from telegram_bot.dialogs.filter_constants import (
     AREA_OPTIONS,
     BUDGET_OPTIONS,
@@ -38,7 +39,7 @@ from telegram_bot.dialogs.filter_constants import (
 )
 from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
 from telegram_bot.dialogs.states import CatalogSG, FilterSG
-from telegram_bot.observability import get_client, mask_pii, observe
+from telegram_bot.observability import mask_pii
 from telegram_bot.services.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
     build_catalog_runtime,
@@ -180,28 +181,14 @@ def _start_filter_observation(
     action: str,
     **extra: Any,
 ):
-    lf = get_client()
-    if lf is None:
-        return contextlib.nullcontext(None)
-
-    payload = mask_pii(
-        {
-            "action": action,
-            **extra,
-            "context": _snapshot_filter_context(manager),
-        }
-    )
-
-    return lf.start_as_current_observation(as_type="span", name=name, input=payload)
+    """No-op stub — Langfuse removed (#2844)."""
+    return contextlib.nullcontext(None)
 
 
 def _update_filter_observation(
     observation: Any, *, manager: DialogManager, action: str, **extra: Any
 ):
-    if observation is None or not hasattr(observation, "update"):
-        return
-    with contextlib.suppress(Exception):
-        observation.update(output=_trace_filter_output(manager, action=action, **extra))
+    """No-op stub — Langfuse removed (#2844)."""
 
 
 def _make_switch_trace_handler(action: str, target_state: Any):
@@ -233,12 +220,8 @@ def _make_switch_trace_handler(action: str, target_state: Any):
 # ============================================================
 
 
-@observe(name="dialog-filter-hub-data", capture_input=False, capture_output=False, as_type="span")
 async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
     """Getter for the hub window — returns filter options and live count."""
-    lf = get_client()
-    if lf is not None:
-        lf.update_current_span(input={"context": _snapshot_filter_context(dialog_manager)})
     _sanitize_filter_dialog_state(dialog_manager)
 
     svc = dialog_manager.middleware_data.get("apartments_service")
@@ -253,17 +236,6 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     dd = dialog_manager.dialog_data
 
     active_filters = build_active_filters_summary(dd)
-    if lf is not None:
-        lf.update_current_span(
-            output=mask_pii(
-                {
-                    "count": count,
-                    "active_filters": active_filters,
-                    "context": _snapshot_filter_context(dialog_manager),
-                }
-            )
-        )
-
     return {
         "count": count,
         "active_filters": active_filters,
@@ -462,22 +434,11 @@ _FIELD_TO_RADIO_ID: dict[str, str] = {
 }
 
 
-@observe(name="dialog-filter-start", capture_input=False, capture_output=False, as_type="span")
 async def on_filter_dialog_start(
     start_data: dict[str, Any] | None,
     manager: DialogManager,
 ) -> None:
     """Pre-populate dialog_data and Radio checked states from existing filters."""
-    lf = get_client()
-    if lf is not None:
-        lf.update_current_span(
-            input=mask_pii(
-                {
-                    "start_data": start_data or {},
-                    "context_before": _snapshot_filter_context(manager),
-                }
-            )
-        )
     filters = (start_data or {}).get("filters") or {}
     dialog_data = _filters_to_dialog_data(filters)
     for field in _FIELD_TO_RADIO_ID:
@@ -500,8 +461,6 @@ async def on_filter_dialog_start(
             radio_widget = manager.find(radio_id)
             if radio_widget is not None:
                 await radio_widget.set_checked(str(value))
-    if lf is not None:
-        lf.update_current_span(output={"context_after": _snapshot_filter_context(manager)})
 
 
 # ============================================================
@@ -515,7 +474,6 @@ async def on_apply(
     manager: DialogManager,
 ) -> None:
     """Apply filters and return to the catalog dialog flow."""
-    from telegram_bot.dialogs.catalog import run_catalog_search_and_render
 
     with _start_filter_observation(
         name="dialog-filter-apply",

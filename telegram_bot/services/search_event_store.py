@@ -8,8 +8,6 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from telegram_bot.observability import observe
-
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,6 @@ class SearchEventStore:
     def __init__(self, *, pool: Any) -> None:
         self._pool = pool
 
-    @observe(name="search-event-append")
     async def append(
         self,
         user_id: int,
@@ -44,7 +41,6 @@ class SearchEventStore:
             results_count,
         )
 
-    @observe(name="search-event-get-user")
     async def get_user_events(
         self,
         user_id: int,

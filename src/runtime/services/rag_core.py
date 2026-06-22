@@ -4,27 +4,16 @@ Extracted to avoid ~300 LOC duplication between:
   telegram_bot/agents/rag_pipeline.py
   telegram_bot/graph/nodes/*.py
 
-Core functions are pure computation (no Langfuse spans, no PipelineMetrics).
-Adapters (pipeline / nodes) handle span tracking, metrics, and state wrapping.
-
-Observability (#2162):
-    Each orchestration helper carries an ``@observe`` decorator with
-    ``capture_input=False`` and ``capture_output=False`` so that the trace tree
-    contains a stable ``rag-core-*`` span for every helper without leaking raw
-    user query text, embedding vectors, or document text. Curated
-    high-signal metadata (cache hit, query type, top-k, vector dim) is added
-    inside each function via ``update_current_span(input=..., output=...)`` so
-    the Langfuse UI shows useful summary fields.
+Core functions are pure computation (no spans, no PipelineMetrics).
+Adapters (pipeline / nodes) handle metrics and state wrapping.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from typing import Any
 
-from src.observability import get_client, observe
 from src.runtime.domain_defaults import _REWRITE_PROMPT
 from src.runtime.domain_defaults import BLOCKED_RESPONSE as BLOCKED_RESPONSE  # re-export
 from src.runtime.services.cache_policy import is_contextual_query
@@ -40,11 +29,7 @@ CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED"
 
 
 def _update_current_span(**kwargs: Any) -> None:
-    """Best-effort ``update_current_span`` wrapper; no-op when no client."""
-    lf = get_client()
-    if lf is not None:
-        with contextlib.suppress(Exception):
-            lf.update_current_span(**kwargs)
+    """No-op stub — Langfuse removed (#2844)."""
 
 
 def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
@@ -65,7 +50,6 @@ def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-build-context", capture_input=False, capture_output=False)
 def build_retrieved_context(
     results: list[dict[str, Any]],
     limit: int = 5,
@@ -100,7 +84,6 @@ def build_retrieved_context(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-rewrite-query", capture_input=False, capture_output=False)
 async def rewrite_query_via_llm(
     query: str,
     *,
@@ -157,7 +140,6 @@ async def rewrite_query_via_llm(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-perform-rerank", capture_input=False, capture_output=False)
 async def perform_rerank(
     query: str,
     documents: list[dict[str, Any]],
@@ -262,7 +244,6 @@ async def perform_rerank(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-compute-query-embedding", capture_input=False, capture_output=False)
 async def compute_query_embedding(
     query: str,
     *,
@@ -421,7 +402,6 @@ async def compute_query_embedding(
     return (dense, sparse, None, False)
 
 
-@observe(name="rag-core-check-semantic-cache", capture_input=False, capture_output=False)
 async def check_semantic_cache(
     query: str,
     vector: list[float],

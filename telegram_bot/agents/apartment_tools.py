@@ -6,7 +6,6 @@ import logging
 
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
-from telegram_bot.observability import get_client, observe
 from telegram_bot.services.apartment_formatter import format_apartment_text
 
 
@@ -14,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-@observe(name="tool-apartment-search", capture_input=False, capture_output=False, as_type="tool")
 async def apartment_search(
     query: str,
     config: RunnableConfig,
@@ -50,9 +48,6 @@ async def apartment_search(
     ctx = get_bot_context(None, config)
     if not ctx or not ctx.apartments_service:
         return "Сервис поиска апартаментов недоступен."
-
-    lf = get_client()
-    lf.update_current_span(input={"query": query[:100], "rooms": rooms, "max_price": max_price_eur})
 
     # Pipeline fallback: extract filters from query text when none provided explicitly
     _has_explicit_filters = any(
@@ -145,7 +140,6 @@ async def apartment_search(
         )
 
         response = format_apartment_text(results)
-        lf.update_current_span(output={"results_count": total})
 
         # Log search filters for CRM enrichment
         store = getattr(ctx, "search_event_store", None)

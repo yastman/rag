@@ -31,7 +31,6 @@ from src.ingestion.unified.colbert_backfill import (
 )
 from src.ingestion.unified.observability import (
     flush_ingestion_traces,
-    observe,
     try_update_ingestion_trace,
 )
 
@@ -69,7 +68,6 @@ def _inspect_sync_dir(
     }
 
 
-@observe(name="ingestion-cli-run", capture_input=False, capture_output=False)
 def cmd_run(args: argparse.Namespace) -> int:
     """Run ingestion."""
     from src.ingestion.unified.config import UnifiedConfig
@@ -132,7 +130,6 @@ async def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
-@observe(name="ingestion-cli-preflight", capture_input=False, capture_output=False)
 async def cmd_preflight(args: argparse.Namespace) -> int:
     """Check that all ingestion dependencies are reachable."""
     import httpx

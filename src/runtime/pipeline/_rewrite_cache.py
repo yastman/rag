@@ -3,12 +3,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from typing import Any
 
-from src.observability import get_client, observe
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
@@ -40,7 +38,6 @@ def _cacheable_query_types() -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-@observe(name="query-rewrite")
 async def _rewrite_query(
     query: str,
     rewrite_count: int,
@@ -79,12 +76,8 @@ async def _rewrite_query(
         if llm is None:
             llm = config.create_llm()
         rewritten, effective, rewrite_actual_model = await rewrite_query_via_llm(query, llm=llm)
-    except Exception as e:
+    except Exception:
         logger.exception("rewrite: LLM rewrite failed, keeping original query")
-        get_client().update_current_span(
-            level="ERROR",
-            status_message=f"Rewrite LLM failed: {str(e)[:200]}",
-        )
         rewritten = query
         effective = False
         rewrite_actual_model = "fallback"
@@ -112,7 +105,6 @@ async def _rewrite_query(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="cache-store", capture_input=False, capture_output=False)
 async def _cache_store(
     query: str,
     response: str,
@@ -129,16 +121,6 @@ async def _cache_store(
 
     Returns dict with latency update.
     """
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "response_length": len(response),
-            "search_results_count": search_results_count,
-        }
-    )
     start = time.perf_counter()
 
     stored_semantic = False
@@ -189,13 +171,6 @@ async def _cache_store(
             logger.info("cache_store: stored=semantic (type=%s)", query_type)
 
     latency = time.perf_counter() - start
-    lf.update_current_span(
-        output={
-            "stored": stored_semantic,
-            "stored_semantic": stored_semantic,
-            "duration_ms": round(latency * 1000, 1),
-        }
-    )
 
     return {
         "stored_semantic": stored_semantic,

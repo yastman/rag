@@ -90,15 +90,6 @@ async def test_generate_answer_stream_safe_fallback_preserves_metadata_and_skips
     assert metadata_out["response_policy_mode"] == "safe_fallback"
     assert metadata_out["llm_provider_model"] == "safe_fallback"
 
-    span_outputs = [
-        call.kwargs["output"]
-        for call in lf_client.update_current_span.call_args_list
-        if "output" in call.kwargs
-    ]
-    assert span_outputs[-1]["safe_fallback_used"] is True
-    assert span_outputs[-1]["grounded"] is False
-    assert span_outputs[-1]["llm_provider_model"] == "safe_fallback"
-    assert span_outputs[-1]["needs_coverage"] is False
     _PipelineMetrics.metric.record.assert_called_once()
     config.create_llm.assert_not_called()
 

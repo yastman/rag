@@ -472,27 +472,12 @@ class TestCheckSingleDep:
     def test_litellm_proxy_is_not_a_preflight_dependency(self):
         assert "litellm" not in DEP_CLASSIFICATION
 
-    async def test_langfuse_uses_get_langfuse_client(self):
+    async def test_langfuse_check_removed(self):
+        """Langfuse dep check removed in #2969; 'langfuse' is now an unknown dep."""
         config = _make_config()
         client = AsyncMock(spec=httpx.AsyncClient)
 
-        with patch(
-            "telegram_bot.observability.get_langfuse_client",
-            return_value=MagicMock(),
-        ):
-            result = await _check_single_dep("langfuse", config, client)
-
-        assert result is True
-
-    async def test_langfuse_none_means_fail(self):
-        config = _make_config()
-        client = AsyncMock(spec=httpx.AsyncClient)
-
-        with patch(
-            "telegram_bot.observability.get_langfuse_client",
-            return_value=None,
-        ):
-            result = await _check_single_dep("langfuse", config, client)
+        result = await _check_single_dep("langfuse", config, client)
 
         assert result is False
 
@@ -531,7 +516,7 @@ class TestCheckDependencies:
 
         assert all(results.values())
         assert "redis" in results
-        assert "langfuse" in results
+        assert "langfuse" not in results  # removed in #2969
 
     async def test_critical_failure_raises_preflight_error(self):
         config = _make_config()
@@ -556,7 +541,7 @@ class TestCheckDependencies:
         config = _make_config()
 
         async def fake_optional(name, cfg, client, **_kwargs):
-            return name != "langfuse"
+            return name != "postgres"
 
         with (
             patch(
@@ -568,7 +553,7 @@ class TestCheckDependencies:
         ):
             results = await check_dependencies(config)
 
-        assert results["langfuse"] is False
+        assert results["postgres"] is False
         # No PreflightError raised — optional deps don't block
 
     async def test_retry_logic_first_fail_second_pass(self):

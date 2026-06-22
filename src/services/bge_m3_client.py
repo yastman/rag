@@ -18,7 +18,6 @@ from typing import Any
 
 import httpx
 
-from src.observability import get_client, observe
 from src.services._retry import bge_retry
 
 
@@ -26,34 +25,6 @@ DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_MAX_LENGTH = 512
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
-LANGFUSE_TRACE_ID_HEADER = "x-langfuse-trace-id"
-LANGFUSE_PARENT_OBSERVATION_ID_HEADER = "x-langfuse-parent-observation-id"
-
-
-def _trace_context_headers() -> dict[str, str]:
-    """Return Langfuse context headers for downstream BGE service calls."""
-    headers: dict[str, str] = {}
-    headers.update(_langfuse_trace_context_headers())
-    return headers
-
-
-def _langfuse_trace_context_headers() -> dict[str, str]:
-    """Return Langfuse context headers consumed by BGE service @observe spans."""
-    try:
-        lf = get_client()
-        trace_id = lf.get_current_trace_id() if hasattr(lf, "get_current_trace_id") else None
-        parent_id = (
-            lf.get_current_observation_id() if hasattr(lf, "get_current_observation_id") else None
-        )
-    except Exception:
-        return {}
-
-    headers: dict[str, str] = {}
-    if trace_id:
-        headers[LANGFUSE_TRACE_ID_HEADER] = str(trace_id)
-    if parent_id:
-        headers[LANGFUSE_PARENT_OBSERVATION_ID_HEADER] = str(parent_id)
-    return headers
 
 
 def _build_payload(
@@ -206,142 +177,49 @@ class BGEM3Client:
                 self._client = client
             return client
 
-    @observe(
-        name="bge-m3-encode-dense", as_type="embedding", capture_input=False, capture_output=False
-    )
     @bge_retry
     async def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors via /encode/dense."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "texts_count": len(texts),
-                "batch_size": self.batch_size,
-                "max_length": self.max_length,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
         if not texts:
-            lf.update_current_span(
-                output={"vectors_count": 0, "vector_dim": 0},
-                metadata={"model": BGE_M3_MODEL_NAME},
-            )
             return DenseResult(vectors=[])
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/dense",
             json=_build_payload(texts, self.batch_size, self.max_length),
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        result = _parse_dense_response(resp.json())
-        lf.update_current_span(
-            output={
-                "vectors_count": len(result.vectors),
-                "vector_dim": len(result.vectors[0]) if result.vectors else 0,
-                "processing_time": result.processing_time,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
-        return result
+        return _parse_dense_response(resp.json())
 
-    @observe(
-        name="bge-m3-encode-sparse", as_type="embedding", capture_input=False, capture_output=False
-    )
     @bge_retry
     async def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors via /encode/sparse."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "texts_count": len(texts),
-                "batch_size": self.batch_size,
-                "max_length": self.max_length,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
         if not texts:
-            lf.update_current_span(
-                output={"weights_count": 0},
-                metadata={"model": BGE_M3_MODEL_NAME},
-            )
             return SparseResult(weights=[])
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/sparse",
             json=_build_payload(texts, self.batch_size, self.max_length),
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        result = _parse_sparse_response(resp.json())
-        lf.update_current_span(
-            output={
-                "weights_count": len(result.weights),
-                "processing_time": result.processing_time,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
-        return result
+        return _parse_sparse_response(resp.json())
 
-    @observe(
-        name="bge-m3-encode-hybrid", as_type="embedding", capture_input=False, capture_output=False
-    )
     @bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
         """Encode texts to dense + sparse (+ optional ColBERT) via /encode/hybrid (single call)."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "texts_count": len(texts),
-                "max_length": self.max_length,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
         if not texts:
-            lf.update_current_span(
-                output={"dense_count": 0, "sparse_count": 0, "colbert_count": 0},
-                metadata={"model": BGE_M3_MODEL_NAME},
-            )
             return HybridResult(dense_vecs=[], lexical_weights=[])
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/hybrid",
             json=_build_payload(texts, self.batch_size, self.max_length),
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        result = _parse_hybrid_response(resp.json())
-        lf.update_current_span(
-            output={
-                "dense_count": len(result.dense_vecs),
-                "dense_dim": len(result.dense_vecs[0]) if result.dense_vecs else 0,
-                "sparse_count": len(result.lexical_weights),
-                "colbert_count": len(result.colbert_vecs or []),
-                "processing_time": result.processing_time,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
-        return result
+        return _parse_hybrid_response(resp.json())
 
-    @observe(name="bge-m3-rerank", as_type="embedding", capture_input=False, capture_output=False)
     @bge_retry
     async def rerank(self, query: str, documents: list[str], top_k: int = 5) -> RerankResult:
         """Rerank documents via ColBERT MaxSim /rerank endpoint."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "query_length": len(query),
-                "documents_count": len(documents),
-                "top_k": top_k,
-                "max_length": self.max_length,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
         if not documents:
-            lf.update_current_span(
-                output={"results_count": 0, "top_score": None},
-                metadata={"model": BGE_M3_MODEL_NAME},
-            )
             return RerankResult()
         client = await self._get_client()
         resp = await client.post(
@@ -352,61 +230,26 @@ class BGEM3Client:
                 "top_k": top_k,
                 "max_length": self.max_length,
             },
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
-        result = RerankResult(
+        return RerankResult(
             results=[{"index": r["index"], "score": r["score"]} for r in data["results"]],
             processing_time=data.get("processing_time"),
         )
-        lf.update_current_span(
-            output={
-                "results_count": len(result.results),
-                "top_score": result.results[0]["score"] if result.results else None,
-                "processing_time": result.processing_time,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
-        return result
 
-    @observe(
-        name="bge-m3-encode-colbert", as_type="embedding", capture_input=False, capture_output=False
-    )
     @bge_retry
     async def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors via /encode/colbert."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "texts_count": len(texts),
-                "max_length": self.max_length,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
         if not texts:
-            lf.update_current_span(
-                output={"colbert_count": 0, "colbert_vector_count": 0},
-                metadata={"model": BGE_M3_MODEL_NAME},
-            )
             return ColbertResult(colbert_vecs=[])
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/colbert",
             json=_build_payload(texts, self.batch_size, self.max_length),
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
-        result = _parse_colbert_response(resp.json())
-        lf.update_current_span(
-            output={
-                "colbert_count": len(result.colbert_vecs),
-                "colbert_vector_count": len(result.colbert_vecs[0]) if result.colbert_vecs else 0,
-                "processing_time": result.processing_time,
-            },
-            metadata={"model": BGE_M3_MODEL_NAME},
-        )
-        return result
+        return _parse_colbert_response(resp.json())
 
     async def aclose(self) -> None:
         """Close the underlying httpx client.
@@ -446,7 +289,6 @@ class BGEM3SyncClient:
         resp = self._client.post(
             f"{self.base_url}/encode/dense",
             json=_build_payload(texts, self.batch_size, self.max_length),
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         return _parse_dense_response(resp.json())
@@ -458,7 +300,6 @@ class BGEM3SyncClient:
         resp = self._client.post(
             f"{self.base_url}/encode/sparse",
             json=_build_payload(texts, self.batch_size, self.max_length),
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         return _parse_sparse_response(resp.json())
@@ -470,7 +311,6 @@ class BGEM3SyncClient:
         resp = self._client.post(
             f"{self.base_url}/encode/colbert",
             json=_build_payload(texts, self.batch_size, self.max_length),
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         return _parse_colbert_response(resp.json())
@@ -486,7 +326,6 @@ class BGEM3SyncClient:
         resp = self._client.post(
             f"{self.base_url}/encode/hybrid",
             json=_build_payload(texts, self.batch_size, self.max_length),
-            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         return _parse_hybrid_response(resp.json())

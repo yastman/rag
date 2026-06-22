@@ -12,7 +12,6 @@ from typing import Any
 
 from src.runtime.services.metrics import PipelineMetrics
 from src.runtime.services.rag_core import perform_rerank
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TOP_K = 5
 
 
-@observe(name="node-rerank")
 async def rerank_node(
     state: dict[str, Any],
     runtime: Any,
@@ -67,12 +65,8 @@ async def rerank_node(
         if not rerank_applied:
             # No reranker path: sort and trim here
             reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
-    except Exception as e:
+    except Exception:
         logger.exception("rerank: ColBERT failed, falling back to score sort")
-        get_client().update_current_span(
-            level="ERROR",
-            status_message=f"ColBERT rerank failed: {str(e)[:200]}",
-        )
         reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
         rerank_applied = False
         rerank_cache_hit = False

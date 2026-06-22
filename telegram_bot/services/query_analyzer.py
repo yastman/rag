@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 from src.runtime.integrations.prompt_manager import get_prompt_with_object
 from src.runtime.llm import create_litellm_chat_client
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -68,28 +67,8 @@ class QueryAnalyzer:
         self.client = create_litellm_chat_client(model=model, timeout=30.0)
         self._structured_client = self.client
 
-    @observe(
-        name="query-analyzer",
-        capture_input=False,
-        capture_output=False,
-    )
     async def analyze(self, query: str) -> dict[str, Any]:
         """Analyze query and extract filters + semantic query.
-
-        Wrapped in ``@observe`` (#1659) so the analyzer remains a named span
-        around the LiteLLM SDK-router structured-output call. Curated
-        ``update_current_span`` payloads avoid leaking the full
-        query or the full LLM response into Langfuse:
-
-        * input: ``{"query_preview": query[:120], "model": self.model}``
-        * output: ``{"filter_keys": sorted(filters.keys()),
-          "filter_count": len(filters),
-          "semantic_query_len": len(semantic_query)}``
-          — schema-level metadata only; no filter *values*, no semantic
-          query *content*.
-        * on exception: ``level="ERROR"`` with ``status_message`` truncated
-          to 200 chars; existing fallback contract preserved (returns
-          ``{"filters": {}, "semantic_query": query}``).
 
         Args:
             query: User query text
@@ -97,16 +76,8 @@ class QueryAnalyzer:
         Returns:
             Dict with 'filters' and 'semantic_query'
         """
-        lf = get_client()
-        if lf is not None:
-            lf.update_current_span(
-                input={
-                    "query_preview": query[:120],
-                    "model": self.model,
-                }
-            )
         try:
-            system_prompt, prompt_obj = get_prompt_with_object(
+            system_prompt, _prompt_obj = get_prompt_with_object(
                 "query-analysis", fallback=SYSTEM_PROMPT
             )
             create_kwargs: dict[str, Any] = {
@@ -119,38 +90,20 @@ class QueryAnalyzer:
                 "max_retries": 2,
                 "temperature": 0.0,
                 "max_tokens": 1000,
-                "name": "query-analysis",
             }
-            if prompt_obj is not None:
-                # Kept as metadata for clients that know how to link Langfuse prompts;
-                # the LiteLLM router drops it before calling the provider.
-                create_kwargs["langfuse_prompt"] = prompt_obj
             result = await self._structured_client.chat.completions.create(**create_kwargs)
 
             filters = result.filters
             semantic_query = result.semantic_query or query
-
-            if lf is not None:
-                lf.update_current_span(
-                    output={
-                        "filter_keys": sorted(filters.keys()),
-                        "filter_count": len(filters),
-                        "semantic_query_len": len(semantic_query),
-                    }
-                )
 
             logger.info("QueryAnalyzer: filters=%s, semantic_query=%s", filters, semantic_query)
             return {"filters": filters, "semantic_query": semantic_query}
 
         except (openai.APIConnectionError, openai.RateLimitError, openai.APITimeoutError) as e:
             logger.error("QueryAnalyzer API error: %s", e)
-            if lf is not None:
-                lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             return {"filters": {}, "semantic_query": query}
         except Exception as e:
             logger.error("QueryAnalyzer error: %s", e, exc_info=True)
-            if lf is not None:
-                lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             return {"filters": {}, "semantic_query": query}
 
     async def close(self):

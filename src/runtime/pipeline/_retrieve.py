@@ -8,7 +8,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from src.observability import observe
 from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
 from src.runtime.services.metrics import record_pipeline_event
 
@@ -117,7 +116,6 @@ async def _execute_qdrant_retrieval(
     return results, search_meta, colbert_used
 
 
-@observe(name="retrieval.initial", capture_input=False, capture_output=False)
 async def _run_initial_retrieval(
     *,
     qdrant: Any,
@@ -141,7 +139,6 @@ async def _run_initial_retrieval(
     )
 
 
-@observe(name="retrieval.relax", capture_input=False, capture_output=False)
 async def _run_relaxed_retrieval(
     *,
     qdrant: Any,

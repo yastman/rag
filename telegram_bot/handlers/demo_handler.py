@@ -34,7 +34,6 @@ from aiogram_dialog import DialogManager, ShowMode, StartMode
 from telegram_bot.callback_data import DemoCB
 from telegram_bot.dialogs.states import DemoSG
 from telegram_bot.keyboards.demo_keyboard import build_demo_menu
-from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -48,7 +47,6 @@ async def handle_demo_button(message: Message) -> None:
     )
 
 
-@observe(name="demo-apartments-prompt", capture_input=False, capture_output=False)
 async def handle_demo_apartments(
     callback: CallbackQuery,
     dialog_manager: DialogManager,
@@ -79,7 +77,6 @@ async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
     """
     from openai import AsyncOpenAI
 
-    @observe(name="demo-transcribe-voice")
     async def _run() -> str | None:
         bot = message.bot
         if bot is None or message.voice is None:

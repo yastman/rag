@@ -18,7 +18,6 @@ import re
 import time
 from typing import Any
 
-from src.observability import get_client, observe
 from src.runtime.services.rag_core import BLOCKED_RESPONSE as _BLOCKED_RESPONSE
 
 
@@ -134,7 +133,6 @@ def detect_injection(text: str) -> tuple[bool, float, str | None]:
     return (max_risk > 0, max_risk, max_category)
 
 
-@observe(name="node-guard", as_type="guardrail")
 async def guard_node(
     state: dict[str, Any],
     runtime: Any,
@@ -150,7 +148,6 @@ async def guard_node(
     """
     guard_mode: str = runtime.context.get("guard_mode", "hard")  # type: ignore[assignment]
     t0 = time.perf_counter()
-    lf = get_client()
 
     messages = state["messages"]
     query = messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
@@ -177,26 +174,10 @@ async def guard_node(
             query,
         )
 
-        lf.update_current_span(
-            output={
-                "injection_detected": True,
-                "risk_score": risk_score,
-                "pattern": pattern,
-                "guard_mode": guard_mode,
-            }
-        )
-
         if guard_mode == "hard":
             result["guard_blocked"] = True
             result["guard_reason"] = "injection"
             result["response"] = _BLOCKED_RESPONSE
-    else:
-        lf.update_current_span(
-            output={
-                "injection_detected": False,
-                "risk_score": 0.0,
-            }
-        )
 
     return result
 

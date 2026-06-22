@@ -35,7 +35,6 @@ import redis.asyncio as redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
-from src.observability import get_client, observe
 from src.services.bge_m3_query_bundle import (
     BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
     BGE_M3_QUERY_BUNDLE_MODEL,
@@ -269,7 +268,6 @@ class CacheLayerManager:
 
     # ========== Semantic Cache ==========
 
-    @observe(name="cache-semantic-check", capture_input=False, capture_output=False)
     async def check_semantic(
         self,
         query: str,
@@ -299,26 +297,8 @@ class CacheLayerManager:
         Returns:
             Cached response string, or None on miss/timeout
         """
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "query_type": query_type,
-                "language": language,
-                "has_user_id": user_id is not None,
-                "has_cache_scope": cache_scope is not None,
-                "has_agent_role": agent_role is not None,
-                "has_filter_signature": filter_signature is not None,
-                "filter_signature": filter_signature,
-                "grounding_mode": grounding_mode,
-                "require_safe_reuse": require_safe_reuse,
-                "cache_timeout_s": cache_timeout,
-                "query_length": len(query),
-                "vector_dim": len(vector),
-            }
-        )
 
         if not self.semantic_cache:
-            lf.update_current_span(output={"hit": False, "semantic_cache_enabled": False})
             return None
 
         threshold = self.cache_thresholds.get(query_type, 0.08)
@@ -359,11 +339,6 @@ class CacheLayerManager:
                 latency_ms = (time.time() - start) * 1000
                 logger.warning("Semantic cache timeout (%.0fms > %.1fs)", latency_ms, cache_timeout)
                 self._metrics["semantic"]["misses"] += 1
-                lf.update_current_span(
-                    level="WARNING",
-                    status_message="Semantic cache timeout",
-                    output={"hit": False, "timeout": True, "latency_ms": round(latency_ms, 2)},
-                )
                 return None
 
             latency_ms = (time.time() - start) * 1000
@@ -378,34 +353,17 @@ class CacheLayerManager:
                     threshold,
                     query_type,
                 )
-                lf.update_current_span(
-                    output={
-                        "hit": True,
-                        "latency_ms": round(latency_ms, 2),
-                        "distance": float(distance),
-                        "threshold": threshold,
-                    }
-                )
                 return str(results[0].get("response", ""))
 
             self._metrics["semantic"]["misses"] += 1
             logger.debug("Semantic MISS (%.0fms, type=%s)", latency_ms, query_type)
-            lf.update_current_span(
-                output={"hit": False, "latency_ms": round(latency_ms, 2), "threshold": threshold}
-            )
             return None
 
         except Exception as e:
             logger.error("Semantic cache error: %s: %s", type(e).__name__, e)
             self._metrics["semantic"]["misses"] += 1
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"Semantic cache error: {type(e).__name__}",
-                output={"hit": False, "error": type(e).__name__},
-            )
             return None
 
-    @observe(name="cache-semantic-store", capture_input=False, capture_output=False)
     async def store_semantic(
         self,
         query: str,
@@ -420,24 +378,7 @@ class CacheLayerManager:
         filter_signature: str | None = None,
     ) -> None:
         """Store query-response pair in semantic cache."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "query_type": query_type,
-                "language": language,
-                "has_user_id": user_id is not None,
-                "has_cache_scope": cache_scope is not None,
-                "has_agent_role": agent_role is not None,
-                "has_filter_signature": filter_signature is not None,
-                "filter_signature": filter_signature,
-                "metadata_keys": sorted((metadata or {}).keys()),
-                "query_length": len(query),
-                "response_length": len(response),
-                "vector_dim": len(vector),
-            }
-        )
         if not self.semantic_cache:
-            lf.update_current_span(output={"stored": False, "semantic_cache_enabled": False})
             return
 
         ttl = self.cache_ttl.get(query_type, 3600)
@@ -481,18 +422,11 @@ class CacheLayerManager:
                 agent_role,
                 ttl,
             )
-            lf.update_current_span(output={"stored": True, "ttl_s": ttl})
         except Exception as e:
             logger.error("Semantic store error: %s: %s", type(e).__name__, e)
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"Semantic store error: {type(e).__name__}",
-                output={"stored": False, "error": type(e).__name__},
-            )
 
     # ========== Exact Caches (SET/GET) ==========
 
-    @observe(name="cache-exact-get", capture_input=False, capture_output=False)
     async def get_exact(self, tier: str, key: str) -> Any | None:
         """Get value from exact cache tier.
 
@@ -503,10 +437,7 @@ class CacheLayerManager:
         Returns:
             Deserialized value, or None on miss
         """
-        lf = get_client()
-        lf.update_current_span(input={"tier": tier, "key_hash": key[:16]})
         if not self.redis:
-            lf.update_current_span(output={"hit": False, "redis_enabled": False, "tier": tier})
             return None
 
         redis_key = f"{tier}:{CACHE_VERSION}:{key}"
@@ -515,24 +446,16 @@ class CacheLayerManager:
             if cached:
                 if tier in self._metrics:
                     self._metrics[tier]["hits"] += 1
-                lf.update_current_span(output={"hit": True, "tier": tier})
                 return json.loads(cached)
             if tier in self._metrics:
                 self._metrics[tier]["misses"] += 1
-            lf.update_current_span(output={"hit": False, "tier": tier})
             return None
         except Exception as e:
             logger.error("Cache get error (%s): %s: %s", tier, type(e).__name__, e)
             if tier in self._metrics:
                 self._metrics[tier]["misses"] += 1
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"Exact cache get error: {type(e).__name__}",
-                output={"hit": False, "tier": tier, "error": type(e).__name__},
-            )
             return None
 
-    @observe(name="cache-exact-store", capture_input=False, capture_output=False)
     async def store_exact(self, tier: str, key: str, value: Any, ttl: int | None = None) -> None:
         """Store value in exact cache tier.
 
@@ -543,82 +466,39 @@ class CacheLayerManager:
             ttl: Optional TTL override (seconds)
         """
         effective_ttl = ttl or self.exact_ttls.get(tier, 3600)
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "tier": tier,
-                "key_hash": key[:16],
-                "ttl_s": effective_ttl,
-            }
-        )
         if not self.redis:
-            lf.update_current_span(output={"stored": False, "redis_enabled": False, "tier": tier})
             return
 
         redis_key = f"{tier}:{CACHE_VERSION}:{key}"
         try:
             await self.redis.setex(redis_key, effective_ttl, json.dumps(value))
-            lf.update_current_span(output={"stored": True, "tier": tier, "ttl_s": effective_ttl})
         except Exception as e:
             logger.error("Cache store error (%s): %s: %s", tier, type(e).__name__, e)
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"Exact cache store error: {type(e).__name__}",
-                output={"stored": False, "tier": tier, "error": type(e).__name__},
-            )
 
     # ========== Convenience: Embeddings ==========
 
-    @observe(name="cache-embedding-get", capture_input=False, capture_output=False)
     async def get_embedding(self, text: str, model: str = "bge-m3") -> list[float] | None:
         """Get cached dense embedding via RedisVL EmbeddingsCache."""
-        lf = get_client()
-        lf.update_current_span(
-            input={"model": model, "text_length": len(text)},
-            metadata={"model": model},
-        )
         if self.embed_cache is None:
-            lf.update_current_span(
-                output={"hit": False, "embed_cache_enabled": False},
-                metadata={"model": model},
-            )
             return None
         try:
             normalized = _normalize_query_for_cache(text)
             result = await self.embed_cache.aget(content=normalized, model_name=model)
             if result is not None:
                 self._metrics["embeddings"]["hits"] += 1
-                lf.update_current_span(output={"hit": True}, metadata={"model": model})
                 return list(result["embedding"])
             self._metrics["embeddings"]["misses"] += 1
-            lf.update_current_span(output={"hit": False}, metadata={"model": model})
             return None
         except Exception as e:
             logger.error("EmbeddingsCache get error: %s: %s", type(e).__name__, e)
             self._metrics["embeddings"]["misses"] += 1
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"EmbeddingsCache get error: {type(e).__name__}",
-                output={"hit": False, "error": type(e).__name__},
-                metadata={"model": model},
-            )
             return None
 
-    @observe(name="cache-embedding-store", capture_input=False, capture_output=False)
     async def store_embedding(
         self, text: str, embedding: list[float], model: str = "bge-m3"
     ) -> None:
         """Store dense embedding via RedisVL EmbeddingsCache."""
-        lf = get_client()
-        lf.update_current_span(
-            input={"model": model, "text_length": len(text), "embedding_dim": len(embedding)},
-            metadata={"model": model},
-        )
         if self.embed_cache is None:
-            lf.update_current_span(
-                output={"stored": False, "embed_cache_enabled": False},
-                metadata={"model": model},
-            )
             return
         try:
             normalized = _normalize_query_for_cache(text)
@@ -629,59 +509,27 @@ class CacheLayerManager:
                 embedding=embedding,
                 ttl=ttl,
             )
-            lf.update_current_span(output={"stored": True}, metadata={"model": model})
         except Exception as e:
             logger.error("EmbeddingsCache store error: %s: %s", type(e).__name__, e)
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"EmbeddingsCache store error: {type(e).__name__}",
-                output={"stored": False, "error": type(e).__name__},
-                metadata={"model": model},
-            )
 
     # ========== Convenience: Sparse Embeddings ==========
 
-    @observe(name="cache-sparse-get", capture_input=False, capture_output=False)
     async def get_sparse_embedding(
         self, text: str, model: str = "bge_m3_sparse"
     ) -> dict[str, Any] | None:
         """Get cached sparse embedding."""
-        lf = get_client()
-        lf.update_current_span(
-            input={"model": model, "text_length": len(text)},
-            metadata={"model": model},
-        )
-        result = await self.get_exact(
-            "sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}")
-        )
-        lf.update_current_span(
-            output={"hit": result is not None},
-            metadata={"model": model},
-        )
-        return result  # type: ignore[no-any-return]
+        return await self.get_exact("sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}"))
 
-    @observe(name="cache-sparse-store", capture_input=False, capture_output=False)
     async def store_sparse_embedding(
         self, text: str, sparse_vector: dict[str, Any], model: str = "bge_m3_sparse"
     ) -> None:
         """Store sparse embedding."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "model": model,
-                "text_length": len(text),
-                "sparse_indices_count": len(sparse_vector.get("indices", [])),
-            },
-            metadata={"model": model},
-        )
         await self.store_exact(
             "sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}"), sparse_vector
         )
-        lf.update_current_span(output={"stored": True}, metadata={"model": model})
 
     # ========== Convenience: BGE-M3 Query Bundle ==========
 
-    @observe(name="cache-bge-m3-bundle-get", capture_input=False, capture_output=False)
     async def get_bge_m3_query_bundle(
         self,
         text: str,
@@ -691,16 +539,7 @@ class CacheLayerManager:
         version: str = BGE_M3_QUERY_BUNDLE_VERSION,
     ) -> BgeM3QueryVectorBundle | None:
         """Get cached BGE-M3 query vector bundle (dense + sparse + ColBERT)."""
-        lf = get_client()
-        lf.update_current_span(
-            input={"model": model, "max_length": max_length, "text_length": len(text)},
-            metadata={"model": model},
-        )
         if self.embed_cache is None:
-            lf.update_current_span(
-                output={"hit": False, "embed_cache_enabled": False},
-                metadata={"model": model},
-            )
             return None
         material = make_bge_m3_query_bundle_key_material(
             text, model=model, max_length=max_length, version=version
@@ -710,16 +549,11 @@ class CacheLayerManager:
                 content=material, model_name=BGE_M3_QUERY_BUNDLE_MODEL_NAME
             )
             if result is None:
-                lf.update_current_span(output={"hit": False}, metadata={"model": model})
                 return None
             metadata = result.get("metadata") or {}
             sparse = metadata.get("sparse")
             colbert = metadata.get("colbert")
             if sparse is None or colbert is None:
-                lf.update_current_span(
-                    output={"hit": False, "invalid": True},
-                    metadata={"model": model},
-                )
                 return None
             bundle = BgeM3QueryVectorBundle(
                 dense=list(result["embedding"]),
@@ -730,24 +564,12 @@ class CacheLayerManager:
                 version=metadata.get("version", version),
             )
             if not bundle.is_complete():
-                lf.update_current_span(
-                    output={"hit": False, "invalid": True},
-                    metadata={"model": model},
-                )
                 return None
-            lf.update_current_span(output={"hit": True}, metadata={"model": model})
             return bundle
         except Exception as e:
             logger.error("BGE-M3 bundle get error: %s: %s", type(e).__name__, e)
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"BGE-M3 bundle get error: {type(e).__name__}",
-                output={"hit": False, "error": type(e).__name__},
-                metadata={"model": model},
-            )
             return None
 
-    @observe(name="cache-bge-m3-bundle-store", capture_input=False, capture_output=False)
     async def store_bge_m3_query_bundle(
         self,
         text: str,
@@ -758,27 +580,9 @@ class CacheLayerManager:
         version: str | None = None,
     ) -> None:
         """Store BGE-M3 query vector bundle. No-ops for incomplete bundles."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "model": model,
-                "max_length": max_length,
-                "text_length": len(text),
-                "bundle_complete": bundle.is_complete(),
-            },
-            metadata={"model": model},
-        )
         if self.embed_cache is None:
-            lf.update_current_span(
-                output={"stored": False, "embed_cache_enabled": False},
-                metadata={"model": model},
-            )
             return
         if not bundle.is_complete():
-            lf.update_current_span(
-                output={"stored": False, "reason": "incomplete"},
-                metadata={"model": model},
-            )
             return
         effective_model = model if model is not None else bundle.model
         effective_max_length = max_length if max_length is not None else bundle.max_length
@@ -805,15 +609,8 @@ class CacheLayerManager:
                 metadata=metadata,
                 ttl=ttl,
             )
-            lf.update_current_span(output={"stored": True}, metadata={"model": model})
         except Exception as e:
             logger.error("BGE-M3 bundle store error: %s: %s", type(e).__name__, e)
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"BGE-M3 bundle store error: {type(e).__name__}",
-                output={"stored": False, "error": type(e).__name__},
-                metadata={"model": model},
-            )
 
     # ========== Convenience: Search Results ==========
 
@@ -835,7 +632,6 @@ class CacheLayerManager:
         )
         return _hash(payload)
 
-    @observe(name="cache-search-get", capture_input=False, capture_output=False)
     async def get_search_results(
         self,
         embedding_prefix: list[float],
@@ -843,22 +639,9 @@ class CacheLayerManager:
         retrieval_config: dict | None = None,
     ) -> list[dict] | None:
         """Get cached search results by embedding prefix + filters + retrieval config hash."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "embedding_prefix_dim": len(embedding_prefix),
-                "filters_count": len(filters or {}),
-                "retrieval_config_keys": sorted((retrieval_config or {}).keys()),
-            }
-        )
         key = self._build_search_key(embedding_prefix, filters, retrieval_config)
-        result = await self.get_exact("search", key)
-        lf.update_current_span(
-            output={"hit": result is not None, "results_count": len(result or [])}
-        )
-        return result  # type: ignore[no-any-return]
+        return await self.get_exact("search", key)
 
-    @observe(name="cache-search-store", capture_input=False, capture_output=False)
     async def store_search_results(
         self,
         embedding_prefix: list[float],
@@ -867,18 +650,8 @@ class CacheLayerManager:
         retrieval_config: dict | None = None,
     ) -> None:
         """Store search results keyed by embedding + filters + retrieval config."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "embedding_prefix_dim": len(embedding_prefix),
-                "filters_count": len(filters or {}),
-                "retrieval_config_keys": sorted((retrieval_config or {}).keys()),
-                "results_count": len(results),
-            }
-        )
         key = self._build_search_key(embedding_prefix, filters, retrieval_config)
         await self.store_exact("search", key, results)
-        lf.update_current_span(output={"stored": True, "results_count": len(results)})
 
     # ========== Convenience: Rerank Results ==========
 
@@ -897,27 +670,13 @@ class CacheLayerManager:
         }
         return _hash(json.dumps(payload, sort_keys=True, ensure_ascii=False))
 
-    @observe(name="cache-rerank-get", capture_input=False, capture_output=False)
     async def get_rerank_results(
         self, query: str, documents: list[dict[str, Any]], top_k: int
     ) -> list[dict[str, Any]] | None:
         """Get cached rerank results for a query+document set."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "query_length": len(query),
-                "documents_count": len(documents),
-                "top_k": top_k,
-            }
-        )
         key = self._build_rerank_key(query, documents, top_k)
-        result = await self.get_exact("rerank", key)
-        lf.update_current_span(
-            output={"hit": result is not None, "results_count": len(result or [])}
-        )
-        return result  # type: ignore[no-any-return]
+        return await self.get_exact("rerank", key)
 
-    @observe(name="cache-rerank-store", capture_input=False, capture_output=False)
     async def store_rerank_results(
         self,
         query: str,
@@ -926,18 +685,8 @@ class CacheLayerManager:
         results: list[dict[str, Any]],
     ) -> None:
         """Store rerank results for a query+document set."""
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "query_length": len(query),
-                "documents_count": len(documents),
-                "top_k": top_k,
-                "results_count": len(results),
-            }
-        )
         key = self._build_rerank_key(query, documents, top_k)
         await self.store_exact("rerank", key, results)
-        lf.update_current_span(output={"stored": True, "results_count": len(results)})
 
     # ========== Conversation History ==========
     # Legacy store/get methods removed in #157: memory owned by LangGraph checkpointer.

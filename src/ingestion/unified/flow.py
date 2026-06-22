@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.ingestion.unified.manifest import FileManifest, compute_content_hash_from_bytes
-from src.ingestion.unified.observability import observe, try_update_ingestion_trace
+from src.ingestion.unified.observability import try_update_ingestion_trace
 
 
 if TYPE_CHECKING:
@@ -169,7 +169,6 @@ def _build_orchestrator(config: UnifiedConfig) -> UnifiedIngestionOrchestrator:
     )
 
 
-@observe(name="ingestion-flow-run-once", capture_input=False, capture_output=False)
 def run_once(config: UnifiedConfig | None = None) -> None:
     """Run ingestion once (single pass) via UnifiedIngestionOrchestrator."""
     from src.ingestion.unified.config import UnifiedConfig as _Cfg
@@ -190,7 +189,6 @@ def run_once(config: UnifiedConfig | None = None) -> None:
     try_update_ingestion_trace(command="flow-run-once", status="completed")
 
 
-@observe(name="ingestion-flow-watch", capture_input=False, capture_output=False)
 def run_watch(
     config: UnifiedConfig | None = None,
     stop_event: asyncio.Event | None = None,

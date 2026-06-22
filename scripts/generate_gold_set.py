@@ -13,12 +13,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
 import json
 import logging
 import os
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -256,51 +254,9 @@ def export_to_jsonl(output_path: Path, items: list[dict[str, Any]]) -> None:
     logger.info("Exported %d items to %s", len(items), output_path)
 
 
-def upload_to_langfuse(
-    langfuse: Any,
-    dataset_name: str,
-    items: list[dict[str, Any]],
-    model_name: str = "",
-) -> int:
-    """Upload items to Langfuse Dataset."""
-    if not items:
-        return 0
-    try:
-        langfuse.get_dataset(name=dataset_name)
-    except Exception:
-        langfuse.create_dataset(name=dataset_name)
-    for item in items:
-        langfuse.create_dataset_item(
-            dataset_name=dataset_name,
-            input={"query": item["query"]},
-            expected_output={"answer": item["answer"]},
-            id=(
-                f"{item.get('source_file_id', 'na')}::"
-                f"{hashlib.sha256(item['query'].encode()).hexdigest()[:16]}"
-            ),
-            metadata={
-                "source_doc": item.get("source_doc", ""),
-                "source_file_id": item.get("source_file_id", ""),
-                "source_chunks": item.get("source_chunks", []),
-                "difficulty": item.get("difficulty", ""),
-                "type": item.get("type", ""),
-                "generated_by": model_name,
-                "generated_at": datetime.now(UTC).isoformat(),
-            },
-        )
-    langfuse.flush()
-    logger.info("Uploaded %d items to Langfuse '%s'", len(items), dataset_name)
-    return len(items)
-
-
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
-
-
-def make_dataset_name(prefix: str = DEFAULT_DATASET_PREFIX) -> str:
-    """Generate versioned dataset name."""
-    return f"{prefix}-v{datetime.now(UTC).strftime('%Y%m%d')}"
 
 
 async def run_pipeline(args: argparse.Namespace) -> None:
@@ -338,15 +294,9 @@ async def run_pipeline(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     export_to_jsonl(Path(args.output), all_items)
-
-    if not args.dry_run:
-        from src.observability import Langfuse
-
-        lf = Langfuse()
-        dataset_name = args.dataset_name or make_dataset_name()
-        upload_to_langfuse(lf, dataset_name, all_items, model_name=llm_model)
-    else:
-        logger.info("DRY RUN: %d items → %s (no Langfuse upload)", len(all_items), args.output)
+    logger.info(
+        "Exported %d items → %s (Langfuse upload removed in #2844)", len(all_items), args.output
+    )
 
 
 def main() -> None:

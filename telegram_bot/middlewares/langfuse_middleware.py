@@ -1,58 +1,16 @@
-"""Langfuse context middleware — universal trace root for Telegram updates."""
+"""Langfuse context middleware stub — Langfuse removed (#2844)."""
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject
-
-from src.observability.safe_payloads import build_safe_input_payload
-from telegram_bot.observability import get_client, propagate_attributes
-from telegram_bot.tracing_context import classify_action, make_session_id
-
-
-logger = logging.getLogger(__name__)
-
-
-def _extract_event_input(event: TelegramObject, action_type: str) -> dict[str, Any]:
-    """Build a safe, concise input dict from a Telegram event.
-
-    Uses ``build_safe_input_payload`` so no raw message text reaches the
-    Langfuse root trace.
-    """
-    if isinstance(event, Message):
-        text = event.text or event.caption or ""
-        return build_safe_input_payload(
-            content_type=str(getattr(event, "content_type", "unknown")),
-            text=text,
-            action=action_type,
-            route=action_type,
-        )
-    if isinstance(event, CallbackQuery):
-        return build_safe_input_payload(
-            content_type="callback",
-            text=event.data or "",
-            action=action_type,
-            route=action_type,
-            extra={"callback_data": event.data or ""},
-        )
-    return build_safe_input_payload(
-        content_type="unknown",
-        text="",
-        action=action_type,
-        route=action_type,
-    )
+from aiogram.types import TelegramObject
 
 
 class LangfuseContextMiddleware(BaseMiddleware):
-    """Create Langfuse trace context for every Telegram update.
-
-    Opens a root observation via ``start_as_current_observation`` and propagates
-    ``session_id``, ``user_id`` and ``tags`` to all child observations.
-    """
+    """No-op stub — Langfuse removed (#2844)."""
 
     async def __call__(
         self,
@@ -60,32 +18,4 @@ class LangfuseContextMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        lf = get_client()
-        if lf is None:
-            return await handler(event, data)
-
-        user = data.get("event_from_user")
-        chat = data.get("event_chat")
-        user_id = getattr(user, "id", None)
-        chat_id = getattr(chat, "id", None) or user_id or "unknown"
-        session_id = make_session_id("chat", chat_id)
-        action_type = classify_action(event, data)
-
-        observation_name = (
-            "telegram-rag-voice" if action_type == "rag-voice" else f"telegram-{action_type}"
-        )
-
-        with (
-            lf.start_as_current_observation(
-                as_type="span",
-                name=observation_name,
-                input=_extract_event_input(event, action_type),
-            ),
-            propagate_attributes(
-                session_id=session_id,
-                user_id=str(user_id) if user_id is not None else None,
-                tags=["telegram", action_type],
-                as_baggage=True,
-            ),
-        ):
-            return await handler(event, data)
+        return await handler(event, data)

@@ -15,7 +15,6 @@ from qdrant_client import QdrantClient, models
 
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
 from src.models import get_bge_m3_model
-from src.observability import get_client, observe
 from src.retrieval.search_engine_shared import (
     AbstractSearchEngine,
     create_engine_from_registry,
@@ -275,33 +274,11 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
-    @observe(
-        name="search-engine-encode-hybrid",
-        as_type="embedding",
-        capture_input=False,
-        capture_output=False,
-    )
     def _encode_query(self, query: str) -> Any:
         """Generate embeddings for hybrid RRF search."""
-        result = self.embedding_model.encode(
+        return self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=False
         )
-        # Populate Langfuse span metadata for trace observability
-        lf = get_client()
-        dense_vec = result.get("dense_vecs")
-        lf.update_current_span(
-            metadata={
-                "model": "BAAI/bge-m3",
-                "fp16": True,
-                "dense_dim": len(dense_vec) if dense_vec is not None else None,
-                "has_sparse": "lexical_weights" in result,
-                "has_colbert": False,
-                "sparse_token_count": (
-                    len(result["lexical_weights"]) if "lexical_weights" in result else 0
-                ),
-            }
-        )
-        return result
 
     def search(
         self,
@@ -482,39 +459,11 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
-    @observe(
-        name="search-engine-encode-hybrid-colbert",
-        as_type="embedding",
-        capture_input=False,
-        capture_output=False,
-    )
     def _encode_query(self, query: str) -> Any:
         """Generate embeddings for hybrid RRF + ColBERT search."""
-        result = self.embedding_model.encode(
+        return self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
-        # Populate Langfuse span metadata for trace observability
-        lf = get_client()
-        dense_vec = result.get("dense_vecs")
-        colbert_vec = result.get("colbert_vecs")
-        colbert_token_count = len(colbert_vec) if isinstance(colbert_vec, list) else 0
-        lf.update_current_span(
-            metadata={
-                "model": "BAAI/bge-m3",
-                "fp16": True,
-                "dense_dim": len(dense_vec) if dense_vec is not None else None,
-                "has_sparse": "lexical_weights" in result,
-                "has_colbert": True,
-                "colbert_token_count": colbert_token_count,
-                "colbert_dim": len(colbert_vec[0])
-                if colbert_token_count > 0 and isinstance(colbert_vec[0], list)
-                else None,
-                "sparse_token_count": (
-                    len(result["lexical_weights"]) if "lexical_weights" in result else 0
-                ),
-            }
-        )
-        return result
 
     def search(
         self,
@@ -575,7 +524,6 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
             for result in response.points
         ]
 
-    @observe(name="colbert-rerank-search", capture_input=False, capture_output=False)
     def _search_hybrid_colbert(
         self,
         query: str,
@@ -696,39 +644,11 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
-    @observe(
-        name="search-engine-encode-dbsf-colbert",
-        as_type="embedding",
-        capture_input=False,
-        capture_output=False,
-    )
     def _encode_query(self, query: str) -> Any:
         """Generate embeddings for DBSF + ColBERT search."""
-        result = self.embedding_model.encode(
+        return self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
-        # Populate Langfuse span metadata for trace observability
-        lf = get_client()
-        dense_vec = result.get("dense_vecs")
-        colbert_vec = result.get("colbert_vecs")
-        colbert_token_count = len(colbert_vec) if isinstance(colbert_vec, list) else 0
-        lf.update_current_span(
-            metadata={
-                "model": "BAAI/bge-m3",
-                "fp16": True,
-                "dense_dim": len(dense_vec) if dense_vec is not None else None,
-                "has_sparse": "lexical_weights" in result,
-                "has_colbert": True,
-                "colbert_token_count": colbert_token_count,
-                "colbert_dim": len(colbert_vec[0])
-                if colbert_token_count > 0 and isinstance(colbert_vec[0], list)
-                else None,
-                "sparse_token_count": (
-                    len(result["lexical_weights"]) if "lexical_weights" in result else 0
-                ),
-            }
-        )
-        return result
 
     def search(
         self,

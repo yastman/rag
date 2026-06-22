@@ -22,12 +22,12 @@ from aiogram_dialog.widgets.kbd import (
 )
 from aiogram_dialog.widgets.text import Format
 
+from telegram_bot.dialogs.catalog import run_catalog_search_and_render
 from telegram_bot.dialogs.root_nav import (
     back_to_main_menu_button,
     get_main_menu_label,
     root_menu_button,
 )
-from telegram_bot.observability import observe
 
 from .filter_constants import (
     AREA_DISPLAY as _AREA_DISPLAY,
@@ -785,14 +785,12 @@ async def on_pref_section_selected(
     await manager.switch_to(FunnelSG.preferences)
 
 
-@observe(name="dialog-funnel-search", capture_input=False, capture_output=False)
 async def on_summary_search(
     callback: CallbackQuery,
     button: Button,
     manager: DialogManager,
 ) -> None:
     """Search, send results as ordinary messages, then hand off to CatalogSG."""
-    from telegram_bot.dialogs.catalog import run_catalog_search_and_render
     from telegram_bot.services.catalog_session import (
         CATALOG_RUNTIME_DATA_KEY,
         build_catalog_runtime,

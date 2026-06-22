@@ -17,10 +17,8 @@ from typing import Any, cast
 
 from src.runtime.pipeline.rag import rag_pipeline
 from src.runtime.services.query_services import classify_query, guard_node
-from src.scoring import write_langfuse_scores
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
-from telegram_bot.observability import get_client, observe
 from telegram_bot.pipelines.state_contract import PreAgentStateContract
 
 
@@ -53,7 +51,6 @@ def _format_context(result: dict) -> str:
 
 
 @tool
-@observe(name="tool-rag-search", capture_input=False, capture_output=False, as_type="tool")
 async def rag_search(
     query: str,
     config: RunnableConfig,
@@ -73,15 +70,6 @@ async def rag_search(
     """
     configurable = config.get("configurable", {})
     ctx = get_bot_context(None, config)
-
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "property_type": property_type,
-            "budget_range": budget_range,
-        }
-    )
 
     try:
         query_type = classify_query(query)
@@ -125,19 +113,11 @@ async def rag_search(
                 result["e2e_latency_ms"] = pipeline_wall_ms
                 result["user_perceived_wall_ms"] = pipeline_wall_ms
 
-                trace_id = lf.get_current_trace_id() or ""
-                try:
-                    write_langfuse_scores(lf, result, trace_id=trace_id)
-                except Exception:
-                    logger.warning("Failed to write Langfuse scores in rag_search", exc_info=True)
-
                 result_store = configurable.get("rag_result_store")
                 if isinstance(result_store, dict):
                     result_store.update(result)
 
-                context = _format_context(result)
-                lf.update_current_span(output={"response_length": len(context)})
-                return context
+                return _format_context(result)
 
         # Reuse pre-computed embedding stashed by pre-agent cache check (#563)
         result_store = configurable.get("rag_result_store")
@@ -158,18 +138,12 @@ async def rag_search(
             )
 
         invoke_start = time.perf_counter()
-        # NOTE (#2157): do NOT forward `langfuse_trace_id` to rag_pipeline.
-        # Per Langfuse SDK 4 docs (OpenTelemetry-based), @observe and
-        # start_as_current_observation share the same OTEL context-propagation
-        # model and nest automatically across the same async call chain. The
-        # `langfuse_trace_id` kwarg on an @observe-decorated function is the
-        # contract for *external* trace context (e.g., a W3C trace context
-        # arriving over HTTP from another process). Passing it from inside an
-        # already-active OTEL span detaches rag_pipeline's @observe from its
-        # parent (tool-rag-search), drops the rag-pipeline observation, takes
-        # over `trace.name`, and orphans cache-/bge-/classify spans up to
-        # telegram-rag-supervisor. See #1253 for the original (wrong) forward
-        # contract this comment reverts.
+        # NOTE (#2157): trace-context forwarding to rag_pipeline was removed
+        # with Langfuse (#2844). Earlier code forwarded a `langfuse_trace_id`
+        # kwarg to carry external OTEL trace context (e.g., a W3C trace context
+        # arriving over HTTP from another process); that propagation path no
+        # longer exists. See #1253 for the original (wrong) forward contract
+        # this note reverts.
         pipeline_kwargs: dict[str, Any] = {
             "user_id": ctx.telegram_user_id if ctx else 0,
             "session_id": ctx.session_id if ctx else "",
@@ -216,24 +190,13 @@ async def rag_search(
         summarize_s = result.get("latency_stages", {}).get("summarize", 0)
         result["user_perceived_wall_ms"] = pipeline_wall_ms - (summarize_s * 1000)
 
-        trace_id = lf.get_current_trace_id() or ""
-
-        # Observability must stay fail-soft: scoring errors must not break user response.
-        try:
-            write_langfuse_scores(lf, result, trace_id=trace_id)
-        except Exception:
-            logger.warning("Failed to write Langfuse scores in rag_search", exc_info=True)
-
         # Store full result for caller via side-channel (#426)
         result_store = configurable.get("rag_result_store")
         if isinstance(result_store, dict):
             result_store.update(result)
 
-        context = _format_context(result)
-        lf.update_current_span(output={"response_length": len(context)})
-        return context
+        return _format_context(result)
 
     except Exception:
         logger.exception("RAG pipeline failed")
-        lf.update_current_span(level="ERROR", status_message="RAG pipeline failed")
         return "Произошла ошибка при поиске. Попробуйте позже."

@@ -1,7 +1,6 @@
 """Utility tools: mortgage_calculator, daily_summary, handoff (#445).
 
-All tools follow the @tool + @observe + RunnableConfig DI pattern from crm_tools.py.
-Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
+All tools follow the @tool +Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
 (SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
 — see #1252).
 """
@@ -14,7 +13,6 @@ from typing import Any
 
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -36,7 +34,6 @@ def _fmt(value: float) -> str:
 
 
 @tool
-@observe(name="tool-mortgage-calculator", as_type="tool")
 async def mortgage_calculator(
     loan_amount: float,
     annual_rate: float,
@@ -100,7 +97,6 @@ async def mortgage_calculator(
 
 
 @tool
-@observe(name="tool-daily-summary", as_type="tool")
 async def daily_summary(
     config: RunnableConfig,
     date: str = "today",
@@ -126,7 +122,6 @@ async def daily_summary(
 
 
 @tool
-@observe(name="tool-handoff", as_type="tool")
 async def handoff(
     reason: str,
     config: RunnableConfig,
@@ -176,17 +171,10 @@ async def handoff(
     # Honest scoring (#2212): handoff_triggered must reflect a REAL action — at
     # least one manager actually notified — not merely that the tool ran. If no
     # notification succeeded, emit handoff_delivery_failed instead of a false
-    # success so the CRM/ops dashboard is not misled. Guard get_client() which
-    # may be None when Langfuse is disabled.
-    lf = get_client()
+    # success so the CRM/ops dashboard is not misled.
     if delivered > 0:
-        if lf is not None:
-            lf.score_current_trace(name="handoff_triggered", value=1, data_type="BOOLEAN")
-            lf.score_current_trace(name="handoff_urgency", value=urgency, data_type="CATEGORICAL")
         return "Ваш запрос передан менеджеру. Ожидайте ответа."
 
-    if lf is not None:
-        lf.score_current_trace(name="handoff_delivery_failed", value=1, data_type="BOOLEAN")
     logger.error(
         "handoff: all %d manager notification(s) failed for user %s",
         len(manager_ids),

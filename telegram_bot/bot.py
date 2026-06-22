@@ -82,9 +82,6 @@ from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
-    create_callback_handler,
-    get_langfuse_client,  # noqa: F401 — re-export kept so legacy tests can patch telegram_bot.bot.get_langfuse_client (#2048 PR-9a)
-    observe,
     propagate_attributes,
 )
 from .services.forum_bridge import ForumBridge
@@ -507,7 +504,6 @@ class PropertyBot:
         """Check if user is an admin."""
         return user_id in self.config.admin_ids
 
-    @observe(name="menu-router", capture_input=False, capture_output=False)
     async def handle_menu_button(
         self,
         message: Message,
@@ -581,15 +577,12 @@ class PropertyBot:
         patched = message.model_copy(update={"text": query_text})
         await self.handle_query(patched)
 
-    @observe(name="menu-search", capture_input=False, capture_output=False)
     async def _handle_search(self, message: Message, dialog_manager: Any = None) -> None:
         return await _bot_catalog._handle_search(self, message, dialog_manager)
 
-    @observe(name="menu-services", capture_input=False, capture_output=False)
     async def _handle_services(self, message: Message, i18n: Any = None) -> None:
         return await _bot_catalog._handle_services(self, message, i18n)
 
-    @observe(name="menu-viewing", capture_input=False, capture_output=False)
     async def _handle_viewing(
         self, message: Message, state: FSMContext, dialog_manager: Any = None
     ) -> None:
@@ -603,7 +596,6 @@ class PropertyBot:
     ) -> Message:
         return await _bot_catalog._send_property_card(self, message, result, telegram_id)
 
-    @observe(name="menu-bookmarks", capture_input=False, capture_output=False)
     async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
         return await _bot_favorites._handle_bookmarks(self, message, state)
 
@@ -615,15 +607,12 @@ class PropertyBot:
         "ask:installment": "Какие условия рассрочки?",
     }
 
-    @observe(name="menu-ask", capture_input=False, capture_output=False)
     async def _handle_ask(self, message: Message, i18n: Any = None) -> None:
         return await _bot_catalog._handle_ask(self, message, i18n)
 
-    @observe(name="cb-ask", capture_input=False, capture_output=False)
     async def handle_ask_callback(self, callback: CallbackQuery) -> None:
         return await _bot_catalog.handle_ask_callback(self, callback)
 
-    @observe(name="menu-manager", capture_input=False, capture_output=False)
     async def _handle_manager(
         self,
         message: Message,
@@ -653,11 +642,9 @@ class PropertyBot:
     async def _close_handoff(self, handoff: HandoffData) -> None:
         return await _bot_handoff._close_handoff(self, handoff)
 
-    @observe(name="cb-service", capture_input=False, capture_output=False)
     async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
         return await _bot_catalog.handle_service_callback(self, callback, i18n)
 
-    @observe(name="cb-cta", capture_input=False, capture_output=False)
     async def handle_cta_callback(
         self,
         callback: CallbackQuery,
@@ -710,7 +697,6 @@ class PropertyBot:
             self, callback, state, callback_data, dialog_manager
         )
 
-    @observe(name="cb-favorite", capture_input=False, capture_output=False)
     async def handle_favorite_callback(
         self,
         callback: CallbackQuery,
@@ -722,7 +708,6 @@ class PropertyBot:
             self, callback, state, callback_data, dialog_manager
         )
 
-    @observe(name="cb-results", capture_input=False, capture_output=False)
     async def handle_results_callback(
         self,
         callback: CallbackQuery,
@@ -734,7 +719,6 @@ class PropertyBot:
             self, callback, state, callback_data, dialog_manager
         )
 
-    @observe(name="cb-card", capture_input=False, capture_output=False)
     async def handle_card_callback(
         self,
         callback: CallbackQuery,
@@ -743,7 +727,6 @@ class PropertyBot:
     ) -> None:
         return await _bot_catalog.handle_card_callback(self, callback, state, dialog_manager)
 
-    @observe(name="telegram-rag-query", capture_input=False, capture_output=False)
     async def handle_query(
         self,
         message: Message,
@@ -891,11 +874,6 @@ class PropertyBot:
             root_trace_metadata=root_trace_metadata,
         )
 
-    @observe(
-        name="telegram-rag-supervisor",
-        capture_input=False,
-        capture_output=False,
-    )
     async def _handle_query_supervisor(
         self,
         message: Message,
@@ -919,12 +897,6 @@ class PropertyBot:
             dialog_manager,
         )
 
-    @observe(
-        name="telegram-rag-agent-stream",
-        capture_input=False,
-        capture_output=False,
-        as_type="agent",
-    )
     async def _astream_supervisor_with_recovery(
         self,
         *,
@@ -953,12 +925,6 @@ class PropertyBot:
             use_streaming=use_streaming,
         )
 
-    @observe(
-        name="telegram-rag-agent-invoke",
-        capture_input=False,
-        capture_output=False,
-        as_type="agent",
-    )
     async def _ainvoke_supervisor_with_recovery(
         self,
         *,
@@ -989,18 +955,15 @@ class PropertyBot:
 
     # _send_hitl_confirmation removed — dead code, no live callers (#2943)
 
-    @observe(name="telegram-hitl-callback", as_type="agent")
     async def handle_hitl_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("Устарело")
 
-    @observe(name="cb-feedback", capture_input=False, capture_output=False)
     async def handle_feedback(
         self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
     ) -> None:
         """Thin wrapper — see ``_bot_feedback_handlers`` (#2048 PR-9a)."""
         await _bot_feedback_handlers.handle_feedback(self, callback, callback_data)
 
-    @observe(name="cb-feedback-reason", capture_input=False, capture_output=False)
     async def handle_feedback_reason(
         self, callback: CallbackQuery, callback_data: FeedbackReasonCB
     ) -> None:
@@ -1013,7 +976,6 @@ class PropertyBot:
         """Thin wrapper — see ``_bot_feedback_handlers`` (#2048 PR-9a)."""
         await _bot_feedback_handlers.clear_feedback_confirmation_later(message, delay_s)
 
-    @observe(name="cb-clearcache", capture_input=False, capture_output=False)
     async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
         """Thin wrapper — see ``_bot_crm_callbacks`` (#2980)."""
         await _bot_crm_callbacks.handle_clearcache_callback(self, callback_query)
@@ -1089,8 +1051,7 @@ class PropertyBot:
             user_id=str(user_id),
             tags=["telegram", "menu", "agent"],
         ):
-            langfuse_handler = create_callback_handler()
-            callbacks = [langfuse_handler] if langfuse_handler else []
+            callbacks: list[Any] = []
             async with ChatActionSender.typing(bot=bot, chat_id=chat_id):  # type: ignore[arg-type]
                 result = await self._ainvoke_supervisor_with_recovery(
                     agent=agent,

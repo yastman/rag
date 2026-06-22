@@ -31,7 +31,7 @@ from qdrant_client.models import (
     SparseVector,
 )
 
-from src.ingestion.unified.observability import observe, try_update_ingestion_trace
+from src.ingestion.unified.observability import try_update_ingestion_trace
 from src.retrieval.topic_classifier import classify_chunk_topic, classify_doc_type
 
 
@@ -372,7 +372,6 @@ class QdrantHybridWriter:
 
         return total_upserted
 
-    @observe(name="ingestion-qdrant-delete-file", capture_input=False, capture_output=False)
     async def delete_file(self, file_id: str, collection_name: str) -> int:
         """Delete all points for a file.
 
@@ -416,7 +415,6 @@ class QdrantHybridWriter:
         )
         return count
 
-    @observe(name="ingestion-qdrant-upsert-chunks", capture_input=False, capture_output=False)
     async def upsert_chunks(
         self,
         chunks: list[Any],

@@ -8,7 +8,6 @@ FusionQuery, and ColBERT reranking details.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import time
 from typing import Any
@@ -17,7 +16,6 @@ from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
 from src.runtime.services.coverage_mode import cap_results_per_doc, detect_coverage_mode
 from src.runtime.services.metrics import PipelineMetrics
 from src.runtime.services.rag_core import build_retrieved_context as _build_retrieved_context
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -45,16 +43,6 @@ def _build_search_cache_profile(
     return {"mode": "rrf", "top_k": top_k, **filter_profile}
 
 
-def _distinct_doc_count(results: list[dict[str, Any]]) -> int:
-    return len(
-        {
-            str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
-            for doc in results
-        }
-    )
-
-
-@observe(name="node-retrieve", capture_input=False, capture_output=False)
 async def retrieve_node(
     state: dict[str, Any],
     runtime: Any,
@@ -95,18 +83,6 @@ async def retrieve_node(
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
 
     # Curated span metadata (replaces auto-captured full state)
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "query_type": state.get("query_type"),
-            "top_k": effective_top_k,
-            "needs_coverage": needs_coverage,
-            "coverage_reason": coverage_decision.reason,
-        }
-    )
 
     dense_vector = state.get("query_embedding")
     sparse_vector: Any = None
@@ -216,25 +192,6 @@ async def retrieve_node(
         latency = time.perf_counter() - start
         PipelineMetrics.get().record("retrieve", latency * 1000)
         logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
-        cached_ctx = _build_retrieved_context(cached_results)
-        distinct_doc_count = _distinct_doc_count(cached_results)
-        lf.update_current_span(
-            output={
-                "results_count": len(cached_results),
-                "search_cache_hit": True,
-                "needs_coverage": needs_coverage,
-                "coverage_reason": coverage_decision.reason,
-                "distinct_doc_count": distinct_doc_count,
-                "coverage_grouping_applied": needs_coverage,
-                "duration_ms": round(latency * 1000, 1),
-                # Full data for Langfuse managed evaluators (#386)
-                "eval_query": query[:2000],
-                "eval_docs": "\n\n".join(
-                    f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
-                    for d in cached_ctx
-                ),
-            }
-        )
         return {
             "documents": cached_results,
             "search_results_count": len(cached_results),
@@ -313,30 +270,6 @@ async def retrieve_node(
     latency = time.perf_counter() - start
     PipelineMetrics.get().record("retrieve", latency * 1000)
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
-
-    scores = [d.get("score", 0) for d in results if isinstance(d, dict)]
-    result_ctx = _build_retrieved_context(results)
-    distinct_doc_count = _distinct_doc_count(results)
-    lf.update_current_span(
-        output={
-            "results_count": len(results),
-            "top_score": round(scores[0], 4) if scores else None,
-            "min_score": round(scores[-1], 4) if scores else None,
-            "search_cache_hit": False,
-            "needs_coverage": needs_coverage,
-            "coverage_reason": coverage_decision.reason,
-            "distinct_doc_count": distinct_doc_count,
-            "coverage_grouping_applied": needs_coverage,
-            "retrieval_backend_error": search_meta.get("backend_error", False),
-            "retrieval_error_type": search_meta.get("error_type"),
-            "duration_ms": round(latency * 1000, 1),
-            # Full data for Langfuse managed evaluators (#386)
-            "eval_query": query[:2000],
-            "eval_docs": "\n\n".join(
-                f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in result_ctx
-            ),
-        }
-    )
 
     update: dict[str, Any] = {
         "documents": results,

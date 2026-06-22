@@ -6,9 +6,7 @@ import html
 import logging
 from typing import Any
 
-from src.observability.safe_payloads import build_safe_output_payload
 from telegram_bot.constants import TELEGRAM_MESSAGE_LIMIT as _TELEGRAM_MESSAGE_LIMIT
-from telegram_bot.observability import get_client
 
 
 logger = logging.getLogger(__name__)
@@ -119,25 +117,7 @@ def build_html_messages(
 
 
 def record_langfuse_response_output(answer_text: str | None, chunks_count: int) -> None:
-    """Best-effort update of the current Langfuse observation output after a send.
-
-    Records response metadata via span-level IO (``update_current_span``).
-    Trace-level IO (``set_current_trace_io``) is deprecated in Langfuse v4 and
-    intentionally not used. No-op when the client or method is missing so
-    Telegram sending never breaks because of observability.
-    """
-    lf = get_client()
-    if lf is None:
-        return
-
-    output = build_safe_output_payload(answer_text, chunks_count)
-
-    update_span = getattr(lf, "update_current_span", None)
-    if callable(update_span):
-        try:
-            update_span(output=output)
-        except Exception:
-            logger.debug("update_current_span failed", exc_info=True)
+    """No-op stub — Langfuse removed (#2844)."""
 
 
 _record_langfuse_response_output = record_langfuse_response_output

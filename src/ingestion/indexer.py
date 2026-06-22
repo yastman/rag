@@ -27,7 +27,6 @@ from qdrant_client.models import (
 
 from src.config import Settings, VectorDimensions
 from src.models import get_bge_m3_model
-from src.observability import observe
 
 from .chunker import Chunk
 
@@ -357,12 +356,6 @@ class DocumentIndexer:
             logger.error(f"✗ Batch failed after {batch_time:.2f}s: {type(e).__name__}: {e}")
             print(f"  ✗ Failed to index batch: {e}")
 
-    @observe(
-        name="ingestion-indexer-embed-texts",
-        as_type="embedding",
-        capture_input=False,
-        capture_output=False,
-    )
     async def _embed_texts(self, texts: list[str]) -> list[dict]:
         """
         Generate embeddings for texts using BGE-M3.

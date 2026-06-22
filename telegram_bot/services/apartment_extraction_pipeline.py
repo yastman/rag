@@ -12,7 +12,6 @@ from src.models.apartment import (
     HardFilters,
     SoftPreferences,
 )
-from telegram_bot.observability import observe
 from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
 from telegram_bot.services.apartment_llm_extractor import merge_extraction_results
 
@@ -41,7 +40,6 @@ class ApartmentExtractionPipeline:
         self._llm = llm_extractor
         self._redis = redis
 
-    @observe(name="apartment-extraction-pipeline", capture_input=False, capture_output=False)
     async def extract(self, query: str) -> ApartmentSearchFilters:
         """Hybrid extraction: cache → regex (deterministic numeric) → LLM (gap fill) → merge.
 

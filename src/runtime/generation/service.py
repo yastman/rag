@@ -6,16 +6,13 @@ Provides transport-free generation methods independent from Telegram message ren
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import inspect
 import logging
 import time
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 from typing import Any
 
 from src.adapters.llm.base import LLMConnectionError
-from src.observability import get_client
 from src.runtime.grounding.policy import (
     is_strict_grounding_safe,
     should_safe_fallback,
@@ -52,20 +49,6 @@ from .policy import (
 logger = logging.getLogger(__name__)
 
 
-def _update_current_span(lf_client: Any | None, **kwargs: Any) -> None:
-    """Update the current Langfuse span when tracing is available."""
-    if lf_client is not None:
-        with contextlib.suppress(Exception):
-            lf_client.update_current_span(**kwargs)
-
-
-def _update_current_generation(lf_client: Any | None, **kwargs: Any) -> None:
-    """Update the current Langfuse generation when tracing is available."""
-    if lf_client is not None:
-        with contextlib.suppress(Exception):
-            lf_client.update_current_generation(**kwargs)
-
-
 def _select_recent_history(
     messages: list[Any], max_messages: int = _MAX_HISTORY_MESSAGES
 ) -> list[Any]:
@@ -90,15 +73,9 @@ def _ensure_history_instruction(system_prompt: str) -> str:
 
 
 def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
-    """Return True if client rejected Langfuse-specific `name` kwarg."""
+    """Return True if client rejected unexpected `name` kwarg."""
     message = str(exc)
     return "unexpected keyword argument" in message and "'name'" in message
-
-
-def _is_unsupported_langfuse_prompt_kwarg(exc: TypeError) -> bool:
-    """Return True if client rejected Langfuse-specific `langfuse_prompt` kwarg."""
-    message = str(exc)
-    return "unexpected keyword argument" in message and "'langfuse_prompt'" in message
 
 
 async def _chat_create_with_optional_name(
@@ -107,35 +84,14 @@ async def _chat_create_with_optional_name(
     observation_name: str,
     **kwargs: Any,
 ) -> Any:
-    """Call chat.completions.create with Langfuse `name` when supported."""
-    create_fn = llm.chat.completions.create
-    if getattr(llm, "_langfuse_auto_trace", True) is False:
-        kwargs.pop("langfuse_prompt", None)
-        return await create_fn(**kwargs)
-    try:
-        return await create_fn(name=observation_name, **kwargs)
-    except TypeError as exc:
-        if _is_unsupported_langfuse_prompt_kwarg(exc):
-            logger.debug("LLM client does not support `langfuse_prompt`; retrying without it")
-            kwargs.pop("langfuse_prompt", None)
-            try:
-                return await create_fn(name=observation_name, **kwargs)
-            except TypeError as exc2:
-                if not _is_unsupported_name_kwarg(exc2):
-                    raise
-                logger.debug("LLM client does not support `name`; retrying without it")
-                return await create_fn(**kwargs)
-        if not _is_unsupported_name_kwarg(exc):
-            raise
-        logger.debug("LLM client does not support `name`; retrying without it")
-        kwargs.pop("langfuse_prompt", None)
-        return await create_fn(**kwargs)
+    """Call chat.completions.create, stripping Langfuse-specific kwargs (removed in #2844)."""
+    kwargs.pop("langfuse_prompt", None)
+    return await llm.chat.completions.create(**kwargs)
 
 
 def _get_dynamic_modules(extra: dict[str, Any] | None = None) -> dict[str, Any]:
     """Retrieve overridable runtime dependencies for generation tests."""
     modules = {
-        "get_client": get_client,
         "get_prompt": get_prompt,
         "get_prompt_with_config": get_prompt_with_config,
         "get_prompt_with_object": get_prompt_with_object,
@@ -459,64 +415,6 @@ def _build_prompt_and_messages(
     )
 
 
-def _build_span_output(
-    *,
-    answer: str,
-    actual_model: str,
-    ttft_ms: float,
-    stream_only_ttft_ms: float | None,
-    elapsed: float,
-    fallback_used: bool,
-    effective_query: str,
-    eval_context: str,
-    needs_coverage: bool,
-    coverage_reason: str | None,
-    prompt_name: str,
-    docs: list[dict[str, Any]],
-    usage_details: dict[str, int] | None,
-    response_obj: Any | None,
-) -> dict[str, Any]:
-    """Build the span output dict for Langfuse tracing (shared by both generation paths)."""
-    span_output: dict[str, Any] = {
-        "response_length": len(answer),
-        "llm_provider_model": actual_model,
-        "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
-        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
-        "llm_response_duration_ms": round(elapsed * 1000, 1),
-        "fallback_used": fallback_used,
-        "response_sent": False,
-        "eval_query": effective_query[:2000],
-        "eval_answer": answer[:3000],
-        "eval_context": eval_context,
-        "needs_coverage": needs_coverage,
-        "coverage_mode": "exhaustive_list" if needs_coverage else "default",
-        "coverage_reason": coverage_reason,
-        "prompt_name": prompt_name,
-        "documents_count": len(docs),
-        "distinct_doc_count": len(
-            {
-                str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
-                for doc in docs
-            }
-        ),
-    }
-    if usage_details:
-        span_output["token_usage"] = {
-            "prompt_tokens": usage_details.get("input"),
-            "completion_tokens": usage_details.get("output"),
-            "total_tokens": usage_details.get("total"),
-        }
-    elif response_obj is not None:
-        usage = getattr(response_obj, "usage", None)
-        if usage is not None:
-            span_output["token_usage"] = {
-                "prompt_tokens": getattr(usage, "prompt_tokens", None),
-                "completion_tokens": getattr(usage, "completion_tokens", None),
-                "total_tokens": getattr(usage, "total_tokens", None),
-            }
-    return span_output
-
-
 async def generate_answer(
     request: GenerationRequest,
     *,
@@ -547,12 +445,8 @@ async def generate_answer(
             return GenerationResult(payload=res)
         return res
 
-    # Resolve Langfuse client
     logger = extra.get("logger") or logging.getLogger(__name__)
-    lf_client = extra.get("lf_client")
     dyn = _get_dynamic_modules(extra)
-    if lf_client is None:
-        lf_client = dyn["get_client"]()
 
     docs = request.documents or []
     raw_history = request.raw_messages or []
@@ -561,27 +455,11 @@ async def generate_answer(
     effective_query = setup.effective_query
     style_info = setup.style_info
     needs_coverage = setup.needs_coverage
-    coverage_reason = setup.coverage_reason
     sources_enabled = setup.sources_enabled
     legal_answer_safe = setup.legal_answer_safe
 
     context = _format_generation_context(
         docs, needs_coverage=needs_coverage, sources_enabled=sources_enabled, extra=extra
-    )
-
-    # Update Langfuse span input
-    _update_current_span(
-        lf_client,
-        input={
-            "query_preview": effective_query[:120],
-            "query_len": len(effective_query),
-            "query_hash": hashlib.sha256(effective_query.encode()).hexdigest()[:8],
-            "context_docs_count": len(docs),
-            "streaming_enabled": False,
-            "grounding_mode": request.grounding_mode,
-            "needs_coverage": needs_coverage,
-            "coverage_reason": coverage_reason,
-        },
     )
 
     if should_safe_fallback(
@@ -596,20 +474,6 @@ async def generate_answer(
             dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
         answer = extra.get("build_fallback_response", _build_fallback_response)(docs)
         current_latency = request.latency_stages or {}
-        _update_current_span(
-            lf_client,
-            output={
-                "response_length": len(answer),
-                "llm_provider_model": "safe_fallback",
-                "fallback_used": False,
-                "safe_fallback_used": True,
-                "grounded": False,
-                "response_sent": False,
-                "needs_coverage": needs_coverage,
-                "coverage_mode": "exhaustive_list" if needs_coverage else "default",
-                "coverage_reason": coverage_reason,
-            },
-        )
         return GenerationResult(
             payload=_ensure_generation_signal_defaults(
                 {
@@ -658,7 +522,6 @@ async def generate_answer(
         dyn=dyn,
         extra=extra,
     )
-    prompt_name = pm.prompt_name
     max_tokens = pm.max_tokens
     response_policy_mode = pm.response_policy_mode
     effective_temperature = pm.effective_temperature
@@ -668,7 +531,6 @@ async def generate_answer(
     ttft_ms = 0.0
     response_obj: Any | None = None
     completion_tokens: float | None = None
-    usage_details: dict[str, int] | None = None
     hard_timeout = False
 
     try:
@@ -697,7 +559,6 @@ async def generate_answer(
         ttft_ms = (t_llm_end - t_llm_start) * 1000
         usage = getattr(response_obj, "usage", None)
         if usage is not None:
-            usage_details = _extract_usage_details(usage)
             completion_tokens = _coerce_positive_number(getattr(usage, "completion_tokens", None))
 
     except Exception as e:
@@ -711,11 +572,6 @@ async def generate_answer(
             )
         else:
             logger.exception("generate_answer: LLM call failed, using fallback")
-        _update_current_span(
-            lf_client,
-            level="ERROR",
-            status_message=f"LLM failed: {str(e)[:200]}",
-        )
         answer = extra.get("build_fallback_response", _build_fallback_response)(docs)
         actual_model = "fallback"
         ttft_ms = 0.0
@@ -724,40 +580,6 @@ async def generate_answer(
     elapsed = time.monotonic() - t0
     with contextlib.suppress(Exception):
         dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
-
-    if actual_model != "fallback":
-        generation_payload: dict[str, Any] = {"model": actual_model}
-        if usage_details:
-            generation_payload["usage_details"] = usage_details
-        elif completion_tokens is not None:
-            generation_payload["usage_details"] = {"output": int(completion_tokens)}
-        with contextlib.suppress(Exception):
-            _update_current_generation(lf_client, **generation_payload)
-
-    retrieved_ctx = request.retrieved_context or []
-    eval_context = "\n\n".join(
-        f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
-        for d in retrieved_ctx[:5]
-        if isinstance(d, dict)
-    )
-
-    span_output = _build_span_output(
-        answer=answer,
-        actual_model=actual_model,
-        ttft_ms=ttft_ms,
-        stream_only_ttft_ms=None,
-        elapsed=elapsed,
-        fallback_used=actual_model == "fallback",
-        effective_query=effective_query,
-        eval_context=eval_context,
-        needs_coverage=needs_coverage,
-        coverage_reason=coverage_reason,
-        prompt_name=prompt_name,
-        docs=docs,
-        usage_details=usage_details,
-        response_obj=response_obj,
-    )
-    _update_current_span(lf_client, output=span_output)
 
     llm_tps: float | None = None
     if ttft_ms > 0 and completion_tokens is not None:
@@ -819,12 +641,10 @@ def _apply_stream_safe_fallback(
     metadata_out: dict[str, Any],
     docs: list[dict[str, Any]],
     style_info: Any,
-    lf_client: Any | None,
     dyn: dict[str, Any],
     extra: dict[str, Any],
     t0: float,
     needs_coverage: bool,
-    coverage_reason: str | None,
 ) -> str:
     """Apply the pre-stream strict-grounding safe fallback branch."""
     elapsed = time.monotonic() - t0
@@ -832,20 +652,6 @@ def _apply_stream_safe_fallback(
         dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
     answer: str = extra.get("build_fallback_response", _build_fallback_response)(docs)
     current_latency = request.latency_stages or {}
-    _update_current_span(
-        lf_client,
-        output={
-            "response_length": len(answer),
-            "llm_provider_model": "safe_fallback",
-            "fallback_used": False,
-            "safe_fallback_used": True,
-            "grounded": False,
-            "response_sent": False,
-            "needs_coverage": needs_coverage,
-            "coverage_mode": "exhaustive_list" if needs_coverage else "default",
-            "coverage_reason": coverage_reason,
-        },
-    )
     metadata_out.update(
         _ensure_generation_signal_defaults(
             {
@@ -896,10 +702,7 @@ async def generate_answer_stream(
         raise ValueError("GenerationRequest.config must be set")
 
     extra.get("logger") or logging.getLogger(__name__)
-    lf_client = extra.get("lf_client")
     dyn = _get_dynamic_modules(extra)
-    if lf_client is None:
-        lf_client = dyn["get_client"]()
 
     docs = request.documents or []
     raw_history = request.raw_messages or []
@@ -908,24 +711,8 @@ async def generate_answer_stream(
     effective_query = setup.effective_query
     style_info = setup.style_info
     needs_coverage = setup.needs_coverage
-    coverage_reason = setup.coverage_reason
     sources_enabled = setup.sources_enabled
     legal_answer_safe = setup.legal_answer_safe
-
-    # Pre-stream updates to Langfuse span
-    _update_current_span(
-        lf_client,
-        input={
-            "query_preview": effective_query[:120],
-            "query_len": len(effective_query),
-            "query_hash": hashlib.sha256(effective_query.encode()).hexdigest()[:8],
-            "context_docs_count": len(docs),
-            "streaming_enabled": True,
-            "grounding_mode": request.grounding_mode,
-            "needs_coverage": needs_coverage,
-            "coverage_reason": coverage_reason,
-        },
-    )
 
     if should_safe_fallback(
         grounding_mode=request.grounding_mode,
@@ -939,12 +726,10 @@ async def generate_answer_stream(
             metadata_out=metadata_out,
             docs=docs,
             style_info=style_info,
-            lf_client=lf_client,
             dyn=dyn,
             extra=extra,
             t0=t0,
             needs_coverage=needs_coverage,
-            coverage_reason=coverage_reason,
         )
         yield answer
         return
@@ -964,7 +749,6 @@ async def generate_answer_stream(
         dyn=dyn,
         extra=extra,
     )
-    prompt_name = pm.prompt_name
     max_tokens = pm.max_tokens
     response_policy_mode = pm.response_policy_mode
     effective_temperature = pm.effective_temperature
@@ -1023,11 +807,6 @@ async def generate_answer_stream(
                     first_token_at = time.monotonic()
                     ttft_ms = (first_token_at - t_request_start) * 1000
                     stream_only_ttft_ms = (first_token_at - t_stream_start) * 1000
-                    if lf_client is not None:
-                        with contextlib.suppress(Exception):
-                            _update_current_generation(
-                                lf_client, completion_start_time=datetime.now(UTC)
-                            )
                 accumulated += text
                 yield text
 
@@ -1048,40 +827,6 @@ async def generate_answer_stream(
     with contextlib.suppress(Exception):
         dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
 
-    if actual_model != "fallback":
-        generation_payload: dict[str, Any] = {"model": actual_model}
-        if usage_details:
-            generation_payload["usage_details"] = usage_details
-        elif completion_tokens is not None:
-            generation_payload["usage_details"] = {"output": int(completion_tokens)}
-        with contextlib.suppress(Exception):
-            _update_current_generation(lf_client, **generation_payload)
-
-    retrieved_ctx = request.retrieved_context or []
-    eval_context = "\n\n".join(
-        f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
-        for d in retrieved_ctx[:5]
-        if isinstance(d, dict)
-    )
-
-    span_output = _build_span_output(
-        answer=accumulated,
-        actual_model=actual_model,
-        ttft_ms=ttft_ms,
-        stream_only_ttft_ms=stream_only_ttft_ms,
-        elapsed=elapsed,
-        fallback_used=False,
-        effective_query=effective_query,
-        eval_context=eval_context,
-        needs_coverage=needs_coverage,
-        coverage_reason=coverage_reason,
-        prompt_name=prompt_name,
-        docs=docs,
-        usage_details=usage_details,
-        response_obj=None,
-    )
-    _update_current_span(lf_client, output=span_output)
-
     llm_decode_ms = (elapsed * 1000) - ttft_ms if ttft_ms > 0 else None
     if llm_decode_ms is not None and llm_decode_ms < 0:
         llm_decode_ms = 0.0
@@ -1095,19 +840,6 @@ async def generate_answer_stream(
         if (stream_only_ttft_ms is not None and ttft_ms > 0)
         else None
     )
-
-    # Warning for TTFT drift
-    if llm_ttft_drift_ms is not None:
-        _drift_warn_threshold = getattr(config, "ttft_drift_warn_ms", None)
-        if not isinstance(_drift_warn_threshold, (int, float)):
-            _drift_warn_threshold = 500
-        if llm_ttft_drift_ms > _drift_warn_threshold:
-            with contextlib.suppress(Exception):
-                _update_current_span(
-                    lf_client,
-                    level="WARNING",
-                    status_message=f"TTFT drift detected: {llm_ttft_drift_ms:.1f}ms (request-based vs stream-only)",
-                )
 
     answer_words = len(accumulated.split())
     answer_chars = len(accumulated)

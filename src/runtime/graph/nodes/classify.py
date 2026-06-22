@@ -16,7 +16,6 @@ import time
 from secrets import choice
 from typing import Any
 
-from src.observability import get_client, observe
 from src.runtime.domain_defaults import CHITCHAT_RESPONSES, OFF_TOPIC_RESPONSES
 
 
@@ -210,15 +209,12 @@ def _get_chitchat_response(query: str) -> str:
     return choice(CHITCHAT_RESPONSES["greeting"])
 
 
-@observe(name="classify-query", capture_input=False, capture_output=False)
 def classify_query(query: str) -> str:
     """Classify query into one of 6 types using regex patterns.
 
     Priority order: CHITCHAT > OFF_TOPIC > STRUCTURED > FAQ > ENTITY > GENERAL.
     """
     text = query.strip()
-    lf = get_client()
-    lf.update_current_span(input={"query_length": len(text)})
 
     if _match_any(_CHITCHAT_COMPILED, text):
         query_type = CHITCHAT
@@ -233,11 +229,9 @@ def classify_query(query: str) -> str:
     else:
         query_type = GENERAL
 
-    lf.update_current_span(output={"query_type": query_type})
     return query_type
 
 
-@observe(name="node-classify")
 async def classify_node(
     state: dict[str, Any],
     runtime: Any,

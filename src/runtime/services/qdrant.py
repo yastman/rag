@@ -11,14 +11,12 @@ Features: RRF fusion, freshness boosting, MMR diversity.
 """
 
 import logging
-import time
 from typing import Any
 from urllib.parse import urlparse
 
 from qdrant_client import AsyncQdrantClient, models
 
 from src.config.qdrant_policy import resolve_collection_name
-from src.observability import get_client, observe
 from src.runtime.services.metrics import record_pipeline_event
 
 
@@ -122,7 +120,6 @@ class QdrantService:
         self._collection_validated = False
         logger.info(f"QdrantService: switched to {self._collection_name} (mode={mode})")
 
-    @observe(name="qdrant-apply-strict-mode", capture_input=False, capture_output=False)
     async def _apply_strict_mode(self) -> None:
         """Apply conservative strict mode limits to the current collection.
 
@@ -135,8 +132,6 @@ class QdrantService:
         if the server does not support StrictModeConfig (older version or error),
         a warning is logged and startup continues.
         """
-        lf = get_client()
-        lf.update_current_span(input={"collection": self._collection_name})
         try:
             strict_config = models.StrictModeConfig(
                 enabled=True,
@@ -153,29 +148,13 @@ class QdrantService:
                 "(max_query_limit=100, max_timeout=30, search_max_hnsw_ef=512)",
                 self._collection_name,
             )
-            lf.update_current_span(
-                output={
-                    "collection": self._collection_name,
-                    "strict_mode_applied": True,
-                }
-            )
         except Exception as exc:
             logger.warning(
                 "QdrantService: strict mode not applied to '%s': %s",
                 self._collection_name,
                 exc,
             )
-            lf.update_current_span(
-                level="WARNING",
-                status_message=f"Strict mode not applied: {type(exc).__name__}",
-                output={
-                    "collection": self._collection_name,
-                    "strict_mode_applied": False,
-                    "error": type(exc).__name__,
-                },
-            )
 
-    @observe(name="qdrant-ensure-alias", capture_input=False, capture_output=False)
     async def _ensure_alias(self) -> None:
         """Ensure the collection alias '{name}_active' points to the current collection.
 
@@ -189,10 +168,6 @@ class QdrantService:
         alias creation failure is logged as a warning and does not block startup.
         """
         alias_name = f"{self._collection_name}_active"
-        lf = get_client()
-        lf.update_current_span(
-            input={"collection": self._collection_name, "alias_name": alias_name}
-        )
         try:
             aliases = await self._client.get_aliases()
             current_target = next(
@@ -209,13 +184,6 @@ class QdrantService:
                     "QdrantService: alias '%s' already points to '%s'",
                     alias_name,
                     self._collection_name,
-                )
-                lf.update_current_span(
-                    output={
-                        "alias_name": alias_name,
-                        "alias_updated": False,
-                        "already_pointing": True,
-                    }
                 )
                 return
 
@@ -244,56 +212,23 @@ class QdrantService:
                 alias_name,
                 self._collection_name,
             )
-            lf.update_current_span(
-                output={
-                    "alias_name": alias_name,
-                    "alias_updated": True,
-                    "previous_target": current_target,
-                }
-            )
         except Exception as exc:
             logger.warning(
                 "QdrantService: alias '%s' creation failed: %s",
                 alias_name,
                 exc,
             )
-            lf.update_current_span(
-                level="WARNING",
-                status_message=f"Alias ensure failed: {type(exc).__name__}",
-                output={
-                    "alias_name": alias_name,
-                    "alias_updated": False,
-                    "error": type(exc).__name__,
-                },
-            )
 
-    @observe(name="qdrant-ensure-collection", capture_input=False, capture_output=False)
     async def ensure_collection(self) -> None:
         """Ensure the configured collection exists; fallback to base collection if needed.
 
         This prevents hard failures when quantization_mode points to a suffix collection
         that hasn't been created/reindexed yet.
         """
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "requested_collection": self._collection_name,
-                "base_collection": self._base_collection_name,
-                "quantization_mode": self._quantization_mode,
-            }
-        )
 
         if self._collection_validated:
             if self._colbert_available is None:
                 await self._refresh_collection_capabilities()
-            lf.update_current_span(
-                output={
-                    "validated": True,
-                    "active_collection": self._collection_name,
-                    "fallback_used": False,
-                    "cached_validation": True,
-                }
-            )
             return
 
         try:
@@ -302,11 +237,6 @@ class QdrantService:
         except Exception as e:
             # If we can't list collections, let the actual query raise a meaningful error.
             logger.warning(f"QdrantService: unable to list collections: {e}")
-            lf.update_current_span(
-                level="WARNING",
-                status_message=f"Unable to list collections: {type(e).__name__}",
-                output={"validated": False, "list_collections_failed": True},
-            )
             return
 
         if self._collection_name in names:
@@ -314,13 +244,6 @@ class QdrantService:
             await self._refresh_collection_capabilities()
             await self._apply_strict_mode()
             await self._ensure_alias()
-            lf.update_current_span(
-                output={
-                    "validated": True,
-                    "active_collection": self._collection_name,
-                    "fallback_used": False,
-                }
-            )
             return
 
         # Fallback: use base collection if it exists.
@@ -336,24 +259,8 @@ class QdrantService:
             await self._refresh_collection_capabilities()
             await self._apply_strict_mode()
             await self._ensure_alias()
-            lf.update_current_span(
-                output={
-                    "validated": True,
-                    "active_collection": self._collection_name,
-                    "fallback_used": True,
-                }
-            )
             return
 
-        lf.update_current_span(
-            level="ERROR",
-            status_message="Qdrant collection validation failed",
-            output={
-                "validated": False,
-                "requested_collection": self._collection_name,
-                "base_collection": self._base_collection_name,
-            },
-        )
         raise RuntimeError(
             f"Qdrant collection '{self._collection_name}' not found "
             f"(base '{self._base_collection_name}' also missing)"
@@ -386,12 +293,6 @@ class QdrantService:
         msg = str(exc).lower()
         return "not existing vector name" in msg or "requires specified vector name" in msg
 
-    @observe(
-        name="qdrant-hybrid-search-rrf",
-        as_type="retriever",
-        capture_input=False,
-        capture_output=False,
-    )
     async def hybrid_search_rrf(
         self,
         dense_vector: list[float],
@@ -437,21 +338,6 @@ class QdrantService:
                 backend_error, error_type, error_message.
         """
         await self.ensure_collection()
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "collection": self._collection_name,
-                "top_k": top_k,
-                "has_sparse": bool(sparse_vector and sparse_vector.get("indices")),
-                "has_filters": bool(filters),
-                "group_by": group_by,
-                "rrf_k": rrf_k,
-            },
-            metadata={
-                "collection": self._collection_name,
-                "quantization_mode": self._quantization_mode,
-            },
-        )
         # Build prefetch queries
         prefetch = []
 
@@ -499,7 +385,6 @@ class QdrantService:
 
         # Execute RRF fusion search with graceful degradation
         try:
-            t_start = time.monotonic()
             if group_by:
                 group_result = await self._client.query_points_groups(
                     collection_name=self._collection_name,
@@ -513,21 +398,6 @@ class QdrantService:
                     search_params=search_params,
                 )
                 results = self._format_group_results(group_result)
-                t_elapsed_ms = (time.monotonic() - t_start) * 1000
-                lf.update_current_span(
-                    output={
-                        "results_count": len(results),
-                        "top_score": results[0]["score"] if results else None,
-                        "grouped": True,
-                        "rrf_k": rrf_k,
-                        "prefetch_multiplier": prefetch_multiplier,
-                        "processing_time_ms": round(t_elapsed_ms, 3),
-                    },
-                    metadata={
-                        "collection": self._collection_name,
-                        "quantization_mode": self._quantization_mode,
-                    },
-                )
                 if return_meta:
                     return results, ok_meta
                 return results
@@ -542,40 +412,12 @@ class QdrantService:
                 search_params=search_params,
             )
             results = self._format_results(result.points)
-            t_elapsed_ms = (time.monotonic() - t_start) * 1000
-            lf.update_current_span(
-                output={
-                    "results_count": len(results),
-                    "top_score": results[0]["score"] if results else None,
-                    "grouped": False,
-                    "rrf_k": rrf_k,
-                    "prefetch_multiplier": prefetch_multiplier,
-                    "processing_time_ms": round(t_elapsed_ms, 3),
-                },
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
-            )
             if return_meta:
                 return results, ok_meta
             return results
         except Exception as e:
             # Graceful degradation: return empty list on any Qdrant error
             logger.error(f"Qdrant search failed (graceful degradation): {e}")
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"Qdrant search failed: {type(e).__name__}: {str(e)[:200]}",
-                output={
-                    "results_count": 0,
-                    "error": type(e).__name__,
-                    "collection": self._collection_name,
-                },
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
-            )
             if return_meta:
                 return [], {
                     "backend_error": True,
@@ -634,25 +476,8 @@ class QdrantService:
             return_meta=return_meta,
         )
         fallback_results = fallback[0] if isinstance(fallback, tuple) else fallback
-        get_client().update_current_span(
-            output={
-                "fallback_reason": fallback_reason,
-                "results_count": len(fallback_results),
-                "top_score": fallback_results[0]["score"] if fallback_results else None,
-            },
-            metadata={
-                "collection": self._collection_name,
-                "quantization_mode": self._quantization_mode,
-            },
-        )
         return fallback, fallback_results
 
-    @observe(
-        name="qdrant-hybrid-search-rrf-colbert",
-        as_type="retriever",
-        capture_input=False,
-        capture_output=False,
-    )
     async def hybrid_search_rrf_colbert(
         self,
         dense_vector: list[float],
@@ -690,21 +515,6 @@ class QdrantService:
             Reranked results (ColBERT MaxSim scores).
         """
         await self.ensure_collection()
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "collection": self._collection_name,
-                "top_k": top_k,
-                "has_sparse": bool(sparse_vector and sparse_vector.get("indices")),
-                "has_filters": bool(filters),
-                "colbert_tokens": len(colbert_query) if colbert_query else 0,
-                "rrf_k": rrf_k,
-            },
-            metadata={
-                "collection": self._collection_name,
-                "quantization_mode": self._quantization_mode,
-            },
-        )
         if self._colbert_available is False:
             logger.debug(
                 "Qdrant ColBERT skipped: vector unavailable in collection %s; using RRF",
@@ -784,7 +594,6 @@ class QdrantService:
         }
 
         try:
-            t_start = time.monotonic()
             # Outer stage: ColBERT MaxSim reranking on pre-stored multivectors
             result = await self._client.query_points(
                 collection_name=self._collection_name,
@@ -823,22 +632,6 @@ class QdrantService:
                         len(fallback_results),
                     )
                 return fallback
-            lf.update_current_span(
-                output={
-                    "fallback_reason": None,
-                    "results_count": len(results),
-                    "top_score": results[0]["score"] if results else None,
-                    "dense_limit": effective_dense_limit,
-                    "sparse_limit": effective_sparse_limit,
-                    "rrf_limit": rrf_limit,
-                    "rrf_k": rrf_k,
-                    "processing_time_ms": round((time.monotonic() - t_start) * 1000, 3),
-                },
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
-            )
             if return_meta:
                 return results, ok_meta
             return results
@@ -855,14 +648,6 @@ class QdrantService:
                 type(e).__name__,
                 e,
             )
-            lf.update_current_span(
-                level="WARNING",
-                status_message=f"ColBERT search failed: {type(e).__name__}",
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
-            )
             fallback, _ = await self._colbert_fallback_to_rrf(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
@@ -876,12 +661,6 @@ class QdrantService:
             )
             return fallback
 
-    @observe(
-        name="qdrant-batch-search-rrf",
-        as_type="retriever",
-        capture_input=False,
-        capture_output=False,
-    )
     async def batch_search_rrf(
         self,
         queries: list[dict],
@@ -912,20 +691,6 @@ class QdrantService:
             return []
 
         await self.ensure_collection()
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "collection": self._collection_name,
-                "queries_count": len(queries),
-                "top_k": top_k,
-                "has_filters": bool(filters),
-                "rrf_k": rrf_k,
-            },
-            metadata={
-                "collection": self._collection_name,
-                "quantization_mode": self._quantization_mode,
-            },
-        )
 
         query_filter = self._build_filter(filters)
         requests = []
@@ -965,7 +730,6 @@ class QdrantService:
             )
 
         try:
-            t_start = time.monotonic()
             responses = await self._client.query_batch_points(
                 collection_name=self._collection_name,
                 requests=requests,
@@ -987,33 +751,10 @@ class QdrantService:
                         seen[pid] = formatted
 
             merged = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
-            result = merged[:top_k]
-            t_elapsed_ms = (time.monotonic() - t_start) * 1000
-            lf.update_current_span(
-                output={
-                    "results_count": len(result),
-                    "unique_points": len(seen),
-                    "top_score": result[0]["score"] if result else None,
-                    "processing_time_ms": round(t_elapsed_ms, 3),
-                },
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
-            )
-            return result
+            return merged[:top_k]
 
         except Exception as e:
             logger.error(f"Qdrant batch search failed (graceful degradation): {e}")
-            lf.update_current_span(
-                level="ERROR",
-                status_message=f"Batch search failed: {type(e).__name__}",
-                output={"results_count": 0, "error": type(e).__name__},
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
-            )
             return []
 
     def _build_filter(self, filters: dict | None) -> models.Filter | None:
