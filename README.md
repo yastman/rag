@@ -150,11 +150,10 @@ CI runs static/lint guardrails only (Ruff, MyPy, Semgrep, lockfile check). Pytes
 The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The following surfaces are physically in-tree but are **archived/reference** — not part of the active production path, and being trimmed in open issues:
 
 - **Telegram Mini App deeplink** — `command_handlers.py` registers a `/start` deep-link handler (`q_` prefix). Archived surface; not a production capability.
-- **Voice message handlers** — `bot.py` contains voice/audio processing handlers. Archived surface; not a production capability.
 - **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
 - **Langfuse shim** — `src/observability/langfuse_client.py` is a no-op Langfuse client (`get_client()` returns `None`, `@observe` is a pass-through decorator); the dead shim is still threaded through `src/runtime/pipeline/rag.py` and `src/runtime/generation/service.py`.
 
-The active production adapter is Telegram (`telegram_bot/`). Voice and Mini App are archived reference surfaces present in the file tree but not on the active runtime path.
+The active production adapter is Telegram (`telegram_bot/`). Mini App deeplink is an archived reference surface present in the file tree but not on the active runtime path. Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
 
 Other honest limits:
 
