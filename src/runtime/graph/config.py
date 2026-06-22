@@ -208,7 +208,7 @@ _FLAT_KWARGS: dict[str, tuple[str, str]] = {
 }
 
 
-def _make_flat_property(flat_name: str, sub_attr: str, sub_field: str) -> property:
+def _make_flat_property(sub_attr: str, sub_field: str) -> property:
     """Build a getter+setter property that routes through a sub-config attribute."""
 
     def _get(self: Any) -> Any:
@@ -446,7 +446,7 @@ class GraphConfig:
 # Auto-generate flat @property accessors from _FLAT_KWARGS.
 # This replaces hundreds of manually written getter/setter pairs (#2577).
 for _flat_name, (_sub_attr, _sub_field) in _FLAT_KWARGS.items():
-    setattr(GraphConfig, _flat_name, _make_flat_property(_flat_name, _sub_attr, _sub_field))
+    setattr(GraphConfig, _flat_name, _make_flat_property(_sub_attr, _sub_field))
 
 
 __all__ = [
