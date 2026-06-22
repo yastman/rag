@@ -6,23 +6,34 @@ This file is the repo gateway for agents. Keep it short. Do not duplicate
 runbooks, Docker contracts, test policy, subsystem ownership, docs maintenance
 rules, or worker-specific workflows here.
 
-## What This Is
+## What This Project Is
 
-A single-process **Python monolith**: one entry point (a Telegram bot,
-`telegram_bot/`), one RAG pipeline (`src/runtime/pipeline/`). It answers from a
-private corpus (Qdrant + BGE-M3 hybrid retrieval) and prepares CRM actions
-behind human confirmation. It is **not** a multi-surface "AI platform" — voice /
-Mini App / HTTP-API / the `telegram_bot/graph/` LangGraph layer are removed or
-inert legacy under active cleanup. Don't reintroduce platform/adapter
-abstractions that have no live caller.
+A self-hostable RAG question-answer chatbot. Users ask in natural language →
+the system retrieves grounded context from documents in Qdrant → an LLM
+produces a cited answer. Telegram is the live adapter. The current live domain
+is real-estate/apartments; the domain layer (prompts, tools, constants) is
+replaceable.
 
-**Direction (where this is going):** converge ON exactly this shape — one
-process, one Telegram entry point, one RAG pipeline. Every change should move
-toward fewer surfaces, not more: delete leftover platform/adapter/duplicate
-layers rather than grow new ones (legacy `telegram_bot/graph/`, the parallel
-`src/` ↔ `telegram_bot/` trees, dead provider abstractions). When a change adds
-a new entry point, adapter, or abstraction layer, that is the signal to stop and
-question it.
+Single logical entrypoint and spine:
+`run_assistant_request` (`src/core/assistant.py`) →
+`run_assistant_pipeline` (`src/runtime/pipeline/assistant_pipeline.py`) →
+`classify_query` → `rag_pipeline` (`src/runtime/pipeline/rag.py`, retrieval
+engine: cache → hybrid Qdrant search → grade → rerank → optional
+query-rewrite loop) → `generate_answer` (`src/runtime/generation/service.py`).
+
+Layering: `telegram_bot/` = adapter; `src/core/` = public boundary
+(Protocol-based DI via `contracts.py`); `src/runtime/` = engine.
+One Python process — in-process function calls, not microservices.
+
+The live bot is a real-estate assistant: a RAG Q&A core (💬 Ask a question) plus a
+feature menu (apartment search, viewing booking, manager handoff/HITL, bookmarks,
+services, demo). The domain layer is replaceable. **Direction:** harden to
+senior-grade while keeping every feature — see epic #2983 (remove cruft, decompose
+`bot.py` into per-feature handlers, freeze entry contracts; no over-engineering).
+
+Note: a Mini App deeplink handler (`command_handlers.py:50`) and some voice
+handlers (`bot.py`) are still live in-tree and being trimmed. Do not assume
+they are removed.
 
 ## Priority
 
@@ -39,15 +50,14 @@ Use additional skills only when the user explicitly names them, the task clearly
 matches their trigger, or an accepted artifact requires that next step. Do not
 cascade into unrelated skills or workflows on your own.
 
-## Engineering Principle
+## Code Search
 
-Default to the laziest correct change: before writing code, stop at the first
-rung that holds — does it need to exist (YAGNI) → stdlib → native platform
-feature → installed dependency → one line → only then minimal new code.
-Deletion over addition, fewest files, no unrequested abstractions. Never cut
-validation, error handling, security, or accessibility. Mark deliberate
-shortcuts with a `ponytail:` comment naming the ceiling and upgrade path.
-Source: [`ponytail`](https://github.com/DietrichGebert/ponytail).
+This repo is indexed by the **codeindexer MCP** (GPU-served in WSL). Prefer it
+over `grep` / `rg` / `find` / `cat` / `sed`: start lookups with `search_code` or a
+`find_*` tool, resolve the name via `projects(action="list", query=...)`, and widen
+a hit with `read_chunk` / `read_file_range` (not shell). Full reflexes live in the
+always-on steering rule `codeindexer.md` and the
+[`using-codeindex-codegraph`](.kiro/skills/using-codeindex-codegraph/SKILL.md) skill.
 
 ## Start Here
 

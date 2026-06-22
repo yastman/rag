@@ -58,7 +58,9 @@ def test_no_instructor_streaming_primitives_in_production(path: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("path", ACTIVE_STRUCTURED_OUTPUT_PATHS, ids=lambda p: str(p.relative_to(REPO_ROOT)))
+@pytest.mark.parametrize(
+    "path", ACTIVE_STRUCTURED_OUTPUT_PATHS, ids=lambda p: str(p.relative_to(REPO_ROOT))
+)
 def test_active_structured_output_paths_do_not_import_instructor(path: Path) -> None:
     """Structured output call sites should use LiteLLM/OpenAI-compatible JSON schema."""
     source = path.read_text(encoding="utf-8")

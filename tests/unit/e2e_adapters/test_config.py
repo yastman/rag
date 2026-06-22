@@ -41,10 +41,18 @@ def test_validate_requires_openai_compatible_judge_api_key() -> None:
             "TELEGRAM_API_HASH": "hash",
             "E2E_JUDGE_PROVIDER": "litellm",
         },
-        drop={"E2E_JUDGE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "CEREBRAS_API_KEY", "GROQ_API_KEY"},
+        drop={
+            "E2E_JUDGE_API_KEY",
+            "LLM_API_KEY",
+            "OPENAI_API_KEY",
+            "CEREBRAS_API_KEY",
+            "GROQ_API_KEY",
+        },
     )
 
-    assert "At least one LLM provider key is required for judge provider 'litellm'" in cfg.validate()
+    assert (
+        "At least one LLM provider key is required for judge provider 'litellm'" in cfg.validate()
+    )
 
 
 def test_validate_allows_no_judge_mode_without_judge_credentials() -> None:
@@ -53,7 +61,13 @@ def test_validate_allows_no_judge_mode_without_judge_credentials() -> None:
             "TELEGRAM_API_ID": "1",
             "TELEGRAM_API_HASH": "hash",
         },
-        drop={"E2E_JUDGE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "CEREBRAS_API_KEY", "GROQ_API_KEY"},
+        drop={
+            "E2E_JUDGE_API_KEY",
+            "LLM_API_KEY",
+            "OPENAI_API_KEY",
+            "CEREBRAS_API_KEY",
+            "GROQ_API_KEY",
+        },
     )
 
     errors = cfg.validate(judge_required=False)

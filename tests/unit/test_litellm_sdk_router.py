@@ -61,6 +61,7 @@ def test_graph_config_create_llm_returns_litellm_sdk_client() -> None:
     assert isinstance(client, LiteLLMChatClient)
     assert client.default_model == "gpt-4o-mini"
 
+
 from types import SimpleNamespace
 
 from pydantic import BaseModel
@@ -79,7 +80,9 @@ class ObjectResponseRouter:
 
 
 @pytest.mark.asyncio
-async def test_chat_client_translates_response_model_to_json_schema_and_drops_wrapper_kwargs() -> None:
+async def test_chat_client_translates_response_model_to_json_schema_and_drops_wrapper_kwargs() -> (
+    None
+):
     router = ObjectResponseRouter('{"answer":"ok","score":9}')
     client = create_litellm_chat_client(model="gpt-4o-mini", router=router, timeout=12)
 

@@ -28,7 +28,6 @@ from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 pytestmark = pytest.mark.requires_extras
 
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

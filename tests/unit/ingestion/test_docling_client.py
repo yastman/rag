@@ -1,4 +1,5 @@
 """Tests for Docling-serve HTTP client helpers."""
+
 import pytest
 
 

@@ -1,8 +1,8 @@
 <div align="center">
 
-# Domain Knowledge Assistant
+# RAG Q&A Chatbot
 
-**Answer from a private knowledge base and prepare CRM/workflow actions only after human confirmation.**
+**Ask questions in natural language. Get answers grounded in your private documents.**
 
 [![CI](https://github.com/yastman/rag/actions/workflows/ci.yml/badge.svg)](https://github.com/yastman/rag/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
@@ -10,285 +10,183 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-<p align="center">
-  <img src="docs/assets/readme/conversational-ai-platform-hero.svg" alt="Domain assistant core: knowledge search, answer generation, CRM confirmation, and optional runtime adapters" width="880">
-</p>
-
 </div>
 
 ---
 
-This repository now centers on one product path: user intent enters the assistant core, the core retrieves context from Qdrant, generates a grounded answer, and prepares CRM/workflow actions only behind human confirmation.
+A self-hostable RAG question-answer bot. Users ask in natural language via Telegram; the system retrieves grounded context from a Qdrant document store and generates a cited answer via an LLM. It is a Python modular monolith — one process, in-process function calls, with external sidecar services managed by Docker Compose.
 
-Telegram is the production adapter. Voice, Mini App, API, and k8s are archived; Langfuse, trace validation, and monitoring are removed or optional. The core proof runs with Telegram, Qdrant, Redis, and Docker Compose. The current sales/catalog automation domain is the first implementation of the assistant, not a requirement that every deployment become a broad platform.
+The current live domain is real-estate/apartments. The domain layer is replaceable.
 
-## Why It Exists
+## Features
 
-Most business bots stop at scripted replies. Most AI demos stop at a prompt. This project demonstrates the full operational loop: users ask in natural language, the system retrieves grounded knowledge, routes workflow intent, prepares business actions, asks for human approval when needed, and leaves structured logs operators can inspect.
+The live Telegram bot is a real-estate assistant: a RAG Q&A core plus a service menu. All actions are kept; only the question path is the pure RAG core, the rest is the (replaceable) domain layer.
 
-| Business need | Platform capability |
-|---|---|
-| Reduce repeated manual answers | RAG over private documents with citation-aware generation |
-| Convert conversations into action | CRM/workflow tools, lead scoring, tasks, notes, and manager handoff |
-| Let users search naturally | Domain-specific extraction plus hybrid vector/search pipelines |
-| Support the production channel | Telegram text adapter over the assistant core |
-| Keep AI behavior inspectable | Structured product logs, imperative pipeline state flow, optional Langfuse traces, quality scores, and runbooks |
-| Control latency and cost | Redis-backed semantic, embedding, search, rerank, and extraction caches |
-
-## Adapt It To Your Domain
-
-The reusable part is the core product path: assistant orchestration, retrieval, ingestion, cache, structured logs, and Docker runtime. The replaceable part is the domain layer: prompts, tools, search schema, CRM/workflow integration, and UI copy.
-
-| Domain | Replaceable module examples |
-|---|---|
-| Sales and CRM | Lead qualification, deal lookup, tasks, notes, manager handoff |
-| Customer support | Policy answers, ticket lookup, escalation workflows |
-| E-commerce | Product catalog search, recommendations, order status tools |
-| Education | Course search, student FAQ, onboarding flows |
-| Internal operations | Knowledge-base assistant, document search, approval workflows |
-
-## Local Runtime Profiles
-
-Use the minimal core stack when you want to run the Python assistant natively and only need local stateful services:
-
-```bash
-make core-min-up  # qdrant + redis only, from compose.core.yml
-```
-
-Use the default/full local compose core when you need the broader platform containers around the assistant:
-
-```bash
-make core-up      # compatibility alias for docker-core-up
-make docker-up    # existing alias for docker-core-up
-```
-
-Optional active surfaces such as BGE-M3, Docling, and ingestion remain behind their dedicated compose profiles or targets. Archived surfaces (Mini App, voice) were removed in #2791; the Langfuse/ml observability stack was removed in #2844.
-
-## Core Capabilities
-
-| Capability | What it means in this repo | Evidence |
+| Menu action | What it does | Layer |
 |---|---|---|
-| Stateful AI orchestration | Repo-native imperative assistant pipeline routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization | [`src/runtime/pipeline/assistant_pipeline.py`](src/runtime/pipeline/assistant_pipeline.py) |
-| Typed workflow state | One state contract tracks query, routing, retrieval, filters, cache, scoring, policy, latency, and response metadata | [`src/core/contracts.py`](src/core/contracts.py) |
-| Assistant core entrypoint | Direct Python calls use `run_assistant_request()` and return `AssistantResult` for E2E and adapters | [`src/core/assistant.py`](src/core/assistant.py) |
-| Optional runtime adapters | Telegram is the production adapter; voice, API, and Mini App surfaces are removed from the repo | [`telegram_bot/`](telegram_bot/) |
-| Self-hosted retrieval | BGE-M3 + Qdrant support dense, sparse, and ColBERT-style retrieval paths | [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) |
-| Deterministic ingestion | CocoIndex and Docling parse, chunk, embed, upsert/delete, retry, and track DLQ state | [`docs/INGESTION.md`](docs/INGESTION.md) |
-| Business tool actions | CRM/domain tools can create workflow actions with HITL confirmation for sensitive writes | [`telegram_bot/agents/`](telegram_bot/agents/) |
-| Cost and latency controls | Redis caches semantic answers, embeddings, search results, rerank results, and extraction outputs | [`telegram_bot/integrations/cache.py`](telegram_bot/integrations/cache.py) |
-| Observability | Structured product logs are required; Langfuse traces are removed (#2844); local monitoring is optional | [`src/utils/product_events.py`](src/utils/product_events.py) |
-| Compose-first runtime | Docker Compose profiles cover core services, bot, and ingestion; archived profiles (voice, ml, obs) remain in compose config for reference | [`DOCKER.md`](DOCKER.md) |
+| 💬 Ask a question | RAG Q&A over the document store | **core** |
+| 🏠 Find an apartment | Filtered catalog search | domain |
+| 🔑 Services | Service info | domain |
+| 📅 Book a viewing | Schedule a viewing | domain |
+| 👤 Contact a manager | Human handoff (HITL) | domain/agent |
+| 📌 My bookmarks | Saved listings | domain |
+| 🎯 Demo | Guided demo flow | domain |
 
-## Why This Is More Than A Bot
+## How It Works
 
-A simple chatbot receives a message and calls an LLM. This repository treats the assistant as an operating system for business workflows:
-
-- The pipeline can decide whether to answer, retrieve, rewrite, rerank, call tools, ask for approval, or hand off.
-- Retrieval is not a single vector query; it includes dense/sparse search, optional reranking, cache policy, grading, and fallbacks.
-- Domain behavior lives behind tools and prompts, so catalog/search/CRM logic can be replaced without rewriting the runtime.
-- Runtime behavior is observable through traces, logs, health checks, validation commands, and documented runbooks.
-
-## Architecture Snapshot
-
-```mermaid
-graph TB
-    subgraph "Channels"
-        TG["Telegram Bot (active)"]
-        TV["Telegram Voice (archived)"]
-        MA["Telegram Mini App (archived)"]
-        VA["LiveKit Voice Agent (archived)"]
-        API["FastAPI RAG API (archived)"]
-    end
-
-    subgraph "AI Workflow Core"
-        ROUTER["Classifier / Router"]
-        GRAPH["Imperative Assistant Pipeline"]
-        HITL["Human Approval"]
-        TOOLS["Domain + CRM Tools"]
-    end
-
-    subgraph "Knowledge Runtime"
-        INGEST["CocoIndex + Docling Ingestion"]
-        RAG["RAG Pipeline"]
-        CACHE["Redis Semantic Cache"]
-        EVAL["Evaluation + Trace Validation"]
-    end
-
-    subgraph "Data + Model Services"
-        QD[("Qdrant")]
-        RD[("Redis")]
-        PG[("PostgreSQL")]
-        BGE["BGE-M3 Embeddings"]
-        LLM["LiteLLM Providers"]
-    end
-
-    subgraph "Operations"
-        LF["Langfuse"]
-        MON["Loki / Promtail / Alertmanager"]
-        DOCKER["Docker Compose Profiles"]
-    end
-
-    TG --> ROUTER
-    TV -.archived.-> ROUTER
-    MA -.archived.-> TG
-    VA -.archived.-> API
-    API -.archived.-> ROUTER
-    ROUTER --> GRAPH
-    GRAPH --> RAG
-    GRAPH --> TOOLS
-    TOOLS --> HITL
-    RAG --> CACHE
-    RAG --> QD
-    INGEST --> QD
-    CACHE --> RD
-    GRAPH --> PG
-    RAG --> BGE
-    GRAPH --> LLM
-    GRAPH --> LF
-    EVAL --> LF
-    DOCKER --> QD
-    DOCKER --> BGE
-    DOCKER --> MON
+```
+User message (Telegram)
+        │
+        ▼
+run_assistant_request()          src/core/assistant.py
+        │
+        ▼
+run_assistant_pipeline()         src/runtime/pipeline/assistant_pipeline.py
+        │
+        ├─ classify_query()      src/runtime/graph/nodes/classify.py
+        │
+        ▼
+rag_pipeline()                   src/runtime/pipeline/rag.py
+        │  cache check → hybrid Qdrant search (dense+sparse+ColBERT)
+        │  → grade docs → optional rerank → optional query-rewrite loop
+        │  returns: grounded document context
+        │
+        ▼
+generate_answer()                src/runtime/generation/service.py
+        │  LLM call with retrieved context
+        │
+        ▼
+AssistantResult (answer + citations)
+        │
+        ▼
+Telegram reply
 ```
 
-## Review This In 5 Minutes
+`run_assistant_request` (`src/core/assistant.py`) is the single public entrypoint used by all adapters and the golden E2E test.
 
-If you are evaluating the project for collaboration, hiring, or client work, read it in this order:
+## Architecture
 
-1. [`docs/portfolio/resume-case-study.md`](docs/portfolio/resume-case-study.md) - concise narrative, feature cards, trade-offs, and limitations.
-2. [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) - folder map and high-signal files.
-3. [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) - tools, business logic, cache, search, CRM, scoring, handoff.
-4. [`src/ingestion/unified/`](src/ingestion/unified/) - deterministic ingestion and Qdrant writes.
-5. [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), and [`DOCKER.md`](DOCKER.md) - runtime architecture.
+One Python process. Three layers:
 
-Safe review notes:
+| Layer | Path | Role |
+|---|---|---|
+| Adapter | `telegram_bot/` | Telegram interface — converts messages to/from `AssistantRequest` / `AssistantResult` |
+| Public boundary | `src/core/` | `contracts.py` defines Protocol-based DI types; `assistant.py` is the entrypoint |
+| Engine | `src/runtime/` | Pipeline, RAG, retrieval, generation, grounding |
 
-- Do not run production deploy scripts, use real credentials, or trigger real CRM write paths without a dedicated review environment.
-- Start with [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) before executing commands.
-- Repository presentation checklist lives in [`docs/review/GITHUB_REPO_SETUP.md`](docs/review/GITHUB_REPO_SETUP.md).
+External sidecar services (Docker Compose — **not** part of the Python binary):
 
-## Proof Of Engineering
+| Service | Purpose |
+|---|---|
+| Qdrant | Vector store — dense, sparse, and ColBERT-style retrieval |
+| BGE-M3 (ONNX) | Self-hosted embeddings served via a local API |
+| Redis | Five independent caches: semantic answer, embedding, search, rerank, extraction. Version-prefixed keys; graceful degradation on miss |
+| PostgreSQL | Persistent state (conversation, ingestion tracking) |
+| Docling | Document parsing for ingestion (PDF, etc.) |
 
-- Workflow architecture: imperative assistant pipeline, typed state contracts, conditional routing, tool boundaries, and HITL confirmation.
-- Retrieval infrastructure: BGE-M3, Qdrant dense/sparse/ColBERT vectors, aliases, strict mode, and reranking path.
-- Ingestion reliability: stable file identity, Docling parsing, chunking, Qdrant upsert/delete, PostgreSQL state, retries, and DLQ.
-- Runtime discipline: Compose profiles, pinned images, health checks, preflight checks, remote Docker helpers, and operational docs.
-- Cost controls: Redis semantic answer cache, embedding cache, search cache, rerank cache, and extraction cache.
-- Observability: structured product logs as the core proof, with Langfuse traces/scores, prompt management, trace validation, local monitoring, and runbooks as optional diagnostics.
-- Quality gates: Ruff, MyPy, pytest tiers, CI guardrails, and documented local validation.
+An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/agents/` for CRM-style workflows (lead scoring, manager handoff, HITL confirmation). It is not required for the core Q&A path.
 
-## Current Domain Module
+## Ingestion
 
-The repository currently includes a working sales/catalog automation module: catalog-style search, lead workflows, manager handoff, scoring, and Kommo CRM integration. Treat that as the first domain implementation, not the boundary of the product.
+`src/ingestion/unified/` — deterministic, idempotent, production-ready:
 
-To adapt the system, replace the domain prompts, extraction logic, catalog/search tools, CRM/tool integrations, and UI copy while keeping the assistant core, RAG, ingestion, cache, structured logs, and Docker profiles.
+- SHA256-based file identity: re-ingesting the same file is a no-op.
+- Idempotent upsert with orphan cleanup (deleted source files are removed from Qdrant).
+- Dead-letter queue (DLQ) for failed documents, with retry and backoff.
+- Docling handles parsing; CocoIndex handles chunking and embedding writes.
+
+See [`docs/INGESTION.md`](docs/INGESTION.md) for operations and schema details.
+
+## Adapt to Your Domain
+
+Replace the domain layer; keep the engine and infrastructure.
+
+**Replaceable:** `telegram_bot/services/apartment_*` prompts and extraction logic, search schema fields, CRM/tool integrations, UI copy, i18n strings.
+
+**Keep:** `src/core/`, `src/runtime/`, `src/ingestion/unified/`, Redis cache layer, Docker Compose profiles.
+
+The current domain (real-estate/apartments) lives entirely in the adapter and service layers. Swapping it does not require touching the retrieval engine or pipeline.
 
 ## Quick Start
 
-Choose the path that matches your goal:
-
-| Goal | Start here |
-|---|---|
-| Review safely before running commands | [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) |
-| Run core local services | `make local-up` |
-| Prove the simplified core product path | `make local-up` then `make e2e-core-live` |
-| Try the core path with a real LLM provider | `make e2e-core-live-real-llm` |
-| Run the bot natively for fast iteration | `make test-bot-health` then `make run-bot` |
-| Run the Compose bot stack | `make docker-bot-up` |
-| Run the full Compose stack | `make docker-full-up` |
-| Understand runtime profiles and ports | [`DOCKER.md`](DOCKER.md) |
-
-### Prerequisites
-
-- Python 3.12+; Python 3.12 is the recommended and minimum supported version for local development.
-- [`uv`](https://docs.astral.sh/uv/)
-- Docker with Compose support.
-- `.env` copied from `.env.example` and filled with local/test credentials.
+Prerequisites: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), Docker with Compose.
 
 ```bash
-cp .env.example .env
+cp .env.example .env          # fill in credentials
+make core-min-up              # start Qdrant + Redis (minimal)
+# or
+make core-up                  # start full sidecar stack (adds BGE-M3, Docling, PostgreSQL)
 ```
 
-`.env.local` is not loaded automatically; use `.env` for local runs.
+Run the bot natively:
+```bash
+make run-bot
+```
 
-For full setup, validation ladder, environment behavior, and troubleshooting, use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
+Run the Compose bot stack:
+```bash
+make docker-bot-up
+```
 
-### Runtime Profiles
-
-Docker Compose is the primary local/VPS runtime. Profiles split the system by operational surface:
-
-| Profile | Services |
-|---|---|
-| default/core | PostgreSQL, Redis, Qdrant, BGE-M3, Docling |
-| `bot` | Telegram bot |
-| `ingest` | unified ingestion service |
-| `ml` | *(removed — see #2844)* |
-| `obs` | Loki, Promtail, Alertmanager (archived — removed in #2791) |
-| `voice` | RAG API, LiveKit, SIP, voice agent (archived — removed in #2791) |
-| `full` | all profile-gated services |
-
-The repo also includes remote Docker helpers for running Compose on a remote host. Treat this as a development convenience, not a required public setup path; see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and [`DOCKER.md`](DOCKER.md) for details.
-
-## Project Map
-
-Use [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md) for the canonical directory ownership map (purpose, owner layer, status, allowed imports, tests, and docs for every major directory).
-
-Use [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) for the maintained folder map and high-signal files.
-
-High-level entry points:
-
-| Area | Path |
-|---|---|
-| Telegram assistant runtime | [`telegram_bot/`](telegram_bot/) |
-| Imperative assistant pipeline | [`src/runtime/pipeline/`](src/runtime/pipeline/) |
-| Assistant core entrypoint | [`src/core/assistant.py`](src/core/assistant.py) |
-| Business/domain tools | [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) |
-| Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
-| Runtime | [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), [`DOCKER.md`](DOCKER.md) |
+For the full setup ladder, environment variables, and troubleshooting, see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
 
 ## Validation
 
 ```bash
-make check       # Ruff lint + MyPy strict type checking
-make test-unit   # Unit tests (parallel via pytest-xdist)
-make e2e-core-live  # Simplified core product E2E against local Qdrant + BGE-M3
-make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
+make check          # Ruff lint + MyPy strict type checking
+make test-core      # Fast core gate (~91 tests, ~8s) — run first for any src/core or src/runtime change
+make test           # Broader fast gate (unit + graph paths) — run for adapter/service changes
+make e2e-core-live  # Golden E2E: indexes fixture corpus, runs full spine through run_assistant_request
 ```
 
-Local verification is the release authority for this repo. Run focused checks for the touched area before merging to `dev` or deploying. CI is intentionally lightweight: it runs static/lint guardrails, not pytest suites or the authoritative full-suite signal.
+`make e2e-core-live` is the main proof of the core path. It exercises classification, retrieval, generation fallback, and runs without Telegram, Langfuse, or voice. It requires local Qdrant and BGE-M3 running (`make core-up`).
 
-`make e2e-core-live` is the main product simplification proof: it indexes the
-synthetic fixture corpus, answers through the assistant core, covers
-classification, retrieval, generation fallback behavior, CRM/HITL with mock
-CRM, and runs without Telegram, Langfuse, voice, Mini App, k8s, or trace
-validation. Use `make e2e-core-live-real-llm` only when real LLM credentials
-and budget are available.
+CI runs static/lint guardrails only (Ruff, MyPy, Semgrep, lockfile check). Pytest suites are local/manual.
 
-## Honest Scope
+## Honest Current State
 
-- Docker Compose is the primary local runtime path.
-- The main reliability proof is the assistant core path: `make local-up` then `make e2e-core-live`.
-- k3s manifests exist for core services but are not full parity with Compose.
-- Monitoring services are local/dev unless production evidence is added.
-- Langfuse, OTel, trace validation, voice, Mini App, and k8s are not required for the core proof.
-- HITL confirmation protects CRM/write workflows, not every possible state transition.
-- The Mini App and voice adapters were removed from the repo in #2791.
-- Some UI/i18n strings are still being migrated into Fluent bundles.
-- Domain-specific names, prompts, and catalog fields remain in the current implementation and should be replaced for a different customer domain.
+The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The following legacy surfaces are still **physically in-tree and partly active** — they are being trimmed in open issues, not already removed:
+
+- **Telegram Mini App deeplink** — `command_handlers.py` registers a `/start` deep-link handler (`q_` prefix). Active.
+- **Voice message handlers** — `bot.py` contains voice/audio processing handlers. Active.
+- **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
+- **Langfuse shim** — `src/observability/langfuse_client.py` is a no-op Langfuse client (`get_client()` returns `None`, `@observe` is a pass-through decorator); the dead shim is still threaded through `src/runtime/pipeline/rag.py` and `src/runtime/generation/service.py`.
+
+Claims in previous README versions that "Mini App and voice adapters were removed" were inaccurate. The above items exist in the current codebase.
+
+Other honest limits:
+
+- k3s manifests exist for core services but are not at parity with Compose.
+- Monitoring (Loki/Promtail/Alertmanager) is local/dev only.
+- Some i18n strings are still being migrated to Fluent bundles.
+
+## Project Map
+
+| Area | Path |
+|---|---|
+| Core entrypoint | [`src/core/assistant.py`](src/core/assistant.py) |
+| Pipeline + RAG engine | [`src/runtime/pipeline/`](src/runtime/pipeline/) |
+| Telegram adapter | [`telegram_bot/`](telegram_bot/) |
+| Domain tools + agents | [`telegram_bot/agents/`](telegram_bot/agents/), [`telegram_bot/services/`](telegram_bot/services/) |
+| Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
+| Compose runtime | [`compose.yml`](compose.yml), [`DOCKER.md`](DOCKER.md) |
+| Full docs index | [`docs/README.md`](docs/README.md) |
 
 ## Documentation
 
 | Document | Use it for |
 |---|---|
-| [`docs/portfolio/resume-case-study.md`](docs/portfolio/resume-case-study.md) | portfolio narrative and feature cards |
-| [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) | safe review path |
-| [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) | folder map and high-signal files |
-| [`docs/README.md`](docs/README.md) | full documentation index |
 | [`DOCKER.md`](DOCKER.md) | Compose services, profiles, ports, env, runtime contracts |
-| [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) | local setup and validation ladder |
-| [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) | query, retrieval, ingestion, voice, observability flows |
-| [`docs/INGESTION.md`](docs/INGESTION.md) | unified ingestion operations |
-| [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) | vector schema and Qdrant operations |
+| [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) | Local setup and validation ladder |
+| [`docs/INGESTION.md`](docs/INGESTION.md) | Ingestion operations |
+| [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) | Vector schema and Qdrant operations |
+| [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) | Query, retrieval, and generation flows |
+| [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) | Folder map and high-signal files |
+| [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) | Safe review path before running commands |
+
+## Direction
+
+The project is being hardened to a senior-grade codebase **without dropping any feature** — tracking epic [#2983](https://github.com/yastman/rag/issues/2983). In short: keep the full feature menu, remove migration cruft (dead LangGraph nodes, no-op Langfuse shim, stale tests), decompose the `bot.py` god-object into per-feature handlers, document the feature map, and freeze the entry-path contracts — with **no new frameworks and no over-engineering**.
 
 ## License
 
