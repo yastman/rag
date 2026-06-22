@@ -385,7 +385,6 @@ class TestQueryAnalyzerStructuredOutputCompat:
         assert not hasattr(qa_mod, "instructor")
 
 
-
 # =============================================================================
 # TestQueryAnalyzerObserveInstrumentation (#1659)
 # =============================================================================

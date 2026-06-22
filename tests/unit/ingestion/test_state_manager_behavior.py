@@ -22,7 +22,6 @@ from src.ingestion.unified.state_manager import UnifiedStateManager
 pytestmark = pytest.mark.requires_extras
 
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
