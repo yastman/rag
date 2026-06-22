@@ -281,6 +281,11 @@ class QdrantHybridTargetConnector:
             content_hash=content_hash,
             embedding_model=current_embedding_model,
             pipeline_version=current_pipeline_version,
+            source_path=source_path,
+            file_name=mutation.file_name,
+            mime_type=mutation.mime_type,
+            file_size=mutation.file_size,
+            collection_name=spec.collection_name,
         )
         if claimed is None:
             logger.debug(f"Skipping (already claimed or up-to-date): {source_path}")

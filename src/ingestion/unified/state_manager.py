@@ -236,6 +236,12 @@ class UnifiedStateManager:
         content_hash: str | None = None,
         embedding_model: str | None = None,
         pipeline_version: str | None = None,
+        *,
+        source_path: str | None = None,
+        file_name: str | None = None,
+        mime_type: str | None = None,
+        file_size: int | None = None,
+        collection_name: str | None = None,
     ) -> FileState | None:
         """Atomically claim a file for processing.
 
@@ -247,12 +253,22 @@ class UnifiedStateManager:
         When content_hash/embedding_model/pipeline_version are provided the
         WHERE clause skips rows that are already up-to-date indexed, so
         changed files are re-claimed even from 'indexed' status.
+
+        File metadata (source_path, file_name, mime_type, file_size,
+        collection_name) is persisted on the first-time INSERT only. The
+        ON CONFLICT DO UPDATE deliberately leaves those columns untouched so a
+        re-claim never clobbers metadata captured on the original ingest
+        (#2941 BLOCKER-2 — claim_processing is the only first-touch writer now
+        that upsert_state_sync is gone).
         """
         pool = await self._get_pool()
         row = await pool.fetchrow(
             """
-            INSERT INTO ingestion_state (file_id, status, content_hash, embedding_model, pipeline_version, updated_at)
-            VALUES ($1, 'processing', $2, $3, $4, NOW())
+            INSERT INTO ingestion_state (
+                file_id, status, content_hash, embedding_model, pipeline_version,
+                source_path, file_name, mime_type, file_size, collection_name, updated_at
+            )
+            VALUES ($1, 'processing', $2, $3, $4, $5, $6, $7, $8, $9, NOW())
             ON CONFLICT (file_id) DO UPDATE
             SET status = 'processing', updated_at = NOW()
             WHERE ingestion_state.status != 'processing'
@@ -270,6 +286,11 @@ class UnifiedStateManager:
             content_hash,
             embedding_model,
             pipeline_version,
+            source_path,
+            file_name,
+            mime_type,
+            file_size,
+            collection_name,
         )
         return FileState.from_row(row) if row else None
 
@@ -495,10 +516,26 @@ class UnifiedStateManager:
         content_hash: str | None = None,
         embedding_model: str | None = None,
         pipeline_version: str | None = None,
+        *,
+        source_path: str | None = None,
+        file_name: str | None = None,
+        mime_type: str | None = None,
+        file_size: int | None = None,
+        collection_name: str | None = None,
     ) -> FileState | None:
         """Sync version of claim_processing()."""
         return self._run_sync(
-            self.claim_processing(file_id, content_hash, embedding_model, pipeline_version)
+            self.claim_processing(
+                file_id,
+                content_hash,
+                embedding_model,
+                pipeline_version,
+                source_path=source_path,
+                file_name=file_name,
+                mime_type=mime_type,
+                file_size=file_size,
+                collection_name=collection_name,
+            )
         )
 
     def reap_stuck_processing_sync(self, threshold_minutes: int) -> None:

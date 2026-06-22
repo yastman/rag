@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 from unittest.mock import AsyncMock
 
 import pytest
@@ -53,11 +55,26 @@ class TestBackoffFormula:
             "Backoff must cap at LEAST(retry_count, 2) to produce 1/5/25 min schedule"
         )
 
-    async def test_backoff_docstring_says_25min(self) -> None:
-        """mark_error docstring must document actual max of 25min, not 30min."""
-        doc = UnifiedStateManager.mark_error.__doc__ or ""
-        # Either 25min is mentioned OR docstring doesn't claim 30min
-        assert "30min" not in doc, "Docstring claims 30min but formula produces 25min"
+    async def test_backoff_comment_documents_25min(self) -> None:
+        """mark_error must document the real 25min cap (not 30min) in its source.
+
+        The schedule comment lives inline in the function body, so checking
+        __doc__ proved nothing (it is None). Inspect the actual source instead.
+        """
+        source = inspect.getsource(UnifiedStateManager.mark_error)
+        assert "25min" in source, "backoff comment must document the real 25min cap"
+        assert "30min" not in source, (
+            "source claims 30min but POWER(5, LEAST(retry_count, 2)) caps at 25min"
+        )
+
+    async def test_backoff_schedule_values_are_1_5_25(
+        self, manager: UnifiedStateManager, mock_pool: AsyncMock
+    ) -> None:
+        """The backoff SQL must encode the 1/5/25 minute schedule, not 30."""
+        await manager.mark_error("f1", "err")
+        sql = mock_pool.execute.call_args[0][0]
+        assert "POWER(5, LEAST(retry_count, 2))" in sql
+        assert "30" not in sql
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +187,67 @@ class TestAtomicClaim:
         assert "processing" in sql
         assert "indexed" in sql
 
+    async def test_claim_processing_persists_metadata_on_insert(
+        self, manager: UnifiedStateManager, mock_pool: AsyncMock
+    ) -> None:
+        """INSERT must persist file metadata so source_path is non-NULL after first claim.
+
+        Regression for BLOCKER-2: upsert_state_sync (the previous metadata writer)
+        was removed, so claim_processing is now the only first-touch writer. The
+        metadata columns must be in the INSERT column list and passed as bind
+        parameters — otherwise source_path/file_name/etc. stay NULL forever.
+        """
+        mock_pool.fetchrow.return_value = None
+
+        await manager.claim_processing(
+            "f1",
+            content_hash="h1",
+            embedding_model="bge-m3-api",
+            pipeline_version="v3.2.1",
+            source_path="docs/doc.txt",
+            file_name="doc.txt",
+            mime_type="text/plain",
+            file_size=5,
+            collection_name="col",
+        )
+
+        call = mock_pool.fetchrow.call_args
+        sql = call[0][0]
+        # Metadata columns present in the INSERT
+        for col in ("source_path", "file_name", "mime_type", "file_size", "collection_name"):
+            assert col in sql, f"INSERT must include {col} column"
+        # Metadata values passed as bind parameters (non-NULL on first insert)
+        bind_args = call[0][1:]
+        assert "docs/doc.txt" in bind_args
+        assert "doc.txt" in bind_args
+        assert "text/plain" in bind_args
+        assert "col" in bind_args
+
+    async def test_claim_processing_does_not_overwrite_metadata_on_conflict(
+        self, manager: UnifiedStateManager, mock_pool: AsyncMock
+    ) -> None:
+        """On re-claim (ON CONFLICT) only status/updated_at change — metadata stays.
+
+        The DO UPDATE SET clause must NOT touch source_path/file_name/etc., so a
+        re-claim of an existing row preserves the originally-persisted metadata.
+        """
+        mock_pool.fetchrow.return_value = None
+
+        await manager.claim_processing("f1", source_path="docs/doc.txt")
+
+        sql = mock_pool.fetchrow.call_args[0][0]
+        # Isolate the DO UPDATE SET ... WHERE clause
+        upper = sql.upper()
+        set_start = upper.index("DO UPDATE")
+        set_end = upper.index("WHERE", set_start)
+        set_clause = sql[set_start:set_end]
+        for col in ("source_path", "file_name", "mime_type", "file_size", "collection_name"):
+            assert col not in set_clause, (
+                f"{col} must not be in the conflict-update SET clause (metadata is insert-only)"
+            )
+        assert "status" in set_clause
+        assert "updated_at" in set_clause
+
 
 # ---------------------------------------------------------------------------
 # Fix 3: Stuck-processing reaper
@@ -224,3 +302,43 @@ class TestReapStuckProcessing:
         mock_pool.execute.return_value = "UPDATE 0"
         await manager.reap_stuck_processing(threshold_minutes=30)
         mock_pool.execute.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Fix 3 (wiring): orchestrator must actually CALL the reaper each poll pass
+# ---------------------------------------------------------------------------
+
+
+class TestReaperWiredIntoOrchestrator:
+    """BLOCKER-3: reap_stuck_processing must have a live caller in the loop."""
+
+    async def test_run_watch_reaps_stuck_processing_each_pass(self) -> None:
+        """run_watch must invoke the reaper with the configured threshold."""
+        from src.ingestion.unified.orchestrator import UnifiedIngestionOrchestrator
+
+        stop_event = asyncio.Event()
+
+        async def _detect(_collection: str) -> list:
+            # Stop after the first pass so the loop terminates.
+            stop_event.set()
+            return []
+
+        change_manager = AsyncMock()
+        change_manager.detect_changes = AsyncMock(side_effect=_detect)
+        writer = AsyncMock()
+        state_manager = AsyncMock()
+
+        orchestrator = UnifiedIngestionOrchestrator(
+            change_manager=change_manager,
+            writer=writer,
+            state_manager=state_manager,
+        )
+
+        await orchestrator.run_watch(
+            "col",
+            stop_event=stop_event,
+            poll_interval=0,
+            reap_threshold_minutes=30,
+        )
+
+        state_manager.reap_stuck_processing.assert_awaited_once_with(30)

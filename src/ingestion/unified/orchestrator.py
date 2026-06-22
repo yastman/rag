@@ -117,6 +117,7 @@ class UnifiedIngestionOrchestrator:
         collection_name: str,
         stop_event: asyncio.Event | None = None,
         poll_interval: float = 30.0,
+        reap_threshold_minutes: int = 30,
     ) -> None:
         """Run ingestion in a polling loop until stop_event is set.
 
@@ -125,11 +126,17 @@ class UnifiedIngestionOrchestrator:
             stop_event: When set, the loop exits after the current pass.
                 If already set on entry, exits immediately without running.
             poll_interval: Seconds to wait between passes.
+            reap_threshold_minutes: Rows stuck in 'processing' longer than this
+                are reset to 'pending' at the start of each pass (#2941
+                BLOCKER-3). Recovers files orphaned by a crashed worker, which
+                would otherwise be skipped forever by the atomic claim guard.
         """
         if stop_event is None:
             stop_event = asyncio.Event()
 
         while not stop_event.is_set():
+            # Recover crashed-worker leftovers before claiming new work.
+            await self.state_manager.reap_stuck_processing(reap_threshold_minutes)
             result = await self.run_once(collection_name)
             logger.info(
                 "run_watch pass: processed=%d deleted=%d errors=%d",
