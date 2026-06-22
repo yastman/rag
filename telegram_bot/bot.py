@@ -88,7 +88,6 @@ from .observability import (
     propagate_attributes,
 )
 from .services.forum_bridge import ForumBridge
-from .services.redis_monitor import RedisHealthMonitor
 from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 
@@ -97,10 +96,12 @@ class GraphRecursionError(RuntimeError):
 
 
 if TYPE_CHECKING:
+    from ._bot_services import Services
     from .agents.context import BotContext as BotContextType
     from .pipelines.state_contract import PreAgentStateContract
 else:
     BotContextType = Any
+    Services = Any
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
 AsyncQdrantClient: Any = None
@@ -297,96 +298,36 @@ def _extract_stream_chunk_text(message_chunk: Any) -> str:
 class PropertyBot:
     """Telegram bot for domain-specific search (configurable via BOT_DOMAIN)."""
 
-    def __init__(self, config: BotConfig):
-        """Initialize bot with services."""
-        from src.runtime.graph.config import GraphConfig
+    def __init__(self, config: BotConfig, _services: Services | None = None):
+        """Initialize bot with services.
+
+        ``_services`` is an optional DI seam for tests: pass a pre-built
+        :class:`~telegram_bot._bot_services.Services` instance to skip the
+        heavy service construction in
+        :func:`~telegram_bot._bot_services.build_services`.
+        """
+        from ._bot_services import build_services
 
         self.config = config
         self.bot = Bot(token=config.telegram_token)
         self.dp = Dispatcher()
 
-        # Graph config for service factories
-        self._graph_config = GraphConfig(
-            llm_base_url=config.llm_base_url,
-            llm_api_key=config.llm_api_key,
-            llm_model=config.llm_model,
-            bge_m3_url=config.bge_m3_url,
-            qdrant_url=config.qdrant_url,
-            qdrant_collection=config.qdrant_collection,
-            search_top_k=config.search_top_k,
-            redis_url=config.redis_url,
-            domain=config.domain,
-            domain_language=config.domain_language,
-        )
+        svc: Services = _services if _services is not None else build_services(config)
 
-        # Initialize legacy graph service dependencies
-        from src.runtime.integrations.cache import CacheLayerManager
-        from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
-        from src.runtime.services.qdrant import QdrantService
-
-        self._cache = CacheLayerManager(redis_url=config.redis_url)
-        self._hybrid = BGEM3HybridEmbeddings(
-            base_url=config.bge_m3_url,
-            timeout=self._graph_config.bge_m3_timeout,
-        )
-        # Use hybrid as primary embeddings provider
-        self._embeddings = self._hybrid
-        self._sparse = BGEM3SparseEmbeddings(
-            base_url=config.bge_m3_url,
-            timeout=self._graph_config.bge_m3_timeout,
-        )
-        self._qdrant = QdrantService(
-            url=config.qdrant_url,
-            api_key=config.qdrant_api_key,
-            collection_name=config.qdrant_collection,
-            quantization_mode=config.qdrant_quantization_mode,
-            timeout=config.qdrant_timeout,
-        )
-
-        # Apartments collection (#629)
-        from .services.apartments_service import ApartmentsService
-
-        self._qdrant_apartments = QdrantService(
-            url=config.qdrant_url,
-            api_key=config.qdrant_api_key,
-            collection_name="apartments",
-        )
-        self._apartments_service = ApartmentsService(qdrant=self._qdrant_apartments)
-
-        # Rerank provider (feature flag). "colbert" keeps the existing
-        # server-side Qdrant ColBERT path and does not instantiate the
-        # deprecated client-side reranker service.
-        self._reranker = None
-        if config.rerank_provider == "colbert":
-            logger.info("Reranking via server-side Qdrant ColBERT path")
-        elif config.rerank_provider == "none":
-            logger.info("Reranking disabled")
-
-        # LLM (optional, defaults via GraphConfig.create_llm)
-        self._llm = self._graph_config.create_llm()
-
-        # Apartment extraction pipeline: LLM first → regex fallback
-        from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
-        from .services.apartment_filter_extractor import ApartmentFilterExtractor
-
-        _apt_llm = None
-        try:
-            from .services.apartment_llm_extractor import ApartmentLlmExtractor
-
-            _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
-        except (ImportError, ModuleNotFoundError):
-            logger.warning(
-                "ApartmentLlmExtractor unavailable, falling back to regex-only extraction",
-                exc_info=True,
-            )
-
-        self._apartment_pipeline = ApartmentExtractionPipeline(
-            regex_extractor=ApartmentFilterExtractor(),
-            llm_extractor=_apt_llm,
-            redis=self._cache.redis,
-        )
-        # Redis health monitor (periodic background task)
-        self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
+        # Unpack services onto bot attributes (preserves existing handler access patterns)
+        self._graph_config = svc.graph_config
+        self._cache = svc.cache
+        self._hybrid = svc.hybrid
+        self._embeddings = svc.embeddings
+        self._sparse = svc.sparse
+        self._qdrant = svc.qdrant
+        self._qdrant_apartments = svc.qdrant_apartments
+        self._apartments_service = svc.apartments_service
+        self._reranker = svc.reranker
+        self._llm = svc.llm
+        self._apartment_pipeline = svc.apartment_pipeline
+        self._redis_monitor = svc.redis_monitor
+        self._i18n_hub: Any = svc.i18n_hub
 
         # Conversation memory checkpointer (initialized in start())
         self._checkpointer: Any = None
@@ -394,19 +335,6 @@ class PropertyBot:
         # Agent checkpointer — Redis with TTL (#424).
         # HumanMessage serialization fixed in langgraph-checkpoint-redis>=0.3.6 (#420).
         self._agent_checkpointer: Any = None
-
-        # i18n hub (fluentogram) — initialize early for localized menu filters.
-        self._i18n_hub: Any = None
-        try:
-            from .middlewares.i18n import create_translator_hub
-
-            self._i18n_hub = create_translator_hub()
-        except Exception:
-            logger.warning(
-                "Failed to initialize i18n hub during startup preflight; "
-                "falling back to RU-only menu filters",
-                exc_info=True,
-            )
 
         # User service (asyncpg) — initialized in start()
         self._user_service: Any = None
@@ -1192,12 +1120,13 @@ class PropertyBot:
                     except Exception:
                         logger.exception("Failed to send menu action response chunk")
 
-    async def start(self):
-        """Start bot polling."""
-        logger.info("Starting bot...")
-        startup_report = StartupReport()
+    # ------------------------------------------------------------------ #
+    # Lifecycle helpers — called in order by start()                      #
+    # ------------------------------------------------------------------ #
 
-        # Authoritative dependency gate must run before Redis-backed startup work.
+    async def _setup_preflight(self) -> tuple[Any, StartupReport]:
+        """Run preflight dependency gate; return (preflight_result, startup_report)."""
+        startup_report = StartupReport()
         from .preflight import PreflightError, check_dependencies
 
         try:
@@ -1209,15 +1138,18 @@ class PropertyBot:
         preflight_report = getattr(preflight_result, "report", None)
         if isinstance(preflight_report, StartupReport):
             startup_report.merge(preflight_report)
+        return preflight_result, startup_report
 
-        # Initialize cache at startup
+    async def _setup_cache(self) -> None:
+        """Initialize Redis cache layer if not already done."""
         if not self._cache_initialized:
             logger.info("Initializing cache service...")
             await self._cache.initialize()
             self._cache_initialized = True
             logger.info("Cache service ready")
 
-        # Initialize conversation memory checkpointer (SDK)
+    async def _setup_checkpointers(self, startup_report: StartupReport) -> None:
+        """Initialize conversation and agent Redis checkpointers."""
         from .integrations.memory import create_fallback_checkpointer, create_redis_checkpointer
 
         try:
@@ -1240,7 +1172,7 @@ class PropertyBot:
                 )
             )
 
-        # Agent/voice checkpointer — Redis with TTL for bounded retention (#424).
+        # Agent checkpointer — Redis with TTL for bounded retention (#424).
         try:
             self._agent_checkpointer = create_redis_checkpointer(
                 self.config.redis_url,
@@ -1264,76 +1196,12 @@ class PropertyBot:
                 )
             )
 
-        # Initialize PostgreSQL pool for realestate DB
+    async def _setup_postgres(self, preflight_result: Any, startup_report: StartupReport) -> None:
+        """Initialize PostgreSQL pool, schema, and dependent services."""
         postgres_available = (
             preflight_result.get("postgres", True) if isinstance(preflight_result, dict) else True
         )
-        if postgres_available:
-            try:
-                import asyncpg
-
-                test_conn: Any | None = None
-                try:
-                    # Validate DB exists before creating pool (avoid traceback spam #570)
-                    test_conn = await asyncpg.connect(
-                        self.config.realestate_database_url, timeout=5
-                    )
-                except asyncpg.InvalidCatalogNameError:
-                    target_db = self._extract_database_name(self.config.realestate_database_url)
-                    if target_db is None:
-                        raise
-                    logger.warning(
-                        "PostgreSQL database %s missing; attempting auto-create",
-                        target_db,
-                    )
-                    if not await self._ensure_postgres_database_exists(asyncpg, target_db):
-                        raise
-                    test_conn = await asyncpg.connect(
-                        self.config.realestate_database_url, timeout=5
-                    )
-                finally:
-                    if test_conn is not None:
-                        await test_conn.close()
-
-                self._pg_pool = await asyncpg.create_pool(
-                    self.config.realestate_database_url,
-                    min_size=0,
-                    max_size=5,
-                    timeout=5,
-                )
-                logger.info("PostgreSQL pool ready (realestate)")
-                await self._ensure_realestate_schema()
-                logger.info("PostgreSQL schema ready (realestate)")
-
-                from .services.user_service import UserService
-
-                self._user_service = UserService(pool=self._pg_pool)
-
-                # Initialize favorites service (#628)
-                from .services.favorites_service import FavoritesService
-
-                self._favorites_service = FavoritesService(pool=self._pg_pool)
-                logger.info("Favorites service ready")
-
-                from .services.search_event_store import SearchEventStore
-
-                self._search_event_store = SearchEventStore(pool=self._pg_pool)
-                logger.info("Search event store ready")
-
-            except Exception:
-                logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
-                startup_report.add(
-                    StartupSignal(
-                        source="postgres_runtime",
-                        severity=StartupSeverity.DEGRADED,
-                        summary="PostgreSQL pool unavailable, user features disabled",
-                        remediation=(
-                            "restore PostgreSQL connectivity for favorites, search events, "
-                            "and user services"
-                        ),
-                    )
-                )
-        else:
+        if not postgres_available:
             startup_report.add(
                 StartupSignal(
                     source="postgres_runtime",
@@ -1348,15 +1216,76 @@ class PropertyBot:
             logger.info(
                 "Skipping PostgreSQL pool init because preflight already marked it unavailable"
             )
+            return
 
-        # Cache bot user id for echo-skip in group handlers (#730 review)
+        try:
+            import asyncpg
+
+            test_conn: Any | None = None
+            try:
+                # Validate DB exists before creating pool (avoid traceback spam #570)
+                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
+            except asyncpg.InvalidCatalogNameError:
+                target_db = self._extract_database_name(self.config.realestate_database_url)
+                if target_db is None:
+                    raise
+                logger.warning(
+                    "PostgreSQL database %s missing; attempting auto-create",
+                    target_db,
+                )
+                if not await self._ensure_postgres_database_exists(asyncpg, target_db):
+                    raise
+                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
+            finally:
+                if test_conn is not None:
+                    await test_conn.close()
+
+            self._pg_pool = await asyncpg.create_pool(
+                self.config.realestate_database_url,
+                min_size=0,
+                max_size=5,
+                timeout=5,
+            )
+            logger.info("PostgreSQL pool ready (realestate)")
+            await self._ensure_realestate_schema()
+            logger.info("PostgreSQL schema ready (realestate)")
+
+            from .services.user_service import UserService
+
+            self._user_service = UserService(pool=self._pg_pool)
+
+            from .services.favorites_service import FavoritesService
+
+            self._favorites_service = FavoritesService(pool=self._pg_pool)
+            logger.info("Favorites service ready")
+
+            from .services.search_event_store import SearchEventStore
+
+            self._search_event_store = SearchEventStore(pool=self._pg_pool)
+            logger.info("Search event store ready")
+
+        except Exception:
+            logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
+            startup_report.add(
+                StartupSignal(
+                    source="postgres_runtime",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="PostgreSQL pool unavailable, user features disabled",
+                    remediation=(
+                        "restore PostgreSQL connectivity for favorites, search events, "
+                        "and user services"
+                    ),
+                )
+            )
+
+    async def _setup_bot_identity(self) -> None:
+        """Cache bot user id and detect forum-topics capability."""
         try:
             me = await self.bot.me()
             self._bot_user_id = me.id
         except Exception:
             logger.warning("Failed to cache bot user id")
 
-        # Verify forum topics mode is enabled for expert threads
         try:
             me = await self.bot.get_me()
             if not getattr(me, "has_topics_enabled", False):
@@ -1373,26 +1302,28 @@ class PropertyBot:
             logger.warning("Failed to check forum topics status", exc_info=True)
             self._topics_enabled = False
 
-        # Initialize handoff services (#730)
-        if self._cache.redis is not None:
-            self._handoff_state = HandoffState(
-                self._cache.redis,
-                ttl_hours=self.config.handoff_ttl_hours,
+    def _setup_handoff_services(self) -> None:
+        """Initialize handoff state machine and forum bridge (#730)."""
+        if self._cache.redis is None:
+            return
+        self._handoff_state = HandoffState(
+            self._cache.redis,
+            ttl_hours=self.config.handoff_ttl_hours,
+        )
+        if self.config.managers_group_id:
+            self._forum_bridge = ForumBridge(
+                bot=self.bot,
+                managers_group_id=self.config.managers_group_id,
             )
-            if self.config.managers_group_id:
-                self._forum_bridge = ForumBridge(
-                    bot=self.bot,
-                    managers_group_id=self.config.managers_group_id,
-                )
-                logger.info(
-                    "Forum Topics bridge enabled (managers_group_id=%s)",
-                    self.config.managers_group_id,
-                )
+            logger.info(
+                "Forum Topics bridge enabled (managers_group_id=%s)",
+                self.config.managers_group_id,
+            )
 
-        # Initialize i18n (fluentogram)
-        from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
+    def _setup_workflow_data(self) -> None:
+        """Register runtime services in dp.workflow_data for handler injection."""
+        from .middlewares.i18n import setup_i18n_middleware
 
-        # Register services in dp.workflow_data so all handlers receive them via data dict
         self.dp["user_service"] = self._user_service
         self.dp["pg_pool"] = self._pg_pool
         self.dp["bot_config"] = self.config
@@ -1404,12 +1335,14 @@ class PropertyBot:
         self.dp["embeddings"] = self._hybrid
         self.dp["llm"] = self._llm
 
-        if self._i18n_hub is None:
-            self._i18n_hub = create_translator_hub()
-        setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
-        logger.info("i18n middleware ready")
+        if self._i18n_hub is not None:
+            setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
+            logger.info("i18n middleware ready")
+        else:
+            logger.warning("i18n hub unavailable; running without i18n middleware")
 
-        # Setup aiogram-dialog routers, including the client root shell.
+    def _setup_dialogs(self) -> None:
+        """Include all aiogram-dialog routers and the catch-all query handler."""
         from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
 
         from .dialogs.catalog import catalog_dialog
@@ -1432,9 +1365,7 @@ class PropertyBot:
         self.dp.include_router(viewing_dialog)
         self.dp.include_router(handoff_dialog)
 
-        # Catch-all text handler — AFTER all dialog routers so that dialog
-        # MessageInput (e.g. viewing phone input) is resolved first.
-        # aiogram SDK: handlers match in registration order, first-match wins.
+        # Catch-all text handler — AFTER dialog routers (first-match wins).
         from aiogram import Router as _Router
 
         self._catch_all_router = _Router(name="catch_all_query")
@@ -1448,10 +1379,8 @@ class PropertyBot:
         aiogram_setup_dialogs(self.dp)
         logger.info("aiogram-dialog setup complete")
 
-        # Start Redis health monitor (background task, every 5 min)
-        await self._redis_monitor.start()
-
-        # Register bot commands in Telegram menu
+    async def _setup_bot_commands(self) -> None:
+        """Register bot commands and menu button in Telegram."""
         await self.bot.set_my_commands(
             [
                 BotCommand(command="start", description="Начать работу с ботом"),
@@ -1463,10 +1392,51 @@ class PropertyBot:
                 BotCommand(command="clearcache", description="Очистить кеш Redis"),
             ]
         )
-
         from aiogram.types import MenuButtonCommands
 
         await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+
+    async def _setup_polling_lock(self) -> None:
+        """Acquire Redis polling lock and start heartbeat task."""
+        if self._cache.redis is None:
+            return
+        self._polling_lock = RedisPollingLock(
+            redis=self._cache.redis,
+            key=POLLING_LOCK_KEY,
+        )
+        self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
+        await self._polling_lock.acquire(self._polling_lock_owner)
+        refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
+        self._polling_lock_consecutive_failures = 0
+
+        async def _polling_lock_heartbeat_loop() -> None:
+            while True:
+                await asyncio.sleep(refresh_interval)
+                try:
+                    await self._polling_lock_heartbeat_tick()
+                except Exception:
+                    logger.exception("Polling lock heartbeat loop error")
+
+        self._polling_lock_task = asyncio.create_task(
+            _polling_lock_heartbeat_loop(), name="polling-lock-heartbeat"
+        )
+
+    async def start(self):
+        """Start bot polling."""
+        logger.info("Starting bot...")
+
+        preflight_result, startup_report = await self._setup_preflight()
+        await self._setup_cache()
+        await self._setup_checkpointers(startup_report)
+        await self._setup_postgres(preflight_result, startup_report)
+        await self._setup_bot_identity()
+        self._setup_handoff_services()
+        self._setup_workflow_data()
+        self._setup_dialogs()
+        await self._setup_bot_commands()
+
+        # Start Redis health monitor (background task, every 5 min)
+        await self._redis_monitor.start()
 
         # Warm up BGE-M3 connection pool (#953)
         await self._warmup_bge()
@@ -1478,31 +1448,10 @@ class PropertyBot:
         else:
             logger.info(startup_report.render())
 
-        if self._cache.redis is not None:
-            self._polling_lock = RedisPollingLock(
-                redis=self._cache.redis,
-                key=POLLING_LOCK_KEY,
-            )
-            self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
-            await self._polling_lock.acquire(self._polling_lock_owner)
-            refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
-            self._polling_lock_consecutive_failures = 0
-
-            async def _polling_lock_heartbeat_loop() -> None:
-                while True:
-                    await asyncio.sleep(refresh_interval)
-                    try:
-                        await self._polling_lock_heartbeat_tick()
-                    except Exception:
-                        logger.exception("Polling lock heartbeat loop error")
-
-            self._polling_lock_task = asyncio.create_task(
-                _polling_lock_heartbeat_loop(), name="polling-lock-heartbeat"
-            )
+        await self._setup_polling_lock()
 
         # DEPS-OBS3: in-process Prometheus /metrics is removed. Pipeline
         # counters/latencies are emitted as structured JSON product logs.
-
         try:
             await self.dp.start_polling(self.bot)
         finally:

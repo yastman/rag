@@ -25,7 +25,6 @@ from aiogram_dialog.utils import remove_intent_id
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
-from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
 from telegram_bot.dialogs.filter_constants import (
     AREA_OPTIONS,
     BUDGET_OPTIONS,
@@ -39,9 +38,7 @@ from telegram_bot.dialogs.filter_constants import (
 )
 from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
 from telegram_bot.dialogs.states import CatalogSG, FilterSG
-from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.observability import get_client, mask_pii, observe
-from telegram_bot.services.catalog_rendering import send_catalog_results
 from telegram_bot.services.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
     build_catalog_runtime,
@@ -518,6 +515,8 @@ async def on_apply(
     manager: DialogManager,
 ) -> None:
     """Apply filters and return to the catalog dialog flow."""
+    from telegram_bot.dialogs.catalog import run_catalog_search_and_render
+
     with _start_filter_observation(
         name="dialog-filter-apply",
         manager=manager,
@@ -567,7 +566,6 @@ async def on_apply(
         )
         await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
-        # Show apartment results respecting view mode
         msg = callback.message
         if msg is None or isinstance(msg, InaccessibleMessage):
             _update_filter_observation(
@@ -575,51 +573,25 @@ async def on_apply(
             )
             return
 
-        # Close the filter shell before handing control back to catalog so users
-        # do not interact with a stale filter message after apply.
-        manager.show_mode = ShowMode.NO_UPDATE
-        await manager.done()
-        if hasattr(msg, "delete"):
-            with contextlib.suppress(Exception):
-                await msg.delete()
+        view_mode: str = runtime.get("view_mode", "cards")
+        telegram_id = callback.from_user.id if callback.from_user else 0
 
-        if not results:
-            await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
-            await activate_catalog_state(dialog_manager=manager, state=CatalogSG.empty)
-            _update_filter_observation(
-                observation,
-                manager=manager,
-                action="apply",
-                result_state=CatalogSG.empty.state,
-                result_count=0,
-            )
-            return
-
-        await send_catalog_results(
-            message=msg,
-            property_bot=manager.middleware_data.get("property_bot"),
+        # Shared close→delete→render sequence (also used by FunnelSG).
+        # Observation tracking is done after because the helper closes the dialog.
+        await run_catalog_search_and_render(
+            msg=msg,
+            manager=manager,
+            runtime=runtime,
             results=results,
-            total_count=total_count,
-            view_mode=runtime.get("view_mode", "cards"),
-            shown_start=1,
-            telegram_id=callback.from_user.id if callback.from_user else 0,
-            reply_markup=(
-                build_catalog_keyboard(
-                    shown=len(results),
-                    total=total_count,
-                    i18n=manager.middleware_data.get("i18n"),
-                )
-                if runtime.get("view_mode", "cards") == "list"
-                else None
-            ),
+            property_bot=manager.middleware_data.get("property_bot"),
+            view_mode=view_mode,
+            telegram_id=telegram_id,
         )
-        await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
-        await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
         _update_filter_observation(
             observation,
             manager=manager,
             action="apply",
-            result_state=CatalogSG.results.state,
+            result_state=CatalogSG.empty.state if not results else CatalogSG.results.state,
             result_count=total_count,
         )
 
