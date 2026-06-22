@@ -431,11 +431,10 @@ forbidden_modules = ["archive"]
 # VULTURE CONFIGURATION (Dead-code detection)
 # =============================================================================
 # Moved from Makefile CLI flags so `uv run vulture` picks up config automatically.
-# Whitelist dynamic entry points (handlers, DI hooks, Telegram callbacks) in
-# vulture_whitelist.py at the repo root.
+# Suppress false positives with inline `# noqa: vulture` comments where needed.
 
 [tool.vulture]
-paths = ["src", "telegram_bot", "services", "scripts", "vulture_whitelist.py"]
+paths = ["src", "telegram_bot", "services", "scripts"]
 exclude = [
     ".venv/*",
     "archive/*",
