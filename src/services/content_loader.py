@@ -1,9 +1,8 @@
 """Canonical home for service-content YAML loaders (#1948 slice 3, #2747).
 
-Issue #1948 ("``src/api`` and ``mini_app`` import from ``telegram_bot``")
-flagged that shared modules used by both the bot and the Mini App backend
-sit under ``telegram_bot/``. This file is the canonical home for the
-``services.yaml`` / ``mini_app.yaml`` loaders. The previous module at
+Issue #1948 flagged that shared modules used by both the bot and other
+surfaces sat under ``telegram_bot/``. This file is the canonical home for the
+``services.yaml`` loader. The previous module at
 ``telegram_bot/services/content_loader.py`` is now a thin re-export shim
 that points here, preserving the bot's existing import surface.
 
@@ -11,7 +10,6 @@ Layering rule (enforced by
 ``tests/contract/test_layering_no_telegram_bot_imports_contract.py``
 and ``tests/contract/test_content_loader_path_contract.py``):
 
-  - ``mini_app/`` imports from ``src.services.content_loader``.
   - ``telegram_bot/`` internals may continue to use either path.
 
 YAML payloads live under ``src/config/`` (#2747) so this shared module
@@ -68,10 +66,3 @@ def get_phone_config(service_key: str) -> dict[str, Any] | None:
     if svc:
         return svc
     return get_entry_point_config(service_key)
-
-
-def load_mini_app_config() -> dict[str, Any]:
-    """Load Mini App configuration (questions + experts) from YAML."""
-    path = _CONFIG_DIR / "mini_app.yaml"
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)  # type: ignore[no-any-return]

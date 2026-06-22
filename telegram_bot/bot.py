@@ -1539,11 +1539,6 @@ class PropertyBot:
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
 
-        if self._miniapp_subscriber_task is not None:
-            self._miniapp_subscriber_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._miniapp_subscriber_task
-            self._miniapp_subscriber_task = None
         if self._polling_lock_task is not None:
             self._polling_lock_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -1586,7 +1581,4 @@ class PropertyBot:
         if self._pg_pool is not None:
             await self._pg_pool.close()
             logger.info("PostgreSQL pool closed")
-        if self._deeplink_redis is not None:
-            await self._deeplink_redis.aclose()
-            self._deeplink_redis = None
         await self.bot.session.close()

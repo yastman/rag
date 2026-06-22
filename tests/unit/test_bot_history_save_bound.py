@@ -33,7 +33,6 @@ def _make_bot(*, max_concurrency: int = 32, drain_timeout: float = 0.5) -> Any:
     bot._history_save_tasks = set()
     bot._history_save_max_concurrency = max_concurrency
     bot._history_save_drain_timeout_s = drain_timeout
-    bot._miniapp_subscriber_task = None
     bot._polling_lock_task = None
     bot._polling_lock = None
     bot._polling_lock_owner = None

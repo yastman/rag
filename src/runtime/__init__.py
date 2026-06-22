@@ -5,7 +5,6 @@ This package is the migration target for #1948 (and the related slice in
 
     src/*           — reusable RAG library, no application coupling
     telegram_bot/*  — bot application, consumer of src/*
-    mini_app/*      — Mini App backend, consumer of src/*
 
 Reality on `dev` still has ``src/api/main.py`` importing
 ``telegram_bot.graph.*``, ``telegram_bot.integrations.cache``,
@@ -29,15 +28,13 @@ After each migration slice:
 * ``telegram_bot/`` re-exports the moved symbol from ``src.runtime`` for
   backward compatibility, then is itself updated to import from the new
   location;
-* ``src/api/main.py`` and ``mini_app/*`` are switched to
-  ``from src.runtime.* import ...`` for the same symbol;
 * the corresponding row in ``tests/data/known_layering_violations.json``
   is removed.
 
 The migration slices are tracked as #2045 (phase 1: pure modules),
 #2047 (phase 3: coupled modules), and #2049 (cleanup: drop the
-allowlist and verify Mini App separability). #2046 / #2048 cover the
-parallel ``telegram_bot/bot.py`` decomposition (#1265).
+allowlist). #2046 / #2048 cover the parallel ``telegram_bot/bot.py``
+decomposition (#1265).
 
 Until those slices land, this package exposes nothing — importing it
 just makes the destination directory exist as a Python package so
