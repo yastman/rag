@@ -27,6 +27,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import os
 import re
 import time
 from typing import TYPE_CHECKING, Any
@@ -206,12 +207,7 @@ class CacheLayerManager:
                 self.redis_url,
                 encoding="utf-8",
                 decode_responses=True,
-                # 5 cache tiers can hit the shared pool concurrently under
-                # bursty Telegram load; 50 gives headroom over the previous 20
-                # without exhausting a single Redis instance (#3026). SemanticCache
-                # and EmbeddingsCache reuse this client (async_redis_client below),
-                # so this is the only pool the app opens.
-                max_connections=50,
+                max_connections=int(os.getenv("REDIS_MAX_CONNECTIONS", "50")),
                 socket_connect_timeout=5,
                 socket_timeout=5,
                 retry_on_timeout=True,
@@ -231,8 +227,6 @@ class CacheLayerManager:
 
         # Lazy import vectorizer for semantic cache
         try:
-            import os
-
             from src.services.vectorizers import BgeM3CacheVectorizer
 
             bge_url = os.getenv("BGE_M3_URL", "http://bge-m3:8000")
