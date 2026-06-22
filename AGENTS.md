@@ -92,18 +92,15 @@ always-on steering rule `codeindexer.md` and the
 - Operational runbooks:
   [`docs/runbooks/README.md`](docs/runbooks/README.md)
 
-## Active Product Simplification
+## Product Simplification (Completed Sprint 2026-06-22)
 
-For product simplification, core E2E, Langfuse optionalization, or related
-refactor work, treat these as the source of truth:
+Langfuse was fully removed (no shims, no `@observe` decorators, no residue).
+Module splits completed: `generate_response.py`, `funnel.py`, `filter_dialog.py`,
+`catalog.py`, `preflight.py` — all split into packages. New runtime sub-packages:
+`src/runtime/qdrant/`, `src/runtime/cache/`, `src/runtime/generation/` (expanded).
+Observability is through structured logs and Loki/Promtail.
 
-- [`docs/designs/product-simplification-e2e-plan.md`](docs/designs/product-simplification-e2e-plan.md)
-- [`docs/designs/yaroslav-simplification-workflow.md`](docs/designs/yaroslav-simplification-workflow.md)
-- [`docs/designs/product-simplification-stage-0-decisions.md`](docs/designs/product-simplification-stage-0-decisions.md)
-
-Do not duplicate the plan here. Follow the plan order: Stage 0 docs first, then
-test/logging infrastructure, then one golden live E2E, then runtime
-simplification.
+For ongoing hardening work, see epic #2983.
 
 ## Local Overrides
 
