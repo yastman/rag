@@ -46,10 +46,11 @@ class TestBotHybridSearch:
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_handler"),
             patch.object(PropertyBot, "_register_handlers"),
-            patch("telegram_bot.integrations.cache.CacheLayerManager"),
-            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-            patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
+            patch.object(PropertyBot, "_setup_middlewares"),
+            patch("src.runtime.integrations.cache.CacheLayerManager"),
+            patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("src.runtime.services.qdrant.QdrantService") as mock_qdrant,
             patch("src.runtime.graph.config.GraphConfig.create_llm"),
         ):
             bot = PropertyBot(_make_config())
@@ -69,10 +70,11 @@ class TestBotHybridSearch:
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_handler"),
             patch.object(PropertyBot, "_register_handlers"),
-            patch("telegram_bot.integrations.cache.CacheLayerManager"),
-            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
-            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch.object(PropertyBot, "_setup_middlewares"),
+            patch("src.runtime.integrations.cache.CacheLayerManager"),
+            patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
+            patch("src.runtime.services.qdrant.QdrantService"),
             patch("src.runtime.graph.config.GraphConfig.create_llm"),
         ):
             PropertyBot(_make_config())
@@ -86,10 +88,11 @@ class TestBotHybridSearch:
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_handler"),
             patch.object(PropertyBot, "_register_handlers"),
-            patch("telegram_bot.integrations.cache.CacheLayerManager"),
-            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings") as mock_hybrid,
-            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch.object(PropertyBot, "_setup_middlewares"),
+            patch("src.runtime.integrations.cache.CacheLayerManager"),
+            patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings") as mock_hybrid,
+            patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("src.runtime.services.qdrant.QdrantService"),
             patch("src.runtime.graph.config.GraphConfig.create_llm"),
         ):
             bot = PropertyBot(_make_config())

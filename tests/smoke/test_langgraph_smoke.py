@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.runtime.graph.state import make_initial_state
-from telegram_bot.observability import traced_pipeline
 from telegram_bot.pipelines.graph_compat import build_graph
 
 
@@ -87,12 +86,11 @@ async def test_full_graph_classify_to_respond():
         error_type=None,
     )
 
-    with traced_pipeline(session_id="smoke-test-20260209", user_id="smoke"):
-        with patch(
-            "telegram_bot.pipelines.graph_compat.run_assistant_pipeline",
-            new=AsyncMock(return_value=pipeline_result),
-        ):
-            result = await graph.ainvoke(state)
+    with patch(
+        "telegram_bot.pipelines.graph_compat.run_assistant_pipeline",
+        new=AsyncMock(return_value=pipeline_result),
+    ):
+        result = await graph.ainvoke(state)
 
     # Graph should produce a response
     assert "response" in result
