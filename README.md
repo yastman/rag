@@ -84,6 +84,8 @@ External sidecar services (Docker Compose — **not** part of the Python binary)
 | PostgreSQL | Persistent state (conversation, ingestion tracking) |
 | Docling | Document parsing for ingestion (PDF, etc.) |
 
+The current retrieval profile is `RETRIEVAL_PROFILE=bge_m3_full`: dense + sparse + ColBERT from local BGE-M3. This is a naming anchor documented in `.env.example`; runtime profile switching is a follow-up item.
+
 An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/agents/` for CRM-style workflows (lead scoring, manager handoff, HITL confirmation). It is not required for the core Q&A path.
 
 ## Ingestion

@@ -235,6 +235,7 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     # --- Misc ops vars -----------------------------------------------------
     "LOG_CORRELATION_SOURCE": "Operator-provided log dump path for manual correlation checks; no Python runtime reader",
     "MLFLOW_TRACKING_URI": "Read by mlflow CLI tooling, not the bot",
+    "RETRIEVAL_PROFILE": "Naming anchor for the local BGE-M3 full-output retrieval path (#3018); consumed as a label in docs/tests until a runtime config PR wires it up",
     # --- Evaluation / LLM-as-judge vars ------------------------------------
     "EVAL_LLM_API_KEY": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
     "EVAL_LLM_BASE_URL": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
