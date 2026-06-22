@@ -14,12 +14,12 @@ from typing import Any, Union
 from qdrant_client import QdrantClient, models
 
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
-from src.models import get_bge_m3_model
-from src.retrieval.search_engine_shared import (
+from src.evaluation.retrieval.search_engine_shared import (
     AbstractSearchEngine,
     create_engine_from_registry,
     lexical_weights_to_sparse,
 )
+from src.models import get_bge_m3_model
 from src.utils.serialization import convert_to_python_types
 
 
