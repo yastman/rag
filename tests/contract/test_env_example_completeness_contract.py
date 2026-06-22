@@ -190,6 +190,9 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "USER_CONTEXT_TTL": "User context cache TTL; doc TBD",
     # --- Swarm / Kiro CI controls ------------------------------------------
     "KIRO_STRICT_REPORT": "Swarm worker report contract flag; gates legacy JSON validators in scripts/, not an operator .env.example setting",
+    # --- Langfuse legacy soft-switches (dead after #2969 removal) ----------
+    "ENABLE_LANGFUSE": "Legacy Langfuse kill-switch still read by src/config/settings.py; to be removed in a follow-up cleanup after #2969",
+    "LANGFUSE_TRACING_ENABLED": "Legacy Langfuse tracing toggle still set by src/observability/bootstrap.py; to be removed in a follow-up cleanup after #2969",
 }
 
 # Vars in .env.example but NOT directly read by Python code. These are
@@ -212,6 +215,8 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "NEXTAUTH_SECRET": "Read by Langfuse server image",
     "SALT": "Read by Langfuse server image",
     "ENCRYPTION_KEY": "Read by Langfuse server image",
+    "LANGFUSE_PUBLIC_KEY": "Read by Langfuse server image and compose env_file; Python tracing removed in #2969",
+    "LANGFUSE_SECRET_KEY": "Read by Langfuse server image and compose env_file; Python tracing removed in #2969",
     "LANGFUSE_DOCKER_HOST": "Container-network alias for langfuse; consumed by compose env_file",
     "LANGFUSE_BASE_URL": "Legacy/operator alias documented for Langfuse tooling; not read by simplified Python runtime",
     "LANGFUSE_REDIS_PASSWORD": (
