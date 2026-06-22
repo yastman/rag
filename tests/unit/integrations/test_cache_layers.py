@@ -1254,7 +1254,7 @@ class TestRedisPoolConfig:
 
             call_kwargs = mock_redis.from_url.call_args[1]
             assert "max_connections" in call_kwargs
-            assert call_kwargs["max_connections"] == 20
+            assert call_kwargs["max_connections"] == 50
 
 
 class TestCacheSpanMetadata:

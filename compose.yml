@@ -152,7 +152,10 @@ services:
       UVICORN_HOST: 0.0.0.0
       UVICORN_PORT: 5001
       DOCLING_BACKEND: docling
-      DOCLING_PDF_BACKEND: dlparse_v2
+      # Aligned with DoclingConfig.pdf_backend client default (#3022). The
+      # form-data field still wins at runtime; this keeps the server default
+      # consistent to avoid confusion if the form field is ever dropped.
+      DOCLING_PDF_BACKEND: dlparse_v4
       DOCLING_TABLE_MODE: accurate
     volumes:
       - ./data/docling:/data

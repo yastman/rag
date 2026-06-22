@@ -206,7 +206,12 @@ class CacheLayerManager:
                 self.redis_url,
                 encoding="utf-8",
                 decode_responses=True,
-                max_connections=20,
+                # 5 cache tiers can hit the shared pool concurrently under
+                # bursty Telegram load; 50 gives headroom over the previous 20
+                # without exhausting a single Redis instance (#3026). SemanticCache
+                # and EmbeddingsCache reuse this client (async_redis_client below),
+                # so this is the only pool the app opens.
+                max_connections=50,
                 socket_connect_timeout=5,
                 socket_timeout=5,
                 retry_on_timeout=True,
