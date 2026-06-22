@@ -4,6 +4,7 @@ Public re-exports keep all existing import paths working unchanged.
 """
 
 from ._constants import (
+    _PREF_MS_ID,
     _PROPERTY_TYPE_DISPLAY,
     _SCROLL_PAGE_SIZE,
     _build_funnel_filters,
@@ -47,6 +48,7 @@ from ._windows import funnel_dialog
 
 
 __all__ = [
+    "_PREF_MS_ID",
     "_PROPERTY_TYPE_DISPLAY",
     "_SCROLL_PAGE_SIZE",
     "_build_funnel_filters",
