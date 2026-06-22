@@ -21,8 +21,13 @@ import re
 import sys
 from collections.abc import Mapping
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
+
+
+if TYPE_CHECKING:
+    from qdrant_client.models import BinaryQuantization, ScalarQuantization
 
 from src.ingestion.unified.colbert_backfill import (
     ColbertBackfillRunner,
@@ -329,13 +334,44 @@ async def cmd_schema_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_quantization_config(
+    mode: str = "binary",
+) -> "BinaryQuantization | ScalarQuantization | None":
+    """Return the Qdrant quantization config for the given mode string.
+
+    Supported values: "binary" (default), "scalar", "off".
+    Raises ValueError for unknown values.
+    """
+    from qdrant_client.models import (
+        BinaryQuantization,
+        BinaryQuantizationConfig,
+        ScalarQuantization,
+        ScalarQuantizationConfig,
+        ScalarType,
+    )
+
+    if mode == "binary":
+        return BinaryQuantization(binary=BinaryQuantizationConfig(always_ram=True))
+    if mode == "scalar":
+        return ScalarQuantization(
+            scalar=ScalarQuantizationConfig(
+                type=ScalarType.INT8,
+                quantile=0.99,
+                always_ram=True,
+            )
+        )
+    if mode == "off":
+        return None
+    raise ValueError(
+        f"Invalid QDRANT_QUANTIZATION_MODE={mode!r}. Use 'binary', 'scalar', or 'off'."
+    )
+
+
 async def cmd_bootstrap(args: argparse.Namespace) -> int:
     """Create Qdrant collection if it doesn't exist."""
     from qdrant_client import QdrantClient
     from qdrant_client.http.exceptions import UnexpectedResponse
     from qdrant_client.models import (
-        BinaryQuantization,
-        BinaryQuantizationConfig,
         Distance,
         HnswConfigDiff,
         Modifier,
@@ -399,6 +435,12 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
 
     # Create collection
     print(f"  Creating collection: {collection_name}")
+    quant_mode = os.getenv("QDRANT_QUANTIZATION_MODE", "binary")
+    try:
+        quantization_config = _resolve_quantization_config(quant_mode)
+    except ValueError as exc:
+        print(f"  [FAIL] {exc}")
+        return 1
     client.create_collection(
         collection_name=collection_name,
         vectors_config={
@@ -406,9 +448,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
                 size=dense_dimension,
                 distance=Distance.COSINE,
                 hnsw_config=HnswConfigDiff(m=16, ef_construct=200, on_disk=False),
-                quantization_config=BinaryQuantization(
-                    binary=BinaryQuantizationConfig(always_ram=True)
-                ),
+                quantization_config=quantization_config,
                 on_disk=True,
             ),
             "colbert": VectorParams(
