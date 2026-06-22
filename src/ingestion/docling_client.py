@@ -105,7 +105,15 @@ class DoclingConfig:
     # NOTE: Earlier versions of this client used values like "word" / "huggingface",
     # but the HTTP API does not support those and may return 0 chunks while still
     # responding with HTTP 200.
-    tokenizer: str | None = None
+    # Default to the embedding model's tokenizer so docling chunk boundaries
+    # align with BGE-M3's token budget (max_tokens=512). Overridable via
+    # DOCLING_TOKENIZER; set to "" / "word" / "huggingface" to fall back to the
+    # docling-serve server-side default (#3021).
+    # NOTE: docling-serve must be able to load this HF tokenizer (network or
+    # pre-warmed HF cache) — see services/docling/Dockerfile HF_HOME.
+    tokenizer: str | None = field(
+        default_factory=lambda: os.getenv("DOCLING_TOKENIZER", "BAAI/bge-m3") or None
+    )
     pdf_backend: str = "dlparse_v4"  # Best table parsing (2026)
     table_mode: str = "accurate"  # accurate | fast
     do_ocr: bool = False  # Enable for scanned documents
