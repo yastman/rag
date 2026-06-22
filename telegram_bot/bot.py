@@ -1322,7 +1322,7 @@ class PropertyBot:
 
     def _setup_workflow_data(self) -> None:
         """Register runtime services in dp.workflow_data for handler injection."""
-        from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
+        from .middlewares.i18n import setup_i18n_middleware
 
         self.dp["user_service"] = self._user_service
         self.dp["pg_pool"] = self._pg_pool
@@ -1335,10 +1335,11 @@ class PropertyBot:
         self.dp["embeddings"] = self._hybrid
         self.dp["llm"] = self._llm
 
-        if self._i18n_hub is None:
-            self._i18n_hub = create_translator_hub()
-        setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
-        logger.info("i18n middleware ready")
+        if self._i18n_hub is not None:
+            setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
+            logger.info("i18n middleware ready")
+        else:
+            logger.warning("i18n hub unavailable; running without i18n middleware")
 
     def _setup_dialogs(self) -> None:
         """Include all aiogram-dialog routers and the catch-all query handler."""
