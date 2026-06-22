@@ -11,7 +11,6 @@ from src.observability.scores import (
     compute_checkpointer_overhead_proxy_ms,
     score,
     write_history_scores,
-    write_langfuse_scores,
     write_scores,
 )
 
@@ -20,6 +19,5 @@ __all__ = [
     "compute_checkpointer_overhead_proxy_ms",
     "score",
     "write_history_scores",
-    "write_langfuse_scores",
     "write_scores",
 ]

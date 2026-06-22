@@ -86,7 +86,7 @@ def test_create_bot_agent_passes_checkpointer():
         assert call_kwargs["checkpointer"] is mock_cp
 
 
-def test_create_bot_agent_uses_langfuse_prompt_manager_by_default():
+def test_create_bot_agent_uses_prompt_manager_by_default():
     """Default client role should be resolved via prompt manager with client_agent name."""
     from telegram_bot.agents.agent import create_bot_agent
 

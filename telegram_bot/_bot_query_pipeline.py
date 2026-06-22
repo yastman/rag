@@ -755,17 +755,6 @@ async def _supervisor_run_core(
     return response_text
 
 
-def _supervisor_write_langfuse_scores(
-    bot: PropertyBot,
-    *,
-    role: str,
-    rag_result_store: dict[str, Any],
-    messages: list[Any],
-) -> str:
-    """No-op stub — Langfuse scores removed (#2844). Returns empty trace_id."""
-    return ""
-
-
 async def _supervisor_store_cache_and_trace(
     bot: PropertyBot,
     message: Message,
@@ -844,10 +833,6 @@ async def _supervisor_store_cache_and_trace(
         filter_signature=filter_signature,
         rag_result_store=rag_result_store,
         root_trace_metadata=root_trace_metadata,
-    )
-
-    _supervisor_write_langfuse_scores(
-        bot, role=role, rag_result_store=rag_result_store, messages=messages
     )
 
 

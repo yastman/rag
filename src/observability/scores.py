@@ -19,10 +19,6 @@ def write_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     """No-op stub — Langfuse removed (#2844)."""
 
 
-# Backward-compat alias
-write_langfuse_scores = write_scores
-
-
 def write_history_scores(
     lf: Any,
     trace_id: str,

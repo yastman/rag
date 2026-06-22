@@ -931,12 +931,12 @@ async def test_streaming_uses_send_message_draft() -> None:
 
 
 # ---------------------------------------------------------------------------
-# #1666 — link Langfuse Prompts to generations via langfuse_prompt= kwarg
+# prompt object linking — kwargs must not leak stale provider kwargs
 # ---------------------------------------------------------------------------
 
 
 class _FakePrompt:
-    """Stand-in for a Langfuse-managed Prompt object."""
+    """Stand-in for a managed Prompt object."""
 
     def __init__(self, text: str = "Compiled system prompt", version: int = 7):
         self.compiled_text = text
@@ -948,8 +948,8 @@ class _FakePrompt:
 
 
 @pytest.mark.asyncio
-async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is_none() -> None:
-    """No ``langfuse_prompt`` must be sent when prompt fell back to a hardcoded string (#1666)."""
+async def test_generate_response_does_not_forward_prompt_object_when_none() -> None:
+    """No stale kwargs must be sent when prompt fell back to a hardcoded string (#1666)."""
     config, client = _make_non_streaming_config(answer="Ответ")
     MagicMock()
 
@@ -970,8 +970,8 @@ async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is
 
 
 @pytest.mark.asyncio
-async def test_generate_response_works_when_langfuse_client_unavailable() -> None:
-    """Prompt linking must degrade gracefully when Langfuse client is unavailable."""
+async def test_generate_response_works_when_prompt_object_unavailable() -> None:
+    """Prompt linking must degrade gracefully when prompt object is unavailable."""
     config, client = _make_non_streaming_config(answer="Ответ без tracing")
 
     with patch(
