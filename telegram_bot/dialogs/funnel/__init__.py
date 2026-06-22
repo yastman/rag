@@ -1,0 +1,85 @@
+"""Property search funnel dialog (aiogram-dialog) — #628, refactored #697, split #3035.
+
+Public re-exports keep all existing import paths working unchanged.
+"""
+
+from ._constants import (
+    _PROPERTY_TYPE_DISPLAY,
+    _SCROLL_PAGE_SIZE,
+    _build_funnel_filters,
+    _compute_active_pref_categories,
+    build_funnel_filters,
+    format_apartment_list,
+)
+from ._getters import (
+    get_budget_options,
+    get_change_filter_options,
+    get_city_options,
+    get_pref_area_options,
+    get_pref_complex_options,
+    get_pref_floor_options,
+    get_pref_furnished_options,
+    get_pref_promotion_options,
+    get_pref_section_options,
+    get_pref_view_options,
+    get_preferences_options,
+    get_property_types,
+    get_summary_data,
+)
+from ._handlers import (
+    on_budget_selected,
+    on_change_filter_selected,
+    on_city_selected,
+    on_pref_area_selected,
+    on_pref_category_selected,
+    on_pref_complex_selected,
+    on_pref_done,
+    on_pref_floor_selected,
+    on_pref_furnished_selected,
+    on_pref_promotion_selected,
+    on_pref_section_selected,
+    on_pref_view_selected,
+    on_property_type_selected,
+    on_summary_search,
+    on_zero_suggestion_selected,
+)
+from ._windows import funnel_dialog
+
+
+__all__ = [
+    "_PROPERTY_TYPE_DISPLAY",
+    "_SCROLL_PAGE_SIZE",
+    "_build_funnel_filters",
+    "_compute_active_pref_categories",
+    "build_funnel_filters",
+    "format_apartment_list",
+    "funnel_dialog",
+    "get_budget_options",
+    "get_change_filter_options",
+    "get_city_options",
+    "get_pref_area_options",
+    "get_pref_complex_options",
+    "get_pref_floor_options",
+    "get_pref_furnished_options",
+    "get_pref_promotion_options",
+    "get_pref_section_options",
+    "get_pref_view_options",
+    "get_preferences_options",
+    "get_property_types",
+    "get_summary_data",
+    "on_budget_selected",
+    "on_change_filter_selected",
+    "on_city_selected",
+    "on_pref_area_selected",
+    "on_pref_category_selected",
+    "on_pref_complex_selected",
+    "on_pref_done",
+    "on_pref_floor_selected",
+    "on_pref_furnished_selected",
+    "on_pref_promotion_selected",
+    "on_pref_section_selected",
+    "on_pref_view_selected",
+    "on_property_type_selected",
+    "on_summary_search",
+    "on_zero_suggestion_selected",
+]
