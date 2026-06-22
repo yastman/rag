@@ -36,9 +36,7 @@ SCAN_DIRS = [
 # httpx.AsyncClient. Removing or rewriting them requires deciding
 # whether to drop sync support or build a tested sync-async boundary
 # that does not break shared async resources. Tracked under #1639.
-ALLOWLIST: dict[str, set[int]] = {
-    "src/runtime/integrations/embeddings.py": {52, 55, 151, 154},
-}
+ALLOWLIST: dict[str, set[int]] = {}
 
 
 def _iter_python_files(directories: list[Path]) -> list[Path]:
