@@ -115,3 +115,8 @@ bug_classes:
     description: should_process + mark_processing was a non-atomic read-then-write; two workers could claim the same file for ingestion simultaneously
     canonical_issue: "#2941"
     guardrail: "tests/unit/ingestion/test_state_manager_reliability.py::TestAtomicClaim — claim_processing uses single UPDATE ... WHERE status NOT IN (...) RETURNING"
+
+  - id: god-file-decompose
+    description: bot.py god-file with high CC (258) and 80 symbols decomposed into focused modules — start() lifecycle, build_services DI factory, voice handler extraction, FunnelSG/FilterSG deduplication
+    canonical_issue: "#2948"
+    guardrail: "make test-core passes; all Telegram handler registrations intact; bot.py line count reduced by ≥400 vs pre-#3000 baseline"
