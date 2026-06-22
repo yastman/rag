@@ -40,7 +40,7 @@ EXPECTED_INDEXES = {
 def main() -> int:
     url = f"{QDRANT_URL}/collections/{COLLECTION}"
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
+        with urllib.request.urlopen(url, timeout=10) as resp:  # nosec B310 — URL is from env (QDRANT_URL), not user input
             data = json.loads(resp.read())
     except Exception as exc:
         print(f"FAIL: could not reach Qdrant at {url}: {exc}", file=sys.stderr)
