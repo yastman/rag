@@ -97,6 +97,124 @@ async def _lookup_search_cache(
     }
 
 
+async def _resolve_bundle_cache(
+    query: str,
+    *,
+    cache: Any,
+    pre_computed_embedding: list[float] | None,
+) -> Any:
+    """Try to load a full BGE-M3 vector bundle from cache (#1493).
+
+    Returns the bundle on hit, None on miss or when pre_computed_embedding is set
+    (pre-computed path skips the bundle lookup entirely).
+    """
+    if pre_computed_embedding is not None:
+        return None
+    if not callable(getattr(cache, "get_bge_m3_query_bundle", None)):
+        return None
+    try:
+        maybe = await cache.get_bge_m3_query_bundle(query)
+        if maybe is not None and hasattr(maybe, "dense") and isinstance(maybe.dense, list):
+            return maybe
+    except Exception:
+        logger.debug("Bundle cache check failed (non-critical), skipping")
+    return None
+
+
+async def _resolve_embeddings(
+    query: str,
+    *,
+    cache: Any,
+    embeddings: Any,
+    pre_computed_embedding: list[float] | None,
+    pre_computed_sparse: Any,
+    pre_computed_colbert: list[list[float]] | None,
+) -> tuple[list[float] | None, Any, list[list[float]] | None, bool, str | None]:
+    """Compute or retrieve dense+sparse+colbert embeddings.
+
+    Returns (embedding, sparse, colbert_query, embeddings_cache_hit, error_type).
+    error_type is non-None when embedding computation failed.
+    """
+    if pre_computed_embedding:
+        logger.debug(
+            "_cache_check: reusing pre-computed embedding (%d dims)",
+            len(pre_computed_embedding),
+        )
+    try:
+        embedding, sparse, colbert_query, embeddings_cache_hit = await compute_query_embedding(
+            query,
+            cache=cache,
+            embeddings=embeddings,
+            pre_computed=pre_computed_embedding,
+            pre_computed_sparse=pre_computed_sparse,
+            pre_computed_colbert=pre_computed_colbert,
+        )
+        return embedding, sparse, colbert_query, embeddings_cache_hit, None
+    except Exception as exc:
+        error_type = type(exc).__name__
+        logger.error("Embedding failed: %s: %s", error_type, exc)
+        return None, None, None, False, error_type
+
+
+async def _resolve_colbert_on_miss(
+    query: str,
+    embedding: list[float] | None,
+    sparse: Any,
+    *,
+    cache: Any,
+    embeddings: Any,
+    pre_computed_sparse: Any,
+) -> tuple[list[list[float]] | None, Any]:
+    """Compute ColBERT vectors after a semantic-cache miss (lazy, avoids cost on hits).
+
+    Also fills in sparse vectors and stores the full bundle when possible (#1493).
+    Returns (colbert_query, sparse) — sparse may be updated if hybrid call provides it.
+    """
+    _has_hybrid_colbert = callable(
+        getattr(embeddings, "aembed_hybrid_with_colbert", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+    _has_colbert_only = callable(
+        getattr(embeddings, "aembed_colbert_query", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
+
+    colbert_query: list[list[float]] | None = None
+
+    if _has_hybrid_colbert:
+        try:
+            _, sparse_from_hybrid, colbert_query = await embeddings.aembed_hybrid_with_colbert(
+                query
+            )
+            if sparse is None and sparse_from_hybrid is not None:
+                sparse = sparse_from_hybrid
+                if not pre_computed_sparse:
+                    await cache.store_sparse_embedding(query, sparse_from_hybrid)
+            # Store full bundle for future requests (#1493)
+            _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
+            if (
+                _has_bundle_cache
+                and embedding is not None
+                and sparse is not None
+                and colbert_query is not None
+            ):
+                try:
+                    bundle_cls = _bge_m3_query_bundle_cls()
+                    await cache.store_bge_m3_query_bundle(
+                        query,
+                        bundle_cls(dense=embedding, sparse=sparse, colbert=colbert_query),
+                    )
+                except Exception:
+                    logger.debug("Bundle store failed (non-critical), skipping")
+        except Exception:
+            logger.debug("ColBERT query encode failed (non-critical), skipping")
+    elif _has_colbert_only:
+        try:
+            colbert_query = await embeddings.aembed_colbert_query(query)
+        except Exception:
+            logger.debug("ColBERT query encode failed (non-critical), skipping")
+
+    return colbert_query, sparse
+
+
 async def _cache_check(
     query: str,
     query_type: str,
@@ -118,48 +236,34 @@ async def _cache_check(
     Returns dict with cache_hit, cached_response, query_embedding, sparse_embedding,
     colbert_query, and latency.
     """
-
     start = time.perf_counter()
 
-    # Try bundle cache first (avoids redundant BGE-M3 calls when full bundle is cached #1493)
-    bundle = None
-    _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
-    if _has_bundle_cache and pre_computed_embedding is None:
-        try:
-            maybe_bundle = await cache.get_bge_m3_query_bundle(query)
-            if (
-                maybe_bundle is not None
-                and hasattr(maybe_bundle, "dense")
-                and isinstance(maybe_bundle.dense, list)
-            ):
-                bundle = maybe_bundle
-        except Exception:
-            logger.debug("Bundle cache check failed (non-critical), skipping")
-
+    # Stage A: Try full bundle cache (avoids redundant BGE-M3 calls #1493)
+    bundle = await _resolve_bundle_cache(
+        query, cache=cache, pre_computed_embedding=pre_computed_embedding
+    )
     if bundle is not None:
-        embedding = bundle.dense
-        sparse = bundle.sparse
-        colbert_query = bundle.colbert
+        embedding: list[float] | None = bundle.dense
+        sparse: Any = bundle.sparse
+        colbert_query: list[list[float]] | None = bundle.colbert
         embeddings_cache_hit = True
     else:
-        # Step 1: Get or compute dense embedding via shared core
-        if pre_computed_embedding:
-            logger.debug(
-                "_cache_check: reusing pre-computed embedding (%d dims)",
-                len(pre_computed_embedding),
-            )
-        try:
-            embedding, sparse, colbert_query, embeddings_cache_hit = await compute_query_embedding(
-                query,
-                cache=cache,
-                embeddings=embeddings,
-                pre_computed=pre_computed_embedding,
-                pre_computed_sparse=pre_computed_sparse,
-                pre_computed_colbert=pre_computed_colbert,
-            )
-        except Exception as exc:
-            embedding_error_type = type(exc).__name__
-            logger.error("Embedding failed: %s: %s", embedding_error_type, exc)
+        # Stage B: Compute/retrieve dense+sparse embeddings
+        (
+            embedding,
+            sparse,
+            colbert_query,
+            embeddings_cache_hit,
+            error_type,
+        ) = await _resolve_embeddings(
+            query,
+            cache=cache,
+            embeddings=embeddings,
+            pre_computed_embedding=pre_computed_embedding,
+            pre_computed_sparse=pre_computed_sparse,
+            pre_computed_colbert=pre_computed_colbert,
+        )
+        if error_type is not None:
             latency = time.perf_counter() - start
             return {
                 "cache_hit": False,
@@ -168,21 +272,24 @@ async def _cache_check(
                 "sparse_embedding": None,
                 "embeddings_cache_hit": False,
                 "embedding_error": True,
-                "embedding_error_type": embedding_error_type,
+                "embedding_error_type": error_type,
                 "error_response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
                 "colbert_query": None,
                 "latency_stages": {**latency_stages, "cache_check": latency},
             }
 
-    # Step 2: Check semantic cache via shared core
+    # Stage C: Check semantic cache
     contextual_query = is_contextual_query(query)
-    if (
+    skip_semantic = (
         semantic_cache_already_checked
         or contextual_query
         or (semantic_cache_filter_sensitive and semantic_cache_filter_signature is None)
-    ):
+        or embedding is None
+    )
+    if skip_semantic:
         hit, cached = False, None
     else:
+        assert embedding is not None  # narrowed: error path already returned above
         hit, cached = await check_semantic_cache(
             query,
             embedding,
@@ -208,50 +315,16 @@ async def _cache_check(
             "latency_stages": {**latency_stages, "cache_check": latency},
         }
 
-    # ColBERT query vectors are only needed on semantic miss.
+    # Stage D: Compute ColBERT vectors on miss (lazy — skipped on cache hits)
     if colbert_query is None:
-        _has_hybrid_colbert = callable(
-            getattr(embeddings, "aembed_hybrid_with_colbert", None)
-        ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
-        _has_colbert_only = callable(
-            getattr(embeddings, "aembed_colbert_query", None)
-        ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
-
-        if _has_hybrid_colbert:
-            try:
-                _, sparse_from_hybrid, colbert_query = await embeddings.aembed_hybrid_with_colbert(
-                    query
-                )
-                if sparse is None and sparse_from_hybrid is not None:
-                    sparse = sparse_from_hybrid
-                    if not pre_computed_sparse:
-                        await cache.store_sparse_embedding(query, sparse_from_hybrid)
-                # Store full bundle for future requests (#1493)
-                if (
-                    _has_bundle_cache
-                    and embedding is not None
-                    and sparse is not None
-                    and colbert_query is not None
-                ):
-                    try:
-                        bundle_cls = _bge_m3_query_bundle_cls()
-                        await cache.store_bge_m3_query_bundle(
-                            query,
-                            bundle_cls(
-                                dense=embedding,
-                                sparse=sparse,
-                                colbert=colbert_query,
-                            ),
-                        )
-                    except Exception:
-                        logger.debug("Bundle store failed (non-critical), skipping")
-            except Exception:
-                logger.debug("ColBERT query encode failed (non-critical), skipping")
-        elif _has_colbert_only:
-            try:
-                colbert_query = await embeddings.aembed_colbert_query(query)
-            except Exception:
-                logger.debug("ColBERT query encode failed (non-critical), skipping")
+        colbert_query, sparse = await _resolve_colbert_on_miss(
+            query,
+            embedding,
+            sparse,
+            cache=cache,
+            embeddings=embeddings,
+            pre_computed_sparse=pre_computed_sparse,
+        )
 
     logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
     return {
