@@ -50,7 +50,7 @@ class QdrantService:
         sparse_vector_name: str = "bm42",
         quantization_mode: str = "off",
         timeout: int = 30,
-        prefer_grpc: bool = True,
+        prefer_grpc: bool = False,
     ):
         """Initialize Qdrant service.
 
@@ -62,7 +62,8 @@ class QdrantService:
             sparse_vector_name: Name of sparse vector field
             quantization_mode: One of 'off', 'scalar', 'binary' - controls collection suffix
             timeout: Connection timeout in seconds (default 30)
-            prefer_grpc: Whether the SDK should prefer gRPC transport
+            prefer_grpc: Whether the SDK should prefer gRPC transport (default False — gRPC
+                port 6334 is not exposed in compose; REST on 6333 is always used)
         """
         # Strip api_key for http:// to avoid "insecure connection" warning (#570)
         scheme = urlparse(url).scheme.lower()
@@ -70,7 +71,8 @@ class QdrantService:
         self._client = AsyncQdrantClient(
             url=url,
             api_key=effective_api_key,
-            # Default remains prefer_grpc=True; see grpcio audit contract (#2241).
+            # prefer_grpc=False: gRPC port 6334 not exposed in compose; REST is always used.
+            # To enable gRPC, expose port 6334 and pass grpc_port=6334 explicitly (#3023).
             prefer_grpc=prefer_grpc,
             timeout=timeout,
         )

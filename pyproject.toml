@@ -186,7 +186,6 @@ constraint-dependencies = [
     "propcache>=0.5.2",
     "protobuf>=6.33.6",
     "pytest-asyncio>=1.4.0",
-    "redisvl>=0.18.2",
     "regex>=2026.5.9",
     "rich>=15.0.0",
     "rpds-py>=2026.5.1",
