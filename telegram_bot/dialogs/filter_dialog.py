@@ -25,6 +25,7 @@ from aiogram_dialog.utils import remove_intent_id
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
+from telegram_bot.dialogs.catalog import run_catalog_search_and_render
 from telegram_bot.dialogs.filter_constants import (
     AREA_OPTIONS,
     BUDGET_OPTIONS,
@@ -38,7 +39,6 @@ from telegram_bot.dialogs.filter_constants import (
 )
 from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
 from telegram_bot.dialogs.states import CatalogSG, FilterSG
-from telegram_bot.dialogs.catalog import run_catalog_search_and_render
 from telegram_bot.observability import mask_pii
 from telegram_bot.services.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
@@ -474,7 +474,6 @@ async def on_apply(
     manager: DialogManager,
 ) -> None:
     """Apply filters and return to the catalog dialog flow."""
-    from telegram_bot.dialogs.catalog import run_catalog_search_and_render
 
     with _start_filter_observation(
         name="dialog-filter-apply",

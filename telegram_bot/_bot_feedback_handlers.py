@@ -47,20 +47,6 @@ if TYPE_CHECKING:  # pragma: no cover — typing-only
 logger = logging.getLogger(__name__)
 
 
-def _get_langfuse_client() -> Any:
-    """Resolve ``get_langfuse_client`` via ``telegram_bot.bot`` module.
-
-    Existing tests patch ``telegram_bot.bot.get_langfuse_client`` directly
-    (``patch.object(bot_module, "get_langfuse_client", ...)``). Looking the
-    function up through the bot module preserves that patch contract after
-    the PR-9a extraction. The lazy import is also necessary to avoid a
-    circular import: ``bot.py`` imports this helper module at startup.
-    """
-    from telegram_bot import bot as _bot_module
-
-    return _bot_module.get_langfuse_client()
-
-
 # Time-to-live for the post-feedback confirmation keyboard before it is
 # cleared. Mirrors the ``_FEEDBACK_CONFIRMATION_TTL_S`` constant in
 # ``bot.py`` so the two callsites stay aligned without an extra import.
@@ -101,10 +87,8 @@ async def handle_feedback(
             except Exception:
                 logger.debug("Failed to show dislike reason keyboard", exc_info=True)
             return
-        # "like" action: write score below
+        # "like" action: acknowledge below
         value: float = 1.0
-        trace_id: str = callback_data.trace_id
-        reason: str | None = None
     else:
         # Legacy fallback (tests and old-format buttons: fb:1/0:, fb:r:)
         data = callback.data or ""
@@ -130,32 +114,8 @@ async def handle_feedback(
                 logger.debug("Failed to show dislike reason keyboard", exc_info=True)
             return
 
-    # Write score (like, or legacy reason path)
+    # Feedback acknowledged (Langfuse scoring removed in #2844, #2969).
     await callback.answer("Спасибо за отзыв!")
-    user_id = callback.from_user.id if callback.from_user else 0
-
-    try:
-        lf_client = _get_langfuse_client()
-        if lf_client is not None:
-            lf_client.create_score(
-                trace_id=trace_id,
-                name="user_feedback",
-                value=value,
-                data_type="NUMERIC",
-                comment=f"user_id:{user_id}",
-                score_id=f"{trace_id}-user_feedback",
-            )
-            if reason is not None:
-                lf_client.create_score(
-                    trace_id=trace_id,
-                    name="user_feedback_reason",
-                    value=reason,
-                    data_type="CATEGORICAL",
-                    comment=f"user_id:{user_id}",
-                    score_id=f"{trace_id}-user_feedback_reason",
-                )
-    except Exception:
-        logger.warning("Failed to write feedback score to Langfuse", exc_info=True)
 
     # Update keyboard to confirmation
     liked = value > 0
@@ -184,31 +144,7 @@ async def handle_feedback_reason(
         await callback.answer()
         return
 
-    trace_id = callback_data.trace_id
     await callback.answer("Спасибо за отзыв!")
-    user_id = callback.from_user.id if callback.from_user else 0
-
-    try:
-        lf_client = _get_langfuse_client()
-        if lf_client is not None:
-            lf_client.create_score(
-                trace_id=trace_id,
-                name="user_feedback",
-                value=0.0,
-                data_type="NUMERIC",
-                comment=f"user_id:{user_id}",
-                score_id=f"{trace_id}-user_feedback",
-            )
-            lf_client.create_score(
-                trace_id=trace_id,
-                name="user_feedback_reason",
-                value=reason,
-                data_type="CATEGORICAL",
-                comment=f"user_id:{user_id}",
-                score_id=f"{trace_id}-user_feedback_reason",
-            )
-    except Exception:
-        logger.warning("Failed to write feedback reason score to Langfuse", exc_info=True)
 
     try:
         msg = callback.message

@@ -82,8 +82,6 @@ from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
-    create_callback_handler,
-    get_langfuse_client,  # noqa: F401 — re-export kept so legacy tests can patch telegram_bot.bot.get_langfuse_client (#2048 PR-9a)
     propagate_attributes,
 )
 from .services.forum_bridge import ForumBridge
@@ -1053,8 +1051,7 @@ class PropertyBot:
             user_id=str(user_id),
             tags=["telegram", "menu", "agent"],
         ):
-            langfuse_handler = create_callback_handler()
-            callbacks = [langfuse_handler] if langfuse_handler else []
+            callbacks: list[Any] = []
             async with ChatActionSender.typing(bot=bot, chat_id=chat_id):  # type: ignore[arg-type]
                 result = await self._ainvoke_supervisor_with_recovery(
                     agent=agent,

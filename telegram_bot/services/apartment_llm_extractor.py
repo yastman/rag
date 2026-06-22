@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import Any, cast
 
@@ -11,7 +10,6 @@ from src.models.apartment import (
     HardFilters,
 )
 from src.runtime.integrations.prompt_manager import get_prompt, get_prompt_with_object
-from telegram_bot.observability import get_client
 
 
 logger = logging.getLogger(__name__)
@@ -121,13 +119,9 @@ class ApartmentLlmExtractor:
 
         source = "hybrid" if partial_filters else "llm"
 
-        # Fetch the prompt + raw Prompt object so we can link the generation
-        # observation to Prompt Management (#1666). LiteLLM routing is the only
-        # chat path; prompt linking remains best-effort observability metadata.
-        system_prompt, prompt_obj = _get_system_prompt_with_object()
-        if prompt_obj is not None:
-            with contextlib.suppress(Exception):
-                get_client().update_current_generation(prompt=prompt_obj)
+        # Fetch the prompt + raw Prompt object (prompt-linking is inert after
+        # Langfuse removal in #2844; prompt_obj is retained for the call shape).
+        system_prompt, _prompt_obj = _get_system_prompt_with_object()
 
         messages = [
             {"role": "system", "content": system_prompt + context},

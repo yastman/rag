@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
-import hashlib
 import inspect
 import logging
 import re
@@ -32,7 +31,6 @@ from src.runtime.integrations.prompt_templates import (
 from src.runtime.services.coverage_mode import detect_coverage_mode
 from src.runtime.services.metrics import PipelineMetrics
 from src.runtime.services.response_style_detector import ResponseStyleDetector
-from telegram_bot.observability import get_client
 from telegram_bot.services.telegram_formatting import (
     build_reply_parameters,
     format_answer_html,
@@ -329,20 +327,6 @@ def _extract_usage_details(usage: Any | None) -> dict[str, int] | None:
     return details or None
 
 
-def _update_current_span(lf_client: Any | None, **kwargs: Any) -> None:
-    """Update the current Langfuse span when tracing is available."""
-    if lf_client is not None:
-        with contextlib.suppress(Exception):
-            lf_client.update_current_span(**kwargs)
-
-
-def _update_current_generation(lf_client: Any | None, **kwargs: Any) -> None:
-    """Update the current Langfuse generation when tracing is available."""
-    if lf_client is not None:
-        with contextlib.suppress(Exception):
-            lf_client.update_current_generation(**kwargs)
-
-
 def _select_recent_history(
     messages: list[Any], max_messages: int = _MAX_HISTORY_MESSAGES
 ) -> list[Any]:
@@ -394,8 +378,7 @@ async def _chat_create_with_optional_name(
     if getattr(llm, "_langfuse_auto_trace", True) is False:
         # Plain client created via GraphConfig.create_llm(auto_trace=False).
         # Skip both Langfuse-specific kwargs to avoid a needless TypeError →
-        # retry round-trip on every call. Generation linking for these clients
-        # happens via _update_current_generation(lf_client, prompt=...) in caller.
+        # retry round-trip on every call.
         kwargs.pop("langfuse_prompt", None)
         return await create_fn(**kwargs)
     try:
@@ -421,7 +404,6 @@ async def _chat_create_with_optional_name(
 def _build_streaming_request(
     llm_messages: list[dict[str, str]],
     config: Any,
-    lf_client: Any | None,
     sanitize_response: Callable[[str], str] | None,
 ) -> GenerationRequest:
     """Build a GenerationRequest from llm_messages when no request is provided."""
@@ -442,7 +424,6 @@ def _build_streaming_request(
         documents=[],
         config=config,
         extra_kwargs={
-            "lf_client": lf_client,
             "sanitize_response": sanitize_response,
         },
     )
@@ -517,10 +498,8 @@ async def _generate_streaming(
     llm_messages: list[dict[str, str]],
     message: Any,
     max_tokens: int = 0,
-    lf_client: Any | None = None,
     temperature: float = 0.7,
     sanitize_response: Callable[[str], str] | None = None,
-    langfuse_prompt: Any | None = None,
     *,
     request: GenerationRequest | None = None,
 ) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
@@ -529,7 +508,7 @@ async def _generate_streaming(
     Sends draft updates as chunks arrive, then finalizes with message.answer().
     """
     if request is None:
-        request = _build_streaming_request(llm_messages, config, lf_client, sanitize_response)
+        request = _build_streaming_request(llm_messages, config, sanitize_response)
 
     accumulated = ""
     last_draft = 0.0
@@ -538,8 +517,6 @@ async def _generate_streaming(
     draft_id = _make_draft_id(chat_id)
 
     metadata_out: dict[str, Any] = {}
-    if langfuse_prompt is not None and "lf_client" not in request.extra_kwargs:
-        request.extra_kwargs["lf_client"] = lf_client
 
     try:
         stream_gen = generate_answer_stream(request, metadata_out)
@@ -818,7 +795,6 @@ async def _run_stream_with_recovery(
     ctx: _StreamingContext,
     config: Any,
     message: Any,
-    lf_client: Any | None,
     build_fallback_response: Callable[[list[dict[str, Any]]], str],
     generate_streaming: Callable[..., Any],
 ) -> _StreamResult:
@@ -840,8 +816,6 @@ async def _run_stream_with_recovery(
         params = inspect.signature(generate_streaming).parameters
         if "request" in params:
             stream_kwargs["request"] = req
-        if "lf_client" in params:
-            stream_kwargs["lf_client"] = lf_client
         if "temperature" in params:
             stream_kwargs["temperature"] = ctx.effective_temperature
         if "sanitize_response" in params:
@@ -968,11 +942,6 @@ async def _run_stream_with_recovery(
                 )
             else:
                 logger.exception("generate_response: LLM call failed, using fallback")
-            _update_current_span(
-                lf_client,
-                level="ERROR",
-                status_message=f"LLM failed: {str(e)[:200]}",
-            )
             answer = build_fallback_response(ctx.docs)
             actual_model = "fallback"
             ttft_ms = 0.0
@@ -997,75 +966,12 @@ async def _run_stream_with_recovery(
     )
 
 
-def _emit_generation_span(
-    *,
-    ctx: _StreamingContext,
-    sr: _StreamResult,
-    elapsed_ms: float,
-    retrieved_context: list[dict[str, Any]] | None,
-    lf_client: Any | None,
-) -> None:
-    """Update Langfuse generation and span output."""
-    if sr.actual_model != "fallback":
-        generation_payload: dict[str, Any] = {"model": sr.actual_model}
-        if sr.usage_details:
-            generation_payload["usage_details"] = sr.usage_details
-        elif sr.completion_tokens is not None:
-            generation_payload["usage_details"] = {"output": int(sr.completion_tokens)}
-        if ctx.prompt_obj is not None:
-            generation_payload["prompt"] = ctx.prompt_obj
-        with contextlib.suppress(Exception):
-            _update_current_generation(lf_client, **generation_payload)
-
-    retrieved_ctx = retrieved_context or []
-    eval_context = "\n\n".join(
-        f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
-        for d in retrieved_ctx[:5]
-        if isinstance(d, dict)
-    )
-    span_output: dict[str, Any] = {
-        "response_length": len(sr.answer),
-        "llm_provider_model": sr.actual_model,
-        "llm_ttft_ms": sr.ttft_ms if sr.ttft_ms > 0 else None,
-        "llm_stream_only_ttft_ms": sr.stream_only_ttft_ms,
-        "llm_response_duration_ms": round(elapsed_ms, 1),
-        "fallback_used": sr.actual_model == "fallback",
-        "response_sent": sr.response_sent,
-        "eval_query": ctx.effective_query[:2000],
-        "eval_answer": sr.answer[:3000],
-        "eval_context": eval_context,
-        "needs_coverage": ctx.effective_needs_coverage,
-        "coverage_mode": "exhaustive_list" if ctx.effective_needs_coverage else "default",
-        "coverage_reason": ctx.coverage_decision.reason
-        or ("state:needs_coverage" if ctx.effective_needs_coverage else None),
-        "prompt_name": ctx.prompt_name
-        if ctx.effective_needs_coverage or ctx.style_enabled
-        else "generate",
-        "documents_count": len(ctx.docs),
-        "distinct_doc_count": len(
-            {
-                str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
-                for doc in ctx.docs
-            }
-        ),
-    }
-    if sr.usage_details:
-        span_output["token_usage"] = {
-            "prompt_tokens": sr.usage_details.get("input"),
-            "completion_tokens": sr.usage_details.get("output"),
-            "total_tokens": sr.usage_details.get("total"),
-        }
-    _update_current_span(lf_client, output=span_output)
-
-
 def _compute_latency_metrics(
     *,
     sr: _StreamResult,
     elapsed_ms: float,
-    config: Any,
-    lf_client: Any | None,
 ) -> tuple[float | None, float | None, float | None]:
-    """Return (llm_decode_ms, llm_tps, llm_ttft_drift_ms) and warn on drift."""
+    """Return (llm_decode_ms, llm_tps, llm_ttft_drift_ms)."""
     llm_decode_ms: float | None = elapsed_ms - sr.ttft_ms if sr.ttft_ms > 0 else None
     if llm_decode_ms is not None and llm_decode_ms < 0:
         llm_decode_ms = 0.0
@@ -1077,17 +983,6 @@ def _compute_latency_metrics(
         if (sr.stream_only_ttft_ms is not None and sr.ttft_ms > 0)
         else None
     )
-    if llm_ttft_drift_ms is not None:
-        threshold = getattr(config, "ttft_drift_warn_ms", None)
-        if not isinstance(threshold, (int, float)):
-            threshold = 500
-        if llm_ttft_drift_ms > threshold:
-            with contextlib.suppress(Exception):
-                _update_current_span(
-                    lf_client,
-                    level="WARNING",
-                    status_message=f"TTFT drift detected: {llm_ttft_drift_ms:.1f}ms",
-                )
     return llm_decode_ms, llm_tps, llm_ttft_drift_ms
 
 
@@ -1096,26 +991,16 @@ def _build_generation_signal(
     ctx: _StreamingContext,
     sr: _StreamResult,
     t0: float,
-    retrieved_context: list[dict[str, Any]] | None,
     latency_stages: dict[str, float] | None,
     llm_call_count: int,
     grounding_mode: str,
-    config: Any,
-    lf_client: Any | None,
     extract_sent_message_ref: Callable[[Any], dict[str, int] | None],
 ) -> dict[str, Any]:
-    """Stage 3: Compute metrics, update spans, build and return result dict."""
+    """Stage 3: Compute metrics, build and return result dict."""
     elapsed = time.monotonic() - t0
     PipelineMetrics.get().record("generate", elapsed * 1000)
-    _emit_generation_span(
-        ctx=ctx,
-        sr=sr,
-        elapsed_ms=elapsed * 1000,
-        retrieved_context=retrieved_context,
-        lf_client=lf_client,
-    )
     llm_decode_ms, llm_tps, llm_ttft_drift_ms = _compute_latency_metrics(
-        sr=sr, elapsed_ms=elapsed * 1000, config=config, lf_client=lf_client
+        sr=sr, elapsed_ms=elapsed * 1000
     )
     answer_words = len(sr.answer.split())
     answer_chars = len(sr.answer)
@@ -1175,7 +1060,6 @@ async def _generate_streaming_response(
     query: str,
     needs_coverage: bool,
     documents: list[dict[str, Any]],
-    retrieved_context: list[dict[str, Any]] | None,
     raw_messages: list[Any] | None,
     latency_stages: dict[str, float] | None,
     llm_call_count: int,
@@ -1183,7 +1067,6 @@ async def _generate_streaming_response(
     grade_confidence: float | None,
     message: Any,
     config: Any,
-    lf_client: Any | None,
     max_context_docs: int,
     format_context: Callable[..., str],
     select_recent_history: Callable[[list[Any], int], list[Any]],
@@ -1217,26 +1100,11 @@ async def _generate_streaming_response(
         style_token_limit=style_token_limit,
         citation_instruction=citation_instruction,
     )
-    _update_current_span(
-        lf_client,
-        input={
-            "query_preview": ctx.effective_query[:120],
-            "query_len": len(ctx.effective_query),
-            "query_hash": hashlib.sha256(ctx.effective_query.encode()).hexdigest()[:8],
-            "context_docs_count": len(ctx.docs),
-            "streaming_enabled": True,
-            "grounding_mode": grounding_mode,
-            "needs_coverage": ctx.effective_needs_coverage,
-            "coverage_reason": ctx.coverage_decision.reason
-            or ("state:needs_coverage" if ctx.effective_needs_coverage else None),
-        },
-    )
     sr = await _run_stream_with_recovery(
         req=req,
         ctx=ctx,
         config=config,
         message=message,
-        lf_client=lf_client,
         build_fallback_response=build_fallback_response,
         generate_streaming=generate_streaming,
     )
@@ -1244,12 +1112,9 @@ async def _generate_streaming_response(
         ctx=ctx,
         sr=sr,
         t0=t0,
-        retrieved_context=retrieved_context,
         latency_stages=latency_stages,
         llm_call_count=llm_call_count,
         grounding_mode=grounding_mode,
-        config=config,
-        lf_client=lf_client,
         extract_sent_message_ref=extract_sent_message_ref,
     )
 
@@ -1314,8 +1179,6 @@ async def generate_response(
     message: Any | None = None,
     config: Any | None = None,
     get_config: Callable[[], Any] | None = None,
-    lf_client: Any | None = None,
-    get_lf_client: Callable[[], Any] | None = None,
     deps: GenerationDeps | None = None,
 ) -> dict[str, Any]:
     """Generate an LLM answer from retrieved context with optional Telegram streaming."""
@@ -1324,8 +1187,6 @@ async def generate_response(
 
     if config is None:
         config = get_config() if get_config is not None else _get_graph_config()
-    if lf_client is None:
-        lf_client = get_lf_client() if get_lf_client is not None else get_client()
 
     req = GenerationRequest(
         query=query,
@@ -1338,7 +1199,6 @@ async def generate_response(
         grade_confidence=grade_confidence,
         config=config,
         extra_kwargs={
-            "lf_client": lf_client,
             "needs_coverage": needs_coverage,
             "max_context_docs": d.max_context_docs,
             "format_context": d.format_context,
@@ -1351,7 +1211,6 @@ async def generate_response(
             "style_token_limit": d.style_token_limit,
             "extract_queue_ms": d.extract_queue_ms,
             "citation_instruction": d.citation_instruction,
-            "get_client": get_client,
             "get_prompt": get_prompt,
             "get_prompt_with_config": get_prompt_with_config,
             "get_prompt_with_object": get_prompt_with_object,
@@ -1367,7 +1226,6 @@ async def generate_response(
             query=query,
             needs_coverage=needs_coverage,
             documents=documents,
-            retrieved_context=retrieved_context,
             raw_messages=raw_messages,
             latency_stages=latency_stages,
             llm_call_count=llm_call_count,
@@ -1375,7 +1233,6 @@ async def generate_response(
             grade_confidence=grade_confidence,
             message=message,
             config=config,
-            lf_client=lf_client,
             max_context_docs=d.max_context_docs,
             format_context=d.format_context,
             select_recent_history=d.select_recent_history,

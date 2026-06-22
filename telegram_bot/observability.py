@@ -1,40 +1,13 @@
-"""Observability re-exports — Langfuse removed (#2844).
+"""Observability re-exports — Langfuse removed (#2844, #2969).
 
-Re-exports from src.observability for backward compatibility.
-All Langfuse symbols are now no-op stubs.
+Re-exports the non-Langfuse helpers from :mod:`src.observability` for
+backward-compatible import paths used across ``telegram_bot``.
 """
 
-import logging
+from src.observability import mask_pii, propagate_attributes
 
-from src.observability import (
-    _LANGFUSE_AVAILABLE,
-    _install_langfuse_warning_filters,
-    _reset_langfuse_client_for_tests,
-    create_callback_handler,
-    get_client,
-    get_langfuse_client,
-    initialize_langfuse,
-    mask_pii,
-    observe,
-    propagate_attributes,
-    sync_langfuse_model_definitions,
-    traced_pipeline,
-)
-
-
-logger = logging.getLogger(__name__)
 
 __all__ = [
-    "_LANGFUSE_AVAILABLE",
-    "_install_langfuse_warning_filters",
-    "_reset_langfuse_client_for_tests",
-    "create_callback_handler",
-    "get_client",
-    "get_langfuse_client",
-    "initialize_langfuse",
     "mask_pii",
-    "observe",
     "propagate_attributes",
-    "sync_langfuse_model_definitions",
-    "traced_pipeline",
 ]

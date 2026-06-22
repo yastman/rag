@@ -104,13 +104,12 @@ class _FailingAsyncStream(_AsyncStream):
 @pytest.mark.asyncio
 async def test_generate_response_non_streaming_returns_llm_answer() -> None:
     config, client = _make_non_streaming_config(answer="Найдено 3 варианта.")
-    lf = MagicMock()
+    MagicMock()
 
     result = await generate_response(
         query="Что есть в Несебре?",
         documents=[{"text": "Тестовый документ", "score": 0.9, "metadata": {"city": "Несебр"}}],
         config=config,
-        lf_client=lf,
         raw_messages=[{"role": "user", "content": "Что есть в Несебре?"}],
     )
 
@@ -129,7 +128,7 @@ def test_services_package_exports_generate_response() -> None:
 async def test_generate_response_retries_without_name_kwarg_non_streaming() -> None:
     """Fallback for plain OpenAI clients that reject Langfuse `name` kwarg."""
     config, client = _make_non_streaming_config(answer="Ответ plain-openai")
-    lf = MagicMock()
+    MagicMock()
     response_obj = client.chat.completions.create.return_value
     client.chat.completions.create = AsyncMock(
         side_effect=[
@@ -143,7 +142,6 @@ async def test_generate_response_retries_without_name_kwarg_non_streaming() -> N
         query="Тест plain openai",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
         raw_messages=[{"role": "user", "content": "Тест plain openai"}],
     )
 
@@ -166,7 +164,6 @@ async def test_generate_response_fallback_on_llm_error() -> None:
             query="Запрос",
             documents=[],
             config=config,
-            lf_client=lf,
         )
 
     assert "временно недоступен" in result["response"]
@@ -179,14 +176,13 @@ async def test_generate_response_fallback_on_llm_error() -> None:
 @pytest.mark.asyncio
 async def test_generate_response_returns_safe_fallback_when_strict_mode_has_weak_context() -> None:
     config, client = _make_non_streaming_config()
-    lf = MagicMock()
+    MagicMock()
 
     result = await generate_response(
         query="виды внж в болгарии",
         documents=[],
         grounding_mode="strict",
         config=config,
-        lf_client=lf,
         raw_messages=[{"role": "user", "content": "виды внж в болгарии"}],
     )
 
@@ -204,7 +200,7 @@ async def test_generate_response_returns_safe_fallback_when_strict_mode_has_low_
     None
 ):
     config, client = _make_non_streaming_config()
-    lf = MagicMock()
+    MagicMock()
 
     result = await generate_response(
         query="виды внж в болгарии",
@@ -212,7 +208,6 @@ async def test_generate_response_returns_safe_fallback_when_strict_mode_has_low_
         grounding_mode="strict",
         grade_confidence=0.1,
         config=config,
-        lf_client=lf,
         raw_messages=[{"role": "user", "content": "виды внж в болгарии"}],
     )
 
@@ -227,7 +222,7 @@ async def test_generate_response_routes_coverage_query_to_exhaustive_prompt() ->
     from unittest.mock import ANY
 
     config, _client = _make_non_streaming_config(answer="Полный список оснований.")
-    lf = MagicMock()
+    MagicMock()
 
     with patch(
         "telegram_bot.services.generate_response.get_prompt_with_config",
@@ -239,7 +234,6 @@ async def test_generate_response_routes_coverage_query_to_exhaustive_prompt() ->
             query="какие еще есть виды внж в болгарии? напиши полный список",
             documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
             config=config,
-            lf_client=lf,
             raw_messages=[{"role": "user", "content": "какие еще есть виды внж"}],
         )
 
@@ -256,14 +250,13 @@ async def test_generate_response_routes_coverage_query_to_exhaustive_prompt() ->
 async def test_generate_response_coverage_mode_bypasses_style_prompt_builder() -> None:
     config, _client = _make_non_streaming_config(answer="Развернутый список.")
     config.response_style_enabled = True
-    lf = MagicMock()
+    MagicMock()
     style_prompt_builder = MagicMock(side_effect=AssertionError("style builder must be skipped"))
 
     result = await generate_response(
         query="перечисли все виды внж",
         documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
         config=config,
-        lf_client=lf,
         deps=GenerationDeps(style_prompt_builder=style_prompt_builder),
         raw_messages=[{"role": "user", "content": "перечисли все виды внж"}],
     )
@@ -273,34 +266,11 @@ async def test_generate_response_coverage_mode_bypasses_style_prompt_builder() -
 
 
 @pytest.mark.asyncio
-async def test_generate_response_logs_coverage_prompt_metadata() -> None:
-    config, _client = _make_non_streaming_config(answer="Ответ.")
-    lf = MagicMock()
-
-    with patch(
-        "telegram_bot.services.generate_response.get_prompt_with_config",
-        return_value=("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
-    ):
-        await generate_response(
-            query="полный список оснований для ВНЖ",
-            documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
-            config=config,
-            lf_client=lf,
-            raw_messages=[{"role": "user", "content": "полный список оснований для ВНЖ"}],
-        )
-
-    assert any(
-        call.kwargs.get("output", {}).get("prompt_name") == "generate_exhaustive_list"
-        for call in lf.update_current_span.call_args_list
-    )
-
-
-@pytest.mark.asyncio
 async def test_generate_response_honors_explicit_coverage_override() -> None:
     from unittest.mock import ANY
 
     config, _client = _make_non_streaming_config(answer="Полный список оснований.")
-    lf = MagicMock()
+    MagicMock()
 
     with patch(
         "telegram_bot.services.generate_response.get_prompt_with_config",
@@ -310,7 +280,6 @@ async def test_generate_response_honors_explicit_coverage_override() -> None:
             query="основания для внж в болгарии",
             documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
             config=config,
-            lf_client=lf,
             raw_messages=[{"role": "user", "content": "основания для внж в болгарии"}],
             needs_coverage=True,
         )
@@ -326,7 +295,7 @@ async def test_generate_response_honors_explicit_coverage_override() -> None:
 @pytest.mark.asyncio
 async def test_generate_response_coverage_mode_includes_all_retrieved_docs_in_prompt() -> None:
     config, client = _make_non_streaming_config(answer="Полный список.")
-    lf = MagicMock()
+    MagicMock()
     docs = [
         {"text": f"Doc {i}", "score": 0.95 - i * 0.01, "metadata": {"doc_id": str(i)}}
         for i in range(8)
@@ -340,7 +309,6 @@ async def test_generate_response_coverage_mode_includes_all_retrieved_docs_in_pr
             query="перечисли все основания для внж",
             documents=docs,
             config=config,
-            lf_client=lf,
             raw_messages=[{"role": "user", "content": "перечисли все основания для внж"}],
         )
 
@@ -356,14 +324,13 @@ async def test_generate_response_strict_mode_does_not_degrade_only_because_show_
 ):
     config, client = _make_non_streaming_config(answer="Подтвержденный ответ по документам.")
     config.show_sources = False
-    lf = MagicMock()
+    MagicMock()
 
     result = await generate_response(
         query="Какие документы нужны для ВНЖ?",
         documents=[{"text": "Список документов", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
         grounding_mode="strict",
         config=config,
-        lf_client=lf,
         raw_messages=[{"role": "user", "content": "Какие документы нужны для ВНЖ?"}],
     )
 
@@ -379,13 +346,12 @@ async def test_generate_response_strips_citation_artifacts_when_sources_disabled
         answer="Потребуется также счёт в болгарском банке 1.\nИ подтверждение дохода [2]."
     )
     config.show_sources = False
-    lf = MagicMock()
+    MagicMock()
 
     result = await generate_response(
         query="Что нужно для ВНЖ?",
         documents=[{"text": "Документ", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
         config=config,
-        lf_client=lf,
         raw_messages=[{"role": "user", "content": "Что нужно для ВНЖ?"}],
     )
 
@@ -401,13 +367,12 @@ async def test_generate_response_keeps_citations_when_sources_enabled() -> None:
         answer="Потребуется также счёт в болгарском банке [1]."
     )
     config.show_sources = True
-    lf = MagicMock()
+    MagicMock()
 
     result = await generate_response(
         query="Что нужно для ВНЖ?",
         documents=[{"text": "Документ", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
         config=config,
-        lf_client=lf,
         raw_messages=[{"role": "user", "content": "Что нужно для ВНЖ?"}],
     )
 
@@ -419,13 +384,12 @@ async def test_generate_response_keeps_citations_when_sources_enabled() -> None:
 async def test_generate_response_formats_context_without_sources_when_sources_disabled() -> None:
     config, client = _make_non_streaming_config(answer="Ответ.")
     config.show_sources = False
-    lf = MagicMock()
+    MagicMock()
 
     await generate_response(
         query="Что нужно для ВНЖ?",
         documents=[{"text": "Описание ВНЖ", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
         config=config,
-        lf_client=lf,
         raw_messages=[{"role": "user", "content": "Что нужно для ВНЖ?"}],
     )
 
@@ -452,7 +416,7 @@ async def test_generate_response_streaming_sets_response_sent_and_message_ref() 
     client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
@@ -470,7 +434,6 @@ async def test_generate_response_streaming_sets_response_sent_and_message_ref() 
             query="Стриминг?",
             documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
             config=config,
-            lf_client=lf,
             message=message,
             raw_messages=[{"role": "user", "content": "Стриминг?"}],
         )
@@ -489,7 +452,7 @@ async def test_generate_response_streaming_does_not_record_output_when_delivery_
     client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     message = AsyncMock()
@@ -504,7 +467,6 @@ async def test_generate_response_streaming_does_not_record_output_when_delivery_
             query="Тест ошибки доставки",
             documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
             config=config,
-            lf_client=lf,
             message=message,
             raw_messages=[{"role": "user", "content": "Тест ошибки доставки"}],
         )
@@ -527,7 +489,7 @@ async def test_generate_response_retries_without_name_kwarg_streaming() -> None:
     )
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
@@ -542,7 +504,6 @@ async def test_generate_response_retries_without_name_kwarg_streaming() -> None:
         query="Стрим plain-openai",
         documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Стрим plain-openai"}],
     )
@@ -570,7 +531,7 @@ async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> No
     client.chat.completions.create = AsyncMock(side_effect=_delayed_stream_create)
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
@@ -585,7 +546,6 @@ async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> No
         query="Стриминг?",
         documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Стриминг?"}],
     )
@@ -602,13 +562,12 @@ async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> No
 async def test_generate_response_non_streaming_has_ttft_ms() -> None:
     """Non-streaming path must report ttft_ms > 0 from LLM call wall time (#571)."""
     config, _client = _make_non_streaming_config(answer="Ответ без стриминга")
-    lf = MagicMock()
+    MagicMock()
 
     result = await generate_response(
         query="Тест таймингов",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
     )
 
     # ttft_ms must be populated (non-zero) in non-streaming mode
@@ -620,106 +579,16 @@ async def test_generate_response_non_streaming_has_ttft_ms() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_response_non_streaming_computes_tps_from_usage() -> None:
-    """Non-streaming path computes llm_tps when completion_tokens available (#571)."""
-    mock_choice = MagicMock()
-    mock_choice.message.content = "Ответ с 10 токенами"
-    mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    mock_response.model = "gpt-4o-mini"
-    mock_usage = MagicMock()
-    mock_usage.prompt_tokens = 20
-    mock_usage.completion_tokens = 10
-    mock_usage.total_tokens = 30
-    mock_response.usage = mock_usage
-
-    mock_client = MagicMock()
-    mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-
-    mock_config = MagicMock()
-    mock_config.domain = "недвижимость"
-    mock_config.llm_model = "gpt-4o-mini"
-    mock_config.llm_temperature = 0.1
-    mock_config.generate_max_tokens = 128
-    mock_config.streaming_enabled = False
-    mock_config.show_sources = False
-    mock_config.response_style_enabled = False
-    mock_config.response_style_shadow_mode = False
-    mock_config.create_llm.return_value = mock_client
-
-    lf = MagicMock()
-
-    result = await generate_response(
-        query="Тест TPS",
-        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
-        config=mock_config,
-        lf_client=lf,
-    )
-
-    assert result["llm_ttft_ms"] > 0
-    # TPS = completion_tokens / (ttft_ms / 1000)
-    assert result["llm_tps"] is not None
-    assert result["llm_tps"] > 0
-    # decode_ms is None for non-streaming
-    assert result["llm_decode_ms"] is None
-    lf.update_current_generation.assert_any_call(
-        model="gpt-4o-mini",
-        usage_details={"input": 20, "output": 10, "total": 30},
-    )
-
-
-@pytest.mark.asyncio
-async def test_generate_response_streaming_updates_generation_usage_details() -> None:
-    """Streaming path should persist usage_details to Langfuse generation."""
-    config, client = _make_non_streaming_config()
-    config.streaming_enabled = True
-
-    usage = MagicMock()
-    usage.prompt_tokens = 11
-    usage.completion_tokens = 7
-    usage.total_tokens = 18
-    stream = _AsyncStream([_StreamChunk("Потоковый ответ", usage=usage)])
-    client.chat.completions.create = AsyncMock(return_value=stream)
-    config.create_llm.return_value = client
-
-    lf = MagicMock()
-    bot = AsyncMock()
-    bot.send_message_draft = AsyncMock(return_value=True)
-    sent_msg = AsyncMock()
-    sent_msg.chat = MagicMock(id=555)
-    sent_msg.message_id = 777
-    message = AsyncMock()
-    message.chat = MagicMock(id=555)
-    message.bot = bot
-    message.answer = AsyncMock(return_value=sent_msg)
-
-    await generate_response(
-        query="Стриминг usage",
-        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
-        config=config,
-        lf_client=lf,
-        message=message,
-        raw_messages=[{"role": "user", "content": "Стриминг usage"}],
-    )
-
-    lf.update_current_generation.assert_any_call(
-        model="gpt-4o-mini",
-        usage_details={"input": 11, "output": 7, "total": 18},
-    )
-
-
-@pytest.mark.asyncio
 async def test_generate_response_non_streaming_tps_none_when_no_usage() -> None:
     """Non-streaming path sets llm_tps=None when usage is not available (#571)."""
     config, _client = _make_non_streaming_config(answer="Ответ")
     # usage=None set in _make_non_streaming_config already
-    lf = MagicMock()
+    MagicMock()
 
     result = await generate_response(
         query="Тест без usage",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
     )
 
     # No usage → no TPS, fallback to llm_tps_unavailable score
@@ -732,13 +601,12 @@ async def test_reasoning_effort_passed_to_llm_create() -> None:
     """reasoning_effort from config is forwarded to chat.completions.create()."""
     config, client = _make_non_streaming_config(answer="Краткий ответ")
     config.get_reasoning_kwargs.return_value = {"reasoning_effort": "low"}
-    lf = MagicMock()
+    MagicMock()
 
     await generate_response(
         query="Тест reasoning",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
     )
 
     call_kwargs = client.chat.completions.create.await_args.kwargs
@@ -750,13 +618,12 @@ async def test_disable_reasoning_passed_to_llm_create() -> None:
     """disable_reasoning is passed through SDK-supported extra_body."""
     config, client = _make_non_streaming_config(answer="Ответ без reasoning")
     config.get_reasoning_kwargs.return_value = {"extra_body": {"disable_reasoning": True}}
-    lf = MagicMock()
+    MagicMock()
 
     await generate_response(
         query="Тест disable reasoning",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
     )
 
     call_kwargs = client.chat.completions.create.await_args.kwargs
@@ -769,13 +636,12 @@ async def test_no_reasoning_kwargs_when_none() -> None:
     """When all reasoning fields are None, no extra kwargs are passed."""
     config, client = _make_non_streaming_config(answer="Обычный ответ")
     config.get_reasoning_kwargs.return_value = {}
-    lf = MagicMock()
+    MagicMock()
 
     await generate_response(
         query="Без reasoning",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
     )
 
     call_kwargs = client.chat.completions.create.await_args.kwargs
@@ -804,7 +670,7 @@ async def test_streaming_reasoning_content_merged_into_response() -> None:
     client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
@@ -819,7 +685,6 @@ async def test_streaming_reasoning_content_merged_into_response() -> None:
         query="Тест reasoning_content",
         documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Тест reasoning_content"}],
     )
@@ -846,7 +711,7 @@ async def test_streaming_raw_reasoning_merged_into_response() -> None:
     client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
@@ -861,7 +726,6 @@ async def test_streaming_raw_reasoning_merged_into_response() -> None:
         query="Тест reasoning",
         documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Тест reasoning"}],
     )
@@ -889,7 +753,7 @@ async def test_streaming_mixed_content_and_reasoning() -> None:
     client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
@@ -904,7 +768,6 @@ async def test_streaming_mixed_content_and_reasoning() -> None:
         query="Тест mixed",
         documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Тест mixed"}],
     )
@@ -927,7 +790,7 @@ async def test_streaming_answer_failure_degrades_gracefully() -> None:
     client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     message = AsyncMock()
@@ -939,7 +802,6 @@ async def test_streaming_answer_failure_degrades_gracefully() -> None:
         query="Тест ошибки доставки",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Тест ошибки доставки"}],
     )
@@ -969,7 +831,7 @@ async def test_stream_failure_raises_and_triggers_fallback() -> None:
     )
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
@@ -984,56 +846,12 @@ async def test_stream_failure_raises_and_triggers_fallback() -> None:
         query="Тест ошибки стрима",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Тест ошибки стрима"}],
     )
 
     assert result["response"] == "Нестриминговый fallback"
     assert result["llm_stream_recovery"] is True
-
-
-@pytest.mark.asyncio
-async def test_stream_recovery_success_does_not_set_warning_level() -> None:
-    """Successful stream recovery should record degradation metadata, not WARNING level."""
-    config, client = _make_non_streaming_config(answer="Нестриминговый fallback")
-    config.streaming_enabled = True
-    fallback_response = MagicMock()
-    fallback_response.choices = [MagicMock()]
-    fallback_response.choices[0].message.content = "Нестриминговый fallback"
-    fallback_response.model = "gpt-4o-mini"
-    fallback_response.usage = None
-    client.chat.completions.create = AsyncMock(
-        side_effect=[RuntimeError("LLM сервис недоступен"), fallback_response]
-    )
-    config.create_llm.return_value = client
-
-    lf = MagicMock()
-    bot = AsyncMock()
-    bot.send_message_draft = AsyncMock(return_value=True)
-    sent_msg = AsyncMock()
-    sent_msg.chat = MagicMock(id=1)
-    sent_msg.message_id = 2
-    message = AsyncMock()
-    message.chat = MagicMock(id=1)
-    message.bot = bot
-    message.answer = AsyncMock(return_value=sent_msg)
-
-    result = await generate_response(
-        query="Тест ошибки стрима",
-        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
-        config=config,
-        lf_client=lf,
-        message=message,
-        raw_messages=[{"role": "user", "content": "Тест ошибки стрима"}],
-    )
-
-    warning_calls = [
-        c for c in lf.update_current_span.call_args_list if c.kwargs.get("level") == "WARNING"
-    ]
-    assert result["response"] == "Нестриминговый fallback"
-    assert result["llm_stream_recovery"] is True
-    assert warning_calls == []
 
 
 @pytest.mark.asyncio
@@ -1053,7 +871,7 @@ async def test_partial_stream_recovery_edits_existing_message_instead_of_sending
     client.chat.completions.create = AsyncMock(side_effect=[partial_stream, fallback_response])
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
@@ -1068,7 +886,6 @@ async def test_partial_stream_recovery_edits_existing_message_instead_of_sending
         query="Тест partial recovery",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Тест partial recovery"}],
     )
@@ -1084,62 +901,6 @@ async def test_partial_stream_recovery_edits_existing_message_instead_of_sending
 
 
 @pytest.mark.asyncio
-async def test_ttft_drift_warn_ms_config() -> None:
-    """TTFT drift warning threshold is read from config.ttft_drift_warn_ms (#675)."""
-    from src.runtime.graph.config import GraphConfig
-
-    # Default value
-    gc = GraphConfig()
-    assert gc.ttft_drift_warn_ms == 500
-
-    # Reads from env
-    gc_env = GraphConfig.from_env()
-    assert isinstance(gc_env.ttft_drift_warn_ms, int)
-
-    # Low threshold (0) triggers warning for any drift
-    config, client = _make_non_streaming_config()
-    config.streaming_enabled = True
-    config.ttft_drift_warn_ms = 0  # any drift triggers warning
-
-    stream = _AsyncStream([_StreamChunk("Ответ")])
-
-    async def _delayed_create(*_args: object, **_kwargs: object) -> _AsyncStream:
-        await asyncio.sleep(0.05)
-        return stream
-
-    client.chat.completions.create = AsyncMock(side_effect=_delayed_create)
-    config.create_llm.return_value = client
-
-    lf = MagicMock()
-    bot = AsyncMock()
-    bot.send_message_draft = AsyncMock(return_value=True)
-    sent_msg = AsyncMock()
-    sent_msg.chat = MagicMock(id=1)
-    sent_msg.message_id = 2
-    message = AsyncMock()
-    message.chat = MagicMock(id=1)
-    message.bot = bot
-    message.answer = AsyncMock(return_value=sent_msg)
-
-    await generate_response(
-        query="Тест TTFT drift",
-        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
-        config=config,
-        lf_client=lf,
-        message=message,
-        raw_messages=[{"role": "user", "content": "Тест TTFT drift"}],
-    )
-
-    warning_calls = [
-        c
-        for c in lf.update_current_span.call_args_list
-        if c.kwargs.get("level") == "WARNING"
-        and "TTFT drift" in (c.kwargs.get("status_message") or "")
-    ]
-    assert len(warning_calls) >= 1
-
-
-@pytest.mark.asyncio
 async def test_streaming_uses_send_message_draft() -> None:
     """Streaming path uses bot.send_message_draft instead of edit_text."""
     config, client = _make_non_streaming_config()
@@ -1148,7 +909,7 @@ async def test_streaming_uses_send_message_draft() -> None:
     client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
-    lf = MagicMock()
+    MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
 
@@ -1165,7 +926,6 @@ async def test_streaming_uses_send_message_draft() -> None:
         query="Стриминг draft?",
         documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
         config=config,
-        lf_client=lf,
         message=message,
         raw_messages=[{"role": "user", "content": "Стриминг draft?"}],
     )
@@ -1202,7 +962,7 @@ class _FakePrompt:
 async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is_none() -> None:
     """No ``langfuse_prompt`` must be sent when prompt fell back to a hardcoded string (#1666)."""
     config, client = _make_non_streaming_config(answer="Ответ")
-    lf = MagicMock()
+    MagicMock()
 
     with patch(
         "telegram_bot.services.generate_response.get_prompt_with_object",
@@ -1212,35 +972,12 @@ async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is
             query="Тест",
             documents=[{"text": "Doc", "score": 0.8, "metadata": {}}],
             config=config,
-            lf_client=lf,
             raw_messages=[{"role": "user", "content": "Тест"}],
         )
 
     client.chat.completions.create.assert_awaited_once()
     call_kwargs = client.chat.completions.create.await_args.kwargs
     assert "langfuse_prompt" not in call_kwargs
-
-
-@pytest.mark.asyncio
-async def test_generate_response_does_not_link_prompt_via_update_when_object_is_none() -> None:
-    """When prompt fell back to hardcoded string, no ``prompt=`` kwarg is sent (#1666)."""
-    config, _ = _make_non_streaming_config(answer="Ответ")
-    lf = MagicMock()
-
-    with patch(
-        "telegram_bot.services.generate_response.get_prompt_with_object",
-        return_value=("Hardcoded fallback", None),
-    ):
-        await generate_response(
-            query="Тест",
-            documents=[{"text": "Doc", "score": 0.8, "metadata": {}}],
-            config=config,
-            lf_client=lf,
-            raw_messages=[{"role": "user", "content": "Тест"}],
-        )
-
-    for call in lf.update_current_generation.call_args_list:
-        assert "prompt" not in (call.kwargs or {})
 
 
 @pytest.mark.asyncio
@@ -1256,7 +993,6 @@ async def test_generate_response_works_when_langfuse_client_unavailable() -> Non
             query="Тест",
             documents=[{"text": "Doc", "score": 0.8, "metadata": {}}],
             config=config,
-            get_lf_client=lambda: None,
             raw_messages=[{"role": "user", "content": "Тест"}],
         )
 
@@ -1286,7 +1022,6 @@ async def test_connection_error_uses_logger_warning_not_exception() -> None:
             query="Запрос",
             documents=[],
             config=config,
-            lf_client=lf,
         )
 
     assert "временно недоступен" in result["response"]
@@ -1318,7 +1053,6 @@ async def test_openai_connection_error_uses_logger_warning_not_exception() -> No
             query="Запрос",
             documents=[],
             config=config,
-            lf_client=lf,
         )
 
     assert "временно недоступен" in result["response"]
@@ -1346,7 +1080,6 @@ async def test_unexpected_error_still_uses_logger_exception() -> None:
             query="Запрос",
             documents=[],
             config=config,
-            lf_client=lf,
         )
 
     assert "временно недоступен" in result["response"]
@@ -1372,7 +1105,6 @@ async def test_fallback_behavior_preserved_for_connection_error() -> None:
             query="Запрос",
             documents=[],
             config=config,
-            lf_client=lf,
         )
 
     assert result["response"] == (
@@ -1398,7 +1130,6 @@ async def test_fallback_with_documents_preserved_for_connection_error() -> None:
             query="Запрос",
             documents=[{"text": "Док", "score": 0.9, "metadata": {"title": "Тест"}}],
             config=config,
-            lf_client=lf,
         )
 
     assert result["fallback_used"] is True
@@ -1420,7 +1151,6 @@ async def test_connection_error_fallback_preserves_usage_and_timing_structure() 
             query="Запрос",
             documents=[],
             config=config,
-            lf_client=lf,
             llm_call_count=3,
             latency_stages={"retrieve": 0.5},
         )
@@ -1461,7 +1191,6 @@ async def test_streaming_connection_error_logs_concise_warning() -> None:
             query="Запрос",
             documents=[],
             config=config,
-            lf_client=lf,
             message=message,
             raw_messages=[{"role": "user", "content": "Запрос"}],
         )
@@ -1497,7 +1226,6 @@ async def test_streaming_non_connection_error_still_uses_exception() -> None:
             query="Запрос",
             documents=[],
             config=config,
-            lf_client=lf,
             message=message,
             raw_messages=[{"role": "user", "content": "Запрос"}],
         )

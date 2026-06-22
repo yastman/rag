@@ -41,7 +41,7 @@ from telegram_bot._bot_streaming import (
     _extract_stream_chunk_text,
     _new_draft_id,
 )
-from telegram_bot.observability import get_client, propagate_attributes
+from telegram_bot.observability import propagate_attributes
 from telegram_bot.tracing_context import make_session_id
 
 
@@ -113,7 +113,7 @@ async def handle_query(
     expert_id: str | None = None
 
     root_trace_metadata: dict[str, Any] = {}
-    response_text = await _handle_query_supervisor(
+    await _handle_query_supervisor(
         bot,
         message,
         pipeline_start,
@@ -124,10 +124,6 @@ async def handle_query(
         expert_id=expert_id,
         dialog_manager=dialog_manager,
     )
-    update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
-    if root_trace_metadata:
-        update_kwargs["metadata"] = root_trace_metadata
-    get_client().update_current_span(**update_kwargs)
 
 
 async def _handle_apartment_fast_path(
@@ -616,61 +612,25 @@ async def _supervisor_pre_agent_cache(
         skip_cache = contextual_query or (
             filter_signal.is_filter_sensitive and filter_signature is None
         )
-        cache_obs_input = {
-            "query_len": len(user_text),
-            "query_type": query_type,
-            "cache_scope": "rag",
-            "agent_role": role,
-            "filter_sensitive": filter_signal.is_filter_sensitive,
-            "has_filter_signature": filter_signature is not None,
-            "contextual_query": contextual_query,
-        }
         cached = None
-        try:
-            with get_client().start_as_current_observation(
-                as_type="span", name="cache-check", input=cache_obs_input
-            ) as cache_obs:
-                if skip_cache:
-                    rag_result_store["semantic_cache_already_checked"] = True
-                    cache_obs.update(output={"cache_hit": False, "skipped": True})
-                else:
-                    check_start = time.perf_counter()
-                    cached = await bot._cache.check_semantic(
-                        query=user_text,
-                        vector=dense,
-                        query_type=query_type,
-                        cache_scope="rag",
-                        agent_role=role,
-                        grounding_mode=grounding_mode if grounding_mode == "strict" else None,
-                        require_safe_reuse=grounding_mode == "strict",
-                        filter_signature=filter_signature,
-                    )
-                    rag_result_store["pre_agent_cache_check_ms"] = (
-                        time.perf_counter() - check_start
-                    ) * 1000
-                    rag_result_store["semantic_cache_already_checked"] = True
-                    cache_obs.update(output={"cache_hit": bool(cached)})
-        except Exception:
-            logger.warning("cache-check observation failed, proceeding without it", exc_info=True)
-            cached = None
-            if skip_cache:
-                rag_result_store["semantic_cache_already_checked"] = True
-            else:
-                check_start = time.perf_counter()
-                cached = await bot._cache.check_semantic(
-                    query=user_text,
-                    vector=dense,
-                    query_type=query_type,
-                    cache_scope="rag",
-                    agent_role=role,
-                    grounding_mode=grounding_mode if grounding_mode == "strict" else None,
-                    require_safe_reuse=grounding_mode == "strict",
-                    filter_signature=filter_signature,
-                )
-                rag_result_store["pre_agent_cache_check_ms"] = (
-                    time.perf_counter() - check_start
-                ) * 1000
-                rag_result_store["semantic_cache_already_checked"] = True
+        if skip_cache:
+            rag_result_store["semantic_cache_already_checked"] = True
+        else:
+            check_start = time.perf_counter()
+            cached = await bot._cache.check_semantic(
+                query=user_text,
+                vector=dense,
+                query_type=query_type,
+                cache_scope="rag",
+                agent_role=role,
+                grounding_mode=grounding_mode if grounding_mode == "strict" else None,
+                require_safe_reuse=grounding_mode == "strict",
+                filter_signature=filter_signature,
+            )
+            rag_result_store["pre_agent_cache_check_ms"] = (
+                time.perf_counter() - check_start
+            ) * 1000
+            rag_result_store["semantic_cache_already_checked"] = True
 
         if cached:
             hit_response = await _handle_pre_agent_cache_hit(
