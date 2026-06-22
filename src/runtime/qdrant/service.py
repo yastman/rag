@@ -35,9 +35,8 @@ class QdrantService:
     - Quantization mode-based collection selection
     """
 
-    # ACORN filtered search (Feb 2026): Code ready in src/retrieval/search_engines.py
-    # but AcornSearchParams not yet exported by qdrant-client SDK.
-    # Track: waiting for qdrant-client 1.18+ release. See #590.
+    # ACORN filtered search: evaluation code in src/evaluation/retrieval/search_engines.py.
+    # AcornSearchParams not yet exported by qdrant-client SDK; connect when #590 lands.
 
     def __init__(
         self,
