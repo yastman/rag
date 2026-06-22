@@ -88,7 +88,6 @@ from .observability import (
     propagate_attributes,
 )
 from .services.forum_bridge import ForumBridge
-from .services.redis_monitor import RedisHealthMonitor
 from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 
@@ -97,10 +96,12 @@ class GraphRecursionError(RuntimeError):
 
 
 if TYPE_CHECKING:
+    from ._bot_services import Services
     from .agents.context import BotContext as BotContextType
     from .pipelines.state_contract import PreAgentStateContract
 else:
     BotContextType = Any
+    Services = Any
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
 AsyncQdrantClient: Any = None
@@ -297,96 +298,36 @@ def _extract_stream_chunk_text(message_chunk: Any) -> str:
 class PropertyBot:
     """Telegram bot for domain-specific search (configurable via BOT_DOMAIN)."""
 
-    def __init__(self, config: BotConfig):
-        """Initialize bot with services."""
-        from src.runtime.graph.config import GraphConfig
+    def __init__(self, config: BotConfig, _services: Services | None = None):
+        """Initialize bot with services.
+
+        ``_services`` is an optional DI seam for tests: pass a pre-built
+        :class:`~telegram_bot._bot_services.Services` instance to skip the
+        heavy service construction in
+        :func:`~telegram_bot._bot_services.build_services`.
+        """
+        from ._bot_services import build_services
 
         self.config = config
         self.bot = Bot(token=config.telegram_token)
         self.dp = Dispatcher()
 
-        # Graph config for service factories
-        self._graph_config = GraphConfig(
-            llm_base_url=config.llm_base_url,
-            llm_api_key=config.llm_api_key,
-            llm_model=config.llm_model,
-            bge_m3_url=config.bge_m3_url,
-            qdrant_url=config.qdrant_url,
-            qdrant_collection=config.qdrant_collection,
-            search_top_k=config.search_top_k,
-            redis_url=config.redis_url,
-            domain=config.domain,
-            domain_language=config.domain_language,
-        )
+        svc: Services = _services if _services is not None else build_services(config)
 
-        # Initialize legacy graph service dependencies
-        from src.runtime.integrations.cache import CacheLayerManager
-        from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
-        from src.runtime.services.qdrant import QdrantService
-
-        self._cache = CacheLayerManager(redis_url=config.redis_url)
-        self._hybrid = BGEM3HybridEmbeddings(
-            base_url=config.bge_m3_url,
-            timeout=self._graph_config.bge_m3_timeout,
-        )
-        # Use hybrid as primary embeddings provider
-        self._embeddings = self._hybrid
-        self._sparse = BGEM3SparseEmbeddings(
-            base_url=config.bge_m3_url,
-            timeout=self._graph_config.bge_m3_timeout,
-        )
-        self._qdrant = QdrantService(
-            url=config.qdrant_url,
-            api_key=config.qdrant_api_key,
-            collection_name=config.qdrant_collection,
-            quantization_mode=config.qdrant_quantization_mode,
-            timeout=config.qdrant_timeout,
-        )
-
-        # Apartments collection (#629)
-        from .services.apartments_service import ApartmentsService
-
-        self._qdrant_apartments = QdrantService(
-            url=config.qdrant_url,
-            api_key=config.qdrant_api_key,
-            collection_name="apartments",
-        )
-        self._apartments_service = ApartmentsService(qdrant=self._qdrant_apartments)
-
-        # Rerank provider (feature flag). "colbert" keeps the existing
-        # server-side Qdrant ColBERT path and does not instantiate the
-        # deprecated client-side reranker service.
-        self._reranker = None
-        if config.rerank_provider == "colbert":
-            logger.info("Reranking via server-side Qdrant ColBERT path")
-        elif config.rerank_provider == "none":
-            logger.info("Reranking disabled")
-
-        # LLM (optional, defaults via GraphConfig.create_llm)
-        self._llm = self._graph_config.create_llm()
-
-        # Apartment extraction pipeline: LLM first → regex fallback
-        from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
-        from .services.apartment_filter_extractor import ApartmentFilterExtractor
-
-        _apt_llm = None
-        try:
-            from .services.apartment_llm_extractor import ApartmentLlmExtractor
-
-            _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
-        except (ImportError, ModuleNotFoundError):
-            logger.warning(
-                "ApartmentLlmExtractor unavailable, falling back to regex-only extraction",
-                exc_info=True,
-            )
-
-        self._apartment_pipeline = ApartmentExtractionPipeline(
-            regex_extractor=ApartmentFilterExtractor(),
-            llm_extractor=_apt_llm,
-            redis=self._cache.redis,
-        )
-        # Redis health monitor (periodic background task)
-        self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
+        # Unpack services onto bot attributes (preserves existing handler access patterns)
+        self._graph_config = svc.graph_config
+        self._cache = svc.cache
+        self._hybrid = svc.hybrid
+        self._embeddings = svc.embeddings
+        self._sparse = svc.sparse
+        self._qdrant = svc.qdrant
+        self._qdrant_apartments = svc.qdrant_apartments
+        self._apartments_service = svc.apartments_service
+        self._reranker = svc.reranker
+        self._llm = svc.llm
+        self._apartment_pipeline = svc.apartment_pipeline
+        self._redis_monitor = svc.redis_monitor
+        self._i18n_hub: Any = svc.i18n_hub
 
         # Conversation memory checkpointer (initialized in start())
         self._checkpointer: Any = None
@@ -394,19 +335,6 @@ class PropertyBot:
         # Agent checkpointer — Redis with TTL (#424).
         # HumanMessage serialization fixed in langgraph-checkpoint-redis>=0.3.6 (#420).
         self._agent_checkpointer: Any = None
-
-        # i18n hub (fluentogram) — initialize early for localized menu filters.
-        self._i18n_hub: Any = None
-        try:
-            from .middlewares.i18n import create_translator_hub
-
-            self._i18n_hub = create_translator_hub()
-        except Exception:
-            logger.warning(
-                "Failed to initialize i18n hub during startup preflight; "
-                "falling back to RU-only menu filters",
-                exc_info=True,
-            )
 
         # User service (asyncpg) — initialized in start()
         self._user_service: Any = None
