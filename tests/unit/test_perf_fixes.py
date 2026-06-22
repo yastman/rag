@@ -236,11 +236,10 @@ def test_start_calls_warmup_bge():
 
 
 def test_write_scores_is_noop():
-    """write_scores / write_langfuse_scores are no-ops — Langfuse removed (#2844)."""
-    from src.scoring import write_langfuse_scores, write_scores
+    """write_scores is a no-op — Langfuse removed (#2844)."""
+    from src.scoring import write_scores
 
     lf = MagicMock()
     result = {"pipeline_wall_ms": 1500.0, "search_results_count": 20, "latency_stages": {}}
     write_scores(lf, result, trace_id="t1")
-    write_langfuse_scores(lf, result, trace_id="t2")
     lf.create_score.assert_not_called()

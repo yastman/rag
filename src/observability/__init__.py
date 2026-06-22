@@ -21,7 +21,6 @@ from src.observability.scores import (
     compute_checkpointer_overhead_proxy_ms,
     score,
     write_history_scores,
-    write_langfuse_scores,
     write_scores,
 )
 from src.security.pii_redaction import PIIRedactor
@@ -56,6 +55,5 @@ __all__ = [
     "propagate_attributes",
     "score",
     "write_history_scores",
-    "write_langfuse_scores",
     "write_scores",
 ]

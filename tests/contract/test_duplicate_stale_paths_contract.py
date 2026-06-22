@@ -26,7 +26,7 @@ def test_src_scoring_is_shim_of_observability_scores() -> None:
     import src.observability.scores as scores_mod
     import src.scoring as scoring_mod
 
-    for name in ("write_langfuse_scores", "score", "compute_checkpointer_overhead_proxy_ms"):
+    for name in ("write_scores", "score", "compute_checkpointer_overhead_proxy_ms"):
         assert getattr(scoring_mod, name) is getattr(scores_mod, name), (
             f"src.scoring.{name} must be the same object as src.observability.scores.{name}. "
             "src/scoring.py should be a shim that re-exports from src/observability/scores.py "
