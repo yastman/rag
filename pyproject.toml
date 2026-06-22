@@ -383,7 +383,7 @@ ignore_errors = true
 # IMPORT-LINTER CONFIGURATION (Architecture boundary enforcement)
 # =============================================================================
 # Contracts encode the key layering invariants documented in
-# docs/architecture/STRUCTURE.md. Run with: uv run lint-imports
+# docs/designs/adr-2855-module-collapse.md. Run with: uv run lint-imports
 #
 # Layer model (strict, inner cannot import outer):
 #   src/core  →  src/runtime  →  telegram_bot

@@ -1,7 +1,7 @@
 """Contract: canonical project structure and active directory map (#2633).
 
 Pins the desired active architecture documented in
-``docs/architecture/STRUCTURE.md``:
+``docs/designs/adr-2855-module-collapse.md``:
 
 - Active directories under ``src/`` and ``telegram_bot/`` are present.
 - ``src/adapters`` does not import ``src/runtime``.
@@ -59,7 +59,7 @@ def test_active_directory_exists(rel_dir: str) -> None:
     path = REPO_ROOT / rel_dir
     assert path.is_dir(), (
         f"#2633: canonical active directory '{rel_dir}' is missing. "
-        "Do not remove active directories without updating STRUCTURE.md and this test."
+        "Do not remove active directories without updating adr-2855-module-collapse.md and this test."
     )
 
 
