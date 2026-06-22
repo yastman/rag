@@ -4,16 +4,8 @@ Extracted to avoid ~300 LOC duplication between:
   telegram_bot/agents/rag_pipeline.py
   telegram_bot/graph/nodes/*.py
 
-Core functions are pure computation (no Langfuse spans, no PipelineMetrics).
-Adapters (pipeline / nodes) handle span tracking, metrics, and state wrapping.
-
-Observability (#2162):
-    Each orchestration helper carries an ``    ``capture_input=False`` and ``capture_output=False`` so that the trace tree
-    contains a stable ``rag-core-*`` span for every helper without leaking raw
-    user query text, embedding vectors, or document text. Curated
-    high-signal metadata (cache hit, query type, top-k, vector dim) is added
-    inside each function via ``update_current_span(input=..., output=...)`` so
-    the Langfuse UI shows useful summary fields.
+Core functions are pure computation (no spans, no PipelineMetrics).
+Adapters (pipeline / nodes) handle metrics and state wrapping.
 """
 
 from __future__ import annotations

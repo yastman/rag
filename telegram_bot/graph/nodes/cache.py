@@ -197,8 +197,6 @@ async def cache_store_node(
     )
     user_id = state.get("user_id")
 
-    start = time.perf_counter()
-
     # Store in semantic cache if we have both response and embedding.
     stored_semantic = False
     filter_sensitive, filter_signature = _resolve_graph_filter_signature(state, query)
@@ -269,7 +267,5 @@ async def cache_store_node(
                 logger.warning(
                     "cache_store: event_stream.log_event failed: %s: %s", type(exc).__name__, exc
                 )
-
-    time.perf_counter() - start
 
     return {"response": response}

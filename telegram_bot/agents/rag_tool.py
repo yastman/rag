@@ -138,15 +138,12 @@ async def rag_search(
             )
 
         invoke_start = time.perf_counter()
-        # NOTE (#2157): do NOT forward `langfuse_trace_id` to rag_pipeline.
-        # Per Langfuse SDK 4 docs (OpenTelemetry-based),        # start_as_current_observation share the same OTEL context-propagation
-        # model and nest automatically across the same async call chain. The
-        # `langfuse_trace_id` kwarg on an        # contract for *external* trace context (e.g., a W3C trace context
-        # arriving over HTTP from another process). Passing it from inside an
-        # already-active OTEL span detaches rag_pipeline's        # parent (tool-rag-search), drops the rag-pipeline observation, takes
-        # over `trace.name`, and orphans cache-/bge-/classify spans up to
-        # telegram-rag-supervisor. See #1253 for the original (wrong) forward
-        # contract this comment reverts.
+        # NOTE (#2157): trace-context forwarding to rag_pipeline was removed
+        # with Langfuse (#2844). Earlier code forwarded a `langfuse_trace_id`
+        # kwarg to carry external OTEL trace context (e.g., a W3C trace context
+        # arriving over HTTP from another process); that propagation path no
+        # longer exists. See #1253 for the original (wrong) forward contract
+        # this note reverts.
         pipeline_kwargs: dict[str, Any] = {
             "user_id": ctx.telegram_user_id if ctx else 0,
             "session_id": ctx.session_id if ctx else "",

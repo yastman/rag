@@ -13,7 +13,7 @@ that wrap an ``ainvoke`` with :func:`begin_checkpoint_overhead_capture` /
 :func:`end_checkpoint_overhead_capture` get the *direct* sum of checkpoint
 I/O time rather than the previous derived proxy
 (``ainvoke_wall_ms - sum_of_stage_latencies``) which also captured Pregel
-loop and ``
+loop and other in-loop overhead.
 """
 
 from __future__ import annotations

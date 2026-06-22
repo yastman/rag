@@ -276,12 +276,9 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
     def _encode_query(self, query: str) -> Any:
         """Generate embeddings for hybrid RRF search."""
-        result = self.embedding_model.encode(
+        return self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=False
         )
-        # Populate Langfuse span metadata for trace observability
-        result.get("dense_vecs")
-        return result
 
     def search(
         self,
@@ -464,14 +461,9 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
     def _encode_query(self, query: str) -> Any:
         """Generate embeddings for hybrid RRF + ColBERT search."""
-        result = self.embedding_model.encode(
+        return self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
-        # Populate Langfuse span metadata for trace observability
-        result.get("dense_vecs")
-        colbert_vec = result.get("colbert_vecs")
-        len(colbert_vec) if isinstance(colbert_vec, list) else 0
-        return result
 
     def search(
         self,
@@ -654,14 +646,9 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
     def _encode_query(self, query: str) -> Any:
         """Generate embeddings for DBSF + ColBERT search."""
-        result = self.embedding_model.encode(
+        return self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
-        # Populate Langfuse span metadata for trace observability
-        result.get("dense_vecs")
-        colbert_vec = result.get("colbert_vecs")
-        len(colbert_vec) if isinstance(colbert_vec, list) else 0
-        return result
 
     def search(
         self,

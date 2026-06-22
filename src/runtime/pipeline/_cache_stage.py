@@ -8,7 +8,6 @@ import logging
 import time
 from typing import Any
 
-from src.observability import get_client
 from src.runtime.pipeline._retrieve import (
     _compute_retrieval_filters,
     _ensure_sparse_vector,
@@ -82,19 +81,6 @@ async def _lookup_search_cache(
     latency = time.perf_counter() - start
     logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
     cached_ctx = _build_retrieved_context(cached_results)
-    get_client().update_current_span(
-        output={
-            "results_count": len(cached_results),
-            "search_cache_hit": True,
-            "duration_ms": round(latency * 1000, 1),
-            "initial_filters": initial_filters,
-            "final_filters": initial_filters,
-            "eval_query": query[:2000],
-            "eval_docs": "\n\n".join(
-                f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in cached_ctx
-            ),
-        }
-    )
     return {
         "documents": cached_results,
         "search_results_count": len(cached_results),
@@ -368,7 +354,6 @@ async def _hybrid_retrieve(
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
 
-    [d.get("score", 0) for d in results if isinstance(d, dict)]
     result_ctx = _build_retrieved_context(results)
 
     return {

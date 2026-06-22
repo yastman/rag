@@ -11,7 +11,6 @@ Features: RRF fusion, freshness boosting, MMR diversity.
 """
 
 import logging
-import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -386,7 +385,6 @@ class QdrantService:
 
         # Execute RRF fusion search with graceful degradation
         try:
-            t_start = time.monotonic()
             if group_by:
                 group_result = await self._client.query_points_groups(
                     collection_name=self._collection_name,
@@ -400,7 +398,6 @@ class QdrantService:
                     search_params=search_params,
                 )
                 results = self._format_group_results(group_result)
-                (time.monotonic() - t_start) * 1000
                 if return_meta:
                     return results, ok_meta
                 return results
@@ -415,7 +412,6 @@ class QdrantService:
                 search_params=search_params,
             )
             results = self._format_results(result.points)
-            (time.monotonic() - t_start) * 1000
             if return_meta:
                 return results, ok_meta
             return results
@@ -598,7 +594,6 @@ class QdrantService:
         }
 
         try:
-            time.monotonic()
             # Outer stage: ColBERT MaxSim reranking on pre-stored multivectors
             result = await self._client.query_points(
                 collection_name=self._collection_name,
@@ -735,7 +730,6 @@ class QdrantService:
             )
 
         try:
-            t_start = time.monotonic()
             responses = await self._client.query_batch_points(
                 collection_name=self._collection_name,
                 requests=requests,
@@ -757,9 +751,7 @@ class QdrantService:
                         seen[pid] = formatted
 
             merged = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
-            result = merged[:top_k]
-            (time.monotonic() - t_start) * 1000
-            return result
+            return merged[:top_k]
 
         except Exception as e:
             logger.error(f"Qdrant batch search failed (graceful degradation): {e}")

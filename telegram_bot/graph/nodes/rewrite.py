@@ -6,14 +6,12 @@ Increments rewrite_count and resets query_embedding to force re-embedding.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from typing import Any
 
 from src.runtime.graph.state import Message
 from src.runtime.services.rag_core import rewrite_query_via_llm
-from telegram_bot.observability import get_client
 
 
 logger = logging.getLogger(__name__)
@@ -36,8 +34,6 @@ async def rewrite_node(
         State update with rewritten message, incremented rewrite_count,
         reset query_embedding, and latency.
     """
-    import contextlib
-
     llm: Any | None = runtime.context.get("llm")
     t0 = time.perf_counter()
 
@@ -46,7 +42,6 @@ async def rewrite_node(
         messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
     )
     rewrite_count = state.get("rewrite_count", 0)
-    rewrite_failed = False
 
     try:
         from src.runtime.graph.config import GraphConfig
@@ -57,24 +52,8 @@ async def rewrite_node(
         rewritten, effective, rewrite_actual_model = await rewrite_query_via_llm(
             original_query, llm=llm
         )
-        with contextlib.suppress(Exception):
-            get_client().update_current_generation(model=rewrite_actual_model)
-        # Safe span input with query metadata
-        with contextlib.suppress(Exception):
-            get_client().update_current_span(
-                input={
-                    "query_preview": str(original_query)[:120],
-                    "query_hash": hashlib.sha256(str(original_query).encode()).hexdigest()[:8],
-                    "query_len": len(str(original_query)),
-                },
-            )
-    except Exception as e:
-        rewrite_failed = True
+    except Exception:
         logger.exception("rewrite_node: LLM rewrite failed, keeping original query")
-        get_client().update_current_span(
-            level="ERROR",
-            status_message=f"Rewrite LLM failed: {str(e)[:200]}",
-        )
         rewritten = original_query
         effective = False
         rewrite_actual_model = "fallback"
@@ -87,19 +66,6 @@ async def rewrite_node(
         rewritten,
         elapsed,
     )
-
-    if not rewrite_failed:
-        # Safe span output with rewritten query metadata.
-        with contextlib.suppress(Exception):
-            client = get_client()
-            client.update_current_span(
-                output={
-                    "rewritten_preview": str(rewritten)[:240],
-                    "rewrite_effective": effective,
-                    "rewrite_provider_model": rewrite_actual_model,
-                    "rewrite_latency_sec": round(elapsed, 3),
-                },
-            )
 
     return {
         "messages": [Message(content=rewritten)],

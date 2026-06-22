@@ -70,20 +70,6 @@ class QueryAnalyzer:
     async def analyze(self, query: str) -> dict[str, Any]:
         """Analyze query and extract filters + semantic query.
 
-        Wrapped in ``        around the LiteLLM SDK-router structured-output call. Curated
-        ``update_current_span`` payloads avoid leaking the full
-        query or the full LLM response into Langfuse:
-
-        * input: ``{"query_preview": query[:120], "model": self.model}``
-        * output: ``{"filter_keys": sorted(filters.keys()),
-          "filter_count": len(filters),
-          "semantic_query_len": len(semantic_query)}``
-          — schema-level metadata only; no filter *values*, no semantic
-          query *content*.
-        * on exception: ``level="ERROR"`` with ``status_message`` truncated
-          to 200 chars; existing fallback contract preserved (returns
-          ``{"filters": {}, "semantic_query": query}``).
-
         Args:
             query: User query text
 

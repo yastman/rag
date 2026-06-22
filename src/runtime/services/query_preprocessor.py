@@ -74,9 +74,6 @@ class HyDEGenerator:
     async def generate_hypothetical_document(self, query: str) -> str:
         """Generate a hypothetical document that would answer the query.
 
-        Wrapped in ``        named span. Curated ``update_current_span`` payloads avoid leaking full
-        prompts/documents into telemetry backends.
-
         Args:
             query: User query (typically short, < 5 words)
 

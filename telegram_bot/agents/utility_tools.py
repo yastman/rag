@@ -171,8 +171,7 @@ async def handoff(
     # Honest scoring (#2212): handoff_triggered must reflect a REAL action — at
     # least one manager actually notified — not merely that the tool ran. If no
     # notification succeeded, emit handoff_delivery_failed instead of a false
-    # success so the CRM/ops dashboard is not misled. Guard get_client() which
-    # may be None when Langfuse is disabled.
+    # success so the CRM/ops dashboard is not misled.
     if delivered > 0:
         return "Ваш запрос передан менеджеру. Ожидайте ответа."
 

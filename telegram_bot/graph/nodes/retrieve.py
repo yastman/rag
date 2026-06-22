@@ -43,15 +43,6 @@ def _build_search_cache_profile(
     return {"mode": "rrf", "top_k": top_k, **filter_profile}
 
 
-def _distinct_doc_count(results: list[dict[str, Any]]) -> int:
-    return len(
-        {
-            str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
-            for doc in results
-        }
-    )
-
-
 async def retrieve_node(
     state: dict[str, Any],
     runtime: Any,
@@ -201,8 +192,6 @@ async def retrieve_node(
         latency = time.perf_counter() - start
         PipelineMetrics.get().record("retrieve", latency * 1000)
         logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
-        _build_retrieved_context(cached_results)
-        _distinct_doc_count(cached_results)
         return {
             "documents": cached_results,
             "search_results_count": len(cached_results),
@@ -281,10 +270,6 @@ async def retrieve_node(
     latency = time.perf_counter() - start
     PipelineMetrics.get().record("retrieve", latency * 1000)
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
-
-    [d.get("score", 0) for d in results if isinstance(d, dict)]
-    _build_retrieved_context(results)
-    _distinct_doc_count(results)
 
     update: dict[str, Any] = {
         "documents": results,

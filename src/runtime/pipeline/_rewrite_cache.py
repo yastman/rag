@@ -7,7 +7,6 @@ import logging
 import time
 from typing import Any
 
-from src.observability import get_client
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
@@ -77,12 +76,8 @@ async def _rewrite_query(
         if llm is None:
             llm = config.create_llm()
         rewritten, effective, rewrite_actual_model = await rewrite_query_via_llm(query, llm=llm)
-    except Exception as e:
+    except Exception:
         logger.exception("rewrite: LLM rewrite failed, keeping original query")
-        get_client().update_current_span(
-            level="ERROR",
-            status_message=f"Rewrite LLM failed: {str(e)[:200]}",
-        )
         rewritten = query
         effective = False
         rewrite_actual_model = "fallback"
