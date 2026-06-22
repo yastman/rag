@@ -32,8 +32,8 @@ senior-grade while keeping every feature — see epic #2983 (remove cruft, decom
 `bot.py` into per-feature handlers, freeze entry contracts; no over-engineering).
 
 Note: a Mini App deeplink handler (`command_handlers.py:50`) and some voice
-handlers (`bot.py`) are still live in-tree and being trimmed. Do not assume
-they are removed.
+handlers (`bot.py`) are archived/reference surfaces still present in the file
+tree and being trimmed. Do not assume they are active production capabilities.
 
 ## Priority
 
