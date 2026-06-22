@@ -47,10 +47,10 @@ class BGEM3Embeddings:
         return await self._provider.aembed_query(text)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return asyncio.get_event_loop().run_until_complete(self.aembed_documents(texts))
+        return asyncio.run(self.aembed_documents(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        return asyncio.get_event_loop().run_until_complete(self.aembed_query(text))
+        return asyncio.run(self.aembed_query(text))
 
     async def aclose(self) -> None:
         await self._provider.aclose()
@@ -139,10 +139,10 @@ class BGEM3HybridEmbeddings:
         return cast(list[list[float]], dense_vecs)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return asyncio.get_event_loop().run_until_complete(self.aembed_documents(texts))
+        return asyncio.run(self.aembed_documents(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        return asyncio.get_event_loop().run_until_complete(self.aembed_query(text))
+        return asyncio.run(self.aembed_query(text))
 
     async def aclose(self) -> None:
         await self._provider.aclose()

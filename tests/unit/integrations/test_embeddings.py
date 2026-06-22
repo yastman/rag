@@ -23,6 +23,10 @@ class TestBGEM3Embeddings:
         emb = BGEM3Embeddings(base_url="http://fake:8000")
         assert isinstance(emb._provider, BgeM3EmbeddingProvider)
 
+    def test_bgem3_embeddings_are_instantiable(self):
+        obj = BGEM3Embeddings(base_url="http://test")
+        assert isinstance(obj, BGEM3Embeddings)
+
     async def test_aembed_query(self):
         mock_response = httpx.Response(
             200,
