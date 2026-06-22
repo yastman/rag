@@ -399,254 +399,277 @@ def _validate_bge_m3_url(url: str) -> tuple[bool, str]:
     )
 
 
+async def _check_dep_redis(config: BotConfig) -> bool:
+    """Redis connectivity + deep health check."""
+    passed, details = await _check_redis_deep(config.redis_url)
+    if not passed:
+        if _is_redis_auth_failure(details.get("error", "")):
+            logger.error("Preflight FAIL: %s", _REDIS_AUTH_FAILURE_HINT)
+        logger.error("Preflight FAIL: Redis deep check — %s", details)
+    return passed
+
+
+async def _check_dep_redis_cache(config: BotConfig) -> bool:
+    """Synthetic write/read/TTL/delete check for each cache key prefix."""
+    cache_ok, cache_errors = await _verify_cache_synthetic(config.redis_url)
+    if not cache_ok:
+        logger.error("Preflight FAIL: Redis cache verify — %s", cache_errors)
+    return cache_ok
+
+
+def _qdrant_describe_vectors(info: Any, collection: str) -> tuple[bool, str | None]:
+    """Return (ok, reason) based on required named vectors in a collection."""
+    dense_vectors = info.config.params.vectors
+    sparse_vectors = info.config.params.sparse_vectors or {}
+    dense_names = set(dense_vectors.keys()) if isinstance(dense_vectors, dict) else set()
+    sparse_names = set(sparse_vectors.keys()) if isinstance(sparse_vectors, dict) else set()
+
+    missing_required: set[str] = set()
+    if "dense" not in dense_names:
+        missing_required.add("dense")
+    if "bm42" not in sparse_names:
+        missing_required.add("bm42")
+    if missing_required:
+        return (
+            False,
+            f"collection {collection} missing required vectors: {sorted(missing_required)}",
+        )
+    return True, None
+
+
+async def _qdrant_check_colbert_coverage(
+    qdrant_client: AsyncQdrantClient, info: Any, collection: str
+) -> None:
+    """Log ColBERT coverage — advisory only, never raises."""
+    dense_vectors = info.config.params.vectors
+    if "colbert" not in (dense_vectors.keys() if isinstance(dense_vectors, dict) else set()):
+        logger.warning(
+            "Preflight WARN: Qdrant collection %s missing 'colbert' vector "
+            "(server-side ColBERT reranking unavailable, RRF fallback active)",
+            collection,
+        )
+        return
+    if not info.points_count:
+        return
+    try:
+        with_colbert = await qdrant_client.count(
+            collection_name=collection,
+            count_filter=models.Filter(must=[models.HasVectorCondition(has_vector="colbert")]),
+            exact=True,
+        )
+        covered = int(with_colbert.count)
+        total = int(info.points_count)
+        ratio = covered / total
+        if ratio < COLBERT_COVERAGE_WARN_THRESHOLD:
+            logger.warning(
+                "Preflight WARN: Qdrant collection %s colbert coverage is %.2f%% "
+                "(%d/%d), below %.2f%% threshold",
+                collection,
+                ratio * 100,
+                covered,
+                total,
+                COLBERT_COVERAGE_WARN_THRESHOLD * 100,
+            )
+        else:
+            logger.info(
+                "Preflight Qdrant: colbert coverage %.2f%% (%d/%d)",
+                ratio * 100,
+                covered,
+                total,
+            )
+    except Exception as exc:
+        logger.warning(
+            "Preflight WARN: Qdrant colbert coverage check failed: %s",
+            _exception_message_with_type(exc),
+        )
+
+
+async def _qdrant_validate_collection(
+    qdrant_client: AsyncQdrantClient, collection: str
+) -> tuple[bool, str | None]:
+    """Check collection existence, required vectors, and ColBERT coverage."""
+    await qdrant_client.info()
+    exists = await qdrant_client.collection_exists(collection)
+    if not exists:
+        logger.warning(
+            "Preflight WARN: Qdrant collection %s not found via SDK existence check; "
+            "creating default schema",
+            collection,
+        )
+        await _ensure_qdrant_collection(qdrant_client, collection)
+        logger.info(
+            "Preflight Qdrant: collection %s created (empty, ready for ingestion)",
+            collection,
+        )
+        return True, None
+
+    info = await qdrant_client.get_collection(collection)
+    logger.info("Preflight Qdrant: collection=%s, points=%s", collection, info.points_count)
+
+    vectors_ok, vectors_reason = _qdrant_describe_vectors(info, collection)
+    if not vectors_ok:
+        logger.error(
+            "Preflight FAIL: Qdrant collection %s missing required vectors: %s",
+            collection,
+            vectors_reason,
+        )
+        return False, vectors_reason
+
+    await _qdrant_check_colbert_coverage(qdrant_client, info, collection)
+    return True, None
+
+
+async def _check_dep_qdrant(
+    config: BotConfig, failure_reasons: dict[str, str] | None = None
+) -> bool:
+    """Qdrant connectivity check with gRPC-primary, REST-fallback transport."""
+    getter = getattr(config, "get_collection_name", None)
+    collection = getter() if callable(getter) else config.qdrant_collection
+    scheme = urlparse(config.qdrant_url).scheme.lower()
+    effective_key = config.qdrant_api_key if scheme == "https" else None
+
+    primary_client: AsyncQdrantClient | None = None
+    primary_exception_detail: str | None = None
+    try:
+        primary_client = AsyncQdrantClient(
+            url=config.qdrant_url,
+            api_key=effective_key,
+            timeout=config.qdrant_timeout,
+            prefer_grpc=True,
+        )
+        primary_passed, primary_reason = await _qdrant_validate_collection(
+            primary_client, collection
+        )
+        if primary_passed:
+            return True
+        _collect_qdrant_failure(
+            failure_reasons, "qdrant", primary_reason or "qdrant preflight failed"
+        )
+        logger.error("Preflight FAIL: Qdrant — %s", primary_reason)
+        return False
+    except Exception as exc:
+        primary_exception_detail = _exception_message_with_type(exc)
+        logger.warning(
+            "Preflight WARN: Qdrant primary gRPC preflight failed: %s",
+            primary_exception_detail,
+        )
+        logger.warning("Preflight WARN: Qdrant attempting SDK REST fallback transport")
+    finally:
+        if primary_client is not None:
+            await primary_client.close()
+
+    if primary_exception_detail is None:
+        return False
+
+    fallback_client: AsyncQdrantClient | None = None
+    try:
+        fallback_client = AsyncQdrantClient(
+            url=config.qdrant_url,
+            api_key=effective_key,
+            timeout=config.qdrant_timeout,
+            prefer_grpc=False,
+        )
+        fallback_passed, fallback_reason = await _qdrant_validate_collection(
+            fallback_client, collection
+        )
+        if fallback_passed:
+            logger.warning(
+                "Preflight WARN: Qdrant primary gRPC preflight failed: %s; "
+                "SDK REST fallback transport succeeded",
+                primary_exception_detail,
+            )
+            return True
+        reason = f"REST fallback transport check failed: {fallback_reason}"
+        _collect_qdrant_failure(failure_reasons, "qdrant", reason)
+        logger.error("Preflight FAIL: Qdrant — %s", reason)
+        return False
+    except Exception as exc:
+        fallback_exception_detail = _exception_message_with_type(exc)
+        reason = (
+            f"primary gRPC failed: {primary_exception_detail}; "
+            f"REST fallback failed: {fallback_exception_detail}"
+        )
+        _collect_qdrant_failure(failure_reasons, "qdrant", reason)
+        logger.error("Preflight FAIL: Qdrant — %s", reason)
+        return False
+    finally:
+        if fallback_client is not None:
+            await fallback_client.close()
+
+
+async def _check_dep_bge_m3(config: BotConfig, client: httpx.AsyncClient) -> bool:
+    """BGE-M3 health + warmup encode check."""
+    url_valid, url_error = _validate_bge_m3_url(config.bge_m3_url)
+    if not url_valid:
+        logger.error("Preflight FAIL: BGE-M3 URL guardrail — %s", url_error)
+        return False
+
+    resp = await client.get(f"{config.bge_m3_url}/health")
+    if resp.status_code != 200:
+        logger.error("Preflight FAIL: BGE-M3 repo-local health contract — %s", resp.status_code)
+        return False
+
+    warmup_resp = await client.post(
+        f"{config.bge_m3_url}/encode/dense",
+        json={"texts": ["preflight warmup"], "max_length": 64, "batch_size": 1},
+        timeout=120.0,
+    )
+    if warmup_resp.status_code == 200:
+        data = warmup_resp.json()
+        logger.info(
+            "Preflight BGE-M3 repo-local warmup OK (%.3fs)",
+            data.get("processing_time", 0),
+        )
+    else:
+        logger.warning(
+            "Preflight BGE-M3 repo-local warmup failed: %s",
+            warmup_resp.status_code,
+        )
+    return True
+
+
+async def _check_dep_postgres(config: BotConfig) -> bool:
+    """Postgres connectivity check (optional dep)."""
+    try:
+        conn = await asyncpg.connect(config.realestate_database_url, timeout=5)
+        try:
+            await conn.fetchval("SELECT 1")
+            logger.info("Preflight Postgres: database reachable")
+            return True
+        finally:
+            await conn.close()
+    except asyncpg.InvalidCatalogNameError:
+        logger.warning(
+            "Preflight WARN: Postgres database does not exist yet; startup may auto-create "
+            "it before enabling user features"
+        )
+        return True
+    except Exception as exc:
+        remediation = _postgres_local_remediation(config.realestate_database_url)
+        if remediation:
+            logger.warning("Preflight WARN: %s — %s", remediation, exc)
+        else:
+            logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
+        return False
+
+
 async def _check_single_dep(
     name: str,
     config: BotConfig,
     client: httpx.AsyncClient,
     failure_reasons: dict[str, str] | None = None,
 ) -> bool:
-    """Run a single dependency check. Returns True if healthy."""
+    """Dispatch a single dependency check by name. Returns True if healthy."""
     if name == "redis":
-        passed, details = await _check_redis_deep(config.redis_url)
-        if not passed:
-            if _is_redis_auth_failure(details.get("error", "")):
-                logger.error("Preflight FAIL: %s", _REDIS_AUTH_FAILURE_HINT)
-            logger.error("Preflight FAIL: Redis deep check — %s", details)
-        return passed
-
+        return await _check_dep_redis(config)
     if name == "redis_cache":
-        cache_ok, cache_errors = await _verify_cache_synthetic(config.redis_url)
-        if not cache_ok:
-            logger.error("Preflight FAIL: Redis cache verify — %s", cache_errors)
-        return cache_ok
-
+        return await _check_dep_redis_cache(config)
     if name == "qdrant":
-        getter = getattr(config, "get_collection_name", None)
-        collection = getter() if callable(getter) else config.qdrant_collection
-        scheme = urlparse(config.qdrant_url).scheme.lower()
-        effective_key = config.qdrant_api_key if scheme == "https" else None
-
-        def _describe_vectors(
-            info: Any,
-        ) -> tuple[bool, str | None]:
-            dense_vectors = info.config.params.vectors
-            sparse_vectors = info.config.params.sparse_vectors or {}
-            dense_names = set(dense_vectors.keys()) if isinstance(dense_vectors, dict) else set()
-            sparse_names = set(sparse_vectors.keys()) if isinstance(sparse_vectors, dict) else set()
-
-            missing_required: set[str] = set()
-            if "dense" not in dense_names:
-                missing_required.add("dense")
-            if "bm42" not in sparse_names:
-                missing_required.add("bm42")
-            if missing_required:
-                reason = (
-                    f"collection {collection} missing required vectors: {sorted(missing_required)}"
-                )
-                return False, reason
-            return True, None
-
-        async def _validate_qdrant_collection(
-            qdrant_client: AsyncQdrantClient,
-        ) -> tuple[bool, str | None]:
-            await qdrant_client.info()
-
-            exists = await qdrant_client.collection_exists(collection)
-
-            if not exists:
-                logger.warning(
-                    "Preflight WARN: Qdrant collection %s not found via SDK existence check; "
-                    "creating default schema",
-                    collection,
-                )
-                await _ensure_qdrant_collection(qdrant_client, collection)
-                logger.info(
-                    "Preflight Qdrant: collection %s created (empty, ready for ingestion)",
-                    collection,
-                )
-                return True, None
-
-            info = await qdrant_client.get_collection(collection)
-
-            logger.info(
-                "Preflight Qdrant: collection=%s, points=%s",
-                collection,
-                info.points_count,
-            )
-
-            vectors_ok, vectors_reason = _describe_vectors(info)
-            if not vectors_ok:
-                logger.error(
-                    "Preflight FAIL: Qdrant collection %s missing required vectors: %s",
-                    collection,
-                    vectors_reason,
-                )
-                return False, vectors_reason
-
-            dense_vectors = info.config.params.vectors
-            colbert_missing = "colbert" not in (
-                dense_vectors.keys() if isinstance(dense_vectors, dict) else set()
-            )
-
-            if colbert_missing:
-                logger.warning(
-                    "Preflight WARN: Qdrant collection %s missing 'colbert' vector "
-                    "(server-side ColBERT reranking unavailable, RRF fallback active)",
-                    collection,
-                )
-            elif info.points_count:
-                try:
-                    with_colbert = await qdrant_client.count(
-                        collection_name=collection,
-                        count_filter=models.Filter(
-                            must=[models.HasVectorCondition(has_vector="colbert")]
-                        ),
-                        exact=True,
-                    )
-                    covered = int(with_colbert.count)
-                    total = int(info.points_count)
-                    ratio = covered / total
-
-                    if ratio < COLBERT_COVERAGE_WARN_THRESHOLD:
-                        logger.warning(
-                            "Preflight WARN: Qdrant collection %s colbert coverage is %.2f%% "
-                            "(%d/%d), below %.2f%% threshold",
-                            collection,
-                            ratio * 100,
-                            covered,
-                            total,
-                            COLBERT_COVERAGE_WARN_THRESHOLD * 100,
-                        )
-                    else:
-                        logger.info(
-                            "Preflight Qdrant: colbert coverage %.2f%% (%d/%d)",
-                            ratio * 100,
-                            covered,
-                            total,
-                        )
-                except Exception as exc:
-                    logger.warning(
-                        "Preflight WARN: Qdrant colbert coverage check failed: %s",
-                        _exception_message_with_type(exc),
-                    )
-            return True, None
-
-        primary_client: AsyncQdrantClient | None = None
-        primary_exception_detail: str | None = None
-        try:
-            primary_client = AsyncQdrantClient(
-                url=config.qdrant_url,
-                api_key=effective_key,
-                timeout=config.qdrant_timeout,
-                prefer_grpc=True,
-            )
-            primary_passed, primary_reason = await _validate_qdrant_collection(primary_client)
-            if primary_passed:
-                return True
-            _collect_qdrant_failure(
-                failure_reasons, "qdrant", primary_reason or "qdrant preflight failed"
-            )
-            logger.error("Preflight FAIL: Qdrant — %s", primary_reason)
-            return False
-        except Exception as exc:
-            primary_exception_detail = _exception_message_with_type(exc)
-            logger.warning(
-                "Preflight WARN: Qdrant primary gRPC preflight failed: %s",
-                primary_exception_detail,
-            )
-            logger.warning("Preflight WARN: Qdrant attempting SDK REST fallback transport")
-        finally:
-            if primary_client is not None:
-                await primary_client.close()
-
-        if primary_exception_detail is None:
-            return False
-
-        fallback_client: AsyncQdrantClient | None = None
-        try:
-            fallback_client = AsyncQdrantClient(
-                url=config.qdrant_url,
-                api_key=effective_key,
-                timeout=config.qdrant_timeout,
-                prefer_grpc=False,
-            )
-            fallback_passed, fallback_reason = await _validate_qdrant_collection(fallback_client)
-            if fallback_passed:
-                logger.warning(
-                    "Preflight WARN: Qdrant primary gRPC preflight failed: %s; "
-                    "SDK REST fallback transport succeeded",
-                    primary_exception_detail,
-                )
-                return True
-            reason = f"REST fallback transport check failed: {fallback_reason}"
-            _collect_qdrant_failure(failure_reasons, "qdrant", reason)
-            logger.error("Preflight FAIL: Qdrant — %s", reason)
-            return False
-        except Exception as exc:
-            fallback_exception_detail = _exception_message_with_type(exc)
-            reason = (
-                f"primary gRPC failed: {primary_exception_detail}; "
-                f"REST fallback failed: {fallback_exception_detail}"
-            )
-            _collect_qdrant_failure(failure_reasons, "qdrant", reason)
-            logger.error("Preflight FAIL: Qdrant — %s", reason)
-            return False
-        finally:
-            if fallback_client is not None:
-                await fallback_client.close()
-
+        return await _check_dep_qdrant(config, failure_reasons)
     if name == "bge_m3":
-        url_valid, url_error = _validate_bge_m3_url(config.bge_m3_url)
-        if not url_valid:
-            logger.error("Preflight FAIL: BGE-M3 URL guardrail — %s", url_error)
-            return False
-
-        resp = await client.get(f"{config.bge_m3_url}/health")
-        if resp.status_code != 200:
-            logger.error("Preflight FAIL: BGE-M3 repo-local health contract — %s", resp.status_code)
-            return False
-        # Warm encode to verify the repo-local model service is actually ready to serve embeddings.
-        warmup_resp = await client.post(
-            f"{config.bge_m3_url}/encode/dense",
-            json={"texts": ["preflight warmup"], "max_length": 64, "batch_size": 1},
-            timeout=120.0,
-        )
-        if warmup_resp.status_code == 200:
-            data = warmup_resp.json()
-            logger.info(
-                "Preflight BGE-M3 repo-local warmup OK (%.3fs)",
-                data.get("processing_time", 0),
-            )
-        else:
-            logger.warning(
-                "Preflight BGE-M3 repo-local warmup failed: %s",
-                warmup_resp.status_code,
-            )
-        return True
-
+        return await _check_dep_bge_m3(config, client)
     if name == "postgres":
-        try:
-            conn = await asyncpg.connect(config.realestate_database_url, timeout=5)
-            try:
-                await conn.fetchval("SELECT 1")
-                logger.info("Preflight Postgres: database reachable")
-                return True
-            finally:
-                await conn.close()
-        except asyncpg.InvalidCatalogNameError:
-            logger.warning(
-                "Preflight WARN: Postgres database does not exist yet; startup may auto-create "
-                "it before enabling user features"
-            )
-            return True
-        except Exception as exc:
-            remediation = _postgres_local_remediation(config.realestate_database_url)
-            if remediation:
-                logger.warning("Preflight WARN: %s — %s", remediation, exc)
-            else:
-                logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
-            return False
-
+        return await _check_dep_postgres(config)
     logger.warning("Preflight: unknown dependency %r", name)
     return False
 
