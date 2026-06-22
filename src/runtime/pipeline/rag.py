@@ -116,6 +116,250 @@ _CONFIDENT_TRIM_TOP_K = 3
 
 
 # ---------------------------------------------------------------------------
+# Stage helpers extracted from rag_pipeline to reduce CC (#3030)
+# ---------------------------------------------------------------------------
+
+
+async def _run_rerank_and_trim(
+    query: str,
+    documents: list[Any],
+    *,
+    cache: Any,
+    reranker: Any | None,
+    config: Any,
+    retrieve_result: dict[str, Any],
+    grade_result: dict[str, Any],
+    latency_stages: dict[str, float],
+) -> tuple[list[Any], bool, bool, bool, dict[str, float]]:
+    """Run rerank (or skip), detect score gap, trim confident leaders.
+
+    Returns: (final_docs, rerank_applied, rerank_cache_hit, gap_confident, latency_stages)
+    """
+    rerank_from_retrieve = retrieve_result.get("rerank_applied", False)
+    if grade_result["skip_rerank"] or rerank_from_retrieve:
+        final_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[
+            : config.rerank_top_k
+        ]
+        rerank_applied = rerank_from_retrieve
+        rerank_cache_hit = False
+    else:
+        rerank_result = await _rerank(
+            query,
+            documents,
+            cache=cache,
+            reranker=reranker,
+            top_k=config.rerank_top_k,
+            latency_stages=latency_stages,
+        )
+        latency_stages = rerank_result["latency_stages"]
+        final_docs = rerank_result["documents"]
+        rerank_applied = rerank_result["rerank_applied"]
+        rerank_cache_hit = rerank_result["rerank_cache_hit"]
+
+    final_gap = detect_score_gap(
+        [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
+    )
+    gap_confident = bool(final_gap["confident"])
+    if gap_confident and len(final_docs) > _CONFIDENT_TRIM_TOP_K:
+        logger.info(
+            "Score gap confident, trimming final docs",
+            extra={
+                "gap_ratio": final_gap.get("ratio", 0.0),
+                "before_count": len(final_docs),
+                "after_count": _CONFIDENT_TRIM_TOP_K,
+            },
+        )
+        final_docs = final_docs[:_CONFIDENT_TRIM_TOP_K]
+
+    return final_docs, rerank_applied, rerank_cache_hit, gap_confident, latency_stages
+
+
+async def _try_build_result(
+    query: str,
+    current_query: str,
+    final_docs: list[Any],
+    *,
+    qdrant: Any,
+    config: Any,
+    retrieve_result: dict[str, Any],
+    latency_stages: dict[str, float],
+    embeddings_cache_hit: bool,
+    rerank_applied: bool,
+    rerank_cache_hit: bool,
+    grade_confidence: float,
+    rewrite_count: int,
+    query_type: str,
+    query_embedding: list[float] | None,
+    cache_embedding: list[float] | None,
+    topic_hint: Any,
+    gap_confident: bool,
+    skip_rewrite: bool,
+    semantic_cache_already_checked: bool,
+) -> dict[str, Any]:
+    """Check missing evidence, expand small-to-big, assemble and return result."""
+    missing_evidence = _find_missing_evidence_constraints(query, final_docs)
+    if missing_evidence:
+        result = _assemble_context(
+            query=current_query,
+            original_query=query,
+            documents=[],
+            latency_stages=latency_stages,
+            cache_hit=False,
+            embeddings_cache_hit=embeddings_cache_hit,
+            search_cache_hit=retrieve_result.get("search_cache_hit", False),
+            search_results_count=retrieve_result["search_results_count"],
+            rerank_applied=rerank_applied,
+            rerank_cache_hit=rerank_cache_hit,
+            grade_confidence=grade_confidence,
+            rewrite_count=rewrite_count,
+            query_type=query_type,
+            query_embedding=query_embedding,
+            cache_key_embedding=cache_embedding,
+            retrieved_context=[],
+            retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
+            retrieval_error_type=retrieve_result.get("retrieval_error_type"),
+            topic_hint=topic_hint,
+            score_gap_confident=gap_confident,
+            missing_evidence_constraints=missing_evidence,
+        )
+    else:
+        await _expand_small_to_big(final_docs, qdrant=qdrant, config=config)
+        result = _assemble_context(
+            query=current_query,
+            original_query=query,
+            documents=final_docs,
+            latency_stages=latency_stages,
+            cache_hit=False,
+            embeddings_cache_hit=embeddings_cache_hit,
+            search_cache_hit=retrieve_result.get("search_cache_hit", False),
+            search_results_count=retrieve_result["search_results_count"],
+            rerank_applied=rerank_applied,
+            rerank_cache_hit=rerank_cache_hit,
+            grade_confidence=grade_confidence,
+            rewrite_count=rewrite_count,
+            query_type=query_type,
+            query_embedding=query_embedding,
+            cache_key_embedding=cache_embedding,
+            retrieved_context=retrieve_result.get("retrieved_context", []),
+            retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
+            retrieval_error_type=retrieve_result.get("retrieval_error_type"),
+            topic_hint=topic_hint,
+            score_gap_confident=gap_confident,
+        )
+    result["skip_rewrite"] = skip_rewrite
+    result["semantic_cache_already_checked"] = semantic_cache_already_checked
+    return result
+
+
+def _init_pipeline_state(
+    query: str,
+    cache_key: str,
+    *,
+    state_contract: PipelineContext | None,
+    semantic_cache_already_checked: bool,
+) -> tuple[Any, Any, bool, Any, bool]:
+    """Extract state_contract fields, compute filter signature and topic hint.
+
+    Returns: (contract_filters, topic_hint, semantic_cache_prechecked,
+              filter_signature, filter_sensitive)
+    """
+    contract_topic_hint = state_contract.get("topic_hint") if state_contract is not None else None
+    contract_filters = state_contract.get("filters") if state_contract is not None else None
+    topic_hint = contract_topic_hint or get_query_topic_hint(query)
+    filter_signature = resolve_semantic_cache_signature(
+        filters=contract_filters if isinstance(contract_filters, dict) else None
+    )
+    filter_sensitive = (
+        detect_filter_sensitive_query(cache_key).is_filter_sensitive
+        if filter_signature is None
+        else True
+    )
+    prechecked = semantic_cache_already_checked or (filter_sensitive and filter_signature is None)
+    return contract_filters, topic_hint, prechecked, filter_signature, filter_sensitive
+
+
+def _unpack_cache_result(
+    cache_result: dict[str, Any],
+    *,
+    latency_stages: dict[str, float],
+) -> tuple[list[float] | None, Any, dict[str, float], list[list[float]] | None, bool]:
+    """Unpack typed fields from cache_result dict.
+
+    Returns: (cache_embedding, cache_sparse, latency_stages, colbert_query, embeddings_cache_hit)
+    """
+    cache_embedding_value = cache_result.get("query_embedding")
+    cache_embedding: list[float] | None = (
+        cache_embedding_value if isinstance(cache_embedding_value, list) else None
+    )
+    cache_sparse: Any = cache_result.get("sparse_embedding")
+    latency_stages_value = cache_result.get("latency_stages")
+    latency_stages = latency_stages_value if isinstance(latency_stages_value, dict) else {}
+    colbert_query_value = cache_result.get("colbert_query")
+    colbert_query: list[list[float]] | None = (
+        colbert_query_value if isinstance(colbert_query_value, list) else None
+    )
+    embeddings_cache_hit = bool(cache_result.get("embeddings_cache_hit", False))
+    return cache_embedding, cache_sparse, latency_stages, colbert_query, embeddings_cache_hit
+
+
+async def _resolve_cache_stage(
+    cache_key: str,
+    query_type: str,
+    user_id: int,
+    *,
+    cache: Any,
+    embeddings: Any,
+    agent_role: str | None,
+    pre_computed_embedding: list[float] | None,
+    pre_computed_sparse: Any,
+    pre_computed_colbert: list[list[float]] | None,
+    semantic_cache_prechecked: bool,
+    semantic_cache_filter_sensitive: bool,
+    semantic_cache_filter_signature: Any,
+    latency_stages: dict[str, float],
+    state_contract: PipelineContext | None,
+) -> tuple[dict[str, Any], bool]:
+    """Run cache stage: fast-path from state_contract or full _cache_check.
+
+    Returns (cache_result, semantic_cache_prechecked).
+    """
+    if (
+        state_contract is not None
+        and state_contract.get("cache_checked") is True
+        and state_contract.get("cache_hit") is False
+        and state_contract.get("embedding_bundle_ready") is True
+    ):
+        return {
+            "cache_hit": False,
+            "cached_response": None,
+            "query_embedding": state_contract.get("dense_vector"),
+            "sparse_embedding": state_contract.get("sparse_vector"),
+            "embeddings_cache_hit": False,
+            "embedding_error": False,
+            "embedding_error_type": None,
+            "colbert_query": state_contract.get("colbert_query"),
+            "latency_stages": latency_stages,
+        }, True
+
+    result = await _cache_check(
+        cache_key,
+        query_type,
+        user_id,
+        cache=cache,
+        embeddings=embeddings,
+        latency_stages=latency_stages,
+        agent_role=agent_role,
+        pre_computed_embedding=pre_computed_embedding,
+        pre_computed_sparse=pre_computed_sparse,
+        pre_computed_colbert=pre_computed_colbert,
+        semantic_cache_already_checked=semantic_cache_prechecked,
+        semantic_cache_filter_sensitive=semantic_cache_filter_sensitive,
+        semantic_cache_filter_signature=semantic_cache_filter_signature,
+    )
+    return result, semantic_cache_prechecked
+
+
+# ---------------------------------------------------------------------------
 # Step 1+2+3+4: Cache check, retrieve, grade, rerank — see submodules
 # ---------------------------------------------------------------------------
 
@@ -173,72 +417,42 @@ async def rag_pipeline(
     grade_confidence = 0.0
     current_query = query
     query_embedding: list[float] | None = None
-    contract_topic_hint = state_contract.get("topic_hint") if state_contract is not None else None
-    contract_filters = state_contract.get("filters") if state_contract is not None else None
-    topic_hint = contract_topic_hint or get_query_topic_hint(query)
-    semantic_cache_prechecked = semantic_cache_already_checked
-    semantic_cache_filter_signature = resolve_semantic_cache_signature(
-        filters=contract_filters if isinstance(contract_filters, dict) else None
+    (
+        contract_filters,
+        topic_hint,
+        semantic_cache_prechecked,
+        semantic_cache_filter_signature,
+        semantic_cache_filter_sensitive,
+    ) = _init_pipeline_state(
+        query,
+        cache_key,
+        state_contract=state_contract,
+        semantic_cache_already_checked=semantic_cache_already_checked,
     )
-    semantic_cache_filter_sensitive = (
-        detect_filter_sensitive_query(cache_key).is_filter_sensitive
-        if semantic_cache_filter_signature is None
-        else True
-    )
-    if semantic_cache_filter_sensitive and semantic_cache_filter_signature is None:
-        semantic_cache_prechecked = True
 
     # Step 1: Cache check (use cache_key = original user query)
     # Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
-    cache_result: dict[str, Any]
-    if (
-        state_contract is not None
-        and state_contract.get("cache_checked") is True
-        and state_contract.get("cache_hit") is False
-        and state_contract.get("embedding_bundle_ready") is True
-    ):
-        semantic_cache_prechecked = True
-        cache_result = {
-            "cache_hit": False,
-            "cached_response": None,
-            "query_embedding": state_contract.get("dense_vector"),
-            "sparse_embedding": state_contract.get("sparse_vector"),
-            "embeddings_cache_hit": False,
-            "embedding_error": False,
-            "embedding_error_type": None,
-            "colbert_query": state_contract.get("colbert_query"),
-            "latency_stages": latency_stages,
-        }
-    else:
-        cache_result = await _cache_check(
-            cache_key,
-            query_type,
-            user_id,
-            cache=cache,
-            embeddings=embeddings,
-            latency_stages=latency_stages,
-            agent_role=agent_role,
-            pre_computed_embedding=pre_computed_embedding,
-            pre_computed_sparse=pre_computed_sparse,
-            pre_computed_colbert=pre_computed_colbert,
-            semantic_cache_already_checked=semantic_cache_prechecked,
-            semantic_cache_filter_sensitive=semantic_cache_filter_sensitive,
-            semantic_cache_filter_signature=semantic_cache_filter_signature,
-        )
+    cache_result, semantic_cache_prechecked = await _resolve_cache_stage(
+        cache_key,
+        query_type,
+        user_id,
+        cache=cache,
+        embeddings=embeddings,
+        agent_role=agent_role,
+        pre_computed_embedding=pre_computed_embedding,
+        pre_computed_sparse=pre_computed_sparse,
+        pre_computed_colbert=pre_computed_colbert,
+        semantic_cache_prechecked=semantic_cache_prechecked,
+        semantic_cache_filter_sensitive=semantic_cache_filter_sensitive,
+        semantic_cache_filter_signature=semantic_cache_filter_signature,
+        latency_stages=latency_stages,
+        state_contract=state_contract,
+    )
     semantic_cache_already_checked = semantic_cache_prechecked
-    # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
-    cache_embedding_value = cache_result.get("query_embedding")
-    cache_embedding: list[float] | None = (
-        cache_embedding_value if isinstance(cache_embedding_value, list) else None
+    # Unpack typed fields from cache_result
+    cache_embedding, cache_sparse, latency_stages, colbert_query, embeddings_cache_hit = (
+        _unpack_cache_result(cache_result, latency_stages=latency_stages)
     )
-    cache_sparse: Any = cache_result.get("sparse_embedding")
-    latency_stages_value = cache_result.get("latency_stages")
-    latency_stages = latency_stages_value if isinstance(latency_stages_value, dict) else {}
-    colbert_query_value = cache_result.get("colbert_query")
-    colbert_query: list[list[float]] | None = (
-        colbert_query_value if isinstance(colbert_query_value, list) else None
-    )
-    embeddings_cache_hit = bool(cache_result.get("embeddings_cache_hit", False))
 
     if cache_result.get("embedding_error"):
         return {
@@ -325,111 +539,52 @@ async def rag_pipeline(
         grade_confidence = grade_result["grade_confidence"]
 
         if grade_result["documents_relevant"]:
-            # Step 4: Rerank (if needed)
-            rerank_from_retrieve = retrieve_result.get("rerank_applied", False)
-            if grade_result["skip_rerank"] or rerank_from_retrieve:
-                # High confidence or server-side ColBERT already applied — skip rerank
-                final_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[
-                    : config.rerank_top_k
-                ]
-                rerank_applied = rerank_from_retrieve  # preserve True from ColBERT path
-                rerank_cache_hit = False
-            else:
-                rerank_result = await _rerank(
-                    current_query,
-                    documents,
-                    cache=cache,
-                    reranker=reranker,
-                    top_k=config.rerank_top_k,
-                    latency_stages=latency_stages,
-                )
-                latency_stages = rerank_result["latency_stages"]
-                final_docs = rerank_result["documents"]
-                rerank_applied = rerank_result["rerank_applied"]
-                rerank_cache_hit = rerank_result["rerank_cache_hit"]
-            final_gap = detect_score_gap(
-                [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
-            )
-            final_gap_confident = bool(final_gap["confident"])
-            gap_ratio = final_gap.get("ratio", 0.0)
-            # Only trim when gap is confident AND we have more than min floor.
-            if final_gap_confident and len(final_docs) > _CONFIDENT_TRIM_TOP_K:
-                logger.info(
-                    "Score gap confident, trimming final docs",
-                    extra={
-                        "gap_ratio": gap_ratio,
-                        "before_count": len(final_docs),
-                        "after_count": _CONFIDENT_TRIM_TOP_K,
-                    },
-                )
-                final_docs = final_docs[:_CONFIDENT_TRIM_TOP_K]
-
-            missing_evidence = _find_missing_evidence_constraints(query, final_docs)
-            if missing_evidence:
-                result = _assemble_context(
-                    query=current_query,
-                    original_query=query,
-                    documents=[],
-                    latency_stages=latency_stages,
-                    cache_hit=False,
-                    embeddings_cache_hit=embeddings_cache_hit,
-                    search_cache_hit=retrieve_result.get("search_cache_hit", False),
-                    search_results_count=retrieve_result["search_results_count"],
-                    rerank_applied=rerank_applied,
-                    rerank_cache_hit=rerank_cache_hit,
-                    grade_confidence=grade_confidence,
-                    rewrite_count=rewrite_count,
-                    query_type=query_type,
-                    query_embedding=query_embedding,
-                    cache_key_embedding=cache_embedding,
-                    retrieved_context=[],
-                    retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
-                    retrieval_error_type=retrieve_result.get("retrieval_error_type"),
-                    topic_hint=topic_hint,
-                    score_gap_confident=final_gap_confident,
-                    missing_evidence_constraints=missing_evidence,
-                )
-                result["skip_rewrite"] = skip_rewrite
-                result["semantic_cache_already_checked"] = semantic_cache_already_checked
-                return result
-
-            # Small-to-big context expansion
-            await _expand_small_to_big(final_docs, qdrant=qdrant, config=config)
-
-            result = _assemble_context(
-                query=current_query,
-                original_query=query,
-                documents=final_docs,
+            # Step 4: Rerank, gap detection, trim
+            (
+                final_docs,
+                rerank_applied,
+                rerank_cache_hit,
+                final_gap_confident,
+                latency_stages,
+            ) = await _run_rerank_and_trim(
+                current_query,
+                documents,
+                cache=cache,
+                reranker=reranker,
+                config=config,
+                retrieve_result=retrieve_result,
+                grade_result=grade_result,
                 latency_stages=latency_stages,
-                cache_hit=False,
+            )
+            return await _try_build_result(
+                query,
+                current_query,
+                final_docs,
+                qdrant=qdrant,
+                config=config,
+                retrieve_result=retrieve_result,
+                latency_stages=latency_stages,
                 embeddings_cache_hit=embeddings_cache_hit,
-                search_cache_hit=retrieve_result.get("search_cache_hit", False),
-                search_results_count=retrieve_result["search_results_count"],
                 rerank_applied=rerank_applied,
                 rerank_cache_hit=rerank_cache_hit,
                 grade_confidence=grade_confidence,
                 rewrite_count=rewrite_count,
                 query_type=query_type,
                 query_embedding=query_embedding,
-                cache_key_embedding=cache_embedding,
-                retrieved_context=retrieve_result.get("retrieved_context", []),
-                retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
-                retrieval_error_type=retrieve_result.get("retrieval_error_type"),
+                cache_embedding=cache_embedding,
                 topic_hint=topic_hint,
-                score_gap_confident=final_gap_confident,
+                gap_confident=final_gap_confident,
+                skip_rewrite=skip_rewrite,
+                semantic_cache_already_checked=semantic_cache_already_checked,
             )
-            result["skip_rewrite"] = skip_rewrite
-            result["semantic_cache_already_checked"] = semantic_cache_already_checked
-            return result
 
         # Check if we should rewrite
-        can_rewrite = (
+        if not (
             rewrite_count < config.max_rewrite_attempts
             and not skip_rewrite
             and rewrite_effective
             and grade_result.get("score_improved", True)
-        )
-        if not can_rewrite:
+        ):
             break
 
         # Step 5: Rewrite query
