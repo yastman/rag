@@ -86,4 +86,4 @@ Menu buttons never directly trigger RAG; they route through handlers that:
 - [`telegram_bot/_bot_favorites.py`](../telegram_bot/_bot_favorites.py) — bookmarks handler
 - [`telegram_bot/_bot_handoff.py`](../telegram_bot/_bot_handoff.py) — manager handoff handler
 - [`telegram_bot/handlers/demo_handler.py`](../telegram_bot/handlers/demo_handler.py) — demo handler
-- [`docs/architecture/STRUCTURE.md`](architecture/STRUCTURE.md) — full architectural module map
+- [`docs/designs/adr-2855-module-collapse.md`](designs/adr-2855-module-collapse.md) — architectural module ownership and import-boundary map
