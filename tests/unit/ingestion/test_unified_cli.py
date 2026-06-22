@@ -732,6 +732,50 @@ class TestCmdReprocess:
 # ---------------------------------------------------------------------------
 
 
+class TestResolveQuantizationConfig:
+    """Unit tests for _resolve_quantization_config() helper."""
+
+    def test_binary_returns_binary_quantization(self):
+        from qdrant_client.models import BinaryQuantization
+
+        from src.ingestion.unified.cli import _resolve_quantization_config
+
+        result = _resolve_quantization_config("binary")
+        assert isinstance(result, BinaryQuantization)
+        assert result.binary.always_ram is True
+
+    def test_scalar_returns_scalar_quantization(self):
+        from qdrant_client.models import ScalarQuantization, ScalarType
+
+        from src.ingestion.unified.cli import _resolve_quantization_config
+
+        result = _resolve_quantization_config("scalar")
+        assert isinstance(result, ScalarQuantization)
+        assert result.scalar.type == ScalarType.INT8
+        assert result.scalar.quantile == 0.99
+        assert result.scalar.always_ram is True
+
+    def test_off_returns_none(self):
+        from src.ingestion.unified.cli import _resolve_quantization_config
+
+        assert _resolve_quantization_config("off") is None
+
+    def test_default_is_binary(self):
+        from qdrant_client.models import BinaryQuantization
+
+        from src.ingestion.unified.cli import _resolve_quantization_config
+
+        # No argument → default "binary"
+        result = _resolve_quantization_config()
+        assert isinstance(result, BinaryQuantization)
+
+    def test_invalid_raises_value_error(self):
+        from src.ingestion.unified.cli import _resolve_quantization_config
+
+        with pytest.raises(ValueError, match="QDRANT_QUANTIZATION_MODE"):
+            _resolve_quantization_config("unknown")
+
+
 class TestCmdBootstrap:
     """Test bootstrap command."""
 
@@ -821,6 +865,78 @@ class TestCmdBootstrap:
         client.create_collection.assert_called_once()
         output = capsys.readouterr().out
         assert "Bootstrap completed" in output
+
+    @patch.dict("os.environ", {"QDRANT_QUANTIZATION_MODE": "scalar"})
+    async def test_bootstrap_scalar_quantization(self, args, capsys):
+        from qdrant_client.http.exceptions import UnexpectedResponse
+        from qdrant_client.models import ScalarQuantization
+
+        config = _make_config(collection_name="new_col")
+        client = MagicMock()
+        client.get_collections.return_value = MagicMock()
+        client.get_collection.side_effect = UnexpectedResponse(
+            status_code=404, reason_phrase="Not found", content=b"", headers={}
+        )
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("qdrant_client.QdrantClient", return_value=client),
+        ):
+            from src.ingestion.unified.cli import cmd_bootstrap
+
+            result = await cmd_bootstrap(args)
+
+        assert result == 0
+        call_kwargs = client.create_collection.call_args.kwargs
+        dense_params = call_kwargs["vectors_config"]["dense"]
+        assert isinstance(dense_params.quantization_config, ScalarQuantization)
+
+    @patch.dict("os.environ", {"QDRANT_QUANTIZATION_MODE": "off"})
+    async def test_bootstrap_no_quantization(self, args, capsys):
+        from qdrant_client.http.exceptions import UnexpectedResponse
+
+        config = _make_config(collection_name="new_col")
+        client = MagicMock()
+        client.get_collections.return_value = MagicMock()
+        client.get_collection.side_effect = UnexpectedResponse(
+            status_code=404, reason_phrase="Not found", content=b"", headers={}
+        )
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("qdrant_client.QdrantClient", return_value=client),
+        ):
+            from src.ingestion.unified.cli import cmd_bootstrap
+
+            result = await cmd_bootstrap(args)
+
+        assert result == 0
+        call_kwargs = client.create_collection.call_args.kwargs
+        dense_params = call_kwargs["vectors_config"]["dense"]
+        assert dense_params.quantization_config is None
+
+    @patch.dict("os.environ", {"QDRANT_QUANTIZATION_MODE": "bad_value"})
+    async def test_bootstrap_invalid_mode_returns_1(self, args, capsys):
+        from qdrant_client.http.exceptions import UnexpectedResponse
+
+        config = _make_config(collection_name="new_col")
+        client = MagicMock()
+        client.get_collections.return_value = MagicMock()
+        client.get_collection.side_effect = UnexpectedResponse(
+            status_code=404, reason_phrase="Not found", content=b"", headers={}
+        )
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("qdrant_client.QdrantClient", return_value=client),
+        ):
+            from src.ingestion.unified.cli import cmd_bootstrap
+
+            result = await cmd_bootstrap(args)
+
+        assert result == 1
+        output = capsys.readouterr().out
+        assert "[FAIL]" in output or "QDRANT_QUANTIZATION_MODE" in output
 
 
 class TestCmdSchemaCheck:
