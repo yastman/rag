@@ -246,6 +246,58 @@ async def load_next_catalog_page(
     return updated
 
 
+async def run_catalog_search_and_render(
+    *,
+    msg: Message,
+    manager: DialogManager,
+    runtime: CatalogRuntime,
+    results: list[Any],
+    property_bot: Any,
+    view_mode: str,
+    telegram_id: int,
+) -> None:
+    """Close dialog shell, delete its message, then render search results.
+
+    Shared post-search render sequence used by FunnelSG and FilterSG to
+    avoid duplicating the close → delete → show pattern (#2948 Step 5).
+
+    Callers are responsible for building ``runtime`` and running the search;
+    this helper owns everything that happens afterwards.
+    """
+    manager.show_mode = ShowMode.NO_UPDATE
+    await manager.done()
+    if hasattr(msg, "delete"):
+        with contextlib.suppress(Exception):
+            await msg.delete()
+
+    if not results:
+        await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
+        await activate_catalog_state(dialog_manager=manager, state=CatalogSG.empty)
+        return
+
+    i18n = manager.middleware_data.get("i18n")
+    await send_catalog_results(
+        message=msg,
+        property_bot=property_bot,
+        results=results,
+        total_count=int(runtime.get("total", len(results)) or len(results)),
+        view_mode=view_mode,
+        shown_start=1,
+        telegram_id=telegram_id,
+        reply_markup=(
+            build_catalog_keyboard(
+                shown=len(results),
+                total=int(runtime.get("total", len(results)) or len(results)),
+                i18n=i18n,
+            )
+            if view_mode == "list"
+            else None
+        ),
+    )
+    await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
+    await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
+
+
 async def _handle_catalog_more_message(
     *,
     message: Message,
