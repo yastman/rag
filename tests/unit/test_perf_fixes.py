@@ -231,135 +231,16 @@ def test_start_calls_warmup_bge():
 
 
 # ---------------------------------------------------------------------------
-# #955: Voice pipeline scores recorded correctly
+# #955: Score stubs are no-ops (Langfuse removed in #2844)
 # ---------------------------------------------------------------------------
 
 
-def test_write_langfuse_scores_voice_fields():
-    """#955: write_langfuse_scores writes voice-specific scores when present."""
-    from src.scoring import write_langfuse_scores
+def test_write_scores_is_noop():
+    """write_scores / write_langfuse_scores are no-ops — Langfuse removed (#2844)."""
+    from src.scoring import write_langfuse_scores, write_scores
 
     lf = MagicMock()
-    lf.get_current_trace_id.return_value = "test-trace-id"
-
-    result = {
-        "query_type": "GENERAL",
-        "pipeline_wall_ms": 1500.0,
-        "e2e_latency_ms": 1500.0,
-        "cache_hit": False,
-        "search_results_count": 20,
-        "latency_stages": {"generate": 0.8, "retrieve": 0.3, "cache_check": 0.05},
-        "grade_confidence": 0.012,
-        "input_type": "voice",
-        "stt_duration_ms": 450.0,
-        "voice_duration_s": 3.5,
-    }
-
-    write_langfuse_scores(lf, result, trace_id="test-trace-id")
-
-    # Collect all score names written
-    score_names = [
-        call.kwargs.get("name", call.args[2] if len(call.args) > 2 else None)
-        for call in lf.create_score.call_args_list
-    ]
-    # Try name from kwargs first
-    if not any(score_names):
-        score_names = []
-        for call in lf.create_score.call_args_list:
-            kw = call.kwargs
-            score_names.append(kw.get("name", ""))
-
-    assert "results_count" in score_names
-    assert "llm_used" in score_names
-    assert "input_type" in score_names
-    assert "stt_duration_ms" in score_names
-    assert "voice_duration_s" in score_names
-
-
-def test_write_langfuse_scores_llm_used_when_generate_in_stages():
-    """#955: llm_used=1.0 when 'generate' key exists in latency_stages."""
-    from src.scoring import write_langfuse_scores
-
-    lf = MagicMock()
-    result = {
-        "latency_stages": {"generate": 0.5},
-        "pipeline_wall_ms": 1000.0,
-        "search_results_count": 5,
-    }
-
-    write_langfuse_scores(lf, result, trace_id="t1")
-
-    # Find the llm_used score call
-    for call in lf.create_score.call_args_list:
-        if call.kwargs.get("name") == "llm_used":
-            assert call.kwargs["value"] == 1.0
-            return
-    pytest.fail("llm_used score not written")
-
-
-def test_write_langfuse_scores_results_count():
-    """#955: results_count reflects search_results_count from state."""
-    from src.scoring import write_langfuse_scores
-
-    lf = MagicMock()
-    result = {
-        "latency_stages": {},
-        "pipeline_wall_ms": 500.0,
-        "search_results_count": 20,
-    }
-
+    result = {"pipeline_wall_ms": 1500.0, "search_results_count": 20, "latency_stages": {}}
+    write_scores(lf, result, trace_id="t1")
     write_langfuse_scores(lf, result, trace_id="t2")
-
-    for call in lf.create_score.call_args_list:
-        if call.kwargs.get("name") == "results_count":
-            assert call.kwargs["value"] == 20.0
-            return
-    pytest.fail("results_count score not written")
-
-
-def test_write_langfuse_scores_no_results_flag():
-    """#955: no_results=1 when search_results_count is 0."""
-    from src.scoring import write_langfuse_scores
-
-    lf = MagicMock()
-    result = {
-        "latency_stages": {},
-        "pipeline_wall_ms": 500.0,
-        "search_results_count": 0,
-    }
-
-    write_langfuse_scores(lf, result, trace_id="t3")
-
-    for call in lf.create_score.call_args_list:
-        if call.kwargs.get("name") == "no_results":
-            assert call.kwargs["value"] == 1.0
-            return
-    pytest.fail("no_results score not written")
-
-
-def test_write_langfuse_scores_cache_hit_voice():
-    """#955: Voice cache hit path still records scores correctly."""
-    from src.scoring import write_langfuse_scores
-
-    lf = MagicMock()
-    result = {
-        "latency_stages": {"cache_check": 0.05},
-        "pipeline_wall_ms": 200.0,
-        "cache_hit": True,
-        "search_results_count": 0,
-        "input_type": "voice",
-        "stt_duration_ms": 300.0,
-        "voice_duration_s": 2.0,
-    }
-
-    write_langfuse_scores(lf, result, trace_id="t4")
-
-    score_names = [call.kwargs.get("name") for call in lf.create_score.call_args_list]
-    assert "semantic_cache_hit" in score_names
-    assert "input_type" in score_names
-    # llm_used should be 0 (no generate stage)
-    for call in lf.create_score.call_args_list:
-        if call.kwargs.get("name") == "llm_used":
-            assert call.kwargs["value"] == 0.0
-        if call.kwargs.get("name") == "semantic_cache_hit":
-            assert call.kwargs["value"] == 1.0
+    lf.create_score.assert_not_called()

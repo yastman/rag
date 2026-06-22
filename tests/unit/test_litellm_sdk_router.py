@@ -51,7 +51,6 @@ async def test_chat_client_delegates_to_router_acompletion() -> None:
         model="gpt-4o-mini",
         timeout=12,
     )
-    assert client._langfuse_auto_trace is False
 
 
 def test_graph_config_create_llm_returns_litellm_sdk_client() -> None:
@@ -91,7 +90,6 @@ async def test_chat_client_translates_response_model_to_json_schema_and_drops_wr
         response_model=StructuredResult,
         max_retries=3,
         name="query-analysis",
-        langfuse_prompt=object(),
     )
 
     assert result == StructuredResult(answer="ok", score=9)
@@ -102,7 +100,6 @@ async def test_chat_client_translates_response_model_to_json_schema_and_drops_wr
     assert "response_model" not in kwargs
     assert "max_retries" not in kwargs
     assert "name" not in kwargs
-    assert "langfuse_prompt" not in kwargs
 
 
 @pytest.mark.asyncio

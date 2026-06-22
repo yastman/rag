@@ -114,7 +114,6 @@ async def test_generate_answer_stream_connection_error_yields_structured_fallbac
 
     mock_llm = MagicMock()
     mock_llm.chat.completions.create = AsyncMock(return_value=_failing_stream())
-    mock_llm._langfuse_auto_trace = False
     config.create_llm = MagicMock(return_value=mock_llm)
 
     lf_client = MagicMock()

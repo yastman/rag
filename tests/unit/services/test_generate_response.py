@@ -157,14 +157,11 @@ async def test_generate_response_retries_without_name_kwarg_non_streaming() -> N
 async def test_generate_response_fallback_on_llm_error() -> None:
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = RuntimeError("provider down")
-    lf = MagicMock()
-
-    with patch("telegram_bot.services.generate_response.get_client", return_value=lf):
-        result = await generate_response(
-            query="Запрос",
-            documents=[],
-            config=config,
-        )
+    result = await generate_response(
+        query="Запрос",
+        documents=[],
+        config=config,
+    )
 
     assert "временно недоступен" in result["response"]
     assert result["fallback_used"] is True
@@ -427,21 +424,17 @@ async def test_generate_response_streaming_sets_response_sent_and_message_ref() 
     message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
-    with patch(
-        "telegram_bot.services.generate_response.record_langfuse_response_output"
-    ) as mock_record_output:
-        result = await generate_response(
-            query="Стриминг?",
-            documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
-            config=config,
-            message=message,
-            raw_messages=[{"role": "user", "content": "Стриминг?"}],
-        )
+    result = await generate_response(
+        query="Стриминг?",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Стриминг?"}],
+    )
 
     assert result["response"] == "Часть 1 Часть 2"
     assert result["response_sent"] is True
     assert result["sent_message"] == {"chat_id": 555, "message_id": 777}
-    mock_record_output.assert_called_once_with("Часть 1 Часть 2", 1)
 
 
 @pytest.mark.asyncio
@@ -460,19 +453,15 @@ async def test_generate_response_streaming_does_not_record_output_when_delivery_
     message.bot = bot
     message.answer = AsyncMock(side_effect=RuntimeError("telegram send failed"))
 
-    with patch(
-        "telegram_bot.services.generate_response.record_langfuse_response_output"
-    ) as mock_record_output:
-        result = await generate_response(
-            query="Тест ошибки доставки",
-            documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
-            config=config,
-            message=message,
-            raw_messages=[{"role": "user", "content": "Тест ошибки доставки"}],
-        )
+    result = await generate_response(
+        query="Тест ошибки доставки",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест ошибки доставки"}],
+    )
 
     assert result["response_sent"] is False
-    mock_record_output.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -1012,12 +1001,8 @@ async def test_connection_error_uses_logger_warning_not_exception() -> None:
 
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = ConnectError("connection refused")
-    lf = MagicMock()
 
-    with (
-        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
-        patch("telegram_bot.services.generate_response.logger") as mock_logger,
-    ):
+    with patch("telegram_bot.services.generate_response.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],
@@ -1043,12 +1028,8 @@ async def test_openai_connection_error_uses_logger_warning_not_exception() -> No
     config.create_llm.side_effect = APIConnectionError(
         message="connection error", request=MagicMock()
     )
-    lf = MagicMock()
 
-    with (
-        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
-        patch("telegram_bot.services.generate_response.logger") as mock_logger,
-    ):
+    with patch("telegram_bot.services.generate_response.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],
@@ -1070,12 +1051,8 @@ async def test_unexpected_error_still_uses_logger_exception() -> None:
     """Non-connection exceptions (e.g. RuntimeError) must still log via logger.exception()."""
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = RuntimeError("unexpected failure")
-    lf = MagicMock()
 
-    with (
-        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
-        patch("telegram_bot.services.generate_response.logger") as mock_logger,
-    ):
+    with patch("telegram_bot.services.generate_response.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],
@@ -1098,14 +1075,11 @@ async def test_fallback_behavior_preserved_for_connection_error() -> None:
 
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = ConnectError("connection refused")
-    lf = MagicMock()
-
-    with patch("telegram_bot.services.generate_response.get_client", return_value=lf):
-        result = await generate_response(
-            query="Запрос",
-            documents=[],
-            config=config,
-        )
+    result = await generate_response(
+        query="Запрос",
+        documents=[],
+        config=config,
+    )
 
     assert result["response"] == (
         "⚠️ Извините, сервис временно недоступен.\n\nПопробуйте повторить запрос позже."
@@ -1123,14 +1097,11 @@ async def test_fallback_with_documents_preserved_for_connection_error() -> None:
 
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = ConnectError("connection refused")
-    lf = MagicMock()
-
-    with patch("telegram_bot.services.generate_response.get_client", return_value=lf):
-        result = await generate_response(
-            query="Запрос",
-            documents=[{"text": "Док", "score": 0.9, "metadata": {"title": "Тест"}}],
-            config=config,
-        )
+    result = await generate_response(
+        query="Запрос",
+        documents=[{"text": "Док", "score": 0.9, "metadata": {"title": "Тест"}}],
+        config=config,
+    )
 
     assert result["fallback_used"] is True
     assert "Тест" in result["response"]
@@ -1144,16 +1115,13 @@ async def test_connection_error_fallback_preserves_usage_and_timing_structure() 
 
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = ConnectError("connection refused")
-    lf = MagicMock()
-
-    with patch("telegram_bot.services.generate_response.get_client", return_value=lf):
-        result = await generate_response(
-            query="Запрос",
-            documents=[],
-            config=config,
-            llm_call_count=3,
-            latency_stages={"retrieve": 0.5},
-        )
+    result = await generate_response(
+        query="Запрос",
+        documents=[],
+        config=config,
+        llm_call_count=3,
+        latency_stages={"retrieve": 0.5},
+    )
 
     assert result["fallback_used"] is True
     assert result["llm_call_count"] == 4  # input count (3) + 1
@@ -1175,7 +1143,6 @@ async def test_streaming_connection_error_logs_concise_warning() -> None:
     client.chat.completions.create = AsyncMock(side_effect=ConnectError("connection refused"))
     config.create_llm.return_value = client
 
-    lf = MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     message = AsyncMock()
@@ -1183,10 +1150,7 @@ async def test_streaming_connection_error_logs_concise_warning() -> None:
     message.bot = bot
     message.answer = AsyncMock(return_value=None)
 
-    with (
-        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
-        patch("telegram_bot.services.generate_response.logger") as mock_logger,
-    ):
+    with patch("telegram_bot.services.generate_response.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],
@@ -1210,7 +1174,6 @@ async def test_streaming_non_connection_error_still_uses_exception() -> None:
     client.chat.completions.create = AsyncMock(side_effect=ValueError("invalid model"))
     config.create_llm.return_value = client
 
-    lf = MagicMock()
     bot = AsyncMock()
     bot.send_message_draft = AsyncMock(return_value=True)
     message = AsyncMock()
@@ -1218,10 +1181,7 @@ async def test_streaming_non_connection_error_still_uses_exception() -> None:
     message.bot = bot
     message.answer = AsyncMock(return_value=None)
 
-    with (
-        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
-        patch("telegram_bot.services.generate_response.logger") as mock_logger,
-    ):
+    with patch("telegram_bot.services.generate_response.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],

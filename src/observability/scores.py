@@ -1,4 +1,4 @@
-"""Langfuse score stubs — Langfuse removed (#2844)."""
+"""Score stubs — Langfuse removed (#2844)."""
 
 from __future__ import annotations
 
@@ -15,8 +15,12 @@ def score(lf: Any, trace_id: str, *, name: str, value: Any, **kwargs: Any) -> No
     """No-op stub — Langfuse removed (#2844)."""
 
 
-def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
+def write_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     """No-op stub — Langfuse removed (#2844)."""
+
+
+# Backward-compat alias
+write_langfuse_scores = write_scores
 
 
 def write_history_scores(

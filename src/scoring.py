@@ -12,6 +12,7 @@ from src.observability.scores import (
     score,
     write_history_scores,
     write_langfuse_scores,
+    write_scores,
 )
 
 
@@ -20,4 +21,5 @@ __all__ = [
     "score",
     "write_history_scores",
     "write_langfuse_scores",
+    "write_scores",
 ]
