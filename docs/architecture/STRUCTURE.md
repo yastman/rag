@@ -63,6 +63,8 @@ Docker sidecars only — not Python packages imported by the monolith.
 | `src/runtime/pipeline/rag.py` | Hybrid retrieval pipeline (cache → search → grade → rerank → rewrite) | runtime | High-signal; call chain starts at `run_assistant_pipeline` |
 | `src/runtime/generation/` | `generate_answer`, grounded LLM response generation | runtime | `service.py` holds the LLM call |
 | `src/runtime/retrieval/` | Qdrant hybrid search execution | runtime | Called by `rag.py` |
+| `src/retrieval/` | `topic_classifier.py` (query-path classifier); `search_engines.py` / `search_engine_shared.py` (back-compat shims re-exporting from `src/evaluation/retrieval/`) | runtime + ingestion | Imported by `rag.py`, `assistant_pipeline.py`, `_grade_rerank.py`, `_rewrite_cache.py`, and `ingestion/unified/qdrant_writer.py` |
+| `src/evaluation/retrieval/` | Real `HybridRRFSearchEngine` implementation | runtime | `search_engines.py` holds the actual hybrid-search logic; `src/retrieval/` shims re-export from here |
 | `src/runtime/grounding/` | Citation and grounding policy | runtime | Applied after generation |
 | `src/runtime/llm/` | LiteLLM client factory and router | runtime | Shared by generation and adapters |
 | `src/runtime/graph/` | LangGraph state and node wiring for the query graph | runtime | `config.py`, `state.py`, `nodes/` |
@@ -106,6 +108,8 @@ telegram_bot  →  src/runtime          (adapter over engine — allowed)
 src/adapters  →  src/core             (allowed)
 src/ingestion →  src/services         (allowed)
 src/ingestion →  src/core             (allowed)
+src/runtime   →  src/retrieval        (topic_classifier, search engine shims)
+src/ingestion →  src/retrieval        (topic_classifier via qdrant_writer.py)
 ```
 
 Forbidden directions (enforced by contract tests and importlinter):
