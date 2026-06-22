@@ -152,7 +152,7 @@ The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The
 - **Telegram Mini App deeplink** — `command_handlers.py` registers a `/start` deep-link handler (`q_` prefix). Active.
 - **Voice message handlers** — `bot.py` contains voice/audio processing handlers. Active.
 - **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
-- **Langfuse shim** — `src/observability/langfuse_client.py` is a no-op Langfuse client (`get_client()` returns `None`, `@observe` is a pass-through decorator); the dead shim is still threaded through `src/runtime/pipeline/rag.py` and `src/runtime/generation/service.py`.
+- **Langfuse residue** — the `langfuse_client.py` shim and its call sites in `rag.py`/`service.py` were removed in #2969. Remaining cleanup (#3008): rename `write_langfuse_scores` to a neutral name, remove `record_langfuse_response_output` stub in `telegram_bot/services/generate_response.py`, and drop lingering Langfuse-named kwargs in `src/runtime/llm/router.py`.
 
 Claims in previous README versions that "Mini App and voice adapters were removed" were inaccurate. The above items exist in the current codebase.
 

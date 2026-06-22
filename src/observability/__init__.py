@@ -22,6 +22,7 @@ from src.observability.scores import (
     score,
     write_history_scores,
     write_langfuse_scores,
+    write_scores,
 )
 from src.security.pii_redaction import PIIRedactor
 
@@ -56,4 +57,5 @@ __all__ = [
     "score",
     "write_history_scores",
     "write_langfuse_scores",
+    "write_scores",
 ]

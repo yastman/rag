@@ -116,13 +116,6 @@ def build_html_messages(
     return rendered
 
 
-def record_langfuse_response_output(answer_text: str | None, chunks_count: int) -> None:
-    """No-op stub — Langfuse removed (#2844)."""
-
-
-_record_langfuse_response_output = record_langfuse_response_output
-
-
 async def send_html_messages(
     message: Any,
     answer_text: str,
@@ -161,8 +154,4 @@ async def send_html_messages(
                 logger.exception("Failed to send formatted response chunk")
                 await message.answer(html.unescape(html_text))
 
-    try:
-        record_langfuse_response_output(answer_text, len(html_messages))
-    except Exception:
-        logger.debug("Failed to record Langfuse output", exc_info=True)
     return True

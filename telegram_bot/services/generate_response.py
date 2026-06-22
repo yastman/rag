@@ -34,7 +34,6 @@ from src.runtime.services.response_style_detector import ResponseStyleDetector
 from telegram_bot.services.telegram_formatting import (
     build_reply_parameters,
     format_answer_html,
-    record_langfuse_response_output,
 )
 
 
@@ -351,15 +350,9 @@ def _ensure_history_instruction(system_prompt: str) -> str:
 
 
 def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
-    """Return True if client rejected Langfuse-specific `name` kwarg."""
+    """Return True if client rejected `name` kwarg (not supported by plain OpenAI SDK)."""
     message = str(exc)
     return "unexpected keyword argument" in message and "'name'" in message
-
-
-def _is_unsupported_langfuse_prompt_kwarg(exc: TypeError) -> bool:
-    """Return True if client rejected Langfuse-specific `langfuse_prompt` kwarg."""
-    message = str(exc)
-    return "unexpected keyword argument" in message and "'langfuse_prompt'" in message
 
 
 async def _chat_create_with_optional_name(
@@ -368,36 +361,14 @@ async def _chat_create_with_optional_name(
     observation_name: str,
     **kwargs: Any,
 ) -> Any:
-    """Call chat.completions.create with Langfuse `name` when supported.
-
-    Some clients (plain OpenAI SDK) reject `name` and `langfuse_prompt` as
-    unexpected kwargs. Langfuse-wrapped clients accept them and use them for
-    generation naming and Prompt Management linking (#1666) respectively.
-    """
+    """Call chat.completions.create, trying `name` kwarg and falling back if unsupported."""
     create_fn = llm.chat.completions.create
-    if getattr(llm, "_langfuse_auto_trace", True) is False:
-        # Plain client created via GraphConfig.create_llm(auto_trace=False).
-        # Skip both Langfuse-specific kwargs to avoid a needless TypeError →
-        # retry round-trip on every call.
-        kwargs.pop("langfuse_prompt", None)
-        return await create_fn(**kwargs)
     try:
         return await create_fn(name=observation_name, **kwargs)
     except TypeError as exc:
-        if _is_unsupported_langfuse_prompt_kwarg(exc):
-            logger.debug("LLM client does not support `langfuse_prompt`; retrying without it")
-            kwargs.pop("langfuse_prompt", None)
-            try:
-                return await create_fn(name=observation_name, **kwargs)
-            except TypeError as exc2:
-                if not _is_unsupported_name_kwarg(exc2):
-                    raise
-                logger.debug("LLM client does not support `name`; retrying without it")
-                return await create_fn(**kwargs)
         if not _is_unsupported_name_kwarg(exc):
             raise
         logger.debug("LLM client does not support `name`; retrying without it")
-        kwargs.pop("langfuse_prompt", None)
         return await create_fn(**kwargs)
 
 
@@ -449,8 +420,6 @@ async def _handle_stream_error(
             parse_mode="HTML",
             reply_parameters=build_reply_parameters(message, getattr(message, "text", "") or ""),
         )
-    if sent_msg is not None:
-        record_langfuse_response_output(final_text, 1)
     raise StreamingPartialDeliveryError(sent_msg, final_text) from None
 
 
@@ -539,9 +508,6 @@ async def _generate_streaming(
     final_text = sanitize_response(accumulated) if sanitize_response else accumulated
     sent_msg = await _deliver_final_message(message, final_text)
 
-    if sent_msg is not None:
-        record_langfuse_response_output(final_text, 1)
-
     actual_model, ttft_ms, stream_only_ttft_ms, usage_details, completion_tokens = (
         _extract_stream_metadata(metadata_out, config)
     )
@@ -610,8 +576,6 @@ async def _non_streaming_llm_call(
         "max_tokens": max_tokens,
         **config.get_reasoning_kwargs(),
     }
-    if prompt_obj is not None:
-        create_kwargs["langfuse_prompt"] = prompt_obj
     response_obj = await _chat_create_with_optional_name(
         llm,
         observation_name="generate-answer",
@@ -822,8 +786,6 @@ async def _run_stream_with_recovery(
             stream_kwargs["sanitize_response"] = lambda text: _sanitize_response_text(
                 text, sources_enabled=ctx.sources_enabled
             )
-        if "langfuse_prompt" in params and ctx.prompt_obj is not None:
-            stream_kwargs["langfuse_prompt"] = ctx.prompt_obj
 
         stream_result = await generate_streaming(
             llm,

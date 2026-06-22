@@ -421,7 +421,6 @@ async def _send_core_response(
 
     from telegram_bot.services.telegram_formatting import (
         build_html_messages,
-        record_langfuse_response_output,
         send_html_messages,
     )
 
@@ -447,7 +446,6 @@ async def _send_core_response(
                 if thread_id is not None:
                     send_kwargs["message_thread_id"] = thread_id
                 await bot.bot.send_message(**send_kwargs)
-                record_langfuse_response_output(response_text, len(html_messages))
             else:
                 await send_html_messages(
                     message, response_text, sources_html=sources_html, reply_markup=reply_markup

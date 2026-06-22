@@ -164,7 +164,6 @@ class _ChatCompletions:
         response_model = request.pop("response_model", None)
         request.pop("max_retries", None)
         request.pop("name", None)  # OpenAI wrapper-only metadata; LiteLLM drops unsupported params.
-        request.pop("langfuse_prompt", None)
         request.setdefault("model", self.default_model)
         request.setdefault("timeout", self.timeout)
         if response_model is not None and "response_format" not in request:
@@ -188,7 +187,6 @@ class LiteLLMChatClient:
     default_model: str = DEFAULT_MODEL_ALIAS
     timeout: float = DEFAULT_TIMEOUT_SECONDS
     chat: _ChatNamespace = field(init=False)
-    _langfuse_auto_trace: bool = field(init=False, default=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -202,7 +200,6 @@ class LiteLLMChatClient:
                 )
             ),
         )
-        object.__setattr__(self, "_langfuse_auto_trace", False)
 
 
 def create_litellm_chat_client(
