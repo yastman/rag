@@ -266,11 +266,11 @@ services:
       - MANIFEST_DIR=/data/manifest
     volumes:
       - type: bind
-        source: ${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}
+        source: ${GDRIVE_SYNC_DIR:-/tmp/drive-sync-empty}
         target: /data/drive-sync
         read_only: true
         bind:
-          create_host_path: false
+          create_host_path: true
       - ingestion-manifest:/data/manifest
     depends_on:
       postgres:
