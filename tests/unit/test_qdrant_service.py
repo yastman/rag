@@ -475,7 +475,7 @@ class TestQdrantServiceTimeout:
             mock_client.assert_called_once_with(
                 url="http://localhost:6333",
                 api_key=None,
-                prefer_grpc=True,
+                prefer_grpc=False,
                 timeout=expected_timeout,
             )
 
