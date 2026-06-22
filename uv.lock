@@ -44,7 +44,6 @@ constraints = [
     { name = "propcache", specifier = ">=0.5.2" },
     { name = "protobuf", specifier = ">=6.33.6" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
-    { name = "redisvl", specifier = ">=0.18.2" },
     { name = "regex", specifier = ">=2026.5.9" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "rpds-py", specifier = ">=2026.5.1" },
