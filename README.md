@@ -132,6 +132,8 @@ make docker-bot-up
 
 For the full setup ladder, environment variables, and troubleshooting, see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
 
+Notable configurable env vars (see `.env.example`): `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`.
+
 ## Validation
 
 ```bash
@@ -139,6 +141,7 @@ make check          # Ruff lint + MyPy strict type checking
 make test-core      # Fast core gate (~91 tests, ~8s) — run first for any src/core or src/runtime change
 make test           # Broader fast gate (unit + graph paths) — run for adapter/service changes
 make e2e-core-live  # Golden E2E: indexes fixture corpus, runs full spine through run_assistant_request
+make qdrant-audit-indexes  # Audit Qdrant payload indexes
 ```
 
 `make e2e-core-live` is the main proof of the core path. It exercises classification, retrieval, generation fallback, and runs without Telegram, Langfuse, or voice. It requires local Qdrant and BGE-M3 running (`make core-up`).
@@ -151,7 +154,7 @@ The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The
 
 - **Telegram Mini App deeplink** — `command_handlers.py` registers a `/start` deep-link handler (`q_` prefix). Archived surface; not a production capability.
 - **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
-- **Langfuse residue** — the `langfuse_client.py` shim and its call sites in `rag.py`/`service.py` were removed in #2969. Remaining cleanup (#3008): rename `write_langfuse_scores` to a neutral name, remove `record_langfuse_response_output` stub in `telegram_bot/services/generate_response.py`, and drop lingering Langfuse-named kwargs in `src/runtime/llm/router.py`.
+- **Langfuse removed** — Langfuse integration was removed; observability is through structured logs and the Loki/Promtail stack.
 
 The active production adapter is Telegram (`telegram_bot/`). Mini App deeplink is an archived reference surface present in the file tree but not on the active runtime path. Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
 
@@ -184,6 +187,7 @@ Other honest limits:
 | [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) | Query, retrieval, and generation flows |
 | [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) | Folder map and high-signal files |
 | [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) | Safe review path before running commands |
+| [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md) | Module ownership map |
 
 ## Direction
 
