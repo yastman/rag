@@ -147,14 +147,13 @@ CI runs static/lint guardrails only (Ruff, MyPy, Semgrep, lockfile check). Pytes
 
 ## Honest Current State
 
-The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The following legacy surfaces are still **physically in-tree and partly active** — they are being trimmed in open issues, not already removed:
+The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The following surfaces are physically in-tree but are **archived/reference** — not part of the active production path, and being trimmed in open issues:
 
-- **Telegram Mini App deeplink** — `command_handlers.py` registers a `/start` deep-link handler (`q_` prefix). Active.
-- **Voice message handlers** — `bot.py` contains voice/audio processing handlers. Active.
+- **Telegram Mini App deeplink** — `command_handlers.py` registers a `/start` deep-link handler (`q_` prefix). Archived surface; not a production capability.
 - **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
 - **Langfuse residue** — the `langfuse_client.py` shim and its call sites in `rag.py`/`service.py` were removed in #2969. Remaining cleanup (#3008): rename `write_langfuse_scores` to a neutral name, remove `record_langfuse_response_output` stub in `telegram_bot/services/generate_response.py`, and drop lingering Langfuse-named kwargs in `src/runtime/llm/router.py`.
 
-Claims in previous README versions that "Mini App and voice adapters were removed" were inaccurate. The above items exist in the current codebase.
+The active production adapter is Telegram (`telegram_bot/`). Mini App deeplink is an archived reference surface present in the file tree but not on the active runtime path. Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
 
 Other honest limits:
 
