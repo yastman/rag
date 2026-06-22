@@ -7,7 +7,7 @@
 	ingest-dir ingest-status ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
-	qdrant-backup qdrant-cleanup \
+	qdrant-audit-indexes qdrant-backup qdrant-cleanup \
 	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
 	docker-clean docker-clean-aggressive
 	test-contract \
@@ -1144,7 +1144,11 @@ ingest-unified-logs: ## Show ingestion service logs
 # QDRANT BACKUP
 # =============================================================================
 
-.PHONY: qdrant-backup qdrant-cleanup
+.PHONY: qdrant-audit-indexes qdrant-backup qdrant-cleanup
+
+qdrant-audit-indexes: ## Audit Qdrant payload indexes — PASS/FAIL with missing fields (#3074)
+	@echo "$(BLUE)Auditing Qdrant payload indexes for $${QDRANT_COLLECTION:-gdrive_documents_bge}...$(NC)"
+	uv run python scripts/qdrant_audit_indexes.py
 
 qdrant-backup: ## Create Qdrant collection snapshots (all collections)
 	@echo "$(BLUE)Creating Qdrant snapshots...$(NC)"
