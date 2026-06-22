@@ -6,8 +6,6 @@ from typing import Any
 
 from aiogram.types import Message
 
-from telegram_bot.dialogs.funnel import format_apartment_list
-
 
 async def send_catalog_results(
     *,
@@ -21,6 +19,10 @@ async def send_catalog_results(
     reply_markup: Any = None,
 ) -> None:
     if view_mode == "list" or property_bot is None:
+        from telegram_bot.dialogs.funnel import (
+            format_apartment_list,  # local: breaks catalog↔funnel cycle
+        )
+
         text = format_apartment_list(results, shown_start=shown_start, total=total_count)
         await message.answer(text, parse_mode="HTML", reply_markup=reply_markup)
         return

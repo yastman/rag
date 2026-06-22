@@ -38,9 +38,7 @@ async def test_send_catalog_results_list_mode_sends_formatted_text() -> None:
     message.answer = AsyncMock()
     reply_markup = ReplyKeyboardMarkup(keyboard=[])
 
-    with patch(
-        "telegram_bot.services.catalog_rendering.format_apartment_list", return_value="LIST"
-    ):
+    with patch("telegram_bot.dialogs.funnel.format_apartment_list", return_value="LIST"):
         await send_catalog_results(
             message=message,
             property_bot=None,
