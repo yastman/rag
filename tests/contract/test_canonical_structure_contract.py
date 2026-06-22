@@ -32,6 +32,8 @@ REQUIRED_ACTIVE_DIRS = [
     "src/adapters/embeddings",
     "src/adapters/llm",
     "src/ingestion/unified",
+    "src/retrieval",
+    "src/evaluation/retrieval",
     "telegram_bot",
     "services/bge-m3-api",
     "services/docling",
