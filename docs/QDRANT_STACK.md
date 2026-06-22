@@ -36,11 +36,11 @@ Default collection name: `gdrive_documents_bge` (set via `QDRANT_COLLECTION` / `
 size:           1024
 distance:       Cosine
 HNSW:           m=16, ef_construct=200, on_disk=false (graph in RAM)
-quantization:   Scalar INT8, quantile=0.99, always_ram=true
+quantization:   Binary, always_ram=true
 on_disk:        true (original vectors on disk for rescoring)
 ```
 
-Scalar INT8 quantization gives ~4× compression at 0.99 accuracy. Originals stay on disk for rescoring with `QDRANT_QUANTIZATION_RESCORE=true`.
+Binary quantization gives ~32× compression (1 bit/dimension). Originals stay on disk for rescoring with `QDRANT_QUANTIZATION_RESCORE=true`.
 
 ### ColBERT Vector Config
 
