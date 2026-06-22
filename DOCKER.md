@@ -116,6 +116,37 @@ BGE_M3_ONNX_MODEL_HOST_DIR=./path/to/bge_m3_onnx_int8
 The directory must contain `model.int8.onnx` (and its `.data` sidecar) before
 running `docker compose build bge-m3`.
 
+## Redis TTL Policy (volatile-lfu safety audit)
+
+Redis runs with `--maxmemory-policy volatile-lfu` (`compose.yml:65`): only keys
+**with a TTL** are eligible for eviction under memory pressure. Keys without a TTL
+are never evicted.
+
+Audit result — all Redis key-writing code categorised by TTL presence:
+
+| Key pattern | Module | TTL | Category | Safe? |
+|---|---|---|---|---|
+| `topics:{user_id}:{expert_id}` | `TopicService` | none | state | ✅ never evicted |
+| `topics:{user_id}:thread:{tid}` | `TopicService` | none | state | ✅ never evicted |
+| `topic:{chat_id}:{expert_id}` | `TopicManager` | 30 d | state/cache | ⚠️ see note |
+| `topic_rev:{chat_id}:{tid}` | `TopicManager` | 30 d | state/cache | ⚠️ see note |
+| `implicit_retry:{uid}` | `_bot_query_pipeline` | 60 s | short-lived cache | ✅ intentional |
+| `extraction:v1:{hash}` | `ApartmentExtractionPipeline` | 24 h | cache | ✅ intentional |
+| `sem:v8:…` (semantic answer cache) | `CacheManager` / RedisVL | per query-type | cache | ✅ intentional |
+| `embeddings:v5:…` | `CacheManager` / RedisVL | configured TTL | cache | ✅ intentional |
+| `search:v5:…`, `rerank:v5:…`, etc. | `CacheManager.store_exact` | `DEFAULT_TTLS` | cache | ✅ intentional |
+| `conversation:{user_id}` | write path removed in #157 | — | n/a | ✅ no writes |
+
+**⚠️ `TopicManager` note:** `topic:` / `topic_rev:` keys carry a 30-day TTL,
+making them eviction candidates under memory pressure. These store Telegram forum
+topic IDs (created via the Telegram API). Expiry causes a new forum topic to be
+created on next access — acceptable degradation, not data loss. If zero-eviction
+guarantees are needed, remove the TTL or use `TopicService` (no-TTL variant)
+instead.
+
+**Rule:** cache keys must have a TTL; durable state keys must have no TTL (or use
+a separate Redis DB). Any future key added to Redis must follow this policy.
+
 ## Memory Limits
 
 | Service | Default limit |
