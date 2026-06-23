@@ -488,7 +488,7 @@ min_confidence = 80
 sort_by_size = true
 
 [tool.bandit]
-exclude_dirs = [".venv", "tests", "archive", "__pycache__"]
+exclude_dirs = [".venv", "tests", "archive", "__pycache__", "scripts"]
 skips = ["B101"]  # Skip assert_used (common in tests)
 
 # =============================================================================

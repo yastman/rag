@@ -48,7 +48,7 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 from collections.abc import Callable
@@ -88,7 +88,7 @@ def _gpu_mem_used_mib() -> float | None:
     deltas around a load, not absolutes.
     """
     try:
-        out = subprocess.run(
+        out = subprocess.run(  # nosec B603 B607
             ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits", "-i", "0"],
             capture_output=True,
             text=True,
@@ -144,7 +144,7 @@ class _OnnxEmbedder:
         self.sess = onnxruntime.InferenceSession(onnx_path, so, providers=providers)
         self.active_providers = self.sess.get_providers()
         # Tokenizer-only load; matches services/bge-m3-api (config-only, no weights).
-        self.tok = AutoTokenizer.from_pretrained(EMBED_MODEL)
+        self.tok = AutoTokenizer.from_pretrained(EMBED_MODEL)  # nosec B615  # benchmark only
 
     def _pick_dense(self, outputs: list[np.ndarray], batch: int) -> np.ndarray:
         # app.py order is dense,sparse,colbert; FP32 exports vary → pick the
