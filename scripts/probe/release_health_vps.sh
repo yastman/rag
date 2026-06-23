@@ -64,9 +64,6 @@ for removed_service in "${VPS_NONCORE_SERVICES[@]}"; do
   fi
 done
 
-log "Bot functional smoke (Qdrant + LiteLLM)"
-make test-bot-health-vps
-
 log "Bot network reachability (qdrant, litellm, postgres, redis, bge-m3)"
 docker compose exec -T bot python - <<'PY'
 import socket

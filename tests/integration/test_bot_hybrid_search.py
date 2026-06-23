@@ -22,7 +22,7 @@ from telegram_bot.config import BotConfig
 def _make_config() -> BotConfig:
     """Create deterministic config for bot initialization tests."""
     return BotConfig(
-        telegram_token="123456:TESTTOKEN",
+        telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         llm_api_key="test-llm-key",
         llm_base_url="https://api.example.com/v1",
         llm_model="test-model",

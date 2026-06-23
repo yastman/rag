@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re as _re
 from typing import Annotated
 from urllib.parse import quote
 
@@ -431,6 +432,16 @@ class BotConfig(BaseSettings):
             return [int(x) for x in v]
         return []
 
+    @field_validator("telegram_token", mode="after")
+    @classmethod
+    def validate_telegram_token_format(cls, v: str) -> str:
+        if v and not _re.match(r"^\d+:[A-Za-z\d_-]{35,}$", v):
+            raise ValueError(
+                "TELEGRAM_BOT_TOKEN format invalid — expected <bot_id>:<35+ chars>; "
+                "set a real token in .env"
+            )
+        return v
+
     @model_validator(mode="after")
     def validate_handoff_contract(self) -> BotConfig:
         self.redis_url = _inject_local_redis_password(
@@ -440,6 +451,13 @@ class BotConfig(BaseSettings):
         )
         if self.handoff_enabled and self.managers_group_id is None:
             raise ValueError("HANDOFF_ENABLED=true but MANAGERS_GROUP_ID is missing")
+        if not self.llm_api_key:
+            import logging as _logging
+
+            _logging.getLogger(__name__).warning(
+                "No LLM provider key set (LLM_API_KEY / OPENAI_API_KEY / "
+                "CEREBRAS_API_KEY). The bot will fail on the first LLM call."
+            )
         return self
 
     def get_collection_name(self) -> str:

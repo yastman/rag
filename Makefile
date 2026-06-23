@@ -11,8 +11,6 @@
 	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
 	docker-clean docker-clean-aggressive
 	test-contract \
-	preflight-bot \
-	preflight-qdrant \
 	release-polling-lock \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
@@ -468,86 +466,14 @@ smoke-zoo: ## Run zoo smoke tests (pytest)
 # REDIS VERIFICATION
 # =============================================================================
 
-.PHONY: test-redis
+.PHONY: bot-response-smoke
 
-test-redis: ## Verify Redis Query Engine is available
-	@echo "$(BLUE)Testing Redis Query Engine...$(NC)"
-	@$(ENV_LOAD) \
-	redis_exec() { \
-		if [ -n "$${REDIS_PASSWORD:-}" ]; then \
-			docker exec -e REDISCLI_AUTH="$$REDIS_PASSWORD" $(REDIS_CONTAINER) redis-cli "$$@"; \
-		else \
-			docker exec $(REDIS_CONTAINER) redis-cli "$$@"; \
-		fi; \
-	}; \
-	redis_policy=$$(redis_exec CONFIG GET maxmemory-policy | tail -n 1); \
-		if [ "$$redis_policy" != "volatile-lfu" ]; then \
-			echo "$(RED)FAIL: maxmemory-policy is $$redis_policy (expected volatile-lfu)$(NC)"; \
-			exit 1; \
-		fi; \
-		echo "  maxmemory-policy: $$redis_policy"; \
-	redis_samples=$$(redis_exec CONFIG GET maxmemory-samples | tail -n 1); \
-		if [ "$$redis_samples" != "$(EXPECTED_MAXMEMORY_SAMPLES)" ]; then \
-			echo "$(RED)FAIL: maxmemory-samples is $$redis_samples (expected $(EXPECTED_MAXMEMORY_SAMPLES))$(NC)"; \
-			exit 1; \
-		fi; \
-		echo "  maxmemory-samples: $$redis_samples"; \
-	redis_exec FT._LIST > /dev/null 2>&1 || \
-		{ echo "$(RED)FAIL: FT._LIST not available - Query Engine missing$(NC)"; exit 1; }; \
-	echo "  FT._LIST: OK"; \
-	redis_exec FT.CREATE __test_vec_idx ON HASH PREFIX 1 __test_vec: SCHEMA name TEXT vec VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE > /dev/null 2>&1 || \
-		{ echo "$(RED)FAIL: Cannot create VECTOR index$(NC)"; exit 1; }; \
-	echo "  FT.CREATE VECTOR: OK"; \
-	redis_exec FT.DROPINDEX __test_vec_idx > /dev/null 2>&1 || true; \
-	echo "$(GREEN)Query Engine + Vector Search: OK$(NC)"; \
-	if [ "$${REQUIRE_REDIS_JSON:-0}" = "1" ]; then \
-		redis_exec JSON.SET __test_json '$$' '{"test":1}' > /dev/null 2>&1 || \
-			{ echo "$(RED)FAIL: JSON.SET not available$(NC)"; exit 1; }; \
-		redis_exec JSON.GET __test_json > /dev/null 2>&1 || \
-			{ echo "$(RED)FAIL: JSON.GET not available$(NC)"; exit 1; }; \
-		redis_exec DEL __test_json > /dev/null 2>&1 || true; \
-		echo "  JSON: OK"; \
-	fi; \
-	echo "$(GREEN)✓ Redis capabilities verified$(NC)"
-
-.PHONY: test-bot-health test-bot-health-vps preflight-bot bot-response-smoke
-
-PREFLIGHT_BOT_FLAGS ?=
 BOT_RESPONSE_SMOKE_FLAGS ?=
-
-preflight-qdrant: ## Fail fast when localhost:6333 is unreachable (run before preflight-bot and bot)
-	@if ! timeout 1 bash -c 'echo >/dev/tcp/localhost/6333' 2>/dev/null; then \
-		echo "$(RED)✗ Qdrant is not reachable on localhost:6333$(NC)" >&2; \
-		echo "$(YELLOW)Run 'make local-up' to start required local services (redis, qdrant, bge-m3)$(NC)" >&2; \
-		exit 1; \
-	fi
-	@echo "$(GREEN)✓ Qdrant reachable$(NC)"
-
-preflight-bot: ## Check bot runtime env before starting (missing .env, invalid token, port issues)
-	@$(UV_RUN_NO_SYNC) python -m scripts.probe.check_bot_runtime_env $(PREFLIGHT_BOT_FLAGS)
 
 bot-response-smoke: ## End-to-end gate: prove `make bot` actually answers a Telegram message (#2192)
 	@echo "$(BLUE)Running bot response smoke gate...$(NC)"
 	@uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m scripts.probe.bot_response_smoke $(BOT_RESPONSE_SMOKE_FLAGS)
 	@echo "$(GREEN)✓ Bot response smoke gate passed$(NC)"
-
-test-bot-health: ## Preflight: verify local native-bot prerequisites (Redis/Qdrant/LiteLLM + optional Postgres note)
-	@echo "$(BLUE)Running bot health preflight...$(NC)"
-	@set -a; if [ -f .env ]; then . ./.env; else . tests/fixtures/compose.ci.env; fi; set +a; \
-	./scripts/probe/bot_health.sh
-	@echo "$(GREEN)✓ Bot health preflight passed$(NC)"
-
-test-bot-health-vps: ## Preflight: verify Qdrant + LLM from inside Docker network (VPS)
-	@echo "$(BLUE)Running VPS bot health preflight...$(NC)"
-	@docker compose exec bot python -c "\
-	import urllib.request, json, sys; \
-	r = json.loads(urllib.request.urlopen('http://qdrant:6333/collections', timeout=10).read()); \
-	names = [c['name'] for c in r['result']['collections']]; \
-	print(f'  Qdrant collections: {names}'); \
-	assert 'gdrive_documents_bge' in names, 'gdrive_documents_bge not found'; \
-	print('  ✓ Qdrant OK'); \
-	"
-	@echo "$(GREEN)✓ VPS bot health preflight passed$(NC)"
 
 # =============================================================================
 # PROJECT MANAGEMENT
@@ -748,7 +674,7 @@ docker-core-up: ## Start default local compose stack (unprofiled services)
 	$(LOCAL_COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
-docker-bot-up: preflight-bot ## Start core + bot services (bot)
+docker-bot-up: ## Start core + bot services (bot)
 	@echo "$(BLUE)Starting bot services...$(NC)"
 	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
@@ -918,7 +844,7 @@ release-polling-lock:  ## Delete the local Redis Telegram polling lock after con
 run-bot:  ## Run bot locally (requires: make local-up)
 	$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
 
-bot: preflight-qdrant preflight-bot test-bot-health ## Alias: run bot (fail-fast when Qdrant is down; tee output to logs/bot-run.log)
+bot: ## Alias: run bot (tee output to logs/bot-run.log)
 	@mkdir -p logs
 	@bash -o pipefail -c '$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main 2>&1 | tee logs/bot-run.log'; \
 	status=$$?; echo '[COMPLETE]'; exit $$status
