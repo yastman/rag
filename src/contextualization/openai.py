@@ -1,7 +1,16 @@
 """OpenAI-based contextualization provider."""
 
-from langfuse import observe
-from langfuse.openai import AsyncOpenAI, OpenAI
+try:
+    from langfuse import observe
+    from langfuse.openai import AsyncOpenAI, OpenAI
+except ImportError:  # ponytail: null decorator until observability cleanup (#2983)
+    from openai import AsyncOpenAI, OpenAI  # type: ignore[assignment]
+
+    def observe(func=None, **kwargs):
+        if func is not None:
+            return func
+        return lambda f: f
+
 
 from src.config import Settings
 

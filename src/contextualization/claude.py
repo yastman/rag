@@ -3,7 +3,20 @@
 from typing import Any, cast
 
 from anthropic import Anthropic, APIStatusError, AsyncAnthropic, RateLimitError
-from langfuse import observe
+
+
+try:
+    from langfuse import observe
+except ImportError:
+
+    def observe(
+        func=None, **kwargs
+    ):  # ponytail: null decorator until observability cleanup (#2983)
+        if func is not None:
+            return func
+        return lambda f: f
+
+
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from src.config import Settings

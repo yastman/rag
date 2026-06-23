@@ -9,7 +9,12 @@ import re
 from typing import Any
 
 import openai
-from langfuse.openai import AsyncOpenAI
+
+
+try:
+    from langfuse.openai import AsyncOpenAI
+except ImportError:  # ponytail: null decorator until observability cleanup (#2983)
+    from openai import AsyncOpenAI  # type: ignore[assignment]
 
 from telegram_bot.integrations.prompt_manager import get_prompt_with_object
 from telegram_bot.observability import get_client, observe

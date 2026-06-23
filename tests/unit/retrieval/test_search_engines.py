@@ -9,7 +9,17 @@ import pytest
 from qdrant_client import models
 
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
-from src.evaluation.retrieval.search_engine_shared import lexical_weights_to_sparse as shared_sparse
+
+
+# ponytail: src.evaluation.retrieval deleted in p3-p5-hygiene; symbols not yet migrated (#2983)
+pytest.importorskip(
+    "src.evaluation.retrieval.search_engines",
+    reason="src.evaluation.retrieval deleted; see #2983",
+)
+
+from src.evaluation.retrieval.search_engine_shared import (
+    lexical_weights_to_sparse as shared_sparse,
+)
 from src.evaluation.retrieval.search_engines import (
     BaselineSearchEngine,
     DBSFColBERTSearchEngine,

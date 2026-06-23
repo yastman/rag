@@ -1,13 +1,13 @@
 """Contract: canonical project structure and active directory map (#2633).
 
-Pins the desired active architecture documented in
-``docs/designs/adr-2855-module-collapse.md``:
+Pins the desired active architecture (see docs/architecture/STRUCTURE.md):
 
 - Active directories under ``src/`` and ``telegram_bot/`` are present.
 - ``src/adapters`` does not import ``src/runtime``.
 - ``src/ingestion`` does not import ``src/runtime``.
 
-Refs #2633 (ARCH-19). archive/ removed in #2791.
+Refs #2633 (ARCH-19). archive/ removed in #2791. src/evaluation/retrieval
+removed in p3-p5-hygiene cleanup; adr-2855-module-collapse.md superseded.
 """
 
 from __future__ import annotations
@@ -33,7 +33,6 @@ REQUIRED_ACTIVE_DIRS = [
     "src/adapters/llm",
     "src/ingestion/unified",
     "src/retrieval",
-    "src/evaluation/retrieval",
     "telegram_bot",
     "services/bge-m3-api",
     "services/docling",
@@ -61,7 +60,7 @@ def test_active_directory_exists(rel_dir: str) -> None:
     path = REPO_ROOT / rel_dir
     assert path.is_dir(), (
         f"#2633: canonical active directory '{rel_dir}' is missing. "
-        "Do not remove active directories without updating adr-2855-module-collapse.md and this test."
+        "Do not remove active directories without updating docs/architecture/STRUCTURE.md and this test."
     )
 
 

@@ -20,7 +20,17 @@ import logging
 from dataclasses import dataclass
 from typing import Literal
 
-from langfuse import get_client, observe
+
+try:
+    from langfuse import get_client, observe
+except ImportError:  # ponytail: null decorator until observability cleanup (#2983)
+
+    def observe(func=None, **kwargs):
+        if func is not None:
+            return func
+        return lambda f: f
+
+    get_client = None  # type: ignore[assignment]
 from tenacity import (
     before_sleep_log,
     retry,

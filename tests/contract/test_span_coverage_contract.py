@@ -38,7 +38,13 @@ def _load_sensitive_spans() -> list[str]:
     Python list drifted whenever new ``@observe(capture_input=False, ...)``
     spans were added (e.g. CRM observability wrappers, hyde-generate,
     session-summary-llm, etc.).
+
+    Returns an empty list when the fixture file is absent (e.g. after
+    Langfuse removal in p3-p5-hygiene); tests that depend on it are
+    xfailed via _TRACE_CONTRACT_MISSING. See #2983 for follow-up.
     """
+    if not _TRACE_CONTRACT_PATH.exists():
+        return []
     with open(_TRACE_CONTRACT_PATH) as fh:
         contract = yaml.safe_load(fh)
     spans = contract.get("sensitive_spans", [])
