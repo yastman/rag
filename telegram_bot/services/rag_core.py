@@ -1,0 +1,499 @@
+"""Shared RAG core functions used by both agent SDK pipeline and LangGraph nodes.
+
+Extracted to avoid ~300 LOC duplication between:
+  telegram_bot/agents/rag_pipeline.py
+  telegram_bot/graph/nodes/*.py
+
+Core functions are pure computation (no Langfuse spans, no PipelineMetrics).
+Adapters (pipeline / nodes) handle span tracking, metrics, and state wrapping.
+
+Observability (#2162):
+    Each orchestration helper carries an ``@observe`` decorator with
+    ``capture_input=False`` and ``capture_output=False`` so that the trace tree
+    contains a stable ``rag-core-*`` span for every helper without leaking raw
+    user query text, embedding vectors, or document text. Curated
+    high-signal metadata (cache hit, query type, top-k, vector dim) is added
+    inside each function via ``update_current_span(input=..., output=...)`` so
+    the Langfuse UI shows useful summary fields.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+from typing import Any
+
+from telegram_bot.observability import get_client, observe
+from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+from telegram_bot.services.cache_policy import is_contextual_query
+
+
+logger = logging.getLogger(__name__)
+
+_MAX_CONTEXT_SNIPPET = 500  # chars per doc for judge evaluation
+
+# Query types eligible for semantic cache. Shared between agent SDK and LangGraph paths.
+CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED", "GENERAL"})
+
+_REWRITE_PROMPT = (
+    "Ты — помощник по поиску недвижимости. "
+    "Пользователь задал вопрос, но результаты поиска оказались нерелевантными.\n\n"
+    "Переформулируй запрос так, чтобы он лучше подходил для поиска по базе недвижимости.\n"
+    "Верни ТОЛЬКО переформулированный запрос, без пояснений.\n\n"
+    "Оригинальный запрос: {query}"
+)
+
+
+def _update_current_span(**kwargs: Any) -> None:
+    """Best-effort ``update_current_span`` wrapper; no-op when no client."""
+    lf = get_client()
+    if lf is not None:
+        with contextlib.suppress(Exception):
+            lf.update_current_span(**kwargs)
+
+
+def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
+    """Return True when caller passed the deprecated client-side ColBERT service."""
+    if reranker is None:
+        return False
+
+    try:
+        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+    return isinstance(reranker, ColbertRerankerService)
+
+
+# ---------------------------------------------------------------------------
+# H2: Context builder
+# ---------------------------------------------------------------------------
+
+
+@observe(name="rag-core-build-context", capture_input=False, capture_output=False)
+def build_retrieved_context(
+    results: list[dict[str, Any]],
+    limit: int = 5,
+) -> list[dict[str, str | float]]:
+    """Build curated context snippets for LLM-as-a-Judge evaluation.
+
+    Shared between rag_pipeline._build_retrieved_context and
+    graph/nodes/retrieve._build_retrieved_context (identical logic).
+    """
+    ctx: list[dict[str, str | float]] = []
+    for doc in results[:limit]:
+        if not isinstance(doc, dict):
+            continue
+        text = doc.get("text", "")
+        meta = doc.get("metadata", {})
+        ctx.append(
+            {
+                "content": text[:_MAX_CONTEXT_SNIPPET],
+                "score": doc.get("score", 0),
+                "chunk_location": meta.get("chunk_location", ""),
+            }
+        )
+    _update_current_span(
+        input={"docs_in": len(results), "limit": limit},
+        output={"snippets_out": len(ctx), "snippet_chars_max": _MAX_CONTEXT_SNIPPET},
+    )
+    return ctx
+
+
+# ---------------------------------------------------------------------------
+# H4: Query rewrite
+# ---------------------------------------------------------------------------
+
+
+@observe(name="rag-core-rewrite-query", capture_input=False, capture_output=False)
+async def rewrite_query_via_llm(
+    query: str,
+    *,
+    llm: Any,
+) -> tuple[str, bool, str]:
+    """Call LLM to rewrite query for better retrieval.
+
+    Args:
+        query: The original query string.
+        llm: LLM client (OpenAI-compatible: llm.chat.completions.create).
+
+    Returns:
+        Tuple of (rewritten_query, effective, model_name).
+        - rewritten_query: reformulated query, or original if rewrite same
+        - effective: True if the rewrite produced a different query
+        - model_name: the model used for rewriting
+
+    Raises:
+        Exception: propagates LLM errors to caller (adapter handles fallback).
+    """
+    from telegram_bot.graph.config import GraphConfig
+
+    config = GraphConfig.from_env()
+    prompt = _REWRITE_PROMPT.format(query=query)
+    response = await llm.chat.completions.create(
+        model=config.rewrite_model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        max_tokens=config.rewrite_max_tokens,
+        name="rewrite-query",  # type: ignore[call-overload]  # langfuse kwarg
+    )
+    rewritten = (response.choices[0].message.content or "").strip()
+    actual_model = getattr(response, "model", config.rewrite_model) or config.rewrite_model
+
+    if not rewritten or rewritten == query:
+        _update_current_span(
+            input={"query_chars": len(query), "rewrite_model": config.rewrite_model},
+            output={"effective": False, "model": actual_model},
+        )
+        return (query, False, actual_model)
+    _update_current_span(
+        input={"query_chars": len(query), "rewrite_model": config.rewrite_model},
+        output={
+            "effective": True,
+            "model": actual_model,
+            "rewritten_chars": len(rewritten),
+        },
+    )
+    return (rewritten, True, actual_model)
+
+
+# ---------------------------------------------------------------------------
+# H3: Rerank
+# ---------------------------------------------------------------------------
+
+
+@observe(name="rag-core-perform-rerank", capture_input=False, capture_output=False)
+async def perform_rerank(
+    query: str,
+    documents: list[dict[str, Any]],
+    *,
+    cache: Any | None = None,
+    reranker: Any | None = None,
+    top_k: int,
+) -> tuple[list[dict[str, Any]], bool, bool]:
+    """Rerank documents using ColBERT reranker or return cache hit.
+
+    Args:
+        query: The query string for reranking.
+        documents: Retrieved document dicts with "text" and "score" keys.
+        cache: Optional cache instance with get_rerank_results / store_rerank_results.
+        reranker: Optional reranker instance with .rerank() method.
+            Deprecated ColbertRerankerService inputs are ignored.
+        top_k: Number of documents to return.
+
+    Returns:
+        Tuple of (reranked_docs, rerank_applied, rerank_cache_hit).
+        - reranked_docs: the final list of documents
+        - rerank_applied: True if ColBERT reranking was used
+        - rerank_cache_hit: True if result came from cache
+
+    Notes:
+        Callers are responsible for Langfuse span tracking, PipelineMetrics,
+        and fallback logic when reranker raises an exception.
+        When no reranker is provided, returns all documents unmodified (no sort).
+        Callers should sort/trim on the no-reranker path if needed.
+    """
+    if not documents:
+        _update_current_span(
+            input={"docs_in": 0, "top_k": top_k},
+            output={"docs_out": 0, "rerank_applied": False, "rerank_cache_hit": False},
+        )
+        return ([], False, False)
+
+    if _is_deprecated_colbert_reranker(reranker):
+        logger.warning(
+            "perform_rerank: ignoring deprecated ColbertRerankerService; "
+            "server-side Qdrant ColBERT is the only supported ColBERT path"
+        )
+        reranker = None
+
+    if reranker is not None:
+        _cache_get = getattr(cache, "get_rerank_results", None) if cache is not None else None
+        _cache_store = getattr(cache, "store_rerank_results", None) if cache is not None else None
+        _has_get_rerank = callable(_cache_get) and asyncio.iscoroutinefunction(_cache_get)
+        _has_store_rerank = callable(_cache_store) and asyncio.iscoroutinefunction(_cache_store)
+
+        if _has_get_rerank and _cache_get is not None:
+            cached_reranked = await _cache_get(query, documents, top_k)
+            if cached_reranked is not None:
+                _update_current_span(
+                    input={"docs_in": len(documents), "top_k": top_k},
+                    output={
+                        "docs_out": len(cached_reranked),
+                        "rerank_applied": True,
+                        "rerank_cache_hit": True,
+                    },
+                )
+                return (cached_reranked, True, True)
+
+        # May raise — callers handle error + fallback sort
+        doc_texts = [doc.get("text", "") for doc in documents]
+        rerank_results = await reranker.rerank(query=query, documents=doc_texts, top_k=top_k)
+
+        reranked: list[dict[str, Any]] = []
+        for rr in rerank_results:
+            idx = rr["index"]
+            if idx < len(documents):
+                doc = {**documents[idx], "score": rr["score"]}
+                reranked.append(doc)
+
+        if _has_store_rerank and _cache_store is not None:
+            await _cache_store(query, documents, top_k, reranked)
+
+        _update_current_span(
+            input={"docs_in": len(documents), "top_k": top_k},
+            output={
+                "docs_out": len(reranked),
+                "rerank_applied": True,
+                "rerank_cache_hit": False,
+            },
+        )
+        return (reranked, True, False)
+
+    # No reranker — return documents as-is; callers sort/trim as needed
+    _update_current_span(
+        input={"docs_in": len(documents), "top_k": top_k},
+        output={
+            "docs_out": len(documents),
+            "rerank_applied": False,
+            "rerank_cache_hit": False,
+        },
+    )
+    return (documents, False, False)
+
+
+# ---------------------------------------------------------------------------
+# H1: Embedding computation + semantic cache check
+# ---------------------------------------------------------------------------
+
+
+@observe(name="rag-core-compute-query-embedding", capture_input=False, capture_output=False)
+async def compute_query_embedding(
+    query: str,
+    *,
+    cache: Any,
+    embeddings: Any,
+    pre_computed: list[float] | None = None,
+    pre_computed_sparse: Any = None,
+    pre_computed_colbert: list[list[float]] | None = None,
+) -> tuple[list[float], Any, list[list[float]] | None, bool]:
+    """Get or compute dense query embedding with optional sparse side-product.
+
+    Handles paths in priority order:
+    1. Pre-computed: caller already has the embedding (e.g. agent pre-fetch) → return immediately.
+    2. Bundle cache hit: BGE-M3 query vector bundle stored from previous request → return with from_cache=True.
+    3. Model compute (bundle): call embeddings.aembed_hybrid_with_colbert, store bundle + legacy caches.
+    4. Legacy cache hit: dense embedding stored from previous request → return with from_cache=True.
+    5. Legacy model compute: call embeddings.aembed_hybrid or aembed_query, cache result.
+
+    Args:
+        query: The query string.
+        cache: Cache instance with get_embedding / store_embedding / store_sparse_embedding
+            and optionally get_bge_m3_query_bundle / store_bge_m3_query_bundle.
+        embeddings: Embedding model with aembed_hybrid_with_colbert, aembed_hybrid, or aembed_query.
+        pre_computed: Pre-computed dense vector (bypasses all computation).
+        pre_computed_sparse: Pre-computed sparse vector; returned alongside pre_computed.
+        pre_computed_colbert: Pre-computed ColBERT vectors; returned alongside pre_computed.
+
+    Returns:
+        Tuple of (dense, sparse, colbert, from_cache).
+        - dense: dense embedding vector (always present)
+        - sparse: sparse vector if computed via hybrid or from bundle; else None
+        - colbert: ColBERT vectors if from bundle or aembed_hybrid_with_colbert; else None
+        - from_cache: True if result came from cache (bundle or legacy dense)
+
+    Raises:
+        Exception: propagates embedding model errors to caller (adapter handles fallback).
+    """
+    # Path 1: caller already has pre-computed vectors
+    if pre_computed is not None:
+        _update_current_span(
+            input={"query_chars": len(query), "source": "pre_computed"},
+            output={
+                "dense_dim": len(pre_computed),
+                "has_sparse": pre_computed_sparse is not None,
+                "has_colbert": pre_computed_colbert is not None,
+                "from_cache": False,
+            },
+        )
+        return (pre_computed, pre_computed_sparse, pre_computed_colbert, False)
+
+    # Determine capabilities
+    _has_bundle_get = callable(
+        getattr(cache, "get_bge_m3_query_bundle", None)
+    ) and asyncio.iscoroutinefunction(cache.get_bge_m3_query_bundle)
+    _has_bundle_store = callable(
+        getattr(cache, "store_bge_m3_query_bundle", None)
+    ) and asyncio.iscoroutinefunction(cache.store_bge_m3_query_bundle)
+    _has_hybrid_colbert = callable(
+        getattr(embeddings, "aembed_hybrid_with_colbert", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+
+    # Path 2: check bundle cache (even if embeddings lacks aembed_hybrid_with_colbert,
+    # a hit still gives us all three vectors).
+    if _has_bundle_get:
+        bundle = await cache.get_bge_m3_query_bundle(query)
+        if isinstance(bundle, BgeM3QueryVectorBundle) and bundle.is_complete():
+            _update_current_span(
+                input={"query_chars": len(query), "source": "bundle_cache"},
+                output={
+                    "dense_dim": len(bundle.dense),
+                    "has_sparse": bundle.sparse is not None,
+                    "has_colbert": bundle.colbert is not None,
+                    "from_cache": True,
+                },
+            )
+            return (bundle.dense, bundle.sparse, bundle.colbert, True)
+
+    # Path 3: full bundle compute (cache miss + aembed_hybrid_with_colbert available)
+    if _has_bundle_get and _has_hybrid_colbert:
+        try:
+            dense, sparse, colbert = await embeddings.aembed_hybrid_with_colbert(query)
+        except (TypeError, ValueError):
+            # aembed_hybrid_with_colbert is present but doesn't return a usable
+            # 3-tuple (e.g. test mocks); fall through to legacy path.
+            pass
+        else:
+            # Store bundle if store API is available
+            if _has_bundle_store:
+                try:
+                    new_bundle = BgeM3QueryVectorBundle(
+                        dense=dense,
+                        sparse=sparse,
+                        colbert=colbert,
+                    )
+                    await cache.store_bge_m3_query_bundle(query, new_bundle)
+                except Exception:
+                    logger.debug("Bundle store failed (non-critical), skipping")
+
+            # Keep legacy caches populated for compatibility
+            try:
+                await cache.store_embedding(query, dense)
+                await cache.store_sparse_embedding(query, sparse)
+            except Exception:
+                logger.debug("Legacy embedding store failed (non-critical), skipping")
+
+            _update_current_span(
+                input={"query_chars": len(query), "source": "bundle_compute"},
+                output={
+                    "dense_dim": len(dense),
+                    "has_sparse": sparse is not None,
+                    "has_colbert": colbert is not None,
+                    "from_cache": False,
+                },
+            )
+            return (dense, sparse, colbert, False)
+
+    # Path 4: legacy dense cache
+    dense = await cache.get_embedding(query)
+    from_cache = dense is not None
+
+    if dense is not None:
+        _update_current_span(
+            input={"query_chars": len(query), "source": "legacy_dense_cache"},
+            output={
+                "dense_dim": len(dense),
+                "has_sparse": False,
+                "has_colbert": False,
+                "from_cache": True,
+            },
+        )
+        return (dense, None, None, from_cache)
+
+    # Path 5: legacy model compute
+    _has_hybrid = callable(
+        getattr(embeddings, "aembed_hybrid", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
+
+    if _has_hybrid:
+        dense, sparse = await embeddings.aembed_hybrid(query)
+        await cache.store_embedding(query, dense)
+        await cache.store_sparse_embedding(query, sparse)
+    else:
+        dense = await embeddings.aembed_query(query)
+        await cache.store_embedding(query, dense)
+        sparse = None
+
+    _update_current_span(
+        input={"query_chars": len(query), "source": "legacy_compute"},
+        output={
+            "dense_dim": len(dense),
+            "has_sparse": sparse is not None,
+            "has_colbert": False,
+            "from_cache": False,
+        },
+    )
+    return (dense, sparse, None, False)
+
+
+@observe(name="rag-core-check-semantic-cache", capture_input=False, capture_output=False)
+async def check_semantic_cache(
+    query: str,
+    vector: list[float],
+    query_type: str,
+    *,
+    cache: Any,
+    agent_role: str | None = None,
+    filter_signature: str | None = None,
+) -> tuple[bool, str | None]:
+    """Check semantic cache for a given query vector.
+
+    Only checks for query types in CACHEABLE_QUERY_TYPES.
+
+    Args:
+        query: The query string.
+        vector: Dense embedding vector for semantic similarity lookup.
+        query_type: Query type (e.g. "FAQ", "GENERAL"). Non-cacheable types skip check.
+        cache: Cache instance with check_semantic method.
+        agent_role: Optional role for role-gated cache scoping (agent SDK only).
+
+    Returns:
+        Tuple of (hit, response).
+        - hit: True if a cached response was found
+        - response: The cached response string, or None on miss
+    """
+    if query_type not in CACHEABLE_QUERY_TYPES:
+        _update_current_span(
+            input={
+                "query_type": query_type,
+                "query_chars": len(query),
+                "vector_dim": len(vector),
+            },
+            output={"cache_hit": False, "skipped_reason": "non_cacheable_query_type"},
+        )
+        return (False, None)
+    if is_contextual_query(query):
+        _update_current_span(
+            input={
+                "query_type": query_type,
+                "query_chars": len(query),
+                "vector_dim": len(vector),
+            },
+            output={"cache_hit": False, "skipped_reason": "contextual_query"},
+        )
+        return (False, None)
+
+    cached = await cache.check_semantic(
+        query=query,
+        vector=vector,
+        query_type=query_type,
+        cache_scope="rag",
+        agent_role=agent_role,
+        filter_signature=filter_signature,
+    )
+
+    _update_current_span(
+        input={
+            "query_type": query_type,
+            "query_chars": len(query),
+            "vector_dim": len(vector),
+            "agent_role": agent_role,
+            "has_filter_signature": filter_signature is not None,
+        },
+        output={"cache_hit": bool(cached)},
+    )
+
+    if cached:
+        return (True, cached)
+    return (False, None)

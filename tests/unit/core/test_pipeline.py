@@ -1,0 +1,565 @@
+"""Tests for RAG pipeline."""
+
+import asyncio
+import os
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+# Stubs for pymupdf/docling are installed via conftest.py pytest_configure (#611).
+from src.core.pipeline import RAGPipeline, RAGResult
+
+
+@pytest.fixture(autouse=True)
+def _stable_api_env(monkeypatch):
+    """Keep Settings() construction deterministic in CI without real secrets."""
+    monkeypatch.setenv("API_PROVIDER", "claude")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
+
+
+class TestRAGResult:
+    """Tests for RAGResult dataclass."""
+
+    def test_rag_result_creation(self):
+        """Test RAGResult can be created with all fields."""
+        result = RAGResult(
+            query="test query",
+            results=[{"text": "doc1", "score": 0.9}],
+            context_used=True,
+            search_method="hybrid",
+            execution_time=0.5,
+        )
+
+        assert result.query == "test query"
+        assert len(result.results) == 1
+        assert result.context_used is True
+        assert result.search_method == "hybrid"
+        assert result.execution_time == 0.5
+
+    def test_rag_result_empty_results(self):
+        """Test RAGResult with empty results list."""
+        result = RAGResult(
+            query="empty",
+            results=[],
+            context_used=False,
+            search_method="baseline",
+            execution_time=0.1,
+        )
+
+        assert result.results == []
+
+
+class TestRAGPipelineInit:
+    """Tests for RAGPipeline initialization."""
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.ClaudeContextualizer")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    def test_pipeline_init_default_settings(
+        self,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_contextualizer,
+        mock_search_engine,
+        mock_transformer,
+    ):
+        """Test pipeline initializes with default settings."""
+        mock_transformer.return_value = MagicMock()
+        mock_search_engine.return_value = MagicMock()
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            pipeline = RAGPipeline()
+
+        mock_transformer.assert_called_once()
+        mock_search_engine.assert_called_once()
+        assert pipeline.settings is not None
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.OpenAIContextualizer")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    def test_pipeline_init_openai_provider(
+        self,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_contextualizer,
+        mock_search_engine,
+        mock_transformer,
+    ):
+        """Test pipeline uses OpenAI contextualizer when configured."""
+        from src.config import APIProvider, Settings
+
+        settings = MagicMock(spec=Settings)
+        settings.api_provider = APIProvider.OPENAI
+
+        mock_transformer.return_value = MagicMock()
+        mock_search_engine.return_value = MagicMock()
+
+        RAGPipeline(settings=settings)
+
+        mock_contextualizer.assert_called_once()
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.GroqContextualizer")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    def test_pipeline_init_groq_provider(
+        self,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_contextualizer,
+        mock_search_engine,
+        mock_transformer,
+    ):
+        """Test pipeline uses Groq contextualizer when configured."""
+        from src.config import APIProvider, Settings
+
+        settings = MagicMock(spec=Settings)
+        settings.api_provider = APIProvider.GROQ
+
+        mock_transformer.return_value = MagicMock()
+        mock_search_engine.return_value = MagicMock()
+
+        RAGPipeline(settings=settings)
+
+        mock_contextualizer.assert_called_once()
+
+
+class TestRAGPipelineSearch:
+    """Tests for RAGPipeline.search()."""
+
+    @pytest.fixture
+    def mock_pipeline(self):
+        """Create pipeline with mocked dependencies."""
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            with patch("src.core.pipeline.get_sentence_transformer") as mock_trans:
+                with patch("src.core.pipeline.create_search_engine") as mock_engine:
+                    with patch("src.core.pipeline.ClaudeContextualizer"):
+                        with patch("src.core.pipeline.DocumentIndexer"):
+                            with patch("src.core.pipeline.DocumentChunker"):
+                                with patch("src.core.pipeline.UniversalDocumentParser"):
+                                    mock_trans.return_value = MagicMock()
+
+                                    # Mock search engine
+                                    mock_se = MagicMock()
+                                    mock_se.search.return_value = [
+                                        MagicMock(
+                                            article_number="121",
+                                            text="Test document",
+                                            score=0.95,
+                                            metadata={"source": "test"},
+                                        )
+                                    ]
+                                    mock_se.get_name.return_value = "mock_engine"
+                                    mock_engine.return_value = mock_se
+
+                                    pipeline = RAGPipeline()
+                                    yield pipeline
+
+    async def test_search_returns_rag_result(self, mock_pipeline):
+        """Test search returns RAGResult with correct structure."""
+        result = await mock_pipeline.search("test query")
+
+        assert isinstance(result, RAGResult)
+        assert result.query == "test query"
+        assert len(result.results) == 1
+        assert result.results[0]["article_number"] == "121"
+
+    async def test_search_respects_top_k(self, mock_pipeline):
+        """Test search uses provided top_k value."""
+        await mock_pipeline.search("query", top_k=5)
+
+        mock_pipeline.search_engine.search.assert_called()
+
+    async def test_search_tracks_execution_time(self, mock_pipeline):
+        """Test search tracks execution time."""
+        result = await mock_pipeline.search("query")
+
+        assert result.execution_time >= 0
+
+    async def test_search_uses_context_flag(self, mock_pipeline):
+        """Test search respects use_context parameter."""
+        result = await mock_pipeline.search("query", use_context=False)
+
+        assert result.context_used is False
+
+    async def test_search_includes_metadata(self, mock_pipeline):
+        """Test search includes metadata in results."""
+        result = await mock_pipeline.search("query")
+
+        assert "metadata" in result.results[0]
+        assert result.results[0]["metadata"] == {"source": "test"}
+
+    async def test_search_includes_search_method(self, mock_pipeline):
+        """Test search includes search method name."""
+        result = await mock_pipeline.search("query")
+
+        assert result.search_method == "mock_engine"
+
+    async def test_search_uses_encode_query_span(self, mock_pipeline):
+        """Test search uses _encode_query for non-hybrid engines."""
+        mock_pipeline.embedding_model.encode.return_value = MagicMock(
+            tolist=lambda: [0.1, 0.2, 0.3]
+        )
+
+        result = await mock_pipeline.search("test query")
+
+        mock_pipeline.embedding_model.encode.assert_called_once_with(
+            "test query", normalize_embeddings=True
+        )
+        assert isinstance(result, RAGResult)
+
+    async def test_search_uses_to_thread_for_encode_query(self, mock_pipeline):
+        """Test search uses asyncio.to_thread so contextvars propagate to worker threads."""
+        mock_pipeline.embedding_model.encode.return_value = MagicMock(
+            tolist=lambda: [0.1, 0.2, 0.3]
+        )
+
+        original_to_thread = asyncio.to_thread
+        calls = []
+
+        async def recording_to_thread(func, *args, **kwargs):
+            calls.append((func, args, kwargs))
+            return await original_to_thread(func, *args, **kwargs)
+
+        with patch("src.core.pipeline.asyncio.to_thread", new=recording_to_thread):
+            result = await mock_pipeline.search("test query")
+
+            assert len(calls) == 2
+            assert isinstance(result, RAGResult)
+
+    def test_encode_query_method_exists(self, mock_pipeline):
+        """Test _encode_query method exists and is callable."""
+        assert hasattr(mock_pipeline, "_encode_query")
+        assert callable(mock_pipeline._encode_query)
+
+
+class TestRAGPipelineExecutorContextPropagation:
+    """Pin the contract that every thread hop in ``search`` propagates context.
+
+    Closes #2167 (follow-up to #2157). ``self.search_engine.search`` and
+    ``self._encode_query`` are both ``@observe``-decorated. When they run
+    in a worker thread without context propagation, the worker sees an empty
+    OTEL context and emits a top-level orphan trace (e.g.
+    ``bge-m3-hybrid-embed``, ``hybrid-rrf-search``) instead of nesting under
+    whatever parent opened the surrounding ``rag-pipeline`` /
+    ``telegram-message`` span. ``asyncio.to_thread`` is the stdlib-native
+    thread hop here because it propagates the current ``contextvars.Context``.
+    """
+
+    def test_search_uses_to_thread_instead_of_raw_executor_hops(self) -> None:
+        """AST contract: ``RAGPipeline.search`` uses context-propagating ``to_thread``."""
+        import ast
+        import inspect
+        import textwrap
+
+        from src.core.pipeline import RAGPipeline
+
+        src = textwrap.dedent(inspect.getsource(RAGPipeline.search))
+        tree = ast.parse(src)
+
+        to_thread_calls: list[ast.Call] = []
+        run_in_executor_calls: list[ast.Call] = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "run_in_executor"
+            ):
+                run_in_executor_calls.append(node)
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "to_thread"
+            ):
+                to_thread_calls.append(node)
+
+        assert not run_in_executor_calls, (
+            "RAGPipeline.search must not use raw loop.run_in_executor; use "
+            "asyncio.to_thread so contextvars propagate into @observe-decorated "
+            "worker calls (#2167)."
+        )
+        assert len(to_thread_calls) == 3, (
+            "RAGPipeline.search must dispatch every sync worker call through "
+            "asyncio.to_thread: hybrid search, dense embedding, and dense search."
+        )
+
+
+class TestRAGPipelineStats:
+    """Tests for pipeline statistics methods."""
+
+    @pytest.fixture
+    def mock_pipeline(self):
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            with patch("src.core.pipeline.get_sentence_transformer"):
+                with patch("src.core.pipeline.create_search_engine") as mock_engine:
+                    with patch("src.core.pipeline.ClaudeContextualizer"):
+                        with patch("src.core.pipeline.DocumentIndexer"):
+                            with patch("src.core.pipeline.DocumentChunker"):
+                                with patch("src.core.pipeline.UniversalDocumentParser"):
+                                    mock_se = MagicMock()
+                                    mock_se.get_name.return_value = "test_engine"
+                                    mock_engine.return_value = mock_se
+
+                                    pipeline = RAGPipeline()
+                                    yield pipeline
+
+    def test_get_stats_returns_dict(self, mock_pipeline):
+        """Test get_stats returns dictionary with expected keys."""
+        stats = mock_pipeline.get_stats()
+
+        assert "api_provider" in stats
+        assert "model" in stats
+        assert "search_engine" in stats
+        assert "collection" in stats
+
+    def test_get_stats_includes_search_engine_name(self, mock_pipeline):
+        """Test get_stats includes search engine name."""
+        stats = mock_pipeline.get_stats()
+
+        assert stats["search_engine"] == "test_engine"
+
+    def test_get_stats_includes_contextualization_stats(self, mock_pipeline):
+        """Test get_stats includes contextualization stats when available."""
+        mock_pipeline.contextualizer.get_stats = MagicMock(return_value={"calls": 5})
+        stats = mock_pipeline.get_stats()
+
+        assert "contextualization_stats" in stats
+        assert stats["contextualization_stats"] == {"calls": 5}
+
+    def test_compute_metrics_placeholder(self, mock_pipeline):
+        """Test _compute_metrics returns placeholder metrics."""
+        results = [
+            RAGResult("q1", [{"article_number": "1"}], True, "test", 0.1),
+        ]
+        ground_truth = [["1"]]
+
+        metrics = mock_pipeline._compute_metrics(results, ground_truth)
+
+        assert "recall_at_1" in metrics
+        assert "mrr" in metrics
+        assert "ndcg_at_10" in metrics
+
+    def test_compute_metrics_returns_all_metrics(self, mock_pipeline):
+        """Test _compute_metrics returns all expected metric keys."""
+        results = [RAGResult("q1", [], True, "test", 0.1)]
+        ground_truth = [["1"]]
+
+        metrics = mock_pipeline._compute_metrics(results, ground_truth)
+
+        expected_keys = ["recall_at_1", "recall_at_5", "recall_at_10", "ndcg_at_10", "mrr"]
+        for key in expected_keys:
+            assert key in metrics
+
+
+class TestRAGPipelineIndex:
+    """Tests for RAGPipeline.index_documents()."""
+
+    @pytest.fixture
+    def mock_pipeline(self):
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            with patch("src.core.pipeline.get_sentence_transformer"):
+                with patch("src.core.pipeline.create_search_engine"):
+                    with patch("src.core.pipeline.ClaudeContextualizer"):
+                        with patch("src.core.pipeline.DocumentIndexer") as mock_idx:
+                            with patch("src.core.pipeline.DocumentChunker") as mock_chk:
+                                with patch("src.core.pipeline.UniversalDocumentParser") as mock_psr:
+                                    pipeline = RAGPipeline()
+                                    # Set mock instances
+                                    pipeline.indexer = mock_idx.return_value
+                                    pipeline.chunker = mock_chk.return_value
+                                    pipeline.parser = mock_psr.return_value
+                                    yield pipeline
+
+    async def test_index_documents_success(self, mock_pipeline):
+        """Test successful document indexing."""
+        # Mock parser
+        mock_doc = MagicMock()
+        mock_doc.content = "Test content"
+        mock_doc.filename = "test.pdf"
+        mock_pipeline.parser.parse_file.return_value = mock_doc
+
+        # Mock chunker
+        mock_chunk = MagicMock()
+        mock_pipeline.chunker.chunk_text.return_value = [mock_chunk]
+
+        # Mock indexer
+        mock_stats = SimpleNamespace(
+            total_chunks=1, indexed_chunks=1, failed_chunks=0, duration_seconds=0.5
+        )
+        mock_pipeline.indexer.index_chunks = AsyncMock(return_value=mock_stats)
+
+        stats = await mock_pipeline.index_documents(["test.pdf"])
+
+        assert stats["total_chunks"] == 1
+        assert stats["indexed_chunks"] == 1
+        mock_pipeline.indexer.create_collection.assert_called_once()
+        mock_pipeline.indexer.index_chunks.assert_called_once()
+
+    async def test_index_documents_handles_exception(self, mock_pipeline):
+        """Test indexing handles parser exceptions."""
+        mock_pipeline.parser.parse_file.side_effect = Exception("Parse error")
+
+        # Mock indexer (empty chunks)
+        mock_stats = SimpleNamespace(
+            total_chunks=0, indexed_chunks=0, failed_chunks=0, duration_seconds=0.1
+        )
+        mock_pipeline.indexer.index_chunks = AsyncMock(return_value=mock_stats)
+
+        stats = await mock_pipeline.index_documents(["bad.pdf"])
+
+        assert stats["total_chunks"] == 0
+        mock_pipeline.indexer.index_chunks.assert_called_once_with(
+            chunks=[], collection_name=mock_pipeline.settings.collection_name
+        )
+
+
+class TestRAGPipelineEvaluate:
+    """Tests for RAGPipeline.evaluate()."""
+
+    @pytest.fixture
+    def mock_pipeline(self):
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            with patch("src.core.pipeline.get_sentence_transformer"):
+                with patch("src.core.pipeline.create_search_engine"):
+                    with patch("src.core.pipeline.ClaudeContextualizer"):
+                        with patch("src.core.pipeline.DocumentIndexer"):
+                            with patch("src.core.pipeline.DocumentChunker"):
+                                with patch("src.core.pipeline.UniversalDocumentParser"):
+                                    pipeline = RAGPipeline()
+                                    yield pipeline
+
+    async def test_evaluate_returns_metrics(self, mock_pipeline):
+        """Test evaluate returns expected metrics dict."""
+        mock_pipeline.search = AsyncMock(return_value=RAGResult("q", [], True, "test", 0.1))
+
+        results = await mock_pipeline.evaluate(["q1", "q2"], ground_truth=[["1"], ["2"]])
+
+        assert "total_queries" in results
+        assert results["total_queries"] == 2
+        assert "average_latency" in results
+        assert "metrics" in results
+        assert "recall_at_1" in results["metrics"]
+
+    async def test_evaluate_empty_queries(self, mock_pipeline):
+        """Test evaluate handles empty queries without ZeroDivisionError."""
+        results = await mock_pipeline.evaluate([])
+
+        assert results["total_queries"] == 0
+        assert results["average_latency"] == 0.0
+        assert results["results"] == []
+        assert results["metrics"] == {}
+
+
+class TestRAGPipelineMain:
+    """Tests for module-level main helper."""
+
+    async def test_main_prints_result_summary(self):
+        """main() should print basic query result information."""
+        from src.core.pipeline import main
+
+        fake_result = RAGResult(
+            query="q",
+            results=[{"article_number": "1", "text": "abc", "score": 0.1, "metadata": {}}],
+            context_used=True,
+            search_method="mock",
+            execution_time=0.01,
+        )
+        fake_pipeline = MagicMock()
+        fake_pipeline.search = AsyncMock(return_value=fake_result)
+
+        with patch("src.core.pipeline.RAGPipeline", return_value=fake_pipeline):
+            with patch("builtins.print") as mock_print:
+                await main()
+
+        assert mock_print.call_count >= 4
+
+
+class TestRAGPipelineContextualizer:
+    """Test contextualizer creation based on API provider."""
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    @patch("src.core.pipeline.ClaudeContextualizer")
+    def test_creates_claude_contextualizer(
+        self,
+        mock_claude,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_search_engine,
+        mock_embedding,
+    ):
+        """Test Claude contextualizer is created for Claude provider."""
+        from src.config import APIProvider
+
+        mock_settings = MagicMock()
+        mock_settings.api_provider = APIProvider.CLAUDE
+
+        _pipeline = RAGPipeline(settings=mock_settings)
+
+        mock_claude.assert_called_once()
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    @patch("src.core.pipeline.OpenAIContextualizer")
+    def test_creates_openai_contextualizer(
+        self,
+        mock_openai,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_search_engine,
+        mock_embedding,
+    ):
+        """Test OpenAI contextualizer is created for OpenAI provider."""
+        from src.config import APIProvider
+
+        mock_settings = MagicMock()
+        mock_settings.api_provider = APIProvider.OPENAI
+
+        _pipeline = RAGPipeline(settings=mock_settings)
+
+        mock_openai.assert_called_once()
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    @patch("src.core.pipeline.GroqContextualizer")
+    def test_creates_groq_contextualizer(
+        self,
+        mock_groq,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_search_engine,
+        mock_embedding,
+    ):
+        """Test Groq contextualizer is created for Groq provider."""
+        from src.config import APIProvider
+
+        mock_settings = MagicMock()
+        mock_settings.api_provider = APIProvider.GROQ
+
+        _pipeline = RAGPipeline(settings=mock_settings)
+
+        mock_groq.assert_called_once()

@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Langfuse CLI quick-audit recipes.
+#
+# Wraps `langfuse api ...` with the env-file load and adds curated
+# perf-audit views used during the "виды внж в болгарии" / 2026-05-26
+# investigation. Safe to extend.
+#
+# Requirements:
+#   - `langfuse-cli` installed (npm: langfuse-cli, binary: `langfuse`)
+#   - Repo `.env` with LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST set
+#
+# Usage:
+#   scripts/lf <command> [args...]
+#
+# Commands:
+#   health                              - Langfuse REST /health
+#   schema                              - List API resources/actions
+#   traces NAME [LIMIT]                 - List traces filtered by name
+#   trace ID                            - Fetch one trace with observations
+#   slowest [N]                         - Top-N slowest rag-pipeline / telegram-message traces
+#   stage-audit ID                      - Per-stage timing breakdown of a single trace
+#   orphans                             - Show recent top-level traces that should be nested
+#   prompts                             - List prompts in Langfuse
+#   skill                               - Print Langfuse skill from GitHub (for AI agents)
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="${LF_ENV_FILE:-$REPO_ROOT/.env}"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "lf: env file not found at $ENV_FILE (set LF_ENV_FILE to override)" >&2
+  exit 1
+fi
+
+LF=(langfuse --env "$ENV_FILE" api)
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  health)
+    "${LF[@]}" healths --help >/dev/null 2>&1 || true
+    # /health endpoint is exposed at /api/public/health, not via CLI subresource
+    # shellcheck disable=SC1090
+    set -a; source "$ENV_FILE" 2>/dev/null || true; set +a
+    : "${LANGFUSE_HOST:?}"
+    curl -fsS -o /dev/null -w "GET /api/public/health -> %{http_code} in %{time_total}s\n" \
+      "${LANGFUSE_HOST}/api/public/health"
+    ;;
+
+  schema)
+    "${LF[@]}" __schema "$@"
+    ;;
+
+  traces)
+    name="${1:-}"; shift || true
+    limit="${1:-20}"; shift || true
+    if [[ -n "$name" ]]; then
+      "${LF[@]}" traces list --name "$name" --limit "$limit" "$@"
+    else
+      "${LF[@]}" traces list --limit "$limit" "$@"
+    fi
+    ;;
+
+  trace)
+    : "${1:?lf trace <trace-id>}"
+    "${LF[@]}" traces get "$@"
+    ;;
+
+  slowest)
+    n="${1:-5}"
+    echo "=== top-$n slowest rag-pipeline traces ==="
+    "${LF[@]}" traces list --name rag-pipeline --limit 50 \
+      | jq --arg n "$n" '.data
+          | sort_by(-.latency)
+          | .[0:($n|tonumber)]
+          | map({id, timestamp, latencyMs: (.latency*1000|floor),
+                 userId, sessionId, observations: (.observations|length),
+                 cost: (.totalCost // 0)})'
+    echo
+    echo "=== top-$n slowest telegram-message traces ==="
+    "${LF[@]}" traces list --name telegram-message --limit 50 \
+      | jq --arg n "$n" '.data
+          | sort_by(-.latency)
+          | .[0:($n|tonumber)]
+          | map({id, timestamp, latencyMs: (.latency*1000|floor),
+                 userId, sessionId, observations: (.observations|length)})'
+    ;;
+
+  stage-audit)
+    : "${1:?lf stage-audit <trace-id>}"
+    tid="$1"
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+    "${LF[@]}" traces get "$tid" > "$tmp"
+    python3 - "$tmp" <<'PY'
+import json, sys
+from datetime import datetime
+from collections import defaultdict
+
+t = json.load(open(sys.argv[1]))
+obs = t.get("observations") or []
+
+def ms(o):
+    try:
+        a = datetime.fromisoformat(o["startTime"].replace("Z","+00:00"))
+        b = datetime.fromisoformat(o["endTime"].replace("Z","+00:00"))
+        return int((b - a).total_seconds() * 1000)
+    except Exception:
+        return 0
+
+print(f"trace={t.get('id')}  name={t.get('name')}  total={int((t.get('latency') or 0)*1000)}ms  obs={len(obs)}")
+inp = t.get("input")
+if isinstance(inp, dict):
+    qp = inp.get("query_preview") or inp.get("original_query_preview") or str(inp)[:120]
+else:
+    qp = str(inp)[:120]
+print(f"query={qp!r}\n")
+
+agg = defaultdict(lambda: {"count":0, "total_ms":0, "max_ms":0})
+for o in obs:
+    a = agg[o.get("name","?")]
+    d = ms(o)
+    a["count"] += 1
+    a["total_ms"] += d
+    a["max_ms"] = max(a["max_ms"], d)
+
+rows = sorted(agg.items(), key=lambda x: -x[1]["total_ms"])
+print(f"{'name':<42} {'cnt':>4} {'total':>8} {'max':>8} {'avg':>8}")
+for n, info in rows[:30]:
+    avg = info["total_ms"]/info["count"]
+    print(f"  {n:<40} {info['count']:>4} {int(info['total_ms']):>6}ms {int(info['max_ms']):>6}ms {int(avg):>6}ms")
+
+llm = sum(v["total_ms"] for n,v in agg.items() if n in ("OpenAI-generation","model","ChatOpenAI"))
+embed = sum(v["total_ms"] for n,v in agg.items() if "bge-m3" in n.lower())
+qdrant = sum(v["total_ms"] for n,v in agg.items() if n.startswith("qdrant"))
+print(f"\nLLM total: {int(llm)}ms   BGE-M3 total: {int(embed)}ms   Qdrant total: {int(qdrant)}ms")
+PY
+    ;;
+
+  orphans)
+    "${LF[@]}" traces list --limit 50 \
+      | jq '.data
+          | map(select(.userId == null and .sessionId == null
+                       and (.name | test("rag-pipeline|bge-m3|cache-|qdrant-|hybrid-retrieve|generate"))))
+          | map({id, name, timestamp, latencyMs: (.latency*1000|floor)})
+          | sort_by(.timestamp) | reverse | .[0:20]'
+    ;;
+
+  prompts)
+    "${LF[@]}" prompts list --limit "${1:-20}"
+    ;;
+
+  skill)
+    langfuse get-skill
+    ;;
+
+  ""|help|-h|--help)
+    grep -E "^#  " "$0" | sed 's/^#  /  /'
+    ;;
+
+  *)
+    echo "lf: unknown command '$cmd' (run 'lf help')" >&2
+    exit 2
+    ;;
+esac

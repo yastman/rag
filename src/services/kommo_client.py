@@ -1,0 +1,336 @@
+"""Async Kommo CRM API adapter (#413).
+
+First-party httpx adapter with OAuth2 auto-refresh delegated to a custom
+``httpx.Auth`` flow (#1646). Bearer header injection and refresh-on-401
+live in :class:`KommoOAuthAuth`, exactly as documented for multi-request
+auth flows in the upstream HTTPX advanced authentication docs.
+Pattern: BGEM3Client (same project).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any, cast
+
+import httpx
+
+from src.observability import observe
+from src.services._retry import kommo_retry
+from src.services.kommo_models import (
+    Contact,
+    ContactCreate,
+    ContactUpdate,
+    Lead,
+    LeadCreate,
+    LeadUpdate,
+    Note,
+    Pipeline,
+    Task,
+    TaskCreate,
+    TaskUpdate,
+)
+
+
+if TYPE_CHECKING:
+    from src.services.kommo_tokens import KommoTokenStoreProtocol
+
+logger = logging.getLogger(__name__)
+
+
+class KommoOAuthAuth(httpx.Auth):
+    """Bearer-token auth flow for Kommo with refresh-on-401 (#1646).
+
+    The flow:
+
+    1. Fetch the current token via ``token_store.get_valid_token()``,
+       attach ``Authorization: Bearer ...`` and yield the request.
+    2. If the response is 401, ask the token store for a fresh token via
+       ``force_refresh()`` and yield the request a second time with the
+       new bearer.
+    3. If ``force_refresh()`` raises ``RuntimeError`` (e.g. seeded
+       long-lived tokens that have no refresh_token), terminate the flow
+       without re-yielding so the original 401 response surfaces to the
+       caller as a normal :class:`httpx.HTTPStatusError`.
+
+    Concurrent calls re-check the current token inside an :class:`asyncio.Lock`
+    so multiple in-flight 401s caused by the same stale bearer trigger at most
+    one refresh.
+    """
+
+    def __init__(self, *, token_store: KommoTokenStoreProtocol) -> None:
+        self._token_store = token_store
+        self._lock = asyncio.Lock()
+
+    async def async_auth_flow(
+        self, request: httpx.Request
+    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        token = await self._token_store.get_valid_token()
+        request.headers["Authorization"] = f"Bearer {token}"
+        response = yield request
+
+        if response.status_code != 401:
+            return
+
+        try:
+            async with self._lock:
+                current_token = await self._token_store.get_valid_token()
+                if current_token != token:
+                    token = current_token
+                else:
+                    token = await self._token_store.force_refresh()
+        except RuntimeError:
+            # No refresh_token (seeded long-lived) — surface the original 401.
+            return
+
+        request.headers["Authorization"] = f"Bearer {token}"
+        yield request
+
+
+class KommoClient:
+    """Async Kommo CRM API adapter with auto-refresh OAuth2."""
+
+    def __init__(self, *, subdomain: str, token_store: KommoTokenStoreProtocol):
+        subdomain = subdomain.removesuffix(".kommo.com")
+        self._base_url = f"https://{subdomain}.kommo.com/api/v4"
+        self._token_store = token_store
+        self._client = httpx.AsyncClient(
+            base_url=self._base_url,
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            headers={"Content-Type": "application/json"},
+            auth=KommoOAuthAuth(token_store=token_store),
+        )
+
+    @kommo_retry
+    async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
+        """Execute a request; bearer + refresh handled by ``KommoOAuthAuth``."""
+        response = await self._client.request(method, path, **kwargs)
+
+        if response.status_code == 204:
+            return {}
+
+        # Raises for 401 (after the auth flow has already retried), 429, 5xx so
+        # tenacity retries transient cases and a seeded-token 401 surfaces
+        # as the canonical HTTPStatusError.
+        response.raise_for_status()
+
+        # Kommo can return empty body on some successful endpoints.
+        if not response.content:
+            return {}
+
+        response_json = response.json()
+        if not isinstance(response_json, dict):
+            msg = "Unexpected Kommo API response shape."
+            raise RuntimeError(msg)
+        return cast(dict[str, Any], response_json)
+
+    # --- Leads ---
+
+    @observe(name="kommo-create-lead")
+    async def create_lead(self, lead: LeadCreate) -> Lead:
+        """POST /api/v4/leads."""
+        data = await self._request(
+            "POST", "/leads", json=[lead.model_dump(exclude_none=True, by_alias=True)]
+        )
+        item = data["_embedded"]["leads"][0]
+        return Lead(**item)
+
+    @observe(name="kommo-get-lead")
+    async def get_lead(self, lead_id: int) -> Lead:
+        """GET /api/v4/leads/{id}."""
+        data = await self._request("GET", f"/leads/{lead_id}")
+        return Lead(**data)
+
+    @observe(name="kommo-update-lead")
+    async def update_lead(self, lead_id: int, update: LeadUpdate) -> Lead:
+        """PATCH /api/v4/leads/{id}."""
+        data = await self._request(
+            "PATCH", f"/leads/{lead_id}", json=update.model_dump(exclude_none=True, by_alias=True)
+        )
+        return Lead(**data)
+
+    @observe(name="kommo-search-leads")
+    async def search_leads(
+        self,
+        query: str | None = None,
+        responsible_user_id: int | None = None,
+        limit: int = 50,
+        with_contacts: bool = False,
+    ) -> list[Lead]:
+        """GET /api/v4/leads with optional query or responsible_user_id filter.
+
+        with_contacts: include embedded contacts via Kommo ?with=contacts (#731).
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if query is not None:
+            params["query"] = query
+        if responsible_user_id is not None:
+            params["filter[responsible_user_id][]"] = responsible_user_id
+        if with_contacts:
+            params["with"] = "contacts"
+        data = await self._request("GET", "/leads", params=params)
+        items = data.get("_embedded", {}).get("leads", [])
+        leads = []
+        for item in items:
+            lead_data = dict(item)
+            embedded = lead_data.pop("_embedded", {})
+            contacts = embedded.get("contacts") if embedded else None
+            if contacts is not None:
+                lead_data["contacts"] = contacts
+            leads.append(Lead(**lead_data))
+        return leads
+
+    @observe(name="kommo-get-tasks")
+    async def get_tasks(
+        self,
+        responsible_user_id: int | None = None,
+        is_completed: bool | None = None,
+        entity_id: int | None = None,
+        limit: int = 50,
+    ) -> list[Task]:
+        """GET /api/v4/tasks with optional filters.
+
+        entity_id: filter tasks by lead/contact entity (#731).
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if responsible_user_id is not None:
+            params["filter[responsible_user_id][]"] = responsible_user_id
+        if is_completed is not None:
+            params["filter[is_completed]"] = int(is_completed)
+        if entity_id is not None:
+            params["filter[entity_id][]"] = entity_id
+        data = await self._request("GET", "/tasks", params=params)
+        items = data.get("_embedded", {}).get("tasks", [])
+        return [Task(**item) for item in items]
+
+    # --- Contacts ---
+
+    @observe(name="kommo-upsert-contact")
+    async def upsert_contact(self, phone: str, contact: ContactCreate) -> Contact:
+        """Find by phone or create new contact. Smart update: fills empty name fields."""
+        data = await self._request("GET", "/contacts", params={"query": phone})
+        contacts = data.get("_embedded", {}).get("contacts", [])
+        if contacts:
+            existing = Contact(**contacts[0])
+            updates: dict[str, str] = {}
+            if not existing.first_name and contact.first_name:
+                updates["first_name"] = contact.first_name
+            if not existing.last_name and contact.last_name:
+                updates["last_name"] = contact.last_name
+            if updates:
+                await self.update_contact(
+                    existing.id,
+                    ContactUpdate(
+                        first_name=updates.get("first_name"),
+                        last_name=updates.get("last_name"),
+                    ),
+                )
+            return existing
+
+        contact_dict = contact.model_dump(exclude_none=True)
+        phone_val = contact_dict.pop("phone", None)
+        email_val = contact_dict.pop("email", None)
+        extra_fields = ContactUpdate.build_contact_fields(phone=phone_val, email=email_val)
+        if extra_fields:
+            existing_cfv: list[dict] = contact_dict.get("custom_fields_values") or []
+            contact_dict["custom_fields_values"] = existing_cfv + extra_fields
+
+        data = await self._request("POST", "/contacts", json=[contact_dict])
+        item = data["_embedded"]["contacts"][0]
+        return Contact(**item)
+
+    @observe(name="kommo-get-contacts")
+    async def get_contacts(self, query: str) -> list[Contact]:
+        """GET /api/v4/contacts?query=..."""
+        data = await self._request("GET", "/contacts", params={"query": query})
+        items = data.get("_embedded", {}).get("contacts", [])
+        return [Contact(**c) for c in items]
+
+    @observe(name="kommo-update-contact")
+    async def update_contact(self, contact_id: int, update: ContactUpdate) -> Contact:
+        """PATCH /api/v4/contacts/{id}."""
+        data = await self._request(
+            "PATCH",
+            f"/contacts/{contact_id}",
+            json=update.model_dump(exclude_none=True),
+        )
+        return Contact(**data)
+
+    # --- Notes ---
+
+    @observe(name="kommo-add-note")
+    async def add_note(self, entity_type: str, entity_id: int, text: str) -> Note:
+        """POST /api/v4/{entity_type}/{id}/notes."""
+        data = await self._request(
+            "POST",
+            f"/{entity_type}/{entity_id}/notes",
+            json=[{"note_type": "common", "params": {"text": text}}],
+        )
+        item = data["_embedded"]["notes"][0]
+        return Note(**item)
+
+    # --- Tasks ---
+
+    @observe(name="kommo-create-task")
+    async def create_task(self, task: TaskCreate) -> Task:
+        """POST /api/v4/tasks."""
+        data = await self._request("POST", "/tasks", json=[task.model_dump(exclude_none=True)])
+        item = data["_embedded"]["tasks"][0]
+        return Task(**item)
+
+    @observe(name="kommo-update-task")
+    async def update_task(self, task_id: int, update: TaskUpdate) -> Task:
+        """PATCH /api/v4/tasks/{id} (#697)."""
+        data = await self._request(
+            "PATCH",
+            f"/tasks/{task_id}",
+            json=update.model_dump(exclude_none=True),
+        )
+        return Task(**data)
+
+    @observe(name="kommo-complete-task")
+    async def complete_task(self, task_id: int, result_text: str | None = None) -> Task:
+        """PATCH /api/v4/tasks/{id} — mark task as completed (#697)."""
+        payload: dict = {"is_completed": True}
+        if result_text is not None:
+            payload["result"] = {"text": result_text}
+        data = await self._request("PATCH", f"/tasks/{task_id}", json=payload)
+        return Task(**data)
+
+    # --- Links ---
+
+    @observe(name="kommo-link-contact")
+    async def link_contact_to_lead(self, lead_id: int, contact_id: int) -> None:
+        """POST /api/v4/leads/{id}/link."""
+        await self._request(
+            "POST",
+            f"/leads/{lead_id}/link",
+            json=[{"to_entity_id": contact_id, "to_entity_type": "contacts"}],
+        )
+
+    # --- Pipelines ---
+
+    @observe(name="kommo-list-pipelines")
+    async def list_pipelines(self) -> list[Pipeline]:
+        """GET /api/v4/leads/pipelines."""
+        data = await self._request("GET", "/leads/pipelines")
+        items = data.get("_embedded", {}).get("pipelines", [])
+        return [Pipeline(**p) for p in items]
+
+    # --- Lead Scores (compatibility path for supervisor tools/tests) ---
+
+    @observe(name="kommo-update-lead-score")
+    async def update_lead_score(self, *, lead_id: int, payload: dict, idempotency_key: str) -> dict:
+        """PATCH /api/v4/leads/{id} with score custom fields."""
+        return await self._request(
+            "PATCH",
+            f"/leads/{lead_id}",
+            json=payload,
+            headers={"X-Idempotency-Key": idempotency_key},
+        )
+
+    async def close(self) -> None:
+        """Close httpx client."""
+        await self._client.aclose()

@@ -53,6 +53,29 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
   exit 2
 fi
 
+# --- Проверить что ОКНО ORCH_TARGET ещё ЖИВО (не только сессия) ---
+# Корень бага (gotcha card_f5600223ad55): устаревший маркер от прошлой сессии
+# указывает ORCH_TARGET на мёртвое/чужое окно (например claude:@1). Сессия при
+# этом жива, поэтому проверки has-session недостаточно — wake-up [DONE] уходил
+# send-keys'ом в мёртвый pane, и оркестратор не просыпался. Сверяем target-окно
+# (@id или имя) со списком живых окон сессии; на stale-маркере — fail loud с
+# подсказкой переклеймить ТЕКУЩЕЕ окно.
+TARGET_WIN="${ORCH_TARGET#*:}"
+_orch_win_live=0
+while IFS=$'\t' read -r _wid _wname; do
+  if [[ "$_wid" == "$TARGET_WIN" || "$_wname" == "$TARGET_WIN" ]]; then
+    _orch_win_live=1
+    break
+  fi
+done < <(tmux list-windows -t "$SESSION" -F '#{window_id}'$'\t''#{window_name}' 2>/dev/null)
+if [[ "$_orch_win_live" -ne 1 ]]; then
+  echo "ERROR: ORCH_TARGET window '$TARGET_WIN' is not a live window in session '$SESSION'." >&2
+  echo "       The orchestrator marker is stale (likely left over from a prior session)." >&2
+  echo "       Re-claim THIS window before launching workers:" >&2
+  echo "         eval \"\$(./scripts/set_orchestrator_window.sh <task>)\"" >&2
+  exit 2
+fi
+
 # --- Сохранить промт в стабильный путь + подставить ORCH_TARGET ---
 # Materialize through a temp file: when PROMPT_SRC == PROMPT_FILE (the natural
 # case where the caller already wrote the prompt to logs/prompts/<worker>.md and
