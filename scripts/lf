@@ -42,8 +42,10 @@ case "$cmd" in
   health)
     "${LF[@]}" healths --help >/dev/null 2>&1 || true
     # /health endpoint is exposed at /api/public/health, not via CLI subresource
+    set -a
     # shellcheck disable=SC1090
-    set -a; source "$ENV_FILE" 2>/dev/null || true; set +a
+    source "$ENV_FILE" 2>/dev/null || true
+    set +a
     : "${LANGFUSE_HOST:?}"
     curl -fsS -o /dev/null -w "GET /api/public/health -> %{http_code} in %{time_total}s\n" \
       "${LANGFUSE_HOST}/api/public/health"
