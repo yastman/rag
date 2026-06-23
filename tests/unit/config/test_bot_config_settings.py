@@ -43,13 +43,13 @@ class TestBotConfigIsPydanticSettings:
         from telegram_bot.config import BotConfig
 
         config = BotConfig(
-            telegram_token="test-token",
+            telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
             llm_api_key="test-key",
             llm_base_url="http://fake:4000",
             search_top_k=42,
         )
 
-        assert config.telegram_token == "test-token"
+        assert config.telegram_token == "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
         assert config.search_top_k == 42
 
     def test_config_bool_fields_parse_env_strings(self, monkeypatch):
@@ -69,7 +69,11 @@ class TestBotConfigIsPydanticSettings:
 
         from telegram_bot.config import BotConfig
 
-        cfg = BotConfig(_env_file=None, telegram_token="test-token", llm_api_key="test-key")
+        cfg = BotConfig(
+            _env_file=None,
+            telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
+            llm_api_key="test-key",
+        )
         assert cfg.manager_ids == []
 
     def test_manager_ids_csv_env_is_parsed(self, monkeypatch):
@@ -78,7 +82,11 @@ class TestBotConfigIsPydanticSettings:
 
         from telegram_bot.config import BotConfig
 
-        cfg = BotConfig(_env_file=None, telegram_token="test-token", llm_api_key="test-key")
+        cfg = BotConfig(
+            _env_file=None,
+            telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
+            llm_api_key="test-key",
+        )
         assert cfg.manager_ids == [123, 456, 789]
 
     def test_admin_ids_empty_env_does_not_crash(self, monkeypatch):
@@ -87,7 +95,11 @@ class TestBotConfigIsPydanticSettings:
 
         from telegram_bot.config import BotConfig
 
-        cfg = BotConfig(_env_file=None, telegram_token="test-token", llm_api_key="test-key")
+        cfg = BotConfig(
+            _env_file=None,
+            telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
+            llm_api_key="test-key",
+        )
         assert cfg.admin_ids == []
 
     def test_agent_checkpointer_ttl_default(self):

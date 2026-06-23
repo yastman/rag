@@ -350,7 +350,7 @@ def test_supervisor_max_tokens_config_default():
     from telegram_bot.config import BotConfig
 
     config = BotConfig(
-        telegram_token="test:token",
+        telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         qdrant_url="http://localhost:6333",
     )
     assert config.supervisor_max_tokens == 1024
@@ -362,7 +362,7 @@ def test_supervisor_max_tokens_config_from_env(monkeypatch):
     from telegram_bot.config import BotConfig
 
     config = BotConfig(
-        telegram_token="test:token",
+        telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         qdrant_url="http://localhost:6333",
     )
     assert config.supervisor_max_tokens == 2048
