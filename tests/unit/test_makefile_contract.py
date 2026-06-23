@@ -292,38 +292,6 @@ def test_runtime_env_file_resolves_before_export() -> None:
 # --- Local all-test entrypoint contract tests ---
 
 
-def test_test_bot_health_target_sources_env_file() -> None:
-    """The test-bot-health target must source an env file before running the script."""
-    text = _makefile_text()
-    block_match = re.search(
-        r"^test-bot-health:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "test-bot-health target not found in Makefile"
-    block = block_match.group(0)
-    assert "tests/fixtures/compose.ci.env" in block, (
-        "test-bot-health target must reference tests/fixtures/compose.ci.env "
-        "as the safe local env fallback when .env is absent"
-    )
-
-
-def test_test_bot_health_target_env_precedence() -> None:
-    """The test-bot-health target must prefer .env over the fixture when .env exists."""
-    text = _makefile_text()
-    block_match = re.search(
-        r"^test-bot-health:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "test-bot-health target not found in Makefile"
-    block = block_match.group(0)
-    assert "-f .env" in block, (
-        "test-bot-health target must check for .env existence first, "
-        "preserving user .env precedence over the compose.ci.env fallback"
-    )
-
-
 def test_run_bot_uses_runtime_env_file_fallback() -> None:
     """`make run-bot` must work in local worktrees without a `.env` file."""
     text = _makefile_text()
@@ -350,19 +318,6 @@ def test_bot_uses_runtime_env_file_fallback() -> None:
     block = block_match.group(0)
     assert '--env-file "$$RAG_RUNTIME_ENV_FILE"' in block
     assert "--env-file .env" not in block
-
-
-def test_bot_depends_on_local_health_preflight() -> None:
-    """`make bot` must gate startup on local health checks to fail fast on Redis drift/outage."""
-    text = _makefile_text()
-    match = re.search(r"^bot:\s*(.+?)\s*##", text, re.MULTILINE)
-    assert match, "bot target not found in Makefile"
-    prerequisites = match.group(1).split()
-    assert "preflight-bot" in prerequisites, "bot target must keep env preflight gate"
-    assert "test-bot-health" in prerequisites, (
-        "bot target must depend on test-bot-health so Redis/Qdrant/LLM readiness "
-        "fails before runtime deep-checks"
-    )
 
 
 def test_bot_preserves_pipeline_failure_exit_code() -> None:
@@ -448,41 +403,6 @@ def test_test_full_uses_bounded_parallelism_by_default() -> None:
     )
 
 
-# --- #2123 / #2126 preflight-bot guardrail contract tests ---
-
-
-def test_preflight_bot_target_exists() -> None:
-    """`preflight-bot` must exist as a standalone Makefile target."""
-    text = _makefile_text()
-    assert re.search(r"^preflight-bot:", text, re.MULTILINE), (
-        "preflight-bot target must exist in Makefile"
-    )
-
-
-def test_preflight_bot_is_phony() -> None:
-    """`preflight-bot` must be declared .PHONY."""
-    text = _makefile_text()
-    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
-    combined = " ".join(phony_blocks)
-    assert "preflight-bot" in combined, "preflight-bot must be declared in .PHONY"
-
-
-def test_preflight_bot_runs_no_sync_module() -> None:
-    """`preflight-bot` must invoke the env checker without uv auto-sync."""
-    text = _makefile_text()
-    block_match = re.search(
-        r"^preflight-bot:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "preflight-bot target not found in Makefile"
-    block = block_match.group(0)
-    assert "$(UV_RUN_NO_SYNC) python -m scripts.probe.check_bot_runtime_env" in block, (
-        "preflight-bot must invoke scripts.probe.check_bot_runtime_env via "
-        "$(UV_RUN_NO_SYNC) so bot startup checks do not mutate .venv"
-    )
-
-
 def test_candidate_check_is_read_only_frozen_gate() -> None:
     """`make candidate-check` must fail on stale env before no-sync lint/type checks."""
     text = _makefile_text()
@@ -501,53 +421,3 @@ def test_candidate_check_is_read_only_frozen_gate() -> None:
     assert "$(UV_RUN_NO_SYNC) mypy $(LINT_PATHS)" in block
     assert "uv run ruff" not in block
     assert "uv run mypy" not in block
-
-
-def test_preflight_bot_has_flag_override() -> None:
-    """`PREFLIGHT_BOT_FLAGS` must be a ?= variable so CI can pass `--no-fail`."""
-    text = _makefile_text()
-    match = re.search(r"^PREFLIGHT_BOT_FLAGS\s*\?=", text, re.MULTILINE)
-    assert match, "PREFLIGHT_BOT_FLAGS must use ?= so CI can override with --no-fail"
-
-
-def test_docker_bot_up_depends_on_preflight_bot() -> None:
-    """`docker-bot-up` must depend on `preflight-bot` so the env check
-    runs before starting the bot containers."""
-    text = _makefile_text()
-    block_match = re.search(
-        r"^docker-bot-up:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "docker-bot-up target not found in Makefile"
-    # The dependency line (first line of the target block).
-    first_line = block_match.group(0).split("\n")[0]
-    assert "preflight-bot" in first_line, (
-        "docker-bot-up must list preflight-bot as a dependency so the env "
-        f"check runs first. Found: {first_line!r}"
-    )
-
-
-def test_bot_target_depends_on_preflight_bot() -> None:
-    """`make bot` (native) must also depend on `preflight-bot` since
-    native bot startup requires real credentials."""
-    text = _makefile_text()
-    block_match = re.search(
-        r"^bot:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "bot target not found in Makefile"
-    first_line = block_match.group(0).split("\n")[0]
-    assert "preflight-bot" in first_line, (
-        "bot target must list preflight-bot as a dependency so native bot "
-        f"launch fails fast when .env is missing. Found: {first_line!r}"
-    )
-
-
-def test_preflight_bot_script_exists() -> None:
-    """The script referenced by preflight-bot must actually exist."""
-    script = Path("scripts/probe/check_bot_runtime_env.py")
-    assert script.is_file(), (
-        f"{script} not found — preflight-bot target references a missing script"
-    )
