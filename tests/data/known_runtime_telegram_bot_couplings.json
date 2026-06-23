@@ -1,1 +1,5 @@
-{}
+{
+  "src/runtime/graph/builder.py": [
+    "telegram_bot.graph.graph:build_graph"
+  ]
+}

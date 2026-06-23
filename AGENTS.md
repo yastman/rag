@@ -31,7 +31,7 @@ services, demo). The domain layer is replaceable. **Direction:** harden to
 senior-grade while keeping every feature — see epic #2983 (remove cruft, decompose
 `bot.py` into per-feature handlers, freeze entry contracts; no over-engineering).
 
-Note: the Mini App deeplink handler is an archived/reference surface still present in the file tree and being trimmed. Do not assume it is an active production capability. Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
+Note: the Mini App deeplink handler is no longer present in the file tree (removed in P3). Do not assume it is an active production capability. Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
 
 ## Priority
 

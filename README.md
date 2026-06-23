@@ -113,6 +113,8 @@ The current domain (real-estate/apartments) lives entirely in the adapter and se
 
 Prerequisites: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), Docker with Compose.
 
+> Runtime: Docker Compose only. No k8s, no Mini App, no CRM/Kommo integration.
+
 ```bash
 cp .env.example .env          # fill in credentials
 make core-min-up              # start Qdrant + Redis (minimal)
@@ -144,7 +146,7 @@ make e2e-core-live  # Golden E2E: indexes fixture corpus, runs full spine throug
 make qdrant-audit-indexes  # Audit Qdrant payload indexes
 ```
 
-`make e2e-core-live` is the main proof of the core path. It exercises classification, retrieval, generation fallback, and runs without Telegram, Langfuse, or voice. It requires local Qdrant and BGE-M3 running (`make core-up`).
+`make e2e-core-live` is the main proof of the core path. It exercises classification, retrieval, generation fallback, and runs without Telegram or voice. It requires local Qdrant and BGE-M3 running (`make core-up`).
 
 CI runs static/lint guardrails only (Ruff, MyPy, Semgrep, lockfile check). Pytest suites are local/manual.
 
@@ -152,17 +154,14 @@ CI runs static/lint guardrails only (Ruff, MyPy, Semgrep, lockfile check). Pytes
 
 The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The following surfaces are physically in-tree but are **archived/reference** — not part of the active production path, and being trimmed in open issues:
 
-- **Telegram Mini App deeplink** — `command_handlers.py` registers a `/start` deep-link handler (`q_` prefix). Archived surface; not a production capability.
 - **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
 - **Langfuse removed** — Langfuse integration was removed; observability is through structured logs and the Loki/Promtail stack.
 
-The active production adapter is Telegram (`telegram_bot/`). Mini App deeplink is an archived reference surface present in the file tree but not on the active runtime path. Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
+The active production adapter is Telegram (`telegram_bot/`). Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
 
 Other honest limits:
 
-- k3s manifests exist for core services but are not at parity with Compose.
 - Monitoring (Loki/Promtail/Alertmanager) is local/dev only.
-- Some i18n strings are still being migrated to Fluent bundles.
 
 ## Project Map
 
@@ -191,7 +190,7 @@ Other honest limits:
 
 ## Direction
 
-The project is being hardened to a senior-grade codebase **without dropping any feature** — tracking epic [#2983](https://github.com/yastman/rag/issues/2983). In short: keep the full feature menu, remove migration cruft (dead LangGraph nodes, no-op Langfuse shim, stale tests), decompose the `bot.py` god-object into per-feature handlers, document the feature map, and freeze the entry-path contracts — with **no new frameworks and no over-engineering**.
+The project is being hardened to a senior-grade codebase **without dropping any feature** — tracking epic [#2983](https://github.com/yastman/rag/issues/2983). In short: keep the full feature menu, remove migration cruft (dead LangGraph nodes, stale tests), decompose the `bot.py` god-object into per-feature handlers, document the feature map, and freeze the entry-path contracts — with **no new frameworks and no over-engineering**.
 
 ## License
 

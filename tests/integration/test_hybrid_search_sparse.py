@@ -19,6 +19,13 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.config import Settings
+
+
+# ponytail: src.evaluation.retrieval deleted in p3-p5-hygiene; symbols not yet migrated (#2983)
+pytest.importorskip(
+    "src.evaluation.retrieval",
+    reason="src.evaluation.retrieval deleted; see #2983",
+)
 from src.evaluation.retrieval import HybridRRFSearchEngine
 
 

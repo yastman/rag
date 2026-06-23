@@ -345,3 +345,6 @@ archive/mini_app/frontend/dist/
 
 # Voice test fixture (archived surface — voice archival #2598)
 data/test/voice_note_sample.ogg
+
+# local swarm skills (not committed)
+skills/
