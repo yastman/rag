@@ -472,35 +472,43 @@ smoke-zoo: ## Run zoo smoke tests (pytest)
 
 test-redis: ## Verify Redis Query Engine is available
 	@echo "$(BLUE)Testing Redis Query Engine...$(NC)"
-	@redis_policy=$$(docker exec $(REDIS_CONTAINER) redis-cli CONFIG GET maxmemory-policy | tail -n 1); \
+	@$(ENV_LOAD) \
+	redis_exec() { \
+		if [ -n "$${REDIS_PASSWORD:-}" ]; then \
+			docker exec -e REDISCLI_AUTH="$$REDIS_PASSWORD" $(REDIS_CONTAINER) redis-cli "$$@"; \
+		else \
+			docker exec $(REDIS_CONTAINER) redis-cli "$$@"; \
+		fi; \
+	}; \
+	redis_policy=$$(redis_exec CONFIG GET maxmemory-policy | tail -n 1); \
 		if [ "$$redis_policy" != "volatile-lfu" ]; then \
 			echo "$(RED)FAIL: maxmemory-policy is $$redis_policy (expected volatile-lfu)$(NC)"; \
 			exit 1; \
 		fi; \
-		echo "  maxmemory-policy: $$redis_policy"
-	@redis_samples=$$(docker exec $(REDIS_CONTAINER) redis-cli CONFIG GET maxmemory-samples | tail -n 1); \
+		echo "  maxmemory-policy: $$redis_policy"; \
+	redis_samples=$$(redis_exec CONFIG GET maxmemory-samples | tail -n 1); \
 		if [ "$$redis_samples" != "$(EXPECTED_MAXMEMORY_SAMPLES)" ]; then \
 			echo "$(RED)FAIL: maxmemory-samples is $$redis_samples (expected $(EXPECTED_MAXMEMORY_SAMPLES))$(NC)"; \
 			exit 1; \
 		fi; \
-		echo "  maxmemory-samples: $$redis_samples"
-	@docker exec $(REDIS_CONTAINER) redis-cli FT._LIST > /dev/null 2>&1 || \
-		(echo "$(RED)FAIL: FT._LIST not available - Query Engine missing$(NC)" && exit 1)
-	@echo "  FT._LIST: OK"
-	@docker exec $(REDIS_CONTAINER) redis-cli FT.CREATE __test_vec_idx ON HASH PREFIX 1 __test_vec: SCHEMA name TEXT vec VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE > /dev/null 2>&1 || \
-		(echo "$(RED)FAIL: Cannot create VECTOR index$(NC)" && exit 1)
-	@echo "  FT.CREATE VECTOR: OK"
-	@docker exec $(REDIS_CONTAINER) redis-cli FT.DROPINDEX __test_vec_idx > /dev/null 2>&1 || true
-	@echo "$(GREEN)Query Engine + Vector Search: OK$(NC)"
-	@if [ "$${REQUIRE_REDIS_JSON:-0}" = "1" ]; then \
-		docker exec $(REDIS_CONTAINER) redis-cli JSON.SET __test_json '$$' '{"test":1}' > /dev/null 2>&1 || \
-			(echo "$(RED)FAIL: JSON.SET not available$(NC)" && exit 1); \
-		docker exec $(REDIS_CONTAINER) redis-cli JSON.GET __test_json > /dev/null 2>&1 || \
-			(echo "$(RED)FAIL: JSON.GET not available$(NC)" && exit 1); \
-		docker exec $(REDIS_CONTAINER) redis-cli DEL __test_json > /dev/null 2>&1 || true; \
+		echo "  maxmemory-samples: $$redis_samples"; \
+	redis_exec FT._LIST > /dev/null 2>&1 || \
+		{ echo "$(RED)FAIL: FT._LIST not available - Query Engine missing$(NC)"; exit 1; }; \
+	echo "  FT._LIST: OK"; \
+	redis_exec FT.CREATE __test_vec_idx ON HASH PREFIX 1 __test_vec: SCHEMA name TEXT vec VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE > /dev/null 2>&1 || \
+		{ echo "$(RED)FAIL: Cannot create VECTOR index$(NC)"; exit 1; }; \
+	echo "  FT.CREATE VECTOR: OK"; \
+	redis_exec FT.DROPINDEX __test_vec_idx > /dev/null 2>&1 || true; \
+	echo "$(GREEN)Query Engine + Vector Search: OK$(NC)"; \
+	if [ "$${REQUIRE_REDIS_JSON:-0}" = "1" ]; then \
+		redis_exec JSON.SET __test_json '$$' '{"test":1}' > /dev/null 2>&1 || \
+			{ echo "$(RED)FAIL: JSON.SET not available$(NC)"; exit 1; }; \
+		redis_exec JSON.GET __test_json > /dev/null 2>&1 || \
+			{ echo "$(RED)FAIL: JSON.GET not available$(NC)"; exit 1; }; \
+		redis_exec DEL __test_json > /dev/null 2>&1 || true; \
 		echo "  JSON: OK"; \
-	fi
-	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"
+	fi; \
+	echo "$(GREEN)✓ Redis capabilities verified$(NC)"
 
 .PHONY: test-bot-health test-bot-health-vps preflight-bot bot-response-smoke
 
