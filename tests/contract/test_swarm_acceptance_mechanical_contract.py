@@ -17,7 +17,6 @@ Pins the boundary agreed in SWARM_AUDIT_REPORT.md:
 from __future__ import annotations
 
 import importlib.util
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -176,39 +175,6 @@ def test_steering_pin_points_to_existing_test() -> None:
     assert refs, "steering must reference a pinning contract test"
     for ref in refs:
         assert (REPO_ROOT / ref).exists(), f"steering references a non-existent test file: {ref}"
-
-
-# --- P3: legacy JSON validators are gated behind KIRO_STRICT_REPORT=1 ---
-
-
-@pytest.mark.parametrize(
-    "script,args",
-    [
-        ("validate_done_json.py", ["/nonexistent.json"]),
-        ("validate_worker_signal.py", ["--role", "quick", "--signal", "/nonexistent.json"]),
-    ],
-)
-def test_legacy_json_validator_is_noop_without_strict_env(script: str, args: list[str]) -> None:
-    env = {k: v for k, v in os.environ.items() if k != "KIRO_STRICT_REPORT"}
-    result = subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / script), *args],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    assert result.returncode == 0, (
-        f"{script} must be a no-op (exit 0) without KIRO_STRICT_REPORT=1; "
-        f"rc={result.returncode} out={result.stdout} err={result.stderr}"
-    )
-    assert "SKIP" in result.stdout, f"{script} should announce the skip; got {result.stdout!r}"
-
-
-@pytest.mark.parametrize("script", ["validate_done_json.py", "validate_worker_signal.py"])
-def test_legacy_json_validator_marked_legacy_in_docstring(script: str) -> None:
-    text = (SCRIPTS_DIR / script).read_text(encoding="utf-8")
-    assert "LEGACY" in text and "KIRO_STRICT_REPORT" in text, (
-        f"{script} must be marked LEGACY and reference KIRO_STRICT_REPORT"
-    )
 
 
 # --- pr-review acceptance role (read-only review reports) ---

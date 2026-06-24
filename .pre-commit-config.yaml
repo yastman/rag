@@ -35,13 +35,6 @@ repos:
         types: [python]
         stages: [pre-commit]
 
-      - id: check-done-json
-        name: Validate DONE JSON schema
-        entry: python3 scripts/validate_done_json.py
-        language: system
-        files: '\.done\.json$'
-        stages: [pre-push]
-
   # Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
   # Best Practice 2025: Run linter BEFORE formatter (lint -> format order)
   # Documentation: https://docs.astral.sh/ruff/integrations/
