@@ -6,16 +6,16 @@ Document ingestion: parsing, chunking, embedding, and indexing into Qdrant.
 
 Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two paths exist:
 
-1. **Current path** (`unified/`) — CocoIndex-based incremental pipeline with deterministic file identity and replace semantics.
+1. **Current path** (`unified/`) — incremental pipeline with deterministic file identity (content-hash manifest) and replace semantics. CocoIndex was removed (#2834); the pipeline now drives Docling → BGE-M3 → Qdrant directly.
 2. **Legacy local wrappers** (`chunker.py`, `indexer.py`, `service.py`) — standalone helpers retained for compatibility; deprecated GDrive-specific modules were retired in favor of `unified/`.
 
 ## Entrypoints
 
 | Entrypoint | Role |
 |------------|------|
-| `src.ingestion.service` | High-level service for directory and Google Drive ingestion (legacy wrapper) |
-| `src.ingestion.unified.cli` | Unified pipeline CLI: `run`, `watch`, `backfill`, `status` |
-| `src.ingestion.unified.flow` `build_flow()` / `run_once()` / `run_watch()` | CocoIndex flow assembly and execution |
+| `src.ingestion.service` | High-level service for directory ingestion (legacy wrapper) |
+| `src.ingestion.unified.cli` | Unified pipeline CLI: `run` (+`--watch`), `preflight`, `bootstrap`, `schema-check`, `coverage-check`, `backfill-colbert` |
+| `src.ingestion.unified.flow` `run_once()` / `run_watch()` | Pipeline assembly and execution (reads `SYNC_DIR`) |
 | `src.ingestion.unified.qdrant_writer` `QdrantHybridWriter` | Writes hybrid vectors (dense + sparse + ColBERT) to Qdrant |
 
 ## Key Files
@@ -23,14 +23,16 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 | File | Purpose |
 |------|---------|
 | [`chunker.py`](./chunker.py) | Document chunking strategies (fixed, semantic, sliding window) |
+| [`hybrid_chunker.py`](./hybrid_chunker.py) | Token-aware hybrid chunking helper |
 | [`document_parser.py`](./document_parser.py) | Docling-based document parsing |
+| [`docling_client.py`](./docling_client.py) | HTTP client for docling-serve (HybridChunker, profiles) |
+| [`docling_native.py`](./docling_native.py) | In-process Docling backend |
 | [`service.py`](./service.py) | Legacy ingestion service wrapper |
 | [`unified/config.py`](./unified/config.py) | Unified pipeline configuration |
-| [`unified/flow.py`](./unified/flow.py) | CocoIndex flow definition |
+| [`unified/flow.py`](./unified/flow.py) | Pipeline definition (`run_once` / `run_watch`) |
 | [`unified/manifest.py`](./unified/manifest.py) | Content-hash-based stable file identity |
 | [`unified/qdrant_writer.py`](./unified/qdrant_writer.py) | Qdrant upsert/delete with payload contract |
-| [`unified/state_manager.py`](./unified/state_manager.py) | Ingestion state and resume tracking |
-| [`unified/targets/qdrant_hybrid_target.py`](./unified/targets/qdrant_hybrid_target.py) | Custom CocoIndex target connector |
+| [`unified/colbert_backfill.py`](./unified/colbert_backfill.py) | Backfill ColBERT vectors for existing points |
 
 ## Boundaries
 
@@ -40,19 +42,21 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 
 ## Related Runtime Services
 
-- **Qdrant** — target vector database
-- **PostgreSQL** — CocoIndex flow state database
-- **BGE-M3** — dense + sparse embeddings (or Voyage when configured)
-- **Docling** — document parsing (HTTP or native backend)
+- **Qdrant** — target vector database (also the source of truth for idempotency via the content-hash manifest)
+- **BGE-M3** — dense + sparse + ColBERT embeddings
+- **Docling** — document parsing (HTTP `docling_http` or `docling_native` backend)
 
 ## Focused Checks
 
 ```bash
-# Unified pipeline dry-run
-python -m src.ingestion.unified.cli run --dry-run
+# Check dependencies are reachable (Qdrant, BGE-M3, Docling, sync dir)
+python -m src.ingestion.unified.cli preflight
 
-# Status check
-python -m src.ingestion.unified.cli status
+# Create the Qdrant collection if missing
+python -m src.ingestion.unified.cli bootstrap
+
+# Validate collection schema (dense / bm42 / colbert)
+python -m src.ingestion.unified.cli schema-check
 
 # Tests
 pytest src/ingestion/unified/
