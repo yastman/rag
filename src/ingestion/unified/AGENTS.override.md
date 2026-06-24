@@ -23,6 +23,7 @@
 ## Guardrails
 - Do not silently alter collection names, manifest hashing, or file identity semantics.
 - Prefer additive config changes over breaking defaults.
+- **Deleted source files are a known limitation**: removing a file from `sync_dir` does not remove its chunks from Qdrant (no vanished-source scan). Do not document this as handled; orphaned points need manual cleanup via `delete_file_sync`/`delete_by_source_path_sync`.
 
 ## References
 - `docs/INGESTION.md`

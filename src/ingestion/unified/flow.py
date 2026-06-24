@@ -178,6 +178,13 @@ def _ingest_directory(
                 "modified_time": datetime.now(UTC).isoformat(),
             }
 
+            # Sweep any prior version of this file before re-upserting. When
+            # content changes the manifest mints a NEW file_id, so the old
+            # version's points live under a different file_id that the
+            # post-upsert stale sweep (keyed on the new file_id) can't reach.
+            # source_path is stable across content changes — delete by it.
+            writer.delete_by_source_path_sync(source_path=rel, collection_name=collection)
+
             stats = writer.upsert_chunks_sync(
                 chunks=chunks,
                 file_id=file_id,
