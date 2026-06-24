@@ -82,3 +82,13 @@ def test_docling_client_profiles_use_canonical_pdf_backend() -> None:
     text = Path("src/ingestion/docling_client.py").read_text(encoding="utf-8")
     assert "dlparse_v4" not in text
     assert "dlparse_v2" not in text
+
+
+def test_dockerfile_docling_no_dlparse_backend() -> None:
+    """services/docling/Dockerfile must not reference deprecated dlparse_v* backends."""
+    import re
+
+    text = Path("services/docling/Dockerfile").read_text(encoding="utf-8")
+    assert not re.search(r"dlparse_v[0-9]", text), (
+        "services/docling/Dockerfile must not contain deprecated dlparse_v* backend references"
+    )
