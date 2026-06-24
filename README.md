@@ -93,7 +93,7 @@ An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/ag
 `src/ingestion/unified/` — deterministic, idempotent, production-ready:
 
 - SHA256-based file identity: re-ingesting the same file is a no-op.
-- Idempotent upsert with orphan cleanup (deleted source files are removed from Qdrant).
+- Idempotent upsert: changed files replace prior chunks by source path. Deleted source files are a known limitation — their chunks remain in Qdrant until manual cleanup.
 - Dead-letter queue (DLQ) for failed documents, with retry and backoff.
 - Docling handles parsing; CocoIndex handles chunking and embedding writes.
 
