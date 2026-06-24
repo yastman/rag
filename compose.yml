@@ -152,11 +152,11 @@ services:
       UVICORN_HOST: 0.0.0.0
       UVICORN_PORT: 5001
       DOCLING_BACKEND: docling
-      # Aligned with DoclingConfig.pdf_backend client default (#3022). The
-      # form-data field still wins at runtime; this keeps the server default
-      # consistent to avoid confusion if the form field is ever dropped.
-      DOCLING_PDF_BACKEND: dlparse_v4
-      DOCLING_TABLE_MODE: accurate
+      # Canonical pdf_backend name (docling-serve 1.x); per-request form-field
+      # overrides this at runtime for all profiles.
+      DOCLING_PDF_BACKEND: docling_parse
+      # fast is the default; per-request form-field overrides for full/quality profiles
+      DOCLING_TABLE_MODE: fast
     volumes:
       - ./data/docling:/data
       - docling_cache:/app/.cache/huggingface

@@ -37,7 +37,7 @@ _PROFILE_SETTINGS: dict[str, dict[str, Any]] = {
         "force_ocr": False,
         "ocr_engine": None,
         "table_mode": "fast",
-        "pdf_backend": "dlparse_v4",
+        "pdf_backend": "docling_parse",
         "pipeline": None,
     },
     "quality": {
@@ -45,7 +45,7 @@ _PROFILE_SETTINGS: dict[str, dict[str, Any]] = {
         "force_ocr": False,
         "ocr_engine": "easyocr",
         "table_mode": "accurate",
-        "pdf_backend": "dlparse_v4",
+        "pdf_backend": "docling_parse",
         "pipeline": None,
     },
     "scan": {
@@ -53,7 +53,7 @@ _PROFILE_SETTINGS: dict[str, dict[str, Any]] = {
         "force_ocr": True,
         "ocr_engine": "easyocr",
         "table_mode": "accurate",
-        "pdf_backend": "dlparse_v4",
+        "pdf_backend": "docling_parse",
         "pipeline": None,
     },
     "vlm": {
@@ -61,7 +61,7 @@ _PROFILE_SETTINGS: dict[str, dict[str, Any]] = {
         "force_ocr": False,
         "ocr_engine": None,
         "table_mode": "accurate",
-        "pdf_backend": "dlparse_v4",
+        "pdf_backend": "docling_parse",
         "pipeline": "vlm",
     },
 }
@@ -114,7 +114,7 @@ class DoclingConfig:
     tokenizer: str | None = field(
         default_factory=lambda: os.getenv("DOCLING_TOKENIZER", "BAAI/bge-m3") or None
     )
-    pdf_backend: str = "dlparse_v4"  # Best table parsing (2026)
+    pdf_backend: str = "docling_parse"  # Canonical backend name (docling-serve 1.x)
     table_mode: str = "accurate"  # accurate | fast
     do_ocr: bool = False  # Enable for scanned documents
 
@@ -156,7 +156,7 @@ class DoclingConfig:
             self.do_ocr = settings["do_ocr"]
         if self.table_mode == "accurate" and settings["table_mode"] != "accurate":
             self.table_mode = settings["table_mode"]
-        if self.pdf_backend == "dlparse_v4" and settings["pdf_backend"] != "dlparse_v4":
+        if self.pdf_backend == "docling_parse" and settings["pdf_backend"] != "docling_parse":
             self.pdf_backend = settings["pdf_backend"]
 
         logger.debug(

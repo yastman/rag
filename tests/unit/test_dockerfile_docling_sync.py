@@ -61,3 +61,24 @@ def test_docling_service_lock_uses_cpu_only_pytorch() -> None:
     )
     assert not locked_package_names.intersection(forbidden_cuda_packages)
     assert not any(name.startswith("nvidia-") for name in locked_package_names)
+
+
+def test_compose_docling_uses_canonical_pdf_backend() -> None:
+    """compose.yml DOCLING_PDF_BACKEND must use canonical docling_parse, not alias dlparse_v4."""
+    text = Path("compose.yml").read_text(encoding="utf-8")
+    assert "DOCLING_PDF_BACKEND: docling_parse" in text
+    assert "dlparse_v4" not in text
+    assert "dlparse_v2" not in text
+
+
+def test_compose_docling_table_mode_is_fast() -> None:
+    """compose.yml DOCLING_TABLE_MODE must be fast (per-request overrides for heavy profiles)."""
+    text = Path("compose.yml").read_text(encoding="utf-8")
+    assert "DOCLING_TABLE_MODE: fast" in text
+
+
+def test_docling_client_profiles_use_canonical_pdf_backend() -> None:
+    """All docling_client.py profiles must use canonical docling_parse backend."""
+    text = Path("src/ingestion/docling_client.py").read_text(encoding="utf-8")
+    assert "dlparse_v4" not in text
+    assert "dlparse_v2" not in text

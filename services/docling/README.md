@@ -38,7 +38,7 @@ uv run pytest tests/unit/test_dockerfile_docling_sync.py -v
 
 ## Owner Boundaries
 
-- Document conversion backend (`dlparse_v2` PDF backend, accurate table mode)
+- Document conversion backend (`docling_parse` PDF backend, accurate table mode)
 - No persistent application state; relies on `./data/docling` volume mount and `docling_cache` volume
 
 Do not change `UVICORN_PORT`, `DOCLING_BACKEND`, or volume mounts without updating `compose.yml` and ingestion pipeline tests.
