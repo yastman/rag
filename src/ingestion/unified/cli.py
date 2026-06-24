@@ -17,7 +17,6 @@ import argparse
 import asyncio
 import logging
 import os
-import re
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -97,40 +96,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         raise
 
     try_update_ingestion_trace(command="run", status="completed", metadata={"watch": watch_mode})
-
-    return 0
-
-
-async def cmd_status(args: argparse.Namespace) -> int:
-    """Show ingestion status."""
-    from src.ingestion.unified.config import UnifiedConfig
-    from src.ingestion.unified.state_manager import UnifiedStateManager
-
-    config = UnifiedConfig()
-    manager = UnifiedStateManager(database_url=config.database_url)
-
-    try:
-        stats = await manager.get_stats()
-        dlq_count = await manager.get_dlq_count()
-        sync_info = _inspect_sync_dir(config.sync_dir, config.supported_extensions)
-
-        print("\n=== Ingestion Status ===")
-        total = sum(stats.values())
-        for status, count in sorted(stats.items()):
-            pct = count / total * 100 if total else 0
-            print(f"  {status}: {count} ({pct:.1f}%)")
-        print(f"  TOTAL: {total}")
-        print(f"\n  DLQ: {dlq_count} items")
-        print(f"  Collection: {config.collection_name}")
-        print(f"  Sync dir: {config.sync_dir}")
-        if sync_info["exists"] and sync_info["is_dir"]:
-            print(f"  Supported files: {sync_info['supported_files']}")
-        elif not sync_info["exists"]:
-            print("  Supported files: n/a (sync dir missing)")
-        else:
-            print("  Supported files: n/a (sync dir is not a directory)")
-    finally:
-        await manager.close()
 
     return 0
 
@@ -217,7 +182,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
                 print(f"  [FAIL] Docling ({config.docling_url}) — {e}")
 
     # Required env vars
-    required_vars = ["QDRANT_URL", "BGE_M3_URL", "INGESTION_DATABASE_URL"]
+    required_vars = ["QDRANT_URL", "BGE_M3_URL"]
     if config.docling_backend != "docling_native":
         required_vars.append("DOCLING_URL")
     missing = [v for v in required_vars if not os.getenv(v)]
@@ -521,106 +486,6 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
-async def cmd_reprocess(args: argparse.Namespace) -> int:
-    """Reprocess a specific file or all errors."""
-    from src.ingestion.unified.config import UnifiedConfig
-    from src.ingestion.unified.state_manager import UnifiedStateManager
-
-    async def _tracking_tables(pool) -> list[str]:
-        rows = await pool.fetch(
-            """
-            SELECT tablename
-            FROM pg_tables
-            WHERE schemaname = 'public'
-              AND tablename LIKE 'unified\\_\\_ingest\\_%\\_\\_cocoindex\\_tracking' ESCAPE '\\'
-            """
-        )
-        return [row["tablename"] for row in rows]
-
-    async def _purge_tracking_rows(pool, source_paths: list[str]) -> int:
-        if not source_paths:
-            return 0
-
-        total_deleted = 0
-        source_keys = [f'"{source_path}"' for source_path in source_paths]
-        for table_name in await _tracking_tables(pool):
-            if not re.fullmatch(r"[A-Za-z0-9_]+", table_name):
-                raise ValueError(f"Unexpected tracking table name: {table_name}")
-            delete_query = f"DELETE FROM {table_name} WHERE source_key = ANY($1::jsonb[])"  # nosec B608
-            deleted = await pool.execute(
-                delete_query,
-                source_keys,
-            )
-            total_deleted += int(deleted.split()[-1])
-        return total_deleted
-
-    def _touch_source_files(sync_dir: Path, source_paths: list[str]) -> int:
-        touched = 0
-        for source_path in source_paths:
-            relative = Path(source_path)
-            candidates = [
-                relative,
-                sync_dir / relative,
-                sync_dir.parent / relative,
-            ]
-            for candidate in candidates:
-                if candidate.exists() and candidate.is_file():
-                    candidate.touch()
-                    touched += 1
-                    break
-        return touched
-
-    config = UnifiedConfig()
-    manager = UnifiedStateManager(database_url=config.database_url)
-
-    try:
-        pool = await manager._get_pool()
-
-        if args.file_id:
-            rows = await pool.fetch(
-                "SELECT source_path FROM ingestion_state WHERE file_id = $1",
-                args.file_id,
-            )
-            source_paths = [row["source_path"] for row in rows if row["source_path"]]
-            await pool.execute(
-                "UPDATE ingestion_state SET status = 'pending', retry_count = 0, "
-                "retry_after = NULL, error_message = NULL WHERE file_id = $1",
-                args.file_id,
-            )
-            purged = await _purge_tracking_rows(pool, source_paths)
-            touched = _touch_source_files(config.sync_dir, source_paths)
-            print(
-                f"Reset file: {args.file_id} "
-                f"(purged tracking rows: {purged}, touched files: {touched})"
-            )
-        else:
-            target_status = "error" if args.errors else "pending" if args.pending else None
-            if target_status is None:
-                print("Specify --file-id, --errors, or --pending")
-                return 1
-
-            rows = await pool.fetch(
-                "SELECT source_path FROM ingestion_state WHERE status = $1",
-                target_status,
-            )
-            source_paths = [row["source_path"] for row in rows if row["source_path"]]
-            result = await pool.execute(
-                "UPDATE ingestion_state SET status = 'pending', retry_count = 0, "
-                "retry_after = NULL, error_message = NULL WHERE status = $1",
-                target_status,
-            )
-            purged = await _purge_tracking_rows(pool, source_paths)
-            touched = _touch_source_files(config.sync_dir, source_paths)
-            print(
-                f"Reset {target_status} files: {result} "
-                f"(purged tracking rows: {purged}, touched files: {touched})"
-            )
-    finally:
-        await manager.close()
-
-    return 0
-
-
 def cmd_backfill_colbert(args: argparse.Namespace) -> int:
     """Backfill missing ColBERT vectors for points in existing collection."""
     from src.ingestion.unified.config import UnifiedConfig
@@ -718,9 +583,6 @@ def main() -> int:
     run_p = subparsers.add_parser("run", help="Run ingestion")
     run_p.add_argument("--watch", "-w", action="store_true", help="Continuous mode")
 
-    # status
-    subparsers.add_parser("status", help="Show status")
-
     # preflight
     subparsers.add_parser("preflight", help="Check dependencies are reachable")
 
@@ -764,12 +626,6 @@ def main() -> int:
     backfill_p.add_argument("--dry-run", action="store_true", help="Do not write updates")
     backfill_p.add_argument("--resume", action="store_true", help="Resume from checkpoint")
 
-    # reprocess
-    reprocess_p = subparsers.add_parser("reprocess", help="Reprocess files")
-    reprocess_p.add_argument("--file-id", help="Specific file ID")
-    reprocess_p.add_argument("--errors", action="store_true", help="All error files")
-    reprocess_p.add_argument("--pending", action="store_true", help="All pending files")
-
     args = parser.parse_args()
     setup_logging(args.verbose)
 
@@ -779,8 +635,6 @@ def main() -> int:
     try:
         if args.command == "run":
             return cmd_run(args)  # type: ignore[no-any-return]
-        if args.command == "status":
-            return asyncio.run(cmd_status(args))  # type: ignore[no-any-return]
         if args.command == "preflight":
             return asyncio.run(cmd_preflight(args))  # type: ignore[no-any-return]
         if args.command == "bootstrap":
@@ -791,8 +645,6 @@ def main() -> int:
             return asyncio.run(cmd_coverage_check(args))  # type: ignore[no-any-return]
         if args.command == "backfill-colbert":
             return cmd_backfill_colbert(args)
-        if args.command == "reprocess":
-            return asyncio.run(cmd_reprocess(args))  # type: ignore[no-any-return]
 
         return 1
     finally:

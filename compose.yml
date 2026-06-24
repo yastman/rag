@@ -257,7 +257,6 @@ services:
     logging: *default-logging
     environment:
       - GDRIVE_SYNC_DIR=/data/drive-sync
-      - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
       - DOCLING_URL=http://docling:5001
       - GDRIVE_COLLECTION_NAME=gdrive_documents_bge

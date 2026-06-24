@@ -1,62 +1,74 @@
 # src/ingestion/unified/
 
-CocoIndex-based unified ingestion pipeline.
+Stateless unified ingestion pipeline.
 
 ## Purpose
 
-Incremental, resumable document ingestion with stable file identity and hybrid vector writes to Qdrant. Replaces the legacy `gdrive_flow.py` and standalone indexer scripts.
+Idempotent document ingestion with stable file identity and hybrid vector
+writes to Qdrant. Runs as a single pass (or a polling watch loop) with **no
+external state database** — idempotency lives in Qdrant via a per-point
+`metadata.content_hash`.
+
+## How it works
+
+`run_once` scans `sync_dir` → for each supported file: compute `content_hash`
+and a stable `file_id` (manifest) → if Qdrant already holds a point for that
+`(file_id, content_hash)` the file is **skipped** → otherwise parse via Docling,
+embed via BGE-M3, and upsert into Qdrant. Upsert uses deterministic point ids
+(atomic replace) so a *changed* file is re-ingested correctly and stale chunks
+are swept.
 
 ## Entrypoints
 
 | Entrypoint | Role |
 |------------|------|
-| [`cli.py`](./cli.py) `main()` | CLI: `run`, `run --watch`, `backfill-colbert`, `status`, `preflight` |
-| [`flow.py`](./flow.py) `build_flow()` | Assemble the CocoIndex flow for a given config |
-| [`flow.py`](./flow.py) `run_once()` | Single-pass ingestion |
-| [`flow.py`](./flow.py) `run_watch()` | Continuous watch mode via `FlowLiveUpdater` |
-| [`qdrant_writer.py`](./qdrant_writer.py) `QdrantHybridWriter.write_file()` | Write a single file's chunks to Qdrant |
+| [`cli.py`](./cli.py) `main()` | CLI: `run`, `run --watch`, `preflight`, `bootstrap`, `schema-check`, `coverage-check`, `backfill-colbert` |
+| [`flow.py`](./flow.py) `run_once()` | Single-pass, stateless, idempotent ingestion |
+| [`flow.py`](./flow.py) `run_watch()` | Continuous polling loop over `run_once` |
+| [`qdrant_writer.py`](./qdrant_writer.py) `QdrantHybridWriter.upsert_chunks_sync()` | Atomic-replace upsert of a file's chunks |
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| [`config.py`](./config.py) | `UnifiedConfig` — paths, Qdrant, Docling, BGE-M3/Voyage settings |
-| [`flow.py`](./flow.py) | CocoIndex flow: LocalFile source → transforms → QdrantHybridTarget |
+| [`config.py`](./config.py) | `UnifiedConfig` — paths, Qdrant, Docling, BGE-M3 settings |
+| [`flow.py`](./flow.py) | Stateless scan → parse → embed → Qdrant upsert with content-hash dedup |
 | [`manifest.py`](./manifest.py) | `FileManifest` — content-hash → stable UUID mapping (rename/move safe) |
 | [`qdrant_writer.py`](./qdrant_writer.py) | Batch hybrid upserts and per-file delete/replace |
-| [`state_manager.py`](./state_manager.py) | File state tracking for resume and idempotency |
 | [`colbert_backfill.py`](./colbert_backfill.py) | Backfill ColBERT multivectors for existing chunks |
-| [`targets/qdrant_hybrid_target.py`](./targets/qdrant_hybrid_target.py) | Custom CocoIndex target connector |
 
 ## Boundaries
 
 - **Deterministic identity**: `manifest.py` uses `content_hash` as the primary key. Renamed or moved files reuse the same `file_id` and do not create duplicates.
-- **Replace semantics**: re-ingesting a file deletes its old chunks (by `file_id`) before inserting new ones.
+- **Idempotency**: a file whose `(file_id, content_hash)` already exists in Qdrant is skipped; there is no separate state store.
+- **Replace semantics**: re-ingesting a changed file deletes the prior version's points by `source_path` and upserts new chunks (deterministic ids), so no stale chunks survive a content change.
+- **Deleted source files (known limitation)**: removing a file from `sync_dir` does **not** delete its chunks from Qdrant. There is no scan for vanished sources; orphaned points remain until manual cleanup. Use `QdrantHybridWriter.delete_file_sync`/`delete_by_source_path_sync` out-of-band to remove them.
 - **Payload contract**: `qdrant_writer.py` writes a consistent payload schema expected by retrieval. Changing fields here requires a coordinated change in `telegram_bot/services/qdrant.py` and `src/retrieval/`.
 - **Do not change hashing or collection semantics** without a migration plan; downstream retrieval and history depend on stable point identities.
 
 ## Related Runtime Services
 
-- **Qdrant** — vector database target
-- **PostgreSQL** — CocoIndex flow state (`INGESTION_DATABASE_URL`)
-- **BGE-M3** — local dense + sparse embeddings (default)
-- **Voyage** — cloud dense embeddings (optional, `USE_LOCAL_DENSE_EMBEDDINGS=false`)
+- **Qdrant** — vector database target (also the source of truth for idempotency)
+- **BGE-M3** — local dense + sparse + ColBERT embeddings
 - **Docling** — document parsing (`DOCLING_BACKEND`: `docling_http` or `docling_native`)
 
 ## Focused Checks
 
 ```bash
-# Run once (dry-run)
-python -m src.ingestion.unified.cli run --dry-run
+# Create the Qdrant collection if missing
+python -m src.ingestion.unified.cli bootstrap
 
-# Watch mode
+# Check dependencies are reachable
+python -m src.ingestion.unified.cli preflight
+
+# Run once
+python -m src.ingestion.unified.cli run
+
+# Watch mode (polling loop)
 python -m src.ingestion.unified.cli run --watch
 
-# Backfill ColBERT vectors
-python -m src.ingestion.unified.cli backfill-colbert
-
 # Tests
-pytest src/ingestion/unified/
+make test-ingest-extra
 make check
 ```
 

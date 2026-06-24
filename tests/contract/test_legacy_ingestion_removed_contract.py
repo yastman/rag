@@ -168,10 +168,11 @@ KNOWN_LIVE_CALLERS: dict[str, str] = {
         "NativeDoclingAdapter subclasses DoclingClient and reuses DoclingChunk "
         "/ DoclingConfig. The unified ingestion pipeline depends on it."
     ),
-    "src/ingestion/unified/targets/qdrant_hybrid_target.py": (
-        "QdrantHybridTargetConnector — the *unified* pipeline target itself — "
-        "imports DoclingClient and DoclingConfig directly. The premise of "
-        '#1532 ("replaced by unified pipeline") does not hold for this file.'
+    "src/ingestion/unified/flow.py": (
+        "The *unified* pipeline flow (run_once) imports DoclingClient and "
+        "DoclingConfig directly to build the HTTP Docling backend. The premise "
+        'of #1532 ("replaced by unified pipeline") does not hold — the unified '
+        "pipeline itself reuses DoclingClient."
     ),
     "telegram_bot/services/ingestion_cocoindex.py": (
         "Telegram bot CLI entrypoint re-exports IngestionService, "

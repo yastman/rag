@@ -33,18 +33,12 @@ class TestArgParsing:
         run_p = subparsers.add_parser("run")
         run_p.add_argument("--watch", "-w", action="store_true")
 
-        subparsers.add_parser("status")
         subparsers.add_parser("preflight")
         bootstrap_p = subparsers.add_parser("bootstrap")
         bootstrap_p.add_argument("--require-colbert", action="store_true")
 
         schema_check_p = subparsers.add_parser("schema-check")
         schema_check_p.add_argument("--require-colbert", action="store_true")
-
-        reprocess_p = subparsers.add_parser("reprocess")
-        reprocess_p.add_argument("--file-id")
-        reprocess_p.add_argument("--errors", action="store_true")
-        reprocess_p.add_argument("--pending", action="store_true")
 
         return parser.parse_args(list(argv))
 
@@ -60,10 +54,6 @@ class TestArgParsing:
     def test_run_watch_long(self):
         args = self._parse("run", "--watch")
         assert args.watch is True
-
-    def test_status(self):
-        args = self._parse("status")
-        assert args.command == "status"
 
     def test_preflight(self):
         args = self._parse("preflight")
@@ -88,25 +78,6 @@ class TestArgParsing:
         args = self._parse("schema-check", "--require-colbert")
         assert args.command == "schema-check"
         assert args.require_colbert is True
-
-    def test_reprocess_file_id(self):
-        args = self._parse("reprocess", "--file-id", "abc123")
-        assert args.command == "reprocess"
-        assert args.file_id == "abc123"
-        assert args.errors is False
-        assert args.pending is False
-
-    def test_reprocess_errors(self):
-        args = self._parse("reprocess", "--errors")
-        assert args.errors is True
-        assert args.file_id is None
-        assert args.pending is False
-
-    def test_reprocess_pending(self):
-        args = self._parse("reprocess", "--pending")
-        assert args.pending is True
-        assert args.file_id is None
-        assert args.errors is False
 
     def test_verbose_flag(self):
         args = self._parse("-v", "run")
@@ -412,115 +383,6 @@ class TestCmdPreflight:
 
 
 # ---------------------------------------------------------------------------
-# cmd_status
-# ---------------------------------------------------------------------------
-
-
-class TestCmdStatus:
-    """Test status command output."""
-
-    @pytest.fixture
-    def args(self):
-        return argparse.Namespace(command="status", verbose=False)
-
-    async def test_status_output_format(self, args, capsys):
-        config = _make_config(collection_name="test_col")
-
-        manager = AsyncMock()
-        manager.get_stats.return_value = {"indexed": 10, "pending": 5, "error": 2}
-        manager.get_dlq_count.return_value = 1
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_status
-
-            result = await cmd_status(args)
-
-        assert result == 0
-        output = capsys.readouterr().out
-        assert "Ingestion Status" in output
-        assert "indexed: 10" in output
-        assert "TOTAL: 17" in output
-        assert "DLQ: 1" in output
-        assert "test_col" in output
-
-    async def test_status_empty_stats(self, args, capsys):
-        config = _make_config(collection_name="empty_col")
-
-        manager = AsyncMock()
-        manager.get_stats.return_value = {}
-        manager.get_dlq_count.return_value = 0
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_status
-
-            result = await cmd_status(args)
-
-        assert result == 0
-        output = capsys.readouterr().out
-        assert "TOTAL: 0" in output
-
-    async def test_status_closes_manager(self, args):
-        config = _make_config()
-
-        manager = AsyncMock()
-        manager.get_stats.return_value = {"indexed": 1}
-        manager.get_dlq_count.return_value = 0
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_status
-
-            await cmd_status(args)
-
-        manager.close.assert_awaited_once()
-
-    async def test_status_reports_supported_file_count(self, args, capsys, tmp_path):
-        sync_dir = tmp_path / "sync"
-        sync_dir.mkdir()
-        (sync_dir / "one.pdf").write_text("pdf")
-        (sync_dir / "two.docx").write_text("docx")
-        (sync_dir / "ignored.tmp").write_text("tmp")
-
-        config = _make_config(collection_name="test_col", sync_dir=sync_dir)
-        manager = AsyncMock()
-        manager.get_stats.return_value = {"indexed": 2}
-        manager.get_dlq_count.return_value = 0
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_status
-
-            result = await cmd_status(args)
-
-        assert result == 0
-        output = capsys.readouterr().out
-        assert "Sync dir:" in output
-        assert "Supported files: 2" in output
-
-
-# ---------------------------------------------------------------------------
 # cmd_run
 # ---------------------------------------------------------------------------
 
@@ -559,172 +421,6 @@ class TestCmdRun:
 
         assert result == 0
         mock_run_watch.assert_called_once_with(config)
-
-
-# ---------------------------------------------------------------------------
-# cmd_reprocess
-# ---------------------------------------------------------------------------
-
-
-class TestCmdReprocess:
-    """Test reprocess command."""
-
-    async def test_reprocess_file_id(self):
-        config = _make_config()
-        pool = AsyncMock()
-        pool.fetch.side_effect = [
-            [{"source_path": "drive-sync/Test/abc.md"}],
-            [{"tablename": "unified__ingest_a7bb25__cocoindex_tracking"}],
-        ]
-        pool.execute.side_effect = ["UPDATE 1", "DELETE 1"]
-        manager = AsyncMock()
-        manager._get_pool.return_value = pool
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_reprocess
-
-            args = argparse.Namespace(
-                command="reprocess",
-                file_id="abc123",
-                errors=False,
-                pending=False,
-                verbose=False,
-            )
-            result = await cmd_reprocess(args)
-
-        assert result == 0
-        assert pool.fetch.await_count == 2
-        assert pool.execute.await_count == 2
-        update_call = pool.execute.await_args_list[0]
-        delete_call = pool.execute.await_args_list[1]
-        assert "abc123" in update_call.args
-        assert "DELETE FROM unified__ingest" in delete_call.args[0]
-
-    async def test_reprocess_errors(self):
-        config = _make_config()
-        pool = AsyncMock()
-        pool.fetch.side_effect = [
-            [{"source_path": "drive-sync/Test/err.md"}],
-            [{"tablename": "unified__ingest_a7bb25__cocoindex_tracking"}],
-        ]
-        pool.execute.side_effect = ["UPDATE 5", "DELETE 1"]
-        manager = AsyncMock()
-        manager._get_pool.return_value = pool
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_reprocess
-
-            args = argparse.Namespace(
-                command="reprocess",
-                file_id=None,
-                errors=True,
-                pending=False,
-                verbose=False,
-            )
-            result = await cmd_reprocess(args)
-
-        assert result == 0
-        update_call = pool.execute.await_args_list[0]
-        delete_call = pool.execute.await_args_list[1]
-        assert update_call.args[1] == "error"
-        assert "DELETE FROM unified__ingest" in delete_call.args[0]
-
-    async def test_reprocess_pending(self):
-        config = _make_config()
-        pool = AsyncMock()
-        pool.fetch.side_effect = [
-            [{"source_path": "drive-sync/Test/pending.md"}],
-            [{"tablename": "unified__ingest_a7bb25__cocoindex_tracking"}],
-        ]
-        pool.execute.side_effect = ["UPDATE 3", "DELETE 1"]
-        manager = AsyncMock()
-        manager._get_pool.return_value = pool
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_reprocess
-
-            args = argparse.Namespace(
-                command="reprocess",
-                file_id=None,
-                errors=False,
-                pending=True,
-                verbose=False,
-            )
-            result = await cmd_reprocess(args)
-
-        assert result == 0
-        update_call = pool.execute.await_args_list[0]
-        assert update_call.args[1] == "pending"
-
-    async def test_reprocess_no_args_returns_1(self, capsys):
-        config = _make_config()
-        manager = AsyncMock()
-        manager._get_pool.return_value = AsyncMock()
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_reprocess
-
-            args = argparse.Namespace(
-                command="reprocess",
-                file_id=None,
-                errors=False,
-                pending=False,
-                verbose=False,
-            )
-            result = await cmd_reprocess(args)
-
-        assert result == 1
-        output = capsys.readouterr().out
-        assert "Specify --file-id, --errors, or --pending" in output
-
-    async def test_reprocess_closes_manager(self):
-        config = _make_config()
-        manager = AsyncMock()
-        manager._get_pool.return_value = AsyncMock()
-
-        with (
-            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch(
-                "src.ingestion.unified.state_manager.UnifiedStateManager",
-                return_value=manager,
-            ),
-        ):
-            from src.ingestion.unified.cli import cmd_reprocess
-
-            args = argparse.Namespace(
-                command="reprocess",
-                file_id="x",
-                errors=False,
-                pending=False,
-                verbose=False,
-            )
-            await cmd_reprocess(args)
-
-        manager.close.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -1008,18 +704,6 @@ class TestMainDispatch:
         assert result == 0
         mock_cmd.assert_called_once()
 
-    @patch("src.ingestion.unified.cli.cmd_status", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
-    def test_main_dispatches_status(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
-        monkeypatch.setattr("sys.argv", ["cli", "status"])
-
-        from src.ingestion.unified.cli import main
-
-        result = main()
-        assert result == 0
-        mock_cmd.assert_awaited_once()
-
     @patch("src.ingestion.unified.cli.cmd_preflight", new_callable=AsyncMock, return_value=0)
     @patch("src.ingestion.unified.cli.setup_logging")
     @patch("src.ingestion.unified.cli.load_dotenv")
@@ -1037,18 +721,6 @@ class TestMainDispatch:
     @patch("src.ingestion.unified.cli.load_dotenv")
     def test_main_dispatches_bootstrap(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "bootstrap"])
-
-        from src.ingestion.unified.cli import main
-
-        result = main()
-        assert result == 0
-        mock_cmd.assert_awaited_once()
-
-    @patch("src.ingestion.unified.cli.cmd_reprocess", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
-    def test_main_dispatches_reprocess(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
-        monkeypatch.setattr("sys.argv", ["cli", "reprocess", "--errors"])
 
         from src.ingestion.unified.cli import main
 

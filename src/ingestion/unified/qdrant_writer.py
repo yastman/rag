@@ -562,6 +562,35 @@ class QdrantHybridWriter:
 
         return count
 
+    def delete_by_source_path_sync(self, source_path: str, collection_name: str) -> int:
+        """Delete every point whose ``metadata.source`` equals ``source_path``.
+
+        Stable across content changes: ``source_path`` never changes for the
+        same file, whereas ``file_id`` is re-minted when content changes (the
+        manifest hashes content). The post-upsert stale sweep keys on the new
+        ``file_id`` only, so the previous version's points — written under the
+        old ``file_id`` — would otherwise be orphaned. The flow calls this
+        before re-upserting a changed file so no stale chunks survive.
+
+        Returns the number of points deleted.
+        """
+        source_filter = Filter(
+            must=[FieldCondition(key="metadata.source", match=MatchValue(value=source_path))]
+        )
+        count = self.client.count(
+            collection_name=collection_name,
+            count_filter=source_filter,
+        ).count
+
+        if count > 0:
+            self.client.delete(
+                collection_name=collection_name,
+                points_selector=FilterSelector(filter=source_filter),
+            )
+            logger.info("Deleted %d points for source_path=%s", count, source_path)
+
+        return count
+
     def upsert_chunks_sync(
         self,
         chunks: list[Any],
