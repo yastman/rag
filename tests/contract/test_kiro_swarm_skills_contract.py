@@ -10,20 +10,25 @@ Verifies that every adapted swarm skill:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 import yaml
 
 
-SKILLS_DIR = Path(__file__).resolve().parents[2] / ".kiro" / "skills"
+# Global ~/.kiro/skills/ is canonical: the project .kiro/skills/ copy was migrated
+# to global and removed (card_8b4812e5777a). Resolution: SKILLS_DIR env override →
+# global canonical. Pointing at the live skills home means this contract actually
+# runs (and validates global skill edits) instead of self-skipping on a dev box
+# where the project copy is gone.
+SKILLS_DIR = Path(os.environ.get("SKILLS_DIR") or (Path.home() / ".kiro" / "skills"))
 
-# .kiro/ is gitignored and untracked (#2820): on a fresh clone the skill files
-# are absent, so this contract can only run where a local .kiro/skills/ exists
-# (developer machines, or after scripts/install_ready_skills.sh).
+# On a fresh clone with no global skills home and no SKILLS_DIR override there is
+# nothing to validate (skill files are untracked, #2820) — skip rather than fail.
 pytestmark = pytest.mark.skipif(
     not SKILLS_DIR.exists(),
-    reason=".kiro/skills/ is untracked (gitignored, #2820); no skills to validate",
+    reason="no skills dir (~/.kiro/skills or $SKILLS_DIR); nothing to validate (#2820)",
 )
 
 SKILL_FILES = sorted(SKILLS_DIR.glob("*/SKILL.md"))
@@ -178,7 +183,7 @@ SWARM_ORCHESTRATOR_REQUIRED = [
     "DONE",
     "FAILED",
     "BLOCKED",
-    "./scripts/launch_kiro_worker.sh",
+    "scripts/launch_kiro_worker.sh",
 ]
 
 SWARM_PLAN_REQUIRED = [
@@ -221,7 +226,7 @@ SWARM_ACCEPTANCE_REQUIRED = [
 SWARM_RECOVERY_REQUIRED = [
     "RECOVERY_REPORT",
     "safe_to_continue",
-    "./scripts/set_orchestrator_window.sh",
+    "scripts/set_orchestrator_window.sh",
 ]
 
 SWARM_PR_REVIEW_FLOW_REQUIRED = [
@@ -457,7 +462,9 @@ def test_route_constants_pr_review_matches_skill_tables() -> None:
     import json
     import re
 
-    KIRO_SKILLS_DIR = SCRIPTS_DIR.parent / ".kiro" / "skills"
+    # Use the canonical (global) skills dir resolved at module scope; agents are
+    # still resolved project-relative (guarded by .exists() below).
+    KIRO_SKILLS_DIR = SKILLS_DIR
     AGENTS_DIR = SCRIPTS_DIR.parent / ".kiro" / "agents"
 
     spec = importlib.util.spec_from_file_location(

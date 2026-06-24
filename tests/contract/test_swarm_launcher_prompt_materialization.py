@@ -33,6 +33,7 @@ def _write_tmux_shim(bin_dir: Path) -> None:
         'case "$1" in\n'
         "  has-session) exit 0 ;;\n"
         "  display-message) echo faketmux ;;\n"
+        "  list-windows) printf '@0\\torch-test\\n' ;;\n"
         "  *) exit 0 ;;\n"
         "esac\n",
         encoding="utf-8",

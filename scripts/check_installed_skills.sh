@@ -2,7 +2,10 @@
 # check_installed_skills.sh — проверить активные skills на опасные паттерны
 set -euo pipefail
 
-SKILLS_DIR="$(cd "$(dirname "$0")/.." && pwd)/.kiro/skills"
+# Global ~/.kiro/skills/ is canonical (the project .kiro/skills/ copy was
+# migrated to global and removed). Override with the SKILLS_DIR env var.
+# card_8b4812e5777a.
+SKILLS_DIR="${SKILLS_DIR:-$HOME/.kiro/skills}"
 
 BLOCKED_PATTERNS=(
   "curl | bash"
@@ -25,21 +28,30 @@ BLOCKED_PATTERNS=(
 )
 
 if [[ ! -d "$SKILLS_DIR" ]]; then
-  echo "ERROR: $SKILLS_DIR not found. Run ./scripts/install_ready_skills.sh first."
+  echo "ERROR: no skills directory found (tried project .kiro/skills/ and $HOME/.kiro/skills/)."
   exit 1
 fi
+
+# Per-skill pattern exemptions. A skill that legitimately documents a blocked
+# pattern as an ORCHESTRATOR instruction or a documented cleanup step (never as a
+# worker command) is exempted for THAT (skill, pattern) pair only — every other
+# pattern is still enforced for the skill. Narrower than skipping the whole skill,
+# which silenced all blocked patterns for gh-pr-review. card_56674e2201a8.
+declare -A PATTERN_EXEMPTIONS=(
+  ["gh-pr-review|gh pr merge"]=1        # orchestrator merge step, not a worker command
+  ["swarm-acceptance|gh pr merge"]=1    # orchestrator disposition instruction
+  ["codeindex-index-transfer|rm -rf"]=1 # documented index-cleanup step in prose
+)
 
 skill_files=( "$SKILLS_DIR"/*/SKILL.md )
 count=${#skill_files[@]}
 found_blocked=0
 
 for skill_file in "${skill_files[@]}"; do
-  skill_name=$(basename "$(dirname "$skill_file")")
-  # gh-pr-review legitimately mentions merge commands as orchestrator instructions
-  [[ "$skill_name" == "gh-pr-review" ]] && continue
   [[ -f "$skill_file" ]] || continue
   skill_name=$(basename "$(dirname "$skill_file")")
   for pattern in "${BLOCKED_PATTERNS[@]}"; do
+    [[ -n "${PATTERN_EXEMPTIONS["${skill_name}|${pattern}"]:-}" ]] && continue
     if grep -qF "$pattern" "$skill_file" 2>/dev/null; then
       echo "BLOCKED: suspicious pattern '$pattern' found in .kiro/skills/$skill_name/SKILL.md"
       found_blocked=1

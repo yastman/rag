@@ -163,8 +163,13 @@ fi
 WORKER_CWD="$(cd "$WORKER_CWD" && pwd)"
 WORKER_TIMEOUT="${WORKER_TIMEOUT:-1800}"
 SIGNAL_FLAG="$LOG_DIR/.${WORKER_NAME}.signaled"
+# .started sentinel (card_07e682e80f5c): the wrapper writes this the moment it is
+# about to spawn kiro-cli. Its presence lets the orchestrator tell "never started"
+# (sentinel absent — wrapper/tmux/cd died before launch) from "started, then
+# crashed at startup or still running" (sentinel present, no terminal status yet).
+STARTED_FLAG="$LOG_DIR/.${WORKER_NAME}.started"
 # STATUS_FILE was defined above (alongside REPORT_FILE) for the prompt sed pass.
-rm -f "$SIGNAL_FLAG" "$STATUS_FILE"
+rm -f "$SIGNAL_FLAG" "$STATUS_FILE" "$STARTED_FLAG"
 
 # --- Wrapper-скрипт для воркера ---
 WRAPPER="$LOG_DIR/${WORKER_NAME}.wrapper.sh"
@@ -221,6 +226,12 @@ resolve_status() {
 ) &
 _watchdog=\$!
 
+# .started sentinel (card_07e682e80f5c): we reached the launch point — cd
+# succeeded and the wrapper is live. Written just before the agent spawns so the
+# orchestrator can distinguish a worker that never started (no sentinel) from one
+# that started and then crashed or is still running.
+date -u +%Y-%m-%dT%H:%M:%SZ > "$STARTED_FLAG"
+
 # Full kiro-cli session. The agent writes its report + status file and exits;
 # the wrapper (below) delivers the single authoritative wake-up.
 kiro-cli chat \\
@@ -235,7 +246,23 @@ kiro-cli chat \\
 # single-fire guard makes a double wake-up impossible even if the timeout
 # failsafe already fired.
 kill "\$_watchdog" 2>/dev/null || true
-send_signal "[\$(resolve_status)] $WORKER_NAME $REPORT_FILE"
+
+# REPORT_FILE existence gate (card_a12c7437430d): a DONE status with no report at
+# the assigned REPORT_FILE is prompt_drift, not success — the agent likely wrote
+# its report to the wrong path. Downgrade DONE->FAILED and surface the newest
+# sibling REPORT.*.md as an evidence hint so the orchestrator can find where the
+# report actually landed. FAILED/BLOCKED are passed through untouched. The
+# parenthetical reason mirrors the timeout failsafe's acceptance-tolerated format.
+# ponytail: nearest is "newest by mtime" — advisory only; the orchestrator verifies.
+_status="\$(resolve_status)"
+if [[ "\$_status" == "DONE" && ! -s "$REPORT_FILE_ABS" ]]; then
+  _nearest="\$(ls -t "$LOG_DIR"/REPORT.*.md 2>/dev/null | head -1)"
+  _hint="prompt_drift: status=DONE but no report at $REPORT_FILE"
+  [[ -n "\$_nearest" ]] && _hint="\$_hint; nearest: \$_nearest"
+  send_signal "[FAILED] $WORKER_NAME $REPORT_FILE (\$_hint)"
+else
+  send_signal "[\$_status] $WORKER_NAME $REPORT_FILE"
+fi
 WRAPPER_EOF
 chmod +x "$WRAPPER"
 

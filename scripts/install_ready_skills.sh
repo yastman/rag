@@ -3,10 +3,14 @@
 # Usage: ./scripts/install_ready_skills.sh
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SKILLS_DIR="$REPO_ROOT/.kiro/skills"
-REFERENCE_DIR="$REPO_ROOT/.kiro/skills_reference/superpowers"
-LOCK_FILE="$REPO_ROOT/.kiro/skills.lock.json"
+# Global ~/.kiro/skills/ is canonical (the project .kiro/skills/ copy was
+# migrated to global and removed). Override the destination with the SKILLS_DIR
+# env var. REFERENCE_DIR and LOCK_FILE live alongside it so the project
+# .kiro/skills/ tree does not reappear. card_8b4812e5777a.
+SKILLS_DIR="${SKILLS_DIR:-$HOME/.kiro/skills}"
+SKILLS_HOME="$(dirname "$SKILLS_DIR")"
+REFERENCE_DIR="$SKILLS_HOME/skills_reference/superpowers"
+LOCK_FILE="$SKILLS_HOME/skills.lock.json"
 TMPDIR_WORK="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_WORK"' EXIT
 
