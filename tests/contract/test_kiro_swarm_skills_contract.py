@@ -283,7 +283,6 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 
 EXPECTED_SCRIPTS = [
     "validate_worker_prompt.py",
-    "validate_worker_signal.py",
     "close_markdown_worker_window.py",
     "route_constants.py",
     "launch_kiro_worker.sh",
