@@ -16,8 +16,6 @@ suite does not need a real tokenizer or model download.
 
 from __future__ import annotations
 
-import sys
-import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -320,38 +318,11 @@ def test_native_adapter_raises_on_unsupported_format(tmp_path: Path) -> None:
 
 def test_unified_config_selects_docling_backend(monkeypatch) -> None:
     from src.ingestion.unified.config import UnifiedConfig
-
-    cocoindex = types.ModuleType("cocoindex")
-    cocoindex_op = types.ModuleType("cocoindex.op")
-
-    class _FakeTargetSpec:
-        def __init__(self, **kwargs: object) -> None:
-            for key, value in kwargs.items():
-                setattr(self, key, value)
-
-    def _target_connector(**_: object):
-        def decorator(cls):
-            return cls
-
-        return decorator
-
-    cocoindex_op.TargetSpec = _FakeTargetSpec
-    cocoindex_op.target_connector = _target_connector
-    monkeypatch.setitem(sys.modules, "cocoindex", cocoindex)
-    monkeypatch.setitem(sys.modules, "cocoindex.op", cocoindex_op)
-
-    from src.ingestion.unified.targets.qdrant_hybrid_target import (
-        QdrantHybridTargetConnector,
-        QdrantHybridTargetSpec,
-    )
+    from src.ingestion.unified.flow import _make_docling
 
     monkeypatch.setenv("DOCLING_BACKEND", "docling_native")
     config = UnifiedConfig()
-    spec = QdrantHybridTargetSpec.from_config(config)
-
-    QdrantHybridTargetConnector._docling = None
-    adapter = QdrantHybridTargetConnector._get_docling(spec)
+    adapter = _make_docling(config)
 
     assert config.docling_backend == "docling_native"
-    assert spec.docling_backend == "docling_native"
     assert adapter.__class__.__name__ == "NativeDoclingAdapter"

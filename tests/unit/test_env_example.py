@@ -71,7 +71,6 @@ class TestEnvExampleCompleteness:
 
     REQUIRED_DB_VARS = [
         "REALESTATE_DATABASE_URL",
-        "INGESTION_DATABASE_URL",
     ]
 
     REQUIRED_RUNTIME_VARS: list[str] = []

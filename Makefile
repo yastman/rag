@@ -5,7 +5,7 @@
 	test-telegram-adapter test-providers-extra test-ingest-extra \
 	smoke-fast smoke-zoo \
 	ingest-dir ingest-status ingest-services \
-	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
+	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-audit-indexes qdrant-backup qdrant-cleanup \
 	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
@@ -1043,7 +1043,7 @@ ingest-services: ## Index curated services.yaml content into Qdrant
 # UNIFIED INGESTION PIPELINE (v3.2.1)
 # =============================================================================
 
-.PHONY: ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+.PHONY: ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-logs
 
 ingest-unified-preflight: ## Check unified ingestion dependencies and source path
 	@echo "$(BLUE)Running unified ingestion preflight...$(NC)"
@@ -1054,22 +1054,13 @@ ingest-unified-bootstrap: ## Create/validate unified ingestion collection schema
 	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli bootstrap --require-colbert
 
 ingest-unified: ## Run unified ingestion once
-	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
+	@echo "$(BLUE)Running unified ingestion...$(NC)"
 	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run
 	@echo "$(GREEN)✓ Ingestion complete$(NC)"
 
 ingest-unified-watch: ## Run unified ingestion continuously (watch mode)
 	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
 	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run --watch
-
-ingest-unified-status: ## Show unified ingestion status
-	@echo "$(BLUE)Unified ingestion status:$(NC)"
-	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli status
-
-ingest-unified-reprocess: ## Reprocess all error files
-	@echo "$(BLUE)Reprocessing error files...$(NC)"
-	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli reprocess --errors
-	@echo "$(GREEN)✓ Reprocess queued$(NC)"
 
 ingest-unified-logs: ## Show ingestion service logs
 	docker compose logs ingestion -f --tail 100

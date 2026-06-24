@@ -1,30 +1,42 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025 RAG-Fresh contributors.
-"""Pure-Python ingestion flow helpers.
+"""Stateless unified ingestion flow.
 
-CocoIndex has been removed (#2834). Ingestion runs via UnifiedIngestionOrchestrator
-with FilePollingChangeManager and QdrantHybridTargetConnector.
+Scan ``sync_dir`` → parse via Docling → embed via BGE-M3 → upsert into Qdrant.
 
-This module retains the pure utility helpers (MIME detection, manifest-based
-file-ID) so callers that imported them directly keep working.
+Idempotency lives entirely in Qdrant: every point carries
+``metadata.content_hash`` (written by :class:`QdrantHybridWriter`). Before
+parsing a file we scroll for a point with this file's ``(file_id,
+content_hash)`` — if one exists the file is unchanged and skipped without
+re-parsing/re-embedding. There is no external state database (the Postgres
+``UnifiedStateManager``/``UnifiedIngestionOrchestrator`` were removed).
+
+``QdrantHybridWriter.upsert_chunks_sync`` already replaces a file's points
+atomically (deterministic ids overwrite in place, stale chunk ids are swept
+afterwards), so a *changed* file is re-ingested correctly.
 """
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
+import time
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from qdrant_client.models import FieldCondition, Filter, MatchValue
+
 from src.ingestion.unified.manifest import FileManifest, compute_content_hash_from_bytes
 from src.ingestion.unified.observability import try_update_ingestion_trace
+from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
 
 if TYPE_CHECKING:
+    from src.ingestion.docling_client import DoclingClient
+    from src.ingestion.docling_native import NativeDoclingAdapter
     from src.ingestion.unified.config import UnifiedConfig
-    from src.ingestion.unified.orchestrator import UnifiedIngestionOrchestrator
-    from src.ingestion.unified.state_manager import FileState
 
 
 logger = logging.getLogger(__name__)
@@ -50,18 +62,17 @@ def get_mime_type(relative_path: str) -> str:
     return MIME_TYPES.get(ext, "application/octet-stream")
 
 
-# Global manifest instance, initialised by callers that need manifest-based IDs.
+# Global manifest instance, initialised by run_once before scanning so that
+# file_id_from_content() can resolve stable, rename-aware ids.
 _manifest: FileManifest | None = None
-
-# Global to store sync_dir for abs_path computation.
-_current_sync_dir: str = ""
 
 
 def file_id_from_content(filename: str, content: bytes | None) -> str:
     """Manifest-based file_id: content hash → stable UUID.
 
-    If a file is renamed/moved but content is unchanged, the same
-    file_id is returned, preventing duplicates in Qdrant.
+    If a file is renamed/moved but content is unchanged, the same file_id is
+    returned, preventing duplicates in Qdrant. Falls back to a path hash when
+    no manifest is loaded or content is unavailable.
     """
     if _manifest is None or content is None:
         return hashlib.sha256(filename.encode()).hexdigest()[:16]
@@ -69,116 +80,155 @@ def file_id_from_content(filename: str, content: bytes | None) -> str:
     return _manifest.get_or_create_id(filename, content_hash)
 
 
-def mime_type_from_filename(filename: str) -> str:
-    return get_mime_type(filename)
+@dataclass
+class IngestionResult:
+    """Summary of a single ``run_once`` pass."""
+
+    processed: int = 0
+    skipped: int = 0
+    errors: int = 0
+    error_details: list[str] = field(default_factory=list)
 
 
-def file_size_from_bytes(content: bytes | None) -> int:
-    return len(content) if content is not None else 0
+def _make_docling(config: UnifiedConfig) -> DoclingClient | NativeDoclingAdapter:
+    """Construct the configured Docling backend (HTTP sidecar or native)."""
+    from src.ingestion.docling_client import DoclingClient, DoclingConfig
+    from src.ingestion.docling_native import NativeDoclingAdapter
 
-
-def basename_from_filename(filename: str) -> str:
-    return Path(filename).name
-
-
-def abs_path_from_filename(filename: str) -> str:
-    """Compute absolute path from relative filename and sync_dir."""
-    return str(Path(_current_sync_dir) / filename)
-
-
-def _flow_name_for(config: UnifiedConfig) -> str:
-    # Keep short for naming compatibility with any stored flow references.
-    suffix = hashlib.sha256(config.collection_name.encode()).hexdigest()[:6]
-    return f"ingest_{suffix}"
-
-
-def _app_namespace_for(config: UnifiedConfig) -> str:
-    return "unified"
-
-
-def _build_orchestrator(config: UnifiedConfig) -> UnifiedIngestionOrchestrator:
-    """Construct a wired UnifiedIngestionOrchestrator from config."""
-    from src.ingestion.unified.orchestrator import (
-        FilePollingChangeManager,
-        UnifiedIngestionOrchestrator,
-    )
-    from src.ingestion.unified.state_manager import UnifiedStateManager
-    from src.ingestion.unified.targets.qdrant_hybrid_target import (
-        QdrantHybridTargetConnector,
-        QdrantHybridTargetSpec,
-        QdrantHybridTargetValues,
-    )
-
-    spec = QdrantHybridTargetSpec.from_config(config)
-    state_manager = UnifiedStateManager(database_url=config.database_url)
-
-    class _TargetDocumentWriter:
-        """DocumentWriter bridge to QdrantHybridTargetConnector (sync → async)."""
-
-        async def write_file(self, file_path: str, collection_name: str) -> FileState:
-            from src.ingestion.unified.flow import (
-                file_id_from_content,
-                get_mime_type,
-            )
-            from src.ingestion.unified.state_manager import FileState as _FileState
-
-            path = Path(file_path)
-            content = path.read_bytes() if path.exists() else None
-            file_id = file_id_from_content(str(path.name), content)
-            values = QdrantHybridTargetValues(
-                abs_path=file_path,
-                source_path=file_path,
-                file_name=path.name,
-                mime_type=get_mime_type(file_path),
-                file_size=len(content) if content is not None else 0,
-            )
-            await asyncio.get_running_loop().run_in_executor(
-                None,
-                lambda: QdrantHybridTargetConnector.mutate((spec, {file_id: values})),
-            )
-            # mutate() persists the authoritative state (content_hash,
-            # embedding_model, pipeline_version) via its own sync state_manager.
-            # Read it back so record_state() doesn't clobber that row with a
-            # stripped FileState(content_hash=None), which would force every
-            # poll to re-classify the file as 'added' and re-ingest (#2940).
-            persisted = await state_manager.get_state(file_id)
-            if persisted is not None:
-                return persisted
-            return _FileState(file_id=file_id, source_path=file_path, status="indexed")
-
-        async def delete_file(self, file_path: str, collection_name: str) -> None:
-            from src.ingestion.unified.flow import file_id_from_content
-
-            path = Path(file_path)
-            file_id = file_id_from_content(str(path.name), None)
-            # ponytail: mutate() treats None value as delete; type stub is too narrow
-            mutations: dict[str, QdrantHybridTargetValues] = {file_id: None}  # type: ignore[dict-item]
-            await asyncio.get_running_loop().run_in_executor(
-                None,
-                lambda: QdrantHybridTargetConnector.mutate((spec, mutations)),
-            )
-
-    change_manager = FilePollingChangeManager(
-        sync_dir=config.sync_dir,
-        state_manager=state_manager,
-    )
-    return UnifiedIngestionOrchestrator(
-        change_manager=change_manager,
-        writer=_TargetDocumentWriter(),
-        state_manager=state_manager,
+    if config.docling_backend == "docling_native":
+        return NativeDoclingAdapter(max_tokens=config.max_tokens_per_chunk)
+    return DoclingClient(
+        DoclingConfig(
+            base_url=config.docling_url,
+            timeout=config.docling_timeout,
+            max_tokens=config.max_tokens_per_chunk,
+        )
     )
 
 
-def run_once(config: UnifiedConfig | None = None) -> None:
-    """Run ingestion once (single pass) via UnifiedIngestionOrchestrator."""
+def _already_indexed(client: object, collection_name: str, file_id: str, content_hash: str) -> bool:
+    """Return True if Qdrant already holds a point for this (file_id, hash).
+
+    ponytail: any scroll failure (missing collection, transient error) is
+    treated as "not indexed" so the file is re-ingested. That is safe because
+    upsert uses deterministic point ids (re-ingest is idempotent), at the cost
+    of redundant work when Qdrant is briefly unreachable.
+    """
+    try:
+        records, _ = client.scroll(  # type: ignore[attr-defined]
+            collection_name=collection_name,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="metadata.file_id", match=MatchValue(value=file_id)),
+                    FieldCondition(
+                        key="metadata.content_hash", match=MatchValue(value=content_hash)
+                    ),
+                ]
+            ),
+            limit=1,
+            with_payload=False,
+            with_vectors=False,
+        )
+    except Exception as exc:  # ponytail: any scroll failure → re-ingest (idempotent)
+        logger.debug("Dedup scroll failed for %s (%s); will re-ingest", file_id, exc)
+        return False
+    return bool(records)
+
+
+def _ingest_directory(
+    config: UnifiedConfig,
+    writer: QdrantHybridWriter,
+    docling: DoclingClient | NativeDoclingAdapter,
+) -> IngestionResult:
+    """Scan sync_dir once and upsert every new/changed supported file."""
+    result = IngestionResult()
+    collection = config.collection_name
+
+    for path in sorted(config.sync_dir.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in config.supported_extensions:
+            continue
+
+        rel = str(path.relative_to(config.sync_dir))
+        try:
+            content = path.read_bytes()
+            content_hash = compute_content_hash_from_bytes(content)
+            file_id = file_id_from_content(rel, content)
+
+            if _already_indexed(writer.client, collection, file_id, content_hash):
+                logger.debug("Skipping unchanged: %s", rel)
+                result.skipped += 1
+                continue
+
+            docling_chunks = docling.chunk_file_sync(path)
+            if not docling_chunks:
+                logger.warning("No chunks from: %s", rel)
+                result.skipped += 1
+                continue
+
+            chunks = docling.to_ingestion_chunks(
+                docling_chunks,
+                source=rel,
+                source_type=path.suffix.lstrip("."),
+            )
+            file_metadata = {
+                "file_name": path.name,
+                "mime_type": get_mime_type(rel),
+                "file_size": len(content),
+                "content_hash": content_hash,
+                "modified_time": datetime.now(UTC).isoformat(),
+            }
+
+            stats = writer.upsert_chunks_sync(
+                chunks=chunks,
+                file_id=file_id,
+                source_path=rel,
+                file_metadata=file_metadata,
+                collection_name=collection,
+            )
+            if stats.errors:
+                raise RuntimeError("; ".join(stats.errors))
+
+            result.processed += 1
+            logger.info("Indexed %s (%d chunks)", rel, stats.points_upserted)
+        except Exception as exc:  # one bad file must not abort the whole pass
+            logger.error("Failed %s: %s", rel, exc, exc_info=True)
+            result.errors += 1
+            result.error_details.append(f"{rel}: {exc}")
+
+    logger.info(
+        "Ingest pass: processed=%d skipped=%d errors=%d",
+        result.processed,
+        result.skipped,
+        result.errors,
+    )
+    return result
+
+
+def _build_writer(config: UnifiedConfig) -> QdrantHybridWriter:
+    return QdrantHybridWriter(
+        qdrant_url=config.qdrant_url,
+        qdrant_api_key=config.qdrant_api_key,
+        bge_m3_url=config.bge_m3_url,
+        bge_m3_timeout=config.bge_m3_timeout,
+        bge_m3_concurrency=config.bge_m3_concurrency,
+    )
+
+
+def run_once(config: UnifiedConfig | None = None) -> IngestionResult:
+    """Run ingestion once (single pass), stateless and idempotent."""
     from src.ingestion.unified.config import UnifiedConfig as _Cfg
 
     if config is None:
         config = _Cfg()
+
+    global _manifest
+    _manifest = FileManifest(config.effective_manifest_dir())
+
     try_update_ingestion_trace(command="flow-run-once", status="started")
     try:
-        orchestrator = _build_orchestrator(config)
-        asyncio.run(orchestrator.run_once(config.collection_name))
+        writer = _build_writer(config)
+        docling = _make_docling(config)
+        result = _ingest_directory(config, writer, docling)
     except Exception as exc:
         try_update_ingestion_trace(
             command="flow-run-once",
@@ -186,22 +236,45 @@ def run_once(config: UnifiedConfig | None = None) -> None:
             metadata={"error_type": type(exc).__name__},
         )
         raise
-    try_update_ingestion_trace(command="flow-run-once", status="completed")
+    try_update_ingestion_trace(
+        command="flow-run-once",
+        status="completed",
+        metadata={
+            "processed": result.processed,
+            "skipped": result.skipped,
+            "errors": result.errors,
+        },
+    )
+    return result
 
 
 def run_watch(
     config: UnifiedConfig | None = None,
-    stop_event: asyncio.Event | None = None,
+    stop_event: object | None = None,
 ) -> None:
-    """Run ingestion continuously via UnifiedIngestionOrchestrator."""
+    """Run ingestion continuously: a polling loop over ``run_once``.
+
+    ``stop_event`` is any object exposing ``is_set()`` (e.g. ``threading.Event``
+    or ``asyncio.Event``); when set after a pass the loop exits. With no event
+    the loop runs until interrupted (Ctrl-C). Replaces the old Postgres-backed
+    orchestrator watch loop — no stuck-row reaping is needed without state.
+    """
     from src.ingestion.unified.config import UnifiedConfig as _Cfg
 
     if config is None:
         config = _Cfg()
+
+    poll = float(getattr(config, "poll_interval_seconds", 60))
     try_update_ingestion_trace(command="flow-watch", status="started")
     try:
-        orchestrator = _build_orchestrator(config)
-        asyncio.run(orchestrator.run_watch(config.collection_name, stop_event=stop_event))
+        while True:
+            run_once(config)
+            if stop_event is not None and stop_event.is_set():  # type: ignore[attr-defined]
+                break
+            time.sleep(poll)
+    except KeyboardInterrupt:
+        try_update_ingestion_trace(command="flow-watch", status="interrupted")
+        return
     except Exception as exc:
         try_update_ingestion_trace(
             command="flow-watch",

@@ -36,9 +36,6 @@ class UnifiedConfig:
         default_factory=lambda: Path(v) if (v := os.getenv("MANIFEST_DIR")) else None
     )
 
-    # Database
-    database_url: str = field(default_factory=lambda: os.getenv("INGESTION_DATABASE_URL", ""))
-
     # Qdrant
     qdrant_url: str = field(
         default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -77,9 +74,8 @@ class UnifiedConfig:
     )
 
     # Pipeline
-    # NOTE: Watch mode is handled by UnifiedIngestionOrchestrator polling loop.
+    # Watch mode polls sync_dir every ``poll_interval_seconds`` (see flow.run_watch).
     poll_interval_seconds: int = 60
-    max_retries: int = 3
     pipeline_version: str = "v3.2.1"
 
     # Supported extensions
