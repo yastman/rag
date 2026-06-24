@@ -6,6 +6,27 @@ import pytest
 pytestmark = pytest.mark.requires_extras
 
 
+@pytest.mark.parametrize(
+    "profile,expected_table_mode",
+    [
+        ("speed", "fast"),
+        ("quality", "accurate"),
+        ("scan", "accurate"),
+    ],
+)
+def test_profile_uses_docling_parse_backend(profile: str, expected_table_mode: str) -> None:
+    """Each profile must use canonical docling_parse backend and correct table_mode."""
+    from src.ingestion.docling_client import DoclingConfig
+
+    cfg = DoclingConfig(profile=profile)
+    assert cfg.pdf_backend == "docling_parse", (
+        f"Profile {profile!r}: expected pdf_backend='docling_parse', got {cfg.pdf_backend!r}"
+    )
+    assert cfg.table_mode == expected_table_mode, (
+        f"Profile {profile!r}: expected table_mode={expected_table_mode!r}, got {cfg.table_mode!r}"
+    )
+
+
 def test_build_chunking_form_data_omits_invalid_tokenizer_word():
     from src.ingestion.docling_client import DoclingClient, DoclingConfig
 
