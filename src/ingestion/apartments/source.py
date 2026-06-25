@@ -1,4 +1,4 @@
-"""CocoIndex-compatible CSV source for apartments with row-level change tracking.
+"""CSV source for apartments with row-level change tracking.
 
 Parses apartments.csv and yields one row per apartment. Change detection uses
 a hash of mutable fields (price, area, furnished, promotion, view) so only

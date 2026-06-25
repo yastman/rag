@@ -60,14 +60,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LEGACY_MODULES: tuple[str, ...] = (
     "src/ingestion/docling_client.py",
     "src/ingestion/gdrive_flow.py",
-    "src/ingestion/service.py",
 )
 
 # Module names (importable form) used by the AST walker below.
 LEGACY_DOTTED_MODULES: tuple[str, ...] = (
     "src.ingestion.docling_client",
     "src.ingestion.gdrive_flow",
-    "src.ingestion.service",
 )
 
 # Roots scanned for runtime imports of the legacy modules. Tests are excluded
@@ -85,13 +83,12 @@ RUNTIME_ROOTS: tuple[str, ...] = (
 def test_legacy_ingestion_module_is_absent(module_path: str) -> None:
     """Each legacy ingestion module file must be deleted from the repository."""
     target = REPO_ROOT / module_path
-    if module_path in {"src/ingestion/docling_client.py", "src/ingestion/service.py"}:
+    if module_path == "src/ingestion/docling_client.py":
         pytest.xfail(
             f"{module_path} cannot be deleted yet: live runtime callers exist. "
             "See module docstring for the audit (DoclingClient is reused by "
             "src/ingestion/docling_native.py and src/ingestion/unified/targets/"
-            "qdrant_hybrid_target.py; service.py is re-exported by "
-            "telegram_bot/services/ingestion_cocoindex.py). Migrate those "
+            "qdrant_hybrid_target.py). Migrate those "
             "callers to the unified pipeline first, then drop this xfail."
         )
     assert not target.exists(), (
@@ -173,24 +170,6 @@ KNOWN_LIVE_CALLERS: dict[str, str] = {
         "DoclingConfig directly to build the HTTP Docling backend. The premise "
         'of #1532 ("replaced by unified pipeline") does not hold — the unified '
         "pipeline itself reuses DoclingClient."
-    ),
-    "telegram_bot/services/ingestion_cocoindex.py": (
-        "Telegram bot CLI entrypoint re-exports IngestionService, "
-        "IngestionStats, ingest_from_directory, ingest_from_gdrive, "
-        "get_ingestion_status from src.ingestion.service. Wired into the "
-        "Makefile via `python -m telegram_bot.services.ingestion_cocoindex`."
-    ),
-    # The package __init__ self-references its own deprecation shims via
-    # string targets; those go through importlib at attribute-access time and
-    # are not real `import` statements, but they still pin the legacy modules
-    # as part of the public deprecated surface (see _DEPRECATED_EXPORTS in
-    # src/ingestion/__init__.py).
-    "src/ingestion/__init__.py": (
-        "src.ingestion declares deprecation shims pointing at "
-        "src.ingestion.docling_client and src.ingestion.service in "
-        "_DEPRECATED_EXPORTS. The shims emit DeprecationWarning at access "
-        "time. They can only be removed once the underlying modules are "
-        "gone (i.e. after the live callers above are migrated)."
     ),
 }
 

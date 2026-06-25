@@ -18,7 +18,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Live modules that previously consumed Voyage — must now be clean.
 DEFAULT_RUNTIME_VOYAGE_CONSUMERS = [
     "src.ingestion.unified.qdrant_writer",
-    "src.ingestion.cocoindex_flow",
 ]
 
 

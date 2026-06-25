@@ -349,7 +349,7 @@ class DoclingClient:
         file_path: Path,
         contextualize: bool = True,
     ) -> list[DoclingChunk]:
-        """Sync version of chunk_file() for CocoIndex target.
+        """Sync version of chunk_file() for blocking/non-async callers.
 
         Uses a fresh httpx client per call to avoid loop mismatch issues.
         Does NOT reuse self._client (which is async and bound to another loop).

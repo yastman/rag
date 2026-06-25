@@ -14,8 +14,6 @@ __all__ = [
     "ContextualChunk",
     "ContextualDocument",
     "DocumentIndexer",
-    "IngestionService",
-    "IngestionStats",
     "load_contextual_chunks",
     "load_contextual_json",
 ]
@@ -25,7 +23,6 @@ if TYPE_CHECKING:
     from .contextual_loader import load_contextual_chunks, load_contextual_json
     from .contextual_schema import ContextualChunk, ContextualDocument
     from .indexer import DocumentIndexer
-    from .service import IngestionService, IngestionStats
 
 
 _LAZY_ATTRS = {
@@ -34,8 +31,6 @@ _LAZY_ATTRS = {
     "ContextualChunk": (".contextual_schema", "ContextualChunk"),
     "ContextualDocument": (".contextual_schema", "ContextualDocument"),
     "DocumentIndexer": (".indexer", "DocumentIndexer"),
-    "IngestionService": (".service", "IngestionService"),
-    "IngestionStats": (".service", "IngestionStats"),
 }
 
 

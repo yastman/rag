@@ -1,4 +1,4 @@
-"""Tests for CocoIndex apartment CSV source."""
+"""Tests for apartment CSV source."""
 
 import csv
 from pathlib import Path

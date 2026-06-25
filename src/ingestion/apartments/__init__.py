@@ -1,1 +1,1 @@
-"""Apartments CocoIndex ingestion pipeline."""
+"""Apartments ingestion pipeline."""
