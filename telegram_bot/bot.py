@@ -80,7 +80,6 @@ from .keyboards.client_keyboard import (
 )
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
-from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
     propagate_attributes,
 )
@@ -385,9 +384,6 @@ class PropertyBot:
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
-        # Langfuse context must be outermost to wrap all handlers
-        self.dp.message.outer_middleware(LangfuseContextMiddleware())
-        self.dp.callback_query.outer_middleware(LangfuseContextMiddleware())
         setup_throttling_middleware(self.dp, default_rate=1.0, admin_ids=self.config.admin_ids)
         setup_error_handler(self.dp)
         self.dp.message.outer_middleware(FSMCancelMiddleware())
