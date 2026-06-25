@@ -1,7 +1,7 @@
 """Flow primitives for apartments ingestion.
 
 Formats hybrid text and builds Qdrant-ready point payloads.
-Used by incremental runner / future CocoIndex wiring.
+Used by incremental runner.
 """
 
 from __future__ import annotations

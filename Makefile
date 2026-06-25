@@ -4,7 +4,7 @@
 	test-preflight test-smoke test-load-eviction \
 	test-telegram-adapter test-providers-extra test-ingest-extra \
 	smoke-fast smoke-zoo \
-	ingest-dir ingest-status ingest-services \
+	ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-audit-indexes qdrant-backup qdrant-cleanup \
@@ -1007,10 +1007,10 @@ eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only, no Langfuse)
 # See docs/GDRIVE_INGESTION.md for ingestion setup.
 
 # =============================================================================
-# DOCUMENT INGESTION (CocoIndex Pipeline)
+# DOCUMENT INGESTION (Ingestion Pipeline)
 # =============================================================================
 
-.PHONY: ingest-setup ingest-dir ingest-status ingest-services ingest-test
+.PHONY: ingest-setup ingest-services ingest-test
 
 ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
 	@echo "$(BLUE)Setting up ingestion infrastructure...$(NC)"
@@ -1019,20 +1019,9 @@ ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
 
 ingest-test: ## Run ingestion unit tests
 	@echo "$(BLUE)Running ingestion tests...$(NC)"
-	uv run pytest tests/unit/test_ingestion*.py tests/unit/test_docling*.py tests/unit/test_chunker.py tests/unit/test_cocoindex*.py -v
+	uv run pytest tests/unit/test_ingestion*.py tests/unit/test_docling*.py tests/unit/test_chunker.py -v
 	@echo "$(GREEN)✓ Ingestion tests complete$(NC)"
 
-ingest-dir: ## Ingest documents from directory (usage: make ingest-dir DIR=path/to/docs)
-ifndef DIR
-	$(error DIR is required. Usage: make ingest-dir DIR=path/to/docs)
-endif
-	@echo "$(BLUE)Ingesting documents from $(DIR)...$(NC)"
-	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
-	@echo "$(GREEN)✓ Directory ingestion complete$(NC)"
-
-ingest-status: ## Show collection statistics
-	@echo "$(BLUE)Collection status:$(NC)"
-	uv run python -m telegram_bot.services.ingestion_cocoindex status
 
 ingest-services: ## Index curated services.yaml content into Qdrant
 	@echo "$(BLUE)Indexing services.yaml content...$(NC)"

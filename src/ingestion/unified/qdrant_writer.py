@@ -177,7 +177,7 @@ class QdrantHybridWriter:
         if not texts:
             return []
         # Semaphore covers entire call including internal batching.
-        # bge_m3_concurrency defaults to 1; CocoIndex runs sequentially.
+        # bge_m3_concurrency defaults to 1; ingestion runs sequentially.
         with self._dense_semaphore:
             result = self._bge_client.encode_dense(texts)
         return result.vectors

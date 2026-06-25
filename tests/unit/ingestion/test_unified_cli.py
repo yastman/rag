@@ -10,10 +10,6 @@ import httpx
 import pytest
 
 
-pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
-pytestmark = pytest.mark.requires_extras
-
-
 # ---------------------------------------------------------------------------
 # Arg parsing
 # ---------------------------------------------------------------------------
@@ -119,7 +115,6 @@ class TestSetupLogging:
         setup_logging()
         assert logging.getLogger("httpx").level == logging.WARNING
         assert logging.getLogger("httpcore").level == logging.WARNING
-        assert logging.getLogger("cocoindex").level == logging.INFO
 
 
 # ---------------------------------------------------------------------------
