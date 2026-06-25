@@ -207,6 +207,9 @@ SWARM_PLAN_REQUIRED = [
     "bug_class_registry_evidence",
     ".github/bug-classes.yml",
     "not sufficient by itself",
+    # round-2 hardening: anti-SDK-drift + parallelism must stay wired
+    "native_first",
+    "Parallelism",
 ]
 
 SWARM_ACCEPTANCE_REQUIRED = [
@@ -221,6 +224,11 @@ SWARM_ACCEPTANCE_REQUIRED = [
     "artifact_trust",
     "needs_fix",
     "needs_review",
+    # autofix / repair loop must stay wired
+    "max_attempts",
+    "review-fix",
+    # new-bug disposition -> card (knowledge stays on the card)
+    "discovered_from",
 ]
 
 SWARM_RECOVERY_REQUIRED = [
@@ -237,6 +245,8 @@ SWARM_PR_REVIEW_FLOW_REQUIRED = [
     "blockers",
     "superpowers:receiving-code-review",
     "anti_regression_evidence",
+    # MIRROR review evidence + worker->reviewer knowledge transfer
+    "card_chat",
 ]
 
 PER_SKILL_CHECKS: dict[str, list[str]] = {
