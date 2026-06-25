@@ -89,8 +89,13 @@ Subsystem overrides may pin tighter commands — see the nearest `AGENTS.overrid
 ## Local overrides
 
 Scoped rules live next to the code — read the nearest one before editing that area:
-`telegram_bot/` · `src/ingestion/unified/` · `scripts/` · `services/` ·
-`services/bge-m3-api/` · `services/docling/` (`AGENTS.override.md` in each).
+
+- [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
+- [`src/ingestion/unified/AGENTS.override.md`](src/ingestion/unified/AGENTS.override.md)
+- [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)
+- [`services/AGENTS.override.md`](services/AGENTS.override.md)
+- [`services/bge-m3-api/AGENTS.override.md`](services/bge-m3-api/AGENTS.override.md)
+- [`services/docling/AGENTS.override.md`](services/docling/AGENTS.override.md)
 
 ## Priority
 
