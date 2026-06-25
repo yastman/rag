@@ -363,7 +363,7 @@ test-unit-extras: ## Run optional-extra unit tests only
 test-contract: ## Run static contract tests (no Docker; optional SDK lanes excluded by markers)
 	@echo "$(BLUE)Running static contract tests...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
-	@echo "$(GREEN)Static contract tests complete$(NC)"
+	@echo "$(GREEN)✓ Static contract tests complete$(NC)"
 
 
 test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
