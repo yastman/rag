@@ -54,43 +54,18 @@ This repo is indexed by the **codeindexer MCP** (GPU-served in WSL). Prefer it
 over `grep` / `rg` / `find` / `cat` / `sed`: start lookups with `search_code` or a
 `find_*` tool, resolve the name via `projects(action="list", query=...)`, and widen
 a hit with `read_chunk` / `read_file_range` (not shell). Full reflexes live in the
-always-on steering rule `codeindexer.md` and the
-[`using-codeindex-codegraph`](.kiro/skills/using-codeindex-codegraph/SKILL.md) skill.
+always-on steering rule `codeindexer.md` and the `using-codeindex-codegraph` skill.
 
 ## Start Here
 
 1. Read [`README.md`](README.md) for the project overview.
-2. Read [`docs/README.md`](docs/README.md) for documentation navigation.
-3. Use [`docs/indexes/`](docs/indexes/) for task-oriented lookup.
-4. Use [`docs/runbooks/README.md`](docs/runbooks/README.md) for operational
-   investigations.
-5. Read the nearest folder `README.md` and `AGENTS.override.md` before scoped
+2. Read the nearest folder `README.md` and `AGENTS.override.md` before scoped
    edits.
 
 ## Canonical Docs
 
 - Runtime, Compose, services, ports, env, and deploy surfaces:
   [`DOCKER.md`](DOCKER.md)
-- Local setup and validation:
-  [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md)
-- Issue triage:
-  [`docs/engineering/issue-triage.md`](docs/engineering/issue-triage.md)
-- Test writing:
-  [`docs/engineering/test-writing-guide.md`](docs/engineering/test-writing-guide.md)
-- SDK/framework lookup:
-  [`docs/engineering/sdk-registry.md`](docs/engineering/sdk-registry.md)
-- Codex Web worker prompt:
-  [`docs/engineering/codex-web-prompt.md`](docs/engineering/codex-web-prompt.md)
-- PR review / gatekeeper:
-  [`docs/engineering/gh-pr-review.md`](docs/engineering/gh-pr-review.md)
-- Orchestrator playbook:
-  [`docs/engineering/orchestrator-playbook.md`](docs/engineering/orchestrator-playbook.md)
-- Orchestrator finish, merge, and cleanup protocol:
-  [`docs/engineering/orchestrator-finish-protocol.md`](docs/engineering/orchestrator-finish-protocol.md)
-- Docs navigation:
-  [`docs/README.md`](docs/README.md), [`docs/indexes/`](docs/indexes/)
-- Operational runbooks:
-  [`docs/runbooks/README.md`](docs/runbooks/README.md)
 
 ## Product Simplification (Completed Sprint 2026-06-22)
 
@@ -120,16 +95,13 @@ secrets in outputs.
 ## Workspace Hygiene
 
 Do not start non-trivial edits in a dirty checkout. Use an isolated git worktree
-for feature work or when unrelated local changes exist; see
-[`docs/engineering/repo-hygiene-runbook.md`](docs/engineering/repo-hygiene-runbook.md).
+for feature work or when unrelated local changes exist.
 
-Git hooks and push gates run lint/static guardrails only. Run tests explicitly as local validation; see
-[`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
+Git hooks and push gates run lint/static guardrails only. Run tests explicitly as local validation.
 
 ## Validation
 
-Use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and the nearest
-override for verification. Run focused checks for touched areas. State skipped
+Use the nearest override for verification. Run focused checks for touched areas. State skipped
 checks.
 
 ## Test Policy
@@ -148,4 +120,4 @@ Core changes should prefer `make test-core` first.
 Adapter/service changes should run `make test-core` + `make test`.
 
 Git hooks and push gates run lint/static guardrails only. Run tests explicitly
-as local validation; see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
+as local validation.
