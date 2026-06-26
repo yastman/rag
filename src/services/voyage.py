@@ -16,8 +16,6 @@ from tenacity import (
     wait_random_exponential,
 )
 
-from src.observability import get_client, observe
-
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +82,6 @@ class VoyageService:
             f"queries={model_queries}, rerank={model_rerank}"
         )
 
-    @observe(name="voyage-embed-documents", as_type="generation")
     @retry(
         retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -97,16 +94,10 @@ class VoyageService:
         input_type: str = "document",
     ) -> list[list[float]]:
         """Generate embeddings for documents with automatic batching."""
-        get_client().update_current_generation(
-            model=self._model_docs,
-            input={"count": len(texts), "input_type": input_type},
-        )
-
         if not texts:
             return []
 
         all_embeddings: list[list[float]] = []
-        total_tokens = 0
 
         for i in range(0, len(texts), self.BATCH_SIZE):
             batch = texts[i : i + self.BATCH_SIZE]
@@ -117,21 +108,10 @@ class VoyageService:
                 input_type=input_type,
             )
             all_embeddings.extend(cast(list[list[float]], response.embeddings))
-            if hasattr(response, "usage") and response.usage:
-                total_tokens += getattr(response.usage, "total_tokens", 0)
-
-        get_client().update_current_generation(
-            usage_details={"input": total_tokens},
-            output={
-                "count": len(all_embeddings),
-                "dimensions": len(all_embeddings[0]) if all_embeddings else 0,
-            },
-        )
 
         logger.info(f"Embedded {len(all_embeddings)} documents with {self._model_docs}")
         return all_embeddings
 
-    @observe(name="voyage-embed-query", as_type="generation")
     @retry(
         retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -140,30 +120,14 @@ class VoyageService:
     )
     async def embed_query(self, text: str) -> list[float]:
         """Generate embedding for a single query."""
-        get_client().update_current_generation(
-            model=self._model_queries,
-            input={"text": text[:200]},
-        )
-
         response = await asyncio.to_thread(
             self._client.embed,
             texts=[text],
             model=self._model_queries,
             input_type="query",
         )
-
-        total_tokens = 0
-        if hasattr(response, "usage") and response.usage:
-            total_tokens = getattr(response.usage, "total_tokens", 0)
-
-        get_client().update_current_generation(
-            usage_details={"input": total_tokens},
-            output={"dimensions": len(response.embeddings[0])},
-        )
-
         return cast(list[float], response.embeddings[0])
 
-    @observe(name="voyage-rerank", as_type="generation")
     @retry(
         retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=10),
@@ -177,11 +141,6 @@ class VoyageService:
         top_k: int | None = None,
     ) -> list[dict]:
         """Rerank documents by relevance to query."""
-        get_client().update_current_generation(
-            model=self._model_rerank,
-            input={"query": query[:200], "documents_count": len(documents), "top_k": top_k},
-        )
-
         if not documents:
             return []
 
@@ -193,7 +152,7 @@ class VoyageService:
             top_k=top_k,
         )
 
-        results = [
+        return [
             {
                 "index": r.index,
                 "relevance_score": r.relevance_score,
@@ -202,16 +161,6 @@ class VoyageService:
             for r in response.results
         ]
 
-        get_client().update_current_generation(
-            output={
-                "results_count": len(results),
-                "top_score": results[0]["relevance_score"] if results else 0,
-            },
-        )
-
-        return results
-
-    @observe(name="voyage-embed-documents-matryoshka", as_type="generation")
     @retry(
         retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -225,15 +174,6 @@ class VoyageService:
         input_type: str = "document",
     ) -> list[list[float]]:
         """Generate Matryoshka embeddings with reduced dimensions."""
-        get_client().update_current_generation(
-            model=self._model_docs,
-            input={
-                "count": len(texts),
-                "output_dimension": output_dimension,
-                "input_type": input_type,
-            },
-        )
-
         if output_dimension not in self.MATRYOSHKA_DIMS:
             raise ValueError(
                 f"Invalid output_dimension {output_dimension}. Supported: {self.MATRYOSHKA_DIMS}"
@@ -243,7 +183,6 @@ class VoyageService:
             return []
 
         all_embeddings: list[list[float]] = []
-        total_tokens = 0
 
         for i in range(0, len(texts), self.BATCH_SIZE):
             batch = texts[i : i + self.BATCH_SIZE]
@@ -255,13 +194,6 @@ class VoyageService:
                 output_dimension=output_dimension,
             )
             all_embeddings.extend(cast(list[list[float]], response.embeddings))
-            if hasattr(response, "usage") and response.usage:
-                total_tokens += getattr(response.usage, "total_tokens", 0)
-
-        get_client().update_current_generation(
-            usage_details={"input": total_tokens},
-            output={"count": len(all_embeddings), "dimensions": output_dimension},
-        )
 
         logger.info(
             f"Embedded {len(all_embeddings)} documents with {self._model_docs} "
@@ -269,7 +201,6 @@ class VoyageService:
         )
         return all_embeddings
 
-    @observe(name="voyage-embed-query-matryoshka", as_type="generation")
     @retry(
         retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -282,11 +213,6 @@ class VoyageService:
         output_dimension: int = 1024,
     ) -> list[float]:
         """Generate Matryoshka embedding for a query with reduced dimensions."""
-        get_client().update_current_generation(
-            model=self._model_queries,
-            input={"text": text[:200], "output_dimension": output_dimension},
-        )
-
         if output_dimension not in self.MATRYOSHKA_DIMS:
             raise ValueError(
                 f"Invalid output_dimension {output_dimension}. Supported: {self.MATRYOSHKA_DIMS}"
@@ -299,16 +225,6 @@ class VoyageService:
             input_type="query",
             output_dimension=output_dimension,
         )
-
-        total_tokens = 0
-        if hasattr(response, "usage") and response.usage:
-            total_tokens = getattr(response.usage, "total_tokens", 0)
-
-        get_client().update_current_generation(
-            usage_details={"input": total_tokens},
-            output={"dimensions": output_dimension},
-        )
-
         return cast(list[float], response.embeddings[0])
 
     # Sync methods for compatibility with existing code
