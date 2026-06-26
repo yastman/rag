@@ -50,7 +50,7 @@ make test-bot-health
 | `agents/` | Agent SDK tools and RAG pipeline functions |
 | `dialogs/` | Funnel dialogs and filter extraction UI |
 | `integrations/` | Langfuse, embeddings, cache, prompt manager |
-| `middlewares/` | Aiogram middlewares (throttling, errors, Langfuse trace root) |
+| `middlewares/` | Aiogram middlewares (throttling, errors) |
 | `pipelines/` | Client-direct pipeline entrypoints and graph-compat facade |
 | `services/` | Bot services (Qdrant, cache, query analysis, response generation) |
 
