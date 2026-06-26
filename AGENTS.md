@@ -29,11 +29,7 @@ run_assistant_request        src/core/assistant.py
 Layering: `telegram_bot/` = adapter · `src/core/` = public boundary (Protocol-based DI via
 `contracts.py`) · `src/runtime/` = engine.
 
-**Heads-up — Langfuse is half-removed (split-brain).** Probe/ingestion paths are no-op'd, but
-live `src/` consumers and a legacy `telegram_bot/agents/rag_pipeline.py` (a duplicate of the
-spine `rag_pipeline`, still carrying `@observe`) remain. Don't assume Langfuse is gone — confirm
-the live path with `find_callers` before editing. Finishing removal + consolidating the
-duplicate is tracked in codeindexer cards (epic-2983).
+**Langfuse fully removed.** All SDK imports and `@observe` decorators are gone from `src/` and `telegram_bot/`. Observability is stdlib logging only.
 
 ## Navigate code (index-first)
 
