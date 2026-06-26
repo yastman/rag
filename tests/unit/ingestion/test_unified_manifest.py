@@ -99,7 +99,7 @@ class TestGDriveManifest:
         m = GDriveManifest(manifest_dir)
         m.get_or_create_id("a.txt", "hash1")
 
-        manifest_path = manifest_dir / ".gdrive_manifest.json"
+        manifest_path = manifest_dir / ".file_manifest.json"
         assert manifest_path.exists()
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert "hash_to_id" in data
