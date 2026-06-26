@@ -160,14 +160,14 @@ def _start_filter_observation(
     action: str,
     **extra: Any,
 ):
-    """No-op stub — Langfuse removed (#2844)."""
+    """No-op stub — tracing removed (#2844)."""
     return contextlib.nullcontext(None)
 
 
 def _update_filter_observation(
     observation: Any, *, manager: DialogManager, action: str, **extra: Any
 ):
-    """No-op stub — Langfuse removed (#2844)."""
+    """No-op stub — tracing removed (#2844)."""
 
 
 def _make_switch_trace_handler(action: str, target_state: Any):

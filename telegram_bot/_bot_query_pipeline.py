@@ -158,7 +158,7 @@ async def _handle_apartment_fast_path(
                 _prev = json.loads(_prev_raw)
                 _time_delta = time.time() - float(_prev["ts"])
                 if is_reformulation(list(dense), _prev["vec"], _time_delta):
-                    pass  # implicit retry detected (Langfuse scoring removed in #2844)
+                    pass  # implicit retry detected (scoring removed in #2844)
             await bot._cache.redis.set(
                 _ikey,
                 json.dumps({"vec": list(dense), "ts": time.time()}),
@@ -320,7 +320,7 @@ def _trace_guard_blocked(
     pattern: str | None,
     root_trace_metadata: dict[str, Any] | None,
 ) -> None:
-    """Write scores for a hard-blocked injection (#1368) — Langfuse removed (#2844)."""
+    """Write scores for a hard-blocked injection (#1368) — tracing removed (#2844)."""
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
     if root_trace_metadata is not None:
         root_trace_metadata.update(
@@ -349,7 +349,7 @@ async def _handle_pre_agent_cache_hit(
     root_trace_metadata: dict[str, Any] | None,
     dense: list[float],
 ) -> str:
-    """Send cached response and write Langfuse trace for cache-hit path."""
+    """Send cached response and write trace for cache-hit path."""
     logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
     rag_result_store["cache_hit"] = True
     rag_result_store["query_type"] = query_type
@@ -482,7 +482,7 @@ def _write_final_pipeline_trace(
     rag_result_store: dict[str, Any],
     root_trace_metadata: dict[str, Any] | None,
 ) -> None:
-    """Write end-of-pipeline Langfuse span metadata and root trace metadata."""
+    """Write end-of-pipeline span metadata and root trace metadata."""
     if root_trace_metadata is not None:
         root_trace_metadata.update(
             {
@@ -771,7 +771,7 @@ async def _supervisor_store_cache_and_trace(
     session_id: str,
     messages: list[Any],
 ) -> None:
-    """Cache store, final trace write, Langfuse scores, and background history save."""
+    """Cache store, final trace write, scores, and background history save."""
     from src.runtime.services.rag_core import CACHEABLE_QUERY_TYPES
 
     # Resolve filter_signature from stored state

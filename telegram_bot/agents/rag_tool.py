@@ -139,11 +139,8 @@ async def rag_search(
 
         invoke_start = time.perf_counter()
         # NOTE (#2157): trace-context forwarding to rag_pipeline was removed
-        # with Langfuse (#2844). Earlier code forwarded a `langfuse_trace_id`
-        # kwarg to carry external OTEL trace context (e.g., a W3C trace context
-        # arriving over HTTP from another process); that propagation path no
-        # longer exists. See #1253 for the original (wrong) forward contract
-        # this note reverts.
+        # (#2844). Earlier code forwarded a trace-id kwarg to carry external OTEL
+        # trace context; that propagation path no longer exists.
         pipeline_kwargs: dict[str, Any] = {
             "user_id": ctx.telegram_user_id if ctx else 0,
             "session_id": ctx.session_id if ctx else "",

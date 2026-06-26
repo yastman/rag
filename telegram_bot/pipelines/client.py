@@ -121,11 +121,6 @@ def _safe_collection_name(config: Any) -> str:
     return value if isinstance(value, str) else ""
 
 
-def _safe_langfuse_env(config: Any) -> str:
-    value = getattr(config, "langfuse_env", "")
-    return value if isinstance(value, str) else ""
-
-
 # ---------------------------------------------------------------------------
 # Cache helpers
 # ---------------------------------------------------------------------------
@@ -409,7 +404,7 @@ async def _pipeline_postprocess(
     trace_id: str,
     config: Any,
 ) -> PipelineResult:
-    """Stage e): Cache store, Langfuse scores, history save. Returns PipelineResult."""
+    """Stage e): Cache store, scores, history save. Returns PipelineResult."""
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
     e2e_wall_ms = wall_ms + pre_agent_ms
     topic_hint = result.get("topic_hint")
@@ -466,7 +461,6 @@ async def _pipeline_postprocess(
         "degraded_reason": decision.degraded_reason,
         "cache_eligible": decision.cache_eligible,
         "collection": _safe_collection_name(config),
-        "environment": _safe_langfuse_env(config),
         "pipeline_wall_ms": wall_ms,
         "pre_agent_ms": pre_agent_ms,
         "bge_model_processing_ms": result.get("bge_model_processing_ms"),
@@ -491,7 +485,7 @@ async def _pipeline_postprocess(
             logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
 
     with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
-        pass  # Langfuse trace context propagation removed (#2844)
+        pass  # trace context propagation seam
 
     result.update(
         {
@@ -566,7 +560,7 @@ async def run_client_pipeline(
         c) RAG pipeline — retrieve + grade + rerank + optional rewrite.
         d) Generate — LLM answer if RAG cache missed.
         e) Send — response + sources to Telegram.
-        f) Post-process — cache store (with guards), Langfuse scores.
+        f) Post-process — cache store (with guards), scores.
 
     Args:
         user_text: Raw user message.

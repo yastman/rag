@@ -15,8 +15,8 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 | [`qdrant.py`](./qdrant.py) | Async Qdrant gateway: hybrid search, RRF, ColBERT, binary quantization |
 | [`query_preprocessor.py`](./query_preprocessor.py) | Rule-based preprocessing: translit normalization, dynamic RRF weights |
 | [`query_analyzer.py`](./query_analyzer.py) | LLM-based filter extraction (price, city, rooms) from natural language |
-| [`generate_response.py`](./generate_response.py) | Canonical response generation with Langfuse prompt management |
-| [`rag_core.py`](./rag_core.py) | Shared RAG core functions (no Langfuse spans, no metrics) |
+| [`generate_response.py`](./generate_response.py) | Canonical response generation with prompt management |
+| [`rag_core.py`](./rag_core.py) | Shared RAG core functions (no spans, no metrics) |
 | [`filter_extractor.py`](./filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |
 | [`apartment_llm_extractor.py`](./apartment_llm_extractor.py) | LLM-based apartment data extraction |
 
@@ -31,7 +31,7 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 - **Qdrant** — vector database queries
 - **Redis** — cache tiers and user context storage
 - **BGE-M3 / Voyage** — embedding providers (Voyage is optional: `uv sync --extra voyage`)
-- **Langfuse** — prompt management and observability (optional)
+- Prompt management and observability (optional)
 
 ## Focused Checks
 
@@ -49,5 +49,5 @@ make check
 - [`../../DOCKER.md`](../../DOCKER.md) — Docker bring-up and service dependencies
 - [`../../docs/LOCAL-DEVELOPMENT.md`](../../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder
 - [`../../docs/runbooks/README.md`](../../docs/runbooks/README.md) — Operational troubleshooting
-- [`../middlewares/`](../middlewares/) — Error handling, throttling, Langfuse trace root
+- [`../middlewares/`](../middlewares/) — Error handling, throttling, trace root
 - [`../../src/retrieval/`](../../src/retrieval/) — Search engine implementations

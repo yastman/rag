@@ -1,7 +1,7 @@
 """Query preprocessing for RAG pipeline optimization.
 
-HyDEGenerator uses the in-process LiteLLM SDK router. Langfuse is optional and
-attached outside the core runtime. QueryPreprocessor is rule-based (no LLM calls).
+HyDEGenerator uses the in-process LiteLLM SDK router.
+QueryPreprocessor is rule-based (no LLM calls).
 """
 
 import logging
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def _update_current_span(**kwargs: Any) -> None:
-    """No-op stub — Langfuse removed (#2844)."""
+    """No-op stub — tracing removed (#2844)."""
 
 
 _SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = _DOMAIN_SHORT_FINANCE

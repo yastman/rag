@@ -1,9 +1,9 @@
 """src.observability package — observability helpers.
 
-Langfuse removed (#2844, #2969). Structured product logs
+Observability integration removed (#2844, #2969). Structured product logs
 (src/utils/product_events.py) are the canonical observability path.
 
-The only Langfuse-era utilities kept here are genuine, non-Langfuse helpers
+The only helpers kept here are genuine, non-tracing utilities
 still used by the runtime: ``mask_pii`` (PII masking for safe payloads) and
 ``propagate_attributes`` (a no-op context manager preserved as a stable
 context-propagation seam for callers).
@@ -37,7 +37,7 @@ def mask_pii(data: Any) -> Any:
 
 @contextlib.contextmanager
 def propagate_attributes(**kwargs: Any) -> Iterator[None]:
-    """No-op context-propagation seam — Langfuse removed (#2844, #2969)."""
+    """No-op context-propagation seam — tracing removed (#2844, #2969)."""
     yield
 
 

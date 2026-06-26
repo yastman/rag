@@ -4,17 +4,16 @@ Extracted to avoid ~300 LOC duplication between:
   telegram_bot/agents/rag_pipeline.py
   telegram_bot/graph/nodes/*.py
 
-Core functions are pure computation (no Langfuse spans, no PipelineMetrics).
+Core functions are pure computation (no spans, no PipelineMetrics).
 Adapters (pipeline / nodes) handle span tracking, metrics, and state wrapping.
 
 Observability (#2162):
     Each orchestration helper carries an ``@observe`` decorator with
     ``capture_input=False`` and ``capture_output=False`` so that the trace tree
-    contains a stable ``rag-core-*`` span for every helper without leaking raw
+    contains a stable span for every helper without leaking raw
     user query text, embedding vectors, or document text. Curated
     high-signal metadata (cache hit, query type, top-k, vector dim) is added
-    inside each function via ``update_current_span(input=..., output=...)`` so
-    the Langfuse UI shows useful summary fields.
+    inside each function.
 """
 
 from __future__ import annotations
@@ -136,7 +135,7 @@ async def rewrite_query_via_llm(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=config.rewrite_max_tokens,
-        name="rewrite-query",  # type: ignore[call-overload]  # langfuse kwarg
+        name="rewrite-query",  # type: ignore[call-overload]
     )
     rewritten = (response.choices[0].message.content or "").strip()
     actual_model = getattr(response, "model", config.rewrite_model) or config.rewrite_model
@@ -189,7 +188,7 @@ async def perform_rerank(
         - rerank_cache_hit: True if result came from cache
 
     Notes:
-        Callers are responsible for Langfuse span tracking, PipelineMetrics,
+        Callers are responsible for span tracking, PipelineMetrics,
         and fallback logic when reranker raises an exception.
         When no reranker is provided, returns all documents unmodified (no sort).
         Callers should sort/trim on the no-reranker path if needed.

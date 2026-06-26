@@ -1,47 +1,23 @@
-"""Langfuse Prompt Management with caching and graceful degradation.
+"""Local prompt management — versioned templates only.
 
-Fetches versioned prompts from Langfuse with client-side caching.
-Falls back to hardcoded prompts when Langfuse is unavailable.
+All prompt text is owned locally; no runtime calls to external prompt stores.
+Replaces the former remote-backed prompt manager (#2628).
 """
 
 from __future__ import annotations
 
 import logging
-import os
-import time
 from typing import Any
-
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
 
-# 1h TTL: prompts change via Langfuse UI deploy, not runtime. Reduces API calls.
+# 1h TTL: accepted for call-site compatibility; not used for lookup.
 DEFAULT_CACHE_TTL = 3600
 
-# Module-level TTL caches for prompt existence
+# Module-level TTL caches preserved for call-site compatibility
 _missing_prompts_until: dict[str, float] = {}
 _transient_failures_until: dict[str, float] = {}
-
-
-def _update_prompt_span_output(
-    client: Any,
-    *,
-    name: str,
-    source: str,
-    prompt_version: Any | None = None,
-) -> None:
-    """Attach safe prompt fetch metadata to the current Langfuse span."""
-    output: dict[str, Any] = {
-        "prompt_name": name,
-        "prompt_source": source,
-    }
-    if prompt_version is not None:
-        output["prompt_version"] = prompt_version
-    try:
-        client.update_current_span(output=output)
-    except Exception:
-        logger.debug("Failed to update prompt span output", exc_info=True)
 
 
 def get_prompt_with_config(
@@ -51,18 +27,11 @@ def get_prompt_with_config(
     cache_ttl: int = DEFAULT_CACHE_TTL,
     variables: dict[str, str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    """Fetch prompt text and config dict from Langfuse.
+    """Return ``(compiled_prompt_text, config_dict)``.
 
-    Config may contain temperature, max_tokens, model, etc. — editable in Langfuse UI.
-
-    Returns:
-        Tuple of (compiled_prompt_text, config_dict).
-        Returns empty dict for config when using fallback.
+    Config is always empty — model/temperature config lives in local settings.
     """
-    text, config, _ = _fetch_prompt_core(
-        name, fallback=fallback, cache_ttl=cache_ttl, variables=variables
-    )
-    return text, config
+    return _apply_fallback_vars(fallback, variables or {}), {}
 
 
 def get_prompt_with_object(
@@ -71,26 +40,16 @@ def get_prompt_with_object(
     fallback: str,
     cache_ttl: int = DEFAULT_CACHE_TTL,
     variables: dict[str, str] | None = None,
-) -> tuple[str, Any | None]:
-    """Return ``(compiled_prompt_string, raw_prompt_object_or_None)``.
+) -> tuple[str, None]:
+    """Return ``(compiled_prompt_string, None)``.
 
-    The raw Prompt object is ``None`` when Langfuse is unavailable or the
-    prompt was loaded from the fallback. Callers can pass it as
-    ``langfuse_prompt=<prompt_obj>`` to ``chat.completions.create(...)`` on a
-    ``langfuse.openai`` client, or as ``prompt=<prompt_obj>`` to
-    ``langfuse.update_current_generation(...)`` for non-OpenAI providers.
-
-    Only managed Langfuse Prompt objects are linkable — fallback strings are
-    intentionally returned with ``None`` so callers can guard with
-    ``if prompt_obj is not None``.
+    The second element is always ``None`` — there is no external prompt object.
+    Callers that guard with ``if prompt_obj is not None`` will safely skip
+    any prompt-linking path.
     """
-    text, _, prompt_obj = _fetch_prompt_core(
-        name, fallback=fallback, cache_ttl=cache_ttl, variables=variables
-    )
-    return text, prompt_obj
+    return _apply_fallback_vars(fallback, variables or {}), None
 
 
-@observe(name="get-prompt", capture_input=False, capture_output=False)
 def get_prompt(
     name: str,
     *,
@@ -98,80 +57,8 @@ def get_prompt(
     cache_ttl: int = DEFAULT_CACHE_TTL,
     variables: dict[str, str] | None = None,
 ) -> str:
-    """Fetch a text prompt from Langfuse with fallback to hardcoded value.
-
-    Args:
-        name: Prompt name in Langfuse.
-        fallback: Hardcoded fallback prompt used when Langfuse is unavailable.
-        cache_ttl: Cache TTL in seconds (default 3600).
-        variables: Variables for prompt.compile() (e.g. {"domain": "недвижимость"}).
-
-    Returns:
-        Compiled prompt string from Langfuse, or the fallback.
-    """
-    text, _, _ = _fetch_prompt_core(
-        name, fallback=fallback, cache_ttl=cache_ttl, variables=variables
-    )
-    return text
-
-
-def _fetch_prompt_core(
-    name: str,
-    *,
-    fallback: str,
-    cache_ttl: int,
-    variables: dict[str, str] | None = None,
-) -> tuple[str, dict[str, Any], Any | None]:
-    """Core prompt fetcher returning ``(text, config, prompt_obj_or_None)``.
-
-    ``prompt_obj`` is the raw Langfuse Prompt object (with ``.compile()``,
-    ``.version``, ``.config`` attributes) when fetched successfully; ``None``
-    otherwise (Langfuse unavailable, missing prompt, transient failure).
-    """
-    vars_ = variables or {}
-
-    def _fallback_result() -> tuple[str, dict[str, Any], Any | None]:
-        _update_prompt_span_output(client, name=name, source="fallback")
-        return _apply_fallback_vars(fallback, vars_), {}, None
-
-    client = get_client()
-    if client is None:
-        return _apply_fallback_vars(fallback, vars_), {}, None
-
-    if _is_temporarily_missing(name) or _is_transient_failure(name):
-        return _fallback_result()
-
-    try:
-        prompt_kwargs: dict[str, Any] = {"cache_ttl_seconds": cache_ttl}
-        label = os.getenv("LANGFUSE_PROMPT_LABEL", "").strip()
-        if label:
-            prompt_kwargs["label"] = label
-        prompt = client.get_prompt(name, **prompt_kwargs)
-        _missing_prompts_until.pop(name, None)
-        _transient_failures_until.pop(name, None)
-        config: dict[str, Any] = getattr(prompt, "config", None) or {}
-        _update_prompt_span_output(
-            client,
-            name=name,
-            source="langfuse",
-            prompt_version=getattr(prompt, "version", None),
-        )
-        if vars_:
-            return str(prompt.compile(**vars_)), config, prompt
-        return str(prompt.compile()), config, prompt
-    except Exception as e:
-        if _is_prompt_not_found(e):
-            _missing_prompts_until[name] = time.monotonic() + cache_ttl
-            logger.debug(
-                "Prompt '%s' not found in Langfuse, using fallback for %ds",
-                name,
-                cache_ttl,
-            )
-            return _fallback_result()
-
-        _transient_failures_until[name] = time.monotonic() + cache_ttl
-        logger.warning("Failed to fetch prompt '%s', using fallback: %s", name, e)
-        return _fallback_result()
+    """Return the local prompt template with optional variable substitution."""
+    return _apply_fallback_vars(fallback, variables or {})
 
 
 def _apply_fallback_vars(fallback: str, compile_vars: dict[str, str]) -> str:
@@ -182,36 +69,6 @@ def _apply_fallback_vars(fallback: str, compile_vars: dict[str, str]) -> str:
     for key, value in compile_vars.items():
         result = result.replace("{{" + key + "}}", value)
     return result
-
-
-def _is_prompt_not_found(error: Exception) -> bool:
-    """Best-effort detection for Langfuse 404 prompt-not-found errors."""
-    text = str(error).lower()
-    return (
-        "prompt not found" in text or "langfusenotfounderror" in text or "status_code: 404" in text
-    )
-
-
-def _is_temporarily_missing(name: str) -> bool:
-    """True when prompt is in local missing-cache TTL window."""
-    until = _missing_prompts_until.get(name)
-    if until is None:
-        return False
-    if until > time.monotonic():
-        return True
-    _missing_prompts_until.pop(name, None)
-    return False
-
-
-def _is_transient_failure(name: str) -> bool:
-    """True when prompt is in local transient-failure TTL window."""
-    until = _transient_failures_until.get(name)
-    if until is None:
-        return False
-    if until > time.monotonic():
-        return True
-    _transient_failures_until.pop(name, None)
-    return False
 
 
 def _reset_client() -> None:

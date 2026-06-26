@@ -11,7 +11,7 @@ Behavior parity with the previous custom FSM is preserved:
 * If ``kommo_client`` is unavailable, the dialog is closed gracefully with
   an error message — no Kommo write is attempted.
 * Invalid date format on the edit-date window does not advance state.
-* All write paths are observed via ``@observe`` for Langfuse trace parity.
+* All write paths are observed via no-op stubs (#2844 tracing removed).
 
 Trigger callbacks (``crm:lead:note:{id}``, ``crm:lead:task:{id}``,
 ``crm:contact:note:{id}``, ``crm:task:edit:{id}``) live in
@@ -34,7 +34,6 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Cancel, Column, Select
 from aiogram_dialog.widgets.text import Const, Format
 
-from telegram_bot.observability import get_client, observe
 from telegram_bot.services.kommo_models import TaskCreate, TaskUpdate
 
 from .states import CrmQuickActionSG
@@ -71,10 +70,8 @@ _EDIT_FIELD_ITEMS: list[tuple[str, str]] = [
 # ---------------------------------------------------------------------------
 
 
-def _update_current_span(lf: Any, **kwargs: Any) -> None:
-    """Update the current Langfuse span when tracing is available."""
-    if lf is not None:
-        lf.update_current_span(**kwargs)
+def _update_current_span(**kwargs: Any) -> None:
+    """No-op stub — tracing removed (#2844)."""
 
 
 def _kommo_from_manager(manager: DialogManager) -> Any | None:
@@ -104,28 +101,22 @@ async def on_dialog_start(start_data: Any, manager: DialogManager) -> None:
 # ---------------------------------------------------------------------------
 
 
-@observe(name="crm-quick-note", capture_input=False, capture_output=False)
 async def on_note_text_input(
     message: Message,
     _widget: MessageInput,
     manager: DialogManager,
 ) -> None:
-    lf = get_client()
     data = manager.dialog_data
     entity_type = str(data.get("entity_type", "leads"))
     entity_id = int(data.get("entity_id", 0) or 0)
     text = (message.text or "").strip()
 
-    _update_current_span(lf, input={"deal_id": entity_id, "action": "create"})
-
     if not text:
-        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_EMPTY_NOTE_WARN)
         return
 
     kommo = _kommo_from_manager(manager)
     if kommo is None:
-        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_NO_CRM)
         await manager.done()
         return
@@ -133,9 +124,8 @@ async def on_note_text_input(
     try:
         await kommo.add_note(entity_type, entity_id, text)
         await message.answer(_NOTE_SUCCESS)
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to add note for %s #%d", entity_type, entity_id)
-        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await message.answer("⚠️ Ошибка при добавлении заметки.")
     finally:
         await manager.done()
@@ -146,27 +136,21 @@ async def on_note_text_input(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="crm-task-create", capture_input=False, capture_output=False)
 async def on_task_text_input(
     message: Message,
     _widget: MessageInput,
     manager: DialogManager,
 ) -> None:
-    lf = get_client()
     data = manager.dialog_data
     entity_id = int(data.get("entity_id", 0) or 0)
     text = (message.text or "").strip()
 
-    _update_current_span(lf, input={"deal_id": entity_id, "action": "create"})
-
     if not text:
-        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_EMPTY_TASK_WARN)
         return
 
     kommo = _kommo_from_manager(manager)
     if kommo is None:
-        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_NO_CRM)
         await manager.done()
         return
@@ -175,9 +159,8 @@ async def on_task_text_input(
         due_ts = int(time.time()) + 86400
         await kommo.create_task(TaskCreate(text=text, entity_id=entity_id, complete_till=due_ts))
         await message.answer(_TASK_SUCCESS)
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to create task for entity #%d", entity_id)
-        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await message.answer("⚠️ Ошибка при создании задачи.")
     finally:
         await manager.done()
@@ -195,24 +178,19 @@ async def get_edit_field_options(_manager: DialogManager, **kwargs: Any) -> dict
     }
 
 
-@observe(name="crm-task-edit-field", capture_input=False, capture_output=False)
 async def on_edit_field_select(
     _callback: CallbackQuery,
     _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    lf = get_client()
     if item_id == "text":
-        _update_current_span(lf, input={"field": "text", "action": "edit-field-choice"})
         await manager.switch_to(CrmQuickActionSG.edit_task_text)
     elif item_id == "date":
-        _update_current_span(lf, input={"field": "date", "action": "edit-field-choice"})
         await manager.switch_to(CrmQuickActionSG.edit_task_date)
     else:
-        # Defensive: Select uses fixed item_id_getter, so this branch is
-        # logically unreachable, but we keep it observable.
-        _update_current_span(lf, output={"action": "cancelled"})
+        # Defensive: Select uses fixed item_id_getter, so this branch is logically unreachable.
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -220,27 +198,21 @@ async def on_edit_field_select(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="crm-task-edit-text", capture_input=False, capture_output=False)
 async def on_edit_task_text_input(
     message: Message,
     _widget: MessageInput,
     manager: DialogManager,
 ) -> None:
-    lf = get_client()
     data = manager.dialog_data
     task_id = int(data.get("edit_task_id", 0) or 0)
     text = (message.text or "").strip()
 
-    _update_current_span(lf, input={"task_id": task_id, "field": "text", "action": "edit"})
-
     if not text:
-        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_EMPTY_TEXT_WARN)
         return
 
     kommo = _kommo_from_manager(manager)
     if kommo is None:
-        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_NO_CRM)
         await manager.done()
         return
@@ -248,9 +220,8 @@ async def on_edit_task_text_input(
     try:
         await kommo.update_task(task_id, TaskUpdate(text=text))
         await message.answer(_EDIT_SUCCESS)
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to update task %d text", task_id)
-        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await message.answer("⚠️ Ошибка при обновлении задачи.")
     finally:
         await manager.done()
@@ -261,31 +232,25 @@ async def on_edit_task_text_input(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="crm-task-edit-date", capture_input=False, capture_output=False)
 async def on_edit_task_date_input(
     message: Message,
     _widget: MessageInput,
     manager: DialogManager,
 ) -> None:
-    lf = get_client()
     data = manager.dialog_data
     task_id = int(data.get("edit_task_id", 0) or 0)
     raw = (message.text or "").strip()
-
-    _update_current_span(lf, input={"task_id": task_id, "field": "date", "action": "edit"})
 
     try:
         dt = datetime.datetime.strptime(raw, "%d.%m.%Y %H:%M")
         dt = dt.replace(tzinfo=datetime.UTC)
         due_ts = int(dt.timestamp())
     except ValueError:
-        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_BAD_DATE_WARN)
         return
 
     kommo = _kommo_from_manager(manager)
     if kommo is None:
-        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_NO_CRM)
         await manager.done()
         return
@@ -293,9 +258,8 @@ async def on_edit_task_date_input(
     try:
         await kommo.update_task(task_id, TaskUpdate(complete_till=due_ts))
         await message.answer(_EDIT_SUCCESS)
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to update task %d due date", task_id)
-        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await message.answer("⚠️ Ошибка при обновлении задачи.")
     finally:
         await manager.done()

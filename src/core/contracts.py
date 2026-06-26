@@ -15,7 +15,7 @@
 
 These dataclasses define the stable boundary between transports (Telegram,
 E2E, optional API) and the assistant core. They intentionally avoid importing
-Telegram, FastAPI, Langfuse, OTel, or live integrations so callers can import
+Telegram, FastAPI, OTel, or live integrations so callers can import
 them in lightweight tests and tooling.
 """
 

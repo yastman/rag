@@ -29,7 +29,7 @@ CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED"
 
 
 def _update_current_span(**kwargs: Any) -> None:
-    """No-op stub — Langfuse removed (#2844)."""
+    """No-op stub — tracing removed (#2844)."""
 
 
 def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
@@ -113,7 +113,7 @@ async def rewrite_query_via_llm(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=config.rewrite_max_tokens,
-        name="rewrite-query",  # type: ignore[call-overload]  # langfuse kwarg
+        name="rewrite-query",  # type: ignore[call-overload]
     )
     rewritten = (response.choices[0].message.content or "").strip()
     actual_model = getattr(response, "model", config.rewrite_model) or config.rewrite_model
@@ -165,7 +165,7 @@ async def perform_rerank(
         - rerank_cache_hit: True if result came from cache
 
     Notes:
-        Callers are responsible for Langfuse span tracking, PipelineMetrics,
+        Callers are responsible for span tracking, PipelineMetrics,
         and fallback logic when reranker raises an exception.
         When no reranker is provided, returns all documents unmodified (no sort).
         Callers should sort/trim on the no-reranker path if needed.

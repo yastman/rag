@@ -141,7 +141,7 @@ def _coerce_positive_number(value: Any) -> float | None:
 
 
 def _extract_usage_details(usage: Any | None) -> dict[str, int] | None:
-    """Extract Langfuse-compatible usage_details from provider usage object."""
+    """Extract usage_details from provider usage object."""
     if usage is None:
         return None
 

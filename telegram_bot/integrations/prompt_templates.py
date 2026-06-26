@@ -94,14 +94,14 @@ def build_system_prompt_with_manager(
     difficulty: str,
     domain: str,
 ) -> str:
-    """Build system prompt via Langfuse prompt manager with contract fallback.
+    """Build system prompt via prompt manager with contract fallback.
 
     Routes through get_prompt() to allow remote prompt overrides and A/B experiments.
     The fallback template has word_limit pre-rendered, domain passed as {{domain}}
-    for Langfuse variable substitution.
+    for variable substitution.
     """
     word_limit = get_word_limit(style, difficulty)
-    # Pre-render word_limit (dynamic), keep {{domain}} for Langfuse substitution
+    # Pre-render word_limit (dynamic), keep {{domain}} for substitution
     fallback = CONTRACT_PROMPTS[style].replace("{word_limit}", str(word_limit))
     fallback = fallback.replace("{domain}", "{{domain}}")
     prompt_name = f"generate_{style}"
