@@ -97,8 +97,6 @@ An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/ag
 - Dead-letter queue (DLQ) for failed documents, with retry and backoff.
 - Docling handles parsing; the unified pipeline handles chunking and embedding writes.
 
-See [`docs/INGESTION.md`](docs/INGESTION.md) for operations and schema details.
-
 ## Adapt to Your Domain
 
 Replace the domain layer; keep the engine and infrastructure.
@@ -131,8 +129,6 @@ Run the Compose bot stack:
 ```bash
 make docker-bot-up
 ```
-
-For the full setup ladder, environment variables, and troubleshooting, see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
 
 Notable configurable env vars (see `.env.example`): `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`.
 
@@ -173,20 +169,12 @@ Other honest limits:
 | Domain tools + agents | [`telegram_bot/agents/`](telegram_bot/agents/), [`telegram_bot/services/`](telegram_bot/services/) |
 | Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
 | Compose runtime | [`compose.yml`](compose.yml), [`DOCKER.md`](DOCKER.md) |
-| Full docs index | [`docs/README.md`](docs/README.md) |
 
 ## Documentation
 
 | Document | Use it for |
 |---|---|
 | [`DOCKER.md`](DOCKER.md) | Compose services, profiles, ports, env, runtime contracts |
-| [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) | Local setup and validation ladder |
-| [`docs/INGESTION.md`](docs/INGESTION.md) | Ingestion operations |
-| [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) | Vector schema and Qdrant operations |
-| [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) | Query, retrieval, and generation flows |
-| [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) | Folder map and high-signal files |
-| [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) | Safe review path before running commands |
-| [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md) | Module ownership map |
 
 ## Direction
 
