@@ -294,7 +294,6 @@ services:
         limits:
           memory: 1G
 
-  # loki, promtail, alertmanager archived — see archive/obs/
   # Langfuse ml stack removed — see #2844
 
 # =============================================================================
