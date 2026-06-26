@@ -451,7 +451,7 @@ class QdrantService:
             sparse_weight / rrf_k / return_meta: forwarded verbatim to
                 :meth:`hybrid_search_rrf`.
             fallback_reason: human-readable cause used as the
-                ``fallback_reason`` field in the Langfuse span output.
+                ``fallback_reason`` field in the span output.
                 Caller-controlled so the four sites stay observably
                 distinct in traces.
 

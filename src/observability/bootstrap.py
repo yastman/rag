@@ -1,4 +1,4 @@
-"""Bootstrap helpers for Langfuse runtime initialization."""
+"""Bootstrap helpers for tracing runtime initialization."""
 
 from __future__ import annotations
 
@@ -20,12 +20,12 @@ def is_endpoint_reachable(url: str, *, timeout: float = 2.0) -> bool:
 
 
 def disable_otel_exporter(*, shutdown: bool = True) -> None:
-    """Disable Langfuse/OTel export path and optionally shutdown active provider.
+    """Disable OTel export path and optionally shutdown active provider.
 
     Use ``shutdown=False`` to avoid noisy exporter shutdown tracebacks when local
-    Langfuse endpoint is explicitly unreachable.
+    endpoint is explicitly unreachable.
     """
-    os.environ["LANGFUSE_TRACING_ENABLED"] = "false"
+    os.environ["TRACING_ENABLED"] = "false"
     os.environ["OTEL_SDK_DISABLED"] = "true"
     os.environ["OTEL_TRACES_EXPORTER"] = "none"
     os.environ["OTEL_METRICS_EXPORTER"] = "none"

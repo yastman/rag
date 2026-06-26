@@ -1,16 +1,6 @@
 """OpenAI-based contextualization provider."""
 
-try:
-    from langfuse import observe
-    from langfuse.openai import AsyncOpenAI, OpenAI
-except ImportError:  # ponytail: null decorator until observability cleanup (#2983)
-    from openai import AsyncOpenAI, OpenAI  # type: ignore[assignment]
-
-    def observe(func=None, **kwargs):
-        if func is not None:
-            return func
-        return lambda f: f
-
+from openai import AsyncOpenAI, OpenAI
 
 from src.config import Settings
 
@@ -53,7 +43,6 @@ class OpenAIContextualizer(ContextualizeProvider):
         self.total_tokens = 0
         self.total_cost = 0.0
 
-    @observe(name="openai-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
         self,
         chunks: list[str],
@@ -69,7 +58,6 @@ class OpenAIContextualizer(ContextualizeProvider):
         _ = context_window
         return await self.contextualize_batch(chunks, query)
 
-    @observe(name="openai-contextualize", capture_input=False, capture_output=False)
     async def contextualize_single(
         self,
         text: str,
@@ -113,7 +101,6 @@ class OpenAIContextualizer(ContextualizeProvider):
             context_method="openai",
         )
 
-    @observe(name="openai-contextualize-sync", capture_input=False, capture_output=False)
     def contextualize_sync(
         self,
         text: str,

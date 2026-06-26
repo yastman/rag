@@ -1,20 +1,6 @@
 """Groq-based contextualization provider (high-speed alternative)."""
 
 from groq import APIStatusError, AsyncGroq, Groq, RateLimitError
-
-
-try:
-    from langfuse import observe
-except ImportError:
-
-    def observe(
-        func=None, **kwargs
-    ):  # ponytail: null decorator until observability cleanup (#2983)
-        if func is not None:
-            return func
-        return lambda f: f
-
-
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from src.config import Settings
@@ -41,7 +27,6 @@ class GroqContextualizer(ContextualizeProvider):
         self.sync_client = Groq(api_key=self.settings.groq_api_key)
         self.total_tokens = 0
 
-    @observe(name="groq-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
         self,
         chunks: list[str],
@@ -57,7 +42,6 @@ class GroqContextualizer(ContextualizeProvider):
         _ = context_window
         return await self.contextualize_batch(chunks, query)
 
-    @observe(name="groq-contextualize", capture_input=False, capture_output=False)
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -95,7 +79,6 @@ class GroqContextualizer(ContextualizeProvider):
             context_method="groq",
         )
 
-    @observe(name="groq-contextualize-sync", capture_input=False, capture_output=False)
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),

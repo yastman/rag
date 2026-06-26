@@ -35,7 +35,7 @@ redacted, meta = redactor.redact_query("Паспорт АА123456")
 
 ## Boundaries
 
-- Redacts **before** logging to Langfuse/MLflow; original query is still used for search accuracy
+- Redacts **before** logging to external tracing/MLflow; original query is still used for search accuracy
 - Does not perform authentication or authorization
 - Does not own Telegram middleware policy; see [`../../telegram_bot/middlewares/`](../../telegram_bot/middlewares/)
 

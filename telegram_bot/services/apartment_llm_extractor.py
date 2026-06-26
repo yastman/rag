@@ -41,11 +41,7 @@ Crown Fort Club, Green Fort Suites, Premier Fort Suites, Nessebar Fort Residence
 
 
 def _get_system_prompt() -> str:
-    """Fetch system prompt from Langfuse Prompt Management with fallback to default.
-
-    Prompt name: "apartment-extraction-system-prompt"
-    Falls back to EXTRACTION_SYSTEM_PROMPT when Langfuse is unavailable.
-    """
+    """Fetch system prompt with fallback to default."""
     return get_prompt(
         "apartment-extraction-system-prompt",
         fallback=EXTRACTION_SYSTEM_PROMPT,
@@ -53,15 +49,11 @@ def _get_system_prompt() -> str:
 
 
 def _get_system_prompt_with_object() -> tuple[str, Any | None]:
-    """Fetch system prompt + raw Langfuse Prompt object for #1666 linking.
+    """Fetch system prompt. Always returns (prompt_str, None).
 
-    Returns the same compiled string as ``_get_system_prompt`` plus the raw
-    Langfuse Prompt object (``None`` if Langfuse is unavailable / fallback
-    was used). Callers can pass the object to
-    ``langfuse.update_current_generation(prompt=...)`` to link the generation
-    observation to a Prompt Management entry. Only managed Langfuse Prompt
-    objects are linkable — fallback strings are intentionally returned with
-    ``None`` so callers can guard with ``if prompt_obj is not None``.
+    The second element is always ``None`` — there is no external prompt object.
+    Callers that guard with ``if prompt_obj is not None`` will safely skip
+    any prompt-linking path.
     """
     return get_prompt_with_object(
         "apartment-extraction-system-prompt",
@@ -119,8 +111,7 @@ class ApartmentLlmExtractor:
 
         source = "hybrid" if partial_filters else "llm"
 
-        # Fetch the prompt + raw Prompt object (prompt-linking is inert after
-        # Langfuse removal in #2844; prompt_obj is retained for the call shape).
+        # Fetch the prompt + raw Prompt object (always None).
         system_prompt, _prompt_obj = _get_system_prompt_with_object()
 
         messages = [

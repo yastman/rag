@@ -1,4 +1,4 @@
-"""Minimal product event logging helper — no Langfuse / OTel / FastAPI / Telegram deps.
+"""Minimal product event logging helper — no OTel / FastAPI / Telegram deps.
 
 Provides:
 

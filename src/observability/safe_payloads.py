@@ -1,4 +1,4 @@
-"""PII-safe Langfuse input/output payload builders."""
+"""PII-safe input/output payload builders."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def build_safe_input_payload(
     route: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build a PII-safe input payload for Langfuse tracing.
+    """Build a PII-safe input payload for tracing.
 
     Never includes raw ``text``. Always includes ``content_type``,
     ``query_preview``, ``query_hash``, and ``query_len``.
@@ -88,7 +88,7 @@ def build_safe_output_payload(
     sources_count: int | None = None,
     fallback_reason: str | None = None,
 ) -> dict[str, Any]:
-    """Build a PII-safe output payload for Langfuse tracing.
+    """Build a PII-safe output payload for tracing.
 
     Never includes raw ``answer_text`` or ``response``. Always includes
     ``answer_preview``, ``answer_hash``, ``answer_len``, ``chunks_count``,

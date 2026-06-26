@@ -3,20 +3,6 @@
 from typing import Any, cast
 
 from anthropic import Anthropic, APIStatusError, AsyncAnthropic, RateLimitError
-
-
-try:
-    from langfuse import observe
-except ImportError:
-
-    def observe(
-        func=None, **kwargs
-    ):  # ponytail: null decorator until observability cleanup (#2983)
-        if func is not None:
-            return func
-        return lambda f: f
-
-
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from src.config import Settings
@@ -64,7 +50,6 @@ class ClaudeContextualizer(ContextualizeProvider):
         self.total_tokens = 0
         self.total_cost = 0.0
 
-    @observe(name="claude-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
         self,
         chunks: list[str],
@@ -81,7 +66,6 @@ class ClaudeContextualizer(ContextualizeProvider):
         _ = context_window
         return await self.contextualize_batch(chunks, query)
 
-    @observe(name="claude-contextualize", capture_input=False, capture_output=False)
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -136,7 +120,6 @@ class ClaudeContextualizer(ContextualizeProvider):
             context_method="claude",
         )
 
-    @observe(name="claude-contextualize-sync", capture_input=False, capture_output=False)
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),

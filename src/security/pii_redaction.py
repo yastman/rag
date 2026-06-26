@@ -8,7 +8,7 @@ class PIIRedactor:
     """
     Redact PII from queries and data before logging.
 
-    Superset of patterns from both query redaction and Langfuse masking:
+    Superset of patterns from both query redaction and payload masking:
     - Ukrainian passport numbers
     - Tax IDs (РНОКПП): 10 digits (applied before user_id to avoid overlap)
     - Telegram user IDs: 9-10 digit standalone numbers

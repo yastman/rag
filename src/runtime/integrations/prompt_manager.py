@@ -1,7 +1,7 @@
 """Local prompt management — versioned templates only.
 
-Replaces the former Langfuse-backed prompt manager (#2628).
 All prompt text is owned locally; no runtime calls to external prompt stores.
+Replaces the former remote-backed prompt manager (#2628).
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def get_prompt_with_object(
 
     The second element is always ``None`` — there is no external prompt object.
     Call-sites that guard with ``if prompt_obj is not None`` will safely skip
-    any Langfuse-specific linkage path.
+    any prompt-linking path.
     """
     return _apply_fallback_vars(fallback, variables or {}), None
 

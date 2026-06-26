@@ -9,7 +9,6 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from telegram_bot.agents.context import get_bot_context
-from telegram_bot.observability import observe
 from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
 
 
@@ -46,7 +45,6 @@ def create_manager_nurturing_tools(*, analytics_service: Any, nurturing_service:
     """Create manager-only nurturing + analytics tools."""
 
     @tool
-    @observe(name="manager-get-funnel-analytics", as_type="tool")
     async def manager_get_funnel_analytics(query: str, config: RunnableConfig) -> str:
         """Get funnel conversion analytics for manager review."""
         role = _resolve_role(config)
@@ -58,7 +56,6 @@ def create_manager_nurturing_tools(*, analytics_service: Any, nurturing_service:
         return str(report)
 
     @tool
-    @observe(name="manager-run-nurturing-batch", as_type="tool")
     async def manager_run_nurturing_batch(query: str, config: RunnableConfig) -> str:
         """Execute an on-demand nurturing batch for warm/cold leads."""
         role = _resolve_role(config)
@@ -82,7 +79,6 @@ def create_crm_score_sync_tool(
     """Create crm_sync_lead_score production tool."""
 
     @tool
-    @observe(name="tool-crm-sync-lead-score", as_type="tool")
     async def crm_sync_lead_score(query: str, config: RunnableConfig) -> str:
         """Sync pending lead scores to Kommo CRM."""
         role = _resolve_role(config)

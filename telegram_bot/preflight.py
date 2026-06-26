@@ -721,7 +721,7 @@ async def check_dependencies(
     CRITICAL deps (redis, qdrant, bge_m3) are retried up to CRITICAL_RETRIES
     times with CRITICAL_RETRY_DELAY between attempts.
 
-    OPTIONAL deps (langfuse) are checked once — failures are logged
+    OPTIONAL deps are checked once — failures are logged
     as warnings but do not block startup.
 
     Returns:
@@ -734,7 +734,7 @@ async def check_dependencies(
     timeout = httpx.Timeout(10.0)
 
     # Order matters: redis_cache depends on redis
-    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres", "langfuse"]
+    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres"]
 
     failure_reasons: dict[str, str] = {}
 

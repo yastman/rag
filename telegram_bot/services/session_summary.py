@@ -1,13 +1,6 @@
 """Session summary generation for CRM integration.
 
 Generates structured summaries from Q&A dialog turns using LLM.
-
-Compatibility:
-    - ``responses.parse`` (Responses API) requires langfuse >= 3.2.4 (fix:
-      langfuse-python#1292, merged 2025-08-12) and openai >= 1.37.0.
-    - Older versions expose the attribute but fail at runtime; the guard
-      below detects this and forces the ``beta.chat.completions.parse``
-      fallback automatically.
 """
 
 import logging
@@ -15,8 +8,6 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel
-
-from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -74,8 +65,7 @@ def check_responses_parse_compat(llm: Any) -> bool:
     """Probe whether *llm.responses.parse* is safe to call.
 
     Performs a lightweight attribute check **without** making a network call.
-    If the Responses API is absent or the wrapper is known-incompatible
-    (e.g. langfuse < 3.2.4 that exposes the attribute but raises at runtime),
+    If the Responses API is absent or the wrapper is known-incompatible,
     the module-level ``_force_chat_completions_fallback`` flag is set so all
     future calls skip the Responses path.
 
@@ -96,13 +86,13 @@ def check_responses_parse_compat(llm: Any) -> bool:
         )
         return False
 
-    # Extra guard: some langfuse wrappers (< 3.2.4) expose the attribute but
+    # Extra guard: some wrappers expose the attribute but
     # the underlying object is not callable or raises TypeError on invocation.
     parse_attr = getattr(llm.responses, "parse", None)
     if not callable(parse_attr):
         _force_chat_completions_fallback = True
         logger.warning(
-            "responses.parse exists but is not callable (langfuse < 3.2.4?) — "
+            "responses.parse exists but is not callable — "
             "forcing beta.chat.completions.parse fallback"
         )
         return False
@@ -128,7 +118,6 @@ def _trim_turns_for_summary(turns: list[dict]) -> list[dict]:
     return cleaned[-_MAX_TURNS_FOR_SUMMARY:]
 
 
-@observe(name="session-summary-generate", capture_input=False, capture_output=False)
 async def generate_summary(
     *,
     turns: list[dict],
@@ -178,15 +167,14 @@ async def generate_summary(
             )
             return getattr(response, "output_parsed", None)
         except Exception:
-            # Graceful degradation: responses.parse failed at runtime
-            # (e.g. langfuse wrapper incompatibility).  Fall through to
-            # beta.chat.completions.parse instead of returning None.
+            # Graceful degradation: responses.parse failed at runtime.
+            # Fall through to beta.chat.completions.parse instead of returning None.
             logger.warning(
                 "responses.parse raised at runtime — falling back to beta.chat.completions.parse",
                 exc_info=True,
             )
 
-    # Fallback: beta.chat.completions.parse (stable across all langfuse versions)
+    # Fallback: beta.chat.completions.parse
     try:
         completion = await llm.beta.chat.completions.parse(  # type: ignore[attr-defined]
             model=model,

@@ -2,8 +2,6 @@
 
 Smart Gateway pattern - single entry point for all Voyage AI operations.
 Validated by: Voyage AI official documentation (January 2026)
-
-Instrumented with Langfuse @observe for LLM observability (2026-01-28).
 """
 
 import asyncio

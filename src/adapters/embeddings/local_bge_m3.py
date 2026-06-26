@@ -81,7 +81,7 @@ class LocalBgeM3Provider(EmbeddingProvider):
             logger.info("Initializing local BGE-M3 model (singleton): %s", self.model_name)
 
             # asyncio.to_thread copies the current contextvars into the worker
-            # thread (Langfuse/OTEL span context), unlike a bare
+            # thread (OTEL span context), unlike a bare
             # loop.run_in_executor(None, ...). See observability contextvars
             # contract.
             _MODEL_INSTANCE = await asyncio.to_thread(

@@ -10,7 +10,7 @@ Slice 1 extraction map:
 * ``_bot_state_helpers`` (#1265 PR-1) — apartment-list and catalog-control
   message-id reads (``_state_apartment_results``,
   ``_state_control_message_id``, ``_extract_current_turn``).
-* ``_bot_observability`` (#1265 PR-2) — Langfuse trace metadata builder
+* ``_bot_observability`` (#1265 PR-2) — trace metadata builder
   (``_build_trace_metadata``).
 * ``_bot_error_classification`` (#1265 PR-3) — post-pipeline cleanup and
   checkpointer error guards (``_is_post_pipeline_cleanup_error``,
@@ -269,7 +269,7 @@ def _extract_current_turn(messages: list[Any]) -> list[Any]:
 
 
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
-    """Build shared metadata dict for Langfuse trace (text + voice handlers).
+    """Build shared metadata dict for trace (text + voice handlers).
 
     Re-exported from :mod:`telegram_bot._bot_observability` (#1265 Slice 1 PR-2).
     """
@@ -460,7 +460,7 @@ class PropertyBot:
 
         self.dp.include_router(create_demo_router())
 
-        # Feedback callbacks (class-method wrappers preserved for Langfuse observe decorators)
+        # Feedback callbacks (class-method wrappers)
         self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
         # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
         self.dp.callback_query(F.data == "fb:done")(self.handle_feedback)

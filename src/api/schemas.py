@@ -14,8 +14,8 @@ class QueryRequest(BaseModel):
     user_id: int = Field(default=0, description="Optional user identifier")
     session_id: str = Field(default="", description="Optional session identifier")
     channel: str = Field(default="api", description="Source channel: api, voice, telegram")
-    langfuse_trace_id: str | None = Field(
-        default=None, description="Optional Langfuse trace ID for cross-trace linking"
+    trace_id: str | None = Field(
+        default=None, description="Optional trace ID for cross-trace linking"
     )
 
 
