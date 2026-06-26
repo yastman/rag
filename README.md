@@ -151,13 +151,10 @@ CI runs static/lint guardrails only (Ruff, MyPy, Semgrep, lockfile check). Pytes
 The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The following surfaces are physically in-tree but are **archived/reference** — not part of the active production path, and being trimmed in open issues:
 
 - **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
-- **Langfuse removed** — Langfuse integration was removed; observability is through structured logs and the Loki/Promtail stack.
+- **Langfuse removed** — Langfuse integration was removed; observability is through structured logs.
+
 
 The active production adapter is Telegram (`telegram_bot/`). Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
-
-Other honest limits:
-
-- Monitoring (Loki/Promtail/Alertmanager) is local/dev only.
 
 ## Project Map
 
