@@ -67,12 +67,9 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
     def test_voyage_embedding_failure_does_not_call_delete(
         self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
     ):
-        """When Voyage embedding raises, delete must not have been called."""
+        """When hybrid embedding raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=5)
-        mock_voyage._client.embed.side_effect = RuntimeError("Voyage API down")
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
-        )
+        mock_bge_client.encode_hybrid.side_effect = RuntimeError("Voyage API down")
 
         chunk = _make_chunk()
         stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
@@ -88,10 +85,9 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
     def test_sparse_embedding_failure_does_not_call_delete(
         self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
     ):
-        """When BGE-M3 sparse encode raises, delete must not have been called."""
+        """When BGE-M3 hybrid encode raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.side_effect = RuntimeError("BGE-M3 timeout")
+        mock_bge_client.encode_hybrid.side_effect = RuntimeError("BGE-M3 timeout")
 
         chunk = _make_chunk()
         stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
@@ -121,10 +117,6 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
     ):
         """When the upsert call to Qdrant raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=4)
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
-        )
         mock_qdrant_client.upsert.side_effect = RuntimeError("Qdrant upsert failed")
 
         chunk = _make_chunk()
@@ -158,10 +150,6 @@ class TestSuccessPathOrderingIsUpsertThenDelete:
         )
         mock_qdrant_client.delete.side_effect = lambda **_: call_order.append("delete")
         mock_qdrant_client.upsert.side_effect = lambda **_: call_order.append("upsert")
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
-        )
 
         chunk = _make_chunk()
         stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
@@ -203,10 +191,6 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
                 MagicMock(id=stale_id_b),
             ],
             None,
-        )
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
         )
 
         chunk = _make_chunk(text="text 0", order=0)
@@ -253,9 +237,10 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
             [MagicMock(id=new_id_0), MagicMock(id=new_id_1)],
             None,
         )
-        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024] * 2)
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}] * 2
+        mock_bge_client.encode_hybrid.return_value = MagicMock(
+            dense_vecs=[[0.2] * 1024] * 2,
+            lexical_weights=[{"indices": [1], "values": [0.5]}] * 2,
+            colbert_vecs=[[[0.1] * 128] * 5] * 2,
         )
 
         chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(2)]

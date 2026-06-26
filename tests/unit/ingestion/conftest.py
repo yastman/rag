@@ -52,6 +52,11 @@ def mock_bge_client():
     )
     client.encode_colbert.return_value = MagicMock(colbert_vecs=[[[0.1] * 128] * 5])
     client.encode_dense.return_value = MagicMock(vectors=[[0.2] * 1024])
+    client.encode_hybrid.return_value = MagicMock(
+        dense_vecs=[[0.2] * 1024],
+        lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
+        colbert_vecs=[[[0.1] * 128] * 5],
+    )
     return client
 
 
@@ -83,8 +88,6 @@ def writer_voyage(mock_qdrant_client, mock_bge_client, mock_voyage):
     ):
         w = QdrantHybridWriter(
             qdrant_url="http://localhost:6333",
-            voyage_api_key="test_key",
-            use_local_embeddings=False,
         )
     # After construction, inject mocks so tests can set side_effects.
     w.client = mock_qdrant_client
@@ -108,7 +111,6 @@ def writer_local(mock_qdrant_client, mock_bge_client):
     ):
         w = QdrantHybridWriter(
             qdrant_url="http://localhost:6333",
-            use_local_embeddings=True,
         )
     w.client = mock_qdrant_client
     w._bge_client = mock_bge_client
