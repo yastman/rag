@@ -134,10 +134,8 @@ class TestPayloadContract:
 def _make_writer_with_mocks(mock_bge_client: MagicMock) -> QdrantHybridWriter:
     """Create QdrantHybridWriter bypassing __init__ and inject mock BGE client."""
     writer = QdrantHybridWriter.__new__(QdrantHybridWriter)
-    writer.use_local_embeddings = True
     writer._bge_client = mock_bge_client
     writer._dense_semaphore = threading.Semaphore(1)
-    writer.voyage = None
     return writer
 
 

@@ -1,6 +1,6 @@
-"""Observability re-exports — Langfuse removed (#2844, #2969).
+"""Observability re-exports — tracing removed (#2844, #2969).
 
-Re-exports the non-Langfuse helpers from :mod:`src.observability` for
+Re-exports the non-tracing helpers from :mod:`src.observability` for
 backward-compatible import paths used across ``telegram_bot``.
 """
 

@@ -1,4 +1,4 @@
-"""Score stubs — Langfuse removed (#2844)."""
+"""Score stubs — tracing removed (#2844)."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ def compute_checkpointer_overhead_proxy_ms(result: dict[str, Any], ainvoke_wall_
 
 
 def score(lf: Any, trace_id: str, *, name: str, value: Any, **kwargs: Any) -> None:
-    """No-op stub — Langfuse removed (#2844)."""
+    """No-op stub — tracing removed (#2844)."""
 
 
 def write_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
-    """No-op stub — Langfuse removed (#2844)."""
+    """No-op stub — tracing removed (#2844)."""
 
 
 def write_history_scores(
@@ -27,4 +27,4 @@ def write_history_scores(
     latency_ms: float = 0.0,
     backend: str = "qdrant",
 ) -> None:
-    """No-op stub — Langfuse removed (#2844)."""
+    """No-op stub — tracing removed (#2844)."""

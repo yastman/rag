@@ -21,7 +21,6 @@ Keep synchronous retrieval strategies available for benchmarks, experiments, and
 | Engine | Method | Typical Latency |
 |--------|--------|-----------------|
 | `BaselineSearchEngine` | Dense only | ~0.5s |
-| `HybridRRFSearchEngine` | Dense + Sparse (RRF) | ~0.7s |
 | `HybridRRFColBERTSearchEngine` | Dense + Sparse + ColBERT rerank | ~1.0s |
 | `DBSFColBERTSearchEngine` | DBSF + ColBERT | ~0.9s |
 

@@ -10,12 +10,12 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 
 | Entrypoint | Role |
 |------------|------|
-| [`main.py`](./main.py) `main()` | CLI entry point: configures logging, initializes Langfuse, starts the bot runtime class with retry |
+| [`main.py`](./main.py) `main()` | CLI entry point: configures logging, initializes observability, starts the bot runtime class with retry |
 | [`bot.py`](./bot.py) `PropertyBot` | Bot lifecycle, handlers, and dispatcher wiring. The class name is legacy; the runtime is domain-adaptable. |
 | [`pipelines/graph_compat.py`](./pipelines/graph_compat.py) `build_graph()` | Imperative graph-compat facade (delegates to `src/runtime/pipeline/`) |
 | [`agents/rag_pipeline.py`](./agents/rag_pipeline.py) | Agent SDK RAG functions (alternative to full LangGraph) |
 | [`pipelines/client.py`](./pipelines/client.py) | Client-direct non-RAG and RAG paths for simple queries |
-| [`preflight.py`](./preflight.py) | Startup health checks (Redis, Qdrant, Langfuse) |
+| [`preflight.py`](./preflight.py) | Startup health checks (Redis, Qdrant, external deps) |
 
 ## Boundaries
 
@@ -27,7 +27,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 - **Qdrant** — vector search (collections: documents, domain catalogs, history)
 - **Redis** — caching, throttling, user context
 - **BGE-M3** — dense + sparse embeddings (local REST API)
-- **Langfuse** — tracing and observability (optional, graceful degradation)
+- Structured logging — observability (optional)
 - **LiveKit** — voice calls (archived; see `archive/voice/`)
 
 ## Focused Checks
@@ -49,8 +49,8 @@ make test-bot-health
 |-----------|---------|
 | `agents/` | Agent SDK tools and RAG pipeline functions |
 | `dialogs/` | Funnel dialogs and filter extraction UI |
-| `integrations/` | Langfuse, embeddings, cache, prompt manager |
-| `middlewares/` | Aiogram middlewares (throttling, errors, Langfuse trace root) |
+| `integrations/` | Embeddings, cache, prompt manager |
+| `middlewares/` | Aiogram middlewares (throttling, errors) |
 | `pipelines/` | Client-direct pipeline entrypoints and graph-compat facade |
 | `services/` | Bot services (Qdrant, cache, query analysis, response generation) |
 

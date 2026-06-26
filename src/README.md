@@ -10,8 +10,7 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 
 | Surface | Entrypoint | Role |
 |---------|------------|------|
-| Ingestion (legacy) | `src.ingestion.service` | High-level ingestion service wrapper |
-| Ingestion (current) | `src.ingestion.unified.cli` | CocoIndex-based unified pipeline CLI |
+| Ingestion (current) | `src.ingestion.unified.cli` | Unified pipeline CLI |
 | Retrieval | `src.retrieval.create_search_engine` | Factory for search engine variants |
 | API | `src.api.main:app` | FastAPI application for HTTP RAG queries |
 | Voice | `src.voice.agent` | LiveKit voice agent (deferred) |
@@ -25,7 +24,7 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 | `config/` | Shared settings, constants, and Qdrant collection policy |
 | `contextualization/` | Claude-based contextualized embedding generation |
 | `core/` | Legacy RAG pipeline orchestrator |
-| `evaluation/` | Smoke tests, RAGAS, AB tests, Langfuse integration |
+| `evaluation/` | Smoke tests, RAGAS, AB tests, tracing integration |
 | `governance/` | Compliance and policy helpers |
 | `ingestion/` | Document parsing, chunking, indexing, unified pipeline |
 | `models/` | BGE-M3 contextualized embedding model wrappers |
@@ -43,11 +42,11 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 ## Related Runtime Services
 
 - **Qdrant** — vector database (used by retrieval, ingestion, and history)
-- **PostgreSQL** — CocoIndex state for unified ingestion
+- **PostgreSQL** — ingestion flow state for unified ingestion
 - **Redis** — caching and rate limiting (used indirectly via `telegram_bot/` services)
 - **BGE-M3 / Voyage** — embedding providers
 - **Docling** — document parsing
-- **Langfuse** — tracing and evaluation (optional)
+- Structured logging — observability
 - **LiveKit** — voice infrastructure (deferred/off by default)
 
 ## Focused Checks

@@ -267,7 +267,7 @@ class BGEM3Client:
 class BGEM3SyncClient:
     """Synchronous HTTP client for BGE-M3 API.
 
-    Used by ingestion pipeline (CocoIndex requires sync operations).
+    Used by ingestion pipeline (sync wrapper for blocking I/O contexts).
     """
 
     def __init__(

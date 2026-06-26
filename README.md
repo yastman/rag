@@ -95,9 +95,7 @@ An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/ag
 - SHA256-based file identity: re-ingesting the same file is a no-op.
 - Idempotent upsert: changed files replace prior chunks by source path. Deleted source files are a known limitation — their chunks remain in Qdrant until manual cleanup.
 - Dead-letter queue (DLQ) for failed documents, with retry and backoff.
-- Docling handles parsing; CocoIndex handles chunking and embedding writes.
-
-See [`docs/INGESTION.md`](docs/INGESTION.md) for operations and schema details.
+- Docling handles parsing; the unified pipeline handles chunking and embedding writes.
 
 ## Adapt to Your Domain
 
@@ -132,8 +130,6 @@ Run the Compose bot stack:
 make docker-bot-up
 ```
 
-For the full setup ladder, environment variables, and troubleshooting, see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
-
 Notable configurable env vars (see `.env.example`): `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`.
 
 ## Validation
@@ -155,13 +151,11 @@ CI runs static/lint guardrails only (Ruff, MyPy, Semgrep, lockfile check). Pytes
 The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The following surfaces are physically in-tree but are **archived/reference** — not part of the active production path, and being trimmed in open issues:
 
 - **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
-- **Langfuse removed** — Langfuse integration was removed; observability is through structured logs and the Loki/Promtail stack.
+
+**Langfuse removed** — Langfuse integration is fully removed. All SDK imports and `@observe` decorators are gone from `src/` and `telegram_bot/`. Observability is through structured logs.
+
 
 The active production adapter is Telegram (`telegram_bot/`). Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
-
-Other honest limits:
-
-- Monitoring (Loki/Promtail/Alertmanager) is local/dev only.
 
 ## Project Map
 
@@ -173,20 +167,12 @@ Other honest limits:
 | Domain tools + agents | [`telegram_bot/agents/`](telegram_bot/agents/), [`telegram_bot/services/`](telegram_bot/services/) |
 | Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
 | Compose runtime | [`compose.yml`](compose.yml), [`DOCKER.md`](DOCKER.md) |
-| Full docs index | [`docs/README.md`](docs/README.md) |
 
 ## Documentation
 
 | Document | Use it for |
 |---|---|
 | [`DOCKER.md`](DOCKER.md) | Compose services, profiles, ports, env, runtime contracts |
-| [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) | Local setup and validation ladder |
-| [`docs/INGESTION.md`](docs/INGESTION.md) | Ingestion operations |
-| [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) | Vector schema and Qdrant operations |
-| [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) | Query, retrieval, and generation flows |
-| [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) | Folder map and high-signal files |
-| [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) | Safe review path before running commands |
-| [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md) | Module ownership map |
 
 ## Direction
 

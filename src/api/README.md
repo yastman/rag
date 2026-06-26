@@ -19,14 +19,14 @@ Exposes a single synchronous RAG endpoint (`POST /query`) and a readiness probe 
 
 - **Thin wrapper**: the API delegates 100 % of RAG logic to `telegram_bot.graph.graph.build_graph()`. No retrieval or generation logic lives here.
 - **No Telegram imports** in request handling. The API is transport-agnostic.
-- Observability parity with the bot: Langfuse traces and scores are written the same way.
+- Observability parity with the bot: traces and scores are written the same way.
 
 ## Runtime Services
 
 - **Qdrant** — vector search
 - **Redis** — semantic cache
 - **BGE-M3** — embeddings
-- **Langfuse** — tracing (optional)
+- Structured logging — observability (optional)
 
 ## Focused Checks
 

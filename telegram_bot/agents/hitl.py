@@ -16,7 +16,7 @@ from langgraph.types import interrupt
 # ---------------------------------------------------------------------------
 # Pending resume trace-id store (#2224)
 # ---------------------------------------------------------------------------
-# A HITL interrupt emits one Langfuse trace; the later ``Command(resume=...)``
+# A HITL interrupt emits one trace; the later ``Command(resume=...)``
 # click emits a *separate* trace. To link them, the bot records the interrupt
 # trace id here (keyed by the checkpointer ``thread_id``) at confirmation time,
 # then reads it back when the resume trace starts and attaches it as
@@ -30,7 +30,7 @@ _PENDING_RESUME_MAX = 1024
 
 
 def set_pending_resume_trace_id(thread_id: str, trace_id: str | None) -> None:
-    """Remember the Langfuse trace id that emitted a HITL interrupt for *thread_id*.
+    """Remember the trace id that emitted a HITL interrupt for *thread_id*.
 
     No-op when either argument is empty so callers can pass
     ``lf.get_current_trace_id()`` directly without guarding (#2224).

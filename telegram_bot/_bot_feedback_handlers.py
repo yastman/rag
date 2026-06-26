@@ -114,7 +114,7 @@ async def handle_feedback(
                 logger.debug("Failed to show dislike reason keyboard", exc_info=True)
             return
 
-    # Feedback acknowledged (Langfuse scoring removed in #2844, #2969).
+    # Feedback acknowledged (scoring removed in #2844, #2969).
     await callback.answer("Спасибо за отзыв!")
 
     # Update keyboard to confirmation

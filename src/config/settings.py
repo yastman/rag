@@ -167,7 +167,6 @@ class Settings:
     def _load_features(self) -> None:
         self.enable_caching = os.getenv("ENABLE_CACHING", "true").lower() == "true"
         self.enable_query_expansion = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
-        self.enable_langfuse = os.getenv("ENABLE_LANGFUSE", "true").lower() == "true"
 
     def _load_quantization_config(self) -> None:
         # Binary: 32x compression, 40x faster (best for dim >= 1024)
@@ -264,7 +263,6 @@ class Settings:
             "batch_size_documents": self.batch_size_documents,
             "enable_caching": self.enable_caching,
             "enable_query_expansion": self.enable_query_expansion,
-            "enable_langfuse": self.enable_langfuse,
             "quantization_mode": self.quantization_mode.value,
             "quantization_rescore": self.quantization_rescore,
             "quantization_oversampling": self.quantization_oversampling,

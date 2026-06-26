@@ -82,6 +82,7 @@ class FileManifest:
         manifest always writes to ``.file_manifest.json``.
         """
         # Primary and legacy manifest paths
+        manifest_dir.mkdir(parents=True, exist_ok=True)
         self._primary_path = manifest_dir / ".file_manifest.json"
         self._legacy_path = manifest_dir / ".gdrive_manifest.json"
         # Effective path used for load/save. Start with primary.

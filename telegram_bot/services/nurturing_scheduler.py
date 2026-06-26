@@ -4,10 +4,6 @@ Uses APScheduler v3 AsyncIOScheduler with:
 - coalesce=True: collapse missed runs into one
 - max_instances=1: prevent concurrent duplicate runs
 - misfire_grace_time=300: 5-min grace window for late execution
-
-TODO(#390): Migrate to APScheduler v4 when stable (currently alpha 4.0.0a6).
-  v4 changes: AsyncScheduler, AnyIO, add_schedule(IntervalTrigger),
-  CoalescePolicy.latest, misfire_grace_time=timedelta(minutes=5).
 """
 
 from __future__ import annotations
@@ -18,16 +14,10 @@ from typing import Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from telegram_bot.observability import get_client, observe, propagate_attributes
+from telegram_bot.observability import propagate_attributes
 
 
 logger = logging.getLogger(__name__)
-
-
-def _update_current_span(lf: Any, **kwargs: Any) -> None:
-    """Update the current Langfuse span when tracing is available."""
-    if lf is not None:
-        lf.update_current_span(**kwargs)
 
 
 class NurturingScheduler:
@@ -93,7 +83,6 @@ class NurturingScheduler:
         """Check if a job is registered."""
         return self._scheduler.get_job(job_id) is not None
 
-    @observe(name="nurturing-scheduler-tick")
     async def run_nurturing_batch(self) -> None:
         """Execute a single nurturing batch (called by scheduler)."""
         try:
@@ -102,36 +91,21 @@ class NurturingScheduler:
         except Exception:
             logger.exception("Nurturing batch failed")
 
-    @observe(name="job-nurturing-dispatch", capture_input=False, capture_output=False)
     async def run_nurturing_dispatch(self) -> None:
-        """Dispatch pending nurturing messages (called by scheduler).
-
-        Wrapped in ``@observe`` (#1663) so the job emits a named Langfuse span
-        tagged ``job/nurturing``. On failure, records ``level='ERROR'`` and
-        re-raises so APScheduler can mark the run as failed.
-        """
-        lf = get_client()
+        """Dispatch pending nurturing messages (called by scheduler)."""
         try:
             with propagate_attributes(tags=["job", "nurturing"]):
                 batch = getattr(self._config, "nurturing_dispatch_batch", 20)
                 count = await self._nurturing.dispatch_pending(batch_size=batch)
                 logger.info("Nurturing dispatch completed: %d messages sent", count)
-        except Exception as exc:
+        except Exception:
             logger.exception("Nurturing dispatch failed")
-            _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
             raise
 
-    @observe(name="job-funnel-rollup", capture_input=False, capture_output=False)
     async def run_funnel_rollup(self) -> None:
-        """Compute and persist daily funnel metrics (called by scheduler).
-
-        Wrapped in ``@observe`` (#1663) so the job emits a named Langfuse span
-        tagged ``job/analytics``. On failure, records ``level='ERROR'`` and
-        re-raises so APScheduler can mark the run as failed.
-        """
+        """Compute and persist daily funnel metrics (called by scheduler)."""
         import datetime as dt
 
-        lf = get_client()
         try:
             with propagate_attributes(tags=["job", "analytics"]):
                 today = dt.date.today()
@@ -139,7 +113,6 @@ class NurturingScheduler:
                 if snapshots:
                     await self._analytics.persist_snapshots(snapshots=snapshots)
                 logger.info("Funnel rollup completed: %d stages", len(snapshots))
-        except Exception as exc:
+        except Exception:
             logger.exception("Funnel rollup failed")
-            _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
             raise

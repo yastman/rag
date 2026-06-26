@@ -126,7 +126,10 @@ class NoopLiveCache:
         return None
 
     async def get_search_results(
-        self, dense_vector: list[float], filters: dict[str, Any] | None
+        self,
+        dense_vector: list[float],
+        filters: dict[str, Any] | None = None,
+        retrieval_config: dict[str, Any] | None = None,
     ) -> None:
         return None
 
@@ -135,6 +138,7 @@ class NoopLiveCache:
         dense_vector: list[float],
         filters: dict[str, Any] | None,
         results: list[dict[str, Any]],
+        retrieval_config: dict[str, Any] | None = None,
     ) -> None:
         return None
 
@@ -414,7 +418,6 @@ async def index_fixture_documents(
         qdrant_url=env.qdrant_url,
         qdrant_api_key=env.qdrant_api_key,
         bge_m3_url=env.bge_m3_url,
-        use_local_embeddings=True,
     )
     total = 0
     try:

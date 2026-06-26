@@ -15,8 +15,6 @@ from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from telegram_bot.observability import get_client, observe
-
 
 logger = logging.getLogger(__name__)
 
@@ -80,13 +78,6 @@ class SessionSummaryWorker:
                 "sessions will be detected but summaries will NOT be generated "
                 "until a real history retriever is wired. See issue #1599."
             )
-            lf = get_client()
-            if lf is not None:
-                lf.score_current_trace(
-                    name="session_summary_history_source_missing",
-                    value=1,
-                    data_type="BOOLEAN",
-                )
         logger.info(
             "SessionSummaryWorker started (poll=%ds, idle=%dmin, history_source=%s)",
             self._poll_interval_sec,
@@ -101,7 +92,6 @@ class SessionSummaryWorker:
             self._scheduler = None
         logger.info("SessionSummaryWorker stopped")
 
-    @observe(name="session-summary-check")
     async def _check_idle_sessions(self) -> int:
         """Scan Redis for idle sessions and process them.
 
@@ -190,29 +180,6 @@ class SessionSummaryWorker:
                 self._poll_interval_sec,
             )
 
-        lf = get_client()
-        if lf is not None:
-            if count > 0:
-                lf.score_current_trace(
-                    name="session_summary_generated", value=1, data_type="BOOLEAN"
-                )
-                lf.score_current_trace(name="session_summary_count", value=float(count))
-            # Honest CRM outcome scores (#2212): "generated" != "written to Kommo".
-            if kommo_written > 0:
-                lf.score_current_trace(
-                    name="session_summary_kommo_written", value=float(kommo_written)
-                )
-            if kommo_skipped > 0:
-                lf.score_current_trace(
-                    name="session_summary_kommo_skipped", value=float(kommo_skipped)
-                )
-            if kommo_failed > 0:
-                lf.score_current_trace(
-                    name="session_summary_kommo_failed", value=float(kommo_failed)
-                )
-            if cap_hit:
-                lf.score_current_trace(name="session_summary_cap_hit", value=1, data_type="BOOLEAN")
-
         return count
 
     async def _get_conversation_history(self, user_id: str) -> list[dict[str, str]]:
@@ -234,31 +201,12 @@ class SessionSummaryWorker:
                 return []
         return []
 
-    @observe(name="session-summary-llm", capture_input=False, capture_output=False)
     async def _generate_summary(self, history: list[dict[str, str]]) -> str:
         """Generate a summary of the conversation via LLM.
 
-        Wrapped in ``@observe`` (#1662) so the auto-traced generation produced
-        by ``langfuse.openai`` becomes a child of a named ``session-summary-llm``
-        span instead of a flat child of the outer ``session-summary-check``
-        span. Curated ``update_current_span`` payloads avoid leaking full
-        conversation history or full summary text into Langfuse.
-
-        On LLM failure the span is recorded at ``level="ERROR"`` with a
-        truncated ``status_message`` and the exception is re-raised; the outer
-        ``_run_loop`` already swallows worker-cycle errors (#1662 plan step 4).
-        Placeholder fallback for empty history is owned by ``#1599``/``#1608``
-        and is intentionally not modified here.
+        On failure the exception is re-raised; the outer ``_run_loop``
+        already swallows worker-cycle errors (#1662 plan step 4).
         """
-        lf = get_client()
-        if lf is not None:
-            lf.update_current_span(
-                input={
-                    "history_turns": len(history),
-                    "model": self._summary_model,
-                }
-            )
-
         messages_text = "\n".join(f"{m['role']}: {m['content']}" for m in history)
         try:
             response = await self._llm.chat.completions.create(
@@ -270,22 +218,9 @@ class SessionSummaryWorker:
                 max_tokens=300,
                 name="session-summary",
             )
-            summary = response.choices[0].message.content or ""
-            if lf is not None:
-                lf.update_current_span(
-                    output={
-                        "summary_len": len(summary),
-                        "summary_preview": summary[:120],
-                    }
-                )
-            return summary
-        except Exception as exc:
+            return response.choices[0].message.content or ""
+        except Exception:
             logger.exception("Summary generation failed for session")
-            if lf is not None:
-                lf.update_current_span(
-                    level="ERROR",
-                    status_message=str(exc)[:200],
-                )
             raise
 
     async def _resolve_lead_id(self, user_id: str) -> int | None:

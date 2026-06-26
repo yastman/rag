@@ -10,7 +10,7 @@ Slice 1 extraction map:
 * ``_bot_state_helpers`` (#1265 PR-1) — apartment-list and catalog-control
   message-id reads (``_state_apartment_results``,
   ``_state_control_message_id``, ``_extract_current_turn``).
-* ``_bot_observability`` (#1265 PR-2) — Langfuse trace metadata builder
+* ``_bot_observability`` (#1265 PR-2) — trace metadata builder
   (``_build_trace_metadata``).
 * ``_bot_error_classification`` (#1265 PR-3) — post-pipeline cleanup and
   checkpointer error guards (``_is_post_pipeline_cleanup_error``,
@@ -80,7 +80,6 @@ from .keyboards.client_keyboard import (
 )
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
-from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
     propagate_attributes,
 )
@@ -270,7 +269,7 @@ def _extract_current_turn(messages: list[Any]) -> list[Any]:
 
 
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
-    """Build shared metadata dict for Langfuse trace (text + voice handlers).
+    """Build shared metadata dict for trace (text + voice handlers).
 
     Re-exported from :mod:`telegram_bot._bot_observability` (#1265 Slice 1 PR-2).
     """
@@ -385,9 +384,6 @@ class PropertyBot:
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
-        # Langfuse context must be outermost to wrap all handlers
-        self.dp.message.outer_middleware(LangfuseContextMiddleware())
-        self.dp.callback_query.outer_middleware(LangfuseContextMiddleware())
         setup_throttling_middleware(self.dp, default_rate=1.0, admin_ids=self.config.admin_ids)
         setup_error_handler(self.dp)
         self.dp.message.outer_middleware(FSMCancelMiddleware())
@@ -464,7 +460,7 @@ class PropertyBot:
 
         self.dp.include_router(create_demo_router())
 
-        # Feedback callbacks (class-method wrappers preserved for Langfuse observe decorators)
+        # Feedback callbacks (class-method wrappers)
         self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
         # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
         self.dp.callback_query(F.data == "fb:done")(self.handle_feedback)

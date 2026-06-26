@@ -1,7 +1,6 @@
 """Query preprocessing for RAG pipeline optimization.
 
-HyDEGenerator uses OpenAI SDK via Langfuse drop-in for auto-tracing.
-QueryPreprocessor is rule-based (no LLM calls).
+HyDEGenerator uses OpenAI SDK via direct client. QueryPreprocessor is rule-based (no LLM calls).
 """
 
 import logging
@@ -9,24 +8,16 @@ import re
 from typing import Any
 
 import openai
-
-
-try:
-    from langfuse.openai import AsyncOpenAI
-except ImportError:  # ponytail: null decorator until observability cleanup (#2983)
-    from openai import AsyncOpenAI  # type: ignore[assignment]
+from openai import AsyncOpenAI
 
 from telegram_bot.integrations.prompt_manager import get_prompt_with_object
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
 
 
-def _update_current_span(lf: Any, **kwargs: Any) -> None:
-    """Update the current Langfuse span when tracing is available."""
-    if lf is not None:
-        lf.update_current_span(**kwargs)
+def _update_current_span(**kwargs: Any) -> None:
+    """No-op stub — tracing removed (#2844)."""
 
 
 _SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = {
@@ -90,14 +81,8 @@ class HyDEGenerator:
             timeout=30.0,
         )
 
-    @observe(name="hyde-generate-document", capture_input=False, capture_output=False)
     async def generate_hypothetical_document(self, query: str) -> str:
         """Generate a hypothetical document that would answer the query.
-
-        Wrapped in ``@observe`` so the auto-traced generation produced by
-        ``langfuse.openai`` becomes a child of a named span (#1661). Curated
-        ``update_current_span`` payloads avoid leaking full prompts/documents
-        into Langfuse.
 
         Args:
             query: User query (typically short, < 5 words)
@@ -105,46 +90,22 @@ class HyDEGenerator:
         Returns:
             Hypothetical document text for embedding
         """
-        lf = get_client()
-        _update_current_span(
-            lf,
-            input={
-                "query_preview": query[:120],
-                "model": self.model,
-            },
-        )
-
         try:
-            system_prompt, prompt_obj = get_prompt_with_object(
+            system_prompt, _prompt_obj = get_prompt_with_object(
                 "hyde", fallback=self.HYDE_SYSTEM_PROMPT
             )
-            create_kwargs: dict[str, Any] = {
-                "model": self.model,
-                "messages": [
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": query},
                 ],
-                "temperature": 0.7,
-                "max_tokens": 200,
-                "name": "hyde-generate",  # langfuse kwarg
-            }
-            if prompt_obj is not None:
-                # Link generation observation to its Langfuse Prompt entry (#1666).
-                create_kwargs["langfuse_prompt"] = prompt_obj
-            response = await self.client.chat.completions.create(  # type: ignore[call-overload]
-                **create_kwargs,
+                temperature=0.7,
+                max_tokens=200,
             )
 
             hypothetical_doc = response.choices[0].message.content or query
             logger.info("HyDE generated doc for '%s': %s...", query, hypothetical_doc[:100])
-
-            _update_current_span(
-                lf,
-                output={
-                    "document_preview": hypothetical_doc[:200],
-                    "tokens_estimated": len(hypothetical_doc.split()),
-                },
-            )
             return hypothetical_doc
 
         except (
@@ -153,19 +114,9 @@ class HyDEGenerator:
             openai.APITimeoutError,
         ) as e:
             logger.error("HyDE generation API error: %s", e)
-            _update_current_span(
-                lf,
-                level="ERROR",
-                status_message=f"HyDE API error: {str(e)[:200]}",
-            )
             return query
         except Exception as e:
             logger.error("HyDE generation failed: %s", e)
-            _update_current_span(
-                lf,
-                level="ERROR",
-                status_message=str(e)[:200],
-            )
             return query
 
     async def close(self):

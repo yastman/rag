@@ -34,7 +34,7 @@ def build_history_graph(
 
     Args:
         history_service: HistoryService instance (Qdrant + BGE-M3).
-        llm: LLM instance (langfuse.openai.AsyncOpenAI). Falls back to GraphConfig.create_llm().
+        llm: LLM instance (AsyncOpenAI). Falls back to GraphConfig.create_llm().
         guard_mode: Content filter mode — "hard" (block), "soft" (flag), "log" (log only).
         content_filter_enabled: If False, skip guard node entirely (#432).
         relevance_threshold: Min similarity score to consider a result relevant (default 0.7; #433).

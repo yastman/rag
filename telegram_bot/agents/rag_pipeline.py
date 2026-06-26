@@ -17,13 +17,11 @@ Orchestrator: rag_pipeline() wires steps with rewrite loop.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import time
 from typing import Any, cast
 
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
-from telegram_bot.observability import get_client, observe
 from telegram_bot.pipelines.state_contract import PreAgentStateContract
 from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
@@ -100,7 +98,6 @@ async def _execute_qdrant_retrieval(
     return results, search_meta, colbert_used
 
 
-@observe(name="retrieval.initial", capture_input=False, capture_output=False)
 async def _run_initial_retrieval(
     *,
     qdrant: Any,
@@ -124,7 +121,6 @@ async def _run_initial_retrieval(
     )
 
 
-@observe(name="retrieval.relax", capture_input=False, capture_output=False)
 async def _run_relaxed_retrieval(
     *,
     qdrant: Any,
@@ -153,7 +149,6 @@ async def _run_relaxed_retrieval(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="cache-check", capture_input=False, capture_output=False)
 async def _cache_check(
     query: str,
     query_type: str,
@@ -175,15 +170,6 @@ async def _cache_check(
     Returns dict with cache_hit, cached_response, query_embedding, sparse_embedding,
     colbert_query, and latency.
     """
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "query_type": query_type,
-        }
-    )
 
     start = time.perf_counter()
 
@@ -227,15 +213,6 @@ async def _cache_check(
             embedding_error_type = type(exc).__name__
             logger.error("Embedding failed: %s: %s", embedding_error_type, exc)
             latency = time.perf_counter() - start
-            lf.update_current_span(
-                level="ERROR",
-                output={
-                    "embedding_error": True,
-                    "embedding_error_type": embedding_error_type,
-                    "error_message": str(exc)[:200],
-                    "duration_ms": round(latency * 1000, 1),
-                },
-            )
             return {
                 "cache_hit": False,
                 "cached_response": None,
@@ -271,14 +248,6 @@ async def _cache_check(
 
     if hit:
         logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
-        lf.update_current_span(
-            output={
-                "cache_hit": True,
-                "embeddings_cache_hit": embeddings_cache_hit,
-                "hit_layer": "semantic",
-                "duration_ms": round(latency * 1000, 1),
-            }
-        )
         return {
             "cache_hit": True,
             "cached_response": cached,
@@ -340,15 +309,6 @@ async def _cache_check(
                 logger.debug("ColBERT query encode failed (non-critical), skipping")
 
     logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
-    lf.update_current_span(
-        output={
-            "cache_hit": False,
-            "embeddings_cache_hit": embeddings_cache_hit,
-            "hit_layer": "none",
-            "semantic_cache_prechecked": semantic_cache_already_checked,
-            "duration_ms": round(latency * 1000, 1),
-        }
-    )
     return {
         "cache_hit": False,
         "cached_response": None,
@@ -367,7 +327,6 @@ async def _cache_check(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="hybrid-retrieve", capture_input=False, capture_output=False)
 async def _hybrid_retrieve(
     query: str,
     query_embedding: list[float] | None,
@@ -387,16 +346,6 @@ async def _hybrid_retrieve(
 
     Returns dict with documents, search_results_count, sparse_embedding, and latency.
     """
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "top_k": top_k,
-            "topic_hint": topic_hint,
-        }
-    )
 
     dense_vector = query_embedding
     # Initialize with pre-computed sparse from _cache_check to avoid redundant BGE-M3 call (#571)
@@ -500,9 +449,7 @@ async def _hybrid_retrieve(
     relaxed_filters = dict(base_filters) if base_filters else None
     initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
     final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
-    initial_results_count: int | None = None
     retrieval_relaxed_from_topic_filter = False
-    retrieval_relax_stage: str | None = None
     qdrant_search_attempts = 0
     dense_weight, sparse_weight = _QUERY_PREPROCESSOR.get_rrf_weights(query)
     if prefer_faq_doc_type and topic_hint:
@@ -520,20 +467,6 @@ async def _hybrid_retrieve(
         latency = time.perf_counter() - start
         logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
         cached_ctx = _build_retrieved_context(cached_results)
-        lf.update_current_span(
-            output={
-                "results_count": len(cached_results),
-                "search_cache_hit": True,
-                "duration_ms": round(latency * 1000, 1),
-                "initial_filters": initial_filters,
-                "final_filters": initial_filters,
-                "eval_query": query[:2000],
-                "eval_docs": "\n\n".join(
-                    f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
-                    for d in cached_ctx
-                ),
-            }
-        )
         return {
             "documents": cached_results,
             "search_results_count": len(cached_results),
@@ -571,20 +504,11 @@ async def _hybrid_retrieve(
     )
     colbert_search_used = colbert_search_used or colbert_used
     qdrant_search_attempts += 1
-    initial_results_count = len(results)
 
     if active_filters and len(results) < 3 and active_filters != relaxed_filters:
         record_pipeline_event("topic_filter_fallback")
         retrieval_relaxed_from_topic_filter = True
         fallback_filters = relaxed_filters if relaxed_filters is not None else None
-        if prefer_faq_doc_type:
-            retrieval_relax_stage = (
-                "topic_and_doc_type_to_topic"
-                if fallback_filters is not None
-                else "topic_and_doc_type_to_none"
-            )
-        else:
-            retrieval_relax_stage = "topic_to_user_filters" if fallback_filters else "topic_to_none"
         results, search_meta, colbert_used = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
@@ -600,9 +524,6 @@ async def _hybrid_retrieve(
         final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
 
     if relaxed_filters is not None and len(results) < 3 and final_filters != base_filters:
-        retrieval_relax_stage = (
-            "topic_to_user_filters" if base_filters is not None else "topic_to_none"
-        )
         results, search_meta, colbert_used = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
@@ -634,31 +555,7 @@ async def _hybrid_retrieve(
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
 
-    scores = [d.get("score", 0) for d in results if isinstance(d, dict)]
     result_ctx = _build_retrieved_context(results)
-    lf.update_current_span(
-        output={
-            "results_count": len(results),
-            "top_score": round(scores[0], 4) if scores else None,
-            "min_score": round(scores[-1], 4) if scores else None,
-            "search_cache_hit": False,
-            "retrieval_backend_error": search_meta.get("backend_error", False),
-            "retrieval_error_type": search_meta.get("error_type"),
-            "duration_ms": round(latency * 1000, 1),
-            "initial_filters": initial_filters,
-            "final_filters": final_filters,
-            "initial_results_count": initial_results_count,
-            "retrieval_relaxed_from_topic_filter": retrieval_relaxed_from_topic_filter,
-            "retrieval_relax_stage": retrieval_relax_stage,
-            "qdrant_search_attempts": qdrant_search_attempts,
-            "rrf_dense_weight": dense_weight,
-            "rrf_sparse_weight": sparse_weight,
-            "eval_query": query[:2000],
-            "eval_docs": "\n\n".join(
-                f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in result_ctx
-            ),
-        }
-    )
 
     return {
         "documents": results,
@@ -684,7 +581,6 @@ async def _hybrid_retrieve(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="grade-documents", as_type="evaluator")
 async def _grade_documents(
     documents: list[dict[str, Any]],
     prev_confidence: float,
@@ -763,7 +659,6 @@ async def _grade_documents(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rerank")
 async def _rerank(
     query: str,
     documents: list[dict[str, Any]],
@@ -795,12 +690,8 @@ async def _rerank(
         if not rerank_applied:
             # No reranker path: sort and trim here
             reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
-    except Exception as e:
+    except Exception:
         logger.exception("rerank: ColBERT failed, falling back to score sort")
-        get_client().update_current_span(
-            level="ERROR",
-            status_message=f"ColBERT rerank failed: {str(e)[:200]}",
-        )
         reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
         rerank_applied = False
         rerank_cache_hit = False
@@ -834,7 +725,6 @@ async def _rerank(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="query-rewrite")
 async def _rewrite_query(
     query: str,
     rewrite_count: int,
@@ -875,12 +765,8 @@ async def _rewrite_query(
         if llm is None:
             llm = config.create_llm()
         rewritten, effective, rewrite_actual_model = await rewrite_query_via_llm(query, llm=llm)
-    except Exception as e:
+    except Exception:
         logger.exception("rewrite: LLM rewrite failed, keeping original query")
-        get_client().update_current_span(
-            level="ERROR",
-            status_message=f"Rewrite LLM failed: {str(e)[:200]}",
-        )
         rewritten = query
         effective = False
         rewrite_actual_model = "fallback"
@@ -908,7 +794,6 @@ async def _rewrite_query(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="cache-store", capture_input=False, capture_output=False)
 async def _cache_store(
     query: str,
     response: str,
@@ -925,16 +810,6 @@ async def _cache_store(
 
     Returns dict with latency update.
     """
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "response_length": len(response),
-            "search_results_count": search_results_count,
-        }
-    )
     start = time.perf_counter()
 
     stored_semantic = False
@@ -985,13 +860,6 @@ async def _cache_store(
             logger.info("cache_store: stored=semantic (type=%s)", query_type)
 
     latency = time.perf_counter() - start
-    lf.update_current_span(
-        output={
-            "stored": stored_semantic,
-            "stored_semantic": stored_semantic,
-            "duration_ms": round(latency * 1000, 1),
-        }
-    )
 
     return {
         "stored_semantic": stored_semantic,
@@ -1004,7 +872,6 @@ async def _cache_store(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-pipeline", capture_input=False, capture_output=False)
 async def rag_pipeline(
     query: str,
     *,
@@ -1045,17 +912,6 @@ async def rag_pipeline(
     # cache_key: use original user query for semantic cache so repeated queries hit
     # even when the agent reformulates them. Falls back to query when not provided.
     cache_key = original_query or query
-
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "original_query_preview": cache_key[:120] if cache_key != query else None,
-            "user_id": user_id,
-            "session_id": session_id,
-            "query_type": query_type,
-        }
-    )
 
     latency_stages: dict[str, float] = {}
     rewrite_count = 0
@@ -1274,14 +1130,6 @@ async def rag_pipeline(
             )
             result["skip_rewrite"] = skip_rewrite
             result["semantic_cache_already_checked"] = semantic_cache_already_checked
-            lf.update_current_span(
-                output={
-                    "cache_hit": False,
-                    "documents_count": len(final_docs),
-                    "rerank_applied": rerank_applied,
-                    "rewrite_count": rewrite_count,
-                }
-            )
             return result
 
         # Check if we should rewrite
@@ -1374,15 +1222,6 @@ async def rag_pipeline(
     )
     result["skip_rewrite"] = skip_rewrite
     result["semantic_cache_already_checked"] = semantic_cache_already_checked
-    lf.update_current_span(
-        output={
-            "cache_hit": False,
-            "documents_count": len(final_docs),
-            "rerank_applied": rerank_applied,
-            "rewrite_count": rewrite_count,
-            "fallback": True,
-        }
-    )
     return result
 
 

@@ -4,7 +4,7 @@ Two main actions:
 - get_daily_plan(): Morning briefing — leads + tasks + stale deals → action plan
 - get_deal_and_task_tips(): Tips for stale deals + task prioritization
 
-Prompts are managed in Langfuse; fallbacks are hardcoded for reliability.
+Prompts are managed locally; fallbacks are hardcoded for reliability.
 LLM responses use HTML formatting (not Markdown) for Telegram parse_mode=HTML.
 """
 
@@ -18,7 +18,6 @@ import time
 from typing import Any
 
 from telegram_bot.integrations.prompt_manager import get_prompt
-from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +26,7 @@ _BRIEFING_CACHE_TTL = 600  # 10 minutes
 _STALE_THRESHOLD_SECONDS = 5 * 86400  # 5 days
 _MAX_TOKENS = 800
 
-# Langfuse prompt names
+# Prompt names
 _PROMPT_DAILY_PLAN = "advisor-daily-plan"
 _PROMPT_DEAL_TIPS = "advisor-deal-tips"
 
@@ -77,7 +76,7 @@ def _format_days_ago(unix_ts: int | None, now: int) -> str:
     return f"{days} дн. назад"
 
 
-# Fallback prompts (used when Langfuse unavailable)
+# Fallback prompts
 _FALLBACK_DAILY_PLAN = (
     "Ты — AI-помощник менеджера по продажам недвижимости в Болгарии.\n"
     "Сегодня: {{today}}.\n\n"
@@ -261,7 +260,6 @@ class AIAdvisorService:
 
         return "\n\n".join(sections)
 
-    @observe(name="advisor-llm-call", capture_input=False, capture_output=False)
     async def _call_llm(self, system_prompt: str, user_text: str) -> str:
         """Call LLM with system+user prompt, return response text."""
         try:

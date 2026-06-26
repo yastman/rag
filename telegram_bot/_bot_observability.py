@@ -1,7 +1,7 @@
 """Observability helpers extracted from ``telegram_bot/bot.py`` (#1265 Slice 1 PR-2).
 
 * :func:`_build_trace_metadata` — pure dict transform that flattens the
-  per-query graph state into the metadata payload Langfuse expects.
+  per-query graph state into the metadata payload.
 
 The function body is byte-for-byte the body that previously lived in
 ``bot.py``; ``telegram_bot/bot.py`` re-exports it via a thin wrapper so
@@ -19,7 +19,7 @@ from typing import Any
 
 
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
-    """Build shared metadata dict for Langfuse trace (text + voice handlers)."""
+    """Build shared metadata dict for trace (text + voice handlers)."""
     return {
         "input_type": result.get("input_type", "text"),
         "query_type": result.get("query_type", ""),

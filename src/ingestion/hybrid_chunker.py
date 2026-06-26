@@ -4,8 +4,7 @@ The legacy :class:`~src.ingestion.chunker.DocumentChunker` exposes
 ``FIXED_SIZE`` / ``SLIDING_WINDOW`` strategies that the project itself
 marked deprecated in favour of Docling's HybridChunker (issue #1235).
 This module gives downstream code a stable, tested entry point so the
-follow-up call-site migrations (``cocoindex_flow.py``,
-``core/pipeline.py``) become mechanical edits.
+follow-up call-site migrations (``core/pipeline.py``) become mechanical edits.
 
 The adapter intentionally does **not** delete the legacy chunker — that
 removal is gated by the contract test

@@ -20,17 +20,6 @@ import logging
 from dataclasses import dataclass
 from typing import Literal
 
-
-try:
-    from langfuse import get_client, observe
-except ImportError:  # ponytail: null decorator until observability cleanup (#2983)
-
-    def observe(func=None, **kwargs):
-        if func is not None:
-            return func
-        return lambda f: f
-
-    get_client = None  # type: ignore[assignment]
 from tenacity import (
     before_sleep_log,
     retry,
@@ -155,7 +144,6 @@ class ContextualizedEmbeddingService:
         """Get configured output dimension."""
         return self._output_dimension
 
-    @observe(name="voyage-contextualized-embed-documents", as_type="generation")
     @retry(
         retry=retry_if_exception(_is_voyage_retryable),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -185,17 +173,7 @@ class ContextualizedEmbeddingService:
         # Validate inputs
         self._validate_inputs(document_chunks)
 
-        # Update Langfuse with input metadata
         total_chunks = sum(len(doc) for doc in document_chunks)
-        get_client().update_current_generation(
-            model=self.MODEL_NAME,
-            input={
-                "documents_count": len(document_chunks),
-                "total_chunks": total_chunks,
-                "output_dimension": self._output_dimension,
-            },
-            metadata={"model": self.MODEL_NAME},
-        )
 
         if not document_chunks:
             return ContextualizedEmbeddingResult(
@@ -223,16 +201,6 @@ class ContextualizedEmbeddingService:
         # Get token usage
         total_tokens = getattr(response, "total_tokens", 0)
 
-        # Update Langfuse with output metadata
-        get_client().update_current_generation(
-            usage_details={"input": total_tokens},
-            output={
-                "embeddings_count": len(all_embeddings),
-                "dimensions": self._output_dimension,
-            },
-            metadata={"model": self.MODEL_NAME},
-        )
-
         logger.info(
             f"Contextualized {len(document_chunks)} documents ({total_chunks} chunks) "
             f"with {self.MODEL_NAME}"
@@ -244,7 +212,6 @@ class ContextualizedEmbeddingService:
             chunks_per_document=chunks_per_doc,
         )
 
-    @observe(name="voyage-contextualized-embed-query", as_type="generation")
     @retry(
         retry=retry_if_exception(_is_voyage_retryable),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -262,13 +229,6 @@ class ContextualizedEmbeddingService:
         Returns:
             Single embedding vector
         """
-        # Update Langfuse with input metadata
-        get_client().update_current_generation(
-            model=self.MODEL_NAME,
-            input={"query": query[:200], "output_dimension": self._output_dimension},
-            metadata={"model": self.MODEL_NAME},
-        )
-
         # Wrap query in expected format: [[query]]
         response = await asyncio.to_thread(
             self._client.contextualized_embed,
@@ -280,18 +240,9 @@ class ContextualizedEmbeddingService:
         )
 
         embedding: list[float] = response.results[0].embeddings[0]  # type: ignore[assignment]
-        total_tokens = getattr(response, "total_tokens", 0)
-
-        # Update Langfuse with output metadata
-        get_client().update_current_generation(
-            usage_details={"input": total_tokens},
-            output={"dimensions": len(embedding)},
-            metadata={"model": self.MODEL_NAME},
-        )
 
         return embedding
 
-    @observe(name="voyage-contextualized-embed-queries", as_type="generation")
     @retry(
         retry=retry_if_exception(_is_voyage_retryable),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -313,16 +264,6 @@ class ContextualizedEmbeddingService:
         if not queries:
             return []
 
-        # Update Langfuse with input metadata
-        get_client().update_current_generation(
-            model=self.MODEL_NAME,
-            input={
-                "queries_count": len(queries),
-                "output_dimension": self._output_dimension,
-            },
-            metadata={"model": self.MODEL_NAME},
-        )
-
         # Wrap each query in its own list: [["q1"], ["q2"], ...]
         inputs = [[q] for q in queries]
 
@@ -339,17 +280,6 @@ class ContextualizedEmbeddingService:
             [float(value) for value in result.embeddings[0]]
             for result in response.results  # type: ignore[misc]
         ]
-        total_tokens = getattr(response, "total_tokens", 0)
-
-        # Update Langfuse with output metadata
-        get_client().update_current_generation(
-            usage_details={"input": total_tokens},
-            output={
-                "embeddings_count": len(embeddings),
-                "dimensions": self._output_dimension,
-            },
-            metadata={"model": self.MODEL_NAME},
-        )
 
         logger.info(f"Embedded {len(queries)} queries with {self.MODEL_NAME}")
 

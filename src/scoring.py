@@ -1,11 +1,13 @@
 """Backward-compat shim — canonical implementation is in src/observability/scores.py.
 
-Langfuse score-writing utilities shared by bot handler and RAG agent tool (#310).
+Score-writing utilities shared by bot handler and RAG agent tool (#310).
 Moved to src/observability/scores.py as part of the observability package consolidation.
 This shim keeps the src.scoring import surface working (#2711).
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from src.observability.scores import (
     compute_checkpointer_overhead_proxy_ms,
@@ -15,9 +17,19 @@ from src.observability.scores import (
 )
 
 
+def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
+    """No-op stub — tracing removed (#2844)."""
+
+
+def write_crm_scores(lf: Any, messages: list, *, trace_id: str = "") -> None:
+    """No-op stub — tracing removed (#2844)."""
+
+
 __all__ = [
     "compute_checkpointer_overhead_proxy_ms",
     "score",
+    "write_crm_scores",
     "write_history_scores",
+    "write_langfuse_scores",
     "write_scores",
 ]

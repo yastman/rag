@@ -95,7 +95,7 @@ def build_system_prompt_with_manager(
 ) -> str:
     """Build system prompt from local contract templates.
 
-    Formerly routed through Langfuse prompt manager for A/B experiments;
+    Formerly routed through a remote prompt manager for A/B experiments;
     now delegates directly to ``build_system_prompt`` (#2628).
     """
     return build_system_prompt(style, difficulty, domain)

@@ -11,7 +11,7 @@
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
 
-"""Unified ingestion tracing helpers — Langfuse removed (#2844, #2951, #2969)."""
+"""Unified ingestion tracing helpers — tracing removed (#2844, #2951, #2969)."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ __all__ = [
 
 
 def flush_ingestion_traces() -> None:
-    """No-op — Langfuse removed (#2844, #2951)."""
+    """No-op — tracing removed (#2844, #2951)."""
 
 
 def ingestion_session_id(command: str) -> str:
@@ -44,7 +44,7 @@ def update_ingestion_trace(
     metadata: dict[str, Any] | None = None,
     trace_id: str | None = None,
 ) -> None:
-    """No-op — Langfuse removed (#2844, #2951, #2969)."""
+    """No-op — tracing removed (#2844, #2951, #2969)."""
 
 
 def try_update_ingestion_trace(
