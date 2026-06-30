@@ -135,7 +135,7 @@ Notable configurable env vars (see `.env.example`): `QDRANT_QUANTIZATION_MODE`, 
 ## Validation
 
 ```bash
-make check          # Ruff lint + MyPy strict type checking
+make check          # Ruff lint + MyPy type checking (non-strict; disallow_untyped_defs=false)
 make test-core      # Fast core gate (~91 tests, ~8s) — run first for any src/core or src/runtime change
 make test           # Broader fast gate (unit + graph paths) — run for adapter/service changes
 make e2e-core-live  # Golden E2E: indexes fixture corpus, runs full spine through run_assistant_request
