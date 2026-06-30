@@ -1,83 +1,75 @@
 """E2E testing configuration."""
 
 import os
-from dataclasses import dataclass, field
 
-from dotenv import load_dotenv
-
-
-load_dotenv()
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclass
-class E2EConfig:
+class E2EConfig(BaseSettings):
     """Configuration for E2E testing."""
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
     # Telegram Userbot (from my.telegram.org)
-    telegram_api_id: int = field(default_factory=lambda: int(os.getenv("TELEGRAM_API_ID", "0")))
-    telegram_api_hash: str = field(default_factory=lambda: os.getenv("TELEGRAM_API_HASH", ""))
+    telegram_api_id: int = Field(default=0, alias="TELEGRAM_API_ID")
+    telegram_api_hash: str = Field(default="", alias="TELEGRAM_API_HASH")
     telegram_session: str = "e2e_tester"
 
     # Target bot
-    bot_username: str = field(
-        default_factory=lambda: os.getenv("E2E_BOT_USERNAME", "@test_your_bot")
-    )
+    bot_username: str = Field(default="@test_your_bot", alias="E2E_BOT_USERNAME")
 
     # Timeouts
     response_timeout: int = 60  # Streaming can be slow
     between_tests_delay: float = 2.0  # Rate limiting
 
     # Judge provider and credentials
-    judge_provider: str = field(default_factory=lambda: os.getenv("E2E_JUDGE_PROVIDER", "litellm"))
-    judge_api_key: str = field(
-        default_factory=lambda: os.getenv(
-            "E2E_JUDGE_API_KEY", os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
-        )
+    judge_provider: str = Field(default="litellm", alias="E2E_JUDGE_PROVIDER")
+    judge_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("E2E_JUDGE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY"),
     )
-    judge_base_url: str = field(
-        default_factory=lambda: os.getenv("E2E_JUDGE_BASE_URL", os.getenv("LLM_BASE_URL", ""))
+    judge_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("E2E_JUDGE_BASE_URL", "LLM_BASE_URL"),
     )
-    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
-    judge_model: str = field(
-        default_factory=lambda: os.getenv("E2E_JUDGE_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini"))
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+    judge_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("E2E_JUDGE_MODEL", "LLM_MODEL"),
     )
 
     # Thresholds
     pass_score: float = 6.0
 
     # Canonical Qdrant collection for current corpus
-    test_collection: str = field(
-        default_factory=lambda: os.getenv("E2E_COLLECTION_NAME", "gdrive_documents_bge")
-    )
+    test_collection: str = Field(default="gdrive_documents_bge", alias="E2E_COLLECTION_NAME")
 
     # Qdrant preflight configuration
-    qdrant_url: str = field(
-        default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333")
+    qdrant_url: str = Field(default="http://localhost:6333", alias="QDRANT_URL")
+    qdrant_doc_collection: str = Field(
+        default="gdrive_documents_bge", alias="E2E_QDRANT_DOC_COLLECTION"
     )
-    qdrant_doc_collection: str = field(
-        default_factory=lambda: os.getenv("E2E_QDRANT_DOC_COLLECTION", "gdrive_documents_bge")
+    qdrant_apartment_collection: str = Field(
+        default="apartments", alias="E2E_QDRANT_APARTMENT_COLLECTION"
     )
-    qdrant_apartment_collection: str = field(
-        default_factory=lambda: os.getenv("E2E_QDRANT_APARTMENT_COLLECTION", "apartments")
-    )
-    qdrant_min_doc_points: int = field(
-        default_factory=lambda: int(os.getenv("E2E_QDRANT_MIN_DOC_POINTS", "1"))
-    )
-    qdrant_min_apartment_points: int = field(
-        default_factory=lambda: int(os.getenv("E2E_QDRANT_MIN_APARTMENT_POINTS", "1"))
-    )
-    qdrant_doc_vectors: str = field(
-        default_factory=lambda: os.getenv("E2E_QDRANT_DOC_VECTORS", "dense,colbert")
-    )
-    qdrant_apartment_vectors: str = field(
-        default_factory=lambda: os.getenv("E2E_QDRANT_APARTMENT_VECTORS", "dense,colbert")
+    qdrant_min_doc_points: int = Field(default=1, alias="E2E_QDRANT_MIN_DOC_POINTS")
+    qdrant_min_apartment_points: int = Field(default=1, alias="E2E_QDRANT_MIN_APARTMENT_POINTS")
+    qdrant_doc_vectors: str = Field(default="dense,colbert", alias="E2E_QDRANT_DOC_VECTORS")
+    qdrant_apartment_vectors: str = Field(
+        default="dense,colbert", alias="E2E_QDRANT_APARTMENT_VECTORS"
     )
 
     # Reports
     reports_dir: str = "reports"
 
     # Voice note fixture path for voice delivery scenarios
-    voice_note_path: str = field(default_factory=lambda: os.getenv("E2E_VOICE_NOTE_PATH", ""))
+    voice_note_path: str = Field(default="", alias="E2E_VOICE_NOTE_PATH")
 
     def validate(self, *, judge_required: bool = True) -> list[str]:
         """Validate configuration, return list of errors."""
