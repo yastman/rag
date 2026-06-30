@@ -6,7 +6,7 @@ If cosine_similarity(current, previous) > 0.7 AND time_delta < 60s → implicit_
 
 from __future__ import annotations
 
-import math
+import numpy as np
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -14,12 +14,13 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
     Returns a value in [-1, 1] where 1 means identical direction.
     """
-    dot = sum(x * y for x, y in zip(a, b, strict=True))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
+    va = np.array(a, dtype=np.float64)
+    vb = np.array(b, dtype=np.float64)
+    norm_a = np.linalg.norm(va)
+    norm_b = np.linalg.norm(vb)
     if norm_a == 0.0 or norm_b == 0.0:
         return 0.0
-    return dot / (norm_a * norm_b)
+    return float(np.dot(va, vb) / (norm_a * norm_b))
 
 
 def is_reformulation(
