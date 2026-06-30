@@ -188,4 +188,3 @@ model load).
 |---|---|
 | [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) | Full local setup and validation ladder |
 | [`docs/INGESTION.md`](docs/INGESTION.md) | Ingestion operations |
-| [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) | Vector schema and Qdrant operations |

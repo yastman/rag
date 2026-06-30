@@ -35,5 +35,3 @@ uv run pytest tests/integration/test_graph_paths.py -n auto --dist=worksteal -q
 ## See Also
 
 - [`../README.md`](../README.md) — Telegram transport layer
-- [`../graph/README.md`](../graph/README.md) — Full LangGraph pipeline
-- [`../../docs/HITL.md`](../../docs/HITL.md) — Human-in-the-loop design
