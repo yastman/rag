@@ -13,17 +13,26 @@ Provides service factories for LLM, embeddings, and cache thresholds.
 removing the duplicated manual getter/setter pairs. The constructor still
 accepts legacy flat kwargs so existing call-sites like
 ``GraphConfig(llm_model="x", bge_m3_url="y")`` continue to work.
+#card_176c964330b6: sub-configs migrated to BaseModel; env-loading via
+pydantic-settings BaseSettings (_GraphEnvSettings), dropping manual os.getenv
+casting in from_env().
 """
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from pydantic import AliasChoices, BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-@dataclass
-class LlmConfig:
+
+# ---------------------------------------------------------------------------
+# Sub-config models (pydantic BaseModel — validated, no env-loading)
+# ---------------------------------------------------------------------------
+
+
+class LlmConfig(BaseModel):
     """LLM provider and generation settings."""
 
     # Deprecated compatibility field; LiteLLM SDK routing no longer uses a proxy base URL.
@@ -39,6 +48,8 @@ class LlmConfig:
     disable_reasoning: bool | None = None  # True/False (zai-glm-4.7)
     rewrite_model: str = "gpt-4o-mini"
     rewrite_max_tokens: int = 64
+
+    model_config = {"arbitrary_types_allowed": True}
 
     def get_reasoning_kwargs(self) -> dict[str, Any]:
         """Return SDK-shaped reasoning params for chat.completions.create()."""
@@ -57,8 +68,7 @@ class LlmConfig:
         return kwargs
 
 
-@dataclass
-class RetrievalConfig:
+class RetrievalConfig(BaseModel):
     """Qdrant, BGE-M3, search, and rerank settings."""
 
     bge_m3_url: str = "http://bge-m3:8000"
@@ -86,11 +96,10 @@ class RetrievalConfig:
     max_context_tokens: int = 8000
 
 
-@dataclass
-class CacheConfig:
+class CacheConfig(BaseModel):
     """Redis cache thresholds and TTLs."""
 
-    cache_thresholds: dict[str, float] = field(
+    cache_thresholds: dict[str, float] = Field(
         default_factory=lambda: {
             "FAQ": 0.12,
             "ENTITY": 0.10,
@@ -98,7 +107,7 @@ class CacheConfig:
             "STRUCTURED": 0.05,
         }
     )
-    cache_ttl: dict[str, int] = field(
+    cache_ttl: dict[str, int] = Field(
         default_factory=lambda: {
             "FAQ": 86400,  # 24h
             "ENTITY": 3600,  # 1h
@@ -108,16 +117,14 @@ class CacheConfig:
     )
 
 
-@dataclass
-class DomainConfig:
+class DomainConfig(BaseModel):
     """Domain identity and language settings."""
 
     domain: str = "недвижимость"
     domain_language: str = "ru"
 
 
-@dataclass
-class ResponseConfig:
+class ResponseConfig(BaseModel):
     """Response style, sources, streaming, and classifier settings."""
 
     # Response length control rollout (#129)
@@ -132,8 +139,7 @@ class ResponseConfig:
     classifier_mode: str = "regex"
 
 
-@dataclass
-class VoiceConfig:
+class VoiceConfig(BaseModel):
     """Voice transcription settings."""
 
     # Voice transcription (#151)
@@ -142,8 +148,7 @@ class VoiceConfig:
     stt_model: str = "whisper"
 
 
-@dataclass
-class SecurityConfig:
+class SecurityConfig(BaseModel):
     """Guard and content filter settings."""
 
     # Prompt injection defense (#226)
@@ -152,8 +157,204 @@ class SecurityConfig:
     content_filter_enabled: bool = True
 
 
+# ---------------------------------------------------------------------------
+# Env-loading settings (pydantic-settings) — used only by from_env()
+# ---------------------------------------------------------------------------
+
+
+class _GraphEnvSettings(BaseSettings):
+    """Flat env-var loader for GraphConfig.from_env().
+
+    Reads all environment variables that GraphConfig cares about,
+    with proper type coercion handled by pydantic-settings.
+    Not part of the public API — use GraphConfig.from_env().
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    # LLM
+    llm_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("llm_api_key", "LLM_API_KEY", "OPENAI_API_KEY"),
+    )
+    llm_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("llm_model", "LLM_MODEL"),
+    )
+    llm_temperature: float = Field(
+        default=0.7,
+        validation_alias=AliasChoices("llm_temperature", "LLM_TEMPERATURE"),
+    )
+    llm_max_tokens: int = Field(
+        default=4096,
+        validation_alias=AliasChoices("llm_max_tokens", "LLM_MAX_TOKENS"),
+    )
+    generate_max_tokens: int = Field(
+        default=1024,
+        validation_alias=AliasChoices("generate_max_tokens", "GENERATE_MAX_TOKENS"),
+    )
+    reasoning_effort: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("reasoning_effort", "REASONING_EFFORT"),
+    )
+    reasoning_format: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("reasoning_format", "REASONING_FORMAT"),
+    )
+    disable_reasoning: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("disable_reasoning", "DISABLE_REASONING"),
+    )
+    rewrite_model: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("rewrite_model", "REWRITE_MODEL"),
+    )
+    rewrite_max_tokens: int = Field(
+        default=64,
+        validation_alias=AliasChoices("rewrite_max_tokens", "REWRITE_MAX_TOKENS"),
+    )
+
+    # Retrieval
+    bge_m3_url: str = Field(
+        default="http://bge-m3:8000",
+        validation_alias=AliasChoices("bge_m3_url", "BGE_M3_URL"),
+    )
+    bge_m3_timeout: float = Field(
+        default=120.0,
+        validation_alias=AliasChoices("bge_m3_timeout", "BGE_M3_TIMEOUT"),
+    )
+    qdrant_url: str = Field(
+        default="http://qdrant:6333",
+        validation_alias=AliasChoices("qdrant_url", "QDRANT_URL"),
+    )
+    qdrant_collection: str = Field(
+        default="gdrive_documents_bge",
+        validation_alias=AliasChoices("qdrant_collection", "QDRANT_COLLECTION"),
+    )
+    search_top_k: int = Field(
+        default=40,
+        validation_alias=AliasChoices("search_top_k", "SEARCH_TOP_K"),
+    )
+    rerank_top_k: int = Field(
+        default=7,
+        validation_alias=AliasChoices("rerank_top_k", "RERANK_TOP_K"),
+    )
+    redis_url: str = Field(
+        default="redis://redis:6379",
+        validation_alias=AliasChoices("redis_url", "REDIS_URL"),
+    )
+    max_rewrite_attempts: int = Field(
+        default=1,
+        validation_alias=AliasChoices("max_rewrite_attempts", "MAX_REWRITE_ATTEMPTS"),
+    )
+    skip_rerank_threshold: float = Field(
+        default=0.018,
+        validation_alias=AliasChoices("skip_rerank_threshold", "SKIP_RERANK_THRESHOLD"),
+    )
+    relevance_threshold_rrf: float = Field(
+        default=0.005,
+        validation_alias=AliasChoices("relevance_threshold_rrf", "RELEVANCE_THRESHOLD_RRF"),
+    )
+    score_improvement_delta: float = Field(
+        default=0.001,
+        validation_alias=AliasChoices("score_improvement_delta", "SCORE_IMPROVEMENT_DELTA"),
+    )
+    rerank_provider: str = Field(
+        default="colbert",
+        validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER"),
+    )
+    small_to_big_mode: str = Field(
+        default="on",
+        validation_alias=AliasChoices("small_to_big_mode", "SMALL_TO_BIG_MODE"),
+    )
+    small_to_big_window_before: int = Field(
+        default=0,
+        validation_alias=AliasChoices("small_to_big_window_before", "SMALL_TO_BIG_WINDOW_BEFORE"),
+    )
+    small_to_big_window_after: int = Field(
+        default=2,
+        validation_alias=AliasChoices("small_to_big_window_after", "SMALL_TO_BIG_WINDOW_AFTER"),
+    )
+    max_expanded_chunks: int = Field(
+        default=10,
+        validation_alias=AliasChoices("max_expanded_chunks", "MAX_EXPANDED_CHUNKS"),
+    )
+    max_context_tokens: int = Field(
+        default=8000,
+        validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
+    )
+
+    # Domain
+    domain: str = Field(
+        default="недвижимость",
+        validation_alias=AliasChoices("domain", "BOT_DOMAIN"),
+    )
+    domain_language: str = Field(
+        default="ru",
+        validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE"),
+    )
+
+    # Response
+    response_style_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("response_style_enabled", "RESPONSE_STYLE_ENABLED"),
+    )
+    response_style_shadow_mode: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("response_style_shadow_mode", "RESPONSE_STYLE_SHADOW_MODE"),
+    )
+    show_sources: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("show_sources", "SHOW_SOURCES"),
+    )
+    streaming_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("streaming_enabled", "STREAMING_ENABLED"),
+    )
+    ttft_drift_warn_ms: int = Field(
+        default=500,
+        validation_alias=AliasChoices("ttft_drift_warn_ms", "TTFT_DRIFT_WARN_MS"),
+    )
+    classifier_mode: str = Field(
+        default="regex",
+        validation_alias=AliasChoices("classifier_mode", "CLASSIFIER_MODE"),
+    )
+
+    # Voice
+    show_transcription: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("show_transcription", "SHOW_TRANSCRIPTION"),
+    )
+    voice_language: str = Field(
+        default="ru",
+        validation_alias=AliasChoices("voice_language", "VOICE_LANGUAGE"),
+    )
+    stt_model: str = Field(
+        default="whisper",
+        validation_alias=AliasChoices("stt_model", "STT_MODEL"),
+    )
+
+    # Security
+    guard_mode: str = Field(
+        default="hard",
+        validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),
+    )
+    content_filter_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("content_filter_enabled", "CONTENT_FILTER_ENABLED"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Mapping from legacy flat kwarg name -> (sub_config_attr, sub_config_field).
 # This is the single source of truth for backward-compatible flat access (#2577).
+# ---------------------------------------------------------------------------
+
 _FLAT_KWARGS: dict[str, tuple[str, str]] = {
     # LLM
     "llm_base_url": ("llm", "llm_base_url"),
@@ -343,71 +544,65 @@ class GraphConfig:
 
     @classmethod
     def from_env(cls) -> GraphConfig:
-        """Create GraphConfig from environment variables."""
-        llm = LlmConfig(
-            llm_api_key=os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", "")),
-            llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-            llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
-            llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
-            rewrite_model=os.getenv("REWRITE_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini")),
-            rewrite_max_tokens=int(os.getenv("REWRITE_MAX_TOKENS", "64")),
-            generate_max_tokens=int(os.getenv("GENERATE_MAX_TOKENS", "1024")),
-            reasoning_effort=os.getenv("REASONING_EFFORT") or None,
-            reasoning_format=os.getenv("REASONING_FORMAT") or None,
-            disable_reasoning=(
-                os.getenv("DISABLE_REASONING", "").lower() == "true"
-                if os.getenv("DISABLE_REASONING")
-                else None
-            ),
-        )
-        retrieval = RetrievalConfig(
-            bge_m3_url=os.getenv("BGE_M3_URL", "http://bge-m3:8000"),
-            bge_m3_timeout=float(os.getenv("BGE_M3_TIMEOUT", "120.0")),
-            qdrant_url=os.getenv("QDRANT_URL", "http://qdrant:6333"),
-            qdrant_collection=os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge"),
-            search_top_k=int(os.getenv("SEARCH_TOP_K", "40")),
-            rerank_top_k=int(os.getenv("RERANK_TOP_K", "7")),
-            redis_url=os.getenv("REDIS_URL", "redis://redis:6379"),
-            max_rewrite_attempts=int(os.getenv("MAX_REWRITE_ATTEMPTS", "1")),
-            skip_rerank_threshold=float(os.getenv("SKIP_RERANK_THRESHOLD", "0.018")),
-            relevance_threshold_rrf=float(os.getenv("RELEVANCE_THRESHOLD_RRF", "0.005")),
-            score_improvement_delta=float(os.getenv("SCORE_IMPROVEMENT_DELTA", "0.001")),
-            rerank_provider=os.getenv("RERANK_PROVIDER", "colbert"),
-            small_to_big_mode=os.getenv("SMALL_TO_BIG_MODE", "on"),
-            small_to_big_window_before=int(os.getenv("SMALL_TO_BIG_WINDOW_BEFORE", "0")),
-            small_to_big_window_after=int(os.getenv("SMALL_TO_BIG_WINDOW_AFTER", "2")),
-            max_expanded_chunks=int(os.getenv("MAX_EXPANDED_CHUNKS", "10")),
-            max_context_tokens=int(os.getenv("MAX_CONTEXT_TOKENS", "8000")),
-        )
-        domain_cfg = DomainConfig(
-            domain=os.getenv("BOT_DOMAIN", "недвижимость"),
-            domain_language=os.getenv("BOT_LANGUAGE", "ru"),
-        )
-        response = ResponseConfig(
-            response_style_enabled=os.getenv("RESPONSE_STYLE_ENABLED", "false").lower() == "true",
-            response_style_shadow_mode=os.getenv("RESPONSE_STYLE_SHADOW_MODE", "false").lower()
-            == "true",
-            show_sources=os.getenv("SHOW_SOURCES", "false").lower() == "true",
-            streaming_enabled=os.getenv("STREAMING_ENABLED", "true").lower() == "true",
-            ttft_drift_warn_ms=int(os.getenv("TTFT_DRIFT_WARN_MS", "500")),
-            classifier_mode=os.getenv("CLASSIFIER_MODE", "regex"),
-        )
-        voice = VoiceConfig(
-            show_transcription=os.getenv("SHOW_TRANSCRIPTION", "true").lower() == "true",
-            voice_language=os.getenv("VOICE_LANGUAGE", "ru"),
-            stt_model=os.getenv("STT_MODEL", "whisper"),
-        )
-        security = SecurityConfig(
-            guard_mode=os.getenv("GUARD_MODE", "hard"),
-            content_filter_enabled=os.getenv("CONTENT_FILTER_ENABLED", "true").lower() == "true",
-        )
+        """Create GraphConfig from environment variables.
+
+        Delegates env-var parsing and type coercion to pydantic-settings
+        (_GraphEnvSettings), then assembles sub-configs from the loaded values.
+        """
+        e = _GraphEnvSettings()
         return cls(
-            llm=llm,
-            retrieval=retrieval,
-            domain_cfg=domain_cfg,
-            response=response,
-            voice=voice,
-            security=security,
+            llm=LlmConfig(
+                llm_api_key=e.llm_api_key,
+                llm_model=e.llm_model,
+                llm_temperature=e.llm_temperature,
+                llm_max_tokens=e.llm_max_tokens,
+                generate_max_tokens=e.generate_max_tokens,
+                reasoning_effort=e.reasoning_effort or None,
+                reasoning_format=e.reasoning_format or None,
+                disable_reasoning=e.disable_reasoning,
+                rewrite_model=e.rewrite_model or e.llm_model,
+                rewrite_max_tokens=e.rewrite_max_tokens,
+            ),
+            retrieval=RetrievalConfig(
+                bge_m3_url=e.bge_m3_url,
+                bge_m3_timeout=e.bge_m3_timeout,
+                qdrant_url=e.qdrant_url,
+                qdrant_collection=e.qdrant_collection,
+                search_top_k=e.search_top_k,
+                rerank_top_k=e.rerank_top_k,
+                redis_url=e.redis_url,
+                max_rewrite_attempts=e.max_rewrite_attempts,
+                skip_rerank_threshold=e.skip_rerank_threshold,
+                relevance_threshold_rrf=e.relevance_threshold_rrf,
+                score_improvement_delta=e.score_improvement_delta,
+                rerank_provider=e.rerank_provider,
+                small_to_big_mode=e.small_to_big_mode,
+                small_to_big_window_before=e.small_to_big_window_before,
+                small_to_big_window_after=e.small_to_big_window_after,
+                max_expanded_chunks=e.max_expanded_chunks,
+                max_context_tokens=e.max_context_tokens,
+            ),
+            domain_cfg=DomainConfig(
+                domain=e.domain,
+                domain_language=e.domain_language,
+            ),
+            response=ResponseConfig(
+                response_style_enabled=e.response_style_enabled,
+                response_style_shadow_mode=e.response_style_shadow_mode,
+                show_sources=e.show_sources,
+                streaming_enabled=e.streaming_enabled,
+                ttft_drift_warn_ms=e.ttft_drift_warn_ms,
+                classifier_mode=e.classifier_mode,
+            ),
+            voice=VoiceConfig(
+                show_transcription=e.show_transcription,
+                voice_language=e.voice_language,
+                stt_model=e.stt_model,
+            ),
+            security=SecurityConfig(
+                guard_mode=e.guard_mode,
+                content_filter_enabled=e.content_filter_enabled,
+            ),
         )
 
     def create_llm(self, model_override: str | None = None, *, auto_trace: bool = True) -> Any:
