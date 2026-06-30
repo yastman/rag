@@ -35,9 +35,15 @@ LOG_DIR="$REPO_ROOT/logs"
 PROMPT_DIR="$REPO_ROOT/logs/prompts"
 mkdir -p "$LOG_DIR" "$SIGNALS_DIR" "$PROMPT_DIR"
 
+# Absolute path to the orchestrator marker. Defined UNCONDITIONALLY (not only on
+# the no-ORCH_TARGET branch) so the worker wrapper can RE-RESOLVE the wake-up
+# target from it at signal time (card_8dfe242c7fc7) instead of only trusting the
+# ORCH_TARGET baked into the wrapper at launch — the launch-time window may be
+# dead and a new orchestrator may hold a different window-id 30 min later.
+MARKER="$SIGNALS_DIR/orchestrator-window.json"
+
 # --- Определить ORCH_TARGET ---
 if [[ -z "${ORCH_TARGET:-}" ]]; then
-  MARKER="$SIGNALS_DIR/orchestrator-window.json"
   if [[ ! -f "$MARKER" ]]; then
     echo "ERROR: ORCH_TARGET not set and no marker at $MARKER" >&2
     echo "Run: eval \$(./scripts/set_orchestrator_window.sh <task>)" >&2
@@ -114,9 +120,16 @@ if [[ -n "${KIRO_REQUIRED_SKILLS:-}" ]]; then
     _skill="${_skill%"${_skill##*[![:space:]]}"}"
     [[ -z "$_skill" ]] && continue
     _skill_file=""
+    # Resolve both a skill dir (<skill>/SKILL.md) AND a bare markdown file
+    # (<name>.md) so shared contracts named like `shared/done-signal-protocol`
+    # are delivered to the worker (card_7b9b6a8eac50). shared/*.md are FILES, not
+    # SKILL.md dirs — without the .md candidates they were never handed over and a
+    # "dedup by path reference" silently dropped worker-critical contracts.
     for _candidate in \
         "$REPO_ROOT/.kiro/skills/${_skill}/SKILL.md" \
-        "$HOME/.kiro/skills/${_skill}/SKILL.md"; do
+        "$HOME/.kiro/skills/${_skill}/SKILL.md" \
+        "$REPO_ROOT/.kiro/skills/${_skill}.md" \
+        "$HOME/.kiro/skills/${_skill}.md"; do
       if [[ -f "$_candidate" ]]; then
         _skill_file="$_candidate"
         break
@@ -190,12 +203,21 @@ cd "$WORKER_CWD"
 send_signal() {
   # single-fire: only the first caller actually wakes the orchestrator
   if ( set -o noclobber; : > "$SIGNAL_FLAG" ) 2>/dev/null; then
+    # Re-resolve the orchestrator target at WAKE-UP time (card_8dfe242c7fc7): the
+    # window we were launched against may be dead and a new orchestrator may hold
+    # a different window-id by now. Prefer the live marker; fall back to the
+    # launch-baked ORCH_TARGET when the marker is missing/unreadable.
+    _orch="$ORCH_TARGET"
+    if [[ -f "$MARKER" ]]; then
+      _m="\$(python3 -c "import json; print(json.load(open('$MARKER'))['orchestrator_target'])" 2>/dev/null || true)"
+      [[ -n "\$_m" ]] && _orch="\$_m"
+    fi
     for _retry in 1 2 3 4 5; do
-      tmux send-keys -t "$ORCH_TARGET" -l "\$1" 2>/dev/null && break || true
+      tmux send-keys -t "\$_orch" -l "\$1" 2>/dev/null && break || true
       sleep 2
     done
     sleep 0.25
-    tmux send-keys -t "$ORCH_TARGET" C-m 2>/dev/null || true
+    tmux send-keys -t "\$_orch" C-m 2>/dev/null || true
   fi
 }
 
