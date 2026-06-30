@@ -1,59 +1,30 @@
-"""Main Telegram bot logic — legacy graph pipeline.
+"""Main Telegram bot logic — PropertyBot thin orchestrator.
 
-Module-level helpers were extracted to focused submodules in slice 1 of
-the ``PropertyBot`` decomposition (issue #1265 / #2046). The thin
-wrappers below preserve the historical ``from telegram_bot.bot import X``
+Module-level helpers are extracted to focused ``_bot_*`` submodules.
+The thin wrappers below preserve the ``from telegram_bot.bot import X``
 import surface for tests that ``patch("telegram_bot.bot.X", ...)``.
 
-Slice 1 extraction map:
-
-* ``_bot_state_helpers`` (#1265 PR-1) — apartment-list and catalog-control
-  message-id reads (``_state_apartment_results``,
-  ``_state_control_message_id``, ``_extract_current_turn``).
-* ``_bot_observability`` (#1265 PR-2) — trace metadata builder
-  (``_build_trace_metadata``).
-* ``_bot_error_classification`` (#1265 PR-3) — post-pipeline cleanup and
-  checkpointer error guards (``_is_post_pipeline_cleanup_error``,
-  ``_is_checkpointer_runtime_error``).
-* ``_bot_streaming`` (#1265 PR-4) — agent streaming draft helpers
-  (``_new_draft_id``, ``_extract_stream_chunk_text``,
-  ``_stream_agent_to_draft``, ``_AGENT_DRAFT_INTERVAL``).
-* ``_bot_pre_agent`` (#1265 PR-5) — pre-agent state contract, dense
-  vector caching, retrieval-vector preparation
-  (``_build_pre_agent_state_contract``, ``_has_async_method``,
-  ``_get_or_compute_pre_agent_dense``,
-  ``_prepare_pre_agent_retrieval_vectors``).
-
-Each extraction is enforced by a contract test under
-``tests/contract/test_bot_*_extraction_contract.py``: byte-for-byte
-parity with the previous module-level implementation, plus a
-``from telegram_bot.bot import …`` import surface guard.
-
-The remaining lifecycle method extraction (``PropertyBot`` instance
-methods → focused modules) is tracked separately as #2048 and is
-blocked on the runtime migration in #1948 / #2045 / #2047.
+Extraction map:
+  _bot_state_helpers (#1265 PR-1), _bot_observability (#1265 PR-2),
+  _bot_error_classification (#1265 PR-3), _bot_streaming (#1265 PR-4),
+  _bot_pre_agent (#1265 PR-5), _bot_lifecycle (card_c6ade99aada1),
+  handlers/command_handlers (card_c6ade99aada1).
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
-import os
-import socket
 from typing import TYPE_CHECKING, Any
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
-    BotCommand,
     CallbackQuery,
     Message,
 )
-from aiogram.utils.chat_action import ChatActionSender
 
-from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY, RedisPollingLock
+from src.runtime.integrations.polling_lock import RedisPollingLock
 from src.services.handoff_state import HandoffData, HandoffState
 
 from . import (
@@ -63,7 +34,7 @@ from . import (
     _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
     _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
     _bot_handoff,  # #2816 Slice 2: extracted handoff handlers
-    _bot_lifecycle,  # #1265 Slice 2 PR-8 / #2048: extracted lifecycle helpers
+    _bot_lifecycle,  # #1265 Slice 2 PR-8 / #2048 / card_c6ade99aada1: lifecycle helpers
     _bot_observability,  # #1265 Slice 1 PR-2: extracted observability helpers
     _bot_pre_agent,  # #1265 Slice 1 PR-5: extracted pre-agent helpers
     _bot_query_pipeline,  # #2816 Slice 2: extracted query pipeline handlers
@@ -72,19 +43,9 @@ from . import (
 )
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
-from .constants import (
-    split_telegram_response as _split_telegram_response,
-)
-from .keyboards.client_keyboard import (
-    parse_menu_button,
-)
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
-from .observability import (
-    propagate_attributes,
-)
 from .services.forum_bridge import ForumBridge
-from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 
 class GraphRecursionError(RuntimeError):
@@ -94,7 +55,6 @@ class GraphRecursionError(RuntimeError):
 if TYPE_CHECKING:
     from ._bot_services import Services
     from .agents.context import BotContext as BotContextType
-    from .pipelines.state_contract import PreAgentStateContract
 else:
     BotContextType = Any
     Services = Any
@@ -142,28 +102,9 @@ def detect_injection(*args: Any, **kwargs: Any) -> Any:
     return _detect_injection(*args, **kwargs)
 
 
-def _build_pre_agent_state_contract(
-    *,
-    rag_result_store: dict[str, Any],
-    query_type: str,
-    topic_hint: str | None,
-    dense_vector: list[float] | None,
-    sparse_vector: dict[str, Any] | None,
-    colbert_query: list[list[float]] | None,
-    grounding_mode: str,
-    filters: dict[str, Any] | None = None,
-) -> PreAgentStateContract:
+def _build_pre_agent_state_contract(*args: Any, **kwargs: Any) -> Any:
     """Thin wrapper — see ``_bot_pre_agent`` (#1265 Slice 1 PR-5)."""
-    return _bot_pre_agent._build_pre_agent_state_contract(
-        rag_result_store=rag_result_store,
-        query_type=query_type,
-        topic_hint=topic_hint,
-        dense_vector=dense_vector,
-        sparse_vector=sparse_vector,
-        colbert_query=colbert_query,
-        grounding_mode=grounding_mode,
-        filters=filters,
-    )
+    return _bot_pre_agent._build_pre_agent_state_contract(*args, **kwargs)
 
 
 def _has_async_method(obj: Any, name: str) -> bool:
@@ -171,36 +112,14 @@ def _has_async_method(obj: Any, name: str) -> bool:
     return _bot_pre_agent._has_async_method(obj, name)
 
 
-async def _get_or_compute_pre_agent_dense(
-    cache: Any,
-    embeddings: Any,
-    query: str,
-    result_store: dict[str, Any],
-) -> list[float] | None:
+async def _get_or_compute_pre_agent_dense(*args: Any, **kwargs: Any) -> Any:
     """Thin wrapper — see ``_bot_pre_agent`` (#1265 Slice 1 PR-5)."""
-    return await _bot_pre_agent._get_or_compute_pre_agent_dense(
-        cache=cache,
-        embeddings=embeddings,
-        query=query,
-        result_store=result_store,
-    )
+    return await _bot_pre_agent._get_or_compute_pre_agent_dense(*args, **kwargs)
 
 
-async def _prepare_pre_agent_retrieval_vectors(
-    cache: Any,
-    embeddings: Any,
-    query: str,
-    dense: list[float] | None,
-    result_store: dict[str, Any],
-) -> None:
+async def _prepare_pre_agent_retrieval_vectors(*args: Any, **kwargs: Any) -> None:
     """Thin wrapper — see ``_bot_pre_agent`` (#1265 Slice 1 PR-5)."""
-    await _bot_pre_agent._prepare_pre_agent_retrieval_vectors(
-        cache=cache,
-        embeddings=embeddings,
-        query=query,
-        dense=dense,
-        result_store=result_store,
-    )
+    await _bot_pre_agent._prepare_pre_agent_retrieval_vectors(*args, **kwargs)
 
 
 def _new_draft_id() -> int:
@@ -211,23 +130,10 @@ def _new_draft_id() -> int:
 _AGENT_DRAFT_INTERVAL = _bot_streaming._AGENT_DRAFT_INTERVAL
 
 
-async def _stream_agent_to_draft(
-    agent: Any,
-    payload: dict[str, Any],
-    config: dict[str, Any],
-    bot: Any,
-    chat_id: int,
-    thread_id: int | None = None,
-) -> dict[str, Any]:
+async def _stream_agent_to_draft(*args: Any, **kwargs: Any) -> dict[str, Any]:
     """Thin wrapper — see ``_bot_streaming`` (#1265 Slice 1 PR-4)."""
     return await _bot_streaming._stream_agent_to_draft(
-        agent=agent,
-        payload=payload,
-        config=config,
-        bot=bot,
-        chat_id=chat_id,
-        thread_id=thread_id,
-        draft_interval=_AGENT_DRAFT_INTERVAL,
+        *args, draft_interval=_AGENT_DRAFT_INTERVAL, **kwargs
     )
 
 
@@ -391,11 +297,7 @@ class PropertyBot:
 
     @staticmethod
     def _extract_database_name(database_url: str) -> str | None:
-        """Extract database name from PostgreSQL URL.
-
-        Thin wrapper — canonical impl lives in
-        :mod:`telegram_bot._bot_postgres_bootstrap` (#1265).
-        """
+        """Thin wrapper — see ``_bot_postgres_bootstrap`` (#1265)."""
         from telegram_bot._bot_postgres_bootstrap import extract_database_name
 
         return extract_database_name(database_url)
@@ -403,11 +305,7 @@ class PropertyBot:
     async def _ensure_postgres_database_exists(
         self, asyncpg_module: Any, database_name: str
     ) -> bool:
-        """Ensure target PostgreSQL database exists, creating it when missing.
-
-        Thin wrapper — canonical impl lives in
-        :mod:`telegram_bot._bot_postgres_bootstrap` (#1265).
-        """
+        """Thin wrapper — see ``_bot_postgres_bootstrap`` (#1265)."""
         from telegram_bot._bot_postgres_bootstrap import ensure_postgres_database_exists
 
         return await ensure_postgres_database_exists(
@@ -417,11 +315,7 @@ class PropertyBot:
         )
 
     async def _ensure_realestate_schema(self) -> None:
-        """Idempotent bootstrap for realestate runtime tables.
-
-        Thin wrapper — canonical impl lives in
-        :mod:`telegram_bot._bot_postgres_bootstrap` (#1265).
-        """
+        """Thin wrapper — see ``_bot_postgres_bootstrap`` (#1265)."""
         from telegram_bot._bot_postgres_bootstrap import ensure_realestate_schema
 
         await ensure_realestate_schema(self._pg_pool)
@@ -478,23 +372,13 @@ class PropertyBot:
         self.dp.include_router(create_results_router(self))
 
     async def _resolve_user_role(self, user_id: int) -> str:
-        """Resolve user role from DB or config fallback (#388)."""
-        db_role: str | None = None
-        user_service = getattr(self, "_user_service", None)
-        if user_service is not None and hasattr(user_service, "get_role"):
-            try:
-                resolved = await user_service.get_role(telegram_id=user_id)
-                if isinstance(resolved, str):
-                    normalized = resolved.strip().lower()
-                    if normalized in {"manager", "client"}:
-                        db_role = normalized
-            except Exception:
-                logger.warning("Role lookup failed", exc_info=True)
+        """Resolve user role from DB or config fallback (#388).
 
-        # Config manager_ids should still elevate known managers even if DB is stale.
-        if user_id in self.config.manager_ids:
-            return "manager"
-        return db_role or "client"
+        Thin delegate — see ``telegram_bot.handlers.command_handlers.resolve_user_role``.
+        """
+        from .handlers.command_handlers import resolve_user_role
+
+        return await resolve_user_role(self, user_id)
 
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is an admin."""
@@ -507,61 +391,13 @@ class PropertyBot:
         dialog_manager: Any = None,
         i18n: Any = None,
     ) -> None:
-        """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
-        action_id = parse_menu_button(
-            message.text or "",
-            i18n_hub=getattr(self, "_i18n_hub", None),
-        )
-        if action_id is None:
-            return
+        """Route ReplyKeyboard button press to dedicated handler (#628, #658).
 
-        # Clear only phone-collection FSM state to avoid wiping unrelated flows (#658)
-        current = await state.get_state()
-        if isinstance(current, str) and current.startswith("PhoneCollectorStates:"):
-            await state.clear()
+        Thin delegate — see ``telegram_bot.handlers.command_handlers.handle_menu_button``.
+        """
+        from .handlers.command_handlers import handle_menu_button
 
-        if dialog_manager is not None:
-            from .dialogs.catalog import dispatch_catalog_text_action, is_catalog_state
-
-            if is_catalog_state(current) and await dispatch_catalog_text_action(
-                message=message,
-                manager=dialog_manager,
-                i18n_hub=getattr(self, "_i18n_hub", None),
-            ):
-                return
-
-        handlers: dict[str, Any] = {
-            "search": self._handle_search,
-            "services": self._handle_services,
-            "viewing": self._handle_viewing,
-            "bookmarks": self._handle_bookmarks,
-            "ask": self._handle_ask,
-            "manager": self._handle_manager,
-            "demo": self._handle_demo,
-        }
-        handler = handlers.get(action_id)
-        if handler:
-            if action_id != "bookmarks":
-                await state.update_data(bookmarks_context=False)
-            if action_id == "search":
-                await handler(message, dialog_manager)
-            elif action_id == "bookmarks":
-                await handler(message, state)
-            elif action_id == "viewing":
-                await handler(message, state, dialog_manager)
-            elif action_id == "services":
-                await handler(message, i18n=i18n)
-            elif action_id == "manager":
-                await handler(
-                    message,
-                    i18n=i18n,
-                    state=state,
-                    dialog_manager=dialog_manager,
-                )
-            elif action_id == "demo":
-                await handler(message)
-            else:
-                await handler(message)
+        await handle_menu_button(self, message, state, dialog_manager=dialog_manager, i18n=i18n)
 
     async def _handle_demo(self, message: Message) -> None:
         from .handlers.demo_handler import handle_demo_button
@@ -981,460 +817,67 @@ class PropertyBot:
     ) -> None:
         """Handle menu button click — dispatch query_text to agent pipeline.
 
-        Called by on_click handlers in dialog files after manager.done().
-        Reuses _ainvoke_supervisor_with_recovery for consistency with handle_query.
+        Thin delegate — see ``telegram_bot.handlers.command_handlers.handle_menu_action``.
         """
-        from .agents.agent import LOCALE_TO_LANGUAGE
-        from .agents.context import BotContext
+        from .handlers.command_handlers import handle_menu_action
 
-        if callback.from_user is None or callback.message is None:
-            return
-
-        user_id = callback.from_user.id
-        chat_id = callback.message.chat.id
-        bot = callback.message.bot
-
-        role = await self._resolve_user_role(user_id)
-        language = LOCALE_TO_LANGUAGE.get(locale, self.config.domain_language)
-        session_id = make_session_id("chat", chat_id)
-
-        # Build tools list via shared helper
-        from .agents.tool_assembly import build_agent_tools
-
-        tools = build_agent_tools(
-            role=role,
-            config=self.config,
-        )
-
-        agent = create_bot_agent(
-            model=self.config.supervisor_model,
-            tools=tools,
-            checkpointer=self._agent_checkpointer,
-            language=language,
-            base_url=self.config.llm_base_url,
-            api_key=self.config.llm_api_key,
-            role=role,
-            max_history_messages=self.config.agent_max_history_messages,
-            max_tokens=self.config.supervisor_max_tokens,
-        )
-
-        ctx = BotContext(
-            telegram_user_id=user_id,
-            session_id=session_id,
-            language=language,
-            embeddings=self._embeddings,
-            sparse_embeddings=self._sparse,
-            qdrant=self._qdrant,
-            cache=self._cache,
-            reranker=self._reranker,
-            llm=self._llm,
-            content_filter_enabled=self.config.content_filter_enabled,
-            guard_mode=self.config.guard_mode,
-            role=role,
-            original_query=query_text,
-            original_user_query=query_text,
-            bot=bot,
-            manager_ids=list(self.config.manager_ids),
-            apartments_service=self._apartments_service,
-            search_event_store=self._search_event_store,
-            config=self.config,
-        )
-
-        rag_result_store: dict[str, Any] = {}
-
-        with propagate_attributes(
-            session_id=session_id,
-            user_id=str(user_id),
-            tags=["telegram", "menu", "agent"],
-        ):
-            callbacks: list[Any] = []
-            async with ChatActionSender.typing(bot=bot, chat_id=chat_id):  # type: ignore[arg-type]
-                result = await self._ainvoke_supervisor_with_recovery(
-                    agent=agent,
-                    tools=tools,
-                    role=role,
-                    user_text=query_text,
-                    chat_id=chat_id,
-                    callbacks=callbacks,
-                    bot_context=ctx,
-                    rag_result_store=rag_result_store,
-                )
-
-        messages = result.get("messages", [])
-        response_text = ""
-        if messages:
-            last_msg = messages[-1]
-            response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-
-        if response_text and not ctx.response_sent:
-            for chunk in _split_telegram_response(response_text):
-                try:
-                    await callback.message.answer(chunk, parse_mode="Markdown")
-                except Exception:
-                    logger.warning("Markdown parse failed in menu action, falling back")
-                    try:
-                        await callback.message.answer(chunk)
-                    except Exception:
-                        logger.exception("Failed to send menu action response chunk")
+        await handle_menu_action(self, callback, query_text, locale=locale)
 
     # ------------------------------------------------------------------ #
     # Lifecycle helpers — called in order by start()                      #
+    # All implementations live in _bot_lifecycle (card_c6ade99aada1).    #
     # ------------------------------------------------------------------ #
 
-    async def _setup_preflight(self) -> tuple[Any, StartupReport]:
+    async def _setup_preflight(self) -> tuple[Any, Any]:
         """Run preflight dependency gate; return (preflight_result, startup_report)."""
-        startup_report = StartupReport()
-        from .preflight import PreflightError, check_dependencies
-
-        try:
-            preflight_result = await check_dependencies(self.config, log_summary=False)
-        except PreflightError as exc:
-            startup_report.merge(exc.report)
-            logger.error(startup_report.render())
-            raise
-        preflight_report = getattr(preflight_result, "report", None)
-        if isinstance(preflight_report, StartupReport):
-            startup_report.merge(preflight_report)
-        return preflight_result, startup_report
+        return await _bot_lifecycle.setup_preflight(self)
 
     async def _setup_cache(self) -> None:
         """Initialize Redis cache layer if not already done."""
-        if not self._cache_initialized:
-            logger.info("Initializing cache service...")
-            await self._cache.initialize()
-            self._cache_initialized = True
-            logger.info("Cache service ready")
+        await _bot_lifecycle.setup_cache(self)
 
-    async def _setup_checkpointers(self, startup_report: StartupReport) -> None:
+    async def _setup_checkpointers(self, startup_report: Any) -> None:
         """Initialize conversation and agent Redis checkpointers."""
-        from .integrations.memory import create_fallback_checkpointer, create_redis_checkpointer
+        await _bot_lifecycle.setup_checkpointers(self, startup_report)
 
-        try:
-            self._checkpointer = create_redis_checkpointer(
-                self.config.redis_url,
-                ttl_minutes=7 * 24 * 60,  # 7 days; SDK uses minutes
-                refresh_on_read=True,  # idle-based retention
-            )
-            await self._checkpointer.asetup()
-            logger.info("Conversation memory checkpointer ready (Redis)")
-        except Exception:
-            logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
-            self._checkpointer = create_fallback_checkpointer()
-            startup_report.add(
-                StartupSignal(
-                    source="conversation_memory",
-                    severity=StartupSeverity.DEGRADED,
-                    summary="Redis checkpointer unavailable, using in-memory fallback",
-                    remediation="restore Redis connectivity for persistent conversation memory",
-                )
-            )
-
-        # Agent checkpointer — Redis with TTL for bounded retention (#424).
-        try:
-            self._agent_checkpointer = create_redis_checkpointer(
-                self.config.redis_url,
-                ttl_minutes=self.config.agent_checkpointer_ttl_minutes,
-                refresh_on_read=True,
-            )
-            await self._agent_checkpointer.asetup()
-            logger.info(
-                "Agent checkpointer ready (Redis, ttl=%s min)",
-                self.config.agent_checkpointer_ttl_minutes,
-            )
-        except Exception:
-            logger.warning("Agent Redis checkpointer init failed, using in-memory", exc_info=True)
-            self._agent_checkpointer = create_fallback_checkpointer()
-            startup_report.add(
-                StartupSignal(
-                    source="agent_memory",
-                    severity=StartupSeverity.DEGRADED,
-                    summary="Agent Redis checkpointer unavailable, using in-memory fallback",
-                    remediation="restore Redis connectivity for persistent agent state",
-                )
-            )
-
-    async def _setup_postgres(self, preflight_result: Any, startup_report: StartupReport) -> None:
+    async def _setup_postgres(self, preflight_result: Any, startup_report: Any) -> None:
         """Initialize PostgreSQL pool, schema, and dependent services."""
-        postgres_available = (
-            preflight_result.get("postgres", True) if isinstance(preflight_result, dict) else True
-        )
-        if not postgres_available:
-            startup_report.add(
-                StartupSignal(
-                    source="postgres_runtime",
-                    severity=StartupSeverity.DEGRADED,
-                    summary="PostgreSQL unavailable — preflight marked it as not reachable",
-                    remediation=(
-                        "restore PostgreSQL connectivity for favorites, search events, "
-                        "and user services"
-                    ),
-                )
-            )
-            logger.info(
-                "Skipping PostgreSQL pool init because preflight already marked it unavailable"
-            )
-            return
-
-        try:
-            import asyncpg
-
-            test_conn: Any | None = None
-            try:
-                # Validate DB exists before creating pool (avoid traceback spam #570)
-                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
-            except asyncpg.InvalidCatalogNameError:
-                target_db = self._extract_database_name(self.config.realestate_database_url)
-                if target_db is None:
-                    raise
-                logger.warning(
-                    "PostgreSQL database %s missing; attempting auto-create",
-                    target_db,
-                )
-                if not await self._ensure_postgres_database_exists(asyncpg, target_db):
-                    raise
-                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
-            finally:
-                if test_conn is not None:
-                    await test_conn.close()
-
-            self._pg_pool = await asyncpg.create_pool(
-                self.config.realestate_database_url,
-                min_size=0,
-                max_size=5,
-                timeout=5,
-            )
-            logger.info("PostgreSQL pool ready (realestate)")
-            await self._ensure_realestate_schema()
-            logger.info("PostgreSQL schema ready (realestate)")
-
-            from .services.user_service import UserService
-
-            self._user_service = UserService(pool=self._pg_pool)
-
-            from .services.favorites_service import FavoritesService
-
-            self._favorites_service = FavoritesService(pool=self._pg_pool)
-            logger.info("Favorites service ready")
-
-            from .services.search_event_store import SearchEventStore
-
-            self._search_event_store = SearchEventStore(pool=self._pg_pool)
-            logger.info("Search event store ready")
-
-        except Exception:
-            logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
-            startup_report.add(
-                StartupSignal(
-                    source="postgres_runtime",
-                    severity=StartupSeverity.DEGRADED,
-                    summary="PostgreSQL pool unavailable, user features disabled",
-                    remediation=(
-                        "restore PostgreSQL connectivity for favorites, search events, "
-                        "and user services"
-                    ),
-                )
-            )
+        await _bot_lifecycle.setup_postgres(self, preflight_result, startup_report)
 
     async def _setup_bot_identity(self) -> None:
         """Cache bot user id and detect forum-topics capability."""
-        try:
-            me = await self.bot.me()
-            self._bot_user_id = me.id
-        except Exception:
-            logger.warning("Failed to cache bot user id")
-
-        try:
-            me = await self.bot.get_me()
-            if not getattr(me, "has_topics_enabled", False):
-                logger.warning(
-                    "Forum topics not enabled for this bot. "
-                    "Enable 'Topics in Private Chats' via BotFather Mini App. "
-                    "Thread routing will be disabled."
-                )
-                self._topics_enabled = False
-            else:
-                self._topics_enabled = True
-                logger.info("Forum topics mode: enabled")
-        except Exception:
-            logger.warning("Failed to check forum topics status", exc_info=True)
-            self._topics_enabled = False
+        await _bot_lifecycle.setup_bot_identity(self)
 
     def _setup_handoff_services(self) -> None:
         """Initialize handoff state machine and forum bridge (#730)."""
-        if self._cache.redis is None:
-            return
-        self._handoff_state = HandoffState(
-            self._cache.redis,
-            ttl_hours=self.config.handoff_ttl_hours,
-        )
-        if self.config.managers_group_id:
-            self._forum_bridge = ForumBridge(
-                bot=self.bot,
-                managers_group_id=self.config.managers_group_id,
-            )
-            logger.info(
-                "Forum Topics bridge enabled (managers_group_id=%s)",
-                self.config.managers_group_id,
-            )
+        _bot_lifecycle.setup_handoff_services(self)
 
     def _setup_workflow_data(self) -> None:
         """Register runtime services in dp.workflow_data for handler injection."""
-        from .middlewares.i18n import setup_i18n_middleware
-
-        self.dp["user_service"] = self._user_service
-        self.dp["pg_pool"] = self._pg_pool
-        self.dp["bot_config"] = self.config
-        self.dp["property_bot"] = self
-        self.dp["apartments_service"] = self._apartments_service
-        self.dp["favorites_service"] = self._favorites_service
-        self.dp["search_event_store"] = self._search_event_store
-        self.dp["pipeline"] = self._apartment_pipeline
-        self.dp["embeddings"] = self._hybrid
-        self.dp["llm"] = self._llm
-
-        if self._i18n_hub is not None:
-            setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
-            logger.info("i18n middleware ready")
-        else:
-            logger.warning("i18n hub unavailable; running without i18n middleware")
+        _bot_lifecycle.setup_workflow_data(self)
 
     def _setup_dialogs(self) -> None:
         """Include all aiogram-dialog routers and the catch-all query handler."""
-        from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
-
-        from .dialogs.catalog import catalog_dialog
-        from .dialogs.client_menu import client_menu_dialog
-        from .dialogs.demo import demo_dialog
-        from .dialogs.faq import faq_dialog
-        from .dialogs.filter_dialog import filter_dialog
-        from .dialogs.funnel import funnel_dialog
-        from .dialogs.handoff import handoff_dialog
-        from .dialogs.settings import settings_dialog
-        from .dialogs.viewing import viewing_dialog
-
-        self.dp.include_router(client_menu_dialog)
-        self.dp.include_router(catalog_dialog)
-        self.dp.include_router(settings_dialog)
-        self.dp.include_router(demo_dialog)
-        self.dp.include_router(funnel_dialog)
-        self.dp.include_router(filter_dialog)
-        self.dp.include_router(faq_dialog)
-        self.dp.include_router(viewing_dialog)
-        self.dp.include_router(handoff_dialog)
-
-        # Catch-all text handler — AFTER dialog routers (first-match wins).
-        from aiogram import Router as _Router
-
-        self._catch_all_router = _Router(name="catch_all_query")
-        self._catch_all_router.message(
-            StateFilter(None),
-            F.text,
-            flags={"rate_limit": {"rate": 2.0, "key": "query"}},
-        )(self.handle_query)
-        self.dp.include_router(self._catch_all_router)
-
-        aiogram_setup_dialogs(self.dp)
-        logger.info("aiogram-dialog setup complete")
+        _bot_lifecycle.setup_dialogs(self)
 
     async def _setup_bot_commands(self) -> None:
         """Register bot commands and menu button in Telegram."""
-        await self.bot.set_my_commands(
-            [
-                BotCommand(command="start", description="Начать работу с ботом"),
-                BotCommand(command="help", description="Помощь и примеры запросов"),
-                BotCommand(command="clear", description="Очистить историю диалога"),
-                BotCommand(command="history", description="Поиск по истории диалогов"),
-                BotCommand(command="stats", description="Статистика кеша"),
-                BotCommand(command="metrics", description="Метрики пайплайна в JSON logs"),
-                BotCommand(command="clearcache", description="Очистить кеш Redis"),
-            ]
-        )
-        from aiogram.types import MenuButtonCommands
-
-        await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        await _bot_lifecycle.setup_bot_commands(self)
 
     async def _setup_polling_lock(self) -> None:
         """Acquire Redis polling lock and start heartbeat task."""
-        if self._cache.redis is None:
-            return
-        self._polling_lock = RedisPollingLock(
-            redis=self._cache.redis,
-            key=POLLING_LOCK_KEY,
-        )
-        self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
-        await self._polling_lock.acquire(self._polling_lock_owner)
-        refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
-        self._polling_lock_consecutive_failures = 0
-
-        async def _polling_lock_heartbeat_loop() -> None:
-            while True:
-                await asyncio.sleep(refresh_interval)
-                try:
-                    await self._polling_lock_heartbeat_tick()
-                except Exception:
-                    logger.exception("Polling lock heartbeat loop error")
-
-        self._polling_lock_task = asyncio.create_task(
-            _polling_lock_heartbeat_loop(), name="polling-lock-heartbeat"
-        )
+        await _bot_lifecycle.setup_polling_lock(self)
 
     async def start(self):
-        """Start bot polling."""
-        logger.info("Starting bot...")
-
-        preflight_result, startup_report = await self._setup_preflight()
-        await self._setup_cache()
-        await self._setup_checkpointers(startup_report)
-        await self._setup_postgres(preflight_result, startup_report)
-        await self._setup_bot_identity()
-        self._setup_handoff_services()
-        self._setup_workflow_data()
-        self._setup_dialogs()
-        await self._setup_bot_commands()
-
-        # Start Redis health monitor (background task, every 5 min)
-        await self._redis_monitor.start()
-
-        # Warm up BGE-M3 connection pool (#953)
-        await self._warmup_bge()
-
-        if startup_report.final_severity is StartupSeverity.FAILED:
-            logger.error(startup_report.render())
-        elif startup_report.final_severity is StartupSeverity.DEGRADED:
-            logger.warning(startup_report.render())
-        else:
-            logger.info(startup_report.render())
-
-        await self._setup_polling_lock()
-
-        # DEPS-OBS3: in-process Prometheus /metrics is removed. Pipeline
-        # counters/latencies are emitted as structured JSON product logs.
-        try:
-            await self.dp.start_polling(self.bot)
-        finally:
-            if self._polling_lock_task is not None:
-                self._polling_lock_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._polling_lock_task
-                self._polling_lock_task = None
+        """Start bot polling — thin delegate to ``_bot_lifecycle.start_bot``."""
+        await _bot_lifecycle.start_bot(self)
 
     async def _warmup_bge(self) -> None:
-        """Warm up BGE-M3 connection pool (#953).
-
-        Thin delegate to :func:`telegram_bot._bot_lifecycle.warmup_bge_pool`
-        — see ``docs/engineering/bot-decomposition-plan-2026-05-27.md``
-        (#1265 / #2048 PR-8).
-        """
+        """Thin delegate to ``_bot_lifecycle.warmup_bge_pool`` (#953)."""
         await _bot_lifecycle.warmup_bge_pool(self._hybrid, log=logger)
 
     async def _polling_lock_heartbeat_tick(self) -> None:
-        """Single heartbeat tick: refresh the Redis polling lock.
-
-        Thin delegate to
-        :func:`telegram_bot._bot_lifecycle.polling_lock_heartbeat_tick` —
-        see ``docs/engineering/bot-decomposition-plan-2026-05-27.md``
-        (#1265 / #2048 PR-8).
-        """
+        """Thin delegate to ``_bot_lifecycle.polling_lock_heartbeat_tick``."""
         await _bot_lifecycle.polling_lock_heartbeat_tick(
             self,
             log=logger,
@@ -1442,49 +885,5 @@ class PropertyBot:
         )
 
     async def stop(self):
-        """Stop bot and cleanup."""
-        logger.info("Stopping bot...")
-
-        if self._polling_lock_task is not None:
-            self._polling_lock_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._polling_lock_task
-            self._polling_lock_task = None
-        if self._polling_lock is not None and self._polling_lock_owner is not None:
-            try:
-                await self._polling_lock.release()
-            except Exception:
-                logger.warning("Failed to release polling lock cleanly", exc_info=True)
-            finally:
-                self._polling_lock = None
-                self._polling_lock_owner = None
-        await self._redis_monitor.stop()
-        await self._cache.close()
-        await self._qdrant.close()
-        if hasattr(self._embeddings, "aclose"):
-            await self._embeddings.aclose()
-        if hasattr(self._sparse, "aclose"):
-            await self._sparse.aclose()
-        if self._reranker and hasattr(self._reranker, "close"):
-            await self._reranker.close()
-        self._pre_agent_filter_extractor = None
-        if self._checkpointer is not None:
-            try:
-                if hasattr(self._checkpointer, "__aexit__"):
-                    await self._checkpointer.__aexit__(None, None, None)
-            except Exception:
-                logger.warning("Failed to close checkpointer cleanly", exc_info=True)
-            finally:
-                self._checkpointer = None
-        if self._agent_checkpointer is not None:
-            try:
-                if hasattr(self._agent_checkpointer, "__aexit__"):
-                    await self._agent_checkpointer.__aexit__(None, None, None)
-            except Exception:
-                logger.warning("Failed to close agent checkpointer cleanly", exc_info=True)
-            finally:
-                self._agent_checkpointer = None
-        if self._pg_pool is not None:
-            await self._pg_pool.close()
-            logger.info("PostgreSQL pool closed")
-        await self.bot.session.close()
+        """Stop bot and cleanup — thin delegate to ``_bot_lifecycle.stop_bot``."""
+        await _bot_lifecycle.stop_bot(self)

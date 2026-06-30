@@ -6,6 +6,11 @@ on an aiogram Router via the create_commands_router() factory.
 Each handler accepts a ``bot`` instance as its first parameter. The factory
 binds this via closures so that aiogram receives the correct signature.
 Tests can import the raw handler functions and pass a mock bot directly.
+
+Also owns menu-routing helpers:
+  - :func:`resolve_user_role` — DB + config role resolution.
+  - :func:`handle_menu_button` — ReplyKeyboard button routing.
+  - :func:`handle_menu_action` — inline menu action dispatch to agent pipeline.
 """
 
 from __future__ import annotations
@@ -274,3 +279,188 @@ def create_commands_router(bot_instance: PropertyBot) -> Router:
     router.message(Command("clearcache"))(_cmd_clearcache)
 
     return router
+
+
+# ---------------------------------------------------------------------------
+# Menu routing helpers (card_c6ade99aada1 — decompose PropertyBot god-object)
+# ---------------------------------------------------------------------------
+
+
+async def resolve_user_role(bot: PropertyBot, user_id: int) -> str:
+    """Resolve user role from DB or config fallback (#388)."""
+    db_role: str | None = None
+    user_service = getattr(bot, "_user_service", None)
+    if user_service is not None and hasattr(user_service, "get_role"):
+        try:
+            resolved = await user_service.get_role(telegram_id=user_id)
+            if isinstance(resolved, str):
+                normalized = resolved.strip().lower()
+                if normalized in {"manager", "client"}:
+                    db_role = normalized
+        except Exception:
+            logger.warning("Role lookup failed", exc_info=True)
+
+    if user_id in bot.config.manager_ids:
+        return "manager"
+    return db_role or "client"
+
+
+async def handle_menu_button(
+    bot: PropertyBot,
+    message: Message,
+    state: FSMContext,
+    dialog_manager: Any = None,
+    i18n: Any = None,
+) -> None:
+    """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
+    from telegram_bot.keyboards.client_keyboard import parse_menu_button
+
+    action_id = parse_menu_button(
+        message.text or "",
+        i18n_hub=getattr(bot, "_i18n_hub", None),
+    )
+    if action_id is None:
+        return
+
+    current = await state.get_state()
+    if isinstance(current, str) and current.startswith("PhoneCollectorStates:"):
+        await state.clear()
+
+    if dialog_manager is not None:
+        from telegram_bot.dialogs.catalog import dispatch_catalog_text_action, is_catalog_state
+
+        if is_catalog_state(current) and await dispatch_catalog_text_action(
+            message=message,
+            manager=dialog_manager,
+            i18n_hub=getattr(bot, "_i18n_hub", None),
+        ):
+            return
+
+    from telegram_bot import _bot_catalog, _bot_favorites, _bot_handoff
+    from telegram_bot.handlers.demo_handler import handle_demo_button
+
+    async def _handle_demo(msg: Message) -> None:
+        await handle_demo_button(msg)
+
+    if action_id != "bookmarks":
+        await state.update_data(bookmarks_context=False)
+
+    if action_id == "search":
+        await _bot_catalog._handle_search(bot, message, dialog_manager)
+    elif action_id == "services":
+        await _bot_catalog._handle_services(bot, message, i18n=i18n)
+    elif action_id == "viewing":
+        await _bot_catalog._handle_viewing(bot, message, state, dialog_manager)
+    elif action_id == "bookmarks":
+        await _bot_favorites._handle_bookmarks(bot, message, state)
+    elif action_id == "ask":
+        await _bot_catalog._handle_ask(bot, message, i18n=i18n)
+    elif action_id == "manager":
+        await _bot_handoff._handle_manager(
+            bot, message, i18n=i18n, state=state, dialog_manager=dialog_manager
+        )
+    elif action_id == "demo":
+        await _handle_demo(message)
+
+
+async def handle_menu_action(
+    bot: PropertyBot,
+    callback: Any,
+    query_text: str,
+    locale: str = "ru",
+) -> None:
+    """Handle menu button click — dispatch query_text to agent pipeline.
+
+    Called by on_click handlers in dialog files after manager.done().
+    """
+    from aiogram.utils.chat_action import ChatActionSender
+
+    from telegram_bot.agents.agent import LOCALE_TO_LANGUAGE, create_bot_agent
+    from telegram_bot.agents.context import BotContext
+    from telegram_bot.agents.tool_assembly import build_agent_tools
+    from telegram_bot.constants import split_telegram_response as _split
+    from telegram_bot.observability import propagate_attributes
+    from telegram_bot.tracing_context import make_session_id
+
+    if callback.from_user is None or callback.message is None:
+        return
+
+    user_id = callback.from_user.id
+    chat_id = callback.message.chat.id
+    aiogram_bot = callback.message.bot
+
+    role = await resolve_user_role(bot, user_id)
+    language = LOCALE_TO_LANGUAGE.get(locale, bot.config.domain_language)
+    session_id = make_session_id("chat", chat_id)
+
+    tools = build_agent_tools(role=role, config=bot.config)
+    agent = create_bot_agent(
+        model=bot.config.supervisor_model,
+        tools=tools,
+        checkpointer=bot._agent_checkpointer,
+        language=language,
+        base_url=bot.config.llm_base_url,
+        api_key=bot.config.llm_api_key,
+        role=role,
+        max_history_messages=bot.config.agent_max_history_messages,
+        max_tokens=bot.config.supervisor_max_tokens,
+    )
+
+    ctx = BotContext(
+        telegram_user_id=user_id,
+        session_id=session_id,
+        language=language,
+        embeddings=bot._embeddings,
+        sparse_embeddings=bot._sparse,
+        qdrant=bot._qdrant,
+        cache=bot._cache,
+        reranker=bot._reranker,
+        llm=bot._llm,
+        content_filter_enabled=bot.config.content_filter_enabled,
+        guard_mode=bot.config.guard_mode,
+        role=role,
+        original_query=query_text,
+        original_user_query=query_text,
+        bot=aiogram_bot,
+        manager_ids=list(bot.config.manager_ids),
+        apartments_service=bot._apartments_service,
+        search_event_store=bot._search_event_store,
+        config=bot.config,
+    )
+
+    rag_result_store: dict[str, Any] = {}
+
+    with propagate_attributes(
+        session_id=session_id,
+        user_id=str(user_id),
+        tags=["telegram", "menu", "agent"],
+    ):
+        callbacks: list[Any] = []
+        async with ChatActionSender.typing(bot=aiogram_bot, chat_id=chat_id):  # type: ignore[arg-type]
+            result = await bot._ainvoke_supervisor_with_recovery(
+                agent=agent,
+                tools=tools,
+                role=role,
+                user_text=query_text,
+                chat_id=chat_id,
+                callbacks=callbacks,
+                bot_context=ctx,
+                rag_result_store=rag_result_store,
+            )
+
+    messages = result.get("messages", [])
+    response_text = ""
+    if messages:
+        last_msg = messages[-1]
+        response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+
+    if response_text and not ctx.response_sent:
+        for chunk in _split(response_text):
+            try:
+                await callback.message.answer(chunk, parse_mode="Markdown")
+            except Exception:
+                logger.warning("Markdown parse failed in menu action, falling back")
+                try:
+                    await callback.message.answer(chunk)
+                except Exception:
+                    logger.exception("Failed to send menu action response chunk")
