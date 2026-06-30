@@ -86,14 +86,24 @@ def test_wrapper_reresolves_orch_target_at_wakeup(tmp_path: Path) -> None:
             f"generated wrapper; got:\n{wtext[:400]}"
         )
 
-        # RED: the wake-up must re-resolve the orchestrator target from the marker
-        # at send time, not rely on the baked literal.
+        # The wake-up must re-resolve the orchestrator target from the marker
+        # at send time, not rely solely on the baked literal.
         assert MARKER_BASENAME in wtext, (
             "launch_kiro_worker.sh bakes ORCH_TARGET into the wrapper and never "
             "re-resolves it at wake-up (card_8dfe242c7fc7). The wrapper must "
             f"re-read {MARKER_BASENAME} (+ re-check window liveness) inside "
             "send_signal so a [DONE] still reaches the orchestrator after the "
             "window it was launched against is gone and a new one was claimed."
+        )
+
+        # The re-resolution must be GATED on window liveness: a STALE marker
+        # pointing at a dead window must NOT win over a live baked target
+        # (regression caught by the live probe 2026-06-30).
+        assert "_win_live" in wtext and "list-windows" in wtext, (
+            "send_signal must verify the resolved target's window is live "
+            "(via tmux list-windows / _win_live) before sending; otherwise a "
+            "stale marker re-introduces the dead-window wake-up bug "
+            "(card_f5600223ad55)."
         )
     finally:
         dest.unlink(missing_ok=True)
