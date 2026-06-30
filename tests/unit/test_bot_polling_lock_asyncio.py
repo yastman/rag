@@ -113,3 +113,37 @@ async def test_bot_stop_cancels_polling_lock_task():
 
     assert task.done()
     assert bot._polling_lock_task is None
+
+
+@pytest.mark.asyncio
+async def test_polling_lock_busy_message_diagnostics() -> None:
+    """PollingLockBusy must surface owner and pttl_ms in its message.
+
+    Replaces the preflight probe deleted in PR #3099 (#2189).
+    Startup failure must be self-diagnosing: operator sees who holds
+    the lock and how long before it expires.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.runtime.integrations.polling_lock import (
+        PollingLockBusy,
+        RedisPollingLock,
+    )
+
+    redis = MagicMock()
+    # lock.acquire returns False → lock is busy
+    mock_lock = MagicMock()
+    mock_lock.acquire = AsyncMock(return_value=False)
+    redis.lock = MagicMock(return_value=mock_lock)
+    # diagnostics: current owner and remaining TTL
+    redis.get = AsyncMock(return_value=b"WIN-HOST:12345")
+    redis.pttl = AsyncMock(return_value=72000)
+
+    pl = RedisPollingLock(redis=redis, key="telegram-bot:polling", ttl_sec=90)
+
+    with pytest.raises(PollingLockBusy) as exc_info:
+        await pl.acquire(owner="test-owner")
+
+    msg = str(exc_info.value)
+    assert "WIN-HOST:12345" in msg, f"owner missing from PollingLockBusy message: {msg!r}"
+    assert "72000" in msg, f"pttl_ms missing from PollingLockBusy message: {msg!r}"

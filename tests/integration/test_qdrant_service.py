@@ -42,7 +42,7 @@ class TestHybridSearchRRFQuantization:
         """Test quantization_ignore=True skips quantization."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_class:
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient") as mock_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_col = MagicMock()
@@ -70,7 +70,7 @@ class TestHybridSearchRRFQuantization:
         """Test quantization_ignore=False forces quantization."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_class:
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient") as mock_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_col = MagicMock()
@@ -102,7 +102,7 @@ class TestHybridSearchRRFQuantization:
         """Test quantization_ignore=None means no search_params quantization."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_class:
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient") as mock_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_col = MagicMock()
@@ -138,7 +138,7 @@ class TestQdrantServiceUnit:
         """HTTP URL should strip api_key and create AsyncQdrantClient with gRPC."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_client_class:
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient") as mock_client_class:
             service = QdrantService(
                 url="http://localhost:6333",
                 api_key="test-key",
@@ -148,7 +148,7 @@ class TestQdrantServiceUnit:
             mock_client_class.assert_called_once_with(
                 url="http://localhost:6333",
                 api_key=None,
-                prefer_grpc=True,
+                prefer_grpc=False,  # default changed: gRPC not exposed in compose
                 timeout=30,
             )
             assert service._collection_name == "test_collection"
@@ -158,7 +158,7 @@ class TestQdrantServiceUnit:
         """Test hybrid_search_rrf builds correct prefetch queries."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_client_class:
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             _mc = MagicMock()
@@ -193,7 +193,7 @@ class TestQdrantServiceUnit:
         """Test hybrid_search_rrf works with only dense vector."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_client_class:
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             _mc = MagicMock()
@@ -221,7 +221,7 @@ class TestQdrantServiceUnit:
         """Test search returns properly formatted results."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient") as mock_client_class:
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient") as mock_client_class:
             mock_client = AsyncMock()
 
             # Mock point
@@ -263,7 +263,7 @@ class TestFilterBuilding:
         """Test filter building with exact match values."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -278,7 +278,7 @@ class TestFilterBuilding:
         """Test filter building with range values."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -293,7 +293,7 @@ class TestFilterBuilding:
         """Test filter building returns None for empty filters."""
         from src.runtime.services.qdrant import QdrantService
 
-        with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
+        with patch("src.runtime.qdrant.service.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
