@@ -200,17 +200,27 @@ cd "$WORKER_CWD"
 # orchestrator was never actually woken. Keying the wake-up on a status/report
 # FILE (which an agent writes reliably, and whose printed echo cannot forge)
 # removes the false positive entirely.
+# Is a tmux target ("session:winref") currently live? session exists AND the
+# @id/name is one of its live windows. Used to choose a LIVE wake-up target.
+_win_live() {
+  local _sess="\${1%%:*}" _win="\${1#*:}"
+  tmux list-windows -t "\$_sess" -F '#{window_id}'\$'\n''#{window_name}' 2>/dev/null | grep -qxF "\$_win"
+}
+
 send_signal() {
   # single-fire: only the first caller actually wakes the orchestrator
   if ( set -o noclobber; : > "$SIGNAL_FLAG" ) 2>/dev/null; then
     # Re-resolve the orchestrator target at WAKE-UP time (card_8dfe242c7fc7): the
     # window we were launched against may be dead and a new orchestrator may hold
-    # a different window-id by now. Prefer the live marker; fall back to the
-    # launch-baked ORCH_TARGET when the marker is missing/unreadable.
+    # a different window-id by now. Prefer the marker's target ONLY IF its window
+    # is currently live (orchestrator genuinely moved); otherwise keep the
+    # launch-baked ORCH_TARGET. A STALE marker pointing at a dead window must NOT
+    # win over a live baked target (regression caught by the live probe
+    # 2026-06-30 — the card_f5600223ad55 dead-window bug, redux).
     _orch="$ORCH_TARGET"
     if [[ -f "$MARKER" ]]; then
       _m="\$(python3 -c "import json; print(json.load(open('$MARKER'))['orchestrator_target'])" 2>/dev/null || true)"
-      [[ -n "\$_m" ]] && _orch="\$_m"
+      if [[ -n "\$_m" ]] && _win_live "\$_m"; then _orch="\$_m"; fi
     fi
     for _retry in 1 2 3 4 5; do
       tmux send-keys -t "\$_orch" -l "\$1" 2>/dev/null && break || true
