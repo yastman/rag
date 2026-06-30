@@ -19,8 +19,6 @@ from aiogram_dialog.widgets.input import MessageInput, TextInput
 from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select, Start
 from aiogram_dialog.widgets.text import Format
 
-from telegram_bot.observability import observe
-
 from .crm_cards import format_lead_card
 from .states import (
     CreateLeadSG,
@@ -200,7 +198,6 @@ async def on_pipeline_skip(
     await manager.switch_to(CreateLeadSG.summary)
 
 
-@observe(name="dialog-crm-create-lead", capture_input=False, capture_output=False)
 async def on_lead_confirm(
     callback: CallbackQuery,
     button: Button,
