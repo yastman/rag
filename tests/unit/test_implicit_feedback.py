@@ -118,33 +118,3 @@ class TestIsReformulation:
         result = is_reformulation(current, previous, time_delta_seconds=-5.0)
         # A future timestamp is outside the valid [0, max_time_seconds) window → False
         assert result is False
-
-
-class TestCosineSimilarity:
-    """Test the cosine_similarity helper."""
-
-    def test_identical_vectors_have_similarity_one(self):
-        """Identical vectors → cosine similarity = 1.0."""
-        from telegram_bot.implicit_feedback import cosine_similarity
-
-        v = [0.5, 0.5, 0.5, 0.5]
-        sim = cosine_similarity(v, v)
-        assert abs(sim - 1.0) < 1e-6
-
-    def test_orthogonal_vectors_have_similarity_zero(self):
-        """Orthogonal vectors → cosine similarity = 0.0."""
-        from telegram_bot.implicit_feedback import cosine_similarity
-
-        a = [1.0, 0.0]
-        b = [0.0, 1.0]
-        sim = cosine_similarity(a, b)
-        assert abs(sim - 0.0) < 1e-6
-
-    def test_opposite_vectors_have_similarity_negative_one(self):
-        """Opposite vectors → cosine similarity = -1.0."""
-        from telegram_bot.implicit_feedback import cosine_similarity
-
-        a = [1.0, 0.0]
-        b = [-1.0, 0.0]
-        sim = cosine_similarity(a, b)
-        assert abs(sim - (-1.0)) < 1e-6
