@@ -40,6 +40,8 @@ fi
 declare -A PATTERN_EXEMPTIONS=(
   ["gh-pr-review|gh pr merge"]=1        # orchestrator merge step, not a worker command
   ["swarm-acceptance|gh pr merge"]=1    # orchestrator disposition instruction
+  ["swarm-orchestrator|gh pr merge"]=1  # orchestrator auto-merge policy (mirror step), not a worker command
+  ["swarm-pr-review-flow|gh pr merge"]=1 # orchestrator merge-disposition prose ("not a gh pr merge"), not a worker command
   ["codeindex-index-transfer|rm -rf"]=1 # documented index-cleanup step in prose
 )
 
