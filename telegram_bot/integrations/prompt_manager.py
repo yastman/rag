@@ -15,10 +15,6 @@ logger = logging.getLogger(__name__)
 # 1h TTL: accepted for call-site compatibility; not used for lookup.
 DEFAULT_CACHE_TTL = 3600
 
-# Module-level TTL caches preserved for call-site compatibility
-_missing_prompts_until: dict[str, float] = {}
-_transient_failures_until: dict[str, float] = {}
-
 
 def get_prompt_with_config(
     name: str,
@@ -72,6 +68,4 @@ def _apply_fallback_vars(fallback: str, compile_vars: dict[str, str]) -> str:
 
 
 def _reset_client() -> None:
-    """Reset the prompt TTL caches (for testing)."""
-    _missing_prompts_until.clear()
-    _transient_failures_until.clear()
+    """No-op: retained for call-site compatibility (no state to reset)."""
