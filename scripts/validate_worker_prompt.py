@@ -89,6 +89,31 @@ CODE_CHANGING_WORKER_TYPES = {
     "quick",
     "review-fix",
 }
+# Tier-based required superpowers (card_9c05aee6022f). A trivial change must not
+# be forced through the full TDD chain just because it touches code. The tier is
+# derived from the worker type via WORKER_TYPE_TIER; any code-changing type not
+# listed there defaults to the full "risky" chain (fail-safe — unknown ⇒ strict).
+#   trivial  → verification only (1-file / docs / config / skill edits, `quick`)
+#   standard → executing-plans + verification (feature / refactor, no TDD)
+#   risky    → full chain incl. TDD (implementation / plan-execution / review-fix)
+WORKER_TIER_REQUIRED_SUPERPOWERS = {
+    "trivial": ("superpowers:verification-before-completion",),
+    "standard": (
+        "superpowers:executing-plans",
+        "superpowers:verification-before-completion",
+    ),
+    "risky": (
+        "superpowers:executing-plans",
+        "superpowers:test-driven-development",
+        "superpowers:verification-before-completion",
+    ),
+}
+WORKER_TYPE_TIER = {
+    "quick": "trivial",
+    "implementation": "risky",
+    "plan-execution": "risky",
+    "review-fix": "risky",
+}
 FORBIDDEN_WORKER_SUPERPOWERS = {
     "superpowers:using-superpowers",
     "superpowers/using-superpowers",
@@ -379,19 +404,14 @@ def validate_superpowers_policy(text: str, errors: list[str]) -> None:
                 )
 
     if task_type in CODE_CHANGING_WORKER_TYPES:
+        tier = WORKER_TYPE_TIER.get(task_type, "risky")
+        tier_required = WORKER_TIER_REQUIRED_SUPERPOWERS[tier]
         if required is None:
             errors.append("code-changing worker prompt requires Required Superpowers")
         else:
-            if "superpowers:executing-plans" not in required:
-                errors.append("code-changing worker prompt requires superpowers:executing-plans")
-            if "superpowers:test-driven-development" not in required:
-                errors.append(
-                    "code-changing worker prompt requires superpowers:test-driven-development"
-                )
-            if "superpowers:verification-before-completion" not in required:
-                errors.append(
-                    "code-changing worker prompt requires superpowers:verification-before-completion"
-                )
+            for needed in tier_required:
+                if needed not in required:
+                    errors.append(f"{tier}-tier code-changing worker prompt requires {needed}")
 
         if line_value(text, "Forbidden Superpowers") is None:
             errors.append("code-changing worker prompt requires Forbidden Superpowers")
