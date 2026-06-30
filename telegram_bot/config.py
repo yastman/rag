@@ -51,6 +51,15 @@ def _inject_local_redis_password(
     return redis_url.replace("redis://", f"redis://:{quote(password, safe='')}@", 1)
 
 
+def _parse_int_id_list(v: object) -> list[int]:
+    """Parse a comma-separated string or list into a list of int IDs."""
+    if isinstance(v, str):
+        return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
+    if isinstance(v, list):
+        return [int(x) for x in v]
+    return []
+
+
 class BotConfig(BaseSettings):
     """Telegram bot configuration."""
 
@@ -226,11 +235,7 @@ class BotConfig(BaseSettings):
     @field_validator("admin_ids", mode="before")
     @classmethod
     def parse_admin_ids(cls, v: object) -> list[int]:
-        if isinstance(v, str):
-            return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
-        if isinstance(v, list):
-            return [int(x) for x in v]
-        return []
+        return _parse_int_id_list(v)
 
     # Domain configuration (configurable per deployment)
     domain: str = Field(
@@ -426,11 +431,7 @@ class BotConfig(BaseSettings):
     @field_validator("manager_ids", mode="before")
     @classmethod
     def parse_manager_ids(cls, v: object) -> list[int]:
-        if isinstance(v, str):
-            return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
-        if isinstance(v, list):
-            return [int(x) for x in v]
-        return []
+        return _parse_int_id_list(v)
 
     @field_validator("telegram_token", mode="after")
     @classmethod
