@@ -10,7 +10,20 @@ from typing import Any
 
 from qdrant_client import AsyncQdrantClient, models
 
-from telegram_bot.observability import get_client, observe
+
+# ponytail: Langfuse removed (#2969) — observe was a no-op decorator, get_client a stub
+def observe(name: str = "", **_kw):  # type: ignore[misc]
+    """No-op decorator replacing removed @observe (Langfuse removed)."""
+
+    def _dec(fn):  # type: ignore[misc]
+        return fn
+
+    return _dec
+
+
+def get_client():  # type: ignore[misc]
+    """No-op stub replacing removed Langfuse client accessor."""
+    return type("_NoopSpan", (), {"update_current_span": lambda *_a, **_kw: None})()
 
 
 logger = logging.getLogger(__name__)

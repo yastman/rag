@@ -29,5 +29,5 @@ uv run python scripts/setup_qdrant_collection.py
 
 - [`docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local commands and validation ladder
 - [`docs/INGESTION.md`](../docs/INGESTION.md) — Unified ingestion runbook
-- [`docs/runbooks/GIT_PR_ISSUE_NATIVE.md`](../docs/runbooks/GIT_PR_ISSUE_NATIVE.md) — Native Git/GitHub hygiene workflow
+- [`docs/runbooks/README.md`](../docs/runbooks/README.md) — Operational runbooks
 - [`tests/README.md`](../tests/README.md) — Test pyramid and markers

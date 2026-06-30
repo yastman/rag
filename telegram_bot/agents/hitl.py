@@ -8,8 +8,8 @@ clicks, the agent is resumed via Command(resume={"action": "approve"|"cancel"}).
 from __future__ import annotations
 
 import threading
-from collections import OrderedDict
 
+from cachetools import LRUCache
 from langgraph.types import interrupt
 
 
@@ -24,9 +24,8 @@ from langgraph.types import interrupt
 # glue — a missing entry simply means no back-link is recorded — so the store
 # is bounded to avoid unbounded growth and guarded by a lock for thread safety.
 
-_PENDING_RESUME_TRACE_IDS: OrderedDict[str, str] = OrderedDict()
+_PENDING_RESUME_TRACE_IDS: LRUCache[str, str] = LRUCache(maxsize=1024)
 _PENDING_RESUME_LOCK = threading.Lock()
-_PENDING_RESUME_MAX = 1024
 
 
 def set_pending_resume_trace_id(thread_id: str, trace_id: str | None) -> None:
@@ -39,9 +38,6 @@ def set_pending_resume_trace_id(thread_id: str, trace_id: str | None) -> None:
         return
     with _PENDING_RESUME_LOCK:
         _PENDING_RESUME_TRACE_IDS[thread_id] = trace_id
-        _PENDING_RESUME_TRACE_IDS.move_to_end(thread_id)
-        while len(_PENDING_RESUME_TRACE_IDS) > _PENDING_RESUME_MAX:
-            _PENDING_RESUME_TRACE_IDS.popitem(last=False)
 
 
 def pop_pending_resume_trace_id(thread_id: str) -> str | None:
