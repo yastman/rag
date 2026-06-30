@@ -21,9 +21,7 @@ REQUIRED_DIRS: list[str] = [
     "scripts",
     "services",
     "services/bge-m3-api",
-    "services/user-base",
     "services/docling",
-    "mini_app/frontend/src",
 ]
 
 
