@@ -203,13 +203,8 @@ cd "$WORKER_CWD"
 # Is a tmux target ("session:winref") currently live? session exists AND the
 # @id/name is one of its live windows. Used to choose a LIVE wake-up target.
 _win_live() {
-  local _t="\$1" _sess _win _wid _wname
-  _sess="\${_t%%:*}"; _win="\${_t#*:}"
-  tmux has-session -t "\$_sess" 2>/dev/null || return 1
-  while IFS=\$'\t' read -r _wid _wname; do
-    [[ "\$_wid" == "\$_win" || "\$_wname" == "\$_win" ]] && return 0
-  done < <(tmux list-windows -t "\$_sess" -F '#{window_id}'\$'\t''#{window_name}' 2>/dev/null)
-  return 1
+  local _sess="\${1%%:*}" _win="\${1#*:}"
+  tmux list-windows -t "\$_sess" -F '#{window_id}'\$'\n''#{window_name}' 2>/dev/null | grep -qxF "\$_win"
 }
 
 send_signal() {
@@ -227,8 +222,6 @@ send_signal() {
       _m="\$(python3 -c "import json; print(json.load(open('$MARKER'))['orchestrator_target'])" 2>/dev/null || true)"
       if [[ -n "\$_m" ]] && _win_live "\$_m"; then _orch="\$_m"; fi
     fi
-    # If the chosen target is dead but the launch-baked one is live, prefer baked.
-    if ! _win_live "\$_orch" && _win_live "$ORCH_TARGET"; then _orch="$ORCH_TARGET"; fi
     for _retry in 1 2 3 4 5; do
       tmux send-keys -t "\$_orch" -l "\$1" 2>/dev/null && break || true
       sleep 2
