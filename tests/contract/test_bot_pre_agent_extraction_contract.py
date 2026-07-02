@@ -47,7 +47,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-NEW_MODULE = REPO_ROOT / "telegram_bot" / "_bot_pre_agent.py"
+NEW_MODULE = REPO_ROOT / "telegram_bot" / "pipeline" / "pre_agent.py"
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
 
 HELPERS: tuple[str, ...] = (
@@ -95,7 +95,7 @@ def test_bot_pre_agent_module_imports_are_clean() -> None:
             if mod in FORBIDDEN_MODULE_LEVEL_IMPORTS:
                 bad.append(node.module or "")
     assert not bad, (
-        f"_bot_pre_agent.py module-level imports must avoid the bot stack; "
+        f"pipeline/pre_agent.py module-level imports must avoid the bot stack; "
         f"found forbidden roots: {bad}"
     )
 
@@ -105,7 +105,7 @@ def test_bot_pre_agent_helper_exposed(helper: str) -> None:
     """Each helper must be defined at module top-level."""
     tree = ast.parse(NEW_MODULE.read_text())
     names = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
-    assert helper in names, f"_bot_pre_agent.{helper} must be defined at module top."
+    assert helper in names, f"pipeline/pre_agent.{helper} must be defined at module top."
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +130,8 @@ class _ProbeObj:
     ],
 )
 def test_has_async_method_byte_for_byte_parity(attr: str, expected: bool) -> None:
-    from telegram_bot import _bot_pre_agent, bot
+    from telegram_bot import bot
+    from telegram_bot.pipeline import pre_agent as _bot_pre_agent
 
     probe = _ProbeObj()
     assert bot._has_async_method(probe, attr) == expected
@@ -183,7 +184,8 @@ class _FakeEmbeddings:
 
 @pytest.mark.asyncio
 async def test_get_or_compute_pre_agent_dense_parity() -> None:
-    from telegram_bot import _bot_pre_agent, bot
+    from telegram_bot import bot
+    from telegram_bot.pipeline import pre_agent as _bot_pre_agent
 
     cache_a = _FakeCache()
     cache_b = _FakeCache()
@@ -206,7 +208,7 @@ async def test_get_or_compute_pre_agent_dense_parity() -> None:
 @pytest.mark.asyncio
 async def test_get_or_compute_pre_agent_dense_uses_cache() -> None:
     """When the cache already has the embedding, no encode runs."""
-    from telegram_bot import _bot_pre_agent
+    from telegram_bot.pipeline import pre_agent as _bot_pre_agent
 
     cache = _FakeCache()
     cache._embeddings["cached_query"] = [9.0, 9.0]
@@ -226,7 +228,8 @@ async def test_get_or_compute_pre_agent_dense_uses_cache() -> None:
 
 @pytest.mark.asyncio
 async def test_prepare_pre_agent_retrieval_vectors_parity() -> None:
-    from telegram_bot import _bot_pre_agent, bot
+    from telegram_bot import bot
+    from telegram_bot.pipeline import pre_agent as _bot_pre_agent
 
     cache_a = _FakeCache()
     cache_b = _FakeCache()
@@ -258,7 +261,8 @@ async def test_prepare_pre_agent_retrieval_vectors_parity() -> None:
 
 
 def test_build_pre_agent_state_contract_parity() -> None:
-    from telegram_bot import _bot_pre_agent, bot
+    from telegram_bot import bot
+    from telegram_bot.pipeline import pre_agent as _bot_pre_agent
 
     common_kwargs: dict[str, object] = {
         "rag_result_store": {"filters": {"city": "Sofia"}},
@@ -281,7 +285,7 @@ def test_build_pre_agent_state_contract_parity() -> None:
 
 def test_build_pre_agent_state_contract_explicit_filters_take_precedence() -> None:
     """``filters`` argument overrides ``rag_result_store['filters']``."""
-    from telegram_bot import _bot_pre_agent
+    from telegram_bot.pipeline import pre_agent as _bot_pre_agent
 
     out = _bot_pre_agent._build_pre_agent_state_contract(
         rag_result_store={"filters": {"city": "ignored"}},

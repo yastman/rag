@@ -11,7 +11,7 @@ This contract pins **PR-4** (streaming/draft helpers):
 
 Mirrors PR-1..PR-3 contracts:
 
-  1. ``telegram_bot/_bot_streaming.py`` exists and is import-clean
+  1. ``telegram_bot/pipeline/streaming.py`` exists and is import-clean
      (stdlib only — no aiogram / langgraph / fastapi / langchain).
   2. All three helpers are exposed at module top.
   3. ``_AGENT_DRAFT_INTERVAL`` is exported (callers in bot.py read it).
@@ -36,7 +36,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-NEW_MODULE = REPO_ROOT / "telegram_bot" / "_bot_streaming.py"
+NEW_MODULE = REPO_ROOT / "telegram_bot" / "pipeline" / "streaming.py"
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
 
 HELPERS: tuple[str, ...] = (
@@ -83,7 +83,7 @@ def test_bot_streaming_module_imports_are_clean() -> None:
             if mod in FORBIDDEN_MODULE_LEVEL_IMPORTS:
                 bad.append(node.module or "")
     assert not bad, (
-        f"_bot_streaming.py module-level imports must avoid the bot stack; "
+        f"pipeline/streaming.py module-level imports must avoid the bot stack; "
         f"found forbidden roots: {bad}"
     )
 
@@ -93,12 +93,13 @@ def test_bot_streaming_helper_exposed(helper: str) -> None:
     """Each helper must be defined at module top-level."""
     tree = ast.parse(NEW_MODULE.read_text())
     names = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
-    assert helper in names, f"_bot_streaming.{helper} must be defined at module top."
+    assert helper in names, f"pipeline/streaming.{helper} must be defined at module top."
 
 
 def test_agent_draft_interval_constant_exposed() -> None:
     """``_AGENT_DRAFT_INTERVAL`` must move with the streaming helper."""
-    from telegram_bot import _bot_streaming, bot
+    from telegram_bot import bot
+    from telegram_bot.pipeline import streaming as _bot_streaming
 
     assert hasattr(_bot_streaming, "_AGENT_DRAFT_INTERVAL")
     assert isinstance(_bot_streaming._AGENT_DRAFT_INTERVAL, float)
@@ -113,7 +114,7 @@ def test_agent_draft_interval_constant_exposed() -> None:
 
 def test_bot_streaming_new_draft_id_returns_positive_31bit_int() -> None:
     """Generator must always produce a positive value within signed-int32."""
-    from telegram_bot import _bot_streaming
+    from telegram_bot.pipeline import streaming as _bot_streaming
 
     for _ in range(200):
         v = _bot_streaming._new_draft_id()
@@ -125,7 +126,8 @@ def test_new_draft_id_wrapper_identity() -> None:
     """``bot._new_draft_id`` and ``_bot_streaming._new_draft_id`` produce
     same-shaped values — both within the documented draft-id range.
     """
-    from telegram_bot import _bot_streaming, bot
+    from telegram_bot import bot
+    from telegram_bot.pipeline import streaming as _bot_streaming
 
     for _ in range(50):
         bv = bot._new_draft_id()
@@ -168,7 +170,8 @@ PARITY_PAYLOADS: list[tuple[str, object]] = [
     ids=[label for label, _ in PARITY_PAYLOADS],
 )
 def test_extract_stream_chunk_text_byte_for_byte_parity(label: str, chunk: object) -> None:
-    from telegram_bot import _bot_streaming, bot
+    from telegram_bot import bot
+    from telegram_bot.pipeline import streaming as _bot_streaming
 
     bot_result = bot._extract_stream_chunk_text(chunk)
     new_result = _bot_streaming._extract_stream_chunk_text(chunk)
@@ -223,7 +226,7 @@ async def test_stream_agent_to_draft_collects_and_finalizes() -> None:
     - skip tool-call chunks,
     - return the final ``values`` payload.
     """
-    from telegram_bot import _bot_streaming
+    from telegram_bot.pipeline import streaming as _bot_streaming
 
     msg_a = SimpleNamespace(content="Hello ", tool_calls=None)
     msg_b = SimpleNamespace(content="world", tool_calls=None)
