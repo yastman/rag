@@ -69,12 +69,6 @@ def _get_detect_injection() -> Any:
     return _m.detect_injection
 
 
-def _get_supervisor_thread_id() -> Any:
-    from telegram_bot.services.checkpointer_utils import _supervisor_thread_id
-
-    return _supervisor_thread_id
-
-
 async def handle_query(
     bot: PropertyBot,
     message: Message,
