@@ -13,8 +13,8 @@ import time
 from typing import Any
 
 from telegram_bot.services.metrics import record_pipeline_event
-from telegram_bot.services.query_preprocessor import QueryPreprocessor
-from telegram_bot.services.rag_core import (
+from telegram_bot.services.rag.query_preprocessor import QueryPreprocessor
+from telegram_bot.services.rag.rag_core import (
     build_retrieved_context as _build_retrieved_context,
 )
 
@@ -190,7 +190,7 @@ async def _hybrid_retrieve(
                         and colbert_query is not None
                     ):
                         try:
-                            from telegram_bot.services.bge_m3_query_bundle import (
+                            from telegram_bot.services.rag.bge_m3_query_bundle import (
                                 BgeM3QueryVectorBundle,
                             )
 

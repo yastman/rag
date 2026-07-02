@@ -3,10 +3,11 @@
 The canonical implementation now lives in ``src.services.vectorizers``.
 This module is preserved so existing imports such as
 
-    from telegram_bot.services.vectorizers import BgeM3CacheVectorizer
-    from telegram_bot.services.vectorizers import UserBaseVectorizer
+    from telegram_bot.services.rag.vectorizers import BgeM3CacheVectorizer
 
 continue to resolve. New code should import from ``src.services.vectorizers``.
+
+Note: UserBaseVectorizer was archived (deepvk/USER2-base) and removed from src.
 
 Tracked under #1948 / #2047 / #2049.
 """
@@ -15,11 +16,9 @@ from __future__ import annotations
 
 from src.services.vectorizers import (
     BgeM3CacheVectorizer,
-    UserBaseVectorizer,
 )
 
 
 __all__ = [
     "BgeM3CacheVectorizer",
-    "UserBaseVectorizer",
 ]

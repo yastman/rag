@@ -1,4 +1,4 @@
-"""Tests for telegram_bot.services.rag_core — shared RAG core functions.
+"""Tests for telegram_bot.services.rag.rag_core — shared RAG core functions.
 
 TDD: tests written BEFORE implementation.  All tests will initially fail with
 ImportError (module doesn't exist yet) — that's the expected RED state.

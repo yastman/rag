@@ -44,7 +44,7 @@ _IMPORT_MAP = {
     "HyDEGenerator": "src.runtime.services.query_preprocessor",
     "PipelineMetrics": "src.runtime.services.metrics",
     "QdrantService": "src.runtime.services.qdrant",
-    "QueryAnalyzer": "telegram_bot.services.query_analyzer",
+    "QueryAnalyzer": "telegram_bot.services.rag.query_analyzer",
     "QueryPreprocessor": "src.runtime.services.query_preprocessor",
     "SmallToBigService": "src.runtime.services.small_to_big",
 }

@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from time import time
 from typing import Any
 
-from telegram_bot.services.grounding_policy import semantic_cache_safe_reuse_allowed
-from telegram_bot.services.query_filter_signal import build_filter_signature
+from telegram_bot.services.rag.grounding_policy import semantic_cache_safe_reuse_allowed
+from telegram_bot.services.rag.query_filter_signal import build_filter_signature
 
 
 _SEMANTIC_CACHEABLE_QUERY_TYPES = {"ENTITY", "FAQ", "GENERAL", "STRUCTURED"}

@@ -10,7 +10,7 @@ Issue: #129
 from __future__ import annotations
 
 from telegram_bot.integrations.prompt_manager import get_prompt
-from telegram_bot.services.response_style_detector import ResponseStyle
+from telegram_bot.services.rag.response_style_detector import ResponseStyle
 
 
 CONTRACT_PROMPTS: dict[ResponseStyle, str] = {

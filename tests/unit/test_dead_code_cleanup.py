@@ -18,7 +18,7 @@ class TestColbertRerankerDeprecation:
 
     def test_colbert_reranker_emits_deprecation_warning(self):
         """Instantiating ColbertRerankerService must warn that it is deprecated."""
-        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+        from telegram_bot.services.rag.colbert_reranker import ColbertRerankerService
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -32,7 +32,7 @@ class TestColbertRerankerDeprecation:
 
     def test_colbert_reranker_deprecation_message_mentions_replacement(self):
         """Deprecation message should mention the replacement (hybrid_search or #569)."""
-        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+        from telegram_bot.services.rag.colbert_reranker import ColbertRerankerService
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")

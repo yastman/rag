@@ -282,7 +282,9 @@ class TestPropertyBotInit:
             patch("telegram_bot.services.qdrant.QdrantService"),
             patch("telegram_bot.graph.config.GraphConfig.create_llm"),
             patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
-            patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+            patch(
+                "telegram_bot.services.rag.colbert_reranker.ColbertRerankerService"
+            ) as mock_colbert,
         ):
             bot = PropertyBot(mock_config)
 
@@ -2900,7 +2902,7 @@ class TestClientDirectPipeline:
     async def test_client_direct_filtered_result_keeps_sdk_trace_metadata_authoritative(
         self, mock_config
     ):
-        from telegram_bot.services.query_filter_signal import QueryFilterSignal
+        from telegram_bot.services.rag.query_filter_signal import QueryFilterSignal
 
         mock_config.client_direct_pipeline_enabled = True
         bot, _ = _create_bot(mock_config)
@@ -4100,7 +4102,7 @@ class TestPreAgentCacheCheck:
         mock_extractor.extract_filters.assert_called_once_with("квартира до 80000 евро в Несебре")
 
     async def test_pre_agent_filters_use_signature_for_semantic_lookup(self, mock_config):
-        from telegram_bot.services.query_filter_signal import QueryFilterSignal
+        from telegram_bot.services.rag.query_filter_signal import QueryFilterSignal
 
         bot, _ = _create_bot(mock_config)
         test_embedding = [0.5] * 10
@@ -4142,7 +4144,7 @@ class TestPreAgentCacheCheck:
     async def test_pre_agent_filter_sensitive_without_extracted_filters_still_skips_lookup(
         self, mock_config
     ):
-        from telegram_bot.services.query_filter_signal import QueryFilterSignal
+        from telegram_bot.services.rag.query_filter_signal import QueryFilterSignal
 
         bot, _ = _create_bot(mock_config)
         test_embedding = [0.5] * 10
@@ -4369,7 +4371,7 @@ class TestPreAgentCacheCheck:
     async def test_pre_agent_filtered_cache_hit_adds_filter_signature_to_trace_metadata(
         self, mock_config
     ):
-        from telegram_bot.services.query_filter_signal import QueryFilterSignal
+        from telegram_bot.services.rag.query_filter_signal import QueryFilterSignal
 
         bot, _ = _create_bot(mock_config)
         test_embedding = [0.5] * 10

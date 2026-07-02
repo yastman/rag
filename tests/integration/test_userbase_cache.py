@@ -20,7 +20,7 @@ class TestUserBaseCacheIntegration:
 
     async def test_russian_paraphrase_matching(self):
         """Should match Russian paraphrases with USER-base."""
-        from telegram_bot.services.vectorizers import UserBaseVectorizer
+        from telegram_bot.services.rag.vectorizers import UserBaseVectorizer
 
         vectorizer = UserBaseVectorizer(
             base_url=os.getenv("USER_BASE_URL", "http://localhost:8003")

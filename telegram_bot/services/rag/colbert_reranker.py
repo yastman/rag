@@ -12,7 +12,7 @@ import logging
 import os
 import warnings
 
-from telegram_bot.services.bge_m3_client import BGEM3Client
+from telegram_bot.services.rag.bge_m3_client import BGEM3Client
 
 
 logger = logging.getLogger(__name__)

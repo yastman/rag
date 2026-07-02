@@ -24,8 +24,8 @@ import logging
 from typing import Any
 
 from telegram_bot.observability import get_client, observe
-from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
-from telegram_bot.services.cache_policy import is_contextual_query
+from telegram_bot.services.rag.bge_m3_query_bundle import BgeM3QueryVectorBundle
+from telegram_bot.services.rag.cache_policy import is_contextual_query
 
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
         return False
 
     try:
-        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+        from telegram_bot.services.rag.colbert_reranker import ColbertRerankerService
     except (ImportError, ModuleNotFoundError):
         return False
 

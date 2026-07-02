@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 
-from telegram_bot.services.vectorizers import UserBaseVectorizer
+from telegram_bot.services.rag.vectorizers import UserBaseVectorizer
 
 
 class TestUserBaseVectorizer:

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from telegram_bot.services.semantic_classifier import SemanticClassifier
+from telegram_bot.services.rag.semantic_classifier import SemanticClassifier
 
 
 class TestSemanticClassifierInit:
@@ -15,7 +15,7 @@ class TestSemanticClassifierInit:
     def test_available_when_router_succeeds(self):
         mock_router = MagicMock()
         with patch(
-            "telegram_bot.services.semantic_classifier.SemanticClassifier.__init__",
+            "telegram_bot.services.rag.semantic_classifier.SemanticClassifier.__init__",
             wraps=None,
         ):
             classifier = SemanticClassifier.__new__(SemanticClassifier)
@@ -25,7 +25,7 @@ class TestSemanticClassifierInit:
 
     def test_unavailable_when_redis_fails(self):
         with patch(
-            "telegram_bot.services.semantic_classifier.SemanticRouter",
+            "telegram_bot.services.rag.semantic_classifier.SemanticRouter",
             side_effect=ConnectionError("Redis unavailable"),
             create=True,
         ):
@@ -115,7 +115,7 @@ class TestSemanticClassifierRouteConfig:
     """Tests for route configuration (references count)."""
 
     def test_has_reference_lists_populated(self):
-        from telegram_bot.services.semantic_classifier import (
+        from telegram_bot.services.rag.semantic_classifier import (
             _CHITCHAT_REFERENCES,
             _ENTITY_REFERENCES,
             _FAQ_REFERENCES,
@@ -130,7 +130,7 @@ class TestSemanticClassifierRouteConfig:
         assert len(_ENTITY_REFERENCES) >= 5
 
     def test_all_references_are_strings(self):
-        from telegram_bot.services.semantic_classifier import (
+        from telegram_bot.services.rag.semantic_classifier import (
             _CHITCHAT_REFERENCES,
             _ENTITY_REFERENCES,
             _FAQ_REFERENCES,

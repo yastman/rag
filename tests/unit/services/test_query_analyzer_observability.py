@@ -2,7 +2,7 @@
 """Unit tests for QueryAnalyzer observability around the LiteLLM SDK router."""
 
 from src.runtime.llm.router import LiteLLMChatClient
-from telegram_bot.services.query_analyzer import QueryAnalyzer
+from telegram_bot.services.rag.query_analyzer import QueryAnalyzer
 
 
 class TestQueryAnalyzerObservability:
