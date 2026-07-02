@@ -108,7 +108,7 @@ def _make_exc_with_message(message: str) -> Exception:
     return RuntimeError(message)
 
 
-def _make_exc_with_traceback(message: str, fake_filename: str, fake_func: str):
+def _make_exc_with_traceback(message: str, fake_filename: str, fake_func: str) -> Exception:
     """Synthesize an Exception whose traceback frame matches given filename/func.
 
     Uses ``compile(...)`` with a custom ``filename`` so the frame's
@@ -123,36 +123,42 @@ def _make_exc_with_traceback(message: str, fake_filename: str, fake_func: str):
     raise AssertionError("expected RuntimeError to be raised")
 
 
-# Representative payloads — each tuple is (label, exception_factory).
-PARITY_PAYLOADS: list[tuple[str, object]] = [
-    ("plain_runtime", _make_exc_with_message("nothing special")),
+# Representative payloads as factories — each tuple is (label, callable → Exception).
+#
+# ponytail: factories instead of eagerly-built exceptions at module level to avoid
+# xdist INTERNALERROR on gw9+. Live traceback objects created by exec() at collection
+# time interfere with coverage.py's sys.settrace in worker subprocesses when the fake
+# filename doesn't exist on disk. Ceiling: if pytest gains native lazy-parametrize
+# support, these lambdas can go away.
+PARITY_PAYLOAD_FACTORIES: list[tuple[str, object]] = [
+    ("plain_runtime", lambda: _make_exc_with_message("nothing special")),
     (
         "pregel_aexit_redis",
-        _make_exc_with_message(
+        lambda: _make_exc_with_message(
             "AsyncPregelLoop.__aexit__ failed: redis.ConnectionError consuming input failed"
         ),
     ),
     (
         "pregel_aexit_redisvl",
-        _make_exc_with_message("PregelLoop.__aexit__ raised RedisVLError schema mismatch"),
+        lambda: _make_exc_with_message("PregelLoop.__aexit__ raised RedisVLError schema mismatch"),
     ),
     (
         "checkpointer_serialize",
-        _make_exc_with_message(
+        lambda: _make_exc_with_message(
             "checkpointer aput failed: msgpack serialization redis connection lost"
         ),
     ),
     (
         "post_pipeline_marker_only",
-        _make_exc_with_message("checkpointer happened but no storage marker"),
+        lambda: _make_exc_with_message("checkpointer happened but no storage marker"),
     ),
     (
         "storage_marker_only",
-        _make_exc_with_message("redis.ConnectionError reading"),
+        lambda: _make_exc_with_message("redis.ConnectionError reading"),
     ),
     (
         "pregel_traceback_aexit",
-        _make_exc_with_traceback(
+        lambda: _make_exc_with_traceback(
             "boom",
             "/site-packages/langgraph/pregel/loop.py",
             "__aexit__",
@@ -160,7 +166,7 @@ PARITY_PAYLOADS: list[tuple[str, object]] = [
     ),
     (
         "checkpoint_traceback",
-        _make_exc_with_traceback(
+        lambda: _make_exc_with_traceback(
             "boom",
             "/site-packages/langgraph/checkpoint/redis.py",
             "aput",
@@ -171,15 +177,21 @@ PARITY_PAYLOADS: list[tuple[str, object]] = [
 
 @pytest.mark.parametrize("helper", HELPERS)
 @pytest.mark.parametrize(
-    ("label", "exc"),
-    [(label, exc) for label, exc in PARITY_PAYLOADS],
-    ids=[label for label, _ in PARITY_PAYLOADS],
+    ("label", "exc_factory"),
+    [(label, factory) for label, factory in PARITY_PAYLOAD_FACTORIES],
+    ids=[label for label, _ in PARITY_PAYLOAD_FACTORIES],
 )
-def test_helper_byte_for_byte_parity(helper: str, label: str, exc: Exception) -> None:
+def test_helper_byte_for_byte_parity(helper: str, label: str, exc_factory: object) -> None:
     """``bot.<helper>(exc)`` and ``_bot_error_classification.<helper>(exc)``
     must produce identical results on every representative payload.
+
+    The exception is constructed inside the test body (not at collection time) so that
+    xdist workers never hold live traceback frames referencing non-existent files during
+    module import — which caused INTERNALERROR crashes on gw9+ workers.
     """
     from telegram_bot import _bot_error_classification, bot
+
+    exc: Exception = exc_factory()  # type: ignore[operator]
 
     bot_fn = getattr(bot, helper)
     new_fn = getattr(_bot_error_classification, helper)
