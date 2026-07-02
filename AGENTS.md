@@ -67,18 +67,16 @@ Subsystem overrides may pin tighter commands — see the nearest `AGENTS.overrid
 
 - Prefer local/test environments. Do **not** touch production, VPS, secrets, SSH, cloud
   credentials, or real CRM write paths unless the task explicitly requires it. Redact secrets.
-- Don't start non-trivial edits in a dirty checkout — use an isolated git worktree. See
-  [`docs/runbooks/README.md`](docs/runbooks/README.md).
+- Don't start non-trivial edits in a dirty checkout — use an isolated git worktree.
 - Use additional skills only when the task matches their trigger; don't cascade into unrelated
   skills on your own.
 
 ## Canonical docs
 
-- Overview / navigation: [`README.md`](README.md) · [`docs/README.md`](docs/README.md)
+- Overview / navigation: [`README.md`](README.md)
 - Runtime, Compose, ports, env, deploy: [`DOCKER.md`](DOCKER.md)
-- Local setup & validation: [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md)
-- Operational investigations: [`docs/runbooks/README.md`](docs/runbooks/README.md)
-- Tests: [`docs/engineering/test-writing-guide.md`](docs/engineering/test-writing-guide.md)
+- Local setup & validation: [`README.md`](README.md) (Quick Start section)
+- Tests: [`tests/README.md`](tests/README.md)
 - Swarm/PR/triage process lives in the Kiro skills (`roadmap-orchestrator`, `gh-pr-review`), not in-repo docs.
 
 ## Local overrides

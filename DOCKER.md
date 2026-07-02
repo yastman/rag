@@ -186,5 +186,5 @@ model load).
 
 | Document | Use it for |
 |---|---|
-| [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) | Full local setup and validation ladder |
-| [`docs/INGESTION.md`](docs/INGESTION.md) | Ingestion operations |
+| [`README.md`](README.md) | Full local setup and validation ladder |
+| [`src/ingestion/README.md`](src/ingestion/README.md) | Ingestion operations |
