@@ -10,20 +10,10 @@ from typing import Any
 
 from qdrant_client import AsyncQdrantClient, models
 
-
-# ponytail: tracing removed (#2969) — observe was a no-op decorator, get_client a stub
-def observe(name: str = "", **_kw):  # type: ignore[misc]
-    """No-op decorator replacing removed @observe (tracing removed)."""
-
-    def _dec(fn):  # type: ignore[misc]
-        return fn
-
-    return _dec
+from src.observability import observe
 
 
-def get_client():  # type: ignore[misc]
-    """No-op stub replacing removed tracing client accessor."""
-    return type("_NoopSpan", (), {"update_current_span": lambda *_a, **_kw: None})()
+# ponytail: tracing removed (#2969) — get_client was a stub, now fully removed
 
 
 logger = logging.getLogger(__name__)
@@ -203,8 +193,6 @@ class HistoryService:
 
         Returns True on success, False on failure.
         """
-        lf = get_client()
-        lf.update_current_span(input={"has_user_id": True})
         try:
             await self._client.delete(
                 collection_name=self._collection_name,
@@ -220,15 +208,9 @@ class HistoryService:
                 ),
             )
             logger.info("Deleted Qdrant history for user_id=%s", user_id)
-            lf.update_current_span(output={"deleted": True})
             return True
         except Exception:
             logger.warning("Failed to delete Qdrant history for user_id=%s", user_id, exc_info=True)
-            lf.update_current_span(
-                level="ERROR",
-                status_message="Failed to delete user history from Qdrant",
-                output={"deleted": False},
-            )
             return False
 
     @observe(name="history-get-session-turns", capture_input=False, capture_output=False)

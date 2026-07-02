@@ -18,7 +18,6 @@ from src.services.content_loader import (
     get_phone_config,
     get_promotions,
     get_service_card,
-    load_mini_app_config,
     load_services_config,
 )
 
@@ -28,6 +27,5 @@ __all__ = [
     "get_phone_config",
     "get_promotions",
     "get_service_card",
-    "load_mini_app_config",
     "load_services_config",
 ]

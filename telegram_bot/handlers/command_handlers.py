@@ -11,6 +11,11 @@ Also owns menu-routing helpers:
   - :func:`resolve_user_role` — DB + config role resolution.
   - :func:`handle_menu_button` — ReplyKeyboard button routing.
   - :func:`handle_menu_action` — inline menu action dispatch to agent pipeline.
+
+Design exception (#1232): ``handle_menu_button`` uses ``state.update_data``
+to reset the ``bookmarks_context`` flag when the user navigates away from
+the bookmarks menu. This is a single context-flag reset (not an FSM driver)
+and is intentionally exempt from the aiogram-dialog migration rule.
 """
 
 from __future__ import annotations
