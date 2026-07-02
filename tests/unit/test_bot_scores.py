@@ -11,7 +11,7 @@ pytest.importorskip("aiogram", reason="aiogram not installed")
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.config import BotConfig
-from telegram_bot.scoring import compute_checkpointer_overhead_proxy_ms, write_langfuse_scores
+from telegram_bot.scoring import compute_checkpointer_overhead_proxy_ms, write_pipeline_scores
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ _TEST_TRACE_ID = "test-trace-abc-123"
 
 
 def _run_score_writer(result, mock_lf):
-    """Call write_langfuse_scores directly for unit testing scoring logic.
+    """Call write_pipeline_scores directly for unit testing scoring logic.
 
     Since #310, pipeline scores are written by scoring.py (called from rag_agent tool
     and handle_voice). This helper tests the scoring function in isolation.
@@ -114,7 +114,7 @@ def _run_score_writer(result, mock_lf):
         getattr(mock_lf, "get_current_trace_id", None)
     ):
         mock_lf.get_current_trace_id = MagicMock(return_value=_TEST_TRACE_ID)
-    write_langfuse_scores(mock_lf, result, trace_id=_TEST_TRACE_ID)
+    write_pipeline_scores(mock_lf, result, trace_id=_TEST_TRACE_ID)
     return mock_lf
 
 
@@ -258,7 +258,7 @@ CHITCHAT_RESULT = {
 
 
 class TestScoreWriting:
-    """Test that write_langfuse_scores writes correct scores from result state."""
+    """Test that write_pipeline_scores writes correct scores from result state."""
 
     def test_scores_written_full_pipeline(self):
         """All scores should be written for a full pipeline result."""
@@ -432,7 +432,7 @@ class TestScoreWriting:
         disabled_client = get_client()
         # Disabled client may not have active trace context; pass explicit trace_id
         # to exercise score writing code path without relying on context lookup.
-        write_langfuse_scores(disabled_client, FULL_PIPELINE_RESULT, trace_id="null-trace")
+        write_pipeline_scores(disabled_client, FULL_PIPELINE_RESULT, trace_id="null-trace")
 
 
 class TestLatencyBreakdownScores:
@@ -917,7 +917,7 @@ class TestCheckpointerOverheadScore:
 class TestScoreIsolation:
     """Verify scores use explicit trace_id via create_score, not session-wide (#435)."""
 
-    def test_write_langfuse_scores_uses_create_score_with_trace_id(self):
+    def test_write_pipeline_scores_uses_create_score_with_trace_id(self):
         """All scores go through create_score(trace_id=...) for isolation (#435)."""
         mock_lf = MagicMock()
         _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)

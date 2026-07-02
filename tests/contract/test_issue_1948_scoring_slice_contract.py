@@ -5,8 +5,8 @@ proposed migrating shared modules out of ``telegram_bot/`` so layering
 arrows go the right way. Slices 1..4 landed in PR #2018, #2020, #2024,
 #2030.
 
-This contract pins **slice 5**: the Langfuse scoring helpers
-(``write_langfuse_scores``, ``score``, ``write_crm_scores``,
+This contract pins **slice 5**: the scoring helpers
+(``write_pipeline_scores``, ``score``, ``write_crm_scores``,
 ``write_history_scores``, ``compute_checkpointer_overhead_proxy_ms``)
 become first-class citizens under ``src/`` and ``src/api/main.py``
 imports them directly from there. ``telegram_bot/scoring.py`` becomes
@@ -23,10 +23,10 @@ Asserted invariants:
   3. The canonical module exposes the full public API
      (``compute_checkpointer_overhead_proxy_ms``, ``score``,
      ``write_crm_scores``, ``write_history_scores``,
-     ``write_langfuse_scores``).
+     ``write_pipeline_scores``).
   4. The ``telegram_bot/scoring.py`` shim re-exports every public
      callable with object-identity (``is``-equal).
-  5. ``src/api/main.py`` imports ``write_langfuse_scores`` from
+  5. ``src/api/main.py`` imports ``write_pipeline_scores`` from
      ``src.scoring`` (not from ``telegram_bot.scoring``).
 """
 
@@ -49,7 +49,7 @@ PUBLIC_API: tuple[str, ...] = (
     "score",
     "write_crm_scores",
     "write_history_scores",
-    "write_langfuse_scores",
+    "write_pipeline_scores",
 )
 
 
@@ -128,7 +128,7 @@ def test_telegram_bot_scoring_shim_re_exports_canonical(name: str) -> None:
 
 def test_rag_api_main_imports_scoring_from_src() -> None:
     """src/api/main.py must not contain any ``telegram_bot.scoring`` references —
-    including the lazy ``from telegram_bot.scoring import write_langfuse_scores``
+    including the lazy ``from telegram_bot.scoring import write_pipeline_scores``
     inside ``_run_rag_pipeline``.
     """
     src = RAG_API_MAIN.read_text()

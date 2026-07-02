@@ -225,7 +225,7 @@ async def query(req: QueryRequest) -> QueryResponse:
 async def _execute_query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
     from src.runtime.graph.state import make_initial_state
-    from src.scoring import write_langfuse_scores
+    from src.scoring import write_pipeline_scores
 
     start = time.perf_counter()
 
@@ -264,7 +264,7 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
                 "rerank_applied": False,
                 "response": fallback_response,
             }
-            write_langfuse_scores(None, fallback_result)
+            write_pipeline_scores(None, fallback_result)
             return QueryResponse(
                 response=fallback_response,
                 query_type="ERROR",
@@ -281,7 +281,7 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
         summarize_s = result.get("latency_stages", {}).get("summarize", 0)
         result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
 
-        write_langfuse_scores(None, result)
+        write_pipeline_scores(None, result)
 
     return QueryResponse(
         response=result.get("response", ""),

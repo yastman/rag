@@ -233,7 +233,7 @@ async def test_rag_search_forwards_state_contract(bot_context):
 
 
 async def test_rag_search_writes_langfuse_scores(bot_context):
-    """rag_search tool calls write_langfuse_scores with full pipeline result."""
+    """rag_search tool calls write_pipeline_scores with full pipeline result."""
     from telegram_bot.agents.rag_tool import rag_search
 
     config = _make_config(bot_context)
@@ -244,7 +244,7 @@ async def test_rag_search_writes_langfuse_scores(bot_context):
             new_callable=AsyncMock,
             return_value=_pipeline_result(cache_hit=True),
         ),
-        patch("telegram_bot.agents.rag_tool.write_langfuse_scores") as mock_write_scores,
+        patch("telegram_bot.agents.rag_tool.write_pipeline_scores") as mock_write_scores,
     ):
         await rag_search.ainvoke({"query": "тест"}, config=config)
 
@@ -257,7 +257,7 @@ async def test_rag_search_writes_langfuse_scores(bot_context):
 
 
 async def test_rag_search_passes_explicit_trace_id_to_scores(bot_context):
-    """rag_search passes explicit trace_id to write_langfuse_scores (#435 hardening)."""
+    """rag_search passes explicit trace_id to write_pipeline_scores (#435 hardening)."""
     from telegram_bot.agents.rag_tool import rag_search
 
     mock_lf = MagicMock()
@@ -270,7 +270,7 @@ async def test_rag_search_passes_explicit_trace_id_to_scores(bot_context):
             return_value=_pipeline_result(),
         ),
         patch("telegram_bot.agents.rag_tool.get_client", return_value=mock_lf),
-        patch("telegram_bot.agents.rag_tool.write_langfuse_scores") as mock_write,
+        patch("telegram_bot.agents.rag_tool.write_pipeline_scores") as mock_write,
     ):
         await rag_search.ainvoke({"query": "test"}, config=_make_config(bot_context))
 
@@ -306,7 +306,7 @@ async def test_rag_search_returns_response_when_score_write_fails(bot_context):
             return_value=_pipeline_result(),
         ),
         patch(
-            "telegram_bot.agents.rag_tool.write_langfuse_scores",
+            "telegram_bot.agents.rag_tool.write_pipeline_scores",
             side_effect=RuntimeError("lf down"),
         ),
     ):

@@ -1,7 +1,7 @@
 """Contract: ``docs/RAG_QUALITY_SCORES.md`` matches ``src/scoring.py`` (#1956).
 
-The doc enumerates every Langfuse score we emit per query. Whenever a new
-``name=...`` lands in ``write_langfuse_scores``, ``write_history_scores``, or
+The doc enumerates every score we emit per query. Whenever a new
+``name=...`` lands in ``write_pipeline_scores``, ``write_history_scores``, or
 ``write_crm_scores``, the doc table must gain a corresponding row. This
 contract pins parity in both directions:
 
@@ -13,7 +13,7 @@ Scope:
 * Source of truth (code): ``src/scoring.py``. We collect every
   string literal passed as ``name=...`` to ``score(...)`` or
   ``lf.create_score(...)``, plus every key of the always-written ``scores``
-  dict literal in ``write_langfuse_scores``.
+  dict literal in ``write_pipeline_scores``.
 * Source of truth (doc): ``docs/RAG_QUALITY_SCORES.md``. We collect every
   backtick-wrapped identifier in the first column of any Markdown table
   whose header is ``| Score |``.
@@ -57,7 +57,7 @@ def _collect_score_names_from_code() -> set[str]:
                 if isinstance(value, ast.Constant) and isinstance(value.value, str):
                     names.add(value.value)
         # Capture keys of the always-written ``scores = {...}`` dict literal
-        # inside write_langfuse_scores plus any later ``scores["..."] = ...``
+        # inside write_pipeline_scores plus any later ``scores["..."] = ...``
         # subscript assignments (e.g. results_count, no_results).
         if isinstance(node, ast.Assign):
             for target in node.targets:
@@ -148,7 +148,7 @@ def test_doc_documents_when_scores_are_written() -> None:
     New contributors look for ``score_current_trace`` calls in the cache node
     and find none (the cache node uses ``update_current_span`` for real-time
     hit/miss). The doc must state that quality scores are written once per
-    query at the end of the pipeline via ``write_langfuse_scores`` while
+    query at the end of the pipeline via ``write_pipeline_scores`` while
     per-node observability uses ``update_current_span``.
     """
     text = DOC_PATH.read_text(encoding="utf-8")
@@ -157,8 +157,8 @@ def test_doc_documents_when_scores_are_written() -> None:
         "section (#2213) explaining once-per-query end-of-pipeline writes vs "
         "per-node update_current_span."
     )
-    assert "write_langfuse_scores" in text, (
-        "The 'when written' section must name write_langfuse_scores as the "
+    assert "write_pipeline_scores" in text, (
+        "The 'when written' section must name write_pipeline_scores as the "
         "once-per-query writer (#2213)."
     )
     assert "update_current_span" in text, (
