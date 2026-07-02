@@ -192,7 +192,11 @@ async def cmd_metrics(bot: PropertyBot, message: Message) -> None:
 
 
 async def cmd_clearcache(bot: PropertyBot, message: Message) -> None:
-    """Handle /clearcache command - show inline keyboard to select cache tier."""
+    """Handle /clearcache command - show inline keyboard to select cache tier (admin only)."""
+    user_id = message.from_user.id if message.from_user else 0
+    if not bot._is_admin(user_id):
+        await message.answer("Недостаточно прав.")
+        return
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
