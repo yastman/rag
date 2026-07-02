@@ -11,9 +11,9 @@ from typing import Any
 from qdrant_client import AsyncQdrantClient, models
 
 
-# ponytail: Langfuse removed (#2969) — observe was a no-op decorator, get_client a stub
+# ponytail: tracing removed (#2969) — observe was a no-op decorator, get_client a stub
 def observe(name: str = "", **_kw):  # type: ignore[misc]
-    """No-op decorator replacing removed @observe (Langfuse removed)."""
+    """No-op decorator replacing removed @observe (tracing removed)."""
 
     def _dec(fn):  # type: ignore[misc]
         return fn
@@ -22,7 +22,7 @@ def observe(name: str = "", **_kw):  # type: ignore[misc]
 
 
 def get_client():  # type: ignore[misc]
-    """No-op stub replacing removed Langfuse client accessor."""
+    """No-op stub replacing removed tracing client accessor."""
     return type("_NoopSpan", (), {"update_current_span": lambda *_a, **_kw: None})()
 
 

@@ -90,7 +90,7 @@ class TestTextRagChatSurface:
                 new=AsyncMock(return_value=gen_result),
             ),
             patch("telegram_bot.pipelines.client.send_html_messages", new=AsyncMock()),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores", new=AsyncMock()),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores", new=AsyncMock()),
             patch(
                 "telegram_bot.pipelines.client.maybe_store_semantic_response",
                 new=AsyncMock(),

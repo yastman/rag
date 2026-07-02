@@ -69,7 +69,7 @@ class TestQuerySupervisorContentFilter:
             ),
             patch("telegram_bot.bot.propagate_attributes") as mock_prop,
             patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.write_langfuse_scores"),
+            patch("telegram_bot.bot.write_pipeline_scores"),
             patch("telegram_bot.bot.score"),
         ):
             mock_prop.return_value.__enter__ = MagicMock(return_value=None)
@@ -103,7 +103,7 @@ class TestQuerySupervisorContentFilter:
             ),
             patch("telegram_bot.bot.propagate_attributes") as mock_prop,
             patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.write_langfuse_scores"),
+            patch("telegram_bot.bot.write_pipeline_scores"),
             patch("telegram_bot.bot.score"),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
             patch(
@@ -158,7 +158,7 @@ class TestQuerySupervisorContentFilter:
             patch("telegram_bot.bot.detect_injection") as mock_detect,
             patch("telegram_bot.bot.propagate_attributes") as mock_prop,
             patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.write_langfuse_scores"),
+            patch("telegram_bot.bot.write_pipeline_scores"),
             patch("telegram_bot.bot.score"),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
             patch(
@@ -316,7 +316,7 @@ class TestQuerySupervisorSemanticCache:
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
             patch("telegram_bot.bot.propagate_attributes") as mock_prop,
             patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.write_langfuse_scores"),
+            patch("telegram_bot.bot.write_pipeline_scores"),
             patch("telegram_bot.bot.score"),
             patch(
                 "telegram_bot.bot._get_or_compute_pre_agent_dense",
@@ -413,7 +413,7 @@ class TestQuerySupervisorCoreEntrypoint:
             patch("telegram_bot.bot.classify_query", return_value="GENERAL"),
             patch("telegram_bot.bot.propagate_attributes") as mock_prop,
             patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.write_langfuse_scores"),
+            patch("telegram_bot.bot.write_pipeline_scores"),
             patch("telegram_bot.bot.score"),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
             patch("telegram_bot.bot.create_callback_handler", return_value=None),

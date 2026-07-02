@@ -147,7 +147,7 @@ class TestPipelineNonRagPaths:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
@@ -180,7 +180,7 @@ class TestPipelineNonRagPaths:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
@@ -212,7 +212,7 @@ class TestPipelineNonRagPaths:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.write_pipeline_scores") as mock_write,
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -249,7 +249,7 @@ class TestPipelineNonRagPaths:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.write_pipeline_scores") as mock_write,
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -348,7 +348,7 @@ class TestPipelineAgentIntentGate:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.write_pipeline_scores") as mock_write,
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -430,7 +430,7 @@ class TestPipelineCacheHit:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             patch("telegram_bot.pipelines.client.generate_response") as mock_gen,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
@@ -486,7 +486,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
@@ -542,7 +542,7 @@ class TestPipelineFullFlow:
             ) as mock_propagate,
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -596,7 +596,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -627,7 +627,7 @@ class TestPipelineFullFlow:
         assert rag_store["e2e_latency_ms"] >= rag_store["pipeline_wall_ms"]
 
     async def test_pipeline_propagates_bge_model_processing_ms_to_scores(self):
-        """bge_model_processing_ms from rag_result_store reaches write_langfuse_scores input."""
+        """bge_model_processing_ms from rag_result_store reaches write_pipeline_scores input."""
         msg = _make_message()
         lf = _make_lf_client()
         lf.get_current_trace_id.return_value = "trace-bge-123"
@@ -653,7 +653,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.write_pipeline_scores") as mock_write,
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -702,7 +702,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -758,7 +758,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.write_pipeline_scores") as mock_write,
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -814,7 +814,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -886,7 +886,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             patch("telegram_bot.pipelines.client.generate_response", side_effect=_capture_generate),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
@@ -940,7 +940,7 @@ class TestPipelineFullFlow:
                 "telegram_bot.pipelines.client.format_sources",
                 return_value="\n\nИсточники:\n[1] ВНЖ",
             ),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
@@ -990,7 +990,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             patch("telegram_bot.pipelines.client.generate_response", mock_gen),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1030,7 +1030,7 @@ class TestPipelineFullFlow:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline", mock_rag),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1078,7 +1078,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
@@ -1111,7 +1111,7 @@ class TestPipelineFullFlow:
                 "telegram_bot.pipelines.client.rag_pipeline",
                 new=AsyncMock(side_effect=RuntimeError("Qdrant down")),
             ),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             with pytest.raises(RuntimeError, match="Qdrant down"):
@@ -1159,7 +1159,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1201,7 +1201,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1243,7 +1243,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1286,7 +1286,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1327,7 +1327,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1378,7 +1378,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1435,7 +1435,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1484,7 +1484,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1533,7 +1533,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1581,7 +1581,7 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1637,7 +1637,7 @@ class TestPreComputedEmbeddingPassthrough:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1702,7 +1702,7 @@ class TestPreComputedEmbeddingPassthrough:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1761,7 +1761,7 @@ class TestPreComputedEmbeddingPassthrough:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1808,7 +1808,7 @@ class TestPreComputedEmbeddingPassthrough:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1885,7 +1885,7 @@ class TestCacheStoreGuardMissingVector:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -1924,7 +1924,7 @@ class TestCacheStoreGuardMissingVector:
         with (
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -2102,7 +2102,7 @@ class TestStreamingFeedbackKeyboard:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -2158,7 +2158,7 @@ class TestStreamingFeedbackKeyboard:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
@@ -2211,7 +2211,7 @@ class TestStreamingFeedbackKeyboard:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.write_pipeline_scores"),
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(

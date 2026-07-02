@@ -81,8 +81,8 @@ class TestLatencyUnitsConsistency:
         assert 0.15 < latency < 0.25, f"Expected ~0.2s, got {latency}"
 
     def test_score_writer_converts_seconds_to_ms(self):
-        """write_langfuse_scores computes total_ms = sum(seconds) * 1000."""
-        from telegram_bot.scoring import write_langfuse_scores as _write_langfuse_scores
+        """write_pipeline_scores computes total_ms = sum(seconds) * 1000."""
+        from telegram_bot.scoring import write_pipeline_scores as _write_pipeline_scores
 
         mock_lf = MagicMock()
 
@@ -103,7 +103,7 @@ class TestLatencyUnitsConsistency:
             },
         }
 
-        _write_langfuse_scores(mock_lf, result, trace_id="test-trace")
+        _write_pipeline_scores(mock_lf, result, trace_id="test-trace")
 
         # latency_total_ms reads pipeline_wall_ms directly (wall-time)
         expected_ms = result["pipeline_wall_ms"]

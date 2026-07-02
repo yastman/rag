@@ -1104,7 +1104,7 @@ class TestRunSingleQuery:
         query = types.SimpleNamespace(text="q", source="faq", difficulty="easy")
         run_meta = {"run_id": "run-1", "git_sha": "abc123", "collection": "test-col"}
 
-        with patch("telegram_bot.scoring.write_langfuse_scores"):
+        with patch("telegram_bot.scoring.write_pipeline_scores"):
             await run_single_query(
                 query,
                 services,
@@ -1140,7 +1140,7 @@ class TestRunSingleQuery:
             async def ainvoke(self, state):
                 raise RuntimeError("graph boom")
 
-        fake_bot = types.SimpleNamespace(_write_langfuse_scores=lambda *_args, **_kwargs: None)
+        fake_bot = types.SimpleNamespace(_write_pipeline_scores=lambda *_args, **_kwargs: None)
         fake_graph = types.SimpleNamespace(build_graph=lambda **_kwargs: _FailingGraph())
         fake_state = types.SimpleNamespace(
             make_initial_state=lambda **_kwargs: {"messages": [{"role": "user", "content": "q"}]}

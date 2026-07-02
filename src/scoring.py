@@ -17,7 +17,7 @@ from src.observability.scores import (
 )
 
 
-def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
+def write_pipeline_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     """No-op stub — tracing removed (#2844)."""
 
 
@@ -30,6 +30,6 @@ __all__ = [
     "score",
     "write_crm_scores",
     "write_history_scores",
-    "write_langfuse_scores",
+    "write_pipeline_scores",
     "write_scores",
 ]
