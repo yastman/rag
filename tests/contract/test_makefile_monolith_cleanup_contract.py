@@ -21,7 +21,6 @@ REMOVED_TARGETS = (
     "test-eval-extra",
     "test-observability-extra",
     "test-optional-surfaces",
-    "test-benchmark",
     "monitoring-up",
     "monitoring-down",
     "monitoring-logs",

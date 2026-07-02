@@ -78,7 +78,7 @@ class TestClassifyExportReasons:
         reasons = classify_export_reasons({"judge_faithfulness": 0.3})
         assert "low_judge_faithfulness" in reasons
 
-    def test_no_results(self):
+    def test_no_results_export(self):
         reasons = classify_export_reasons({"no_results": 1.0})
         assert "no_results" in reasons
 

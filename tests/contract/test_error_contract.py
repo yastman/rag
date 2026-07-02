@@ -62,6 +62,8 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # span when the helper LLM call fails before falling back to the
     # original query (#1810).
     "telegram_bot/services/query_preprocessor.py": ["ERROR"],
+    # History service — records ERROR span when conversation history save/load fails.
+    "telegram_bot/services/history_service.py": ["ERROR"],
 }
 
 

@@ -5,9 +5,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from langchain_core.runnables import RunnableConfig
 
 from telegram_bot.agents.context import BotContext
+from telegram_bot.agents.tooling import RunnableConfig
 from telegram_bot.services.kommo_models import Contact, Lead, Note, Task
 
 

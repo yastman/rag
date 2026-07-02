@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from langchain_core.tools import tool
-
 from telegram_bot.agents.context import BotContext
 from telegram_bot.agents.manager_tools import build_tools_for_role, create_manager_nurturing_tools
+from telegram_bot.agents.tooling import tool
 
 
 @tool

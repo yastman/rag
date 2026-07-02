@@ -112,6 +112,11 @@ ingest = [
     "fastembed>=0.7.4",
 ]
 
+# Evaluation / LLM-as-judge (no-patch Dependabot alert CVE-2026-6587; kept isolated — issue #2043)
+eval = [
+    "ragas",
+]
+
 # All optional dependencies (kept surfaces only; archived extras removed by #2640)
 all = [
     "contextual-rag[core,telegram,providers,docs,ingest,ml-local]",

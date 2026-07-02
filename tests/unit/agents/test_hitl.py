@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from langchain_core.runnables import RunnableConfig
-
 from telegram_bot.agents.context import BotContext
+from telegram_bot.agents.tooling import RunnableConfig
 
 
 def _make_config(bot_context: BotContext) -> RunnableConfig:
