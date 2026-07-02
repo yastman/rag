@@ -29,7 +29,7 @@ from src.runtime.services.cache_policy import (
     resolve_semantic_cache_signature,
 )
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
-from telegram_bot._bot_error_classification import _is_checkpointer_runtime_error
+from telegram_bot.handlers.error_classification import _is_checkpointer_runtime_error
 from telegram_bot.observability import propagate_attributes
 from telegram_bot.observability.state_helpers import (
     _state_control_message_id,  # card_2a71ec058138: homed to observability/

@@ -35,7 +35,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-NEW_MODULE = REPO_ROOT / "telegram_bot" / "_bot_error_classification.py"
+NEW_MODULE = REPO_ROOT / "telegram_bot" / "handlers" / "error_classification.py"
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
 
 # Helpers extracted by Slice 1 PR-3.
@@ -189,7 +189,8 @@ def test_helper_byte_for_byte_parity(helper: str, label: str, exc_factory: objec
     xdist workers never hold live traceback frames referencing non-existent files during
     module import — which caused INTERNALERROR crashes on gw9+ workers.
     """
-    from telegram_bot import _bot_error_classification, bot
+    from telegram_bot import bot
+    from telegram_bot.handlers import error_classification as _bot_error_classification
 
     exc: Exception = exc_factory()  # type: ignore[operator]
 
