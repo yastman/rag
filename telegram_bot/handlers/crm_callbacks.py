@@ -3,7 +3,7 @@
 Factory ``create_crm_router(bot)`` returns an aiogram Router that
 registers ``cc:`` (clear-cache) and ``hitl:`` (human-in-the-loop) callback
 handlers. The clear-cache logic lives in
-``telegram_bot._bot_crm_callbacks``; the HITL handler is a no-op stub
+``telegram_bot.handlers.bot_crm_callbacks``; the HITL handler is a no-op stub
 because the HITL send path was removed in #2943.
 """
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 def create_crm_router(bot: PropertyBot) -> Router:
     """Return a router with CRM/cache callback handlers bound to *bot*."""
-    from telegram_bot import _bot_crm_callbacks
+    from telegram_bot.handlers import bot_crm_callbacks as _bot_crm_callbacks
 
     router = Router(name="crm_callbacks")
 

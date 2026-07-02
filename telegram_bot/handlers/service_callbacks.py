@@ -2,7 +2,7 @@
 
 Factory ``create_service_router(bot)`` returns an aiogram Router that
 registers the ``svc:``, ``cta:``, and ``ask:`` callback handlers.
-The actual handler logic lives in ``telegram_bot._bot_catalog``.
+The actual handler logic lives in ``telegram_bot.handlers.catalog``.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 def create_service_router(bot: PropertyBot) -> Router:
     """Return a router with service/CTA/ask callback handlers bound to *bot*."""
-    from telegram_bot import _bot_catalog
+    from telegram_bot.handlers import catalog as _bot_catalog
 
     router = Router(name="service_callbacks")
 

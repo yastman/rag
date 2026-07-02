@@ -345,7 +345,9 @@ async def handle_menu_button(
         ):
             return
 
-    from telegram_bot import _bot_catalog, _bot_favorites, _bot_handoff
+    from telegram_bot.handlers import bot_handoff as _bot_handoff
+    from telegram_bot.handlers import catalog as _bot_catalog
+    from telegram_bot.handlers import favorites as _bot_favorites
     from telegram_bot.handlers.demo_handler import handle_demo_button
 
     async def _handle_demo(msg: Message) -> None:

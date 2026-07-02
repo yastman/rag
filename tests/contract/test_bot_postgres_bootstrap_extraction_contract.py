@@ -4,7 +4,7 @@ Issue #1265 published a phased extraction plan that pulls module-level
 helpers out of ``telegram_bot/bot.py`` so the ``PropertyBot`` class
 shrinks to a thin facade. PR-1..PR-6 of Slice 1 already landed
 (``_bot_kommo``, ``_bot_observability``, ``_bot_pre_agent``,
-``_bot_state_helpers``, ``_bot_streaming``, ``_bot_error_classification``).
+``_bot_state_helpers``, ``_bot_streaming``, ``handlers/error_classification``).
 
 This contract pins the **postgres bootstrap** extract. The module was
 originally placed at ``telegram_bot/_bot_postgres_bootstrap.py`` and

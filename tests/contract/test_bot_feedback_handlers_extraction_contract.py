@@ -1,4 +1,4 @@
-"""Contract: feedback handlers live in ``telegram_bot/_bot_feedback_handlers.py``.
+"""Contract: feedback handlers live in ``telegram_bot/handlers/feedback_handlers.py``.
 
 PR-9a of the Slice 2 decomposition plan
 (``docs/engineering/bot-decomposition-plan-2026-05-27.md``, parent
@@ -10,7 +10,7 @@ suite.
 
 The contract pins:
 
-1. ``telegram_bot._bot_feedback_handlers`` exposes the three module-level
+1. ``telegram_bot.handlers.feedback_handlers`` exposes the three module-level
    helpers ``handle_feedback`` / ``handle_feedback_reason`` /
    ``clear_feedback_confirmation_later`` (all async).
 2. The module's top-level imports stay narrow — no aiogram /
@@ -29,8 +29,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MODULE_NAME = "telegram_bot._bot_feedback_handlers"
-MODULE_PATH = REPO_ROOT / "telegram_bot" / "_bot_feedback_handlers.py"
+MODULE_NAME = "telegram_bot.handlers.feedback_handlers"
+MODULE_PATH = REPO_ROOT / "telegram_bot" / "handlers" / "feedback_handlers.py"
 BOT_PATH = REPO_ROOT / "telegram_bot" / "bot.py"
 
 FORBIDDEN_TOP_IMPORTS = {
@@ -96,7 +96,7 @@ def _method_awaits_helper(method: ast.AsyncFunctionDef, helper_name: str) -> boo
     """True iff the method body awaits a call to ``helper_name``.
 
     Accepted shapes:
-      * ``await _bot_feedback_handlers.HELPER(...)``
+      * ``await _bot_feedback_handlers.HELPER(...)`` (now from handlers.feedback_handlers)
       * ``await HELPER(...)`` (when imported by name)
     """
     for node in ast.walk(method):
@@ -118,7 +118,7 @@ def test_handle_feedback_method_delegates() -> None:
     method = _find_class_method(tree, "PropertyBot", "handle_feedback")
     assert _method_awaits_helper(method, "handle_feedback"), (
         "PropertyBot.handle_feedback must delegate to "
-        "telegram_bot._bot_feedback_handlers.handle_feedback."
+        "telegram_bot.handlers.feedback_handlers.handle_feedback."
     )
 
 
@@ -127,7 +127,7 @@ def test_handle_feedback_reason_method_delegates() -> None:
     method = _find_class_method(tree, "PropertyBot", "handle_feedback_reason")
     assert _method_awaits_helper(method, "handle_feedback_reason"), (
         "PropertyBot.handle_feedback_reason must delegate to "
-        "telegram_bot._bot_feedback_handlers.handle_feedback_reason."
+        "telegram_bot.handlers.feedback_handlers.handle_feedback_reason."
     )
 
 
@@ -136,5 +136,5 @@ def test_clear_feedback_confirmation_method_delegates() -> None:
     method = _find_class_method(tree, "PropertyBot", "_clear_feedback_confirmation_later")
     assert _method_awaits_helper(method, "clear_feedback_confirmation_later"), (
         "PropertyBot._clear_feedback_confirmation_later must delegate to "
-        "telegram_bot._bot_feedback_handlers.clear_feedback_confirmation_later."
+        "telegram_bot.handlers.feedback_handlers.clear_feedback_confirmation_later."
     )

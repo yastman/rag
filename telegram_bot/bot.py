@@ -8,11 +8,12 @@ import surface for tests that ``patch("telegram_bot.bot.X", ...)``.
 Extraction map:
   observability/state_helpers (card_2a71ec058138, #1265 PR-1),
   observability/bot_observability (card_2a71ec058138, #1265 PR-2),
-  _bot_error_classification (#1265 PR-3),
+  handlers/error_classification (#1265 PR-3),
   pipeline/streaming (#1265 PR-4, card_2a71ec058138 SLICE 3),
   pipeline/pre_agent (#1265 PR-5, card_2a71ec058138 SLICE 3),
   pipeline/supervisor (#2816 Slice 2, card_2a71ec058138 SLICE 3),
   lifecycle/lifecycle (card_2a71ec058138),
+  handlers/{catalog,favorites,bot_handoff,bot_crm_callbacks,feedback_handlers} (card_2a71ec058138 SLICE 2),
   handlers/command_handlers (card_c6ade99aada1).
 """
 
@@ -32,16 +33,26 @@ from aiogram.types import (
 from src.runtime.integrations.polling_lock import RedisPollingLock
 from src.services.handoff_state import HandoffData, HandoffState
 
-from . import (
-    _bot_catalog,  # #2816 Slice 2: extracted catalog/card handlers
-    _bot_crm_callbacks,  # #2980: extracted clearcache callback handler
-    _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
-    _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
-    _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
-    _bot_handoff,  # #2816 Slice 2: extracted handoff handlers
-)
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
+from .handlers import (
+    bot_crm_callbacks as _bot_crm_callbacks,  # #2980: extracted clearcache callback handler
+)
+from .handlers import (
+    bot_handoff as _bot_handoff,  # #2816 Slice 2: extracted handoff handlers
+)
+from .handlers import (
+    catalog as _bot_catalog,  # #2816 Slice 2: extracted catalog/card handlers
+)
+from .handlers import (
+    error_classification as _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
+)
+from .handlers import (
+    favorites as _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
+)
+from .handlers import (
+    feedback_handlers as _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
+)
 from .lifecycle import lifecycle as _bot_lifecycle  # card_2a71ec058138: homed to lifecycle/
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
