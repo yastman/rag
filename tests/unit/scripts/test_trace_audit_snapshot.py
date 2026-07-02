@@ -1,7 +1,7 @@
 """Unit tests for scripts/audit/trace_audit_snapshot.py (#2221 / Epic L).
 
 The repo already has the right runtime-audit tooling — validate_traces.py,
-validate_voice_traces.py, langfuse_triage.py, probe/observability_diagnostic.py
+validate_voice_traces.py, langfuse_triage.py
 — but no single command that runs them and produces ONE reviewable markdown
 snapshot. Epic L adds ``make trace-audit-snapshot`` wrapping them.
 
