@@ -38,7 +38,7 @@ from telegram_bot.handlers.command_handlers import (
     cmd_stats,
 )
 from telegram_bot.preflight import PreflightError
-from telegram_bot.services.error_utils import walk_traceback_frames
+from telegram_bot.services.util.error_utils import walk_traceback_frames
 from telegram_bot.startup_status import DependencyCheckResult, StartupReport
 
 

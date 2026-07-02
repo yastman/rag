@@ -18,7 +18,7 @@ Owned helpers (verbatim, byte-for-byte semantics with the pre-extract
 
 from __future__ import annotations
 
-from telegram_bot.services.error_utils import walk_traceback_frames
+from telegram_bot.services.util.error_utils import walk_traceback_frames
 
 
 def _is_post_pipeline_cleanup_error(

@@ -179,10 +179,10 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
 
 # Re-export from shared module (avoid circular imports with middlewares)
 # Re-export checkpointer helpers from shared utility module for backward compat
-from .services.checkpointer_utils import (  # noqa: E402
+from .services.util.checkpointer_utils import (  # noqa: E402
     _delete_checkpointer_thread as _delete_checkpointer_thread,
 )
-from .services.checkpointer_utils import (  # noqa: E402
+from .services.util.checkpointer_utils import (  # noqa: E402
     _supervisor_thread_id as _supervisor_thread_id,
 )
 from .tracing_context import make_session_id as make_session_id  # noqa: E402

@@ -49,7 +49,7 @@ async def handle_clearcache_callback(
     text: str
     try:
         if data in ("history", "all_and_history"):
-            from telegram_bot.services.checkpointer_utils import (
+            from telegram_bot.services.util.checkpointer_utils import (
                 _delete_checkpointer_thread,
                 _supervisor_thread_id,
             )

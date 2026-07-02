@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from telegram_bot.services.text_utils import parse_int_with_k_suffix
+from telegram_bot.services.util.text_utils import parse_int_with_k_suffix
 
 
 class BaseFilterExtractor:

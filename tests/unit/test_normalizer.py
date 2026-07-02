@@ -2,7 +2,7 @@
 
 import pytest
 
-from telegram_bot.services.normalizer import normalize_ru_uk
+from telegram_bot.services.util.normalizer import normalize_ru_uk
 
 
 class TestGreetingsRU:
