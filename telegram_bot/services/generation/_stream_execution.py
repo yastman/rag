@@ -14,7 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from src.runtime.generation import GenerationRequest, generate_answer_stream
-from telegram_bot.services.telegram_formatting import (
+from telegram_bot.services.generation.telegram_formatting import (
     build_reply_parameters,
     format_answer_html,
 )

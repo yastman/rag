@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.services.ai_advisor_service import AIAdvisorService
+from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
 
 def _llm_with_response(content: str = "ok") -> MagicMock:

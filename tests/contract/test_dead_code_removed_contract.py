@@ -209,7 +209,7 @@ def test_dead_code_test_classes_are_gone(rel_path: str, class_name: str) -> None
 def test_services_llm_module_is_gone() -> None:
     """``telegram_bot/services/llm.py`` must be deleted (#1541 item #1).
 
-    Production code uses ``telegram_bot.services.generate_response`` instead.
+    Production code uses ``telegram_bot.services.generation.generate_response`` instead.
     The previous file was deprecated in #1671's wake and only its own tests
     plus the lazy-export map kept it alive.
     """

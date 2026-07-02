@@ -3395,7 +3395,7 @@ class TestStreamingCoordination:
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch(
-                "telegram_bot.services.telegram_formatting.record_langfuse_response_output"
+                "telegram_bot.services.generation.telegram_formatting.record_langfuse_response_output"
             ) as mock_record_output,
         ):
             message = _make_text_message("квартиры")
@@ -5687,7 +5687,7 @@ class TestPropertyBotApartmentPipeline:
                 return_value=False,
             ),
             _patch(
-                "telegram_bot.services.generate_response.generate_response",
+                "telegram_bot.services.generation.generate_response.generate_response",
                 new_callable=AsyncMock,
                 return_value={"response": "ok", "response_sent": True},
             ),

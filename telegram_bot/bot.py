@@ -598,7 +598,7 @@ class PropertyBot:
         reply_markup: Any | None = None,
     ) -> None:
         """Send long Telegram response in chunks with Telegram HTML formatting."""
-        from telegram_bot.services.telegram_formatting import send_html_messages
+        from telegram_bot.services.generation.telegram_formatting import send_html_messages
 
         await send_html_messages(message, text, reply_markup=reply_markup)
 

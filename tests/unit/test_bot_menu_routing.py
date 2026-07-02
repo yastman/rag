@@ -451,7 +451,7 @@ class TestHandleApartmentFastPath:
                 return_value="Formatted apartments",
             ),
             patch(
-                "telegram_bot.services.generate_response.generate_response",
+                "telegram_bot.services.generation.generate_response.generate_response",
                 new_callable=AsyncMock,
                 return_value={"response": "Here are your apartments", "response_sent": False},
             ),

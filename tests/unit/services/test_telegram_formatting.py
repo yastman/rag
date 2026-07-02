@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from telegram_bot.services.telegram_formatting import build_reply_parameters
+from telegram_bot.services.generation.telegram_formatting import build_reply_parameters
 
 
 def test_build_reply_parameters_returns_none_for_multiline_text() -> None:

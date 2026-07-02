@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import telegram_bot.services as services
-from telegram_bot.services.generate_response import GenerationDeps, generate_response
+from telegram_bot.services.generation.generate_response import GenerationDeps, generate_response
 
 
 def _make_non_streaming_config(answer: str = "Ответ модели") -> tuple[MagicMock, MagicMock]:
@@ -121,7 +121,8 @@ async def test_generate_response_non_streaming_returns_llm_answer() -> None:
 
 def test_services_package_exports_generate_response() -> None:
     assert "generate_response" in services.__all__
-    assert services.generate_response is generate_response
+    exported = services.generate_response
+    assert exported is generate_response
 
 
 @pytest.mark.asyncio
@@ -222,7 +223,7 @@ async def test_generate_response_routes_coverage_query_to_exhaustive_prompt() ->
     MagicMock()
 
     with patch(
-        "telegram_bot.services.generate_response.get_prompt_with_config",
+        "telegram_bot.services.generation.generate_response.get_prompt_with_config",
         side_effect=[
             ("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
         ],
@@ -270,7 +271,7 @@ async def test_generate_response_honors_explicit_coverage_override() -> None:
     MagicMock()
 
     with patch(
-        "telegram_bot.services.generate_response.get_prompt_with_config",
+        "telegram_bot.services.generation.generate_response.get_prompt_with_config",
         return_value=("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
     ) as mock_get_prompt:
         result = await generate_response(
@@ -299,7 +300,7 @@ async def test_generate_response_coverage_mode_includes_all_retrieved_docs_in_pr
     ]
 
     with patch(
-        "telegram_bot.services.generate_response.get_prompt_with_config",
+        "telegram_bot.services.generation.generate_response.get_prompt_with_config",
         return_value=("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
     ):
         result = await generate_response(
@@ -954,7 +955,7 @@ async def test_generate_response_does_not_forward_prompt_object_when_none() -> N
     MagicMock()
 
     with patch(
-        "telegram_bot.services.generate_response.get_prompt_with_object",
+        "telegram_bot.services.generation.generate_response.get_prompt_with_object",
         return_value=("Hardcoded fallback prompt", None),
     ):
         await generate_response(
@@ -975,7 +976,7 @@ async def test_generate_response_works_when_prompt_object_unavailable() -> None:
     config, client = _make_non_streaming_config(answer="Ответ без tracing")
 
     with patch(
-        "telegram_bot.services.generate_response.get_prompt_with_object",
+        "telegram_bot.services.generation.generate_response.get_prompt_with_object",
         return_value=("Hardcoded fallback", None),
     ):
         result = await generate_response(
@@ -1002,7 +1003,7 @@ async def test_connection_error_uses_logger_warning_not_exception() -> None:
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = ConnectError("connection refused")
 
-    with patch("telegram_bot.services.generate_response.logger") as mock_logger:
+    with patch("telegram_bot.services.generation.generate_response.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],
@@ -1029,7 +1030,7 @@ async def test_openai_connection_error_uses_logger_warning_not_exception() -> No
         message="connection error", request=MagicMock()
     )
 
-    with patch("telegram_bot.services.generate_response.logger") as mock_logger:
+    with patch("telegram_bot.services.generation.generate_response.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],
@@ -1052,7 +1053,7 @@ async def test_unexpected_error_still_uses_logger_exception() -> None:
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = RuntimeError("unexpected failure")
 
-    with patch("telegram_bot.services.generate_response.logger") as mock_logger:
+    with patch("telegram_bot.services.generation.generate_response.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],

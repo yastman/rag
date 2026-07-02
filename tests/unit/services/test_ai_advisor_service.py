@@ -13,12 +13,12 @@ from telegram_bot.services.crm.kommo_models import Lead, Task
 
 def test_ai_advisor_service_is_importable():
     """AIAdvisorService can be imported from telegram_bot.services."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService  # noqa: F401
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService  # noqa: F401
 
 
 def test_ai_advisor_service_instantiation():
     """AIAdvisorService instantiates with kommo_client and llm."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     svc = AIAdvisorService(kommo_client=MagicMock(), llm=MagicMock())
     assert svc is not None
@@ -26,7 +26,7 @@ def test_ai_advisor_service_instantiation():
 
 def test_ai_advisor_service_instantiation_with_cache():
     """AIAdvisorService accepts optional cache parameter."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     svc = AIAdvisorService(kommo_client=MagicMock(), llm=MagicMock(), cache=MagicMock())
     assert svc is not None
@@ -37,14 +37,14 @@ def test_ai_advisor_service_instantiation_with_cache():
 
 def test_get_daily_plan_method_exists():
     """AIAdvisorService has get_daily_plan method."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     assert hasattr(AIAdvisorService, "get_daily_plan")
 
 
 def test_get_deal_and_task_tips_method_exists():
     """AIAdvisorService has get_deal_and_task_tips method."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     assert hasattr(AIAdvisorService, "get_deal_and_task_tips")
 
@@ -52,10 +52,10 @@ def test_get_deal_and_task_tips_method_exists():
 # --- get_daily_plan ---
 
 
-@patch("telegram_bot.services.ai_advisor_service.get_prompt")
+@patch("telegram_bot.services.generation.ai_advisor_service.get_prompt")
 async def test_daily_plan_uses_langfuse_prompt(mock_get_prompt: MagicMock) -> None:
     """get_daily_plan fetches prompt from Langfuse via get_prompt()."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     mock_get_prompt.return_value = "System prompt from Langfuse"
 
@@ -74,10 +74,10 @@ async def test_daily_plan_uses_langfuse_prompt(mock_get_prompt: MagicMock) -> No
     mock_get_prompt.assert_called()
 
 
-@patch("telegram_bot.services.ai_advisor_service.get_prompt")
+@patch("telegram_bot.services.generation.ai_advisor_service.get_prompt")
 async def test_deal_tips_uses_langfuse_prompt(mock_get_prompt: MagicMock) -> None:
     """get_deal_and_task_tips fetches prompt from Langfuse via get_prompt()."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     mock_get_prompt.return_value = "System prompt from Langfuse"
 
@@ -98,7 +98,7 @@ async def test_deal_tips_uses_langfuse_prompt(mock_get_prompt: MagicMock) -> Non
 
 async def test_get_daily_plan_returns_string() -> None:
     """get_daily_plan returns non-empty string."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     llm_response = MagicMock()
     llm_response.choices[0].message.content = "Ваш план на день"
@@ -110,7 +110,9 @@ async def test_get_daily_plan_returns_string() -> None:
     kommo.get_tasks = AsyncMock(return_value=[])
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         result = await svc.get_daily_plan(manager_id=1)
 
     assert isinstance(result, str)
@@ -119,7 +121,7 @@ async def test_get_daily_plan_returns_string() -> None:
 
 async def test_get_deal_and_task_tips_returns_string() -> None:
     """get_deal_and_task_tips returns non-empty string."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     llm_response = MagicMock()
     llm_response.choices[0].message.content = "Советы по сделкам"
@@ -131,7 +133,9 @@ async def test_get_deal_and_task_tips_returns_string() -> None:
     kommo.get_tasks = AsyncMock(return_value=[])
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         result = await svc.get_deal_and_task_tips(manager_id=1)
 
     assert isinstance(result, str)
@@ -140,7 +144,7 @@ async def test_get_deal_and_task_tips_returns_string() -> None:
 
 async def test_get_daily_plan_fetches_leads_tasks_and_stale() -> None:
     """get_daily_plan fetches leads, tasks and stale data."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     llm_response = MagicMock()
     llm_response.choices[0].message.content = "Plan"
@@ -153,7 +157,9 @@ async def test_get_daily_plan_fetches_leads_tasks_and_stale() -> None:
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
 
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         await svc.get_daily_plan(manager_id=5)
 
     # search_leads and get_tasks should both be called
@@ -163,7 +169,7 @@ async def test_get_daily_plan_fetches_leads_tasks_and_stale() -> None:
 
 async def test_get_deal_and_task_tips_fetches_tasks_and_stale() -> None:
     """get_deal_and_task_tips fetches tasks and stale deals."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     llm_response = MagicMock()
     llm_response.choices[0].message.content = "Tips"
@@ -176,7 +182,9 @@ async def test_get_deal_and_task_tips_fetches_tasks_and_stale() -> None:
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
 
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         await svc.get_deal_and_task_tips(manager_id=5)
 
     kommo.get_tasks.assert_called()
@@ -185,7 +193,7 @@ async def test_get_deal_and_task_tips_fetches_tasks_and_stale() -> None:
 
 async def test_get_daily_plan_uses_cache_on_hit() -> None:
     """get_daily_plan returns cached value without calling LLM."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     cache_redis = AsyncMock()
     cache_redis.get = AsyncMock(return_value="Cached plan")
@@ -198,7 +206,9 @@ async def test_get_daily_plan_uses_cache_on_hit() -> None:
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm, cache=cache)
 
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         result = await svc.get_daily_plan(manager_id=5)
 
     assert result == "Cached plan"
@@ -207,7 +217,7 @@ async def test_get_daily_plan_uses_cache_on_hit() -> None:
 
 async def test_get_daily_plan_stores_result_in_cache() -> None:
     """get_daily_plan stores computed result in cache for future calls."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     llm_response = MagicMock()
     llm_response.choices[0].message.content = "Plan text"
@@ -226,7 +236,9 @@ async def test_get_daily_plan_stores_result_in_cache() -> None:
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm, cache=cache)
 
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         await svc.get_daily_plan(manager_id=3)
 
     cache_redis.setex.assert_called_once()
@@ -234,7 +246,7 @@ async def test_get_daily_plan_stores_result_in_cache() -> None:
 
 async def test_get_daily_plan_cache_key_includes_manager_id() -> None:
     """get_daily_plan uses manager_id in cache key for isolation."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     llm_response = MagicMock()
     llm_response.choices[0].message.content = "ok"
@@ -253,7 +265,9 @@ async def test_get_daily_plan_cache_key_includes_manager_id() -> None:
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm, cache=cache)
 
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         await svc.get_daily_plan(manager_id=99)
 
     get_call_key = cache_redis.get.call_args[0][0]
@@ -262,7 +276,7 @@ async def test_get_daily_plan_cache_key_includes_manager_id() -> None:
 
 async def test_get_daily_plan_handles_kommo_error() -> None:
     """get_daily_plan returns string when Kommo API fails."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     kommo = MagicMock()
     kommo.search_leads = AsyncMock(side_effect=Exception("Kommo error"))
@@ -275,7 +289,9 @@ async def test_get_daily_plan_handles_kommo_error() -> None:
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
 
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         result = await svc.get_daily_plan(manager_id=1)
 
     assert isinstance(result, str)
@@ -283,7 +299,7 @@ async def test_get_daily_plan_handles_kommo_error() -> None:
 
 async def test_get_daily_plan_handles_llm_error() -> None:
     """get_daily_plan returns error string when LLM fails."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     kommo = MagicMock()
     kommo.search_leads = AsyncMock(return_value=[])
@@ -294,7 +310,9 @@ async def test_get_daily_plan_handles_llm_error() -> None:
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
 
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         result = await svc.get_daily_plan(manager_id=1)
 
     assert isinstance(result, str)
@@ -306,28 +324,28 @@ async def test_get_daily_plan_handles_llm_error() -> None:
 
 def test_format_budget_with_value():
     """_format_budget formats integer as € with space separator."""
-    from telegram_bot.services.ai_advisor_service import _format_budget
+    from telegram_bot.services.generation.ai_advisor_service import _format_budget
 
     assert _format_budget(50000) == "€50 000"
 
 
 def test_format_budget_none():
     """_format_budget returns dash for None."""
-    from telegram_bot.services.ai_advisor_service import _format_budget
+    from telegram_bot.services.generation.ai_advisor_service import _format_budget
 
     assert _format_budget(None) == "—"
 
 
 def test_format_budget_zero():
     """_format_budget returns €0 for zero."""
-    from telegram_bot.services.ai_advisor_service import _format_budget
+    from telegram_bot.services.generation.ai_advisor_service import _format_budget
 
     assert _format_budget(0) == "€0"
 
 
 def test_format_date_with_timestamp():
     """_format_date returns human-readable Russian date."""
-    from telegram_bot.services.ai_advisor_service import _format_date
+    from telegram_bot.services.generation.ai_advisor_service import _format_date
 
     # 2025-03-01 00:00:00 UTC = 1740787200
     result = _format_date(1740787200)
@@ -337,14 +355,14 @@ def test_format_date_with_timestamp():
 
 def test_format_date_none():
     """_format_date returns dash for None."""
-    from telegram_bot.services.ai_advisor_service import _format_date
+    from telegram_bot.services.generation.ai_advisor_service import _format_date
 
     assert _format_date(None) == "—"
 
 
 def test_format_days_ago_recent():
     """_format_days_ago shows days count."""
-    from telegram_bot.services.ai_advisor_service import _format_days_ago
+    from telegram_bot.services.generation.ai_advisor_service import _format_days_ago
 
     now = int(time.time())
     three_days_ago = now - 3 * 86400
@@ -355,14 +373,14 @@ def test_format_days_ago_recent():
 
 def test_format_days_ago_none():
     """_format_days_ago returns dash for None."""
-    from telegram_bot.services.ai_advisor_service import _format_days_ago
+    from telegram_bot.services.generation.ai_advisor_service import _format_days_ago
 
     assert _format_days_ago(None, int(time.time())) == "—"
 
 
 def test_format_days_ago_today():
     """_format_days_ago shows 'сегодня' for 0 days."""
-    from telegram_bot.services.ai_advisor_service import _format_days_ago
+    from telegram_bot.services.generation.ai_advisor_service import _format_days_ago
 
     now = int(time.time())
     result = _format_days_ago(now, now)
@@ -374,7 +392,7 @@ def test_format_days_ago_today():
 
 async def test_fetch_leads_text_formats_rich_data():
     """_fetch_leads_text returns human-readable lead data with budget and dates."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     leads = [
         Lead(id=1, name="Иванов", budget=50000, created_at=1740787200, updated_at=1740700800),
@@ -396,7 +414,7 @@ async def test_fetch_leads_text_formats_rich_data():
 
 async def test_fetch_tasks_text_formats_rich_data():
     """_fetch_tasks_text shows human dates, overdue markers, linked lead name."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     now_ts = int(time.time())
     tasks = [
@@ -431,7 +449,7 @@ async def test_fetch_tasks_text_formats_rich_data():
 
 async def test_fetch_stale_text_categorizes_by_severity():
     """_fetch_stale_text groups deals by inactivity severity."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     now_ts = int(time.time())
     leads = [
@@ -459,7 +477,7 @@ async def test_fetch_stale_text_categorizes_by_severity():
 
 def test_fallback_daily_plan_is_contract_style():
     """Fallback daily plan prompt contains prioritization logic and HTML rules."""
-    from telegram_bot.services.ai_advisor_service import _FALLBACK_DAILY_PLAN
+    from telegram_bot.services.generation.ai_advisor_service import _FALLBACK_DAILY_PLAN
 
     text = _FALLBACK_DAILY_PLAN
     assert "недвижимост" in text.lower()  # домен
@@ -471,7 +489,7 @@ def test_fallback_daily_plan_is_contract_style():
 
 def test_fallback_deal_tips_is_contract_style():
     """Fallback deal tips prompt contains analysis logic and HTML rules."""
-    from telegram_bot.services.ai_advisor_service import _FALLBACK_DEAL_TIPS
+    from telegram_bot.services.generation.ai_advisor_service import _FALLBACK_DEAL_TIPS
 
     text = _FALLBACK_DEAL_TIPS
     assert "недвижимост" in text.lower()
@@ -484,7 +502,7 @@ def test_fallback_deal_tips_is_contract_style():
 
 async def test_get_prioritized_leads_handles_llm_error() -> None:
     """Backward compat: get_daily_plan returns error message when LLM fails."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
 
     leads = [Lead(id=1, name="Deal A", budget=100000)]
     kommo = MagicMock()
@@ -495,7 +513,9 @@ async def test_get_prioritized_leads_handles_llm_error() -> None:
     llm.chat.completions.create = AsyncMock(side_effect=Exception("LLM error"))
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+    with patch(
+        "telegram_bot.services.generation.ai_advisor_service.get_prompt", return_value="prompt"
+    ):
         result = await svc.get_daily_plan(manager_id=1)
 
     assert isinstance(result, str)

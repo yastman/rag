@@ -183,7 +183,7 @@ async def _handle_apartment_fast_path(
         return None
 
     from telegram_bot.services.apartment_formatter import format_apartment_text
-    from telegram_bot.services.generate_response import generate_response
+    from telegram_bot.services.generation.generate_response import generate_response
 
     context = format_apartment_text(results)
 
@@ -409,13 +409,13 @@ async def _send_core_response(
     sources_html = ""
     documents = rag_result_store.get("documents", [])
     if bot._graph_config.show_sources and documents and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
-        from telegram_bot.services.telegram_formatting import format_sources_html
+        from telegram_bot.services.generation.telegram_formatting import format_sources_html
 
         _MAX_SOURCES = 5
         sources_html = format_sources_html(documents, max_sources=_MAX_SOURCES)
         rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
 
-    from telegram_bot.services.telegram_formatting import (
+    from telegram_bot.services.generation.telegram_formatting import (
         build_html_messages,
         send_html_messages,
     )
