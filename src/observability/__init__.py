@@ -39,9 +39,28 @@ def propagate_attributes(**kwargs: Any) -> Iterator[None]:
     yield
 
 
+def observe(name: str = "", **_kw: Any) -> Any:
+    """No-op @observe decorator — Langfuse removed (#2844, #2969).
+
+    Accepts both ``@observe`` and ``@observe(name="...")`` usage.
+    When called with a callable argument (bare decorator form), returns
+    that callable unchanged. When called with keyword args (factory form),
+    returns a pass-through decorator.
+    """
+    # ponytail: supports both @observe and @observe(name="x") — no framework needed
+    if callable(name):
+        return name  # bare @observe — name is actually the decorated function
+
+    def _decorator(fn: Any) -> Any:
+        return fn
+
+    return _decorator
+
+
 __all__ = [
     "compute_checkpointer_overhead_proxy_ms",
     "mask_pii",
+    "observe",
     "propagate_attributes",
     "score",
     "write_history_scores",
