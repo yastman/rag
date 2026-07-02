@@ -27,7 +27,6 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 | [`document_parser.py`](./document_parser.py) | Docling-based document parsing |
 | [`docling_client.py`](./docling_client.py) | HTTP client for docling-serve (HybridChunker, profiles) |
 | [`docling_native.py`](./docling_native.py) | In-process Docling backend |
-| [`service.py`](./service.py) | Legacy ingestion service wrapper |
 | [`unified/config.py`](./unified/config.py) | Unified pipeline configuration |
 | [`unified/flow.py`](./unified/flow.py) | Pipeline definition (`run_once` / `run_watch`) |
 | [`unified/manifest.py`](./unified/manifest.py) | Content-hash-based stable file identity |
