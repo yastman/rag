@@ -6,7 +6,7 @@ contract so the LLM is instructed to emit a bool rather than the legacy
 ``furniture (string)`` "Есть"/"Нет" form.
 """
 
-from telegram_bot.services.query_analyzer import SYSTEM_PROMPT
+from telegram_bot.services.rag.query_analyzer import SYSTEM_PROMPT
 
 
 def test_prompt_mentions_furnished_filter() -> None:

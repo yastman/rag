@@ -20,7 +20,7 @@ class TestVoyageServiceUnit:
 
     def test_init_creates_client_with_api_key(self):
         """Test initialization creates voyageai.Client."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             service = VoyageService(api_key="test-key")
@@ -32,7 +32,7 @@ class TestVoyageServiceUnit:
 
     def test_init_with_custom_models(self):
         """Test initialization with custom model names."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client"):
             service = VoyageService(
@@ -48,7 +48,7 @@ class TestVoyageServiceUnit:
 
     async def test_embed_documents_batches_large_input(self):
         """Test embed_documents splits into batches of 128."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -78,7 +78,7 @@ class TestVoyageServiceUnit:
 
     async def test_embed_documents_uses_document_model(self):
         """Test embed_documents uses model_docs."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -94,7 +94,7 @@ class TestVoyageServiceUnit:
 
     async def test_embed_query_uses_query_model(self):
         """Test embed_query uses model_queries (asymmetric retrieval)."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -110,7 +110,7 @@ class TestVoyageServiceUnit:
 
     async def test_embed_documents_empty_list(self):
         """Test embed_documents with empty list returns empty."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client"):
             service = VoyageService(api_key="test-key")
@@ -120,7 +120,7 @@ class TestVoyageServiceUnit:
 
     async def test_rerank_returns_formatted_results(self):
         """Test rerank returns list of dicts with index and score."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -141,7 +141,7 @@ class TestVoyageServiceUnit:
 
     async def test_rerank_empty_documents(self):
         """Test rerank with empty documents returns empty list."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client"):
             service = VoyageService(api_key="test-key")
@@ -151,7 +151,7 @@ class TestVoyageServiceUnit:
 
     async def test_rerank_uses_rerank_model(self):
         """Test rerank uses model_rerank."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -170,7 +170,7 @@ class TestVoyageServiceBackwardCompatibility:
 
     async def test_can_replace_voyage_embedding_service(self):
         """Test VoyageService provides same interface as VoyageEmbeddingService."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -190,7 +190,7 @@ class TestVoyageServiceBackwardCompatibility:
 
     async def test_can_replace_voyage_reranker_service(self):
         """Test VoyageService provides same interface as VoyageRerankerService."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -210,7 +210,7 @@ class TestVoyageServiceBackwardCompatibility:
 
     def test_sync_methods_work(self):
         """Test sync wrappers for non-async code."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -233,14 +233,14 @@ class TestVoyageServiceMatryoshka:
 
     def test_matryoshka_dims_constant(self):
         """Test supported dimensions are defined."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         assert VoyageService.MATRYOSHKA_DIMS == (2048, 1024, 512, 256)
         assert VoyageService.DEFAULT_DIM == 1024
 
     async def test_embed_documents_matryoshka_passes_output_dimension(self):
         """Test embed_documents_matryoshka passes output_dimension to API."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -255,7 +255,7 @@ class TestVoyageServiceMatryoshka:
 
     async def test_embed_query_matryoshka_passes_output_dimension(self):
         """Test embed_query_matryoshka passes output_dimension to API."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -270,7 +270,7 @@ class TestVoyageServiceMatryoshka:
 
     async def test_embed_documents_matryoshka_invalid_dimension_raises(self):
         """Test embed_documents_matryoshka raises for invalid dimensions."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client"):
             service = VoyageService(api_key="test-key")
@@ -283,7 +283,7 @@ class TestVoyageServiceMatryoshka:
 
     async def test_embed_query_matryoshka_invalid_dimension_raises(self):
         """Test embed_query_matryoshka raises for invalid dimensions."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client"):
             service = VoyageService(api_key="test-key")
@@ -295,7 +295,7 @@ class TestVoyageServiceMatryoshka:
 
     async def test_embed_documents_matryoshka_empty_list(self):
         """Test embed_documents_matryoshka with empty list returns empty."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client"):
             service = VoyageService(api_key="test-key")
@@ -305,7 +305,7 @@ class TestVoyageServiceMatryoshka:
 
     async def test_embed_documents_matryoshka_batches_correctly(self):
         """Test embed_documents_matryoshka batches like embed_documents."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
@@ -324,7 +324,7 @@ class TestVoyageServiceMatryoshka:
 
     def test_matryoshka_sync_methods_work(self):
         """Test sync wrappers for Matryoshka methods."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()

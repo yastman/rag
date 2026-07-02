@@ -186,7 +186,7 @@ async def test_lifespan_respects_rerank_provider_none() -> None:
         patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
         patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
         patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
-        patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        patch("telegram_bot.services.rag.colbert_reranker.ColbertRerankerService") as mock_colbert,
     ):
         async with lifespan(app):
             assert app.state.max_rewrite_attempts == 2
@@ -219,7 +219,7 @@ async def test_lifespan_keeps_colbert_runtime_server_side() -> None:
         patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
         patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
         patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
-        patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        patch("telegram_bot.services.rag.colbert_reranker.ColbertRerankerService") as mock_colbert,
     ):
         async with lifespan(app):
             assert app.state.max_rewrite_attempts == 2

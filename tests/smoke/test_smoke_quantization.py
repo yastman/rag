@@ -26,7 +26,7 @@ async def voyage_service():
     if not api_key:
         pytest.skip("VOYAGE_API_KEY not set")
     try:
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
     except Exception as exc:  # pragma: no cover - depends on optional third-party packages
         pytest.skip(f"Voyage stack unavailable in this environment: {exc}")
 

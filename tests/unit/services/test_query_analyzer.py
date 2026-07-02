@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import openai
 import pytest
 
-from telegram_bot.services.query_analyzer import QueryAnalysisResult, QueryAnalyzer
+from telegram_bot.services.rag.query_analyzer import QueryAnalysisResult, QueryAnalyzer
 
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -380,7 +380,7 @@ class TestQueryAnalyzerStructuredOutputCompat:
     """
 
     def test_module_does_not_import_instructor(self):
-        import telegram_bot.services.query_analyzer as qa_mod
+        import telegram_bot.services.rag.query_analyzer as qa_mod
 
         assert not hasattr(qa_mod, "instructor")
 
@@ -419,7 +419,7 @@ class TestQueryAnalyzerObserveInstrumentation:
     @staticmethod
     def _patched_lf(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         """Replace get_client used by the query_analyzer module with a recording mock."""
-        from telegram_bot.services import query_analyzer as qa_mod
+        from telegram_bot.services.rag import query_analyzer as qa_mod
 
         mock_lf = MagicMock()
         monkeypatch.setattr(qa_mod, "get_client", lambda: mock_lf)
@@ -447,8 +447,8 @@ class TestQueryAnalyzerObserveInstrumentation:
             return decorator
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
-        monkeypatch.delitem(sys.modules, "telegram_bot.services.query_analyzer", raising=False)
-        importlib.import_module("telegram_bot.services.query_analyzer")
+        monkeypatch.delitem(sys.modules, "telegram_bot.services.rag.query_analyzer", raising=False)
+        importlib.import_module("telegram_bot.services.rag.query_analyzer")
 
     @staticmethod
     def _record_observe_calls(
@@ -475,8 +475,8 @@ class TestQueryAnalyzerObserveInstrumentation:
             return decorator
 
         monkeypatch.setattr(observability_mod, "observe", recording_observe)
-        monkeypatch.delitem(sys.modules, "telegram_bot.services.query_analyzer", raising=False)
-        importlib.import_module("telegram_bot.services.query_analyzer")
+        monkeypatch.delitem(sys.modules, "telegram_bot.services.rag.query_analyzer", raising=False)
+        importlib.import_module("telegram_bot.services.rag.query_analyzer")
         return captured_calls
 
     # ------------------------------------------------------------------
@@ -485,15 +485,15 @@ class TestQueryAnalyzerObserveInstrumentation:
 
     def test_query_analyzer_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (#1659 contract)."""
-        from telegram_bot.services import query_analyzer as qa_mod
+        from telegram_bot.services.rag import query_analyzer as qa_mod
 
         assert hasattr(qa_mod, "observe"), (
-            "telegram_bot.services.query_analyzer must import `observe` from "
+            "telegram_bot.services.rag.query_analyzer must import `observe` from "
             "telegram_bot.observability for the @observe decorator on "
             "QueryAnalyzer.analyze"
         )
         assert hasattr(qa_mod, "get_client"), (
-            "telegram_bot.services.query_analyzer must import `get_client` "
+            "telegram_bot.services.rag.query_analyzer must import `get_client` "
             "from telegram_bot.observability for curated update_current_span calls"
         )
 
@@ -538,7 +538,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.query_analyzer import (
+        from telegram_bot.services.rag.query_analyzer import (
             QueryAnalysisResult,
             QueryAnalyzer,
         )
@@ -596,7 +596,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.query_analyzer import (
+        from telegram_bot.services.rag.query_analyzer import (
             QueryAnalysisResult,
             QueryAnalyzer,
         )
@@ -648,8 +648,8 @@ class TestQueryAnalyzerObserveInstrumentation:
         """Tracing must degrade gracefully when Langfuse is unavailable."""
         self._disable_observe(monkeypatch)
 
-        from telegram_bot.services import query_analyzer as qa_mod
-        from telegram_bot.services.query_analyzer import (
+        from telegram_bot.services.rag import query_analyzer as qa_mod
+        from telegram_bot.services.rag.query_analyzer import (
             QueryAnalysisResult,
             QueryAnalyzer,
         )
@@ -682,7 +682,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.query_analyzer import QueryAnalyzer
+        from telegram_bot.services.rag.query_analyzer import QueryAnalyzer
 
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
@@ -721,7 +721,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.query_analyzer import QueryAnalyzer
+        from telegram_bot.services.rag.query_analyzer import QueryAnalyzer
 
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"

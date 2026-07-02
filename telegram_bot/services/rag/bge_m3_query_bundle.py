@@ -3,7 +3,7 @@
 The canonical implementation now lives in ``src.services.bge_m3_query_bundle``.
 This module is preserved so existing imports such as
 
-    from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+    from telegram_bot.services.rag.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
 continue to resolve. New code should import from ``src.services.bge_m3_query_bundle``.
 
