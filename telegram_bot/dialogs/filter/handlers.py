@@ -21,7 +21,7 @@ from telegram_bot.dialogs.filter._state import (
 )
 from telegram_bot.dialogs.filter_constants import FIELD_TO_FILTER_KEY, build_filters_dict
 from telegram_bot.dialogs.states import CatalogSG, FilterSG
-from telegram_bot.services.catalog_session import (
+from telegram_bot.services.apartment.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
     build_catalog_runtime,
 )

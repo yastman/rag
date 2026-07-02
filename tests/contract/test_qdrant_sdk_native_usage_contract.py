@@ -37,7 +37,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 # Extend this list rather than working around the contract.
 SCAN_FILES: list[Path] = [
     REPO_ROOT / "src" / "ingestion" / "unified" / "qdrant_writer.py",
-    REPO_ROOT / "telegram_bot" / "services" / "apartments_service.py",
+    REPO_ROOT / "telegram_bot" / "services" / "apartment" / "apartments_service.py",
     REPO_ROOT / "telegram_bot" / "services" / "qdrant.py",
     # New retrieval seam added in #2576 — runtime pipeline and graph tool callers.
     REPO_ROOT / "src" / "runtime" / "retrieval" / "service.py",

@@ -12,14 +12,14 @@ from src.models.apartment import (
     HardFilters,
     SoftPreferences,
 )
-from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
-from telegram_bot.services.apartment_llm_extractor import merge_extraction_results
+from telegram_bot.services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
+from telegram_bot.services.apartment.apartment_llm_extractor import merge_extraction_results
 
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
 
-    from telegram_bot.services.apartment_llm_extractor import ApartmentLlmExtractor
+    from telegram_bot.services.apartment.apartment_llm_extractor import ApartmentLlmExtractor
 
 logger = logging.getLogger(__name__)
 

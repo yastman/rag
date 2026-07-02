@@ -1,6 +1,6 @@
 """Tests for dynamic example generation from Qdrant."""
 
-from telegram_bot.services.apartments_service import generate_search_examples
+from telegram_bot.services.apartment.apartments_service import generate_search_examples
 
 
 class TestGenerateExamples:

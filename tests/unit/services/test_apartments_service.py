@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from qdrant_client import models
 
-from telegram_bot.services.apartments_service import (
+from telegram_bot.services.apartment.apartments_service import (
     ApartmentsService,
     _build_apartment_filter,
     check_escalation,

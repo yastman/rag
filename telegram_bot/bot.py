@@ -295,7 +295,7 @@ class PropertyBot:
     def _get_pre_agent_filter_extractor(self) -> Any:
         """Lazily construct the deterministic extractor used on pre-agent semantic misses."""
         if self._pre_agent_filter_extractor is None:
-            from .services.apartment_filter_extractor import ApartmentFilterExtractor
+            from .services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
 
             self._pre_agent_filter_extractor = ApartmentFilterExtractor()
         return self._pre_agent_filter_extractor

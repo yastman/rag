@@ -1,6 +1,6 @@
 """Contracts for the shared catalog runtime."""
 
-from telegram_bot.services.catalog_session import (
+from telegram_bot.services.apartment.catalog_session import (
     build_catalog_runtime,
     clear_legacy_catalog_state,
     update_catalog_runtime_page,

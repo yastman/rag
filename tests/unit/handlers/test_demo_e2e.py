@@ -10,8 +10,10 @@ from telegram_bot.keyboards.demo_keyboard import (
     build_demo_examples,
     build_demo_menu,
 )
-from telegram_bot.services.apartment_extraction_pipeline import ApartmentExtractionPipeline
-from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
+from telegram_bot.services.apartment.apartment_extraction_pipeline import (
+    ApartmentExtractionPipeline,
+)
+from telegram_bot.services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
 
 
 def test_demo_button_exists_in_menu():

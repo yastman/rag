@@ -2945,7 +2945,7 @@ class TestClientDirectPipeline:
                 create=True,
             ),
             patch(
-                "telegram_bot.services.filter_extractor.FilterExtractor",
+                "telegram_bot.services.apartment.filter_extractor.FilterExtractor",
                 return_value=mock_extractor,
             ),
             patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
@@ -4086,7 +4086,7 @@ class TestPreAgentCacheCheck:
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
             patch(
-                "telegram_bot.services.filter_extractor.FilterExtractor",
+                "telegram_bot.services.apartment.filter_extractor.FilterExtractor",
                 return_value=mock_extractor,
             ),
         ):
@@ -4125,7 +4125,7 @@ class TestPreAgentCacheCheck:
                 create=True,
             ),
             patch(
-                "telegram_bot.services.filter_extractor.FilterExtractor",
+                "telegram_bot.services.apartment.filter_extractor.FilterExtractor",
                 return_value=mock_extractor,
             ),
         ):
@@ -4165,7 +4165,7 @@ class TestPreAgentCacheCheck:
                 create=True,
             ),
             patch(
-                "telegram_bot.services.filter_extractor.FilterExtractor",
+                "telegram_bot.services.apartment.filter_extractor.FilterExtractor",
                 return_value=mock_extractor,
             ),
         ):
@@ -4391,7 +4391,7 @@ class TestPreAgentCacheCheck:
                 create=True,
             ),
             patch(
-                "telegram_bot.services.filter_extractor.FilterExtractor",
+                "telegram_bot.services.apartment.filter_extractor.FilterExtractor",
                 return_value=mock_extractor,
             ),
         ):
@@ -5646,7 +5646,7 @@ class TestPropertyBotApartmentPipeline:
             patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
             patch.dict(
                 sys.modules,
-                {"telegram_bot.services.apartment_llm_extractor": None},
+                {"telegram_bot.services.apartment.apartment_llm_extractor": None},
             ),
         ):
             bot = PropertyBot(mock_config)
@@ -5683,7 +5683,7 @@ class TestPropertyBotApartmentPipeline:
 
         with (
             _patch(
-                "telegram_bot.services.apartments_service.check_escalation",
+                "telegram_bot.services.apartment.apartments_service.check_escalation",
                 return_value=False,
             ),
             _patch(
