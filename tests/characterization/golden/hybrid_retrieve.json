@@ -1,0 +1,11 @@
+{
+  "search_results_count": 3,
+  "retrieval_backend_error": false,
+  "search_cache_hit": false,
+  "rerank_applied": false,
+  "doc_ids": [
+    "doc_sunny_beach_studio",
+    "doc_cleaning_service",
+    "doc_legal_status"
+  ]
+}
