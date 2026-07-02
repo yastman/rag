@@ -1,4 +1,4 @@
-"""classify_node — regex-based query classification for the RAG pipeline.
+"""classify_query — regex-based query classification for the RAG pipeline.
 
 Classifies user queries into 6 types: CHITCHAT, OFF_TOPIC, STRUCTURED,
 FAQ, ENTITY, GENERAL. Returns canned responses for CHITCHAT/OFF_TOPIC.
@@ -9,12 +9,9 @@ as part of the reverse-layering Slice B (#1948 / #2049).
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
-import time
 from secrets import choice
-from typing import Any
 
 from src.runtime.domain_defaults import CHITCHAT_RESPONSES, OFF_TOPIC_RESPONSES
 
@@ -232,54 +229,6 @@ def classify_query(query: str) -> str:
     return query_type
 
 
-async def classify_node(
-    state: dict[str, Any],
-    runtime: Any,
-) -> dict[str, Any]:
-    """Pipeline helper: classify the user query.
-
-    Reads the last user message, classifies it, and optionally sets
-    a canned response for CHITCHAT/OFF_TOPIC queries.
-
-    Args:
-        state: Current graph state.
-        runtime: object with an optional context mapping (classifier).
-
-    Returns partial state update with query_type, response (if canned),
-    and latency_stages["classify"].
-    """
-    t0 = time.perf_counter()
-    classifier = runtime.context.get("classifier")
-
-    messages = state["messages"]
-    query = messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
-
-    if classifier is not None and classifier.available:
-        try:
-            query_type = await asyncio.to_thread(classifier.classify, query)
-            logger.info("Semantic query classified as %s: %.50s", query_type, query)
-        except Exception as exc:
-            logger.warning("SemanticClassifier failed, falling back to regex: %s", exc)
-            query_type = classify_query(query)
-            logger.info("Query classified as %s: %.50s", query_type, query)
-    else:
-        query_type = classify_query(query)
-        logger.info("Query classified as %s: %.50s", query_type, query)
-
-    result: dict[str, Any] = {
-        "query_type": query_type,
-        "llm_call_count": state.get("llm_call_count", 0) + 1,
-        "latency_stages": {**state.get("latency_stages", {}), "classify": time.perf_counter() - t0},
-    }
-
-    if query_type == CHITCHAT:
-        result["response"] = _get_chitchat_response(query)
-    elif query_type == OFF_TOPIC:
-        result["response"] = choice(OFF_TOPIC_RESPONSES)
-
-    return result
-
-
 __all__ = [
     "CHITCHAT",
     "CHITCHAT_RESPONSES",
@@ -290,6 +239,5 @@ __all__ = [
     "OFF_TOPIC_RESPONSES",
     "STRUCTURED",
     "_get_chitchat_response",
-    "classify_node",
     "classify_query",
 ]
