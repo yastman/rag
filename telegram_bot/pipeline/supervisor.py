@@ -131,7 +131,7 @@ async def _handle_apartment_fast_path(
     dialog_manager: Any = None,
 ) -> str | None:
     """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
-    from telegram_bot.services.apartments_service import check_escalation
+    from telegram_bot.services.apartment.apartments_service import check_escalation
 
     result = await bot._apartment_pipeline.extract(user_text)
 
@@ -182,7 +182,7 @@ async def _handle_apartment_fast_path(
     if escalation:
         return None
 
-    from telegram_bot.services.apartment_formatter import format_apartment_text
+    from telegram_bot.services.apartment.apartment_formatter import format_apartment_text
     from telegram_bot.services.generation.generate_response import generate_response
 
     context = format_apartment_text(results)
@@ -203,8 +203,8 @@ async def _handle_apartment_fast_path(
     if state is not None and results:
         from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
         from telegram_bot.dialogs.states import CatalogSG
-        from telegram_bot.services.catalog_rendering import send_catalog_results
-        from telegram_bot.services.catalog_session import (
+        from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
+        from telegram_bot.services.apartment.catalog_session import (
             build_catalog_runtime,
             clear_legacy_catalog_state,
         )

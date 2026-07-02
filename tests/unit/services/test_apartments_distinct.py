@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.apartments_service import ApartmentsService
+from telegram_bot.services.apartment.apartments_service import ApartmentsService
 
 
 @pytest.fixture

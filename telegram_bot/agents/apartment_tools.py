@@ -6,7 +6,7 @@ import logging
 
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
-from telegram_bot.services.apartment_formatter import format_apartment_text
+from telegram_bot.services.apartment.apartment_formatter import format_apartment_text
 
 
 logger = logging.getLogger(__name__)

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from telegram_bot.services.apartment_extraction_pipeline import ApartmentExtractionPipeline
-from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
+from telegram_bot.services.apartment.apartment_extraction_pipeline import (
+    ApartmentExtractionPipeline,
+)
+from telegram_bot.services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
 
 
 @pytest.fixture

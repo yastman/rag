@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 from aiogram_dialog import DialogManager
 
-from telegram_bot.services.catalog_session import (
+from telegram_bot.services.apartment.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
     CatalogRuntime,
 )

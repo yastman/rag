@@ -18,8 +18,11 @@ from telegram_bot.dialogs.states import CatalogSG, DemoSG
 from telegram_bot.handlers.demo_handler import transcribe_voice
 from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
-from telegram_bot.services.catalog_rendering import send_catalog_results
-from telegram_bot.services.catalog_session import CATALOG_RUNTIME_DATA_KEY, build_catalog_runtime
+from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
+from telegram_bot.services.apartment.catalog_session import (
+    CATALOG_RUNTIME_DATA_KEY,
+    build_catalog_runtime,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +40,7 @@ async def intro_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
 
     if apartments_service is not None:
         try:
-            from telegram_bot.services.apartments_service import generate_search_examples
+            from telegram_bot.services.apartment.apartments_service import generate_search_examples
 
             stats = await apartments_service.get_collection_stats()
             examples = generate_search_examples(stats)

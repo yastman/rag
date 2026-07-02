@@ -12,7 +12,7 @@ from telegram_bot.constants.apartment_constants import (
     APARTMENT_CITY_ALIASES_SORTED,
     APARTMENT_CITY_NAMES,
 )
-from telegram_bot.services.base_filter_extractor import BaseFilterExtractor
+from telegram_bot.services.apartment.base_filter_extractor import BaseFilterExtractor
 
 
 # All canonical complex names plus RU/EN short aliases — sorted longest-first for greedy match

@@ -58,8 +58,8 @@ def build_services(config: BotConfig) -> Services:
     from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
     from src.runtime.services.qdrant import QdrantService
 
-    from .services.apartments_service import ApartmentsService
-    from .services.redis_monitor import RedisHealthMonitor
+    from telegram_bot.services.apartment.apartments_service import ApartmentsService
+    from telegram_bot.services.redis_monitor import RedisHealthMonitor
 
     graph_config = GraphConfig(
         llm_base_url=config.llm_base_url,
@@ -106,12 +106,12 @@ def build_services(config: BotConfig) -> Services:
 
     llm = graph_config.create_llm()
 
-    from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
-    from .services.apartment_filter_extractor import ApartmentFilterExtractor
+    from telegram_bot.services.apartment.apartment_extraction_pipeline import ApartmentExtractionPipeline
+    from telegram_bot.services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
 
     _apt_llm = None
     try:
-        from .services.apartment_llm_extractor import ApartmentLlmExtractor
+        from telegram_bot.services.apartment.apartment_llm_extractor import ApartmentLlmExtractor
 
         _apt_llm = ApartmentLlmExtractor(llm=llm, model=config.apartment_extraction_model)
     except (ImportError, ModuleNotFoundError):

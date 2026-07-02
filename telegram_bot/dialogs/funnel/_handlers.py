@@ -172,7 +172,7 @@ async def on_summary_search(
 ) -> None:
     """Search, send results as ordinary messages, then hand off to CatalogSG."""
     from telegram_bot.dialogs.catalog import run_catalog_search_and_render
-    from telegram_bot.services.catalog_session import (
+    from telegram_bot.services.apartment.catalog_session import (
         CATALOG_RUNTIME_DATA_KEY,
         build_catalog_runtime,
     )

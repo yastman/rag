@@ -16,8 +16,11 @@ from telegram_bot.dialogs.catalog._runtime import (
 )
 from telegram_bot.dialogs.states import CatalogSG
 from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
-from telegram_bot.services.catalog_rendering import send_catalog_results
-from telegram_bot.services.catalog_session import CatalogRuntime, update_catalog_runtime_page
+from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
+from telegram_bot.services.apartment.catalog_session import (
+    CatalogRuntime,
+    update_catalog_runtime_page,
+)
 
 
 _PAGE_SIZE = 10

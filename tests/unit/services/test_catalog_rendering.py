@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.services.catalog_rendering import send_catalog_results
+from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
 
 
 @pytest.mark.asyncio

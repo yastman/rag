@@ -84,7 +84,10 @@ async def test_apartment_fast_path_bootstraps_catalog_runtime_and_dialog() -> No
     message = _make_message()
 
     with (
-        patch("telegram_bot.services.apartments_service.check_escalation", return_value=False),
+        patch(
+            "telegram_bot.services.apartment.apartments_service.check_escalation",
+            return_value=False,
+        ),
         patch(
             "telegram_bot.services.generation.generate_response.generate_response",
             new=AsyncMock(return_value={"response": "ok", "response_sent": True}),
@@ -132,7 +135,10 @@ async def test_fast_path_deletes_legacy_footer_before_catalog_controls() -> None
     message.bot = MagicMock(delete_message=AsyncMock())
 
     with (
-        patch("telegram_bot.services.apartments_service.check_escalation", return_value=False),
+        patch(
+            "telegram_bot.services.apartment.apartments_service.check_escalation",
+            return_value=False,
+        ),
         patch(
             "telegram_bot.services.generation.generate_response.generate_response",
             new=AsyncMock(return_value={"response": "ok", "response_sent": True}),

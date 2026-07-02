@@ -10,7 +10,9 @@ from src.models.apartment import (
     HardFilters,
     SoftPreferences,
 )
-from telegram_bot.services.apartment_extraction_pipeline import ApartmentExtractionPipeline
+from telegram_bot.services.apartment.apartment_extraction_pipeline import (
+    ApartmentExtractionPipeline,
+)
 
 
 def _make_filters(confidence: str = "HIGH", source: str = "regex") -> ApartmentSearchFilters:
