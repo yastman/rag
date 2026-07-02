@@ -15,7 +15,7 @@ from langchain_core.tools import tool
 
 from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.hitl import format_hitl_preview, hitl_guard
-from telegram_bot.services.kommo_models import (
+from telegram_bot.services.crm.kommo_models import (
     ContactCreate,
     ContactUpdate,
     LeadCreate,

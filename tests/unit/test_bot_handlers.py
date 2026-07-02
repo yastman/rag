@@ -2238,7 +2238,9 @@ class TestPostgresPoolInit:
                 return_value=mock_checkpointer,
             ),
             patch("telegram_bot.services.user_service.UserService") as mock_user_service,
-            patch("telegram_bot.services.lead_scoring_store.LeadScoringStore") as mock_score_store,
+            patch(
+                "telegram_bot.services.crm.lead_scoring_store.LeadScoringStore"
+            ) as mock_score_store,
             patch(
                 "asyncpg.connect",
                 AsyncMock(side_effect=[missing_exc, admin_conn, test_conn]),

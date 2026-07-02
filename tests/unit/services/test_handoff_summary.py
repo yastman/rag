@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.handoff_summary import generate_handoff_summary
+from telegram_bot.services.crm.handoff_summary import generate_handoff_summary
 
 
 @pytest.mark.asyncio

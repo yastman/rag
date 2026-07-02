@@ -10,7 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from telegram_bot.observability import observe
-from telegram_bot.services.lead_scoring_models import LeadScoreRecord
+from telegram_bot.services.crm.lead_scoring_models import LeadScoreRecord
 
 
 if TYPE_CHECKING:

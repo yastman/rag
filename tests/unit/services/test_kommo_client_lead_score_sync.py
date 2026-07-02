@@ -22,7 +22,7 @@ def mock_token_store():
 
 @pytest.fixture
 def kommo_client(mock_token_store):
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     return KommoClient(subdomain="testcompany", token_store=mock_token_store)
 

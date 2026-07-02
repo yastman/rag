@@ -137,7 +137,7 @@ def test_hitl_guard_returns_cancel():
 async def test_crm_create_lead_approve():
     """crm_create_lead executes after approve."""
     from telegram_bot.agents.crm_tools import crm_create_lead
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     mock_kommo = AsyncMock()
     mock_kommo.create_lead = AsyncMock(return_value=Lead(id=2, name="Test Deal"))
@@ -155,7 +155,7 @@ async def test_crm_create_lead_approve():
 async def test_crm_create_lead_cancel():
     """crm_create_lead returns cancel message when action != approve."""
     from telegram_bot.agents.crm_tools import crm_create_lead
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     mock_kommo = AsyncMock()
     mock_kommo.create_lead = AsyncMock(return_value=Lead(id=2, name="Test"))
@@ -173,7 +173,7 @@ async def test_crm_create_lead_cancel():
 async def test_crm_update_lead_approve():
     """crm_update_lead executes after approve."""
     from telegram_bot.agents.crm_tools import crm_update_lead
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     mock_kommo = AsyncMock()
     mock_kommo.update_lead = AsyncMock(return_value=Lead(id=1, name="Updated"))
@@ -208,7 +208,7 @@ async def test_crm_upsert_contact_cancel():
 async def test_crm_update_contact_approve():
     """crm_update_contact executes after approve."""
     from telegram_bot.agents.crm_tools import crm_update_contact
-    from telegram_bot.services.kommo_models import Contact
+    from telegram_bot.services.crm.kommo_models import Contact
 
     mock_kommo = AsyncMock()
     mock_kommo.update_contact = AsyncMock(return_value=Contact(id=50, first_name="Updated"))

@@ -45,9 +45,9 @@ CANONICAL_MODELS = REPO_ROOT / "src" / "services" / "kommo_models.py"
 CANONICAL_TOKENS = REPO_ROOT / "src" / "services" / "kommo_tokens.py"
 CANONICAL_CLIENT = REPO_ROOT / "src" / "services" / "kommo_client.py"
 
-SHIM_MODELS = REPO_ROOT / "telegram_bot" / "services" / "kommo_models.py"
-SHIM_TOKENS = REPO_ROOT / "telegram_bot" / "services" / "kommo_tokens.py"
-SHIM_CLIENT = REPO_ROOT / "telegram_bot" / "services" / "kommo_client.py"
+SHIM_MODELS = REPO_ROOT / "telegram_bot" / "services" / "crm" / "kommo_models.py"
+SHIM_TOKENS = REPO_ROOT / "telegram_bot" / "services" / "crm" / "kommo_tokens.py"
+SHIM_CLIENT = REPO_ROOT / "telegram_bot" / "services" / "crm" / "kommo_client.py"
 
 # Forbidden module-level imports for canonical files (src cannot reach into
 # telegram_bot/* per the #1948 layering rule).
@@ -173,9 +173,9 @@ def test_canonical_client_exposes_public_api(name: str) -> None:
 )
 def test_telegram_bot_kommo_shim_re_exports_canonical(submodule: str, name: str) -> None:
     canonical = importlib.import_module(f"src.services.{submodule}")
-    shim = importlib.import_module(f"telegram_bot.services.{submodule}")
+    shim = importlib.import_module(f"telegram_bot.services.crm.{submodule}")
     assert getattr(shim, name) is getattr(canonical, name), (
-        f"telegram_bot.services.{submodule}.{name} must be the SAME object as "
+        f"telegram_bot.services.crm.{submodule}.{name} must be the SAME object as "
         f"src.services.{submodule}.{name} (re-export shim, not a copy)."
     )
 

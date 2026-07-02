@@ -158,7 +158,7 @@ async def test_seed_writes_when_redis_empty() -> None:
 async def test_seed_uses_canonical_redis_key_constant() -> None:
     """The seed call writes to the canonical ``KommoTokenStore.REDIS_KEY``."""
     from telegram_bot import _bot_kommo
-    from telegram_bot.services.kommo_tokens import REDIS_KEY
+    from telegram_bot.services.crm.kommo_tokens import REDIS_KEY
 
     redis = _make_redis(hgetall_ret={})
     await _bot_kommo._seed_kommo_access_token(redis=redis, access_token="t", subdomain="s")

@@ -17,14 +17,14 @@ def mock_token_store():
 
 @pytest.fixture
 def kommo_client(mock_token_store):
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     return KommoClient(subdomain="test-co", token_store=mock_token_store)
 
 
 async def test_upsert_returns_existing_contact_unchanged(kommo_client, httpx_mock) -> None:
     """When existing contact already has first_name, no PATCH is sent."""
-    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.crm.kommo_models import ContactCreate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/contacts?query=%2B1234567890",
@@ -38,7 +38,7 @@ async def test_upsert_returns_existing_contact_unchanged(kommo_client, httpx_moc
 
 async def test_upsert_updates_empty_first_name(kommo_client, httpx_mock) -> None:
     """When existing contact has empty first_name, PATCH is sent with the new value."""
-    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.crm.kommo_models import ContactCreate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/contacts?query=%2B1234567890",
@@ -56,7 +56,7 @@ async def test_upsert_updates_empty_first_name(kommo_client, httpx_mock) -> None
 
 async def test_upsert_creates_new_when_not_found(kommo_client, httpx_mock) -> None:
     """When no contact found by phone, a new one is created via POST."""
-    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.crm.kommo_models import ContactCreate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/contacts?query=%2B9990000000",
@@ -76,7 +76,7 @@ async def test_upsert_new_contact_sends_phone_in_custom_fields(kommo_client, htt
     """When creating a new contact, phone must be in custom_fields_values (PHONE field_code)."""
     import json
 
-    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.crm.kommo_models import ContactCreate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/contacts?query=%2B380501234567",
@@ -109,7 +109,7 @@ async def test_upsert_new_contact_without_phone_no_custom_fields(kommo_client, h
     """When creating contact without phone, custom_fields_values is not injected."""
     import json
 
-    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.crm.kommo_models import ContactCreate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/contacts?query=%2B000",

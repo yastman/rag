@@ -4,7 +4,7 @@ import pytest
 
 
 def test_lead_score_record_validates_score_range():
-    from telegram_bot.services.lead_scoring_models import LeadScoreRecord
+    from telegram_bot.services.crm.lead_scoring_models import LeadScoreRecord
 
     rec = LeadScoreRecord(
         lead_id=11,
@@ -20,7 +20,7 @@ def test_lead_score_record_validates_score_range():
 
 
 def test_lead_score_record_rejects_invalid_score():
-    from telegram_bot.services.lead_scoring_models import LeadScoreRecord
+    from telegram_bot.services.crm.lead_scoring_models import LeadScoreRecord
 
     with pytest.raises(ValueError):
         LeadScoreRecord(
@@ -33,8 +33,8 @@ def test_lead_score_record_rejects_invalid_score():
 
 
 def test_lead_score_payload_uses_field_id_not_field_name():
-    from telegram_bot.services.kommo_models import LeadScoreSyncPayload
-    from telegram_bot.services.lead_scoring_models import LeadScoreRecord
+    from telegram_bot.services.crm.kommo_models import LeadScoreSyncPayload
+    from telegram_bot.services.crm.lead_scoring_models import LeadScoreRecord
 
     rec = LeadScoreRecord(
         lead_id=11,
@@ -59,8 +59,8 @@ def test_lead_score_payload_uses_field_id_not_field_name():
 
 
 def test_lead_score_payload_score_value_in_values():
-    from telegram_bot.services.kommo_models import LeadScoreSyncPayload
-    from telegram_bot.services.lead_scoring_models import LeadScoreRecord
+    from telegram_bot.services.crm.kommo_models import LeadScoreSyncPayload
+    from telegram_bot.services.crm.lead_scoring_models import LeadScoreRecord
 
     rec = LeadScoreRecord(
         lead_id=11,

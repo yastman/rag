@@ -112,7 +112,7 @@ def test_parse_due_date_past_raises():
 def test_filter_tasks_today_returns_only_todays_tasks(monkeypatch):
     """filter_tasks_today returns only tasks due today."""
     from telegram_bot.dialogs.crm_tasks import filter_tasks_today
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     # Freeze production's "now" to a deterministic UTC noon so the test's
     # today_ts/tomorrow_ts/yesterday_ts and the production's today_start/end
@@ -138,7 +138,7 @@ def test_filter_tasks_today_returns_only_todays_tasks(monkeypatch):
 def test_filter_tasks_overdue_returns_only_overdue():
     """filter_tasks_overdue returns tasks past due and not completed."""
     from telegram_bot.dialogs.crm_tasks import filter_tasks_overdue
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     now = int(time.time())
     past_ts = now - 86400  # yesterday
@@ -158,7 +158,7 @@ def test_filter_tasks_overdue_returns_only_overdue():
 def test_filter_tasks_today_skips_completed(monkeypatch):
     """filter_tasks_today skips completed tasks."""
     from telegram_bot.dialogs.crm_tasks import filter_tasks_today
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     fixed_now = datetime.datetime(2026, 6, 15, 12, 0, 0, tzinfo=datetime.UTC)
     _freeze_crm_tasks_now(monkeypatch, fixed_now)
@@ -256,7 +256,7 @@ def test_render_tasks_text_empty():
 def test_render_tasks_text_single_task():
     """render_tasks_text includes task text and ID."""
     from telegram_bot.dialogs.crm_tasks import render_tasks_text
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     task = Task(id=42, text="Call client back", is_completed=False)
     result = render_tasks_text([task])
@@ -268,7 +268,7 @@ def test_render_tasks_text_single_task():
 def test_render_tasks_text_multiple_tasks():
     """render_tasks_text includes all tasks."""
     from telegram_bot.dialogs.crm_tasks import render_tasks_text
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     tasks = [
         Task(id=1, text="First task", is_completed=False),
@@ -288,7 +288,7 @@ async def test_get_task_list_includes_edit_tasks():
     from unittest.mock import AsyncMock, MagicMock
 
     from telegram_bot.dialogs.crm_tasks import get_task_list
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     kommo = AsyncMock()
     kommo.get_tasks = AsyncMock(
@@ -315,7 +315,7 @@ async def test_get_task_list_edit_tasks_excludes_completed():
     from unittest.mock import AsyncMock, MagicMock
 
     from telegram_bot.dialogs.crm_tasks import get_task_list
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     kommo = AsyncMock()
     kommo.get_tasks = AsyncMock(

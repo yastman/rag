@@ -8,7 +8,7 @@ import pytest
 
 from telegram_bot.agents.context import BotContext
 from telegram_bot.agents.tooling import RunnableConfig
-from telegram_bot.services.kommo_models import Contact, Lead, Note, Task
+from telegram_bot.services.crm.kommo_models import Contact, Lead, Note, Task
 
 
 @pytest.fixture

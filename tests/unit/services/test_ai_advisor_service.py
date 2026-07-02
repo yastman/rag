@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.services.kommo_models import Lead, Task
+from telegram_bot.services.crm.kommo_models import Lead, Task
 
 
 # --- Instantiation ---

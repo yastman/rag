@@ -10,7 +10,7 @@ import asyncio
 from typing import Any
 
 from telegram_bot.observability import observe
-from telegram_bot.services.kommo_tokens import KommoTokenStore as _CanonicalKommoTokenStore
+from telegram_bot.services.crm.kommo_tokens import KommoTokenStore as _CanonicalKommoTokenStore
 
 
 class KommoTokenStore(_CanonicalKommoTokenStore):

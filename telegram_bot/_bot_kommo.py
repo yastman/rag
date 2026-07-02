@@ -39,7 +39,7 @@ async def _seed_kommo_access_token(
 
     Returns True if seeded, False if skipped.
     """
-    from .services.kommo_tokens import REDIS_KEY
+    from .services.crm.kommo_tokens import REDIS_KEY
 
     if not access_token:
         return False

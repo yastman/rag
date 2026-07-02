@@ -149,7 +149,7 @@ async def _complete_handoff(
         except Exception:
             logger.warning("Failed to fetch chat history for handoff summary")
     if len(history) >= bot.config.handoff_summary_min_messages:
-        from telegram_bot.services.handoff_summary import generate_handoff_summary
+        from telegram_bot.services.crm.handoff_summary import generate_handoff_summary
 
         summary = await generate_handoff_summary(history, llm=bot._llm)
 

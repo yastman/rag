@@ -22,7 +22,7 @@ def mock_token_store():
 
 @pytest.fixture
 def kommo_client(mock_token_store):
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     return KommoClient(subdomain="test-co", token_store=mock_token_store)
 
@@ -85,7 +85,7 @@ async def test_401_with_force_refresh_runtime_error_raises_original_401(
     mock_token_store, httpx_mock
 ):
     """401 with force_refresh raising RuntimeError raises the original 401 HTTPStatusError."""
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     mock_token_store.force_refresh = AsyncMock(
         side_effect=RuntimeError("No refresh_token available for Kommo.")

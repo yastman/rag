@@ -157,7 +157,7 @@ async def test_get_search_contacts_results_empty_kommo():
 async def test_get_search_contacts_results_with_mock_kommo():
     """Search contacts results returns formatted cards from kommo."""
     from telegram_bot.dialogs.crm_contacts import get_search_contacts_results
-    from telegram_bot.services.kommo_models import Contact
+    from telegram_bot.services.crm.kommo_models import Contact
 
     fake_contact = Contact(id=7, first_name="Ivan", last_name="Petrov")
 
@@ -260,7 +260,7 @@ async def test_on_email_skip_advances_to_summary_without_email():
 async def test_on_contact_confirm_calls_upsert_contact():
     """Confirm handler calls kommo.upsert_contact() with correct data."""
     from telegram_bot.dialogs.crm_contacts import on_contact_confirm
-    from telegram_bot.services.kommo_models import Contact
+    from telegram_bot.services.crm.kommo_models import Contact
 
     created = Contact(id=200, first_name="Ivan", last_name="Petrov")
     kommo = AsyncMock()

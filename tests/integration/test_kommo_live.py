@@ -55,7 +55,7 @@ class _StaticTokenStore:
 
 def _make_client():
     """Create fresh KommoClient (new httpx session per test)."""
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     return KommoClient(
         subdomain=os.environ["KOMMO_SUBDOMAIN"],
@@ -75,7 +75,7 @@ class TestKommoLiveCRUD:
 
     async def test_01_create_lead(self):
         """Create a test lead."""
-        from telegram_bot.services.kommo_models import LeadCreate
+        from telegram_bot.services.crm.kommo_models import LeadCreate
 
         client = _make_client()
         try:
@@ -102,7 +102,7 @@ class TestKommoLiveCRUD:
         """Update lead budget and verify."""
         assert self._lead_id, "test_01 must run first"
 
-        from telegram_bot.services.kommo_models import LeadUpdate
+        from telegram_bot.services.crm.kommo_models import LeadUpdate
 
         client = _make_client()
         try:
@@ -128,7 +128,7 @@ class TestKommoLiveCRUD:
         """Create task linked to lead."""
         assert self._lead_id, "test_01 must run first"
 
-        from telegram_bot.services.kommo_models import TaskCreate
+        from telegram_bot.services.crm.kommo_models import TaskCreate
 
         client = _make_client()
         try:
@@ -147,7 +147,7 @@ class TestKommoLiveCRUD:
 
     async def test_06_upsert_contact(self):
         """Create a test contact via upsert."""
-        from telegram_bot.services.kommo_models import ContactCreate
+        from telegram_bot.services.crm.kommo_models import ContactCreate
 
         client = _make_client()
         try:

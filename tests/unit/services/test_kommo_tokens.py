@@ -20,7 +20,7 @@ def mock_redis():
 
 @pytest.fixture
 def token_store(mock_redis):
-    from telegram_bot.services.kommo_tokens import KommoTokenStore
+    from telegram_bot.services.crm.kommo_tokens import KommoTokenStore
 
     return KommoTokenStore(
         redis=mock_redis,

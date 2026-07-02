@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from telegram_bot.observability import propagate_attributes
-from telegram_bot.services.kommo_models import LeadScoreSyncPayload
+from telegram_bot.services.crm.kommo_models import LeadScoreSyncPayload
 
 
 logger = logging.getLogger(__name__)
