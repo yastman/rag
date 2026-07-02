@@ -38,6 +38,7 @@ jobs:
         # 60 was aspirational and would false-fail; raise the ratchet as coverage grows.
         run: >
           PYTHONDONTWRITEBYTECODE=1
+          PYTHONPATH=scripts/covfix
           uv run pytest
           tests/integration/ tests/smoke/
           -n auto --dist=worksteal
@@ -78,6 +79,7 @@ jobs:
       - name: Run heavy tier suites
         run: >
           PYTHONDONTWRITEBYTECODE=1
+          PYTHONPATH=scripts/covfix
           uv run pytest tests/
           -n auto --dist=loadscope
           -q --timeout=60
