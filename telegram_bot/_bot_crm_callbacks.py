@@ -40,6 +40,10 @@ async def handle_clearcache_callback(
     callback_query: CallbackQuery,
 ) -> None:
     """Handle /clearcache inline keyboard callbacks (cc: prefix)."""
+    user_id = callback_query.from_user.id if callback_query.from_user else 0
+    if not bot._is_admin(user_id):
+        await callback_query.answer("Недостаточно прав.", show_alert=True)
+        return
     data = (callback_query.data or "").removeprefix("cc:")
     tier_name = _TIER_NAMES.get(data, data)
     text: str
