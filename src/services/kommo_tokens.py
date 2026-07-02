@@ -6,6 +6,7 @@ Pattern: stateless reads (Redis), atomic writes.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any, Protocol, cast, runtime_checkable
@@ -63,6 +64,7 @@ class KommoTokenStore:
         self._subdomain = subdomain
         self._redirect_uri = redirect_uri
         self._token_url = f"https://{subdomain}.kommo.com/oauth2/access_token"
+        self._refresh_lock = asyncio.Lock()
 
     async def get_valid_token(self) -> str:
         """Return valid access_token, refreshing if near expiry."""
@@ -170,27 +172,51 @@ class KommoTokenStore:
         return access_token
 
     async def _refresh_tokens(self, refresh_token: str) -> str:
-        """Refresh the access token using refresh_token."""
-        payload = {
-            "client_id": self._client_id,
-            "client_secret": self._client_secret,
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "redirect_uri": self._redirect_uri,
-        }
-        resp = await self._token_request(payload)
-        access_token = str(resp.get("access_token", ""))
-        new_refresh_token = str(resp.get("refresh_token", ""))
-        expires_in = int(resp.get("expires_in", 0))
-        if not access_token or not new_refresh_token or expires_in <= 0:
-            msg = "Invalid OAuth2 refresh response from Kommo."
-            raise RuntimeError(msg)
-        await self._save_tokens(
-            access_token=access_token,
-            refresh_token=new_refresh_token,
-            expires_in=expires_in,
-        )
-        return access_token
+        """Refresh the access token using refresh_token.
+
+        Serialized via asyncio.Lock to prevent concurrent refresh-token rotation races.
+        Kommo rotates the refresh token on the first request; a concurrent second call
+        would receive invalid_grant and corrupt stored state.
+
+        Inside the lock, re-reads Redis to detect whether a concurrent call already
+        refreshed. If the stored refresh_token has rotated away from the caller's
+        token, the refresh already happened — return the fresh access_token directly
+        without a second POST.
+        """
+        async with self._refresh_lock:
+            # Re-check: if a concurrent refresh already ran, use the fresh result.
+            current = await self._load_tokens()
+            if current:
+                stored_refresh = current.get("refresh_token", "")
+                if stored_refresh and stored_refresh != refresh_token:
+                    # Another waiter already rotated the token; return fresh access_token.
+                    access_token = current.get("access_token", "")
+                    if access_token:
+                        logger.debug(
+                            "Kommo refresh deduped (token already rotated by concurrent call)"
+                        )
+                        return access_token
+
+            payload = {
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "redirect_uri": self._redirect_uri,
+            }
+            resp = await self._token_request(payload)
+            access_token = str(resp.get("access_token", ""))
+            new_refresh_token = str(resp.get("refresh_token", ""))
+            expires_in = int(resp.get("expires_in", 0))
+            if not access_token or not new_refresh_token or expires_in <= 0:
+                msg = "Invalid OAuth2 refresh response from Kommo."
+                raise RuntimeError(msg)
+            await self._save_tokens(
+                access_token=access_token,
+                refresh_token=new_refresh_token,
+                expires_in=expires_in,
+            )
+            return access_token
 
     @retry(
         retry=retry_if_exception_type(_RETRYABLE_TOKEN_ERRORS),
