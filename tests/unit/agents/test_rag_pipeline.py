@@ -524,6 +524,11 @@ async def test_hybrid_retrieve_retries_without_topic_filter_when_results_too_sma
 
 
 async def test_hybrid_retrieve_emits_topic_relax_trace_markers(mock_cache, mock_sparse):
+    """When topic filter yields too few results, _hybrid_retrieve relaxes to no-filter.
+
+    This tests the behavioral contract (relaxation happens, relaxed docs returned)
+    — Langfuse trace markers were removed with Langfuse removal.
+    """
     from src.runtime.pipeline.rag import _hybrid_retrieve
 
     mock_qdrant = AsyncMock()
@@ -543,40 +548,28 @@ async def test_hybrid_retrieve_emits_topic_relax_trace_markers(mock_cache, mock_
             ),
         ]
     )
-    mock_lf = MagicMock()
 
-    with patch("src.runtime.pipeline.rag.get_client", return_value=mock_lf):
-        result = await _hybrid_retrieve(
-            "виды внж в болгарии?",
-            [0.1] * 1024,
-            cache=mock_cache,
-            sparse_embeddings=mock_sparse,
-            qdrant=mock_qdrant,
-            colbert_query=[[0.2] * 1024] * 4,
-            topic_hint="legal",
-            latency_stages={},
-        )
+    result = await _hybrid_retrieve(
+        "виды внж в болгарии?",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        colbert_query=[[0.2] * 1024] * 4,
+        topic_hint="legal",
+        latency_stages={},
+    )
 
+    # Behavioral assertions: relaxation occurred, relaxed docs are returned
     assert len(result["documents"]) == 3
     assert mock_qdrant.hybrid_search_rrf_colbert.await_count == 2
     first_call = mock_qdrant.hybrid_search_rrf_colbert.await_args_list[0].kwargs
     second_call = mock_qdrant.hybrid_search_rrf_colbert.await_args_list[1].kwargs
     assert first_call["filters"] == {"topic": "legal"}
     assert second_call["filters"] is None
-
-    output_calls = [
-        call.kwargs["output"]
-        for call in mock_lf.update_current_span.call_args_list
-        if "output" in call.kwargs
-    ]
-    assert output_calls
-    final_output = output_calls[-1]
-    assert final_output["initial_filters"] == {"topic": "legal"}
-    assert final_output["final_filters"] is None
-    assert final_output["initial_results_count"] == 1
-    assert final_output["retrieval_relaxed_from_topic_filter"] is True
-    assert final_output["retrieval_relax_stage"] == "topic_to_none"
-    assert final_output["qdrant_search_attempts"] == 2
+    # The result should contain the relaxed (broader) docs
+    doc_texts = [d["text"] for d in result["documents"]]
+    assert "broad-1" in doc_texts or "narrow" in doc_texts
 
 
 async def test_relaxed_retrieval_emits_second_stage_only_when_needed(mock_cache, mock_sparse):
