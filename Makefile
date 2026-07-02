@@ -751,6 +751,20 @@ docs-check: ## Check Markdown relative links for broken targets
 check: lint type-check ## Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
 
+lint-full: ## Full linter gate: bandit + vulture (blocking) + deptry (blocking) + radon + interrogate (report-only)
+	@echo "$(BLUE)Running full lint gate...$(NC)"
+	@echo "$(BLUE)[1/5] bandit security scan...$(NC)"
+	uv run --frozen bandit -r src/ telegram_bot/ -c pyproject.toml
+	@echo "$(BLUE)[2/5] vulture dead-code check...$(NC)"
+	uv run --frozen vulture src/ telegram_bot/ vulture_whitelist.py --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
+	@echo "$(BLUE)[3/5] deptry dependency audit...$(NC)"
+	uv run --frozen deptry .
+	@echo "$(BLUE)[4/5] radon complexity report (report-only)...$(NC)"
+	uv run --frozen radon cc src/ telegram_bot/ -a || true
+	@echo "$(BLUE)[5/5] interrogate docstring coverage (report-only, ≥70%)...$(NC)"
+	uv run --frozen interrogate src/core src/runtime src/ingestion/unified -v --fail-under 70
+	@echo "$(GREEN)✓ Full lint gate complete$(NC)"
+
 check-frozen: ## Read-only check: fail if .venv is stale, then lint + type-check without uv sync
 	@echo "$(BLUE)Checking frozen uv environment...$(NC)"
 	@uv sync --frozen --check || { \
