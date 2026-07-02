@@ -1,0 +1,36 @@
+# Ingestion
+
+How documents get from a source file into the Qdrant store the RAG spine retrieves from.
+The deterministic, idempotent, production path lives in `src/ingestion/unified/` — see
+[`../src/ingestion/README.md`](../src/ingestion/README.md) and
+[`../src/ingestion/unified/AGENTS.override.md`](../src/ingestion/unified/AGENTS.override.md).
+
+## Pipeline
+
+```
+source file → Docling (parse) → chunk + embed (BGE-M3: dense + sparse + ColBERT) → Qdrant upsert
+```
+
+- **Docling** (sidecar service) parses PDFs and other formats over HTTP — see
+  [`../services/docling/README.md`](../services/docling/README.md).
+- The **unified pipeline** owns chunking and the embedding writes; **BGE-M3** serves
+  embeddings — see [`../services/bge-m3-api/README.md`](../services/bge-m3-api/README.md).
+
+## Guarantees
+
+- **SHA256 file identity** — re-ingesting an unchanged file is a no-op.
+- **Idempotent upsert** — a changed file replaces its prior chunks by source path.
+- **Dead-letter queue (DLQ)** — failed documents are queued with retry + backoff.
+
+**Known limitation:** deleting a source file does **not** remove its chunks from Qdrant;
+they remain until manual cleanup.
+
+## Run it
+
+```bash
+make core-up          # Docling + BGE-M3 + Qdrant must be up (see ../docs/LOCAL-DEVELOPMENT.md)
+```
+
+Ingestion entry points and scripts live under `scripts/` (see
+[`../scripts/README.md`](../scripts/README.md)) and `src/ingestion/`. Qdrant collection
+setup/audit: `make qdrant-audit-indexes`.
