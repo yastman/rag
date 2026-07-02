@@ -68,6 +68,50 @@ _FILTER_LABELS: dict[str, str] = {
 }
 
 
+def _format_price_filter(p: Any) -> str | None:
+    """Format a price_eur filter value to a human-readable string."""
+    if not isinstance(p, dict):
+        return f"€{p:,.0f}"
+    lo, hi = p.get("gte"), p.get("lte")
+    if lo is not None and hi is not None:
+        return f"€{lo:,.0f}–€{hi:,.0f}"
+    if hi is not None:
+        return f"до €{hi:,.0f}"
+    if lo is not None:
+        return f"от €{lo:,.0f}"
+    return None
+
+
+def _format_area_filter(a: Any) -> str | None:
+    """Format an area_m2 filter value to a human-readable string."""
+    if not isinstance(a, dict):
+        return None
+    lo, hi = a.get("gte"), a.get("lte")
+    if lo is not None and hi is not None:
+        return f"{lo}–{hi} м²"
+    if hi is not None:
+        return f"до {hi} м²"
+    if lo is not None:
+        return f"от {lo} м²"
+    return None
+
+
+def _format_floor_filter(f: Any) -> str | None:
+    """Format a floor filter value to a human-readable string."""
+    if not isinstance(f, dict):
+        return None
+    lo, hi = f.get("gte"), f.get("lte")
+    if lo is not None and hi is not None and lo == hi:
+        return f"{lo} эт."
+    if lo is not None and hi is not None:
+        return f"{lo}–{hi} эт."
+    if hi is not None:
+        return f"до {hi} эт."
+    if lo is not None:
+        return f"от {lo} эт."
+    return None
+
+
 def _format_filters(filters: dict[str, Any] | str | None) -> str:
     """Format filters dict to human-readable string."""
     if not filters:
@@ -78,29 +122,13 @@ def _format_filters(filters: dict[str, Any] | str | None) -> str:
     if "rooms" in data:
         parts.append(f"{data['rooms']} комн.")
     if "price_eur" in data:
-        p = data["price_eur"]
-        if isinstance(p, dict):
-            lo = p.get("gte")
-            hi = p.get("lte")
-            if lo is not None and hi is not None:
-                parts.append(f"€{lo:,.0f}–€{hi:,.0f}")
-            elif hi is not None:
-                parts.append(f"до €{hi:,.0f}")
-            elif lo is not None:
-                parts.append(f"от €{lo:,.0f}")
-        else:
-            parts.append(f"€{p:,.0f}")
+        s = _format_price_filter(data["price_eur"])
+        if s:
+            parts.append(s)
     if "area_m2" in data:
-        a = data["area_m2"]
-        if isinstance(a, dict):
-            lo = a.get("gte")
-            hi = a.get("lte")
-            if lo is not None and hi is not None:
-                parts.append(f"{lo}–{hi} м²")
-            elif hi is not None:
-                parts.append(f"до {hi} м²")
-            elif lo is not None:
-                parts.append(f"от {lo} м²")
+        s = _format_area_filter(data["area_m2"])
+        if s:
+            parts.append(s)
     if "complex_name" in data:
         parts.append(f"комплекс: {data['complex_name']}")
     if "view_tags" in data:
@@ -108,18 +136,9 @@ def _format_filters(filters: dict[str, Any] | str | None) -> str:
     if "is_furnished" in data:
         parts.append("мебель: да" if data["is_furnished"] else "мебель: нет")
     if "floor" in data:
-        f = data["floor"]
-        if isinstance(f, dict):
-            lo = f.get("gte")
-            hi = f.get("lte")
-            if lo is not None and hi is not None and lo == hi:
-                parts.append(f"{lo} эт.")
-            elif lo is not None and hi is not None:
-                parts.append(f"{lo}–{hi} эт.")
-            elif hi is not None:
-                parts.append(f"до {hi} эт.")
-            elif lo is not None:
-                parts.append(f"от {lo} эт.")
+        s = _format_floor_filter(data["floor"])
+        if s:
+            parts.append(s)
     return ", ".join(parts)
 
 
