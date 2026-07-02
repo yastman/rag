@@ -12,12 +12,12 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from telegram_bot._bot_state_helpers import (
+from telegram_bot.constants import STALE_RESULTS_CALLBACK_TEXT as _STALE_RESULTS_CALLBACK_TEXT
+from telegram_bot.handlers.handoff import start_qualification
+from telegram_bot.observability.state_helpers import (  # card_2a71ec058138: homed to observability/
     _state_apartment_results,
     _state_control_message_id,
 )
-from telegram_bot.constants import STALE_RESULTS_CALLBACK_TEXT as _STALE_RESULTS_CALLBACK_TEXT
-from telegram_bot.handlers.handoff import start_qualification
 
 
 if TYPE_CHECKING:  # pragma: no cover

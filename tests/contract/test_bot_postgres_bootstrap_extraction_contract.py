@@ -6,7 +6,10 @@ shrinks to a thin facade. PR-1..PR-6 of Slice 1 already landed
 (``_bot_kommo``, ``_bot_observability``, ``_bot_pre_agent``,
 ``_bot_state_helpers``, ``_bot_streaming``, ``_bot_error_classification``).
 
-This contract pins the **postgres bootstrap** extract:
+This contract pins the **postgres bootstrap** extract. The module was
+originally placed at ``telegram_bot/_bot_postgres_bootstrap.py`` and
+homed to ``telegram_bot/lifecycle/postgres_bootstrap.py``
+(card_2a71ec058138).
 
 * ``_extract_database_name(database_url) -> str | None`` — pure URL
   parsing.
@@ -26,7 +29,7 @@ that import via ``from telegram_bot.bot import …`` keep working.
 
 Asserted invariants:
 
-  1. ``telegram_bot/_bot_postgres_bootstrap.py`` exists.
+  1. ``telegram_bot/lifecycle/postgres_bootstrap.py`` exists.
   2. The module exposes ``REALESTATE_SCHEMA_STATEMENTS``,
      ``extract_database_name``, ``ensure_postgres_database_exists``,
      ``ensure_realestate_schema`` at module top.
@@ -51,7 +54,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-NEW_MODULE = REPO_ROOT / "telegram_bot" / "_bot_postgres_bootstrap.py"
+NEW_MODULE = REPO_ROOT / "telegram_bot" / "lifecycle" / "postgres_bootstrap.py"
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
 
 
@@ -87,7 +90,7 @@ def _module_ast() -> ast.Module:
 def test_module_exists() -> None:
     assert NEW_MODULE.exists(), (
         f"Expected extracted module at "
-        f"{NEW_MODULE.relative_to(REPO_ROOT)} (#1265 postgres bootstrap "
+        f"{NEW_MODULE.relative_to(REPO_ROOT)} (card_2a71ec058138, #1265 postgres bootstrap "
         f"slice). The file owns the canonical implementation; bot.py "
         f"keeps thin wrappers."
     )
@@ -107,7 +110,7 @@ def test_module_exposes_required_public_names() -> None:
             top_names.add(node.target.id)
     missing = [name for name in REQUIRED_PUBLIC_NAMES if name not in top_names]
     assert not missing, (
-        f"_bot_postgres_bootstrap.py must expose {REQUIRED_PUBLIC_NAMES} "
+        f"lifecycle/postgres_bootstrap.py must expose {REQUIRED_PUBLIC_NAMES} "
         f"at module top; missing: {missing}."
     )
 
@@ -130,7 +133,7 @@ def test_module_imports_stay_light() -> None:
                 ):
                     offenders.append(alias.name)
     assert not offenders, (
-        f"_bot_postgres_bootstrap.py must keep module-level imports "
+        f"lifecycle/postgres_bootstrap.py must keep module-level imports "
         f"light (stdlib + logging + re + urllib.parse). Forbidden "
         f"top-level imports found: {offenders}."
     )
@@ -140,7 +143,7 @@ def test_realestate_schema_statements_is_a_real_schema() -> None:
     """Sanity floor: the extracted DDL must contain >=10 statements;
     a near-empty list would mean someone extracted the wrapper but lost
     the canonical schema. Ten is well below the actual count (~24)."""
-    from telegram_bot import _bot_postgres_bootstrap as mod
+    from telegram_bot.lifecycle import postgres_bootstrap as mod
 
     statements = list(mod.REALESTATE_SCHEMA_STATEMENTS)
     assert len(statements) >= 10, (
