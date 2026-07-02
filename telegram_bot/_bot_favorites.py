@@ -11,8 +11,10 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from telegram_bot._bot_state_helpers import _state_apartment_results
 from telegram_bot.callback_data import FavoriteCB
+from telegram_bot.observability.state_helpers import (
+    _state_apartment_results,  # card_2a71ec058138: homed to observability/
+)
 
 
 if TYPE_CHECKING:  # pragma: no cover

@@ -23,7 +23,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BOOTSTRAP = REPO_ROOT / "telegram_bot" / "_bot_postgres_bootstrap.py"
+BOOTSTRAP = REPO_ROOT / "telegram_bot" / "lifecycle" / "postgres_bootstrap.py"
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
 FUNNEL_LEAD_SCORING = REPO_ROOT / "telegram_bot" / "services" / "funnel_lead_scoring.py"
 

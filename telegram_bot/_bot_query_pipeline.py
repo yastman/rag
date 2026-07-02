@@ -35,13 +35,15 @@ from telegram_bot._bot_pre_agent import (
     _get_or_compute_pre_agent_dense,
     _prepare_pre_agent_retrieval_vectors,
 )
-from telegram_bot._bot_state_helpers import _state_control_message_id
 from telegram_bot._bot_streaming import (
     _AGENT_DRAFT_INTERVAL,
     _extract_stream_chunk_text,
     _new_draft_id,
 )
 from telegram_bot.observability import propagate_attributes
+from telegram_bot.observability.state_helpers import (
+    _state_control_message_id,  # card_2a71ec058138: homed to observability/
+)
 from telegram_bot.tracing_context import make_session_id
 
 

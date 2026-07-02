@@ -1,29 +1,23 @@
-"""Contract: lifecycle helpers live in ``telegram_bot/_bot_lifecycle.py`` (#2048).
+"""Contract: lifecycle helpers live in ``telegram_bot/lifecycle/lifecycle.py`` (#2048).
 
 PR-8 of the Slice 2 decomposition plan
 (``docs/engineering/bot-decomposition-plan-2026-05-27.md``) extracts the
 ``_warmup_bge`` and ``_polling_lock_heartbeat_tick`` helpers out of
-``PropertyBot`` so that:
-
-* their bodies can be imported and unit-tested without instantiating the
-  full bot (no aiogram / langgraph / qdrant_client cost),
-* ``telegram_bot/bot.py`` shrinks toward a thin facade,
-* the import-graph invariants from Slice 1 (no aiogram / langgraph /
-  qdrant_client / fastapi at module scope of an ``_bot_*.py`` file) are
-  preserved.
+``PropertyBot``, originally to ``telegram_bot/_bot_lifecycle.py``, then
+homed to ``telegram_bot/lifecycle/lifecycle.py`` (card_2a71ec058138).
 
 The contract pins three things:
 
-1. ``telegram_bot._bot_lifecycle`` exposes the module-level helpers
+1. ``telegram_bot.lifecycle.lifecycle`` exposes the module-level helpers
    ``warmup_bge_pool`` and ``polling_lock_heartbeat_tick``.
 2. ``PropertyBot._warmup_bge`` and ``PropertyBot._polling_lock_heartbeat_tick``
    delegate to those helpers (verified statically — the method body must
    ``await`` the module-level helper).
-3. ``telegram_bot/_bot_lifecycle.py`` does not import aiogram, langgraph,
+3. ``telegram_bot/lifecycle/lifecycle.py`` does not import aiogram, langgraph,
    langchain, qdrant_client or fastapi at module scope.
 
 Re-introducing inline lifecycle code on ``PropertyBot`` (or pulling a
-heavy import into ``_bot_lifecycle.py``) trips this contract at CI time.
+heavy import into ``lifecycle/lifecycle.py``) trips this contract at CI time.
 """
 
 from __future__ import annotations
@@ -35,8 +29,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-LIFECYCLE_MODULE = "telegram_bot._bot_lifecycle"
-LIFECYCLE_PATH = REPO_ROOT / "telegram_bot" / "_bot_lifecycle.py"
+LIFECYCLE_MODULE = "telegram_bot.lifecycle.lifecycle"
+LIFECYCLE_PATH = REPO_ROOT / "telegram_bot" / "lifecycle" / "lifecycle.py"
 BOT_PATH = REPO_ROOT / "telegram_bot" / "bot.py"
 
 # Forbidden module-scope imports — these belong to the heavy bot stack and
@@ -59,7 +53,7 @@ def _parse(path: Path) -> ast.Module:
 
 def test_lifecycle_module_exists_and_exports_helpers() -> None:
     assert LIFECYCLE_PATH.is_file(), (
-        f"{LIFECYCLE_PATH.relative_to(REPO_ROOT)} must exist (#2048 PR-8)."
+        f"{LIFECYCLE_PATH.relative_to(REPO_ROOT)} must exist (card_2a71ec058138, #2048 PR-8)."
     )
     module = importlib.import_module(LIFECYCLE_MODULE)
     missing = [name for name in REQUIRED_HELPERS if not hasattr(module, name)]
@@ -103,7 +97,8 @@ def _method_awaits_lifecycle_helper(method: ast.AsyncFunctionDef, helper_name: s
     """Return True iff the method body awaits a call to the named helper.
 
     Accepted shapes:
-      * ``await _bot_lifecycle.HELPER(...)`` — preferred form.
+      * ``await _bot_lifecycle.HELPER(...)`` — old form (still accepted).
+      * ``await lifecycle.HELPER(...)`` — new form after homing.
       * ``await HELPER(...)`` — when the helper was imported by name.
     """
     for node in ast.walk(method):
@@ -116,7 +111,8 @@ def _method_awaits_lifecycle_helper(method: ast.AsyncFunctionDef, helper_name: s
         # Bare-name import: ``await polling_lock_heartbeat_tick(...)``.
         if isinstance(func, ast.Name) and func.id == helper_name:
             return True
-        # Attribute access: ``await _bot_lifecycle.polling_lock_heartbeat_tick(...)``.
+        # Attribute access: ``await _bot_lifecycle.polling_lock_heartbeat_tick(...)``
+        # or ``await lifecycle.polling_lock_heartbeat_tick(...)``.
         if isinstance(func, ast.Attribute) and func.attr == helper_name:
             return True
     return False
@@ -127,7 +123,7 @@ def test_warmup_bge_method_delegates_to_helper() -> None:
     method = _find_class_method(tree, "PropertyBot", "_warmup_bge")
     assert _method_awaits_lifecycle_helper(method, "warmup_bge_pool"), (
         "PropertyBot._warmup_bge must delegate to "
-        "telegram_bot._bot_lifecycle.warmup_bge_pool. Move the body into the "
+        "telegram_bot.lifecycle.lifecycle.warmup_bge_pool. Move the body into the "
         "module-level helper and have the method await it."
     )
 
@@ -137,6 +133,6 @@ def test_polling_lock_heartbeat_method_delegates_to_helper() -> None:
     method = _find_class_method(tree, "PropertyBot", "_polling_lock_heartbeat_tick")
     assert _method_awaits_lifecycle_helper(method, "polling_lock_heartbeat_tick"), (
         "PropertyBot._polling_lock_heartbeat_tick must delegate to "
-        "telegram_bot._bot_lifecycle.polling_lock_heartbeat_tick. Move the "
+        "telegram_bot.lifecycle.lifecycle.polling_lock_heartbeat_tick. Move the "
         "body into the module-level helper and have the method await it."
     )
