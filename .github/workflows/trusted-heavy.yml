@@ -88,6 +88,7 @@ jobs:
         # Run only on src/core + src/runtime (the units exercised by the fast suite).
         # Raise the ratchet as coverage grows; do NOT set to aspirational 80.
         run: >
+          PYTHONPATH=scripts/covfix
           uv run pytest tests/unit/ tests/core/ tests/runtime/
           --ignore=tests/unit/telegram_bot
           -n auto --dist=worksteal

@@ -340,7 +340,7 @@ test-benchmark: ## Run benchmark suite standalone (#1618)
 
 test-cov: ## Run tests with coverage
 	@echo "$(BLUE)Running tests with coverage...$(NC)"
-	uv run pytest tests/ --cov=src --cov=telegram_bot --cov-report=html --cov-report=term
+	PYTHONPATH=scripts/covfix uv run pytest tests/ --cov=src --cov=telegram_bot --cov-report=html --cov-report=term
 	@echo "$(GREEN)✓ Tests with coverage complete$(NC)"
 	@echo "$(YELLOW)Open htmlcov/index.html to view coverage report$(NC)"
 
