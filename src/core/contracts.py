@@ -49,43 +49,57 @@ class AssistantRequest:
 class CacheProvider(Protocol):
     """Semantic cache dependency used by the runtime RAG path."""
 
-    async def check_semantic(self, *args: Any, **kwargs: Any) -> Any: ...
+    async def check_semantic(self, *args: Any, **kwargs: Any) -> Any:
+        """Return a cached result for the given query, or None on a cache miss."""
+        ...
 
 
 class EmbeddingProvider(Protocol):
     """Dense embedding dependency used by core/runtime."""
 
-    async def aembed_query(self, text: str) -> list[float]: ...
+    async def aembed_query(self, text: str) -> list[float]:
+        """Return a dense embedding vector for the given text."""
+        ...
 
 
 class SparseEmbeddingProvider(Protocol):
     """Sparse embedding dependency used by core/runtime."""
 
-    async def aembed_query(self, text: str) -> dict[str, Any]: ...
+    async def aembed_query(self, text: str) -> dict[str, Any]:
+        """Return a sparse embedding (token → weight mapping) for the given text."""
+        ...
 
 
 class QdrantClientProtocol(Protocol):
     """Vector search dependency used by core/runtime."""
 
-    async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> Any: ...
+    async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> Any:
+        """Execute a hybrid dense+sparse RRF search and return ranked results."""
+        ...
 
 
 class RerankerProvider(Protocol):
     """Optional reranking dependency used by core/runtime."""
 
-    async def rerank(self, *args: Any, **kwargs: Any) -> Any: ...
+    async def rerank(self, *args: Any, **kwargs: Any) -> Any:
+        """Re-score and reorder a candidate document list for a given query."""
+        ...
 
 
 class LLMProvider(Protocol):
     """Optional language-model dependency used by core/runtime."""
 
-    async def generate(self, *args: Any, **kwargs: Any) -> str: ...
+    async def generate(self, *args: Any, **kwargs: Any) -> str:
+        """Generate a text response given a prompt or message list."""
+        ...
 
 
 class TelemetryLogger(Protocol):
     """SDK-friendly telemetry callback surface for product events."""
 
-    def log_event(self, event: str, **fields: Any) -> None: ...
+    def log_event(self, event: str, **fields: Any) -> None:
+        """Emit a named product event with arbitrary key-value fields."""
+        ...
 
 
 @dataclass
@@ -126,6 +140,7 @@ class AssistantError(RuntimeError):
     """Unrecoverable error from the core assistant."""
 
     def __init__(self, message: str, *, error_type: str = "internal") -> None:
+        """Create an AssistantError with a human-readable message and error_type tag."""
         super().__init__(message)
         self.error_type = error_type
 
