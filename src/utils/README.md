@@ -11,7 +11,6 @@ Keeps document-structure parsing and JSON serialization helpers isolated from pi
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Utility exports |
-| [`structure_parser.py`](./structure_parser.py) | Regex-based parser for Ukrainian legal documents (articles, chapters) |
 | [`serialization.py`](./serialization.py) | NumPy-to-Python type conversion helpers |
 
 ## Structure Parser

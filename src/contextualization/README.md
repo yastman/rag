@@ -58,5 +58,5 @@ uv run pytest tests/unit/contextualization/ -q
 
 ## See Also
 
-- [src/core/pipeline.py](../core/pipeline.py) — Uses contextualizers in RAG pipeline
+- [src/core/assistant.py](../core/assistant.py) — Uses contextualizers in RAG pipeline
 - [src/ingestion/](../ingestion/) — Document chunking before contextualization

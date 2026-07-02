@@ -12,7 +12,6 @@ Keeps heavy ML imports lazy so normal imports do not require local model extras.
 |------|---------|
 | [`__init__.py`](./__init__.py) | Exports `get_bge_m3_model`, `get_sentence_transformer` |
 | [`embedding_model.py`](./embedding_model.py) | Singleton BGE-M3 (`FlagEmbedding`) and `SentenceTransformer` |
-| [`contextualized_embedding.py`](./contextualized_embedding.py) | Voyage AI `voyage-context-3` contextualized embeddings client (lazy-import, optional `voyage` extra) |
 
 ## Usage
 

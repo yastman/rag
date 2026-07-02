@@ -11,8 +11,6 @@ Keep synchronous retrieval strategies available for benchmarks, experiments, and
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Exports `create_search_engine` and search engine classes |
-| [`search_engines.py`](./search_engines.py) | Benchmark/eval-only search variants: Baseline, HybridRRF, HybridRRFColBERT, DBSFColBERT |
-| [`search_engine_shared.py`](./search_engine_shared.py) | Shared primitives: sparse vector conversion, result shaping |
 | [`reranker.py`](./reranker.py) | Cross-encoder reranking (ms-marco-MiniLM, +10-15% NDCG) |
 | [`topic_classifier.py`](./topic_classifier.py) | Lightweight topic/doc-type classification for retrieval tuning |
 
