@@ -107,7 +107,7 @@ def test_qdrant_preflight_still_exercises_grpc_but_runtime_defaults_rest() -> No
     gRPC by default while keeping preflight coverage for explicit diagnostics.
     """
     qdrant_service = REPO / "src/runtime/qdrant/service.py"
-    preflight = REPO / "telegram_bot" / "preflight.py"
+    preflight = REPO / "telegram_bot" / "preflight" / "checks.py"
     qdrant_text = qdrant_service.read_text(encoding="utf-8")
     preflight_text = preflight.read_text(encoding="utf-8")
 

@@ -15,7 +15,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 | [`pipelines/graph_compat.py`](./pipelines/graph_compat.py) `build_graph()` | Imperative graph-compat facade (delegates to `src/runtime/pipeline/`) |
 | [`agents/rag_pipeline.py`](./agents/rag_pipeline.py) | Agent SDK RAG functions (alternative to full LangGraph) |
 | [`pipelines/client.py`](./pipelines/client.py) | Client-direct non-RAG and RAG paths for simple queries |
-| [`preflight.py`](./preflight.py) | Startup health checks (Redis, Qdrant, external deps) |
+| [`preflight/`](./preflight/) | Startup health checks (Redis, Qdrant, external deps) |
 
 ## Boundaries
 
