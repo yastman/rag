@@ -38,7 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 CORE_SPINE = REPO_ROOT / "src" / "runtime" / "pipeline" / "assistant_pipeline.py"
 CLIENT_DIRECT = REPO_ROOT / "telegram_bot" / "pipelines" / "client.py"
-GENERATE_RESPONSE_SHIM = REPO_ROOT / "telegram_bot" / "services" / "generate_response.py"
+GENERATE_RESPONSE_SHIM = REPO_ROOT / "telegram_bot" / "services" / "generation" / "generate_response.py"
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ def test_client_direct_uses_generate_response_shim() -> None:
     assert _imports_name_from_module(
         CLIENT_DIRECT,
         "generate_response",
-        "telegram_bot.services.generate_response",
+        "telegram_bot.services.generation.generate_response",
     ), (
         f"{CLIENT_DIRECT.relative_to(REPO_ROOT)} does not import `generate_response` from "
         "`telegram_bot.services.generate_response`. "

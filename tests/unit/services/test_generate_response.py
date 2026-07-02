@@ -1151,7 +1151,7 @@ async def test_streaming_connection_error_logs_concise_warning() -> None:
     message.bot = bot
     message.answer = AsyncMock(return_value=None)
 
-    with patch("telegram_bot.services._stream_execution.logger") as mock_logger:
+    with patch("telegram_bot.services.generation._stream_execution.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],
@@ -1182,7 +1182,7 @@ async def test_streaming_non_connection_error_still_uses_exception() -> None:
     message.bot = bot
     message.answer = AsyncMock(return_value=None)
 
-    with patch("telegram_bot.services._stream_execution.logger") as mock_logger:
+    with patch("telegram_bot.services.generation._stream_execution.logger") as mock_logger:
         result = await generate_response(
             query="Запрос",
             documents=[],
