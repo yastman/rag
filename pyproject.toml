@@ -493,6 +493,7 @@ addopts = """
     --strict-config
     --capture=sys
     --dist=worksteal
+    --continue-on-collection-errors
 """
 testpaths = ["tests"]
 pythonpath = ["."]
