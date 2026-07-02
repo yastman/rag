@@ -29,7 +29,7 @@ run_assistant_request        src/core/assistant.py
 Layering: `telegram_bot/` = adapter · `src/core/` = public boundary (Protocol-based DI via
 `contracts.py`) · `src/runtime/` = engine.
 
-**Langfuse fully removed.** All SDK imports and `@observe` decorators are gone from `src/` and `telegram_bot/`. Observability is stdlib logging only.
+**Langfuse SDK fully removed** (#2844, #2969) — no `langfuse` dependency, no `from langfuse` imports anywhere. The `@observe` decorators that remain across `src/` and `telegram_bot/` are now local **no-op shims** (`src.observability` / `telegram_bot.observability`), not tracing. Observability is stdlib logging only.
 
 ## Navigate code (index-first)
 
