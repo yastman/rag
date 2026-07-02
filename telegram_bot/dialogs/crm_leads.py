@@ -210,7 +210,7 @@ async def on_lead_confirm(
             await callback.message.answer("❌ CRM-интеграция недоступна.")
         return
 
-    from telegram_bot.services.kommo_models import LeadCreate
+    from telegram_bot.services.crm.kommo_models import LeadCreate
 
     data = manager.dialog_data
     payload = LeadCreate(

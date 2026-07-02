@@ -206,7 +206,7 @@ async def test_on_entity_selected_stores_id_and_switches_summary():
 async def test_get_entity_options_mocked_leads():
     """get_entity_options returns leads from kommo_client."""
     from telegram_bot.dialogs.crm_notes import get_entity_options
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     fake_lead = Lead(id=5, name="Lead Alpha")
     kommo = AsyncMock()
@@ -225,7 +225,7 @@ async def test_get_entity_options_mocked_leads():
 async def test_get_entity_options_mocked_contacts():
     """get_entity_options returns contacts from kommo_client."""
     from telegram_bot.dialogs.crm_notes import get_entity_options
-    from telegram_bot.services.kommo_models import Contact
+    from telegram_bot.services.crm.kommo_models import Contact
 
     fake_contact = Contact(id=3, first_name="Ivan", last_name="Petrov")
     kommo = AsyncMock()
@@ -342,7 +342,7 @@ async def test_on_note_confirm_invalid_fields():
 async def test_on_note_confirm_success():
     """on_note_confirm creates note via Kommo and answers with note id."""
     from telegram_bot.dialogs.crm_notes import on_note_confirm
-    from telegram_bot.services.kommo_models import Note
+    from telegram_bot.services.crm.kommo_models import Note
 
     note = Note(id=99, text="Note text")
     kommo = AsyncMock()

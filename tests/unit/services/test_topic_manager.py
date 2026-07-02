@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.topic_manager import TopicManager
+from telegram_bot.services.crm.topic_manager import TopicManager
 
 
 @pytest.fixture

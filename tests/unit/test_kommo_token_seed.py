@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from telegram_bot.services.kommo_tokens import REDIS_KEY
+from telegram_bot.services.crm.kommo_tokens import REDIS_KEY
 
 
 @pytest.fixture

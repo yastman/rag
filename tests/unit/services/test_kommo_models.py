@@ -5,7 +5,7 @@ from __future__ import annotations
 
 def test_lead_create_minimal():
     """LeadCreate with only required fields."""
-    from telegram_bot.services.kommo_models import LeadCreate
+    from telegram_bot.services.crm.kommo_models import LeadCreate
 
     lead = LeadCreate(name="Показ: Иван")
     assert lead.name == "Показ: Иван"
@@ -15,7 +15,7 @@ def test_lead_create_minimal():
 
 def test_lead_create_full():
     """LeadCreate with all fields."""
-    from telegram_bot.services.kommo_models import LeadCreate
+    from telegram_bot.services.crm.kommo_models import LeadCreate
 
     lead = LeadCreate(name="Показ", budget=100000, pipeline_id=1, status_id=2)
     assert lead.budget == 100000
@@ -23,7 +23,7 @@ def test_lead_create_full():
 
 def test_lead_model():
     """Lead response model from API."""
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=123, name="Показ", budget=50000, status_id=1, pipeline_id=2)
     assert lead.id == 123
@@ -31,7 +31,7 @@ def test_lead_model():
 
 def test_contact_create():
     """ContactCreate with phone."""
-    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.crm.kommo_models import ContactCreate
 
     contact = ContactCreate(first_name="Иван", phone="+359888123456")
     assert contact.first_name == "Иван"
@@ -40,7 +40,7 @@ def test_contact_create():
 
 def test_contact_model():
     """Contact response model."""
-    from telegram_bot.services.kommo_models import Contact
+    from telegram_bot.services.crm.kommo_models import Contact
 
     contact = Contact(id=456, first_name="Иван")
     assert contact.id == 456
@@ -48,7 +48,7 @@ def test_contact_model():
 
 def test_task_create():
     """TaskCreate for CRM task."""
-    from telegram_bot.services.kommo_models import TaskCreate
+    from telegram_bot.services.crm.kommo_models import TaskCreate
 
     task = TaskCreate(
         text="Показ квартиры",
@@ -62,7 +62,7 @@ def test_task_create():
 
 def test_note_response():
     """Note response model."""
-    from telegram_bot.services.kommo_models import Note
+    from telegram_bot.services.crm.kommo_models import Note
 
     note = Note(id=789, text="Клиент заинтересован")
     assert note.id == 789
@@ -73,7 +73,7 @@ def test_note_response():
 
 def test_lead_with_responsible_user_id():
     """Lead model accepts responsible_user_id field."""
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=1, name="Deal", responsible_user_id=42)
     assert lead.responsible_user_id == 42
@@ -81,7 +81,7 @@ def test_lead_with_responsible_user_id():
 
 def test_lead_with_loss_reason_id():
     """Lead model accepts loss_reason_id field."""
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=1, name="Lost Deal", loss_reason_id=7)
     assert lead.loss_reason_id == 7
@@ -89,7 +89,7 @@ def test_lead_with_loss_reason_id():
 
 def test_task_with_extended_fields():
     """Task model accepts is_completed, responsible_user_id, created_at, updated_at."""
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     task = Task(
         id=200,
@@ -107,7 +107,7 @@ def test_task_with_extended_fields():
 
 def test_task_result_field():
     """Task model accepts result dict field."""
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     task = Task(id=201, text="Done", is_completed=True, result={"text": "Completed"})
     assert task.result == {"text": "Completed"}
@@ -115,7 +115,7 @@ def test_task_result_field():
 
 def test_task_result_field_accepts_list_payload():
     """Task model accepts Kommo payload where result can be an empty list."""
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     task = Task(id=202, text="Open", is_completed=False, result=[])
     assert task.result == []
@@ -123,7 +123,7 @@ def test_task_result_field_accepts_list_payload():
 
 def test_contact_update_minimal():
     """ContactUpdate model with minimal fields."""
-    from telegram_bot.services.kommo_models import ContactUpdate
+    from telegram_bot.services.crm.kommo_models import ContactUpdate
 
     update = ContactUpdate(first_name="Ivan")
     assert update.first_name == "Ivan"
@@ -133,7 +133,7 @@ def test_contact_update_minimal():
 
 def test_contact_update_build_phone():
     """ContactUpdate.build_contact_fields builds phone entry."""
-    from telegram_bot.services.kommo_models import ContactUpdate
+    from telegram_bot.services.crm.kommo_models import ContactUpdate
 
     fields = ContactUpdate.build_contact_fields(phone="+380991234567")
     assert len(fields) == 1
@@ -143,7 +143,7 @@ def test_contact_update_build_phone():
 
 def test_contact_update_build_email():
     """ContactUpdate.build_contact_fields builds email entry."""
-    from telegram_bot.services.kommo_models import ContactUpdate
+    from telegram_bot.services.crm.kommo_models import ContactUpdate
 
     fields = ContactUpdate.build_contact_fields(email="test@example.com")
     assert len(fields) == 1
@@ -153,7 +153,7 @@ def test_contact_update_build_email():
 
 def test_contact_update_build_phone_and_email():
     """ContactUpdate.build_contact_fields builds both phone and email."""
-    from telegram_bot.services.kommo_models import ContactUpdate
+    from telegram_bot.services.crm.kommo_models import ContactUpdate
 
     fields = ContactUpdate.build_contact_fields(phone="+380", email="x@y.com")
     assert len(fields) == 2
@@ -163,7 +163,7 @@ def test_contact_update_build_phone_and_email():
 
 def test_contact_update_build_empty():
     """ContactUpdate.build_contact_fields returns empty list when both None."""
-    from telegram_bot.services.kommo_models import ContactUpdate
+    from telegram_bot.services.crm.kommo_models import ContactUpdate
 
     fields = ContactUpdate.build_contact_fields()
     assert fields == []
@@ -178,19 +178,19 @@ class TestKommoCustomFieldValue:
     """Pydantic model for a single Kommo custom field value entry."""
 
     def test_string_value_serializes_to_value_dict(self) -> None:
-        from telegram_bot.services.kommo_models import KommoCustomFieldValue
+        from telegram_bot.services.crm.kommo_models import KommoCustomFieldValue
 
         v = KommoCustomFieldValue(value="Telegram-бот")
         assert v.model_dump(exclude_none=True) == {"value": "Telegram-бот"}
 
     def test_int_value_serializes_to_value_dict(self) -> None:
-        from telegram_bot.services.kommo_models import KommoCustomFieldValue
+        from telegram_bot.services.crm.kommo_models import KommoCustomFieldValue
 
         v = KommoCustomFieldValue(value=12345)
         assert v.model_dump(exclude_none=True) == {"value": 12345}
 
     def test_enum_code_when_present(self) -> None:
-        from telegram_bot.services.kommo_models import KommoCustomFieldValue
+        from telegram_bot.services.crm.kommo_models import KommoCustomFieldValue
 
         v = KommoCustomFieldValue(value="+380501234567", enum_code="WORK")
         assert v.model_dump(exclude_none=True) == {
@@ -203,7 +203,7 @@ class TestKommoCustomField:
     """Pydantic model for a Kommo custom_fields_values entry (field_id + values)."""
 
     def test_serialized_payload_matches_kommo_api_shape(self) -> None:
-        from telegram_bot.services.kommo_models import (
+        from telegram_bot.services.crm.kommo_models import (
             KommoCustomField,
             KommoCustomFieldValue,
         )
@@ -224,14 +224,14 @@ class TestKommoCustomField:
         new helper should preserve that contract — emitting a field with
         id=0 would target a non-existent CRM field.
         """
-        from telegram_bot.services.kommo_models import KommoCustomField
+        from telegram_bot.services.crm.kommo_models import KommoCustomField
 
         # field_id=0 / None must produce an explicit None so callers can filter.
         assert KommoCustomField.build_simple(field_id=0, value="x") is None
         assert KommoCustomField.build_simple(field_id=None, value="x") is None
 
     def test_build_simple_returns_payload_for_valid_field(self) -> None:
-        from telegram_bot.services.kommo_models import KommoCustomField
+        from telegram_bot.services.crm.kommo_models import KommoCustomField
 
         f = KommoCustomField.build_simple(field_id=200, value="Telegram-бот")
         assert f is not None
@@ -241,7 +241,7 @@ class TestKommoCustomField:
         }
 
     def test_dump_list_filters_none_entries(self) -> None:
-        from telegram_bot.services.kommo_models import KommoCustomField
+        from telegram_bot.services.crm.kommo_models import KommoCustomField
 
         items = [
             KommoCustomField.build_simple(field_id=100, value="A"),

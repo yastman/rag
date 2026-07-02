@@ -19,14 +19,14 @@ def mock_token_store():
 @pytest.fixture
 def kommo_client(mock_token_store):
     """KommoClient with mocked token store."""
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     return KommoClient(subdomain="test-co", token_store=mock_token_store)
 
 
 async def test_create_lead(kommo_client, httpx_mock):
     """create_lead sends POST /api/v4/leads."""
-    from telegram_bot.services.kommo_models import LeadCreate
+    from telegram_bot.services.crm.kommo_models import LeadCreate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/leads",
@@ -83,7 +83,7 @@ async def test_401_with_seeded_token_raises_http_error(mock_token_store, httpx_m
     """401 with seeded token (no refresh_token) raises HTTPStatusError, not RuntimeError."""
     from httpx import HTTPStatusError
 
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     mock_token_store.force_refresh = AsyncMock(
         side_effect=RuntimeError("No refresh_token available for Kommo.")
@@ -105,7 +105,7 @@ async def test_upsert_contact_find_existing(kommo_client, httpx_mock):
     """upsert_contact finds existing contact by phone."""
     import re
 
-    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.crm.kommo_models import ContactCreate
 
     httpx_mock.add_response(
         url=re.compile(r".*/contacts"),
@@ -124,7 +124,7 @@ async def test_upsert_contact_find_existing(kommo_client, httpx_mock):
 
 def test_subdomain_plain(mock_token_store):
     """Plain subdomain builds correct base URL."""
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     client = KommoClient(subdomain="linhminhphung1", token_store=mock_token_store)
     assert client._base_url == "https://linhminhphung1.kommo.com/api/v4"
@@ -132,7 +132,7 @@ def test_subdomain_plain(mock_token_store):
 
 def test_subdomain_with_kommo_suffix(mock_token_store):
     """Subdomain with .kommo.com suffix doesn't produce double domain (#411)."""
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     client = KommoClient(subdomain="linhminhphung1.kommo.com", token_store=mock_token_store)
     assert client._base_url == "https://linhminhphung1.kommo.com/api/v4"
@@ -140,7 +140,7 @@ def test_subdomain_with_kommo_suffix(mock_token_store):
 
 def test_subdomain_with_dots(mock_token_store):
     """Subdomain containing dots (but not .kommo.com) works correctly."""
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     client = KommoClient(subdomain="api-c", token_store=mock_token_store)
     assert client._base_url == "https://api-c.kommo.com/api/v4"
@@ -240,7 +240,7 @@ async def test_get_tasks_accepts_result_list_payload(kommo_client, httpx_mock):
 
 async def test_update_contact(kommo_client, httpx_mock):
     """update_contact sends PATCH /api/v4/contacts/{id}."""
-    from telegram_bot.services.kommo_models import ContactUpdate
+    from telegram_bot.services.crm.kommo_models import ContactUpdate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/contacts/456",
@@ -256,7 +256,7 @@ async def test_update_contact(kommo_client, httpx_mock):
 
 async def test_update_contact_with_custom_fields(kommo_client, httpx_mock):
     """update_contact sends phone/email in custom_fields_values."""
-    from telegram_bot.services.kommo_models import ContactUpdate
+    from telegram_bot.services.crm.kommo_models import ContactUpdate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/contacts/789",
@@ -275,7 +275,7 @@ async def test_update_contact_with_custom_fields(kommo_client, httpx_mock):
 
 async def test_create_task(kommo_client, httpx_mock):
     """create_task sends POST /api/v4/tasks and returns Task."""
-    from telegram_bot.services.kommo_models import TaskCreate
+    from telegram_bot.services.crm.kommo_models import TaskCreate
 
     httpx_mock.add_response(
         url="https://test-co.kommo.com/api/v4/tasks",
@@ -370,7 +370,7 @@ async def test_get_tasks_by_entity_id(kommo_client, httpx_mock):
 
 async def test_upsert_contact_updates_first_name_when_empty(kommo_client) -> None:
     """Existing contact with empty first_name gets ContactUpdate(first_name=...)."""
-    from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
+    from telegram_bot.services.crm.kommo_models import Contact, ContactCreate, ContactUpdate
 
     existing_raw = {"id": 42, "first_name": None, "last_name": "Doe"}
     kommo_client._request = AsyncMock(  # type: ignore[method-assign]
@@ -395,7 +395,7 @@ async def test_upsert_contact_updates_first_name_when_empty(kommo_client) -> Non
 
 async def test_upsert_contact_updates_last_name_when_empty(kommo_client) -> None:
     """Existing contact with empty last_name gets ContactUpdate(last_name=...)."""
-    from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
+    from telegram_bot.services.crm.kommo_models import Contact, ContactCreate, ContactUpdate
 
     existing_raw = {"id": 7, "first_name": "Jane", "last_name": None}
     kommo_client._request = AsyncMock(  # type: ignore[method-assign]
@@ -422,7 +422,7 @@ async def test_upsert_contact_updates_last_name_when_empty(kommo_client) -> None
 
 async def test_upsert_contact_no_update_when_names_already_filled(kommo_client) -> None:
     """When names are already present, upsert_contact should return existing contact unchanged."""
-    from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
+    from telegram_bot.services.crm.kommo_models import Contact, ContactCreate, ContactUpdate
 
     existing_raw = {"id": 99, "first_name": "Alice", "last_name": "Wonder"}
     kommo_client._request = AsyncMock(  # type: ignore[method-assign]
@@ -461,13 +461,13 @@ class TestKommoOAuthAuthFlow:
     def test_kommo_oauth_auth_class_is_subclass_of_httpx_auth(self) -> None:
         import httpx
 
-        from telegram_bot.services.kommo_client import KommoOAuthAuth
+        from telegram_bot.services.crm.kommo_client import KommoOAuthAuth
 
         assert issubclass(KommoOAuthAuth, httpx.Auth)
 
     def test_kommo_client_attaches_oauth_auth_to_async_client(self, mock_token_store) -> None:
         """The shared httpx.AsyncClient must be constructed with KommoOAuthAuth."""
-        from telegram_bot.services.kommo_client import KommoClient, KommoOAuthAuth
+        from telegram_bot.services.crm.kommo_client import KommoClient, KommoOAuthAuth
 
         client = KommoClient(subdomain="test-co", token_store=mock_token_store)
         # httpx exposes the auth on the AsyncClient as ``client.auth``.
@@ -476,7 +476,7 @@ class TestKommoOAuthAuthFlow:
     async def test_async_auth_flow_sets_bearer_then_yields(self, mock_token_store) -> None:
         import httpx
 
-        from telegram_bot.services.kommo_client import KommoOAuthAuth
+        from telegram_bot.services.crm.kommo_client import KommoOAuthAuth
 
         auth = KommoOAuthAuth(token_store=mock_token_store)
         request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/1")
@@ -497,7 +497,7 @@ class TestKommoOAuthAuthFlow:
     ) -> None:
         import httpx
 
-        from telegram_bot.services.kommo_client import KommoOAuthAuth
+        from telegram_bot.services.crm.kommo_client import KommoOAuthAuth
 
         auth = KommoOAuthAuth(token_store=mock_token_store)
         request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/1")
@@ -522,7 +522,7 @@ class TestKommoOAuthAuthFlow:
     ) -> None:
         import httpx
 
-        from telegram_bot.services.kommo_client import KommoOAuthAuth
+        from telegram_bot.services.crm.kommo_client import KommoOAuthAuth
 
         mock_token_store.get_valid_token.side_effect = [
             "stale-token",
@@ -559,7 +559,7 @@ class TestKommoOAuthAuthFlow:
         """
         import httpx
 
-        from telegram_bot.services.kommo_client import KommoOAuthAuth
+        from telegram_bot.services.crm.kommo_client import KommoOAuthAuth
 
         mock_token_store.force_refresh = AsyncMock(
             side_effect=RuntimeError("No refresh_token available for Kommo.")
@@ -587,7 +587,7 @@ class TestKommoClientRequestNoLongerHandles401:
         import inspect
         import textwrap
 
-        from telegram_bot.services import kommo_client as mod
+        from telegram_bot.services.crm import kommo_client as mod
 
         source = textwrap.dedent(inspect.getsource(mod.KommoClient._request))
         tree = ast.parse(source)

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
+from telegram_bot.services.crm.lead_score_sync import sync_pending_lead_scores
 
 
 @pytest.mark.asyncio
@@ -117,7 +117,7 @@ class TestLeadScoreSyncObserveInstrumentation:
         """Replace get_client used by the lead_score_sync module with a recording mock."""
         from unittest.mock import MagicMock
 
-        from telegram_bot.services import lead_score_sync as lss_mod
+        from telegram_bot.services.crm import lead_score_sync as lss_mod
 
         mock_lf = MagicMock()
         monkeypatch.setattr(lss_mod, "get_client", lambda: mock_lf)
@@ -147,24 +147,24 @@ class TestLeadScoreSyncObserveInstrumentation:
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
         monkeypatch.setattr(observability_mod, "propagate_attributes", fake_propagate)
-        sys.modules.pop("telegram_bot.services.lead_score_sync", None)
-        importlib.import_module("telegram_bot.services.lead_score_sync")
+        sys.modules.pop("telegram_bot.services.crm.lead_score_sync", None)
+        importlib.import_module("telegram_bot.services.crm.lead_score_sync")
 
     def test_lead_score_sync_module_imports_observe_get_client_and_propagate_attributes(self):
         """Module wires the Langfuse decorator + helpers (#1663 contract)."""
-        from telegram_bot.services import lead_score_sync as lss_mod
+        from telegram_bot.services.crm import lead_score_sync as lss_mod
 
         assert hasattr(lss_mod, "observe"), (
-            "telegram_bot.services.lead_score_sync must import `observe` "
+            "telegram_bot.services.crm.lead_score_sync must import `observe` "
             "from telegram_bot.observability for the @observe decorator on "
             "sync_pending_lead_scores"
         )
         assert hasattr(lss_mod, "get_client"), (
-            "telegram_bot.services.lead_score_sync must import `get_client` "
+            "telegram_bot.services.crm.lead_score_sync must import `get_client` "
             "for curated update_current_span calls"
         )
         assert hasattr(lss_mod, "propagate_attributes"), (
-            "telegram_bot.services.lead_score_sync must import `propagate_attributes` "
+            "telegram_bot.services.crm.lead_score_sync must import `propagate_attributes` "
             "for tags=['job', 'lead-scoring']"
         )
 
@@ -186,8 +186,8 @@ class TestLeadScoreSyncObserveInstrumentation:
             return decorator
 
         monkeypatch.setattr(observability_mod, "observe", recording_observe)
-        sys.modules.pop("telegram_bot.services.lead_score_sync", None)
-        importlib.import_module("telegram_bot.services.lead_score_sync")
+        sys.modules.pop("telegram_bot.services.crm.lead_score_sync", None)
+        importlib.import_module("telegram_bot.services.crm.lead_score_sync")
 
         sync_calls = [c for c in captured if c.get("name") == "job-lead-score-sync"]
         assert len(sync_calls) == 1, (
@@ -221,11 +221,11 @@ class TestLeadScoreSyncObserveInstrumentation:
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
         monkeypatch.setattr(observability_mod, "propagate_attributes", recording_propagate)
-        sys.modules.pop("telegram_bot.services.lead_score_sync", None)
-        importlib.import_module("telegram_bot.services.lead_score_sync")
+        sys.modules.pop("telegram_bot.services.crm.lead_score_sync", None)
+        importlib.import_module("telegram_bot.services.crm.lead_score_sync")
 
         self._patched_lf(monkeypatch)
-        from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
+        from telegram_bot.services.crm.lead_score_sync import sync_pending_lead_scores
 
         await sync_pending_lead_scores(
             scoring_store=None,
@@ -244,8 +244,8 @@ class TestLeadScoreSyncObserveInstrumentation:
         """Lead-score sync must degrade gracefully when tracing is unavailable."""
         self._disable_observe_and_propagate(monkeypatch)
 
-        from telegram_bot.services import lead_score_sync as lss_mod
-        from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
+        from telegram_bot.services.crm import lead_score_sync as lss_mod
+        from telegram_bot.services.crm.lead_score_sync import sync_pending_lead_scores
 
         monkeypatch.setattr(lss_mod, "get_client", lambda: None)
 
@@ -264,7 +264,7 @@ class TestLeadScoreSyncObserveInstrumentation:
         self._disable_observe_and_propagate(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
+        from telegram_bot.services.crm.lead_score_sync import sync_pending_lead_scores
 
         scoring_store = AsyncMock()
         kommo_client = AsyncMock()
@@ -313,7 +313,7 @@ class TestLeadScoreSyncObserveInstrumentation:
         self._disable_observe_and_propagate(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
+        from telegram_bot.services.crm.lead_score_sync import sync_pending_lead_scores
 
         scoring_store = AsyncMock()
         scoring_store.list_pending_sync.side_effect = RuntimeError("DB exploded")

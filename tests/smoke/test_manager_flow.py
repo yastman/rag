@@ -105,12 +105,12 @@ class TestHotLeadNotifierExists:
     """HotLeadNotifier service is importable and has correct interface."""
 
     def test_notifier_importable(self):
-        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
         assert callable(getattr(HotLeadNotifier, "notify_if_hot", None))
 
     def test_notifier_constructor(self):
-        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
         notifier = HotLeadNotifier(
             bot=MagicMock(),

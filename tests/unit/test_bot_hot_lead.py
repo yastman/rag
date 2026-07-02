@@ -53,7 +53,7 @@ class TestHotLeadNotifierWiring:
 
     def test_notifier_importable_and_has_interface(self):
         """HotLeadNotifier is importable and has notify_if_hot method."""
-        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
         assert hasattr(HotLeadNotifier, "notify_if_hot")
         assert callable(getattr(HotLeadNotifier, "notify_if_hot", None))

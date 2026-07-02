@@ -2,7 +2,7 @@
 
 from unittest.mock import AsyncMock
 
-from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
 
 async def test_notifier_sends_once_per_session():
@@ -79,7 +79,7 @@ class TestHotLeadNotifierObserveInstrumentation:
     def _patched_lf(monkeypatch: pytest.MonkeyPatch):
         from unittest.mock import MagicMock
 
-        from telegram_bot.services import hot_lead_notifier as hln_mod
+        from telegram_bot.services.crm import hot_lead_notifier as hln_mod
 
         mock_lf = MagicMock()
         monkeypatch.setattr(hln_mod, "get_client", lambda: mock_lf)
@@ -99,18 +99,18 @@ class TestHotLeadNotifierObserveInstrumentation:
             return decorator
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
-        sys.modules.pop("telegram_bot.services.hot_lead_notifier", None)
-        importlib.import_module("telegram_bot.services.hot_lead_notifier")
+        sys.modules.pop("telegram_bot.services.crm.hot_lead_notifier", None)
+        importlib.import_module("telegram_bot.services.crm.hot_lead_notifier")
 
     def test_hot_lead_notifier_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (#1663 contract)."""
-        from telegram_bot.services import hot_lead_notifier as hln_mod
+        from telegram_bot.services.crm import hot_lead_notifier as hln_mod
 
         assert hasattr(hln_mod, "observe"), (
-            "telegram_bot.services.hot_lead_notifier must import `observe`"
+            "telegram_bot.services.crm.hot_lead_notifier must import `observe`"
         )
         assert hasattr(hln_mod, "get_client"), (
-            "telegram_bot.services.hot_lead_notifier must import `get_client`"
+            "telegram_bot.services.crm.hot_lead_notifier must import `get_client`"
         )
 
     def test_hot_lead_notifier_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
@@ -131,8 +131,8 @@ class TestHotLeadNotifierObserveInstrumentation:
             return decorator
 
         monkeypatch.setattr(observability_mod, "observe", recording_observe)
-        sys.modules.pop("telegram_bot.services.hot_lead_notifier", None)
-        importlib.import_module("telegram_bot.services.hot_lead_notifier")
+        sys.modules.pop("telegram_bot.services.crm.hot_lead_notifier", None)
+        importlib.import_module("telegram_bot.services.crm.hot_lead_notifier")
 
         sync_calls = [c for c in captured if c.get("name") == "job-hot-lead-notify"]
         assert len(sync_calls) == 1, (
@@ -146,8 +146,8 @@ class TestHotLeadNotifierObserveInstrumentation:
         """Hot-lead notification must not require an initialized Langfuse client."""
         self._disable_observe(monkeypatch)
 
-        from telegram_bot.services import hot_lead_notifier as hln_mod
-        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+        from telegram_bot.services.crm import hot_lead_notifier as hln_mod
+        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
         monkeypatch.setattr(hln_mod, "get_client", lambda: None)
 
@@ -166,7 +166,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
         cache = AsyncMock()
         cache.redis = AsyncMock()
@@ -206,7 +206,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
         cache = AsyncMock()
         cache.redis = AsyncMock()
@@ -232,7 +232,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
         cache = AsyncMock()
         cache.redis = AsyncMock()
@@ -258,7 +258,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
 
         cache = AsyncMock()
         cache.redis = AsyncMock()

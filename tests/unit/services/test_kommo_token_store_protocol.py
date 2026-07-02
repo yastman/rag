@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from telegram_bot.services.kommo_tokens import KommoTokenStore, KommoTokenStoreProtocol
+from telegram_bot.services.crm.kommo_tokens import KommoTokenStore, KommoTokenStoreProtocol
 
 
 def test_token_store_contract_is_protocol():

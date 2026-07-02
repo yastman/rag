@@ -1,6 +1,6 @@
 """Tests for lead scoring (rule-based)."""
 
-from telegram_bot.services.lead_scoring import classify_lead, compute_lead_score
+from telegram_bot.services.crm.lead_scoring import classify_lead, compute_lead_score
 
 
 def test_hot_lead():

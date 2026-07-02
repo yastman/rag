@@ -64,7 +64,7 @@ def test_format_lead_card_returns_text_and_keyboard():
     from aiogram.types import InlineKeyboardMarkup
 
     from telegram_bot.dialogs.crm_cards import format_lead_card
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=1, name="Test Deal", budget=75000, pipeline_id=10, status_id=5)
     text, keyboard = format_lead_card(lead)
@@ -78,7 +78,7 @@ def test_format_lead_card_returns_text_and_keyboard():
 def test_format_lead_card_callback_prefixes():
     """Lead card inline buttons use crm:lead: prefix."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=42, name="Deal")
     _, keyboard = format_lead_card(lead)
@@ -95,7 +95,7 @@ def test_format_contact_card_returns_text_and_keyboard():
     from aiogram.types import InlineKeyboardMarkup
 
     from telegram_bot.dialogs.crm_cards import format_contact_card
-    from telegram_bot.services.kommo_models import Contact
+    from telegram_bot.services.crm.kommo_models import Contact
 
     contact = Contact(id=5, first_name="Ivan", last_name="Petrov")
     text, keyboard = format_contact_card(contact)
@@ -109,7 +109,7 @@ def test_format_contact_card_returns_text_and_keyboard():
 def test_format_contact_card_callback_prefixes():
     """Contact card inline buttons use crm:contact: prefix."""
     from telegram_bot.dialogs.crm_cards import format_contact_card
-    from telegram_bot.services.kommo_models import Contact
+    from telegram_bot.services.crm.kommo_models import Contact
 
     contact = Contact(id=7, first_name="Anna")
     _, keyboard = format_contact_card(contact)
@@ -123,7 +123,7 @@ def test_format_contact_card_callback_prefixes():
 def test_format_task_card_active_task():
     """format_task_card for active task shows complete button."""
     from telegram_bot.dialogs.crm_cards import format_task_card
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     task = Task(
         id=3,
@@ -146,7 +146,7 @@ def test_format_task_card_active_task():
 def test_format_task_card_completed_task():
     """format_task_card for completed task shows reopen button."""
     from telegram_bot.dialogs.crm_cards import format_task_card
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     task = Task(id=4, text="Done task", is_completed=True)
     text, keyboard = format_task_card(task)
@@ -197,7 +197,7 @@ def test_build_pagination_buttons_single_page():
 
 def test_kommo_client_has_update_task():
     """KommoClient exposes update_task method."""
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     assert hasattr(KommoClient, "update_task")
     assert callable(KommoClient.update_task)
@@ -205,7 +205,7 @@ def test_kommo_client_has_update_task():
 
 def test_kommo_client_has_complete_task():
     """KommoClient exposes complete_task method."""
-    from telegram_bot.services.kommo_client import KommoClient
+    from telegram_bot.services.crm.kommo_client import KommoClient
 
     assert hasattr(KommoClient, "complete_task")
     assert callable(KommoClient.complete_task)
@@ -213,7 +213,7 @@ def test_kommo_client_has_complete_task():
 
 def test_task_update_model():
     """TaskUpdate model accepts partial fields."""
-    from telegram_bot.services.kommo_models import TaskUpdate
+    from telegram_bot.services.crm.kommo_models import TaskUpdate
 
     update = TaskUpdate(text="Updated text")
     assert update.text == "Updated text"
@@ -223,7 +223,7 @@ def test_task_update_model():
 
 def test_task_update_model_dump_excludes_none():
     """TaskUpdate.model_dump excludes None values for PATCH payload."""
-    from telegram_bot.services.kommo_models import TaskUpdate
+    from telegram_bot.services.crm.kommo_models import TaskUpdate
 
     update = TaskUpdate(text="New text")
     dumped = update.model_dump(exclude_none=True)

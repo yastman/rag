@@ -11,7 +11,7 @@ from tenacity import wait_none
 
 from telegram_bot.integrations.cache import CacheLayerManager
 from telegram_bot.services.bge_m3_client import BGEM3Client
-from telegram_bot.services.kommo_client import KommoClient
+from telegram_bot.services.crm.kommo_client import KommoClient
 
 
 @pytest.mark.asyncio
