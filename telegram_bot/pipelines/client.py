@@ -28,7 +28,7 @@ from telegram_bot.services.generation.telegram_formatting import (
     format_sources_html,
     send_html_messages,
 )
-from telegram_bot.services.types import PipelineResult
+from telegram_bot.services.util.types import PipelineResult
 
 
 logger = logging.getLogger(__name__)

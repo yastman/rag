@@ -6,7 +6,7 @@ These helpers are deliberately aiogram/langgraph/fastapi/langchain-free so they
 can be imported from tests, tooling, and lightweight runtime adapters without
 pulling the full bot stack. Module-level imports are restricted to stdlib
 plus the local traceback-walk helper from
-``telegram_bot.services.error_utils``.
+``telegram_bot.services.util.error_utils``.
 
 Owned helpers (verbatim, byte-for-byte semantics with the pre-extract
 ``bot.py`` definitions; pinned by
@@ -18,7 +18,7 @@ Owned helpers (verbatim, byte-for-byte semantics with the pre-extract
 
 from __future__ import annotations
 
-from telegram_bot.services.error_utils import walk_traceback_frames
+from telegram_bot.services.util.error_utils import walk_traceback_frames
 
 
 def _is_post_pipeline_cleanup_error(

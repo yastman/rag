@@ -1,7 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from telegram_bot.services.business_hours import is_business_hours
+from telegram_bot.services.util.business_hours import is_business_hours
 
 
 def test_during_business_hours():

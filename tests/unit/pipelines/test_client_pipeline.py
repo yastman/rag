@@ -18,7 +18,7 @@ from telegram_bot.pipelines.client import (
     detect_agent_intent,
     run_client_pipeline,
 )
-from telegram_bot.services.types import PipelineResult
+from telegram_bot.services.util.types import PipelineResult
 
 
 # ---------------------------------------------------------------------------

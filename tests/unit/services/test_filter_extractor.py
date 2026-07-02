@@ -6,7 +6,7 @@ from telegram_bot.constants.apartment_constants import APARTMENT_CITY_NAMES, APA
 from telegram_bot.services.apartment.apartment_filter_extractor import (
     ApartmentFilterExtractor as FilterExtractor,
 )
-from telegram_bot.services.text_utils import parse_int_with_k_suffix
+from telegram_bot.services.util.text_utils import parse_int_with_k_suffix
 
 
 # Read-only: safe to share across all tests.

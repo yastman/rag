@@ -850,7 +850,7 @@ async def _handle_query_supervisor(
     _supervisor_store_cache_and_trace.
     """
     from telegram_bot.agents.agent import LOCALE_TO_LANGUAGE
-    from telegram_bot.services.checkpointer_utils import _supervisor_thread_id
+    from telegram_bot.services.util.checkpointer_utils import _supervisor_thread_id
 
     classify_query = _get_classify_query()
 
@@ -980,7 +980,7 @@ async def _astream_supervisor_with_recovery(
     use_streaming: bool = True,
 ) -> tuple[str, dict[str, Any]]:
     """Stream supervisor agent output and retry once on checkpointer runtime errors."""
-    from telegram_bot.services.checkpointer_utils import _supervisor_thread_id
+    from telegram_bot.services.util.checkpointer_utils import _supervisor_thread_id
 
     payload = {"messages": [{"role": "user", "content": user_text}]}
     config = {
@@ -1115,7 +1115,7 @@ async def _ainvoke_supervisor_with_recovery(
     """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures."""
     from telegram_bot.bot import create_bot_agent
     from telegram_bot.pipeline.streaming import _stream_agent_to_draft
-    from telegram_bot.services.checkpointer_utils import _supervisor_thread_id
+    from telegram_bot.services.util.checkpointer_utils import _supervisor_thread_id
 
     payload = {"messages": [{"role": "user", "content": user_text}]}
     config = {

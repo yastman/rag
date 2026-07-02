@@ -17,7 +17,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 from src.services.handoff_state import HandoffData
 from telegram_bot.handlers.handoff import HandoffStates, start_qualification
-from telegram_bot.services.business_hours import is_business_hours
+from telegram_bot.services.util.business_hours import is_business_hours
 
 
 if TYPE_CHECKING:  # pragma: no cover
