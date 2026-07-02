@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services import session_summary_worker as ssw_mod
-from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+from telegram_bot.services.generation import session_summary_worker as ssw_mod
+from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
 
 def _worker(**kwargs) -> SessionSummaryWorker:

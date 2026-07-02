@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
 
 def _mock_completion(content: str) -> MagicMock:
@@ -28,7 +28,7 @@ def worker():
 
 async def test_worker_starts_and_stops(worker):
     with patch(
-        "telegram_bot.services.session_summary_worker.AsyncIOScheduler"
+        "telegram_bot.services.generation.session_summary_worker.AsyncIOScheduler"
     ) as mock_scheduler_cls:
         mock_scheduler = MagicMock()
         mock_scheduler_cls.return_value = mock_scheduler
@@ -66,7 +66,7 @@ async def test_idle_session_detected(worker):
 
 async def test_idle_session_scoring_skipped_when_langfuse_client_missing(worker, monkeypatch):
     """Missing Langfuse client must not break the idle-session worker loop."""
-    from telegram_bot.services import session_summary_worker as ssw_mod
+    from telegram_bot.services.generation import session_summary_worker as ssw_mod
 
     monkeypatch.setattr(ssw_mod, "get_client", lambda: None)
     worker._redis.scan = AsyncMock(return_value=(0, [b"session:last_active:123"]))
@@ -101,7 +101,7 @@ async def test_skip_short_conversations(worker):
 async def test_graceful_stop_during_processing(worker):
     """Worker stops cleanly even if already running."""
     with patch(
-        "telegram_bot.services.session_summary_worker.AsyncIOScheduler"
+        "telegram_bot.services.generation.session_summary_worker.AsyncIOScheduler"
     ) as mock_scheduler_cls:
         mock_scheduler = MagicMock()
         mock_scheduler_cls.return_value = mock_scheduler
@@ -196,7 +196,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
     @staticmethod
     def _patched_lf(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         """Replace get_client used by the worker module with a recording mock."""
-        from telegram_bot.services import session_summary_worker as ssw_mod
+        from telegram_bot.services.generation import session_summary_worker as ssw_mod
 
         mock_lf = MagicMock()
         monkeypatch.setattr(ssw_mod, "get_client", lambda: mock_lf)
@@ -227,7 +227,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
 
     def test_session_summary_worker_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (#1662 contract)."""
-        from telegram_bot.services import session_summary_worker as ssw_mod
+        from telegram_bot.services.generation import session_summary_worker as ssw_mod
 
         assert hasattr(ssw_mod, "observe"), (
             "telegram_bot.services.session_summary_worker must import `observe` "
@@ -290,7 +290,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         mock_lf = self._patched_lf(monkeypatch)
 
         # Re-import to bind the no-op observe applied above.
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(
             redis=AsyncMock(),
@@ -335,7 +335,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         long_summary = (
             "Клиент ищет 2-комнатную квартиру у моря в Болгарии, бюджет до 80к EUR. "
@@ -381,8 +381,8 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         """Tracing must degrade gracefully when Langfuse is unavailable."""
         self._disable_observe(monkeypatch)
 
-        from telegram_bot.services import session_summary_worker as ssw_mod
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation import session_summary_worker as ssw_mod
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         monkeypatch.setattr(ssw_mod, "get_client", lambda: None)
 
@@ -413,7 +413,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(
             redis=AsyncMock(),
@@ -450,7 +450,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         short_summary = "Клиент: 2BR, Несебр, до 80к EUR."
         worker = SessionSummaryWorker(
@@ -489,7 +489,7 @@ class TestPerCycleCap:
 
     async def test_cap_enforced_excess_keys_are_deferred(self):
         """Only ``max_sessions_per_cycle`` idle keys are processed per tick."""
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         keys = self._idle_keys(20)
         idle_ts = str(time.time() - 9999).encode()
@@ -527,7 +527,7 @@ class TestPerCycleCap:
         should keep scanning past them until it finds enough idle keys to
         fill the cap.
         """
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         keys = self._idle_keys(10)
         active_ts = str(time.time() - 60).encode()  # 1 min ago: NOT idle
@@ -571,8 +571,8 @@ class TestPerCycleCap:
 
     async def test_cap_hit_emits_langfuse_score(self, monkeypatch):
         """When the cap is hit, emit ``session_summary_cap_hit=1`` for visibility."""
-        from telegram_bot.services import session_summary_worker as ssw_mod
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation import session_summary_worker as ssw_mod
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         mock_lf = MagicMock()
         monkeypatch.setattr(ssw_mod, "get_client", lambda: mock_lf)
@@ -608,8 +608,8 @@ class TestPerCycleCap:
 
     async def test_under_cap_does_not_emit_cap_hit_score(self, monkeypatch):
         """Below the cap -> no cap_hit signal."""
-        from telegram_bot.services import session_summary_worker as ssw_mod
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation import session_summary_worker as ssw_mod
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         mock_lf = MagicMock()
         monkeypatch.setattr(ssw_mod, "get_client", lambda: mock_lf)
@@ -645,14 +645,14 @@ class TestPerCycleCap:
 
     def test_cap_default_is_50(self):
         """Default ``max_sessions_per_cycle`` keeps current behavior bounded."""
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock())
         assert worker._max_sessions_per_cycle == 50
 
     def test_cap_clamps_at_minimum_one(self):
         """A non-positive cap is normalized to 1 (must process at least one)."""
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock(), max_sessions_per_cycle=0)
         assert worker._max_sessions_per_cycle == 1
@@ -668,7 +668,7 @@ class TestHistorySourceWiring:
 
     async def test_idle_session_uses_history_source_callable(self):
         """A wired history_source produces real history → summary is generated."""
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         async def fake_history_source(user_id: str) -> list[dict[str, str]]:
             assert user_id == "777"
@@ -697,7 +697,7 @@ class TestHistorySourceWiring:
 
     async def test_default_get_history_returns_empty_without_source(self):
         """Without history_source the placeholder still returns []."""
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock())
         result = await worker._get_conversation_history("123")
@@ -705,7 +705,7 @@ class TestHistorySourceWiring:
 
     async def test_history_source_exception_falls_back_to_empty(self):
         """A buggy history_source must not crash the worker — returns []."""
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         async def boom(_user_id: str) -> list[dict[str, str]]:
             raise RuntimeError("checkpointer down")
@@ -722,7 +722,7 @@ class TestHistorySourceWiring:
         """Operators must see a startup warning when the worker is a no-op."""
         import logging
 
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock())
         with caplog.at_level(
@@ -738,7 +738,7 @@ class TestHistorySourceWiring:
         """A wired worker must not log the no-op warning."""
         import logging
 
-        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+        from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 
         async def empty_source(_user_id: str) -> list[dict[str, str]]:
             return []

@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import telegram_bot.services.session_summary as ss_module
-from telegram_bot.services.session_summary import (
+import telegram_bot.services.generation.session_summary as ss_module
+from telegram_bot.services.generation.session_summary import (
     SessionSummary,
     _trim_turns_for_summary,
     check_responses_parse_compat,
@@ -419,7 +419,7 @@ class TestTrimTurnsForSummary:
 class TestFormatSummaryAsNote:
     """Test CRM note formatting."""
 
-    @patch("telegram_bot.services.session_summary.datetime")
+    @patch("telegram_bot.services.generation.session_summary.datetime")
     def test_formats_full_summary(self, mock_dt):
         """format_summary_as_note produces readable CRM note with date."""
         mock_dt.now.return_value = datetime(2026, 2, 17, tzinfo=UTC)

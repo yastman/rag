@@ -294,7 +294,7 @@ async def test_run_miniapp_rag_success(mock_config):
             return_value={"documents": [{"text": "doc1"}]},
         ),
         patch(
-            "telegram_bot.services.generate_response.generate_response",
+            "telegram_bot.services.generation.generate_response.generate_response",
             new_callable=AsyncMock,
             return_value={"response": "Ответ от RAG"},
         ),
