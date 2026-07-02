@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from telegram_bot.services.funnel_analytics_store import FunnelAnalyticsStore
+from telegram_bot.services.observability.funnel_analytics_store import FunnelAnalyticsStore
 
 
 @pytest.mark.asyncio

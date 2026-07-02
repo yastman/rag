@@ -309,7 +309,7 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
         log.info("PostgreSQL schema ready (realestate)")
 
         from telegram_bot.services.favorites_service import FavoritesService
-        from telegram_bot.services.search_event_store import SearchEventStore
+        from telegram_bot.services.observability.search_event_store import SearchEventStore
         from telegram_bot.services.user_service import UserService
 
         bot._user_service = UserService(pool=bot._pg_pool)

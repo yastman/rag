@@ -129,7 +129,9 @@ async def crm_create_lead(
                     limit=20,
                 )
                 if events:
-                    from telegram_bot.services.search_event_store import format_search_summary
+                    from telegram_bot.services.observability.search_event_store import (
+                        format_search_summary,
+                    )
 
                     summary = format_search_summary(events)
                     if summary:
