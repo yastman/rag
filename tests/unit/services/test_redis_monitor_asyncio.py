@@ -32,8 +32,7 @@ async def test_start_creates_asyncio_task_not_apscheduler():
     await monitor.stop()
 
 
-@pytest.mark.asyncio
-async def test_start_does_not_import_or_use_apscheduler():
+def test_start_does_not_import_or_use_apscheduler():
     """redis_monitor module must not reference AsyncIOScheduler after migration."""
     import telegram_bot.services.redis_monitor as mod
 
