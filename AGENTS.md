@@ -29,16 +29,13 @@ run_assistant_request        src/core/assistant.py
 Layering: `telegram_bot/` = adapter · `src/core/` = public boundary (Protocol-based DI via
 `contracts.py`) · `src/runtime/` = engine.
 
-**Langfuse fully removed.** All SDK imports and `@observe` decorators are gone from `src/` and `telegram_bot/`. Observability is stdlib logging only.
+**Langfuse status**: The SDK has been mostly removed from the live production path (`src/core/pipeline.py` and main flows). However, some test files, compatibility shims, and legacy references still exist. Full cleanup is tracked in #3097 and #3098. Observability is currently done via structured logging.
 
 ## Navigate code (index-first)
 
 This repo is indexed by the **codeindexer** + **codegraph** MCP servers. Use them instead of
 `grep`/`find`/`cat`/`sed` — start with `search_code` / `find_*`, resolve names via
 `projects(action="list", query=...)`, widen a hit with `read_chunk` / `read_file_range`.
-Depth, tool map, cost limits and footguns live in the global skill
-**`using-codeindex-codegraph`** (loaded on demand). A standalone `grep`/`rg`/`find` on an
-indexed path is blocked by a hook — append `# nogrep` to bypass.
 
 ## Planning & state (in codeindexer, not GitHub)
 
