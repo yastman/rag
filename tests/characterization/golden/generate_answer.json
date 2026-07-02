@@ -1,0 +1,8 @@
+{
+  "response_text": "Стоимость 115 000 EUR, акт 16 выдан.",
+  "grounded": true,
+  "safe_fallback_used": false,
+  "llm_call_count": 1,
+  "llm_provider_model": "golden-llm-model",
+  "streaming_enabled": false
+}

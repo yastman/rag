@@ -1,0 +1,12 @@
+{
+  "response_text": "Стоимость 115 000 EUR. Правовой статус: акт 16.",
+  "route": "rag_search",
+  "retrieved_doc_ids": [
+    "doc_cleaning_service",
+    "doc_legal_status",
+    "doc_sunny_beach_studio"
+  ],
+  "documents_count": 3,
+  "cache_hit": false,
+  "error_type": null
+}
