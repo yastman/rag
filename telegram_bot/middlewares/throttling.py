@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections import defaultdict
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -38,17 +38,33 @@ class QuotaTracker:
     Args:
         quota: Maximum number of requests allowed per window. 0 disables the guard.
         window_seconds: Duration of the sliding window in seconds.
+        maxsize: Hard cap on the number of tracked users (bounds key growth).
 
-    ponytail: O(n) prune where n ≤ quota (bounded); single process, CPython GIL
-              prevents data races. Upgrade path: per-user asyncio.Lock if GIL is
-              lifted or this moves to a thread-pool executor.
+    The per-user timestamp list is pruned on every check (sliding window). The
+    key store is an ``OrderedDict`` capped at ``maxsize`` with LRU eviction —
+    otherwise a plain dict would leak one key per distinct user ever seen (a
+    one-shot user leaves ``[t]`` behind forever, since it is never touched again
+    to be pruned).
+
+    ponytail: O(n) prune where n ≤ quota; O(1) LRU touch + evict. Single process,
+              CPython GIL prevents data races. Ceiling: if >``maxsize`` users are
+              active within one window, the least-recently-active key is evicted —
+              a fail-open reset of that user's quota. Upgrade path: per-user
+              asyncio.Lock if the GIL is lifted or this moves to a thread pool.
     """
 
-    def __init__(self, quota: int, window_seconds: int) -> None:
+    def __init__(
+        self,
+        quota: int,
+        window_seconds: int,
+        maxsize: int = _DEFAULT_CACHE_MAXSIZE,
+    ) -> None:
         self.quota = quota
         self.window_seconds = window_seconds
-        # user_id → list[float] of request timestamps within current window
-        self._counts: dict[int, list[float]] = defaultdict(list)
+        self._maxsize = maxsize
+        # user_id → list[float] of request timestamps within current window.
+        # LRU-ordered so idle keys can be evicted once the cap is reached.
+        self._counts: OrderedDict[int, list[float]] = OrderedDict()
 
     def exceeded(self, user_id: int) -> bool:
         """Check and record a request for *user_id*.
@@ -60,13 +76,19 @@ class QuotaTracker:
             return False
         now = time.time()
         cutoff = now - self.window_seconds
-        timestamps = self._counts[user_id]
-        # Prune expired entries in place (O(n) where n ≤ quota)
-        while timestamps and timestamps[0] < cutoff:
-            timestamps.pop(0)
+        # Prune expired entries (O(n) where n ≤ quota). ``.get`` avoids creating a
+        # key on a mere check.
+        timestamps = [t for t in self._counts.get(user_id, ()) if t >= cutoff]
         if len(timestamps) >= self.quota:
+            self._counts[user_id] = timestamps
+            self._counts.move_to_end(user_id)
             return True
         timestamps.append(now)
+        self._counts[user_id] = timestamps
+        self._counts.move_to_end(user_id)
+        # Bound key growth: drop the least-recently-active users past the cap.
+        while len(self._counts) > self._maxsize:
+            self._counts.popitem(last=False)
         return False
 
     def reset(self, user_id: int | None = None) -> None:

@@ -96,6 +96,23 @@ class TestQuotaTracker_throttle_cost_quota:
         t._counts[1] = [time.time() - 2]  # older than 1s window
         assert t.exceeded(1) is False  # now allowed again (prune happened)
 
+    def test_idle_user_keys_evicted_bounds_growth(self):
+        """Key store never grows past ``maxsize`` — idle/one-shot users are evicted.
+
+        Regression: ``_counts`` was a ``defaultdict(list)`` whose keys were never
+        evicted — every one-shot user left a key forever. The store is now an
+        LRU-capped ``OrderedDict`` so its memory is bounded by the cap, not by the
+        total number of distinct users ever seen.
+        """
+        from telegram_bot.middlewares.throttling import QuotaTracker
+
+        t = QuotaTracker(quota=3, window_seconds=60, maxsize=5)
+        for uid in range(20):  # 20 distinct one-shot users
+            t.exceeded(user_id=uid)
+        assert len(t._counts) == 5  # bounded, not 20 keys
+        # The 5 most-recently-active users are retained; older keys evicted (LRU).
+        assert set(t._counts) == set(range(15, 20))
+
 
 # ---------------------------------------------------------------------------
 # 2. Env-var defaults for QuotaTracker / TTLCache maxsize
