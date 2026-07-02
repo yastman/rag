@@ -677,7 +677,7 @@ core-up: docker-core-up ## Start the full default local compose core
 
 docker-core-up: ## Start default local compose stack (unprofiled services)
 	@echo "$(BLUE)Starting core services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) up -d
+	$(LOCAL_COMPOSE_CMD) up -d --wait
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
 docker-bot-up: ## Start core + bot services (bot)
