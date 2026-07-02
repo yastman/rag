@@ -557,3 +557,73 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+
+# =============================================================================
+# DEPTRY CONFIGURATION — scoped to production code (src/ telegram_bot/)
+# =============================================================================
+# Run via: make deps-audit  (blocking, full audit)
+#       or: make lint-full   (blocking, within the lint-full gate)
+#
+# Design notes:
+# - experimental_namespace_package: src/ and telegram_bot/ are in-repo
+#   namespace packages (not PyPI packages), so DEP001 on intra-repo imports
+#   is a false positive suppressed by this flag.
+# - extend_exclude: src/api/ and src/contextualization/ are archived/reference
+#   code not on the active production path; their optional deps (fastapi,
+#   langgraph, anthropic, groq) should not gate the production lint.
+# - per_rule_ignores DEP001: remaining optional/conditional imports that are
+#   not declared in pyproject.toml because they live in optional extras or
+#   archived CRM paths (langchain_core, langgraph, fluent_compiler, apscheduler,
+#   voyageai, FlagEmbedding, anyio).
+# - per_rule_ignores DEP002: packages declared as optional extras that are not
+#   imported in the scoped src/+telegram_bot/ scan (aiohttp and requests are
+#   intentional safety-pins per #2710; ml-local / docs / ingest extras are
+#   not used in the production path being scanned).
+# - per_rule_ignores DEP003: anyio is a transitive dep used directly in
+#   src/ingestion/docling_client.py — not worth adding as a direct dep now.
+
+[tool.deptry]
+experimental_namespace_package = true
+extend_exclude = [
+    "src/api",
+    "src/contextualization",
+    "scripts",
+    "services",
+    "archive",
+    "tests",
+]
+
+[tool.deptry.per_rule_ignores]
+# Optional/archived imports not in pyproject.toml dependencies
+DEP001 = [
+    "FlagEmbedding",
+    "voyageai",
+    "langchain_core",
+    "langgraph",
+    "fluent_compiler",
+    "apscheduler",
+    "anyio",
+]
+# Optional extras not imported in the production src/+telegram_bot/ scan
+DEP002 = [
+    "aiohttp",
+    "requests",
+    "FlagEmbedding",
+    "scipy",
+    "torch",
+    "torchvision",
+    "transformers",
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings",
+    "docling",
+    "docling-core",
+    "fastembed",
+    "contextual-rag",
+    "sentence-transformers",
+    "pymupdf",
+]
+# Transitive deps used directly — acceptable, not worth adding as direct dep
+DEP003 = [
+    "anyio",
+]
