@@ -6,6 +6,7 @@ import logging
 import sys
 import time
 import types
+from dataclasses import dataclass
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,14 @@ import pytest
 
 # Skip entire module if aiogram not installed
 pytest.importorskip("aiogram", reason="aiogram not installed")
+
+
+# Local stub replacing langchain_core.messages.AIMessageChunk.
+# Tests only need the .content attribute for streaming-chunk assertions.
+@dataclass
+class AIMessageChunk:
+    content: str
+
 
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
@@ -3291,7 +3300,6 @@ class TestStreamingCoordination:
 
     async def test_handle_query_streams_private_sdk_agent_via_drafts(self, mock_config):
         """Private sdk_agent path streams chunks with sendMessageDraft and finalizes once."""
-        from langchain_core.messages import AIMessageChunk
 
         bot, _ = _create_bot(mock_config)
         bot.bot.send_message_draft = AsyncMock(return_value=True)
@@ -3367,7 +3375,6 @@ class TestStreamingCoordination:
 
     async def test_sdk_agent_draftstreamer_records_langfuse_root_output(self, mock_config):
         """DraftStreamer finalize in private chat must record sanitized root output (#1485)."""
-        from langchain_core.messages import AIMessageChunk
 
         bot, _ = _create_bot(mock_config)
         bot.bot.send_message_draft = AsyncMock(return_value=True)
@@ -3403,7 +3410,6 @@ class TestStreamingCoordination:
 
     async def test_astream_supervisor_preserves_final_state_from_values_stream(self, mock_config):
         """Streaming path must keep final state so interrupts/metadata are not lost."""
-        from langchain_core.messages import AIMessageChunk
 
         bot, _ = _create_bot(mock_config)
         bot.bot.send_message_draft = AsyncMock(return_value=True)
@@ -3463,7 +3469,6 @@ class TestStreamingCoordination:
         count). We also pin a generous upper bound so a future optimisation that
         sends two early drafts plus a final drainer still passes.
         """
-        from langchain_core.messages import AIMessageChunk
 
         bot, _ = _create_bot(mock_config)
         bot.bot.send_message_draft = AsyncMock(return_value=True)
@@ -3537,7 +3542,6 @@ class TestStreamingCoordination:
         self, mock_config, manager_mode, should_retry
     ):
         """Streaming helper retries only for client role on checkpointer errors."""
-        from langchain_core.messages import AIMessageChunk
 
         if manager_mode:
             mock_config.manager_ids = [12345]

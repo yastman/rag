@@ -2,11 +2,19 @@
 """Tests for Langfuse score writing (#310: scoring logic moved to scoring.py)."""
 
 import asyncio
+from dataclasses import dataclass
 
 import pytest
 
 
 pytest.importorskip("aiogram", reason="aiogram not installed")
+
+
+# Local stub replacing langchain_core.messages.AIMessageChunk.
+@dataclass
+class AIMessageChunk:
+    content: str
+
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -131,7 +139,6 @@ async def _run_handle_query_supervisor(
     mock_config, mock_lf_client, *, history_service=None, streaming=False
 ):
     """Run handle_query through SDK agent path with mocked agent (#413)."""
-    from langchain_core.messages import AIMessageChunk
 
     bot = _create_bot(mock_config)
     if history_service is not None:

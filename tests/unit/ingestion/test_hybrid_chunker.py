@@ -27,6 +27,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 # ---------------------------------------------------------------------------
 # make_hybrid_chunker
 # ---------------------------------------------------------------------------

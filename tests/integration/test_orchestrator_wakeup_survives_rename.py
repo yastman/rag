@@ -31,7 +31,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SET_ORCH = REPO_ROOT / "scripts" / "set_orchestrator_window.sh"
 
-pytestmark = pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux not available on PATH")
+pytestmark = [
+    pytest.mark.no_services,
+    pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux not available on PATH"),
+]
 
 
 def _tmux(*args: str) -> subprocess.CompletedProcess[str]:

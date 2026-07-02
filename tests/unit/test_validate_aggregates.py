@@ -203,7 +203,7 @@ class TestComputeAggregates:
         assert "transcribe" in agg["cold"]["node_p50"]
         assert agg["cold"]["node_p50"]["transcribe"] == pytest.approx(80.0, abs=5)
 
-    def test_empty_results(self):
+    def test_empty_results_aggregates(self):
         agg = compute_aggregates([])
         assert agg == {}
 

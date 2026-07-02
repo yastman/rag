@@ -115,7 +115,7 @@ async def test_bot_stop_cancels_polling_lock_task():
 
 
 @pytest.mark.asyncio
-async def test_polling_lock_busy_message_diagnostics() -> None:
+async def test_polling_lock_busy_message_diagnostics_asyncio() -> None:
     """PollingLockBusy must surface owner and pttl_ms in its message.
 
     Replaces the preflight probe deleted in PR #3099 (#2189).

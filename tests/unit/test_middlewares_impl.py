@@ -58,7 +58,7 @@ class TestErrorHandlerMiddleware:
         call_args = event.answer.call_args[0][0]
         assert "ошибка" in call_args.lower() or "❌" in call_args
 
-    async def test_error_does_not_send_message_for_non_message_event(self, middleware):
+    async def test_error_does_not_send_message_for_non_message_event_impl(self, middleware):
         """Test that error does not try to send message for non-Message events."""
         handler = AsyncMock(side_effect=RuntimeError("Internal error"))
         event = MagicMock(spec=[])  # Not a Message
@@ -85,7 +85,7 @@ class TestErrorHandlerMiddleware:
 class TestSetupErrorMiddleware:
     """Tests for setup_error_middleware function."""
 
-    def test_setup_registers_middleware(self):
+    def test_setup_registers_error_middleware(self):
         """Test that setup_error_middleware registers the middleware."""
         from telegram_bot.middlewares.error_handler import setup_error_middleware
 
@@ -282,7 +282,7 @@ class TestSetupThrottlingMiddleware:
         # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
         assert mock_dp.callback_query.middleware.register.call_count == 2
 
-    def test_setup_uses_defaults(self):
+    def test_setup_uses_throttle_defaults(self):
         """Test that setup works with default parameters."""
         from telegram_bot.middlewares.throttling import setup_throttling_middleware
 

@@ -20,12 +20,7 @@ SCAN_DIRS: tuple[Path, ...] = (
 )
 EXCLUDE_DIRS: tuple[str, ...] = ("/tests/", "/.venv/", "/__pycache__/")
 
-CONTEXT_BREAKING_ALLOWLIST: dict[str, str] = {
-    "src/voice/agent.py:619": (
-        "Standalone local health-check HTTP server thread. It does not carry "
-        "request/RAG observability context and does not create child Langfuse spans."
-    ),
-}
+CONTEXT_BREAKING_ALLOWLIST: dict[str, str] = {}
 
 
 def _iter_python_files() -> list[Path]:

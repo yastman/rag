@@ -19,7 +19,12 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from langchain.messages import AIMessage, HumanMessage
+
+from src.runtime.graph.state import Message as HumanMessage
+
+
+# Local alias — carries only `.content` like the original langchain types.
+AIMessage = HumanMessage
 
 from telegram_bot.graph.middleware.cache import (
     SemanticCacheMiddleware,

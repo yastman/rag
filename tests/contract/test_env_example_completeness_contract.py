@@ -241,6 +241,12 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "OPENAI_BASE_URL": "OpenAI SDK base URL override; consumed by SDK at import time, not directly by Python code in this repo",
     "REDIS_HOST": "Read by redis-langfuse / langfuse / langfuse-worker compose services; not consumed by Python code in this repo",
     "REDIS_PORT": "Read by redis-langfuse / langfuse / langfuse-worker compose services; not consumed by Python code in this repo",
+    # --- E2E testing vars ---------------------------------------------------
+    "E2E_VOICE_NOTE_PATH": (
+        "Consumed by scripts/e2e/config.py via plain Field(alias=...) — "
+        "the scanner only detects AliasChoices(), not plain alias=; "
+        "legitimate operator-facing setting for voice E2E scenarios (#1486)"
+    ),
 }
 
 

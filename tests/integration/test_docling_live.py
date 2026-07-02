@@ -10,6 +10,9 @@ import httpx
 import pytest
 
 
+pytestmark = pytest.mark.requires_services
+
+
 DOCLING_URL = "http://localhost:5001"
 
 # Minimal valid single-page PDF (hand-crafted, no external tools needed)

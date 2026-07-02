@@ -52,7 +52,7 @@ def _parse(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
-def test_module_exists_and_exports_required_helpers() -> None:
+def test_module_exists_and_exports_required_helpers_feedback() -> None:
     assert MODULE_PATH.is_file(), f"{MODULE_PATH.relative_to(REPO_ROOT)} must exist (#2048 PR-9a)."
     module = importlib.import_module(MODULE_NAME)
     for name in REQUIRED_HELPERS:
@@ -62,7 +62,7 @@ def test_module_exists_and_exports_required_helpers() -> None:
         )
 
 
-def test_module_has_no_heavy_top_imports() -> None:
+def test_module_has_no_heavy_top_imports_feedback() -> None:
     """Feedback helpers must stay cheap to import — no aiogram /
     langchain / langgraph / qdrant_client / fastapi at module scope.
     Lazy-import inside function bodies if needed."""
