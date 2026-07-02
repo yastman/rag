@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from telegram_bot.services.search_event_store import format_search_summary
+from telegram_bot.services.observability.search_event_store import format_search_summary
 
 
 class TestFormatSearchSummary:

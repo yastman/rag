@@ -2,7 +2,7 @@
 
 from unittest.mock import AsyncMock, patch
 
-from telegram_bot.services.redis_monitor import RedisHealthMonitor
+from telegram_bot.services.observability.redis_monitor import RedisHealthMonitor
 
 
 async def test_check_health_scans_all_checkpoint_keys_and_alerts_on_growth():
@@ -27,7 +27,7 @@ async def test_check_health_scans_all_checkpoint_keys_and_alerts_on_growth():
     )
     monitor._redis = mock_redis
 
-    with patch("telegram_bot.services.redis_monitor.logger") as mock_logger:
+    with patch("telegram_bot.services.observability.redis_monitor.logger") as mock_logger:
         await monitor._check_health()
 
     assert mock_redis.scan.call_count == 2
@@ -55,7 +55,7 @@ async def test_check_health_no_warning_on_first_run():
     mock_redis.scan = AsyncMock(return_value=(0, ["checkpoint:1"]))
     monitor._redis = mock_redis
 
-    with patch("telegram_bot.services.redis_monitor.logger") as mock_logger:
+    with patch("telegram_bot.services.observability.redis_monitor.logger") as mock_logger:
         await monitor._check_health()
 
     # No growth warning on first run
@@ -87,7 +87,7 @@ async def test_check_health_no_warning_when_count_stable():
     )
     monitor._redis = mock_redis
 
-    with patch("telegram_bot.services.redis_monitor.logger") as mock_logger:
+    with patch("telegram_bot.services.observability.redis_monitor.logger") as mock_logger:
         await monitor._check_health()
 
     # No growth warning — count stayed at 5
@@ -113,7 +113,7 @@ async def test_check_health_checkpoint_scan_failure_is_non_fatal():
     mock_redis.dbsize = AsyncMock(side_effect=RuntimeError("no acl"))
     monitor._redis = mock_redis
 
-    with patch("telegram_bot.services.redis_monitor.logger") as mock_logger:
+    with patch("telegram_bot.services.observability.redis_monitor.logger") as mock_logger:
         await monitor._check_health()
 
     # Core INFO health log still emitted despite checkpoint metrics failure.
@@ -133,7 +133,9 @@ async def test_start_sets_max_connections_for_monitor_pool():
     monitor = RedisHealthMonitor("redis://localhost:6379")
 
     with (
-        patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url,
+        patch(
+            "telegram_bot.services.observability.redis_monitor.aioredis.from_url"
+        ) as mock_from_url,
     ):
         mock_client = AsyncMock()
         mock_from_url.return_value = mock_client
@@ -153,7 +155,9 @@ async def test_start_creates_asyncio_task_and_stop_cancels_it():
     monitor = RedisHealthMonitor("redis://localhost:6379")
 
     with (
-        patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url,
+        patch(
+            "telegram_bot.services.observability.redis_monitor.aioredis.from_url"
+        ) as mock_from_url,
     ):
         mock_client = AsyncMock()
         mock_from_url.return_value = mock_client

@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from telegram_bot.observability import observe
-from telegram_bot.services.funnel_analytics_store import FunnelAnalyticsStore
+from telegram_bot.services.observability.funnel_analytics_store import FunnelAnalyticsStore
 
 
 logger = logging.getLogger(__name__)

@@ -59,7 +59,7 @@ def build_services(config: BotConfig) -> Services:
     from src.runtime.services.qdrant import QdrantService
 
     from telegram_bot.services.apartment.apartments_service import ApartmentsService
-    from telegram_bot.services.redis_monitor import RedisHealthMonitor
+    from telegram_bot.services.observability.redis_monitor import RedisHealthMonitor
 
     graph_config = GraphConfig(
         llm_base_url=config.llm_base_url,

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.nurturing_scheduler import NurturingScheduler
+from telegram_bot.services.observability.nurturing_scheduler import NurturingScheduler
 
 
 @pytest.fixture
@@ -74,7 +74,7 @@ class TestNurturingSchedulerObserveInstrumentation:
 
     @staticmethod
     def _patched_lf(monkeypatch: pytest.MonkeyPatch):
-        from telegram_bot.services import nurturing_scheduler as ns_mod
+        from telegram_bot.services.observability import nurturing_scheduler as ns_mod
 
         mock_lf = MagicMock()
         monkeypatch.setattr(ns_mod, "get_client", lambda: mock_lf)
@@ -100,20 +100,20 @@ class TestNurturingSchedulerObserveInstrumentation:
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
         monkeypatch.setattr(observability_mod, "propagate_attributes", fake_propagate)
-        sys.modules.pop("telegram_bot.services.nurturing_scheduler", None)
-        importlib.import_module("telegram_bot.services.nurturing_scheduler")
+        sys.modules.pop("telegram_bot.services.observability.nurturing_scheduler", None)
+        importlib.import_module("telegram_bot.services.observability.nurturing_scheduler")
 
     def test_nurturing_scheduler_module_imports_observe_get_client_and_propagate_attributes(self):
         """Module wires the Langfuse decorator + helpers (#1663 contract)."""
-        from telegram_bot.services import nurturing_scheduler as ns_mod
+        from telegram_bot.services.observability import nurturing_scheduler as ns_mod
 
         assert hasattr(ns_mod, "observe")
         assert hasattr(ns_mod, "get_client"), (
-            "telegram_bot.services.nurturing_scheduler must import `get_client` "
+            "telegram_bot.services.observability.nurturing_scheduler must import `get_client` "
             "for curated update_current_span(level='ERROR', ...) calls"
         )
         assert hasattr(ns_mod, "propagate_attributes"), (
-            "telegram_bot.services.nurturing_scheduler must import `propagate_attributes` "
+            "telegram_bot.services.observability.nurturing_scheduler must import `propagate_attributes` "
             "for tags=['job', 'nurturing'] / ['job', 'analytics']"
         )
 
@@ -141,8 +141,8 @@ class TestNurturingSchedulerObserveInstrumentation:
 
         monkeypatch.setattr(observability_mod, "observe", recording_observe)
         monkeypatch.setattr(observability_mod, "propagate_attributes", fake_propagate)
-        sys.modules.pop("telegram_bot.services.nurturing_scheduler", None)
-        importlib.import_module("telegram_bot.services.nurturing_scheduler")
+        sys.modules.pop("telegram_bot.services.observability.nurturing_scheduler", None)
+        importlib.import_module("telegram_bot.services.observability.nurturing_scheduler")
 
         dispatch_calls = [c for c in captured if c.get("name") == "job-nurturing-dispatch"]
         assert len(dispatch_calls) == 1, (
@@ -186,11 +186,11 @@ class TestNurturingSchedulerObserveInstrumentation:
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
         monkeypatch.setattr(observability_mod, "propagate_attributes", recording_propagate)
-        sys.modules.pop("telegram_bot.services.nurturing_scheduler", None)
-        importlib.import_module("telegram_bot.services.nurturing_scheduler")
+        sys.modules.pop("telegram_bot.services.observability.nurturing_scheduler", None)
+        importlib.import_module("telegram_bot.services.observability.nurturing_scheduler")
 
         self._patched_lf(monkeypatch)
-        from telegram_bot.services.nurturing_scheduler import NurturingScheduler
+        from telegram_bot.services.observability.nurturing_scheduler import NurturingScheduler
 
         scheduler = NurturingScheduler(**fake_services)
         await scheduler.run_nurturing_dispatch()
@@ -223,11 +223,11 @@ class TestNurturingSchedulerObserveInstrumentation:
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
         monkeypatch.setattr(observability_mod, "propagate_attributes", recording_propagate)
-        sys.modules.pop("telegram_bot.services.nurturing_scheduler", None)
-        importlib.import_module("telegram_bot.services.nurturing_scheduler")
+        sys.modules.pop("telegram_bot.services.observability.nurturing_scheduler", None)
+        importlib.import_module("telegram_bot.services.observability.nurturing_scheduler")
 
         self._patched_lf(monkeypatch)
-        from telegram_bot.services.nurturing_scheduler import NurturingScheduler
+        from telegram_bot.services.observability.nurturing_scheduler import NurturingScheduler
 
         fake_services["analytics_service"].build_daily_snapshot = AsyncMock(return_value=[])
         scheduler = NurturingScheduler(**fake_services)
@@ -244,8 +244,8 @@ class TestNurturingSchedulerObserveInstrumentation:
         """Missing Langfuse client must not mask the job failure."""
         self._disable_observe_and_propagate(monkeypatch)
 
-        from telegram_bot.services import nurturing_scheduler as ns_mod
-        from telegram_bot.services.nurturing_scheduler import NurturingScheduler
+        from telegram_bot.services.observability import nurturing_scheduler as ns_mod
+        from telegram_bot.services.observability.nurturing_scheduler import NurturingScheduler
 
         monkeypatch.setattr(ns_mod, "get_client", lambda: None)
         fake_services["nurturing_service"].dispatch_pending = AsyncMock(
@@ -262,7 +262,7 @@ class TestNurturingSchedulerObserveInstrumentation:
         self._disable_observe_and_propagate(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.nurturing_scheduler import NurturingScheduler
+        from telegram_bot.services.observability.nurturing_scheduler import NurturingScheduler
 
         fake_services["nurturing_service"].dispatch_pending = AsyncMock(
             side_effect=RuntimeError("Dispatch boom")
@@ -287,7 +287,7 @@ class TestNurturingSchedulerObserveInstrumentation:
         self._disable_observe_and_propagate(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        from telegram_bot.services.nurturing_scheduler import NurturingScheduler
+        from telegram_bot.services.observability.nurturing_scheduler import NurturingScheduler
 
         fake_services["analytics_service"].build_daily_snapshot = AsyncMock(
             side_effect=RuntimeError("Rollup boom")
