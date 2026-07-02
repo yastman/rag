@@ -47,7 +47,7 @@ def _build_pre_agent_state_contract(
     filters: dict[str, Any] | None = None,
 ) -> PreAgentStateContract:
     """Build the shared pre-agent contract and preserve any upstream filters."""
-    from .pipelines.state_contract import build_pre_agent_miss_contract
+    from telegram_bot.pipelines.state_contract import build_pre_agent_miss_contract
 
     resolved_filters = filters
     if resolved_filters is None:

@@ -30,12 +30,14 @@ from src.runtime.services.cache_policy import (
 )
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot._bot_error_classification import _is_checkpointer_runtime_error
-from telegram_bot._bot_pre_agent import (
+from telegram_bot._bot_state_helpers import _state_control_message_id
+from telegram_bot.observability import propagate_attributes
+from telegram_bot.pipeline.pre_agent import (
     _build_pre_agent_state_contract,
     _get_or_compute_pre_agent_dense,
     _prepare_pre_agent_retrieval_vectors,
 )
-from telegram_bot._bot_streaming import (
+from telegram_bot.pipeline.streaming import (
     _AGENT_DRAFT_INTERVAL,
     _extract_stream_chunk_text,
     _new_draft_id,
@@ -1113,8 +1115,8 @@ async def _ainvoke_supervisor_with_recovery(
     message: Any | None = None,
 ) -> dict[str, Any]:
     """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures."""
-    from telegram_bot._bot_streaming import _stream_agent_to_draft
     from telegram_bot.bot import create_bot_agent
+    from telegram_bot.pipeline.streaming import _stream_agent_to_draft
     from telegram_bot.services.checkpointer_utils import _supervisor_thread_id
 
     payload = {"messages": [{"role": "user", "content": user_text}]}

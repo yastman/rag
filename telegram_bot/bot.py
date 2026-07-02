@@ -8,8 +8,11 @@ import surface for tests that ``patch("telegram_bot.bot.X", ...)``.
 Extraction map:
   observability/state_helpers (card_2a71ec058138, #1265 PR-1),
   observability/bot_observability (card_2a71ec058138, #1265 PR-2),
-  _bot_error_classification (#1265 PR-3), _bot_streaming (#1265 PR-4),
-  _bot_pre_agent (#1265 PR-5), lifecycle/lifecycle (card_2a71ec058138),
+  _bot_error_classification (#1265 PR-3),
+  pipeline/streaming (#1265 PR-4, card_2a71ec058138 SLICE 3),
+  pipeline/pre_agent (#1265 PR-5, card_2a71ec058138 SLICE 3),
+  pipeline/supervisor (#2816 Slice 2, card_2a71ec058138 SLICE 3),
+  lifecycle/lifecycle (card_2a71ec058138),
   handlers/command_handlers (card_c6ade99aada1).
 """
 
@@ -36,9 +39,6 @@ from . import (
     _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
     _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
     _bot_handoff,  # #2816 Slice 2: extracted handoff handlers
-    _bot_pre_agent,  # #1265 Slice 1 PR-5: extracted pre-agent helpers
-    _bot_query_pipeline,  # #2816 Slice 2: extracted query pipeline handlers
-    _bot_streaming,  # #1265 Slice 1 PR-4: extracted streaming helpers
 )
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
@@ -50,6 +50,11 @@ from .observability import (
 )
 from .observability import (
     state_helpers as _bot_state_helpers,  # card_2a71ec058138: homed to observability/
+)
+from .pipeline import pre_agent as _bot_pre_agent  # card_2a71ec058138 SLICE 3: moved to pipeline/
+from .pipeline import streaming as _bot_streaming  # card_2a71ec058138 SLICE 3: moved to pipeline/
+from .pipeline import (
+    supervisor as _bot_query_pipeline,  # card_2a71ec058138 SLICE 3: moved to pipeline/
 )
 from .services.forum_bridge import ForumBridge
 
