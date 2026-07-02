@@ -348,3 +348,6 @@ data/test/voice_note_sample.ogg
 
 # local swarm skills (not committed)
 skills/
+
+# Windows GPU driver artifact
+NVIDIA Corporation/
