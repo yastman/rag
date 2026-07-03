@@ -1,9 +1,12 @@
 """Tests for SessionSummaryWorker (#445 Task 5)."""
 
+import pytest
+
+
+pytest.importorskip("apscheduler")  # skip if apscheduler not installed
+
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
 

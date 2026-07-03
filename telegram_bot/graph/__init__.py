@@ -14,8 +14,7 @@ compatibility façade, **not** as a competing text runtime.
 
 from src.runtime.graph.config import GraphConfig
 from src.runtime.graph.state import RAGState, make_initial_state
-
-from .graph import build_graph
+from telegram_bot.pipelines.graph_compat import build_graph
 
 
 __all__ = ["GraphConfig", "RAGState", "build_graph", "make_initial_state"]

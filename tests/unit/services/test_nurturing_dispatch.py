@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
+
+
+pytest.importorskip("apscheduler")  # skip if apscheduler not installed
+
+from unittest.mock import AsyncMock, MagicMock
 
 from telegram_bot.services.observability.nurturing_scheduler import NurturingScheduler
 from telegram_bot.services.observability.nurturing_service import NurturingService
