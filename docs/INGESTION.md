@@ -20,7 +20,7 @@ source file → Docling (parse) → chunk + embed (BGE-M3: dense + sparse + ColB
 
 - **SHA256 file identity** — re-ingesting an unchanged file is a no-op.
 - **Idempotent upsert** — a changed file replaces its prior chunks by source path.
-- **Dead-letter queue (DLQ)** — failed documents are queued with retry + backoff.
+- **Error handling** — failed documents are logged and skipped; `run_watch` retries on the next polling cycle (60 s). No DLQ, no exponential backoff.
 
 **Known limitation:** deleting a source file does **not** remove its chunks from Qdrant;
 they remain until manual cleanup.
