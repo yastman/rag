@@ -145,22 +145,9 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
             except Exception as e:
                 results["docling"] = False
                 print(f"  [FAIL] Docling native backend — {e}")
-        else:
-            try:
-                resp = await client.get(f"{config.docling_url}/health")
-                results["docling"] = resp.status_code == 200
-                if results["docling"]:
-                    print(f"  [OK] Docling ({config.docling_url})")
-                else:
-                    print(f"  [FAIL] Docling — HTTP {resp.status_code}")
-            except Exception as e:
-                results["docling"] = False
-                print(f"  [FAIL] Docling ({config.docling_url}) — {e}")
 
     # Required env vars
     required_vars = ["QDRANT_URL", "BGE_M3_URL"]
-    if config.docling_backend != "docling_native":
-        required_vars.append("DOCLING_URL")
     missing = [v for v in required_vars if not os.getenv(v)]
     if missing:
         results["env_vars"] = False

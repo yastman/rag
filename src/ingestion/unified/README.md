@@ -50,7 +50,7 @@ are swept.
 
 - **Qdrant** — vector database target (also the source of truth for idempotency)
 - **BGE-M3** — local dense + sparse + ColBERT embeddings
-- **Docling** — document parsing (`DOCLING_BACKEND`: `docling_http` or `docling_native`)
+- **Docling** — document parsing (in-process via `docling_native` backend; `DOCLING_BACKEND` only accepts `docling_native`)
 
 ## Focused Checks
 
