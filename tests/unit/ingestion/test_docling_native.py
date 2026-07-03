@@ -326,3 +326,84 @@ def test_unified_config_selects_docling_backend(monkeypatch) -> None:
 
     assert config.docling_backend == "docling_native"
     assert adapter.__class__.__name__ == "NativeDoclingAdapter"
+
+
+# ---------------------------------------------------------------------------
+# D1 — to_ingestion_chunks correctness (no live Docling service)
+# ---------------------------------------------------------------------------
+
+
+def test_to_ingestion_chunks_page_range_stored_as_list(sample_md_path: Path) -> None:
+    """page_range from DoclingChunk must be stored as a list in extra_metadata."""
+    converter = _FakeConverter()
+    chunker = _FakeChunker([_FakeChunk(text="Some text.", meta=_FakeChunkMeta(headings=["Intro"]))])
+    adapter = NativeDoclingAdapter(max_tokens=80, converter=converter, chunker=chunker)
+    docling_chunks = adapter.chunk_file_sync(sample_md_path)
+
+    # Manually inject page_range into the docling chunk to test the path.
+    docling_chunks[0].page_range = (3, 5)
+
+    ingestion_chunks = adapter.to_ingestion_chunks(
+        docling_chunks,
+        source="docs/sample.md",
+        source_type="md",
+    )
+
+    meta = ingestion_chunks[0].extra_metadata or {}
+    assert "page_range" in meta, "page_range must be present in extra_metadata"
+    assert meta["page_range"] == [3, 5], "page_range must be stored as a list, not a tuple"
+
+
+def test_to_ingestion_chunks_no_page_range_when_none(sample_md_path: Path) -> None:
+    """When page_range is None it must be absent from extra_metadata."""
+    converter = _FakeConverter()
+    chunker = _FakeChunker([_FakeChunk(text="No pages.", meta=_FakeChunkMeta(headings=[]))])
+    adapter = NativeDoclingAdapter(max_tokens=80, converter=converter, chunker=chunker)
+    docling_chunks = adapter.chunk_file_sync(sample_md_path)
+    # page_range defaults to None in DoclingChunk
+
+    ingestion_chunks = adapter.to_ingestion_chunks(
+        docling_chunks,
+        source="docs/sample.md",
+        source_type="md",
+    )
+
+    meta = ingestion_chunks[0].extra_metadata or {}
+    assert "page_range" not in meta
+
+
+def test_to_ingestion_chunks_doc_id_determinism(sample_md_path: Path) -> None:
+    """doc_id must be deterministic: same source path always → same id across two calls."""
+    import hashlib
+
+    converter = _FakeConverter()
+    chunker = _FakeChunker([_FakeChunk(text="Hello.", meta=_FakeChunkMeta(headings=[]))])
+    adapter = NativeDoclingAdapter(max_tokens=80, converter=converter, chunker=chunker)
+    docling_chunks = adapter.chunk_file_sync(sample_md_path)
+
+    source = "docs/fixed_path.md"
+    chunks_a = adapter.to_ingestion_chunks(docling_chunks, source=source, source_type="md")
+    chunks_b = adapter.to_ingestion_chunks(docling_chunks, source=source, source_type="md")
+
+    doc_id_a = (chunks_a[0].extra_metadata or {})["doc_id"]
+    doc_id_b = (chunks_b[0].extra_metadata or {})["doc_id"]
+    assert doc_id_a == doc_id_b, "doc_id must be identical across two calls for the same source"
+
+    # Also verify it matches the expected SHA256[:16] derivation.
+    expected = hashlib.sha256(source.encode()).hexdigest()[:16]
+    assert doc_id_a == expected, f"Expected doc_id={expected!r}, got {doc_id_a!r}"
+
+
+def test_to_ingestion_chunks_doc_id_differs_for_different_sources(sample_md_path: Path) -> None:
+    """Different source paths must produce different doc_ids."""
+    converter = _FakeConverter()
+    chunker = _FakeChunker([_FakeChunk(text="Hello.", meta=_FakeChunkMeta(headings=[]))])
+    adapter = NativeDoclingAdapter(max_tokens=80, converter=converter, chunker=chunker)
+    docling_chunks = adapter.chunk_file_sync(sample_md_path)
+
+    chunks_a = adapter.to_ingestion_chunks(docling_chunks, source="path/a.md", source_type="md")
+    chunks_b = adapter.to_ingestion_chunks(docling_chunks, source="path/b.md", source_type="md")
+
+    doc_id_a = (chunks_a[0].extra_metadata or {})["doc_id"]
+    doc_id_b = (chunks_b[0].extra_metadata or {})["doc_id"]
+    assert doc_id_a != doc_id_b
