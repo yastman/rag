@@ -7,6 +7,9 @@ The only helpers kept here are genuine, non-tracing utilities
 still used by the runtime: ``mask_pii`` (PII masking for safe payloads) and
 ``propagate_attributes`` (a no-op context manager preserved as a stable
 context-propagation seam for callers).
+
+``traced_pipeline``, ``_disable_otel_exporter``, and ``_is_endpoint_reachable``
+are no-op / thin shims kept for import-compatibility (#2844, #2969).
 """
 
 from __future__ import annotations
@@ -15,6 +18,12 @@ import contextlib
 from collections.abc import Iterator
 from typing import Any
 
+from src.observability.bootstrap import (
+    disable_otel_exporter as _disable_otel_exporter,
+)
+from src.observability.bootstrap import (
+    is_endpoint_reachable as _is_endpoint_reachable,
+)
 from src.observability.scores import (
     compute_checkpointer_overhead_proxy_ms,
     score,
@@ -36,6 +45,23 @@ def mask_pii(data: Any) -> Any:
 @contextlib.contextmanager
 def propagate_attributes(**kwargs: Any) -> Iterator[None]:
     """No-op context-propagation seam — tracing removed (#2844, #2969)."""
+    yield
+
+
+@contextlib.contextmanager
+def traced_pipeline(
+    *,
+    session_id: str = "",
+    user_id: str = "",
+    tags: list[str] | None = None,
+    **_kwargs: Any,
+) -> Iterator[None]:
+    """No-op traced-pipeline context manager — Langfuse removed (#2844, #2969).
+
+    Kept as a stable seam so callers that wrap pipeline invocations with
+    ``async with traced_pipeline(...)`` continue to work without changes.
+    """
+    # ponytail: pure no-op; caller gets the context block with no overhead.
     yield
 
 
@@ -69,12 +95,15 @@ def get_client() -> Any:
 
 
 __all__ = [
+    "_disable_otel_exporter",
+    "_is_endpoint_reachable",
     "compute_checkpointer_overhead_proxy_ms",
     "get_client",
     "mask_pii",
     "observe",
     "propagate_attributes",
     "score",
+    "traced_pipeline",
     "write_history_scores",
     "write_scores",
 ]
