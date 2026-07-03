@@ -113,6 +113,21 @@ make e2e-test-traces-core    # required #1307 core Telethon trace gate
 make bot-response-smoke      # #2192: prove make bot actually answers
 ```
 
+#### Telethon E2E runner — unit tests vs live run
+
+Unit tests (no credentials needed, no live bot required):
+```bash
+uv run pytest tests/unit/scripts -k e2e_runner -q
+```
+
+Live end-to-end run against a real bot (requires `.env` with valid credentials):
+```bash
+make e2e-telegram-test  # requires: TELEGRAM_API_ID, TELEGRAM_API_HASH, E2E_BOT_USERNAME in .env; live bot running
+# or directly:
+uv run python scripts/e2e/runner.py --no-judge          # passthrough mode
+uv run python scripts/e2e/runner.py --group immigration # specific group
+```
+
 `make bot-response-smoke` runs five preflight stages (env vars, Telethon
 session file, `getMe` username match, `getWebhookInfo` empty, polling
 lock state) before delegating to `scripts.e2e.quick_test` for one safe
