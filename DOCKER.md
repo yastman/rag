@@ -28,7 +28,7 @@ Services are gated by profiles. Run only what you need.
 |---|---|
 | *(no profile)* | `postgres`, `redis`, `qdrant`, `bge-m3` |
 | `bot` | above + `bot` |
-| `ingest` | above + `docling`, `ingestion` |
+| `ingest` | above + `ingestion` |
 | `full` | all services |
 
 ## Services
@@ -40,8 +40,7 @@ Services are gated by profiles. Run only what you need.
 | `qdrant` | `qdrant/qdrant:v1.18.1` | default | Vector store — dense, sparse, ColBERT retrieval |
 | `bge-m3` | built locally | default | Self-hosted BGE-M3 ONNX embedding API |
 | `bot` | built locally | `bot` | Telegram bot process |
-| `docling` | built locally | `ingest` | Document parsing (PDF, etc.) |
-| `ingestion` | built locally | `ingest` | Unified ingestion pipeline |
+| `ingestion` | built locally | `ingest` | Unified ingestion pipeline (Docling runs in-process) |
 
 ## Ports (dev only — `compose.dev.yml`)
 
@@ -54,7 +53,6 @@ Base `compose.yml` exposes **no ports**. All ports are loopback-bound in dev.
 | `redis` | `127.0.0.1:6379` | Redis |
 | `postgres` | `127.0.0.1:5432` | PostgreSQL |
 | `bge-m3` | `127.0.0.1:8000` | HTTP |
-| `docling` | `127.0.0.1:5001` | HTTP |
 
 ## Common Commands
 
@@ -156,7 +154,6 @@ a separate Redis DB). Any future key added to Redis must follow this policy.
 | `qdrant` | 1 GB |
 | `bge-m3` | 4 GB (override: `BGE_M3_MEMORY_LIMIT`) |
 | `bot` | 512 MB |
-| `docling` | 2 GB |
 | `ingestion` | 1 GB |
 
 ## Health Checks
@@ -173,7 +170,6 @@ model load).
 | `redis_data` | `redis` |
 | `qdrant_data` | `qdrant` |
 | `hf_cache` | `bge-m3` |
-| `docling_cache` | `docling` |
 | `ingestion-manifest` | `ingestion` |
 
 ## Security Defaults

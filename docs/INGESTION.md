@@ -8,11 +8,11 @@ The deterministic, idempotent, production path lives in `src/ingestion/unified/`
 ## Pipeline
 
 ```
-source file → Docling (parse) → chunk + embed (BGE-M3: dense + sparse + ColBERT) → Qdrant upsert
+source file → Docling (in-process, native SDK) → chunk + embed (BGE-M3: dense + sparse + ColBERT) → Qdrant upsert
 ```
 
-- **Docling** (sidecar service) parses PDFs and other formats over HTTP — see
-  [`../services/docling/README.md`](../services/docling/README.md).
+- **Docling** runs in-process inside the ingestion container (native SDK, no HTTP sidecar or
+  `DOCLING_URL`). PDF and other format parsing happens directly without a separate service.
 - The **unified pipeline** owns chunking and the embedding writes; **BGE-M3** serves
   embeddings — see [`../services/bge-m3-api/README.md`](../services/bge-m3-api/README.md).
 
@@ -28,7 +28,7 @@ they remain until manual cleanup.
 ## Run it
 
 ```bash
-make core-up          # Docling + BGE-M3 + Qdrant must be up (see ../docs/LOCAL-DEVELOPMENT.md)
+make core-up          # BGE-M3 + Qdrant must be up (see ../docs/LOCAL-DEVELOPMENT.md)
 ```
 
 Ingestion entry points and scripts live under `scripts/` (see
