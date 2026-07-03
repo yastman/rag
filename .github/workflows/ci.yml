@@ -67,10 +67,10 @@ jobs:
           enable-cache: true
 
       - name: Ruff lint
-        run: uvx ruff check src/ telegram_bot/ mini_app/ services/ scripts/ --output-format=github
+        run: uvx ruff check src/ telegram_bot/ services/ scripts/ --output-format=github
 
       - name: Ruff format check
-        run: uvx ruff format --target-version py312 --check src/ telegram_bot/ mini_app/ services/ scripts/
+        run: uvx ruff format --target-version py312 --check src/ telegram_bot/ services/ scripts/
 
   uv-lock:
     name: Lockfile Check

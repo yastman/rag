@@ -9,7 +9,8 @@ Only used for coverage runs (wired via PYTHONPATH in the Makefile test-cov
 target and the CI coverage workflow steps); harmless everywhere else.
 """
 
-try:
+import contextlib
+
+
+with contextlib.suppress(Exception):  # pragma: no cover - numpy always present in test env
     import numpy  # noqa: F401
-except Exception:  # pragma: no cover - numpy always present in test env
-    pass

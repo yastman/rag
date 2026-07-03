@@ -57,7 +57,6 @@ def build_services(config: BotConfig) -> Services:
     from src.runtime.integrations.cache import CacheLayerManager
     from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
     from src.runtime.services.qdrant import QdrantService
-
     from telegram_bot.services.apartment.apartments_service import ApartmentsService
     from telegram_bot.services.observability.redis_monitor import RedisHealthMonitor
 
@@ -106,7 +105,9 @@ def build_services(config: BotConfig) -> Services:
 
     llm = graph_config.create_llm()
 
-    from telegram_bot.services.apartment.apartment_extraction_pipeline import ApartmentExtractionPipeline
+    from telegram_bot.services.apartment.apartment_extraction_pipeline import (
+        ApartmentExtractionPipeline,
+    )
     from telegram_bot.services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
 
     _apt_llm = None

@@ -24,8 +24,8 @@ from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hin
 from telegram_bot.agents.cache_stage import _cache_check
 from telegram_bot.agents.retrieval_stage import _hybrid_retrieve
 from telegram_bot.pipelines.state_contract import PreAgentStateContract
-from telegram_bot.services.rag.cache_policy import resolve_semantic_cache_signature
 from telegram_bot.services.metrics import record_pipeline_event
+from telegram_bot.services.rag.cache_policy import resolve_semantic_cache_signature
 from telegram_bot.services.rag.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.services.rag.query_preprocessor import expand_short_query
 from telegram_bot.services.rag.rag_core import (
