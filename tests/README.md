@@ -50,7 +50,6 @@ Run these selectively, not on every save.
 | Integration | `tests/integration/` | Real service interaction (Qdrant, Redis, APIs) | Minutes |
 | Smoke | `tests/smoke/` | Live service health and routing sanity | Minutes |
 | Eval | `tests/eval/` | RAG quality (faithfulness, relevance) | Minutes |
-| Baseline | `tests/baseline/` | Observability metric regressions | Minutes |
 | Benchmark | `tests/benchmark/` | Parser/reranker throughput comparisons | Varies |
 | Observability | `tests/observability/` | Trace collector/manager infrastructure | Varies |
 | Chaos | `tests/chaos/` | Degraded-service behavior and fallbacks | Minutes |
@@ -129,10 +128,8 @@ make eval-rag-full           # RAGAS + DeepEval
 ```
 
 ### Baseline / observability
-```bash
-make baseline-smoke          # smoke with Langfuse tracing
-make baseline-compare        # compare against a baseline tag
-```
+
+> `tests/baseline/` was removed in P19 (Langfuse integration removed, #2844). The `make baseline-smoke` and `make baseline-compare` targets are no longer available. Observability is through structured logs.
 
 ### Compose validation (for runtime-impacting changes)
 When changing `compose*.yml`, Dockerfiles, or service definitions, verify the effective config:
