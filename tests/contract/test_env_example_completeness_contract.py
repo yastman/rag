@@ -131,10 +131,8 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "UV_PROJECT_ENVIRONMENT": "uv-only; managed by uv",
     "UV_CACHE_DIR": "uv-only; managed by uv",
     "FORCE_REINSTALL": "Make-only knob; not a bot env",
-    # --- LangChain / Langfuse internal toggles read at import time ----------
+    # --- LangChain internal toggles read at import time --------------------
     "LANGCHAIN_TRACING_V2": "LangChain SDK auto-detect; not an operator setting",
-    "LANGFUSE_DEBUG": "Langfuse SDK debug flag; documented in Langfuse docs",
-    "LANGFUSE_OTEL_PYTHON_DISABLED_INSTRUMENTATIONS": "Langfuse SDK internal",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "OTel SDK; set per-service in compose, not .env.example",
     "OTEL_EXPORTER_OTLP_HEADERS": "OTel SDK; set per-service in compose",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "OTel SDK; set per-service in compose",
@@ -190,9 +188,6 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "USER_CONTEXT_TTL": "User context cache TTL; doc TBD",
     # --- Swarm / Kiro CI controls ------------------------------------------
     "KIRO_STRICT_REPORT": "Swarm worker report contract flag; gates legacy JSON validators in scripts/, not an operator .env.example setting",
-    # --- Langfuse legacy soft-switches (dead after #2969 removal) ----------
-    "ENABLE_LANGFUSE": "Legacy Langfuse kill-switch still read by src/config/settings.py; to be removed in a follow-up cleanup after #2969",
-    "LANGFUSE_TRACING_ENABLED": "Legacy Langfuse tracing toggle still set by src/observability/bootstrap.py; to be removed in a follow-up cleanup after #2969",
 }
 
 # Vars in .env.example but NOT directly read by Python code. These are
@@ -211,18 +206,10 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "MINIO_ROOT_PASSWORD": "Read by minio image entrypoint",
     "POSTGRES_PASSWORD": "Read by postgres image entrypoint, not Python",
     "ELEVENLABS_API_KEY": "Read by voice agent SDK at runtime via env_file, not directly by Python",
-    # --- Langfuse stack secrets (read by langfuse server image) ------------
-    "NEXTAUTH_SECRET": "Read by Langfuse server image",
-    "SALT": "Read by Langfuse server image",
-    "ENCRYPTION_KEY": "Read by Langfuse server image",
-    "LANGFUSE_PUBLIC_KEY": "Read by Langfuse server image and compose env_file; Python tracing removed in #2969",
-    "LANGFUSE_SECRET_KEY": "Read by Langfuse server image and compose env_file; Python tracing removed in #2969",
-    "LANGFUSE_DOCKER_HOST": "Container-network alias for langfuse; consumed by compose env_file",
-    "LANGFUSE_BASE_URL": "Legacy/operator alias documented for Langfuse tooling; not read by simplified Python runtime",
-    "LANGFUSE_REDIS_PASSWORD": (
-        "Read by redis-langfuse / langfuse / langfuse-worker compose services "
-        "(REDIS_AUTH + redis-server --requirepass); not consumed by any Python code"
-    ),
+    # --- ML stack secrets (MinIO, ClickHouse) -------------------------------
+    "NEXTAUTH_SECRET": "Read by ML stack server image",
+    "SALT": "Read by ML stack server image",
+    "ENCRYPTION_KEY": "Read by ML stack server image",
     # --- OpenTelemetry SDK env consumed by instrumented service runtimes ----
     "OTEL_PROPAGATORS": (
         "Read by OpenTelemetry SDK from Compose service env; documented in "
@@ -239,8 +226,8 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "EVAL_LLM_API_KEY": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
     "EVAL_LLM_BASE_URL": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
     "OPENAI_BASE_URL": "OpenAI SDK base URL override; consumed by SDK at import time, not directly by Python code in this repo",
-    "REDIS_HOST": "Read by redis-langfuse / langfuse / langfuse-worker compose services; not consumed by Python code in this repo",
-    "REDIS_PORT": "Read by redis-langfuse / langfuse / langfuse-worker compose services; not consumed by Python code in this repo",
+    "REDIS_HOST": "Read by compose services; not consumed by Python code in this repo",
+    "REDIS_PORT": "Read by compose services; not consumed by Python code in this repo",
     # --- E2E testing vars ---------------------------------------------------
     "E2E_VOICE_NOTE_PATH": (
         "Consumed by scripts/e2e/config.py via plain Field(alias=...) — "
@@ -490,13 +477,3 @@ def test_allowlists_have_no_overlap_with_documented_keys() -> None:
         f" {sorted(bogus_not_in_code)}. Remove them from the allowlist;"
         " they belong in .env.example as documented variables."
     )
-
-
-def test_langfuse_container_env_surface_is_documented_and_fixture_backed() -> None:
-    """Containerized services, including bge-m3, use the Docker Langfuse host."""
-    env_example_keys = _parse_env_example()
-    ci_env_keys = _parse_env_file(REPO_ROOT / "tests/fixtures/compose.ci.env")
-
-    required = {"LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_DOCKER_HOST"}
-    assert required <= env_example_keys
-    assert required <= ci_env_keys

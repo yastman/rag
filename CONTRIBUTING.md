@@ -38,7 +38,7 @@ This project and everyone participating in it is governed by our [Code of Conduc
 
 - Do not run production or CRM write flows without maintainer approval.
 - Use fake/demo credentials for local development and testing.
-- Treat Telegram, Kommo, Langfuse, LiveKit, and cloud credentials as external secrets.
+- Treat Telegram, Kommo, LiveKit, and cloud credentials as external secrets.
 
 ## Questions
 
