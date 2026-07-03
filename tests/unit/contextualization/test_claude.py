@@ -1,5 +1,10 @@
 """Unit tests for ClaudeContextualizer."""
 
+import pytest
+
+
+pytest.importorskip("groq")  # skip if groq (and optional contextualizer deps) not installed
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

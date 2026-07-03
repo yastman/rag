@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import pytest
+
+
+# funnel_lead_scoring module was removed — skip the whole file
+pytest.importorskip(
+    "telegram_bot.services.funnel_lead_scoring",
+    reason="funnel_lead_scoring module was removed",
+)
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
-
-from telegram_bot.services.funnel_lead_scoring import persist_and_sync_funnel_lead_score
+from telegram_bot.services.funnel_lead_scoring import (
+    persist_and_sync_funnel_lead_score,
+)
 
 
 @pytest.mark.asyncio

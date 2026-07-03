@@ -1,7 +1,6 @@
 """Unit tests for telegram_bot/bot.py handlers (LangGraph pipeline)."""
 
 import asyncio
-import json
 import logging
 import sys
 import time
@@ -28,7 +27,6 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 from telegram_bot.bot import PropertyBot, make_session_id
 from telegram_bot.config import BotConfig
 from telegram_bot.handlers.command_handlers import (
-    cmd_call,
     cmd_clear,
     cmd_clearcache,
     cmd_help,
@@ -699,40 +697,10 @@ class TestCommandHandlers:
         assert "# HELP" in call_args
         assert "bot_cmd_metrics_test_sentinel_total" in call_args
 
+    @pytest.mark.skip(reason="cmd_call removed — LiveKit/voice path archived")
     async def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
         """`/call` dispatch metadata should include langfuse_trace_id for continuity (#609)."""
-        mock_config.admin_ids = [12345]
-        mock_config.livekit_url = "ws://livekit.local"
-        mock_config.livekit_api_key = "lk-key"
-        mock_config.livekit_api_secret = "lk-secret"
-        mock_config.sip_trunk_id = "trunk-123"
-
-        bot, _ = _create_bot(mock_config)
-        message = _make_text_message("/call +380501234567 тестовая заявка")
-
-        fake_lk = MagicMock()
-        fake_lk.agent_dispatch.create_dispatch = AsyncMock()
-        fake_lk.sip.create_sip_participant = AsyncMock()
-        fake_lk.aclose = AsyncMock()
-
-        fake_api = types.SimpleNamespace(
-            LiveKitAPI=MagicMock(return_value=fake_lk),
-            CreateAgentDispatchRequest=lambda **kwargs: types.SimpleNamespace(**kwargs),
-            CreateSIPParticipantRequest=lambda **kwargs: types.SimpleNamespace(**kwargs),
-        )
-        fake_livekit = types.SimpleNamespace(api=fake_api)
-        mock_lf = MagicMock()
-        mock_lf.get_current_trace_id.return_value = "trace-123"
-
-        with (
-            patch.dict(sys.modules, {"livekit": fake_livekit}),
-            patch("telegram_bot.handlers.command_handlers.get_client", return_value=mock_lf),
-        ):
-            await cmd_call(bot, message)
-
-        dispatch_request = fake_lk.agent_dispatch.create_dispatch.await_args.args[0]
-        metadata = json.loads(dispatch_request.metadata)
-        assert metadata["langfuse_trace_id"] == "trace-123"
+        # cmd_call was removed with the voice path
 
 
 def _mock_agent_result(**overrides):
