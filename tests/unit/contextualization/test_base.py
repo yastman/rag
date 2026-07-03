@@ -1,5 +1,10 @@
 """Unit tests for contextualization base classes."""
 
+import pytest
+
+
+pytest.importorskip("groq")  # skip if groq not installed
+
 from datetime import datetime
 
 import pytest

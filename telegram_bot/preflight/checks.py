@@ -6,20 +6,16 @@ from enum import StrEnum
 from typing import Any
 from urllib.parse import urlparse
 
-import asyncpg
 import httpx
-from qdrant_client import AsyncQdrantClient
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
 from telegram_bot.preflight.remediation import (
     COLBERT_COVERAGE_WARN_THRESHOLD,  # noqa: F401 — re-exported for tests
-    _check_redis_deep,
     _exception_message_with_type,
     _is_redis_auth_failure,
     _postgres_local_remediation,
     _qdrant_validate_collection,
-    _verify_cache_synthetic,
 )
 
 from ..config import BotConfig
@@ -184,7 +180,10 @@ def _validate_bge_m3_url(url: str) -> tuple[bool, str]:
 
 async def _check_dep_redis(config: BotConfig) -> bool:
     """Redis connectivity + deep health check."""
-    passed, details = await _check_redis_deep(config.redis_url)
+    # Lazy import so tests can patch telegram_bot.preflight._check_redis_deep
+    import telegram_bot.preflight as _pf
+
+    passed, details = await _pf._check_redis_deep(config.redis_url)
     if not passed:
         if _is_redis_auth_failure(details.get("error", "")):
             logger.error("Preflight FAIL: %s", _REDIS_AUTH_FAILURE_HINT)
@@ -194,7 +193,10 @@ async def _check_dep_redis(config: BotConfig) -> bool:
 
 async def _check_dep_redis_cache(config: BotConfig) -> bool:
     """Synthetic write/read/TTL/delete check for each cache key prefix."""
-    cache_ok, cache_errors = await _verify_cache_synthetic(config.redis_url)
+    # Lazy import so tests can patch telegram_bot.preflight._verify_cache_synthetic
+    import telegram_bot.preflight as _pf
+
+    cache_ok, cache_errors = await _pf._verify_cache_synthetic(config.redis_url)
     if not cache_ok:
         logger.error("Preflight FAIL: Redis cache verify — %s", cache_errors)
     return cache_ok
@@ -204,15 +206,19 @@ async def _check_dep_qdrant(
     config: BotConfig, failure_reasons: dict[str, str] | None = None
 ) -> bool:
     """Qdrant connectivity check with gRPC-primary, REST-fallback transport."""
+    # Lazy import so tests can patch telegram_bot.preflight.AsyncQdrantClient
+    import telegram_bot.preflight as _pf
+
+    _AsyncQdrantClient = _pf.AsyncQdrantClient
     getter = getattr(config, "get_collection_name", None)
     collection = getter() if callable(getter) else config.qdrant_collection
     scheme = urlparse(config.qdrant_url).scheme.lower()
     effective_key = config.qdrant_api_key if scheme == "https" else None
 
-    primary_client: AsyncQdrantClient | None = None
+    primary_client = None
     primary_exception_detail: str | None = None
     try:
-        primary_client = AsyncQdrantClient(
+        primary_client = _AsyncQdrantClient(
             url=config.qdrant_url,
             api_key=effective_key,
             timeout=config.qdrant_timeout,
@@ -242,9 +248,9 @@ async def _check_dep_qdrant(
     if primary_exception_detail is None:
         return False
 
-    fallback_client: AsyncQdrantClient | None = None
+    fallback_client = None
     try:
-        fallback_client = AsyncQdrantClient(
+        fallback_client = _AsyncQdrantClient(
             url=config.qdrant_url,
             api_key=effective_key,
             timeout=config.qdrant_timeout,
@@ -311,21 +317,37 @@ async def _check_dep_bge_m3(config: BotConfig, client: httpx.AsyncClient) -> boo
 
 async def _check_dep_postgres(config: BotConfig) -> bool:
     """Postgres connectivity check (optional dep)."""
+    # Lazy import so tests can patch telegram_bot.preflight.asyncpg
+    import telegram_bot.preflight as _pf
+
     try:
-        conn = await asyncpg.connect(config.realestate_database_url, timeout=5)
+        conn = await _pf.asyncpg.connect(config.realestate_database_url, timeout=5)
         try:
             await conn.fetchval("SELECT 1")
             logger.info("Preflight Postgres: database reachable")
             return True
         finally:
             await conn.close()
-    except asyncpg.InvalidCatalogNameError:
-        logger.warning(
-            "Preflight WARN: Postgres database does not exist yet; startup may auto-create "
-            "it before enabling user features"
-        )
-        return True
     except Exception as exc:
+        # asyncpg.InvalidCatalogNameError indicates DB doesn't exist yet —
+        # treat as non-fatal. Guard against mock stubs where the attr is
+        # not a real exception class.
+        import telegram_bot.preflight as _pf
+
+        invalid_catalog = getattr(_pf.asyncpg, "InvalidCatalogNameError", None)
+        is_missing_db = False
+        if invalid_catalog is not None:
+            try:
+                is_missing_db = isinstance(exc, invalid_catalog)
+            except TypeError:
+                # invalid_catalog is a MagicMock or non-type — fall back to name check
+                is_missing_db = type(exc).__name__ == "InvalidCatalogNameError"
+        if is_missing_db:
+            logger.warning(
+                "Preflight WARN: Postgres database does not exist yet; startup may auto-create "
+                "it before enabling user features"
+            )
+            return True
         remediation = _postgres_local_remediation(config.realestate_database_url)
         if remediation:
             logger.warning("Preflight WARN: %s — %s", remediation, exc)
@@ -362,6 +384,8 @@ async def _check_critical_with_retry(
     failure_reasons: dict[str, str] | None = None,
 ) -> bool:
     """Check a critical dependency with tenacity retry."""
+    # Lazy import so tests can patch telegram_bot.preflight._check_single_dep
+    import telegram_bot.preflight as _pf
 
     @retry(
         stop=stop_after_attempt(CRITICAL_RETRIES),
@@ -369,7 +393,7 @@ async def _check_critical_with_retry(
         reraise=True,
     )
     async def _attempt() -> bool:
-        result = await _check_single_dep(
+        result = await _pf._check_single_dep(
             dep_name,
             config,
             client,
@@ -411,6 +435,10 @@ async def check_dependencies(
     Raises:
         PreflightError: If any CRITICAL dep fails after all retries.
     """
+    # Lazy import so tests can patch telegram_bot.preflight._check_critical_with_retry
+    # and telegram_bot.preflight._check_single_dep
+    import telegram_bot.preflight as _pf
+
     results: dict[str, bool] = {}
     timeout = httpx.Timeout(10.0)
 
@@ -430,7 +458,7 @@ async def check_dependencies(
                 continue
 
             if level == DepLevel.CRITICAL:
-                results[dep_name] = await _check_critical_with_retry(
+                results[dep_name] = await _pf._check_critical_with_retry(
                     dep_name,
                     config,
                     client,
@@ -439,7 +467,7 @@ async def check_dependencies(
             else:
                 # Single attempt for optional deps
                 try:
-                    results[dep_name] = await _check_single_dep(
+                    results[dep_name] = await _pf._check_single_dep(
                         dep_name,
                         config,
                         client,

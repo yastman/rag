@@ -12,10 +12,13 @@ A worker cycle emits ``session_summary_kommo_written`` /
 
 from __future__ import annotations
 
+import pytest
+
+
+pytest.importorskip("apscheduler")  # skip if apscheduler not installed
+
 import time
 from unittest.mock import AsyncMock, MagicMock
-
-import pytest
 
 from telegram_bot.services.generation import session_summary_worker as ssw_mod
 from telegram_bot.services.generation.session_summary_worker import SessionSummaryWorker
