@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Setup Langfuse Score Configs for typed scoring (#753).
+"""Score config definitions for RAG pipeline scoring (#753).
 
-Creates Score Configs in Langfuse for structured, typed scoring of RAG pipeline traces.
-Idempotent: checks existing configs before creating new ones.
+Langfuse SDK removed (#2969). This script retains SCORE_CONFIGS data and
+helper functions for reference; Langfuse upload is no longer supported.
+The SCORE_CONFIGS structure is still tested to document the intended schema.
 
-Usage:
+Usage (no-op — Langfuse removed):
     uv run python -m scripts.setup_score_configs
 """
 
@@ -13,11 +14,6 @@ from __future__ import annotations
 import logging
 import sys
 from typing import Any
-
-from dotenv import load_dotenv
-from langfuse import Langfuse
-from langfuse.api.commons.types.config_category import ConfigCategory
-from langfuse.api.commons.types.score_config_data_type import ScoreConfigDataType
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -83,9 +79,9 @@ SCORE_CONFIGS: list[dict[str, Any]] = [
 ]
 
 _DATA_TYPE_MAP = {
-    "NUMERIC": ScoreConfigDataType.NUMERIC,
-    "CATEGORICAL": ScoreConfigDataType.CATEGORICAL,
-    "BOOLEAN": ScoreConfigDataType.BOOLEAN,
+    "NUMERIC": "NUMERIC",
+    "CATEGORICAL": "CATEGORICAL",
+    "BOOLEAN": "BOOLEAN",
 }
 
 
@@ -99,7 +95,7 @@ def setup_score_configs(api: Any) -> dict[str, str]:
     """Create all required score configs. Skip configs that already exist.
 
     Args:
-        api: Langfuse low-level API client (langfuse.api).
+        api: Any object with a score_configs.get / score_configs.create interface.
 
     Returns:
         Mapping of {config_name: config_id} for all required configs.
@@ -124,7 +120,7 @@ def setup_score_configs(api: Any) -> dict[str, str]:
 
         if cfg.get("categories"):
             kwargs["categories"] = [
-                ConfigCategory(label=cat["label"], value=cat["value"]) for cat in cfg["categories"]
+                {"label": cat["label"], "value": cat["value"]} for cat in cfg["categories"]
             ]
 
         created = api.score_configs.create(**kwargs)
@@ -135,22 +131,11 @@ def setup_score_configs(api: Any) -> dict[str, str]:
 
 
 def main() -> None:
-    load_dotenv()
-
-    try:
-        lf = Langfuse()
-    except Exception as e:
-        logger.error("Failed to initialize Langfuse client: %s", e)
-        sys.exit(1)
-
-    logger.info("Setting up Langfuse Score Configs...")
-    result = setup_score_configs(lf.api)
-
-    logger.info("Done. %d score config(s) ready:", len(result))
-    for name, config_id in sorted(result.items()):
-        logger.info("  %s → %s", name, config_id)
-
-    lf.flush()
+    logger.error(
+        "setup_score_configs: Langfuse removed (#2969). This script is a no-op. "
+        "Score config definitions are preserved in SCORE_CONFIGS for reference."
+    )
+    sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -72,7 +72,6 @@ if [[ "${compose_profiles}" == *",ml,"* || "${compose_profiles}" == *",full,"* |
     ENCRYPTION_KEY
     CLICKHOUSE_PASSWORD
     MINIO_ROOT_PASSWORD
-    LANGFUSE_REDIS_PASSWORD
   )
   optional_password_vars+=(
     NEXTAUTH_SECRET
@@ -80,7 +79,6 @@ if [[ "${compose_profiles}" == *",ml,"* || "${compose_profiles}" == *",full,"* |
     ENCRYPTION_KEY
     CLICKHOUSE_PASSWORD
     MINIO_ROOT_PASSWORD
-    LANGFUSE_REDIS_PASSWORD
   )
 fi
 

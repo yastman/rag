@@ -28,7 +28,6 @@ removable_volumes=(
   vps_clickhouse_data
   vps_clickhouse_logs
   vps_minio_data
-  vps_langfuse_redis_data
   vps_ingestion-manifest
 )
 

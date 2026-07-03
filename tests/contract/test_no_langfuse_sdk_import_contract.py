@@ -1,4 +1,4 @@
-"""Contract: no real Langfuse SDK imports remain in src/ or telegram_bot/ (#2951).
+"""Contract: no real Langfuse SDK imports remain in src/, telegram_bot/, scripts/, or services/ (#2951).
 
 Bug class: incomplete-removal — half-done feature removal leaves dead shim.
 The shim in src/observability/ is intentional; direct `from langfuse import …`
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-_SCAN_DIRS = ["src", "telegram_bot"]
+_SCAN_DIRS = ["src", "telegram_bot", "scripts", "services"]
 
 
 def _is_real_langfuse_import(node: ast.stmt) -> bool:
@@ -29,10 +29,13 @@ def _is_real_langfuse_import(node: ast.stmt) -> bool:
 
 
 def test_no_langfuse_sdk_imports_in_src_and_telegram_bot() -> None:
-    """No file in src/ or telegram_bot/ may import the real Langfuse SDK directly."""
+    """No file in src/, telegram_bot/, scripts/, or services/ may import the real Langfuse SDK directly."""
     violations: list[str] = []
     for dir_name in _SCAN_DIRS:
-        for py_file in sorted((ROOT / dir_name).rglob("*.py")):
+        scan_dir = ROOT / dir_name
+        if not scan_dir.exists():
+            continue
+        for py_file in sorted(scan_dir.rglob("*.py")):
             try:
                 tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
             except SyntaxError:

@@ -14,8 +14,8 @@ The core gate does not import `telegram_bot` (it has no `aiogram`/`langchain_cor
 so the entire `telegram_bot` package (~11 000 stmts) is measured as 0% covered.
 That drags the combined total down to ~10%.
 
-Running the full `make test-cov` (`pytest tests/`) hits 43 collection errors (missing optional
-deps: `langfuse`, `langchain_core`, `groq`, `apscheduler`, `prometheus_client`, `aiogram`, etc.)
+Running the full `make test-cov` (`pytest tests/`) hits collection errors (missing optional
+deps: `langchain_core`, `groq`, `apscheduler`, `prometheus_client`, `aiogram`, etc.)
 and produces no coverage summary at all — exit 2.
 
 ---
