@@ -11,14 +11,14 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Public API exports (VoyageService, CacheService, QdrantService, etc.) |
-| [`voyage.py`](./voyage.py) | Voyage AI gateway: embeddings + reranking (optional `voyage` extra) |
+| [`rag/voyage.py`](./rag/voyage.py) | Voyage AI gateway: embeddings + reranking (optional `voyage` extra) |
 | [`qdrant.py`](./qdrant.py) | Async Qdrant gateway: hybrid search, RRF, ColBERT, binary quantization |
-| [`query_preprocessor.py`](./query_preprocessor.py) | Rule-based preprocessing: translit normalization, dynamic RRF weights |
-| [`query_analyzer.py`](./query_analyzer.py) | LLM-based filter extraction (price, city, rooms) from natural language |
-| [`generate_response.py`](./generate_response.py) | Canonical response generation with prompt management |
-| [`rag_core.py`](./rag_core.py) | Shared RAG core functions (no spans, no metrics) |
-| [`filter_extractor.py`](./filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |
-| [`apartment_llm_extractor.py`](./apartment_llm_extractor.py) | LLM-based apartment data extraction |
+| [`rag/query_preprocessor.py`](./rag/query_preprocessor.py) | Rule-based preprocessing: translit normalization, dynamic RRF weights |
+| [`rag/query_analyzer.py`](./rag/query_analyzer.py) | LLM-based filter extraction (price, city, rooms) from natural language |
+| [`generation/generate_response.py`](./generation/generate_response.py) | Canonical response generation with prompt management |
+| [`rag/rag_core.py`](./rag/rag_core.py) | Shared RAG core functions (no spans, no metrics) |
+| [`apartment/filter_extractor.py`](./apartment/filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |
+| [`apartment/apartment_llm_extractor.py`](./apartment/apartment_llm_extractor.py) | LLM-based apartment data extraction |
 
 ## Boundaries
 
