@@ -136,42 +136,6 @@ services:
           memory: ${BGE_M3_MEMORY_LIMIT:-4G}
           pids: 200
 
-  docling:
-    <<: *security-defaults
-    image: "${COMPOSE_PROJECT_NAME:-dev}_docling"
-    build:
-      context: ./services/docling
-      dockerfile: Dockerfile
-    profiles: ["ingest", "full"]
-    restart: unless-stopped
-    logging: *default-logging
-    # Docling writes temporary files and HuggingFace caches at runtime.
-    # Keep hardening defaults, but allow writes for this service.
-    read_only: false
-    environment:
-      UVICORN_HOST: 0.0.0.0
-      UVICORN_PORT: 5001
-      DOCLING_BACKEND: docling
-      # Canonical pdf_backend name (docling-serve 1.x); per-request form-field
-      # overrides this at runtime for all profiles.
-      DOCLING_PDF_BACKEND: docling_parse
-      # fast is the default; per-request form-field overrides for full/quality profiles
-      DOCLING_TABLE_MODE: fast
-    volumes:
-      - ./data/docling:/data
-      - docling_cache:/app/.cache/huggingface
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          pids: 200
-
   # =============================================================================
   # TELEGRAM BOT
   # =============================================================================
@@ -261,7 +225,6 @@ services:
     environment:
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - QDRANT_URL=http://qdrant:6333
-      - DOCLING_URL=http://docling:5001
       - GDRIVE_COLLECTION_NAME=gdrive_documents_bge
       # Local embeddings (matches VPS production)
       - USE_LOCAL_DENSE_EMBEDDINGS=true
@@ -281,8 +244,6 @@ services:
       postgres:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
-      docling:
         condition: service_healthy
       bge-m3:
         condition: service_healthy
@@ -308,5 +269,4 @@ volumes:
   redis_data:
   qdrant_data:
   hf_cache:
-  docling_cache:
   ingestion-manifest:

@@ -34,7 +34,6 @@ from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
 
 if TYPE_CHECKING:
-    from src.ingestion.docling_client import DoclingClient
     from src.ingestion.docling_native import NativeDoclingAdapter
     from src.ingestion.unified.config import UnifiedConfig
 
@@ -90,20 +89,11 @@ class IngestionResult:
     error_details: list[str] = field(default_factory=list)
 
 
-def _make_docling(config: UnifiedConfig) -> DoclingClient | NativeDoclingAdapter:
-    """Construct the configured Docling backend (HTTP sidecar or native)."""
-    from src.ingestion.docling_client import DoclingClient, DoclingConfig
+def _make_docling(config: UnifiedConfig) -> NativeDoclingAdapter:
+    """Construct the configured Docling backend (native only)."""
     from src.ingestion.docling_native import NativeDoclingAdapter
 
-    if config.docling_backend == "docling_native":
-        return NativeDoclingAdapter(max_tokens=config.max_tokens_per_chunk)
-    return DoclingClient(
-        DoclingConfig(
-            base_url=config.docling_url,
-            timeout=config.docling_timeout,
-            max_tokens=config.max_tokens_per_chunk,
-        )
-    )
+    return NativeDoclingAdapter(max_tokens=config.max_tokens_per_chunk)
 
 
 def _already_indexed(client: object, collection_name: str, file_id: str, content_hash: str) -> bool:
@@ -138,7 +128,7 @@ def _already_indexed(client: object, collection_name: str, file_id: str, content
 def _ingest_directory(
     config: UnifiedConfig,
     writer: QdrantHybridWriter,
-    docling: DoclingClient | NativeDoclingAdapter,
+    docling: NativeDoclingAdapter,
 ) -> IngestionResult:
     """Scan sync_dir once and upsert every new/changed supported file."""
     result = IngestionResult()

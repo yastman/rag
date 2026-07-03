@@ -56,10 +56,7 @@ class UnifiedConfig:
 
     # Docling
     docling_backend: str = field(
-        default_factory=lambda: os.getenv("DOCLING_BACKEND", "docling_http")
-    )
-    docling_url: str = field(
-        default_factory=lambda: os.getenv("DOCLING_URL", "http://localhost:5001")
+        default_factory=lambda: os.getenv("DOCLING_BACKEND", "docling_native")
     )
     docling_timeout: float = 300.0
     max_tokens_per_chunk: int = 512
@@ -85,10 +82,9 @@ class UnifiedConfig:
 
     def __post_init__(self) -> None:
         """Validate config values that must stay within known rollout paths."""
-        if self.docling_backend not in {"docling_http", "docling_native"}:
+        if self.docling_backend != "docling_native":
             raise ValueError(
-                "DOCLING_BACKEND must be 'docling_http' or 'docling_native', "
-                f"got {self.docling_backend!r}"
+                f"DOCLING_BACKEND must be 'docling_native', got {self.docling_backend!r}"
             )
 
     def effective_manifest_dir(self) -> Path:
