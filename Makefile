@@ -314,9 +314,9 @@ test-providers-extra: ## Run optional provider/contextualization tests explicitl
 	@echo "$(GREEN)✓ Providers-extra tests complete (no tests)$(NC)"
 
 
-test-ingest-extra: ## Run optional ingestion-extra tests explicitly
+test-ingest-extra: ## Run optional ingestion-extra tests explicitly (docling-native extra)
 	@echo "$(BLUE)Running ingestion-extra tests...$(NC)"
-	uv sync --extra ingest --all-groups
+	uv sync --extra docling-native --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
 	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
 

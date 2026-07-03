@@ -83,14 +83,6 @@ RUNTIME_ROOTS: tuple[str, ...] = (
 def test_legacy_ingestion_module_is_absent(module_path: str) -> None:
     """Each legacy ingestion module file must be deleted from the repository."""
     target = REPO_ROOT / module_path
-    if module_path == "src/ingestion/docling_client.py":
-        pytest.xfail(
-            f"{module_path} cannot be deleted yet: live runtime callers exist. "
-            "See module docstring for the audit (DoclingClient is reused by "
-            "src/ingestion/docling_native.py and src/ingestion/unified/targets/"
-            "qdrant_hybrid_target.py). Migrate those "
-            "callers to the unified pipeline first, then drop this xfail."
-        )
     assert not target.exists(), (
         f"{module_path} still exists; #1532 requires it to be removed "
         "(replaced by src/ingestion/unified/)."
@@ -157,21 +149,10 @@ def _module_imports_legacy(py_file: Path) -> set[str]:
     return hits
 
 
-# Files that the audit identified as live runtime callers. Each one is xfail'd
-# with the precise reason so the contract documents *why* the assertion can't
-# pass yet.
-KNOWN_LIVE_CALLERS: dict[str, str] = {
-    "src/ingestion/docling_native.py": (
-        "NativeDoclingAdapter subclasses DoclingClient and reuses DoclingChunk "
-        "/ DoclingConfig. The unified ingestion pipeline depends on it."
-    ),
-    "src/ingestion/unified/flow.py": (
-        "The *unified* pipeline flow (run_once) imports DoclingClient and "
-        "DoclingConfig directly to build the HTTP Docling backend. The premise "
-        'of #1532 ("replaced by unified pipeline") does not hold — the unified '
-        "pipeline itself reuses DoclingClient."
-    ),
-}
+# Files that the audit identified as live runtime callers. Empty since
+# phase_6508bc74ca4a: docling_client.py deleted, callers migrated to
+# docling_common.py / NativeDoclingAdapter standalone.
+KNOWN_LIVE_CALLERS: dict[str, str] = {}
 
 
 def test_no_runtime_imports_of_legacy_ingestion_modules() -> None:
