@@ -96,7 +96,13 @@ class NativeDoclingAdapter:
                     "docling is not installed; docling_native backend requires the optional "
                     "docling dependency"
                 )
-            self._converter = RuntimeDocumentConverter()
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.pipeline_options import PdfFormatOption, PdfPipelineOptions
+
+            pipeline_options = PdfPipelineOptions(do_ocr=False, do_table_structure=True)
+            self._converter = RuntimeDocumentConverter(
+                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+            )
         return self._converter
 
     def _get_chunker(self) -> Any:
@@ -112,7 +118,12 @@ class NativeDoclingAdapter:
                     "docling_core is not installed; docling_native backend requires "
                     "HybridChunker from docling_core.transforms.chunker"
                 )
-            self._chunker = HybridChunker(max_tokens=self._max_tokens, merge_peers=True)
+            from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
+
+            tokenizer = HuggingFaceTokenizer.from_pretrained(
+                model_name="BAAI/bge-m3", max_tokens=self._max_tokens
+            )
+            self._chunker = HybridChunker(tokenizer=tokenizer, merge_peers=True)
         return self._chunker
 
     def chunk_file_sync(
@@ -158,12 +169,25 @@ class NativeDoclingAdapter:
                 continue
             meta = getattr(raw_chunk, "meta", None)
             headings = list(getattr(meta, "headings", None) or []) if meta is not None else []
+            # Extract page_range from chunk.meta.doc_items[*].prov[*].page_no
+            page_range = None
+            if meta is not None:
+                doc_items = getattr(meta, "doc_items", []) or []
+                pages: set[int] = set()
+                for item in doc_items:
+                    prov_list = getattr(item, "prov", []) or []
+                    for prov in prov_list:
+                        pg = getattr(prov, "page_no", None)
+                        if pg is not None:
+                            pages.add(int(pg))
+                if pages:
+                    page_range = (min(pages), max(pages))
             chunks.append(
                 DoclingChunk(
                     text=text,
                     seq_no=len(chunks),
                     headings=headings,
-                    page_range=None,
+                    page_range=page_range,
                     metadata={"parser": "docling_native"},
                 )
             )
