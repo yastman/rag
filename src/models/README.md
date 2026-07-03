@@ -47,4 +47,4 @@ uv run pytest tests/unit/utils/test_embedding_model.py tests/unit/test_contextua
 ## See Also
 
 - [`src/retrieval/`](../retrieval/) — Uses models for search
-- [`telegram_bot/services/voyage.py`](../../telegram_bot/services/voyage.py) — Voyage AI alternative
+- [`telegram_bot/services/rag/voyage.py`](../../telegram_bot/services/rag/voyage.py) — Voyage AI alternative
