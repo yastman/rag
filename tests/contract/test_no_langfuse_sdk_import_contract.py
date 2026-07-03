@@ -36,6 +36,9 @@ def test_no_langfuse_sdk_imports_in_src_and_telegram_bot() -> None:
         if not scan_dir.exists():
             continue
         for py_file in sorted(scan_dir.rglob("*.py")):
+            # Skip virtualenv / installed packages — only scan project source
+            if ".venv" in py_file.parts or "__pypackages__" in py_file.parts:
+                continue
             try:
                 tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
             except SyntaxError:
