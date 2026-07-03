@@ -29,7 +29,7 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
     "src/runtime/integrations/cache.py": ["ERROR", "WARNING"],
-    "telegram_bot/services/generate_response.py": ["ERROR", "WARNING"],
+    "telegram_bot/services/generation/generate_response.py": ["ERROR", "WARNING"],
     "telegram_bot/services/qdrant.py": ["ERROR", "WARNING"],
     "src/runtime/services/qdrant.py": ["ERROR", "WARNING"],
     # SDK-native runtime pipeline — curated ERROR spans on the embedding,
@@ -57,13 +57,16 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # Query analyzer LLM wrapper — records ERROR on OpenAI / connection /
     # rate-limit / timeout exceptions before falling back to the user's raw
     # query (#1659, #1810).
-    "telegram_bot/services/query_analyzer.py": ["ERROR"],
+    "telegram_bot/services/rag/query_analyzer.py": ["ERROR"],
     # HyDE query preprocessor — records ERROR on hyde-generate-document
     # span when the helper LLM call fails before falling back to the
     # original query (#1810).
-    "telegram_bot/services/query_preprocessor.py": ["ERROR"],
+    "telegram_bot/services/rag/query_preprocessor.py": ["ERROR"],
     # History service — records ERROR span when conversation history save/load fails.
     "telegram_bot/services/history_service.py": ["ERROR"],
+    # Semantic cache middleware — records ERROR span on embedding failure path
+    # (WIP aiogram-dialog middleware migration, #2050–2052).
+    "telegram_bot/graph/middleware/cache.py": ["ERROR"],
 }
 
 
