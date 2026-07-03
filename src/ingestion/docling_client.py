@@ -6,11 +6,9 @@ and HybridChunker for RAG-optimized chunking.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +16,13 @@ import anyio
 import httpx
 
 from src.ingestion.chunker import Chunk
+from src.ingestion.docling_common import (
+    SUPPORTED_FORMATS,
+    DoclingChunk,
+    generate_doc_id,
+    get_mime_type,
+    to_ingestion_chunks,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -183,17 +188,6 @@ class ConvertedDocument:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class DoclingChunk:
-    """Chunk from docling's HybridChunker with rich metadata."""
-
-    text: str
-    seq_no: int
-    headings: list[str] = field(default_factory=list)
-    page_range: tuple[int, int] | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
 class DoclingClient:
     """Client for docling-serve HTTP API.
 
@@ -203,7 +197,8 @@ class DoclingClient:
     - Batch processing support
     """
 
-    SUPPORTED_FORMATS = {".pdf", ".docx", ".doc", ".html", ".htm", ".md", ".txt", ".xlsx", ".csv"}
+    # Class attribute alias — keeps existing isinstance/attribute access working.
+    SUPPORTED_FORMATS = SUPPORTED_FORMATS
 
     def __init__(self, config: DoclingConfig | None = None):
         """Initialize client.
@@ -429,6 +424,8 @@ class DoclingClient:
     ) -> list[Chunk]:
         """Convert DoclingChunks to standard Chunk objects for indexing.
 
+        Delegates to :func:`src.ingestion.docling_common.to_ingestion_chunks`.
+
         Args:
             docling_chunks: Chunks from chunk_file()
             source: Source filename or identifier
@@ -437,67 +434,17 @@ class DoclingClient:
         Returns:
             List of Chunk objects compatible with QdrantHybridWriter
         """
-        # Generate document hash for doc_id
-        doc_id = self._generate_doc_id(source)
-        created_at = datetime.now(UTC).isoformat()
-
-        chunks = []
-        for i, dc in enumerate(docling_chunks):
-            # Build extra metadata with unified schema
-            extra_metadata = {
-                "doc_id": doc_id,
-                "source": source,
-                "source_type": source_type,
-                "created_at": created_at,
-                "chunk_order": i,  # Explicit alias for small-to-big
-            }
-
-            # Add page range if available
-            if dc.page_range:
-                extra_metadata["page_range"] = list(dc.page_range)
-
-            # Add section from headings
-            if dc.headings:
-                extra_metadata["section"] = " > ".join(dc.headings)
-
-            # Include original docling metadata
-            if dc.metadata:
-                extra_metadata["docling_meta"] = dc.metadata
-
-            chunk = Chunk(
-                text=dc.text,
-                chunk_id=i,
-                document_name=source,
-                article_number=doc_id,  # Use doc_id as article_number
-                section=" > ".join(dc.headings) if dc.headings else None,
-                page_range=dc.page_range,
-                order=i,
-                extra_metadata=extra_metadata,
-            )
-            chunks.append(chunk)
-
-        return chunks
+        return to_ingestion_chunks(docling_chunks, source, source_type)
 
     @staticmethod
     def _generate_doc_id(source: str) -> str:
         """Generate document ID from source name (SHA-256 prefix)."""
-        return hashlib.sha256(source.encode()).hexdigest()[:16]
+        return generate_doc_id(source)
 
     @staticmethod
     def _get_mime_type(suffix: str) -> str:
         """Get MIME type for file extension."""
-        mime_types = {
-            ".pdf": "application/pdf",
-            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".doc": "application/msword",
-            ".html": "text/html",
-            ".htm": "text/html",
-            ".md": "text/markdown",
-            ".txt": "text/plain",
-            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ".csv": "text/csv",
-        }
-        return mime_types.get(suffix, "application/octet-stream")
+        return get_mime_type(suffix)
 
     @staticmethod
     def _parse_page_range(meta: dict[str, Any]) -> tuple[int, int] | None:

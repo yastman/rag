@@ -31,7 +31,12 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-from src.ingestion.docling_client import DoclingChunk, DoclingClient, DoclingConfig
+from src.ingestion.chunker import Chunk
+from src.ingestion.docling_common import (
+    SUPPORTED_FORMATS,
+    DoclingChunk,
+    to_ingestion_chunks,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -58,16 +63,20 @@ def _load_runtime_hybrid_chunker() -> Any | None:
 RuntimeDocumentConverter: Any | None = _load_runtime_document_converter()
 
 
-class NativeDoclingAdapter(DoclingClient):
+class NativeDoclingAdapter:
     """Native Docling adapter with the same chunk contract as DoclingClient.
 
     Uses ``HybridChunker`` over the in-process ``DoclingDocument`` instead of
-    the parent class's docling-serve REST round-trip. Behaviour parity with
+    a docling-serve REST round-trip. Behaviour parity with
     ``DoclingClient.chunk_file_sync`` is preserved through ``DoclingChunk``
     objects: ``text``, ``seq_no``, ``headings`` (from ``chunk.meta.headings``),
     plus a ``parser`` metadata marker so downstream consumers can attribute
     chunks to this code path.
     """
+
+    # Expose the same SUPPORTED_FORMATS as DoclingClient for callers that
+    # reference it via the adapter.
+    SUPPORTED_FORMATS = SUPPORTED_FORMATS
 
     def __init__(
         self,
@@ -76,9 +85,8 @@ class NativeDoclingAdapter(DoclingClient):
         converter: DocumentConverterType | None = None,
         chunker: Any | None = None,
     ) -> None:
-        super().__init__(DoclingConfig(max_tokens=max_tokens))
-        self._converter = converter
         self._max_tokens = max_tokens
+        self._converter = converter
         self._chunker = chunker
 
     def _get_converter(self) -> DocumentConverterType:
@@ -114,7 +122,7 @@ class NativeDoclingAdapter(DoclingClient):
     ) -> list[DoclingChunk]:
         """Convert a document natively and chunk it via ``HybridChunker``.
 
-        The ``contextualize`` flag preserves the parent class contract:
+        The ``contextualize`` flag preserves the DoclingClient contract:
         contextualized embedding text uses ``HybridChunker.contextualize`` when
         available, while callers can still request raw chunk text.
         """
@@ -166,3 +174,15 @@ class NativeDoclingAdapter(DoclingClient):
             len(chunks),
         )
         return chunks
+
+    def to_ingestion_chunks(
+        self,
+        docling_chunks: list[DoclingChunk],
+        source: str,
+        source_type: str = "docling",
+    ) -> list[Chunk]:
+        """Convert DoclingChunks to standard Chunk objects for indexing.
+
+        Delegates to :func:`src.ingestion.docling_common.to_ingestion_chunks`.
+        """
+        return to_ingestion_chunks(docling_chunks, source, source_type)
