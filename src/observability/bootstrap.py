@@ -9,13 +9,9 @@ in the full observability stack.
 
 from __future__ import annotations
 
-import logging
 import os
 import socket
 import urllib.parse
-
-
-logger = logging.getLogger(__name__)
 
 
 def is_endpoint_reachable(url: str, *, timeout: float = 2.0) -> bool:
@@ -41,29 +37,14 @@ def disable_otel_exporter(*, shutdown: bool = True) -> None:
     spans/metrics/logs are sent. Safe to call at any point before or after
     the OTel SDK initialises (env vars are read lazily by most exporters).
 
-    When *shutdown* is False the call skips any provider.shutdown() call —
-    use this in early-startup paths where a provider may not yet exist.
+    The *shutdown* parameter is kept for API compatibility but is now a no-op:
+    the monolith never constructs an SDK TracerProvider (Langfuse/OTel removed),
+    so there is nothing to shut down.
     """
-    os.environ["LANGFUSE_TRACING_ENABLED"] = "false"
     os.environ["OTEL_SDK_DISABLED"] = "true"
     os.environ["OTEL_TRACES_EXPORTER"] = "none"
     os.environ["OTEL_METRICS_EXPORTER"] = "none"
     os.environ["OTEL_LOGS_EXPORTER"] = "none"
-
-    if not shutdown:
-        return
-
-    # ponytail: attempt graceful SDK shutdown; ignore if OTel not installed or
-    # provider is not an SDK provider (ceiling: only SdkTracerProvider has shutdown).
-    try:
-        import opentelemetry.trace as _trace
-        from opentelemetry.sdk.trace import TracerProvider as _SdkTracerProvider
-
-        provider = _trace.get_tracer_provider()
-        if isinstance(provider, _SdkTracerProvider):
-            provider.shutdown()
-    except Exception as exc:  # best-effort shutdown — ignore failures
-        logger.debug("OTel provider shutdown skipped: %s", exc)
 
 
 __all__ = [
