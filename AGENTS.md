@@ -88,7 +88,6 @@ Scoped rules live next to the code — read the nearest one before editing that 
 - [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)
 - [`services/AGENTS.override.md`](services/AGENTS.override.md)
 - [`services/bge-m3-api/AGENTS.override.md`](services/bge-m3-api/AGENTS.override.md)
-- [`services/docling/AGENTS.override.md`](services/docling/AGENTS.override.md)
 
 ## Priority
 

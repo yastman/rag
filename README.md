@@ -82,7 +82,6 @@ External sidecar services (Docker Compose — **not** part of the Python binary)
 | BGE-M3 (ONNX) | Self-hosted embeddings served via a local API |
 | Redis | Five independent caches: semantic answer, embedding, search, rerank, extraction. Version-prefixed keys; graceful degradation on miss |
 | PostgreSQL | Persistent state (conversation, ingestion tracking) |
-| Docling | Document parsing for ingestion (PDF, etc.) |
 
 An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/agents/` for CRM-style workflows (lead scoring, manager handoff, HITL confirmation). It is not required for the core Q&A path.
 
@@ -93,7 +92,7 @@ An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/ag
 - SHA256-based file identity: re-ingesting the same file is a no-op.
 - Idempotent upsert: changed files replace prior chunks by source path. Deleted source files are a known limitation — their chunks remain in Qdrant until manual cleanup.
 - Error handling: failed documents are logged and skipped; `run_watch` retries on the next polling cycle (60 s). No DLQ or exponential backoff — orphaned chunks from deleted source files remain in Qdrant until manual cleanup (known limitation).
-- Docling handles parsing; the unified pipeline handles chunking and embedding writes.
+- Docling handles parsing in-process (native SDK, no HTTP sidecar); the unified pipeline handles chunking and embedding writes.
 
 ## Adapt to Your Domain
 
@@ -115,7 +114,7 @@ Prerequisites: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), Docker with Com
 cp .env.example .env          # fill in credentials
 make core-min-up              # start Qdrant + Redis (minimal)
 # or
-make core-up                  # start full sidecar stack (adds BGE-M3, Docling, PostgreSQL)
+make core-up                  # start full sidecar stack (adds BGE-M3, PostgreSQL)
 ```
 
 Run the bot natively:
