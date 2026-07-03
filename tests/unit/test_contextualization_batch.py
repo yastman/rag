@@ -1,9 +1,12 @@
 """Tests for contextualize_batch() parallel chunk processing."""
 
+import pytest
+
+
+pytest.importorskip("groq")  # skip if groq (and optional contextualizer deps) not installed
+
 import asyncio
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from src.contextualization.base import ContextualizedChunk, ContextualizeProvider
 from src.contextualization.claude import ClaudeContextualizer

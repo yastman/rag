@@ -21,7 +21,7 @@
 - For cache/search/rerank behavior edits, run targeted suites from `tests/unit/` and affected integration tests.
 
 ## Observability
-- Keep existing tracing patterns consistent (`telegram_bot/observability.py`).
+- Keep existing tracing patterns consistent (`telegram_bot/observability/` package, no-op shims — Langfuse removed #2844).
 - Do not remove score/trace instrumentation without explicit reason and replacement.
 
 ## References

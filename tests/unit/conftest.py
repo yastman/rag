@@ -207,7 +207,13 @@ def pytest_configure(config):
     _asyncpg_real = "asyncpg" in sys.modules and not isinstance(sys.modules["asyncpg"], MagicMock)
     if not _asyncpg_real:
         _saved_modules["asyncpg"] = sys.modules.get("asyncpg")
-        sys.modules["asyncpg"] = MagicMock()
+        _asyncpg_mock = MagicMock()
+
+        class _InvalidCatalogNameError(Exception):
+            """Minimal asyncpg.InvalidCatalogNameError stub for isinstance() checks."""
+
+        _asyncpg_mock.InvalidCatalogNameError = _InvalidCatalogNameError
+        sys.modules["asyncpg"] = _asyncpg_mock
         _mocked_module_names.append("asyncpg")
 
     # -- anthropic (optional Claude dep) ------------------------------------
@@ -242,6 +248,23 @@ def pytest_configure(config):
         _saved_modules["cachetools"] = sys.modules.get("cachetools")
         sys.modules["cachetools"] = MagicMock()
         _mocked_module_names.append("cachetools")
+
+    # -- langchain_core (optional archived CRM dep) -------------------------
+    _langchain_core_real = "langchain_core" in sys.modules and not isinstance(
+        sys.modules["langchain_core"], MagicMock
+    )
+    if not _langchain_core_real:
+        _lc_mods = [
+            "langchain_core",
+            "langchain_core.runnables",
+            "langchain_core.tools",
+            "langchain_core.messages",
+            "langchain_core.callbacks",
+        ]
+        for mod_name in _lc_mods:
+            _saved_modules[mod_name] = sys.modules.get(mod_name)
+            sys.modules[mod_name] = MagicMock()
+        _mocked_module_names.extend(_lc_mods)
 
 
 def pytest_unconfigure(config):

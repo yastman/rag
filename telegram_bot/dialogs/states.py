@@ -81,3 +81,112 @@ class DemoSG(StatesGroup):
 
     intro = State()  # Step 1: query input (text or voice)
     results = State()  # Step 2: search results display
+
+
+# ---------------------------------------------------------------------------
+# Compatibility stubs — states removed with the archived CRM voice/AI path.
+# The dialog modules that reference these remain in-tree but are not on the
+# active production path.  Stubs prevent ImportError during collection.
+# ---------------------------------------------------------------------------
+
+
+class AIAdvisorSG(StatesGroup):
+    """AI Advisor dialog states (archived — not on active production path)."""
+
+    main = State()
+    loading = State()
+    result = State()
+
+
+class CrmQuickActionSG(StatesGroup):
+    """CRM quick-action dialog states (archived — not on active production path)."""
+
+    waiting_note = State()
+    waiting_task = State()
+    edit_task_choose_field = State()
+    edit_task_text = State()
+    edit_task_date = State()
+
+
+class ContactsMenuSG(StatesGroup):
+    """Contacts navigation hub (archived CRM path)."""
+
+    main = State()
+
+
+class CreateContactSG(StatesGroup):
+    """Create contact wizard (archived CRM path)."""
+
+    name = State()
+    phone = State()
+    email = State()
+    confirm = State()
+
+
+class SearchContactsSG(StatesGroup):
+    """Search contacts dialog (archived CRM path)."""
+
+    query = State()
+    results = State()
+
+
+class LeadsMenuSG(StatesGroup):
+    """Leads navigation hub (archived CRM path)."""
+
+    main = State()
+
+
+class CRMMenuSG(StatesGroup):
+    """CRM top-level navigation menu (archived CRM path)."""
+
+    main = State()
+
+
+class ManagerMenuSG(StatesGroup):
+    """Manager menu dialog (archived CRM path)."""
+
+    main = State()
+
+
+class CreateLeadSG(StatesGroup):
+    """Create lead wizard (archived CRM path)."""
+
+    name = State()
+    phone = State()
+    budget = State()
+    confirm = State()
+
+
+class SearchSG(StatesGroup):
+    """Generic search dialog (archived CRM path)."""
+
+    query = State()
+    results = State()
+
+
+class CreateNoteSG(StatesGroup):
+    """Create note dialog (archived CRM path)."""
+
+    text = State()
+    confirm = State()
+
+
+class CreateTaskSG(StatesGroup):
+    """Create task wizard (archived CRM path)."""
+
+    title = State()
+    due_date = State()
+    confirm = State()
+
+
+class MyTasksSG(StatesGroup):
+    """My tasks view dialog (archived CRM path)."""
+
+    main = State()
+    task_detail = State()
+
+
+class TasksMenuSG(StatesGroup):
+    """Tasks navigation menu (archived CRM path)."""
+
+    main = State()
