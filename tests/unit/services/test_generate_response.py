@@ -1196,3 +1196,134 @@ async def test_streaming_non_connection_error_still_uses_exception() -> None:
     mock_logger.exception.assert_called()
     exception_msg = mock_logger.exception.call_args[0][0]
     assert "LLM call failed" in exception_msg
+
+
+# ---------------------------------------------------------------------------
+# G-A (P0) — Grounded answer carries citation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_grounded_answer_carries_citation() -> None:
+    """G-A: LLM call succeeds with docs → grounded=True, citation in response, llm_call_count=1."""
+    doc_title = "Апартамент у моря"
+    config, client = _make_non_streaming_config(
+        answer=f"Квартира стоит 80 000€. Источник: {doc_title} [1]."
+    )
+
+    result = await generate_response(
+        query="Сколько стоит квартира?",
+        documents=[{"text": "Цена 80 000€", "score": 0.9, "metadata": {"title": doc_title}}],
+        grounding_mode="normal",
+        config=config,
+        raw_messages=[{"role": "user", "content": "Сколько стоит квартира?"}],
+    )
+
+    assert result["grounded"] is True
+    assert result["safe_fallback_used"] is False
+    assert result["llm_call_count"] == 1
+    # Citation from the mocked document must appear in the response
+    assert doc_title in result["response"]
+    client.chat.completions.create.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# G-B (P0) — Strict mode + empty docs → safe fallback
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_strict_empty_safe_fallback_gate() -> None:
+    """G-B: strict mode + empty docs → safe fallback at the runtime generate_answer layer.
+
+    Tests generate_answer directly (the runtime layer).
+    generate_answer uses _build_fallback_response from src.runtime.generation.policy
+    (not build_safe_fallback_response from src.runtime.grounding.policy) — they are
+    different functions. This test asserts the actual runtime behaviour:
+    safe_fallback_used=True, llm_provider_model == "safe_fallback", LLM not called.
+    """
+    from src.runtime.generation.contracts import GenerationRequest
+    from src.runtime.generation.policy import _build_fallback_response as runtime_fallback_builder
+    from src.runtime.generation.service import generate_answer
+    from src.runtime.services.coverage_mode import CoverageDecision
+    from src.runtime.services.response_style_detector import StyleInfo
+
+    llm_mock = MagicMock()
+    llm_mock.chat.completions.create = AsyncMock()  # must NOT be called
+
+    cfg = MagicMock()
+    cfg.show_sources = True
+    cfg.response_style_enabled = False
+    cfg.response_style_shadow_mode = False
+    cfg.generate_max_tokens = 512
+    cfg.domain = "real-estate"
+    cfg.llm_temperature = 0.2
+    cfg.llm_model = "gpt-test"
+    cfg.get_reasoning_kwargs.return_value = {}
+    cfg.create_llm.return_value = llm_mock
+
+    fake_style = StyleInfo(style="balanced", difficulty="medium", reasoning="test", word_count=3)
+    detector = MagicMock()
+    detector.detect.return_value = fake_style
+
+    dyn: dict = {
+        "ResponseStyleDetector": lambda: detector,
+        "detect_coverage_mode": lambda _q: CoverageDecision(False, None),
+        "get_prompt_with_config": lambda name, **_kw: (f"sys:{name}", {"max_tokens": 200}),
+        "get_prompt_with_object": lambda _n, **_kw: (None, None),
+        "build_system_prompt_with_manager": lambda **_kw: "style_sys",
+        "get_token_limit": lambda _s, _d: 400,
+        "PipelineMetrics": MagicMock(get=MagicMock(return_value=MagicMock(record=MagicMock()))),
+    }
+
+    request = GenerationRequest(
+        query="Каков правовой статус объекта?",
+        documents=[],
+        grounding_mode="strict",
+        llm_call_count=0,
+        config=cfg,
+        extra_kwargs=dyn,
+    )
+
+    result = await generate_answer(request)
+
+    assert result.payload["safe_fallback_used"] is True
+    assert result.payload["llm_provider_model"] == "safe_fallback"
+    # Runtime uses _build_fallback_response (not the grounding policy one)
+    assert result.payload["response"] == runtime_fallback_builder([])
+    llm_mock.chat.completions.create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# G-D (P1) — Anti-hallucination: prompt contains only grounded facts
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_prompt_contains_document_content_not_hallucinated_text() -> None:
+    """G-D: LLM prompt must contain doc text from retrieved docs and a grounding instruction."""
+    doc_text = "Рассрочка 0% доступна для объекта в Несебре"
+    config, client = _make_non_streaming_config(answer="Рассрочка доступна.")
+
+    await generate_response(
+        query="Есть ли рассрочка?",
+        documents=[{"text": doc_text, "score": 0.88, "metadata": {"title": "Объект Несебр"}}],
+        grounding_mode="normal",
+        config=config,
+        raw_messages=[{"role": "user", "content": "Есть ли рассрочка?"}],
+    )
+
+    client.chat.completions.create.assert_awaited_once()
+    messages = client.chat.completions.create.await_args.kwargs["messages"]
+
+    # The user message must contain the actual document text (not hallucinated)
+    user_msg = next(m for m in messages if m["role"] == "user")
+    assert doc_text in user_msg["content"], (
+        f"Document text '{doc_text}' not found in LLM prompt — anti-hallucination violated"
+    )
+
+    # The prompt must include a grounding instruction
+    full_prompt = " ".join(m["content"] for m in messages)
+    assert "на основе контекста" in full_prompt.lower(), (
+        "Grounding instruction ('на основе контекста') missing from LLM prompt"
+    )
