@@ -62,8 +62,8 @@ def disable_otel_exporter(*, shutdown: bool = True) -> None:
         provider = _trace.get_tracer_provider()
         if isinstance(provider, _SdkTracerProvider):
             provider.shutdown()
-    except Exception:
-        pass
+    except Exception as exc:  # best-effort shutdown — ignore failures
+        logger.debug("OTel provider shutdown skipped: %s", exc)
 
 
 __all__ = [
