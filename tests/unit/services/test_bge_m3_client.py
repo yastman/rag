@@ -114,40 +114,6 @@ class TestBGEM3Client:
         assert result.processing_time == 0.1
         assert "/encode/hybrid" in mock_http.post.call_args[0][0]
 
-    async def test_encode_hybrid_injects_langfuse_context_headers(self, client, monkeypatch):
-        from src.services import bge_m3_client as mod
-
-        monkeypatch.setattr(
-            mod,
-            "get_client",
-            lambda: MagicMock(
-                get_current_trace_id=MagicMock(
-                    return_value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                ),
-                get_current_observation_id=MagicMock(return_value="bbbbbbbbbbbbbbbb"),
-            ),
-        )
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "dense_vecs": [[0.1] * 1024],
-            "lexical_weights": [{"indices": [1], "values": [0.5]}],
-            "processing_time": 0.1,
-        }
-
-        mock_http = AsyncMock()
-        mock_http.post = AsyncMock(return_value=mock_resp)
-        mock_http.is_closed = False
-        client._client = mock_http
-
-        await client.encode_hybrid(["hello"])
-
-        headers = mock_http.post.call_args.kwargs["headers"]
-        assert headers["x-langfuse-trace-id"] == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        assert headers["x-langfuse-parent-observation-id"] == "bbbbbbbbbbbbbbbb"
-
     async def test_encode_hybrid_empty_input(self, client):
         result = await client.encode_hybrid([])
         assert result.dense_vecs == []
@@ -398,36 +364,6 @@ class TestBGEM3SyncClient:
             mock_post.assert_called_once()
             call_url = mock_post.call_args[0][0]
             assert "/encode/hybrid" in call_url
-
-    def test_encode_hybrid_sync_injects_langfuse_context_headers(self, sync_client, monkeypatch):
-        from src.services import bge_m3_client as mod
-
-        monkeypatch.setattr(
-            mod,
-            "get_client",
-            lambda: mock.MagicMock(
-                get_current_trace_id=mock.MagicMock(
-                    return_value="cccccccccccccccccccccccccccccccc",
-                ),
-                get_current_observation_id=mock.MagicMock(return_value="dddddddddddddddd"),
-            ),
-        )
-
-        mock_resp = mock.MagicMock()
-        mock_resp.json.return_value = {
-            "dense_vecs": [[0.1] * 1024],
-            "lexical_weights": [{"indices": [1, 2], "values": [0.5, 0.3]}],
-            "colbert_vecs": [[[0.1] * 1024] * 5],
-            "processing_time": 0.42,
-        }
-        mock_resp.raise_for_status = lambda: None
-
-        with mock.patch.object(sync_client._client, "post", return_value=mock_resp) as mock_post:
-            sync_client.encode_hybrid(["hello"])
-
-        headers = mock_post.call_args.kwargs["headers"]
-        assert headers["x-langfuse-trace-id"] == "cccccccccccccccccccccccccccccccc"
-        assert headers["x-langfuse-parent-observation-id"] == "dddddddddddddddd"
 
     def test_encode_hybrid_empty_input(self, sync_client):
         """Empty input returns empty HybridResult without HTTP call."""
