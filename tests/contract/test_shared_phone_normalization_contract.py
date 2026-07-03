@@ -25,7 +25,6 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MINI_APP_PHONE_PATH = REPO_ROOT / "mini_app" / "phone.py"
 PHONE_KEYBOARD_PATH = REPO_ROOT / "telegram_bot" / "keyboards" / "phone_keyboard.py"
 # Canonical home moved to src/phone_utils.py in #1948 to break the reverse
 # layering between mini_app and telegram_bot. telegram_bot/phone_utils.py is
@@ -79,82 +78,37 @@ def test_shared_phone_utils_does_not_import_aiogram() -> None:
             )
 
 
-def test_mini_app_phone_no_local_regex_validator() -> None:
-    """``mini_app/phone.py`` must not redeclare its own digit-count regex."""
-    src = MINI_APP_PHONE_PATH.read_text(encoding="utf-8")
-    assert "_PHONE_RE" not in src, (
-        "mini_app/phone.py still defines _PHONE_RE; consume the shared "
-        "telegram_bot.phone_utils.normalize_phone helper instead."
-    )
-    assert "\\d{7,15}" not in src, (
-        "mini_app/phone.py still uses the digit-count regex; that pattern "
-        "accepts impossible numbers like +11111111111 and never normalizes "
-        "to E.164. Reuse the phonenumbers-based normalize_phone helper."
-    )
-
-
-def test_mini_app_phone_imports_shared_normalizer() -> None:
-    """``mini_app/phone.py`` must import the shared ``normalize_phone`` from the
-    canonical ``src.phone_utils`` home (#1948 forbids ``mini_app -> telegram_bot``)."""
-    tree = ast.parse(MINI_APP_PHONE_PATH.read_text(encoding="utf-8"))
-    imported_normalize = False
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.ImportFrom)
-            and node.module == "src.phone_utils"
-            and any(alias.name == "normalize_phone" for alias in node.names)
-        ):
-            imported_normalize = True
-            break
-    assert imported_normalize, (
-        "mini_app/phone.py must import normalize_phone from src.phone_utils "
-        "(#1948 layering fix). Importing from telegram_bot.phone_utils now "
-        "triggers the layering ratchet test."
-    )
+# test_mini_app_phone_no_local_regex_validator — REMOVED (Mini App archived)
+# test_mini_app_phone_imports_shared_normalizer — REMOVED (Mini App archived)
 
 
 def test_phone_keyboard_re_exports_or_uses_shared_module() -> None:
     """``phone_keyboard.py`` must consume the shared module so there is one
-    source of truth for the validation/normalization logic."""
+    source of truth for the validation/normalization logic.
+
+    Accepts either ``telegram_bot.phone_utils`` (shim) or the canonical
+    ``src.phone_utils`` import — both point to the same implementation.
+    """
     tree = ast.parse(PHONE_KEYBOARD_PATH.read_text(encoding="utf-8"))
     used_shared = False
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == "telegram_bot.phone_utils":
+        if isinstance(node, ast.ImportFrom) and node.module in (
+            "telegram_bot.phone_utils",
+            "src.phone_utils",
+        ):
             used_shared = True
             break
     assert used_shared, (
         "telegram_bot/keyboards/phone_keyboard.py must import phone "
-        "normalization from telegram_bot.phone_utils to keep one source of "
-        "truth."
+        "normalization from telegram_bot.phone_utils or src.phone_utils to "
+        "keep one source of truth."
     )
 
 
-def test_pydantic_phone_request_normalizes_to_e164() -> None:
-    """Behavioral guard: ``PhoneRequest`` must store the E.164-normalized
-    value, not the raw input."""
-    from mini_app.phone import PhoneRequest
-
-    request = PhoneRequest(
-        phone="+359 888 123 456",
-        source="test",
-        user_id=42,
-    )
-    assert request.phone == "+359888123456", (
-        f"PhoneRequest must normalize phone to E.164 form; got {request.phone!r}"
-    )
-
-
-def test_pydantic_phone_request_rejects_impossible_numbers() -> None:
-    """Behavioral guard: numbers that match the old digit-count regex but are
-    not real phone numbers must be rejected (they used to slip through)."""
-    import pytest
-    from mini_app.phone import PhoneRequest
-    from pydantic import ValidationError
-
-    # All-1s: 11 digits, regex-valid, phonenumbers-invalid.
-    with pytest.raises(ValidationError):
-        PhoneRequest(phone="+11111111111", source="test", user_id=42)
-
-    # Letters: matches neither regex nor phonenumbers.
-    with pytest.raises(ValidationError):
-        PhoneRequest(phone="not-a-phone", source="test", user_id=42)
+# ---------------------------------------------------------------------------
+# Mini App tests removed — Mini App is permanently archived.
+# (test_mini_app_phone_no_local_regex_validator,
+#  test_mini_app_phone_imports_shared_normalizer,
+#  test_pydantic_phone_request_normalizes_to_e164,
+#  test_pydantic_phone_request_rejects_impossible_numbers)
+# ---------------------------------------------------------------------------

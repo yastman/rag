@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from telegram_bot.callback_data import FavoriteCB
-from telegram_bot.services.apartment_formatter import format_apartment_html
+from telegram_bot.services.apartment.apartment_formatter import format_apartment_html
 
 
 if TYPE_CHECKING:

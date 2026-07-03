@@ -14,7 +14,13 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from langchain.messages import AIMessage, HumanMessage
+
+from src.runtime.graph.state import Message as HumanMessage
+
+
+# Local alias — the classify middleware stores messages in state dicts;
+# this stub carries only `.content` like the original langchain types.
+AIMessage = HumanMessage
 
 from telegram_bot.graph.middleware.classify import (
     ClassifyMiddleware,

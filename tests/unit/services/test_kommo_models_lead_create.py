@@ -1,6 +1,6 @@
 """Tests for LeadCreate model additions."""
 
-from telegram_bot.services.kommo_models import LeadCreate
+from telegram_bot.services.crm.kommo_models import LeadCreate
 
 
 def test_lead_create_has_responsible_user_id() -> None:

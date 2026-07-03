@@ -343,7 +343,7 @@ def test_extraction_produces_correct_filter(
     query: str, expected_key: str, expected_value: object
 ) -> None:
     """Verify text queries produce correct filters."""
-    from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
+    from telegram_bot.services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
 
     extractor = ApartmentFilterExtractor()
     result = extractor.parse(query)

@@ -1,13 +1,19 @@
 """Main Telegram bot logic — PropertyBot thin orchestrator.
 
-Module-level helpers are extracted to focused ``_bot_*`` submodules.
+Module-level helpers are extracted to focused ``_bot_*`` submodules and
+lifecycle/observability subpackages.
 The thin wrappers below preserve the ``from telegram_bot.bot import X``
 import surface for tests that ``patch("telegram_bot.bot.X", ...)``.
 
 Extraction map:
-  _bot_state_helpers (#1265 PR-1), _bot_observability (#1265 PR-2),
-  _bot_error_classification (#1265 PR-3), _bot_streaming (#1265 PR-4),
-  _bot_pre_agent (#1265 PR-5), _bot_lifecycle (card_c6ade99aada1),
+  observability/state_helpers (card_2a71ec058138, #1265 PR-1),
+  observability/bot_observability (card_2a71ec058138, #1265 PR-2),
+  handlers/error_classification (#1265 PR-3),
+  pipeline/streaming (#1265 PR-4, card_2a71ec058138 SLICE 3),
+  pipeline/pre_agent (#1265 PR-5, card_2a71ec058138 SLICE 3),
+  pipeline/supervisor (#2816 Slice 2, card_2a71ec058138 SLICE 3),
+  lifecycle/lifecycle (card_2a71ec058138),
+  handlers/{catalog,favorites,bot_handoff,bot_crm_callbacks,feedback_handlers} (card_2a71ec058138 SLICE 2),
   handlers/command_handlers (card_c6ade99aada1).
 """
 
@@ -27,24 +33,40 @@ from aiogram.types import (
 from src.runtime.integrations.polling_lock import RedisPollingLock
 from src.services.handoff_state import HandoffData, HandoffState
 
-from . import (
-    _bot_catalog,  # #2816 Slice 2: extracted catalog/card handlers
-    _bot_crm_callbacks,  # #2980: extracted clearcache callback handler
-    _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
-    _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
-    _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
-    _bot_handoff,  # #2816 Slice 2: extracted handoff handlers
-    _bot_lifecycle,  # #1265 Slice 2 PR-8 / #2048 / card_c6ade99aada1: lifecycle helpers
-    _bot_observability,  # #1265 Slice 1 PR-2: extracted observability helpers
-    _bot_pre_agent,  # #1265 Slice 1 PR-5: extracted pre-agent helpers
-    _bot_query_pipeline,  # #2816 Slice 2: extracted query pipeline handlers
-    _bot_state_helpers,  # #1265 Slice 1 PR-1: extracted state-shape helpers
-    _bot_streaming,  # #1265 Slice 1 PR-4: extracted streaming helpers
-)
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
+from .handlers import (
+    bot_crm_callbacks as _bot_crm_callbacks,  # #2980: extracted clearcache callback handler
+)
+from .handlers import (
+    bot_handoff as _bot_handoff,  # #2816 Slice 2: extracted handoff handlers
+)
+from .handlers import (
+    catalog as _bot_catalog,  # #2816 Slice 2: extracted catalog/card handlers
+)
+from .handlers import (
+    error_classification as _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
+)
+from .handlers import (
+    favorites as _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
+)
+from .handlers import (
+    feedback_handlers as _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
+)
+from .lifecycle import lifecycle as _bot_lifecycle  # card_2a71ec058138: homed to lifecycle/
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
+from .observability import (
+    bot_observability as _bot_observability,  # card_2a71ec058138: homed to observability/
+)
+from .observability import (
+    state_helpers as _bot_state_helpers,  # card_2a71ec058138: homed to observability/
+)
+from .pipeline import pre_agent as _bot_pre_agent  # card_2a71ec058138 SLICE 3: moved to pipeline/
+from .pipeline import streaming as _bot_streaming  # card_2a71ec058138 SLICE 3: moved to pipeline/
+from .pipeline import (
+    supervisor as _bot_query_pipeline,  # card_2a71ec058138 SLICE 3: moved to pipeline/
+)
 from .services.forum_bridge import ForumBridge
 
 
@@ -53,8 +75,8 @@ class GraphRecursionError(RuntimeError):
 
 
 if TYPE_CHECKING:
-    from ._bot_services import Services
     from .agents.context import BotContext as BotContextType
+    from .lifecycle.services import Services  # card_2a71ec058138: homed to lifecycle/
 else:
     BotContextType = Any
     Services = Any
@@ -140,9 +162,9 @@ async def _stream_agent_to_draft(*args: Any, **kwargs: Any) -> dict[str, Any]:
 def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
     """Read cached apartment payloads from legacy or dialog-owned state.
 
-    Implementation lives in :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1
-    PR-1). This wrapper preserves the historical ``telegram_bot.bot`` import
-    surface for existing callers and tests.
+    Implementation lives in :mod:`telegram_bot.observability.state_helpers`
+    (card_2a71ec058138, #1265 Slice 1 PR-1). This wrapper preserves the historical
+    ``telegram_bot.bot`` import surface for existing callers and tests.
     """
     return _bot_state_helpers._state_apartment_results(state_data)
 
@@ -150,17 +172,17 @@ def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]
 def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
     """Locate the catalog control message id (legacy or dialog-owned shape).
 
-    Re-exported from :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1 PR-1).
+    Re-exported from :mod:`telegram_bot.observability.state_helpers` (card_2a71ec058138).
     """
     return _bot_state_helpers._state_control_message_id(state_data)
 
 
 # Re-export from shared module (avoid circular imports with middlewares)
 # Re-export checkpointer helpers from shared utility module for backward compat
-from .services.checkpointer_utils import (  # noqa: E402
+from .services.util.checkpointer_utils import (  # noqa: E402
     _delete_checkpointer_thread as _delete_checkpointer_thread,
 )
-from .services.checkpointer_utils import (  # noqa: E402
+from .services.util.checkpointer_utils import (  # noqa: E402
     _supervisor_thread_id as _supervisor_thread_id,
 )
 from .tracing_context import make_session_id as make_session_id  # noqa: E402
@@ -169,7 +191,7 @@ from .tracing_context import make_session_id as make_session_id  # noqa: E402
 def _extract_current_turn(messages: list[Any]) -> list[Any]:
     """Slice agent checkpointer history down to the current turn (#507).
 
-    Re-exported from :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1 PR-1).
+    Re-exported from :mod:`telegram_bot.observability.state_helpers` (card_2a71ec058138).
     """
     return _bot_state_helpers._extract_current_turn(messages)
 
@@ -177,7 +199,7 @@ def _extract_current_turn(messages: list[Any]) -> list[Any]:
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     """Build shared metadata dict for trace (text + voice handlers).
 
-    Re-exported from :mod:`telegram_bot._bot_observability` (#1265 Slice 1 PR-2).
+    Re-exported from :mod:`telegram_bot.observability.bot_observability` (card_2a71ec058138).
     """
     return _bot_observability._build_trace_metadata(result)
 
@@ -204,11 +226,11 @@ class PropertyBot:
         """Initialize bot with services.
 
         ``_services`` is an optional DI seam for tests: pass a pre-built
-        :class:`~telegram_bot._bot_services.Services` instance to skip the
+        :class:`~telegram_bot.lifecycle.services.Services` instance to skip the
         heavy service construction in
-        :func:`~telegram_bot._bot_services.build_services`.
+        :func:`~telegram_bot.lifecycle.services.build_services`.
         """
-        from ._bot_services import build_services
+        from .lifecycle.services import build_services  # card_2a71ec058138: homed to lifecycle/
 
         self.config = config
         self.bot = Bot(token=config.telegram_token)
@@ -273,7 +295,7 @@ class PropertyBot:
     def _get_pre_agent_filter_extractor(self) -> Any:
         """Lazily construct the deterministic extractor used on pre-agent semantic misses."""
         if self._pre_agent_filter_extractor is None:
-            from .services.apartment_filter_extractor import ApartmentFilterExtractor
+            from .services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
 
             self._pre_agent_filter_extractor = ApartmentFilterExtractor()
         return self._pre_agent_filter_extractor
@@ -297,16 +319,16 @@ class PropertyBot:
 
     @staticmethod
     def _extract_database_name(database_url: str) -> str | None:
-        """Thin wrapper — see ``_bot_postgres_bootstrap`` (#1265)."""
-        from telegram_bot._bot_postgres_bootstrap import extract_database_name
+        """Thin wrapper — see ``lifecycle.postgres_bootstrap`` (card_2a71ec058138)."""
+        from telegram_bot.lifecycle.postgres_bootstrap import extract_database_name
 
         return extract_database_name(database_url)
 
     async def _ensure_postgres_database_exists(
         self, asyncpg_module: Any, database_name: str
     ) -> bool:
-        """Thin wrapper — see ``_bot_postgres_bootstrap`` (#1265)."""
-        from telegram_bot._bot_postgres_bootstrap import ensure_postgres_database_exists
+        """Thin wrapper — see ``lifecycle.postgres_bootstrap`` (card_2a71ec058138)."""
+        from telegram_bot.lifecycle.postgres_bootstrap import ensure_postgres_database_exists
 
         return await ensure_postgres_database_exists(
             asyncpg_module,
@@ -315,8 +337,8 @@ class PropertyBot:
         )
 
     async def _ensure_realestate_schema(self) -> None:
-        """Thin wrapper — see ``_bot_postgres_bootstrap`` (#1265)."""
-        from telegram_bot._bot_postgres_bootstrap import ensure_realestate_schema
+        """Thin wrapper — see ``lifecycle.postgres_bootstrap`` (card_2a71ec058138)."""
+        from telegram_bot.lifecycle.postgres_bootstrap import ensure_realestate_schema
 
         await ensure_realestate_schema(self._pg_pool)
 
@@ -576,7 +598,7 @@ class PropertyBot:
         reply_markup: Any | None = None,
     ) -> None:
         """Send long Telegram response in chunks with Telegram HTML formatting."""
-        from telegram_bot.services.telegram_formatting import send_html_messages
+        from telegram_bot.services.generation.telegram_formatting import send_html_messages
 
         await send_html_messages(message, text, reply_markup=reply_markup)
 
@@ -825,7 +847,7 @@ class PropertyBot:
 
     # ------------------------------------------------------------------ #
     # Lifecycle helpers — called in order by start()                      #
-    # All implementations live in _bot_lifecycle (card_c6ade99aada1).    #
+    # All implementations live in lifecycle/lifecycle (card_2a71ec058138).#
     # ------------------------------------------------------------------ #
 
     async def _setup_preflight(self) -> tuple[Any, Any]:
@@ -869,15 +891,15 @@ class PropertyBot:
         await _bot_lifecycle.setup_polling_lock(self)
 
     async def start(self):
-        """Start bot polling — thin delegate to ``_bot_lifecycle.start_bot``."""
+        """Start bot polling — thin delegate to ``lifecycle.lifecycle.start_bot``."""
         await _bot_lifecycle.start_bot(self)
 
     async def _warmup_bge(self) -> None:
-        """Thin delegate to ``_bot_lifecycle.warmup_bge_pool`` (#953)."""
+        """Thin delegate to ``lifecycle.lifecycle.warmup_bge_pool`` (#953)."""
         await _bot_lifecycle.warmup_bge_pool(self._hybrid, log=logger)
 
     async def _polling_lock_heartbeat_tick(self) -> None:
-        """Thin delegate to ``_bot_lifecycle.polling_lock_heartbeat_tick``."""
+        """Thin delegate to ``lifecycle.lifecycle.polling_lock_heartbeat_tick``."""
         await _bot_lifecycle.polling_lock_heartbeat_tick(
             self,
             log=logger,
@@ -885,5 +907,5 @@ class PropertyBot:
         )
 
     async def stop(self):
-        """Stop bot and cleanup — thin delegate to ``_bot_lifecycle.stop_bot``."""
+        """Stop bot and cleanup — thin delegate to ``lifecycle.lifecycle.stop_bot``."""
         await _bot_lifecycle.stop_bot(self)

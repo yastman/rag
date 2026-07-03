@@ -269,8 +269,8 @@ async def get_pref_section_options(**kwargs: Any) -> dict[str, Any]:
     }
 
 
-async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
-    """Getter for summary window — shows selected filters and can_search flag."""
+def _build_summary_lines(data: dict[str, Any]) -> list[str]:
+    """Build the human-readable filter display lines for the summary window."""
     from telegram_bot.dialogs.filter_constants import (
         AREA_DISPLAY as _AREA_DISPLAY,
     )
@@ -284,27 +284,18 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
         VIEW_DISPLAY as _VIEW_DISPLAY,
     )
 
-    dialog_manager = kwargs.get("dialog_manager")
-    data: dict[str, Any] = {}
-    if dialog_manager is not None:
-        data = getattr(dialog_manager, "dialog_data", {})
-        start = getattr(dialog_manager, "start_data", None) or {}
-        if start and not data:
-            data.update(start)
+    from ._constants import _PROPERTY_TYPE_DISPLAY
 
     lines: list[str] = ["Ваши параметры поиска:\n"]
 
     city_val = data.get("city", "any")
-    city_label = city_val if city_val and city_val != "any" else "Любой"
-    lines.append(f"🏙 Город: {city_label}")
+    lines.append(f"🏙 Город: {city_val if city_val and city_val != 'any' else 'Любой'}")
 
     complex_val = data.get("complex")
     if complex_val and complex_val != "any":
         lines.append(f"🏢 Комплекс: {complex_val}")
 
     property_type_val = data.get("property_type", "any")
-    from ._constants import _PROPERTY_TYPE_DISPLAY
-
     property_type_label = (
         _PROPERTY_TYPE_DISPLAY.get(property_type_val, property_type_val)
         if property_type_val and property_type_val != "any"
@@ -346,21 +337,39 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     if promotion_val == "yes":
         lines.append("🎁 Акции: Только акции")
 
+    return lines
+
+
+async def _count_apartments_for_summary(svc: Any, data: dict[str, Any]) -> int:
+    """Count apartments matching funnel filters; returns 0 on any error."""
+    try:
+        from ._constants import _build_funnel_filters
+
+        filters = _build_funnel_filters(data)
+        return await svc.count_with_filters(filters=filters)
+    except Exception:
+        logger.exception("Failed to count apartments for summary")
+        return 0
+
+
+async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
+    """Getter for summary window — shows selected filters and can_search flag."""
+    dialog_manager = kwargs.get("dialog_manager")
+    data: dict[str, Any] = {}
+    if dialog_manager is not None:
+        data = getattr(dialog_manager, "dialog_data", {})
+        start = getattr(dialog_manager, "start_data", None) or {}
+        if start and not data:
+            data.update(start)
+
+    lines = _build_summary_lines(data)
     summary_text = "\n".join(lines)
 
     svc = None
     if dialog_manager is not None:
         middleware = getattr(dialog_manager, "middleware_data", {})
         svc = middleware.get("apartments_service")
-    count = 0
-    if svc is not None:
-        try:
-            from ._constants import _build_funnel_filters
-
-            filters = _build_funnel_filters(data)
-            count = await svc.count_with_filters(filters=filters)
-        except Exception:
-            logger.exception("Failed to count apartments for summary")
+    count = await _count_apartments_for_summary(svc, data) if svc is not None else 0
     summary_text += f"\n\nНайдено: {count} апартаментов\nСортировка: по цене ↑"
 
     return {

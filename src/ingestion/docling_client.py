@@ -560,29 +560,3 @@ class DoclingClient:
             return self._parse_page_range(meta)
 
         return None
-
-
-async def chunk_document(
-    file_path: Path,
-    docling_url: str = "http://localhost:5001",
-    max_tokens: int = 512,
-) -> list[Chunk]:
-    """Convenience function to chunk a document file.
-
-    Args:
-        file_path: Path to document file
-        docling_url: Docling-serve URL
-        max_tokens: Maximum tokens per chunk
-
-    Returns:
-        List of Chunk objects ready for indexing
-    """
-    config = DoclingConfig(base_url=docling_url, max_tokens=max_tokens)
-
-    async with DoclingClient(config) as client:
-        docling_chunks = await client.chunk_file(file_path)
-        return client.to_ingestion_chunks(
-            docling_chunks,
-            source=file_path.name,
-            source_type=file_path.suffix.lstrip("."),
-        )

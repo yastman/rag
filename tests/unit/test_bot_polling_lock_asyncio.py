@@ -33,8 +33,7 @@ def _make_bot_with_polling_lock() -> Any:
     return bot
 
 
-@pytest.mark.asyncio
-async def test_bot_polling_lock_uses_asyncio_task_not_apscheduler():
+def test_bot_polling_lock_uses_asyncio_task_not_apscheduler():
     """PropertyBot must not have _polling_lock_scheduler after migration.
 
     Documents intent: _polling_lock_task (asyncio.Task) replaces the old
@@ -116,7 +115,7 @@ async def test_bot_stop_cancels_polling_lock_task():
 
 
 @pytest.mark.asyncio
-async def test_polling_lock_busy_message_diagnostics() -> None:
+async def test_polling_lock_busy_message_diagnostics_asyncio() -> None:
     """PollingLockBusy must surface owner and pttl_ms in its message.
 
     Replaces the preflight probe deleted in PR #3099 (#2189).

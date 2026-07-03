@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.lead_scoring_models import LeadScoreRecord
-from telegram_bot.services.lead_scoring_store import LeadScoringStore
+from telegram_bot.services.crm.lead_scoring_models import LeadScoreRecord
+from telegram_bot.services.crm.lead_scoring_store import LeadScoringStore
 
 
 @pytest.fixture

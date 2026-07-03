@@ -45,4 +45,4 @@ uv run pytest tests/unit/config/ -q
 ## See Also
 
 - [`.env.example`](../../.env.example) — Environment variables template
-- [`src/core/pipeline.py`](../core/pipeline.py) — Uses `Settings` for pipeline config
+- [`src/core/assistant.py`](../core/assistant.py) — Uses `Settings` for pipeline config

@@ -8,12 +8,14 @@ landed in PR #2024 (slice 3).
 
 This contract pins **slice 4**: the entire Kommo CRM stack
 (``kommo_client``, ``kommo_models``, ``kommo_tokens``) becomes a first-class
-citizen under ``src/services/`` and ``mini_app/phone.py`` imports
-``KommoClient`` from there. The three ``telegram_bot/services/kommo_*.py``
+citizen under ``src/services/``. The three ``telegram_bot/services/kommo_*.py``
 files become thin re-export shims so existing bot internals
 (``telegram_bot/agents/crm_tools.py``, ``telegram_bot/dialogs/crm_*``,
 ``telegram_bot/handlers/crm_callbacks.py``, ``scripts/kommo_seed.py``)
 keep working unchanged.
+
+Mini App is permanently archived — test 5 (mini_app/phone.py import
+assertions) was removed.
 
 Asserted invariants:
 
@@ -26,9 +28,6 @@ Asserted invariants:
      ``src.services.kommo_models`` only — no ``telegram_bot.*`` paths.
   4. The three ``telegram_bot/services/kommo_*.py`` shims re-export every
      canonical public name with object-identity (``is``-equal).
-  5. ``mini_app/phone.py`` imports ``KommoClient`` from
-     ``src.services.kommo_client`` (no ``telegram_bot.services.kommo_client``
-     reference anywhere in mini_app).
 """
 
 from __future__ import annotations
@@ -46,14 +45,12 @@ CANONICAL_MODELS = REPO_ROOT / "src" / "services" / "kommo_models.py"
 CANONICAL_TOKENS = REPO_ROOT / "src" / "services" / "kommo_tokens.py"
 CANONICAL_CLIENT = REPO_ROOT / "src" / "services" / "kommo_client.py"
 
-SHIM_MODELS = REPO_ROOT / "telegram_bot" / "services" / "kommo_models.py"
-SHIM_TOKENS = REPO_ROOT / "telegram_bot" / "services" / "kommo_tokens.py"
-SHIM_CLIENT = REPO_ROOT / "telegram_bot" / "services" / "kommo_client.py"
+SHIM_MODELS = REPO_ROOT / "telegram_bot" / "services" / "crm" / "kommo_models.py"
+SHIM_TOKENS = REPO_ROOT / "telegram_bot" / "services" / "crm" / "kommo_tokens.py"
+SHIM_CLIENT = REPO_ROOT / "telegram_bot" / "services" / "crm" / "kommo_client.py"
 
-MINI_APP_PHONE = REPO_ROOT / "mini_app" / "phone.py"
-
-# Forbidden module-level imports for canonical files (mini_app/src cannot
-# reach into telegram_bot/* per the #1948 layering rule).
+# Forbidden module-level imports for canonical files (src cannot reach into
+# telegram_bot/* per the #1948 layering rule).
 FORBIDDEN_TELEGRAM_BOT_PREFIX = "telegram_bot"
 
 MODELS_PUBLIC_API: tuple[str, ...] = (
@@ -176,36 +173,13 @@ def test_canonical_client_exposes_public_api(name: str) -> None:
 )
 def test_telegram_bot_kommo_shim_re_exports_canonical(submodule: str, name: str) -> None:
     canonical = importlib.import_module(f"src.services.{submodule}")
-    shim = importlib.import_module(f"telegram_bot.services.{submodule}")
+    shim = importlib.import_module(f"telegram_bot.services.crm.{submodule}")
     assert getattr(shim, name) is getattr(canonical, name), (
-        f"telegram_bot.services.{submodule}.{name} must be the SAME object as "
+        f"telegram_bot.services.crm.{submodule}.{name} must be the SAME object as "
         f"src.services.{submodule}.{name} (re-export shim, not a copy)."
     )
 
 
 # ---------------------------------------------------------------------------
-# 5. mini_app/phone.py imports from src/, not telegram_bot/
+# 5. mini_app/phone.py imports — REMOVED (Mini App permanently archived)
 # ---------------------------------------------------------------------------
-
-
-def test_mini_app_phone_imports_kommo_client_from_src() -> None:
-    """mini_app/phone.py must not have any telegram_bot.services.kommo_*
-    imports anywhere — including inside lazy ``def get_kommo_client()``.
-    """
-    src = MINI_APP_PHONE.read_text()
-    assert "src.services.kommo_client" in src, (
-        f"#1948 slice 4: {MINI_APP_PHONE.relative_to(REPO_ROOT)} must import "
-        "KommoClient from src.services.kommo_client."
-    )
-    assert "telegram_bot.services.kommo_client" not in src, (
-        f"#1948 slice 4 regression: {MINI_APP_PHONE.relative_to(REPO_ROOT)} "
-        "must not reference telegram_bot.services.kommo_client anymore."
-    )
-    assert "telegram_bot.services.kommo_models" not in src, (
-        f"#1948 slice 4 regression: {MINI_APP_PHONE.relative_to(REPO_ROOT)} "
-        "must not reference telegram_bot.services.kommo_models anymore."
-    )
-    assert "telegram_bot.services.kommo_tokens" not in src, (
-        f"#1948 slice 4 regression: {MINI_APP_PHONE.relative_to(REPO_ROOT)} "
-        "must not reference telegram_bot.services.kommo_tokens anymore."
-    )

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
+.PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-benchmark test-cov clean all-checks \
 	deps-audit vuln-audit arch-lint complexity docs-coverage audit \
 	dead-code-check deps-check \
 	test-preflight test-smoke test-load-eviction \
@@ -24,7 +24,7 @@ POLLING_LOCK_KEY ?= telegram-bot:polling
 RELEASE_POLLING_LOCK_FORCE ?= 0
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
-LINT_PATHS := src/ telegram_bot/ services/ scripts/
+LINT_PATHS := src/ telegram_bot/ mini_app/ services/ scripts/
 
 # Default target
 .DEFAULT_GOAL := help
@@ -50,7 +50,7 @@ PYTHON_VERSION ?= 3.12
 UV_RUN_NO_SYNC ?= uv run --no-sync
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_ARGS ?= -n 2 --dist=worksteal
-PYTEST_FULL_PARALLEL_DIRS ?= tests/chaos/ tests/contract/ tests/unit/
+PYTEST_FULL_PARALLEL_DIRS ?= tests/chaos/ tests/contract/ tests/unit/ tests/benchmark/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 CORE_LIVE_TEST_PATH := tests/e2e/test_core_live_ingest_answer.py
 CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH) -v --tb=short -m "e2e and requires_services"
@@ -280,7 +280,7 @@ audit: lint type-check security deps-audit vuln-audit arch-lint complexity ## Fu
 test: ## Run deterministic core PR/local gate (core + graph paths + no-service lane)
 	@echo "$(BLUE)Running deterministic core gate (test-core + graph_paths + no-service lane)...$(NC)"
 	$(MAKE) test-core
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/integration/test_graph_paths.py -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	$(MAKE) test-no-service-lane
 	@echo "$(GREEN)✓ Deterministic core gate complete$(NC)"
 
@@ -295,6 +295,7 @@ test-core: ## Run monolith core-required tests only (local/manual)
 	  tests/unit/core/ \
 	  tests/unit/runtime/ \
 	  tests/regression/ \
+	  tests/characterization/ \
 	  tests/contract/test_runtime_no_telegram_bot_coupling_contract.py \
 	  tests/contract/test_layering_no_telegram_bot_imports_contract.py \
 	  --ignore=tests/unit/core/test_pipeline.py \
@@ -332,9 +333,14 @@ test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_SEQUENTIAL_DIRS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
 
+test-benchmark: ## Run benchmark suite standalone (#1618)
+	@echo "$(BLUE)Running benchmark tests...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 RUN_BENCHMARK_TESTS=1 $(UV_RUN_NO_SYNC) pytest tests/benchmark/ $(PYTEST_PARALLEL_ARGS) --timeout=60 -q
+	@echo "$(GREEN)✓ Benchmark tests complete$(NC)"
+
 test-cov: ## Run tests with coverage
 	@echo "$(BLUE)Running tests with coverage...$(NC)"
-	uv run pytest tests/ --cov=src --cov=telegram_bot --cov-report=html --cov-report=term
+	PYTHONPATH=scripts/covfix uv run pytest tests/ --cov=src --cov=telegram_bot --cov-report=html --cov-report=term
 	@echo "$(GREEN)✓ Tests with coverage complete$(NC)"
 	@echo "$(YELLOW)Open htmlcov/index.html to view coverage report$(NC)"
 
@@ -671,7 +677,7 @@ core-up: docker-core-up ## Start the full default local compose core
 
 docker-core-up: ## Start default local compose stack (unprofiled services)
 	@echo "$(BLUE)Starting core services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) up -d
+	$(LOCAL_COMPOSE_CMD) up -d --wait
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
 docker-bot-up: ## Start core + bot services (bot)
@@ -749,6 +755,20 @@ docs-check: ## Check Markdown relative links for broken targets
 
 check: lint type-check ## Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
+
+lint-full: ## Full linter gate: bandit + vulture (blocking) + deptry (blocking) + radon + interrogate (report-only)
+	@echo "$(BLUE)Running full lint gate...$(NC)"
+	@echo "$(BLUE)[1/5] bandit security scan...$(NC)"
+	uv run --frozen bandit -r src/ telegram_bot/ -c pyproject.toml
+	@echo "$(BLUE)[2/5] vulture dead-code check...$(NC)"
+	uv run --frozen vulture src/ telegram_bot/ vulture_whitelist.py --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
+	@echo "$(BLUE)[3/5] deptry dependency audit...$(NC)"
+	uv run --frozen deptry .
+	@echo "$(BLUE)[4/5] radon complexity report (report-only)...$(NC)"
+	uv run --frozen radon cc src/ telegram_bot/ -a || true
+	@echo "$(BLUE)[5/5] interrogate docstring coverage (report-only, ≥70%)...$(NC)"
+	uv run --frozen interrogate src/core src/runtime src/ingestion/unified -v --fail-under 70
+	@echo "$(GREEN)✓ Full lint gate complete$(NC)"
 
 check-frozen: ## Read-only check: fail if .venv is stale, then lint + type-check without uv sync
 	@echo "$(BLUE)Checking frozen uv environment...$(NC)"

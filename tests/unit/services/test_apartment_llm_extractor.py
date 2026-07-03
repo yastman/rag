@@ -12,7 +12,7 @@ from src.models.apartment import (
     HardFilters,
     SoftPreferences,
 )
-from telegram_bot.services.apartment_llm_extractor import (
+from telegram_bot.services.apartment.apartment_llm_extractor import (
     EXTRACTION_SYSTEM_PROMPT,
     ApartmentLlmExtractor,
     _get_system_prompt,
@@ -151,7 +151,9 @@ class TestGetSystemPrompt:
     """Task 13: Tests for prompt manager integration in extraction."""
 
     def test_get_system_prompt_calls_get_prompt_with_correct_name(self) -> None:
-        with patch("telegram_bot.services.apartment_llm_extractor.get_prompt") as mock_get_prompt:
+        with patch(
+            "telegram_bot.services.apartment.apartment_llm_extractor.get_prompt"
+        ) as mock_get_prompt:
             mock_get_prompt.return_value = "custom prompt from langfuse"
             result = _get_system_prompt()
             mock_get_prompt.assert_called_once_with(
@@ -161,7 +163,9 @@ class TestGetSystemPrompt:
             assert result == "custom prompt from langfuse"
 
     def test_get_system_prompt_returns_default_when_langfuse_unavailable(self) -> None:
-        with patch("telegram_bot.services.apartment_llm_extractor.get_prompt") as mock_get_prompt:
+        with patch(
+            "telegram_bot.services.apartment.apartment_llm_extractor.get_prompt"
+        ) as mock_get_prompt:
             mock_get_prompt.return_value = EXTRACTION_SYSTEM_PROMPT
             result = _get_system_prompt()
             assert "Солнечный берег" in result
@@ -220,11 +224,11 @@ class TestApartmentExtractorPromptLinking:
 
         with (
             patch(
-                "telegram_bot.services.apartment_llm_extractor.get_prompt_with_object",
+                "telegram_bot.services.apartment.apartment_llm_extractor.get_prompt_with_object",
                 return_value=("compiled prompt text", managed_prompt),
             ),
             patch(
-                "telegram_bot.services.apartment_llm_extractor.get_client",
+                "telegram_bot.services.apartment.apartment_llm_extractor.get_client",
             ) as mock_get_client,
         ):
             mock_lf = mock_get_client.return_value
@@ -243,11 +247,11 @@ class TestApartmentExtractorPromptLinking:
 
         with (
             patch(
-                "telegram_bot.services.apartment_llm_extractor.get_prompt_with_object",
+                "telegram_bot.services.apartment.apartment_llm_extractor.get_prompt_with_object",
                 return_value=(EXTRACTION_SYSTEM_PROMPT, None),  # prompt_obj is None
             ),
             patch(
-                "telegram_bot.services.apartment_llm_extractor.get_client",
+                "telegram_bot.services.apartment.apartment_llm_extractor.get_client",
             ) as mock_get_client,
         ):
             mock_lf = mock_get_client.return_value
@@ -267,11 +271,11 @@ class TestApartmentExtractorPromptLinking:
 
         with (
             patch(
-                "telegram_bot.services.apartment_llm_extractor.get_prompt_with_object",
+                "telegram_bot.services.apartment.apartment_llm_extractor.get_prompt_with_object",
                 return_value=(sentinel_prompt_text, object()),
             ),
             patch(
-                "telegram_bot.services.apartment_llm_extractor.get_client",
+                "telegram_bot.services.apartment.apartment_llm_extractor.get_client",
             ),
         ):
             await mock_extractor.extract("двушка у моря")
@@ -295,11 +299,11 @@ class TestApartmentExtractorPromptLinking:
 
         with (
             patch(
-                "telegram_bot.services.apartment_llm_extractor.get_prompt_with_object",
+                "telegram_bot.services.apartment.apartment_llm_extractor.get_prompt_with_object",
                 return_value=("compiled", object()),
             ),
             patch(
-                "telegram_bot.services.apartment_llm_extractor.get_client",
+                "telegram_bot.services.apartment.apartment_llm_extractor.get_client",
             ) as mock_get_client,
         ):
             mock_lf = mock_get_client.return_value

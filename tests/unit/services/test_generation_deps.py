@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from telegram_bot.services.generate_response import GenerationDeps
+from telegram_bot.services.generation.generate_response import GenerationDeps
 
 
 def test_generation_deps_is_importable() -> None:

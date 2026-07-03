@@ -34,8 +34,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # helper (``create_callback_handler``) local because it depends on
 # ``langfuse.langchain`` which is not part of the shared runtime.
 PHASE1_MODULES: tuple[tuple[str, str, int], ...] = (
-    # observability was converted to a package in ARCH-13; pin the __init__.py
-    ("telegram_bot/observability.py", "src/observability/__init__.py", 100),
+    # observability was converted to a package in ARCH-13; pin the __init__.py.
+    # The package __init__ is the shim — same re-export surface as the old flat module.
+    ("telegram_bot/observability/__init__.py", "src/observability/__init__.py", 100),
 )
 
 

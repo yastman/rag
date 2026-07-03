@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.funnel_analytics_service import FunnelAnalyticsService
+from telegram_bot.services.observability.funnel_analytics_service import FunnelAnalyticsService
 
 
 def _make_row(**kwargs):

@@ -67,3 +67,11 @@ bge_retry = make_retry_decorator(
     jitter=1,
     max_attempts=3,
 )
+
+kommo_retry = make_retry_decorator(
+    retry_on_http_status=True,
+    initial=1.0,
+    max_=8,
+    jitter=2,
+    max_attempts=3,
+)

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
+from telegram_bot.services.crm.lead_score_sync import sync_pending_lead_scores
 
 
 @pytest.mark.asyncio

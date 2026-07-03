@@ -57,6 +57,11 @@ EXEMPTED_HANDLERS: dict[str, frozenset[str]] = {
     # progress. Qualification UI itself runs in `dialogs/handoff.py`
     # (`HandoffSG`).
     "handoff.py": frozenset({"HandoffSG"}),
+    # command_handlers uses state.update_data(bookmarks_context=False) as a
+    # single context-flag reset when navigating away from the bookmarks view —
+    # not a state-machine driver. The flag is consumed by _bot_favorites and
+    # clears leftover context across menu transitions (#1232 design exception).
+    "command_handlers.py": frozenset({"#1232"}),
 }
 
 
@@ -186,7 +191,7 @@ def test_exemption_list_is_minimal() -> None:
     same-PR update to this number, which forces a reviewer to consider
     whether the exception is really justified.
     """
-    expected_count = 2
+    expected_count = 3
     actual_count = len(EXEMPTED_HANDLERS)
     assert actual_count == expected_count, (
         f"EXEMPTED_HANDLERS has {actual_count} entries but the contract "

@@ -199,7 +199,7 @@ def test_rooms_studio_returns_list():
 
 def test_rooms_list_creates_match_any():
     """rooms=[0,1] -> MatchAny(any=[0,1]) in Qdrant filter."""
-    from telegram_bot.services.apartments_service import _build_apartment_filter
+    from telegram_bot.services.apartment.apartments_service import _build_apartment_filter
 
     qdrant_filter = _build_apartment_filter({"rooms": [0, 1]})
     assert qdrant_filter is not None

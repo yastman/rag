@@ -79,7 +79,7 @@ async def test_task_complete_no_kommo_answers_alert():
 @pytest.mark.asyncio
 async def test_task_postpone_calls_kommo_update_task():
     from telegram_bot.handlers.crm_callbacks import on_task_postpone
-    from telegram_bot.services.kommo_models import TaskUpdate
+    from telegram_bot.services.crm.kommo_models import TaskUpdate
 
     kommo = AsyncMock()
     callback = AsyncMock()
@@ -229,7 +229,7 @@ async def test_task_edit_no_kommo_answers_alert_no_dialog():
 
 def test_format_task_card_active_task_has_postpone_button():
     from telegram_bot.dialogs.crm_cards import format_task_card
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     task = Task(id=3, text="Call client", is_completed=False)
     _, keyboard = format_task_card(task)
@@ -243,7 +243,7 @@ def test_format_task_card_active_task_has_postpone_button():
 
 def test_format_task_card_completed_task_no_postpone_button():
     from telegram_bot.dialogs.crm_cards import format_task_card
-    from telegram_bot.services.kommo_models import Task
+    from telegram_bot.services.crm.kommo_models import Task
 
     task = Task(id=4, text="Done task", is_completed=True)
     _, keyboard = format_task_card(task)

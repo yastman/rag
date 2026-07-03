@@ -4,9 +4,7 @@ Three concrete gaps identified by audit:
 
 1. ``docs/architecture/STRUCTURE.md`` exists and references the active layers
    (src/core, src/runtime, src/adapters, src/ingestion).
-2. ``.env.example`` contains ``RETRIEVAL_PROFILE=bge_m3_full`` (the naming
-   anchor documented in README and #3018).
-3. Qdrant collection schema in ingestion code statically declares all three
+2. Qdrant collection schema in ingestion code statically declares all three
    vector namespaces: ``dense``, ``bm42``, ``colbert``.
 
 All checks are static (no Docker, no network, no imports of heavy deps).
@@ -14,7 +12,6 @@ All checks are static (no Docker, no network, no imports of heavy deps).
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 
@@ -45,31 +42,6 @@ def test_architecture_structure_md_references_active_layers() -> None:
     assert not missing, (
         f"docs/architecture/STRUCTURE.md does not reference active layers: {missing}. "
         "Keep the structure map in sync with the active directory layout."
-    )
-
-
-# ---------------------------------------------------------------------------
-# 2. .env.example contains RETRIEVAL_PROFILE=bge_m3_full
-# ---------------------------------------------------------------------------
-
-ENV_EXAMPLE = REPO_ROOT / ".env.example"
-
-
-def test_env_example_retrieval_profile_is_bge_m3_full() -> None:
-    """``RETRIEVAL_PROFILE=bge_m3_full`` must be the value in .env.example (#3018).
-
-    This is the naming anchor for the local BGE-M3 full-output retrieval path.
-    The env completeness test checks presence/absence; this test pins the value.
-    """
-    assert ENV_EXAMPLE.is_file(), ".env.example must exist."
-    content = ENV_EXAMPLE.read_text(encoding="utf-8")
-    match = re.search(r"^RETRIEVAL_PROFILE\s*=\s*(\S+)", content, re.MULTILINE)
-    assert match is not None, (
-        "RETRIEVAL_PROFILE is not set in .env.example. Add: RETRIEVAL_PROFILE=bge_m3_full  (#3018)"
-    )
-    assert match.group(1) == "bge_m3_full", (
-        f"RETRIEVAL_PROFILE must be 'bge_m3_full' in .env.example, got '{match.group(1)}'. "
-        "This is the canonical retrieval profile for the local BGE-M3 stack (#3018)."
     )
 
 

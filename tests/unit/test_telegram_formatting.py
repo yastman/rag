@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from telegram_bot.services.telegram_formatting import send_html_messages
+from telegram_bot.services.generation.telegram_formatting import send_html_messages
 
 
 class TestSendHtmlMessages:

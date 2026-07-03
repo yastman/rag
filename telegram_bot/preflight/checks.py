@@ -1,0 +1,499 @@
+"""Bot dependency preflight checks with CRITICAL/OPTIONAL classification."""
+
+import logging
+import os
+from enum import StrEnum
+from typing import Any
+from urllib.parse import urlparse
+
+import asyncpg
+import httpx
+from qdrant_client import AsyncQdrantClient
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
+from telegram_bot.preflight.remediation import (
+    COLBERT_COVERAGE_WARN_THRESHOLD,  # noqa: F401 — re-exported for tests
+    _check_redis_deep,
+    _exception_message_with_type,
+    _is_redis_auth_failure,
+    _postgres_local_remediation,
+    _qdrant_validate_collection,
+    _verify_cache_synthetic,
+)
+
+from ..config import BotConfig
+from ..startup_status import DependencyCheckResult, StartupReport, StartupSeverity, StartupSignal
+
+
+logger = logging.getLogger(__name__)
+
+# Retry settings for critical deps
+CRITICAL_RETRIES = 3
+CRITICAL_RETRY_DELAY = 5.0  # seconds
+_DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
+
+_REDIS_AUTH_FAILURE_HINT = (
+    "Redis auth failed: .env REDIS_PASSWORD may not match the running Redis container password. "
+    "Run `make local-redis-recreate` and then `make test-bot-health`."
+)
+
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_CANONICAL_BGE_M3_PORT = 8000
+
+
+class DepLevel(StrEnum):
+    CRITICAL = "CRITICAL"
+    OPTIONAL = "OPTIONAL"
+
+
+# Dependency classification:
+#   CRITICAL — bot cannot function, fail startup after retries
+#   OPTIONAL — bot can degrade gracefully, warn and continue
+DEP_CLASSIFICATION: dict[str, DepLevel] = {
+    "redis": DepLevel.CRITICAL,
+    "redis_cache": DepLevel.CRITICAL,
+    "qdrant": DepLevel.CRITICAL,
+    "bge_m3": DepLevel.CRITICAL,
+    "postgres": DepLevel.OPTIONAL,
+}
+
+_DEP_REMEDIATION: dict[str, str] = {
+    "redis": "start Redis and verify REDIS_PASSWORD / redis_url",
+    "redis_cache": "restore Redis cache write/read path",
+    "qdrant": "Run `make local-up` to start Qdrant, then verify collection configuration",
+    "bge_m3": "start the repo-local BGE-M3 service and verify /health and /encode/dense",
+    "postgres": "start PostgreSQL or accept degraded user-feature mode",
+}
+
+
+def _collect_qdrant_failure(failures: dict[str, str] | None, dep_name: str, reason: str) -> None:
+    if failures is None:
+        return
+    failures[dep_name] = reason
+
+
+def _read_colbert_coverage_warn_threshold() -> float:
+    """Read configurable ColBERT coverage warning threshold safely."""
+    raw = os.getenv(
+        "COLBERT_COVERAGE_WARN_THRESHOLD",
+        str(_DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD),
+    )
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid COLBERT_COVERAGE_WARN_THRESHOLD=%r, fallback to %.3f",
+            raw,
+            _DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD,
+        )
+        return _DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD
+
+
+class PreflightError(SystemExit):
+    """Raised when a CRITICAL dependency is unreachable after retries."""
+
+    def __init__(self, failed_deps: list[str], report: StartupReport | None = None):
+        self.failed_deps = failed_deps
+        self.report = report or StartupReport()
+        msg = (
+            f"CRITICAL preflight failure — cannot start bot. "
+            f"Unreachable after {CRITICAL_RETRIES} attempts: {', '.join(failed_deps)}"
+        )
+        super().__init__(msg)
+
+
+def _build_dependency_report(
+    results: dict[str, bool], failures: dict[str, str] | None = None
+) -> StartupReport:
+    report = StartupReport()
+    for dep_name, passed in results.items():
+        if passed:
+            continue
+        level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+        severity = (
+            StartupSeverity.FAILED if level == DepLevel.CRITICAL else StartupSeverity.DEGRADED
+        )
+        detail = ""
+        if failures:
+            detail = failures.get(dep_name, "").strip()
+        summary = f"{level.value} dependency unavailable"
+        if detail:
+            summary = f"{summary}: {detail}"
+        report.add(
+            StartupSignal(
+                source=dep_name,
+                severity=severity,
+                summary=summary,
+                remediation=_DEP_REMEDIATION.get(dep_name),
+            )
+        )
+    return report
+
+
+def _validate_bge_m3_url(url: str) -> tuple[bool, str]:
+    """Validate a BGE-M3 URL before making network calls.
+
+    Guardrail against Docker/compose drift (#2182, #2188, #2185):
+    - Local/native URLs (localhost, 127.0.0.1, ::1) must use port 8000.
+    - Container-internal ``http://bge-m3:8000`` is allowed.
+    - Non-local hosts are not port-enforced.
+    - Malformed or empty URLs are rejected.
+
+    Returns:
+        Tuple of (valid, error_message). When valid, error_message is ''.
+    """
+    if not url or not url.strip():
+        return False, "BGE_M3_URL is empty"
+
+    try:
+        parsed = httpx.URL(url)
+    except httpx.InvalidURL:
+        return False, f"BGE_M3_URL is not a valid URL: {url!r}"
+
+    if not parsed.scheme or not parsed.host:
+        return False, f"BGE_M3_URL is not a valid URL: {url!r}"
+
+    host = parsed.host
+    port = parsed.port
+
+    # Non-local, non-compose hosts are not port-enforced
+    if host != "bge-m3" and host not in _LOCAL_HOSTS:
+        return True, ""
+
+    # Local URLs must use canonical port 8000
+    if port == _CANONICAL_BGE_M3_PORT:
+        return True, ""
+
+    if port is None:
+        return (
+            False,
+            f"BGE_M3_URL {url!r} uses canonical host {host!r} without port 8000. "
+            "Set BGE_M3_URL=http://localhost:8000 for native runs or "
+            "http://bge-m3:8000 for Compose services.",
+        )
+
+    return (
+        False,
+        f"BGE_M3_URL {url!r} uses non-canonical port {port}. "
+        "Only port 8000 is canonical for BGE-M3. "
+        "Set BGE_M3_URL=http://localhost:8000 for native runs or "
+        "http://bge-m3:8000 for Compose services.",
+    )
+
+
+async def _check_dep_redis(config: BotConfig) -> bool:
+    """Redis connectivity + deep health check."""
+    passed, details = await _check_redis_deep(config.redis_url)
+    if not passed:
+        if _is_redis_auth_failure(details.get("error", "")):
+            logger.error("Preflight FAIL: %s", _REDIS_AUTH_FAILURE_HINT)
+        logger.error("Preflight FAIL: Redis deep check — %s", details)
+    return passed
+
+
+async def _check_dep_redis_cache(config: BotConfig) -> bool:
+    """Synthetic write/read/TTL/delete check for each cache key prefix."""
+    cache_ok, cache_errors = await _verify_cache_synthetic(config.redis_url)
+    if not cache_ok:
+        logger.error("Preflight FAIL: Redis cache verify — %s", cache_errors)
+    return cache_ok
+
+
+async def _check_dep_qdrant(
+    config: BotConfig, failure_reasons: dict[str, str] | None = None
+) -> bool:
+    """Qdrant connectivity check with gRPC-primary, REST-fallback transport."""
+    getter = getattr(config, "get_collection_name", None)
+    collection = getter() if callable(getter) else config.qdrant_collection
+    scheme = urlparse(config.qdrant_url).scheme.lower()
+    effective_key = config.qdrant_api_key if scheme == "https" else None
+
+    primary_client: AsyncQdrantClient | None = None
+    primary_exception_detail: str | None = None
+    try:
+        primary_client = AsyncQdrantClient(
+            url=config.qdrant_url,
+            api_key=effective_key,
+            timeout=config.qdrant_timeout,
+            prefer_grpc=True,
+        )
+        primary_passed, primary_reason = await _qdrant_validate_collection(
+            primary_client, collection
+        )
+        if primary_passed:
+            return True
+        _collect_qdrant_failure(
+            failure_reasons, "qdrant", primary_reason or "qdrant preflight failed"
+        )
+        logger.error("Preflight FAIL: Qdrant — %s", primary_reason)
+        return False
+    except Exception as exc:
+        primary_exception_detail = _exception_message_with_type(exc)
+        logger.warning(
+            "Preflight WARN: Qdrant primary gRPC preflight failed: %s",
+            primary_exception_detail,
+        )
+        logger.warning("Preflight WARN: Qdrant attempting SDK REST fallback transport")
+    finally:
+        if primary_client is not None:
+            await primary_client.close()
+
+    if primary_exception_detail is None:
+        return False
+
+    fallback_client: AsyncQdrantClient | None = None
+    try:
+        fallback_client = AsyncQdrantClient(
+            url=config.qdrant_url,
+            api_key=effective_key,
+            timeout=config.qdrant_timeout,
+            prefer_grpc=False,
+        )
+        fallback_passed, fallback_reason = await _qdrant_validate_collection(
+            fallback_client, collection
+        )
+        if fallback_passed:
+            logger.warning(
+                "Preflight WARN: Qdrant primary gRPC preflight failed: %s; "
+                "SDK REST fallback transport succeeded",
+                primary_exception_detail,
+            )
+            return True
+        reason = f"REST fallback transport check failed: {fallback_reason}"
+        _collect_qdrant_failure(failure_reasons, "qdrant", reason)
+        logger.error("Preflight FAIL: Qdrant — %s", reason)
+        return False
+    except Exception as exc:
+        fallback_exception_detail = _exception_message_with_type(exc)
+        reason = (
+            f"primary gRPC failed: {primary_exception_detail}; "
+            f"REST fallback failed: {fallback_exception_detail}"
+        )
+        _collect_qdrant_failure(failure_reasons, "qdrant", reason)
+        logger.error("Preflight FAIL: Qdrant — %s", reason)
+        return False
+    finally:
+        if fallback_client is not None:
+            await fallback_client.close()
+
+
+async def _check_dep_bge_m3(config: BotConfig, client: httpx.AsyncClient) -> bool:
+    """BGE-M3 health + warmup encode check."""
+    url_valid, url_error = _validate_bge_m3_url(config.bge_m3_url)
+    if not url_valid:
+        logger.error("Preflight FAIL: BGE-M3 URL guardrail — %s", url_error)
+        return False
+
+    resp = await client.get(f"{config.bge_m3_url}/health")
+    if resp.status_code != 200:
+        logger.error("Preflight FAIL: BGE-M3 repo-local health contract — %s", resp.status_code)
+        return False
+
+    warmup_resp = await client.post(
+        f"{config.bge_m3_url}/encode/dense",
+        json={"texts": ["preflight warmup"], "max_length": 64, "batch_size": 1},
+        timeout=120.0,
+    )
+    if warmup_resp.status_code == 200:
+        data = warmup_resp.json()
+        logger.info(
+            "Preflight BGE-M3 repo-local warmup OK (%.3fs)",
+            data.get("processing_time", 0),
+        )
+    else:
+        logger.warning(
+            "Preflight BGE-M3 repo-local warmup failed: %s",
+            warmup_resp.status_code,
+        )
+    return True
+
+
+async def _check_dep_postgres(config: BotConfig) -> bool:
+    """Postgres connectivity check (optional dep)."""
+    try:
+        conn = await asyncpg.connect(config.realestate_database_url, timeout=5)
+        try:
+            await conn.fetchval("SELECT 1")
+            logger.info("Preflight Postgres: database reachable")
+            return True
+        finally:
+            await conn.close()
+    except asyncpg.InvalidCatalogNameError:
+        logger.warning(
+            "Preflight WARN: Postgres database does not exist yet; startup may auto-create "
+            "it before enabling user features"
+        )
+        return True
+    except Exception as exc:
+        remediation = _postgres_local_remediation(config.realestate_database_url)
+        if remediation:
+            logger.warning("Preflight WARN: %s — %s", remediation, exc)
+        else:
+            logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
+        return False
+
+
+async def _check_single_dep(
+    name: str,
+    config: BotConfig,
+    client: httpx.AsyncClient,
+    failure_reasons: dict[str, str] | None = None,
+) -> bool:
+    """Dispatch a single dependency check by name. Returns True if healthy."""
+    if name == "redis":
+        return await _check_dep_redis(config)
+    if name == "redis_cache":
+        return await _check_dep_redis_cache(config)
+    if name == "qdrant":
+        return await _check_dep_qdrant(config, failure_reasons)
+    if name == "bge_m3":
+        return await _check_dep_bge_m3(config, client)
+    if name == "postgres":
+        return await _check_dep_postgres(config)
+    logger.warning("Preflight: unknown dependency %r", name)
+    return False
+
+
+async def _check_critical_with_retry(
+    dep_name: str,
+    config: BotConfig,
+    client: httpx.AsyncClient,
+    failure_reasons: dict[str, str] | None = None,
+) -> bool:
+    """Check a critical dependency with tenacity retry."""
+
+    @retry(
+        stop=stop_after_attempt(CRITICAL_RETRIES),
+        wait=wait_fixed(CRITICAL_RETRY_DELAY),
+        reraise=True,
+    )
+    async def _attempt() -> bool:
+        result = await _check_single_dep(
+            dep_name,
+            config,
+            client,
+            failure_reasons=failure_reasons,
+        )
+        if not result:
+            msg = f"{dep_name} check returned False"
+            raise RuntimeError(msg)
+        return result
+
+    try:
+        return await _attempt()
+    except Exception as e:
+        logger.error(
+            "Preflight FAIL: %s [CRITICAL] after %d attempts — %s",
+            dep_name,
+            CRITICAL_RETRIES,
+            e,
+        )
+        return False
+
+
+async def check_dependencies(
+    config: BotConfig,
+    *,
+    log_summary: bool = True,
+) -> DependencyCheckResult:
+    """Check all bot dependencies with retry logic for CRITICAL ones.
+
+    CRITICAL deps (redis, qdrant, bge_m3) are retried up to CRITICAL_RETRIES
+    times with CRITICAL_RETRY_DELAY between attempts.
+
+    OPTIONAL deps are checked once — failures are logged
+    as warnings but do not block startup.
+
+    Returns:
+        Status dict mapping dep name to pass/fail.
+
+    Raises:
+        PreflightError: If any CRITICAL dep fails after all retries.
+    """
+    results: dict[str, bool] = {}
+    timeout = httpx.Timeout(10.0)
+
+    # Order matters: redis_cache depends on redis
+    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres"]
+
+    failure_reasons: dict[str, str] = {}
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for dep_name in dep_order:
+            level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+
+            # redis_cache depends on redis — skip if redis failed
+            if dep_name == "redis_cache" and not results.get("redis"):
+                results["redis_cache"] = False
+                logger.warning("Preflight SKIP: Redis cache verify (Redis unreachable)")
+                continue
+
+            if level == DepLevel.CRITICAL:
+                results[dep_name] = await _check_critical_with_retry(
+                    dep_name,
+                    config,
+                    client,
+                    failure_reasons=failure_reasons,
+                )
+            else:
+                # Single attempt for optional deps
+                try:
+                    results[dep_name] = await _check_single_dep(
+                        dep_name,
+                        config,
+                        client,
+                        failure_reasons=failure_reasons,
+                    )
+                except Exception as e:
+                    logger.warning("Preflight WARN: %s [OPTIONAL] — %s", dep_name, e)
+                    results[dep_name] = False
+
+    # Log per-dependency status
+    for dep_name, passed in results.items():
+        level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+        status = "OK" if passed else "FAIL"
+        logger.info("Preflight %s: %s [%s]", status, dep_name, level.value)
+
+    report = _build_dependency_report(results, failures=failure_reasons)
+    if log_summary:
+        if report.final_severity is StartupSeverity.FAILED:
+            logger.error(report.render())
+        elif report.final_severity is StartupSeverity.DEGRADED:
+            logger.warning(report.render())
+        else:
+            logger.info(report.render())
+
+    # Enforce critical deps
+    critical_failures = [
+        name
+        for name, passed in results.items()
+        if not passed and DEP_CLASSIFICATION.get(name) == DepLevel.CRITICAL
+    ]
+    if critical_failures:
+        raise PreflightError(critical_failures, report=report)
+
+    return DependencyCheckResult(results, report=report)
+
+
+# ---------------------------------------------------------------------------
+# Polling lock pre-start guard (issue #2189)
+# ---------------------------------------------------------------------------
+
+
+async def check_polling_lock(
+    redis: Any,
+    key: str = POLLING_LOCK_KEY,
+) -> dict[str, Any] | None:
+    """Check if a Redis polling lock is held without acquiring or deleting it.
+
+    Returns None when no lock exists, or a diagnostics dict with key, owner,
+    and pttl_ms when the lock is active.
+    """
+    owner = await redis.get(key)
+    if owner is None:
+        return None
+    if isinstance(owner, bytes):
+        owner = owner.decode("utf-8", errors="replace")
+    pttl = await redis.pttl(key)
+    return {"key": key, "owner": owner, "pttl_ms": pttl}

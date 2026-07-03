@@ -23,9 +23,12 @@ from src.runtime.services.cache_policy import (
 )
 from telegram_bot.observability import propagate_attributes
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
-from telegram_bot.services.generate_response import generate_response
-from telegram_bot.services.telegram_formatting import format_sources_html, send_html_messages
-from telegram_bot.services.types import PipelineResult
+from telegram_bot.services.generation.generate_response import generate_response
+from telegram_bot.services.generation.telegram_formatting import (
+    format_sources_html,
+    send_html_messages,
+)
+from telegram_bot.services.util.types import PipelineResult
 
 
 logger = logging.getLogger(__name__)

@@ -16,7 +16,7 @@ from src.scoring import (
     score,
     write_crm_scores,
     write_history_scores,
-    write_langfuse_scores,
+    write_pipeline_scores,
 )
 
 
@@ -25,5 +25,5 @@ __all__ = [
     "score",
     "write_crm_scores",
     "write_history_scores",
-    "write_langfuse_scores",
+    "write_pipeline_scores",
 ]

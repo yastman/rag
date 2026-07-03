@@ -1,22 +1,18 @@
-"""Contract test for issue #2058 — /metrics admin command uses Prometheus.
+"""Contract test for issue #2058 — /metrics admin command uses structured logging.
 
-Slice 1/2 of #2058 rewrites the bot's ``/metrics`` admin command in
-``telegram_bot/handlers/command_handlers.py::cmd_metrics`` to emit the
-SDK-native :func:`prometheus_client.generate_latest` text format. The
-deprecated rolling-window dump
-(``PipelineMetrics.get().format_text()``) is no longer the source of
-truth for that command.
+#2058 originally planned to rewrite ``cmd_metrics`` to use Prometheus
+``generate_latest``. That plan was superseded: in-process Prometheus was
+disabled and the /metrics command was updated to direct operators to
+structured JSON logs (``event=pipeline_latency``, ``event=pipeline_counter``)
+instead of emitting Prometheus text format.
 
-Class removal (the rest of #2058 acceptance) is a follow-up slice that
-must migrate ~7 remaining ``PipelineMetrics.get()`` call-sites and a
-batch of unit tests; locking the admin path here protects the user-
-facing surface independently of that work.
+This contract enforces the current architecture:
 
-This contract enforces:
-
-1. ``cmd_metrics`` calls :func:`prometheus_client.generate_latest`.
+1. ``cmd_metrics`` directs operators to structured JSON logs (not Prometheus).
 2. ``cmd_metrics`` does not invoke the deprecated
    ``PipelineMetrics.format_text()`` rolling-window dump.
+3. ``cmd_metrics`` does not call ``prometheus_client.generate_latest``
+   (in-process Prometheus is disabled).
 """
 
 from __future__ import annotations
@@ -43,11 +39,23 @@ def _cmd_metrics_body() -> str:
     return re.sub(r'""".*?"""', "", body, count=1, flags=re.DOTALL)
 
 
-def test_cmd_metrics_calls_generate_latest() -> None:
+def test_cmd_metrics_directs_to_structured_logs() -> None:
+    """cmd_metrics must respond with a message directing operators to structured logs.
+
+    In-process Prometheus was disabled; the command now points operators to
+    structured JSON log events (event=pipeline_latency, event=pipeline_counter).
+    """
     body = _cmd_metrics_body()
-    assert "generate_latest(" in body, (
-        "cmd_metrics() must call prometheus_client.generate_latest(...) "
-        "to emit the SDK-native text format (issue #2058 slice 1/2)."
+    assert "message.answer(" in body, (
+        "cmd_metrics() must call message.answer() to reply to the operator."
+    )
+    # The response must mention structured JSON logs or the log event names.
+    assert any(
+        token in body for token in ("structured", "pipeline_latency", "pipeline_counter", "JSON")
+    ), (
+        "cmd_metrics() must direct operators to structured JSON log events "
+        "(event=pipeline_latency / event=pipeline_counter). "
+        "In-process Prometheus /metrics is disabled."
     )
 
 
@@ -56,4 +64,14 @@ def test_cmd_metrics_does_not_use_deprecated_format_text() -> None:
     assert "format_text" not in body, (
         "cmd_metrics() must not call the deprecated "
         "PipelineMetrics.format_text() rolling-window dump (issue #2058)."
+    )
+
+
+def test_cmd_metrics_does_not_call_generate_latest() -> None:
+    """In-process Prometheus is disabled; generate_latest must not be called."""
+    body = _cmd_metrics_body()
+    assert "generate_latest(" not in body, (
+        "cmd_metrics() must not call prometheus_client.generate_latest() — "
+        "in-process Prometheus /metrics is disabled. "
+        "Operators are directed to structured JSON logs instead."
     )

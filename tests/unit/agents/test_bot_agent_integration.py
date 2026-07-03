@@ -92,7 +92,7 @@ def test_bot_local_lock_imports_router_structured_output_service():
         "--frozen",
         "python",
         "-c",
-        "from telegram_bot.services.apartment_llm_extractor import ApartmentLlmExtractor; print('ok')",
+        "from telegram_bot.services.apartment.apartment_llm_extractor import ApartmentLlmExtractor; print('ok')",
     ]
     env = os.environ.copy()
     env["PYTHONPATH"] = repo_root

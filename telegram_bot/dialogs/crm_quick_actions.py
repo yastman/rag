@@ -34,7 +34,7 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Cancel, Column, Select
 from aiogram_dialog.widgets.text import Const, Format
 
-from telegram_bot.services.kommo_models import TaskCreate, TaskUpdate
+from telegram_bot.services.crm.kommo_models import TaskCreate, TaskUpdate
 
 from .states import CrmQuickActionSG
 

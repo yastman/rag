@@ -73,7 +73,9 @@ def test_telegram_adapter_does_not_import_runtime_directly() -> None:
 
 def test_supervisor_run_core_calls_assistant_app() -> None:
     """Assert _supervisor_run_core uses AssistantApp.run_text, not run_assistant_request directly."""
-    pipeline_path = Path(__file__).parent.parent.parent / "telegram_bot" / "_bot_query_pipeline.py"
+    pipeline_path = (
+        Path(__file__).parent.parent.parent / "telegram_bot" / "pipeline" / "supervisor.py"
+    )
     assert pipeline_path.exists(), f"Pipeline not found at {pipeline_path}"
 
     source = pipeline_path.read_text()

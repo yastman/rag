@@ -9,7 +9,7 @@ import pytest
 
 from telegram_bot.agents.context import BotContext
 from telegram_bot.agents.manager_tools import create_crm_score_sync_tool
-from telegram_bot.services.lead_scoring_models import LeadScoreRecord
+from telegram_bot.services.crm.lead_scoring_models import LeadScoreRecord
 
 
 logger = logging.getLogger(__name__)

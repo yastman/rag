@@ -5,7 +5,10 @@ TDD RED phase: these tests must fail before implementation.
 
 from __future__ import annotations
 
-from telegram_bot.services.apartment_formatter import format_apartment_html, format_apartment_text
+from telegram_bot.services.apartment.apartment_formatter import (
+    format_apartment_html,
+    format_apartment_text,
+)
 
 
 class TestFormatApartmentText:

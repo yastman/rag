@@ -19,7 +19,7 @@ from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select, Sta
 from aiogram_dialog.widgets.text import Const, Format
 
 from telegram_bot.observability import observe
-from telegram_bot.services.kommo_models import Task
+from telegram_bot.services.crm.kommo_models import Task
 
 from .states import CreateTaskSG, CrmQuickActionSG, MyTasksSG, TasksMenuSG
 
@@ -396,7 +396,7 @@ async def on_task_confirm(
     manager: DialogManager,
 ) -> None:
     """Create task via Kommo API and close dialog."""
-    from telegram_bot.services.kommo_models import TaskCreate
+    from telegram_bot.services.crm.kommo_models import TaskCreate
 
     kommo = manager.middleware_data.get("kommo_client")
     data = manager.dialog_data

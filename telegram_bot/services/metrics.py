@@ -9,8 +9,6 @@ to work unchanged.
 
 from src.runtime.services.metrics import (
     PipelineMetrics,
-    pipeline_latency_seconds,
-    rag_pipeline_events_total,
     record_counter_metric,
     record_pipeline_event,
     record_pipeline_latency,
@@ -19,8 +17,6 @@ from src.runtime.services.metrics import (
 
 __all__ = [
     "PipelineMetrics",
-    "pipeline_latency_seconds",
-    "rag_pipeline_events_total",
     "record_counter_metric",
     "record_pipeline_event",
     "record_pipeline_latency",

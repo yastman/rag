@@ -81,6 +81,124 @@ def _apply_stream_safe_fallback(
     return answer
 
 
+def _update_chunk_usage(
+    chunk: Any,
+    usage_details: dict[str, int] | None,
+    completion_tokens: float | None,
+) -> tuple[dict[str, int] | None, float | None]:
+    """Update usage_details and completion_tokens from a streaming chunk's usage field.
+
+    Returns updated (usage_details, completion_tokens).
+    """
+    if not (hasattr(chunk, "usage") and chunk.usage is not None):
+        return usage_details, completion_tokens
+    chunk_usage = _extract_usage_details(chunk.usage)
+    if chunk_usage:
+        usage_details = {**(usage_details or {}), **chunk_usage}
+    maybe_tokens = _coerce_positive_number(getattr(chunk.usage, "completion_tokens", None))
+    if maybe_tokens is not None:
+        completion_tokens = maybe_tokens
+    return usage_details, completion_tokens
+
+
+def _extract_chunk_text(chunk: Any) -> str | None:
+    """Extract text content from a streaming chunk's delta, or None if absent."""
+    if not getattr(chunk, "choices", None):
+        return None
+    delta = chunk.choices[0].delta
+    text = delta.content if delta else None
+    if not text:
+        text = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+    return text or None
+
+
+def _compute_stream_timing(
+    *,
+    ttft_ms: float,
+    stream_only_ttft_ms: float | None,
+    elapsed_ms: float,
+    completion_tokens: float | None,
+) -> tuple[float | None, float | None, float | None]:
+    """Derive decode_ms, tps, and ttft_drift_ms from raw timing values.
+
+    Returns (llm_decode_ms, llm_tps, llm_ttft_drift_ms).
+    """
+    llm_decode_ms: float | None = None
+    if ttft_ms > 0:
+        llm_decode_ms = max(0.0, elapsed_ms - ttft_ms)
+
+    llm_tps: float | None = None
+    if completion_tokens is not None and llm_decode_ms is not None and llm_decode_ms > 0:
+        llm_tps = completion_tokens / (llm_decode_ms / 1000)
+
+    llm_ttft_drift_ms: float | None = None
+    if stream_only_ttft_ms is not None and ttft_ms > 0:
+        llm_ttft_drift_ms = max(0.0, ttft_ms - stream_only_ttft_ms)
+
+    return llm_decode_ms, llm_tps, llm_ttft_drift_ms
+
+
+def _write_stream_metadata(
+    *,
+    request: GenerationRequest,
+    metadata_out: dict[str, Any],
+    accumulated: str,
+    style_info: Any,
+    actual_model: str,
+    ttft_ms: float,
+    stream_only_ttft_ms: float | None,
+    elapsed: float,
+    llm_decode_ms: float | None,
+    llm_tps: float | None,
+    llm_ttft_drift_ms: float | None,
+    response_policy_mode: str,
+    legal_answer_safe: bool,
+    needs_coverage: bool,
+) -> None:
+    """Write final streaming metadata into metadata_out dict."""
+    answer_words = len(accumulated.split())
+    answer_chars = len(accumulated)
+    ratio = answer_words / max(style_info.word_count, 1)
+    current_latency = request.latency_stages or {}
+    current_llm_calls = max(0, int(request.llm_call_count))
+
+    metadata_out.update(
+        _ensure_generation_signal_defaults(
+            {
+                "response": accumulated,
+                "response_sent": False,
+                "sent_message": None,
+                "llm_provider_model": actual_model,
+                "llm_ttft_ms": ttft_ms,
+                "llm_response_duration_ms": elapsed * 1000,
+                "llm_stream_only_ttft_ms": stream_only_ttft_ms,
+                "llm_ttft_drift_ms": llm_ttft_drift_ms,
+                "llm_call_count": current_llm_calls + 1,
+                "latency_stages": {**current_latency, "generate": elapsed},
+                "llm_decode_ms": llm_decode_ms,
+                "llm_tps": llm_tps,
+                "llm_queue_ms": None,
+                "llm_timeout": False,
+                "llm_stream_recovery": False,
+                "streaming_enabled": True,
+                "response_style": style_info.style,
+                "response_difficulty": style_info.difficulty,
+                "response_style_reasoning": style_info.reasoning,
+                "answer_words": answer_words,
+                "answer_chars": answer_chars,
+                "answer_to_question_ratio": ratio,
+                "response_policy_mode": response_policy_mode,
+                "grounding_mode": request.grounding_mode,
+                "safe_fallback_used": False,
+                "grounded": True,
+                "legal_answer_safe": legal_answer_safe,
+                "semantic_cache_safe_reuse": legal_answer_safe,
+                "needs_coverage": needs_coverage,
+            }
+        )
+    )
+
+
 async def generate_answer_stream(
     request: GenerationRequest,
     metadata_out: dict[str, Any],
@@ -173,26 +291,10 @@ async def generate_answer_stream(
         t_stream_start = time.monotonic()
 
         async for chunk in stream:
-            if hasattr(chunk, "usage") and chunk.usage is not None:
-                chunk_usage = _extract_usage_details(chunk.usage)
-                if chunk_usage:
-                    usage_details = {**(usage_details or {}), **chunk_usage}
-                maybe_tokens = _coerce_positive_number(
-                    getattr(chunk.usage, "completion_tokens", None)
-                )
-                if maybe_tokens is not None:
-                    completion_tokens = maybe_tokens
-
-            if not getattr(chunk, "choices", None):
-                continue
-
-            delta = chunk.choices[0].delta
-            text = delta.content if delta else None
-            if not text:
-                text = getattr(delta, "reasoning_content", None) or getattr(
-                    delta, "reasoning", None
-                )
-
+            usage_details, completion_tokens = _update_chunk_usage(
+                chunk, usage_details, completion_tokens
+            )
+            text = _extract_chunk_text(chunk)
             if text:
                 if ttft_ms == 0.0:
                     first_token_at = time.monotonic()
@@ -218,60 +320,26 @@ async def generate_answer_stream(
     with contextlib.suppress(Exception):
         dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
 
-    llm_decode_ms = (elapsed * 1000) - ttft_ms if ttft_ms > 0 else None
-    if llm_decode_ms is not None and llm_decode_ms < 0:
-        llm_decode_ms = 0.0
-
-    llm_tps: float | None = None
-    if completion_tokens is not None and llm_decode_ms is not None and llm_decode_ms > 0:
-        llm_tps = completion_tokens / (llm_decode_ms / 1000)
-
-    llm_ttft_drift_ms = (
-        max(0.0, ttft_ms - stream_only_ttft_ms)
-        if (stream_only_ttft_ms is not None and ttft_ms > 0)
-        else None
+    llm_decode_ms, llm_tps, llm_ttft_drift_ms = _compute_stream_timing(
+        ttft_ms=ttft_ms,
+        stream_only_ttft_ms=stream_only_ttft_ms,
+        elapsed_ms=elapsed * 1000,
+        completion_tokens=completion_tokens,
     )
 
-    answer_words = len(accumulated.split())
-    answer_chars = len(accumulated)
-    question_words = style_info.word_count
-    ratio = answer_words / max(question_words, 1)
-
-    current_latency = request.latency_stages or {}
-    current_llm_calls = max(0, int(request.llm_call_count))
-
-    metadata_out.update(
-        _ensure_generation_signal_defaults(
-            {
-                "response": accumulated,
-                "response_sent": False,
-                "sent_message": None,
-                "llm_provider_model": actual_model,
-                "llm_ttft_ms": ttft_ms,
-                "llm_response_duration_ms": elapsed * 1000,
-                "llm_stream_only_ttft_ms": stream_only_ttft_ms,
-                "llm_ttft_drift_ms": llm_ttft_drift_ms,
-                "llm_call_count": current_llm_calls + 1,
-                "latency_stages": {**current_latency, "generate": elapsed},
-                "llm_decode_ms": llm_decode_ms,
-                "llm_tps": llm_tps,
-                "llm_queue_ms": None,
-                "llm_timeout": False,
-                "llm_stream_recovery": False,
-                "streaming_enabled": True,
-                "response_style": style_info.style,
-                "response_difficulty": style_info.difficulty,
-                "response_style_reasoning": style_info.reasoning,
-                "answer_words": answer_words,
-                "answer_chars": answer_chars,
-                "answer_to_question_ratio": ratio,
-                "response_policy_mode": response_policy_mode,
-                "grounding_mode": request.grounding_mode,
-                "safe_fallback_used": False,
-                "grounded": True,
-                "legal_answer_safe": legal_answer_safe,
-                "semantic_cache_safe_reuse": legal_answer_safe,
-                "needs_coverage": needs_coverage,
-            }
-        )
+    _write_stream_metadata(
+        request=request,
+        metadata_out=metadata_out,
+        accumulated=accumulated,
+        style_info=style_info,
+        actual_model=actual_model,
+        ttft_ms=ttft_ms,
+        stream_only_ttft_ms=stream_only_ttft_ms,
+        elapsed=elapsed,
+        llm_decode_ms=llm_decode_ms,
+        llm_tps=llm_tps,
+        llm_ttft_drift_ms=llm_ttft_drift_ms,
+        response_policy_mode=response_policy_mode,
+        legal_answer_safe=legal_answer_safe,
+        needs_coverage=needs_coverage,
     )

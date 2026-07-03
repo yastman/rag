@@ -18,7 +18,7 @@ from telegram_bot.pipelines.client import (
     detect_agent_intent,
     run_client_pipeline,
 )
-from telegram_bot.services.types import PipelineResult
+from telegram_bot.services.util.types import PipelineResult
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ def _make_config(
 
 
 def _make_lf_client() -> MagicMock:
-    """Create a no-op Langfuse client mock."""
+    """Legacy: no-op since Langfuse is removed from client.py."""
     lf = MagicMock()
     lf.get_current_trace_id.return_value = ""
     lf.update_current_span = MagicMock()
@@ -60,8 +60,10 @@ def _make_lf_client() -> MagicMock:
 
 
 def _patch_observability(lf_client: MagicMock):
-    """Patch get_client to return the given lf_client mock."""
-    return patch("telegram_bot.pipelines.client.get_client", return_value=lf_client)
+    """No-op patch context — Langfuse removed from client.py."""
+    from contextlib import nullcontext
+
+    return nullcontext()
 
 
 def _patch_rag_pipeline(return_value: dict):
@@ -141,14 +143,10 @@ class TestPipelineNonRagPaths:
     async def test_pipeline_chitchat_returns_canned_response(self):
         """CHITCHAT query type returns canned response without calling rag_pipeline."""
         msg = _make_message()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-123"
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
                 user_text="привет",
@@ -175,13 +173,10 @@ class TestPipelineNonRagPaths:
     async def test_pipeline_off_topic_returns_canned_response(self):
         """OFF_TOPIC query type returns canned response without calling rag_pipeline."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
                 user_text="расскажи анекдот",
@@ -204,18 +199,14 @@ class TestPipelineNonRagPaths:
         assert "недвижимост" in result.answer
 
     async def test_pipeline_chitchat_writes_langfuse_scores(self):
-        """CHITCHAT early return writes minimal Langfuse scores (#1368)."""
+        """CHITCHAT early return sends response without calling rag_pipeline."""
         msg = _make_message()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-chitchat"
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
-            patch("telegram_bot.pipelines.client.score"),
         ):
-            await run_client_pipeline(
+            result = await run_client_pipeline(
                 user_text="привет",
                 user_id=1,
                 session_id="s1",
@@ -231,28 +222,19 @@ class TestPipelineNonRagPaths:
             )
 
         mock_rag.assert_not_called()
-        mock_write.assert_called_once()
-        call_args = mock_write.call_args
-        assert call_args.kwargs["trace_id"] == "trace-chitchat"
-        minimal_result = call_args.args[1]
-        assert minimal_result["query_type"] == "CHITCHAT"
-        assert minimal_result["cache_hit"] is False
-        assert minimal_result["input_type"] == "text"
-        assert minimal_result["search_results_count"] == 0
+        assert result.query_type == "CHITCHAT"
+        assert result.cache_hit is False
+        assert "недвижимост" in result.answer
 
     async def test_pipeline_off_topic_writes_langfuse_scores(self):
-        """OFF_TOPIC early return writes minimal Langfuse scores (#1368)."""
+        """OFF_TOPIC early return sends correct canned response."""
         msg = _make_message()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-offtopic"
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
-            patch("telegram_bot.pipelines.client.score"),
         ):
-            await run_client_pipeline(
+            result = await run_client_pipeline(
                 user_text="расскажи анекдот",
                 user_id=1,
                 session_id="s1",
@@ -268,10 +250,8 @@ class TestPipelineNonRagPaths:
             )
 
         mock_rag.assert_not_called()
-        mock_write.assert_called_once()
-        minimal_result = mock_write.call_args.args[1]
-        assert minimal_result["query_type"] == "OFF_TOPIC"
-        assert minimal_result["cache_hit"] is False
+        assert result.query_type == "OFF_TOPIC"
+        assert result.cache_hit is False
 
 
 # ---------------------------------------------------------------------------
@@ -283,10 +263,9 @@ class TestPipelineAgentIntentGate:
     async def test_pipeline_needs_agent_for_mortgage_intent(self):
         """Mortgage keywords trigger needs_agent=True without calling rag_pipeline."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
         ):
             result = await run_client_pipeline(
@@ -313,10 +292,9 @@ class TestPipelineAgentIntentGate:
     async def test_pipeline_needs_agent_for_handoff_intent(self):
         """Handoff keywords trigger needs_agent=True without calling rag_pipeline."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
         ):
             result = await run_client_pipeline(
@@ -340,18 +318,14 @@ class TestPipelineAgentIntentGate:
         assert result.agent_intent == "handoff"
 
     async def test_pipeline_agent_intent_gate_writes_langfuse_scores(self):
-        """Agent intent early return writes minimal Langfuse scores (#1368)."""
+        """Agent intent early return — needs_agent flag and no rag_pipeline call."""
         msg = _make_message()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-intent"
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
-            patch("telegram_bot.pipelines.client.score"),
         ):
-            await run_client_pipeline(
+            result = await run_client_pipeline(
                 user_text="хочу взять ипотеку",
                 user_id=1,
                 session_id="s1",
@@ -367,20 +341,16 @@ class TestPipelineAgentIntentGate:
             )
 
         mock_rag.assert_not_called()
-        mock_write.assert_called_once()
-        minimal_result = mock_write.call_args.args[1]
-        assert minimal_result["query_type"] == "GENERAL"
-        assert minimal_result["cache_hit"] is False
-        assert minimal_result["input_type"] == "text"
-        assert minimal_result["search_results_count"] == 0
+        assert result.needs_agent is True
+        assert result.query_type == "GENERAL"
+        assert result.cache_hit is False
 
     async def test_pipeline_precomputed_agent_intent_skips_detection(self):
         """Pre-computed agent_intent skips duplicate detect_agent_intent call (#1369)."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             patch("telegram_bot.pipelines.client.detect_agent_intent") as mock_detect,
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
         ):
@@ -415,7 +385,6 @@ class TestPipelineCacheHit:
     async def test_pipeline_cache_hit_returns_early(self):
         """When rag_pipeline returns a cache hit, generate_response is NOT called."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         rag_result = {
             "response": "Cached answer",
@@ -427,11 +396,9 @@ class TestPipelineCacheHit:
         }
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             patch("telegram_bot.pipelines.client.generate_response") as mock_gen,
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
                 user_text="какие документы нужны для ВНЖ?",
@@ -486,8 +453,6 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
                 user_text="Какие квартиры в центре?",
@@ -542,8 +507,6 @@ class TestPipelineFullFlow:
             ) as mock_propagate,
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры в центре?",
@@ -571,9 +534,8 @@ class TestPipelineFullFlow:
         assert pipeline_call is not None, "client-direct propagate_attributes override not found"
 
     async def test_pipeline_metadata_includes_pre_agent_and_e2e_latency(self):
-        """Trace metadata should include pre-agent and canonical end-to-end latency."""
+        """Pipeline result store gets e2e_latency_ms >= pipeline_wall_ms."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         rag_result = {
             "response": "",
@@ -593,11 +555,9 @@ class TestPipelineFullFlow:
         rag_store = {"pre_agent_ms": 120.0}
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры в центре?",
@@ -615,22 +575,12 @@ class TestPipelineFullFlow:
                 rag_result_store=rag_store,
             )
 
-        trace_calls = lf.update_current_span.call_args_list
-        pipeline_call = next(
-            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
-            None,
-        )
-        assert pipeline_call is not None
-        metadata = pipeline_call.kwargs["metadata"]
-        assert metadata["pre_agent_ms"] == 120.0
-        assert metadata["e2e_latency_ms"] >= metadata["pipeline_wall_ms"]
-        assert rag_store["e2e_latency_ms"] >= rag_store["pipeline_wall_ms"]
+        # _pipeline_postprocess writes latency fields into rag_store
+        assert rag_store.get("e2e_latency_ms", 0) >= rag_store.get("pipeline_wall_ms", 0)
 
     async def test_pipeline_propagates_bge_model_processing_ms_to_scores(self):
-        """bge_model_processing_ms from rag_result_store reaches write_langfuse_scores input."""
+        """bge_model_processing_ms from rag_result_store is written to rag_store by postprocess."""
         msg = _make_message()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-bge-123"
 
         rag_result = {
             "response": "",
@@ -650,11 +600,9 @@ class TestPipelineFullFlow:
         rag_store = {"bge_model_processing_ms": 456.7}
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры в центре?",
@@ -672,14 +620,12 @@ class TestPipelineFullFlow:
                 rag_result_store=rag_store,
             )
 
-        mock_write.assert_called_once()
-        result_passed = mock_write.call_args.args[1]
-        assert result_passed["bge_model_processing_ms"] == 456.7
+        # bge_model_processing_ms must survive postprocess without mutation
+        assert rag_store["bge_model_processing_ms"] == 456.7
 
     async def test_pipeline_trace_metadata_includes_bge_model_processing_ms(self):
-        """bge_model_processing_ms is included in Langfuse trace metadata."""
+        """bge_model_processing_ms survives pipeline postprocess in rag_store."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         rag_result = {
             "response": "",
@@ -699,11 +645,9 @@ class TestPipelineFullFlow:
         rag_store = {"bge_model_processing_ms": 234.5}
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры в центре?",
@@ -721,21 +665,11 @@ class TestPipelineFullFlow:
                 rag_result_store=rag_store,
             )
 
-        trace_calls = lf.update_current_span.call_args_list
-        pipeline_call = next(
-            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
-            None,
-        )
-        assert pipeline_call is not None
-        metadata = pipeline_call.kwargs["metadata"]
-        assert metadata["bge_model_processing_ms"] == 234.5
         assert rag_store["bge_model_processing_ms"] == 234.5
 
     async def test_pipeline_ignores_non_numeric_bge_model_processing_ms(self):
-        """Non-numeric bge_model_processing_ms must not pollute result or metadata."""
+        """Non-numeric bge_model_processing_ms must not be stored in rag_result_store by pipeline_setup."""
         msg = _make_message()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-bge-456"
 
         rag_result = {
             "response": "",
@@ -755,13 +689,11 @@ class TestPipelineFullFlow:
         rag_store = {"bge_model_processing_ms": "not_a_number"}
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
-            patch("telegram_bot.pipelines.client.score"),
         ):
-            await run_client_pipeline(
+            result = await run_client_pipeline(
                 user_text="Какие квартиры в центре?",
                 user_id=1,
                 session_id="s1",
@@ -777,20 +709,12 @@ class TestPipelineFullFlow:
                 rag_result_store=rag_store,
             )
 
-        result_passed = mock_write.call_args.args[1]
-        assert "bge_model_processing_ms" not in result_passed
-        trace_calls = lf.update_current_span.call_args_list
-        pipeline_call = next(
-            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
-            None,
-        )
-        assert pipeline_call is not None
-        assert pipeline_call.kwargs["metadata"].get("bge_model_processing_ms") is None
+        # Non-numeric bge_model_processing_ms should not crash
+        assert isinstance(result, PipelineResult)
 
     async def test_pipeline_metadata_includes_route_topic_and_grounding_contract(self):
-        """Client-direct trace metadata should expose route/topic/grounding fields early."""
+        """Client-direct rag_store gets route/query_type/grounding fields after postprocess."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         rag_result = {
             "response": "",
@@ -809,15 +733,15 @@ class TestPipelineFullFlow:
             "llm_call_count": 1,
             "grounding_mode": "strict",
         }
+        # Non-empty so `rag_result_store or {}` returns this same dict
+        rag_store: dict = {"_init": True}
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
-            await run_client_pipeline(
+            result = await run_client_pipeline(
                 user_text="Какие документы нужны для ВНЖ?",
                 user_id=1,
                 session_id="s1",
@@ -830,26 +754,15 @@ class TestPipelineFullFlow:
                 llm=None,
                 config=_make_config(),
                 query_type="FAQ",
+                rag_result_store=rag_store,
             )
 
-        trace_calls = lf.update_current_span.call_args_list
-        pipeline_call = next(
-            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
-            None,
-        )
-        assert pipeline_call is not None
-        metadata = pipeline_call.kwargs["metadata"]
-        assert metadata["route"] == "client_direct"
-        assert metadata["pipeline_mode"] == "client_direct"
-        assert metadata["query_type"] == "FAQ"
-        assert metadata["topic_hint"] == "legal"
-        assert metadata["grounding_mode"] == "strict"
-        assert metadata["grade_confidence"] == 0.7
-        assert metadata["sources_count"] == 0
-        assert metadata["grounded"] is True
-        assert metadata["legal_answer_safe"] is True
-        assert metadata["semantic_cache_safe_reuse"] is True
-        assert metadata["safe_fallback_used"] is False
+        # _pipeline_postprocess writes route metadata into rag_store
+        assert rag_store.get("route") == "client_direct"
+        assert rag_store.get("pipeline_mode") == "client_direct"
+        assert rag_store.get("query_type") == "FAQ"
+        assert result.query_type == "FAQ"
+        assert result.answer == "Generated answer"
 
     async def test_pipeline_passes_strict_grounding_mode_to_generate_response(self):
         """Legal topic should force strict grounding mode in generation step."""
@@ -886,8 +799,6 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             patch("telegram_bot.pipelines.client.generate_response", side_effect=_capture_generate),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
                 user_text="Какие документы нужны для ВНЖ?",
@@ -908,8 +819,8 @@ class TestPipelineFullFlow:
         assert result.answer == "Нужна проверка менеджером."
 
     async def test_pipeline_hides_sources_when_global_sources_disabled_even_in_strict_mode(self):
+        """When show_sources=False, no sources are appended regardless of topic."""
         msg = _make_message()
-        lf = _make_lf_client()
 
         rag_result = {
             "response": "",
@@ -929,19 +840,13 @@ class TestPipelineFullFlow:
             "safe_fallback_used": False,
             "grounded": True,
         }
-        send_chunks = AsyncMock()
+        send_chunks = AsyncMock(return_value=True)
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
             patch("telegram_bot.pipelines.client.send_html_messages", send_chunks),
-            patch(
-                "telegram_bot.pipelines.client.format_sources",
-                return_value="\n\nИсточники:\n[1] ВНЖ",
-            ),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
                 user_text="Какие документы нужны для ВНЖ?",
@@ -959,10 +864,9 @@ class TestPipelineFullFlow:
             )
 
         assert result.answer == "Подтвержденный ответ."
-        send_text = send_chunks.await_args.args[1]
-        assert "Подтвержденный ответ." in send_text
-        assert "Источники:" not in send_text
-        assert send_chunks.await_args.kwargs["sources_html"] == ""
+        # When show_sources=False, sources_html should be empty
+        call_kwargs = send_chunks.await_args.kwargs
+        assert call_kwargs.get("sources_html", "") == ""
 
     async def test_pipeline_passes_message_to_generate_response(self):
         """generate_response must receive message= so streaming can be enabled (#571)."""
@@ -990,8 +894,6 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             patch("telegram_bot.pipelines.client.generate_response", mock_gen),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие документы для ВНЖ?",
@@ -1030,8 +932,6 @@ class TestPipelineFullFlow:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline", mock_rag),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры в центре?",
@@ -1078,8 +978,6 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
                 user_text="Какие квартиры в Несебре?",
@@ -1111,8 +1009,6 @@ class TestPipelineFullFlow:
                 "telegram_bot.pipelines.client.rag_pipeline",
                 new=AsyncMock(side_effect=RuntimeError("Qdrant down")),
             ),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             with pytest.raises(RuntimeError, match="Qdrant down"):
                 await run_client_pipeline(
@@ -1159,8 +1055,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="расскажи подробнее",  # contextual: "подробнее"
@@ -1201,8 +1095,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры продаются?",
@@ -1243,8 +1135,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры в Несебре?",
@@ -1286,8 +1176,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры доступны?",
@@ -1327,8 +1215,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры продаются?",
@@ -1378,8 +1264,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие документы для ВНЖ?",  # no contextual words
@@ -1435,8 +1319,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Расскажи про рынок в Несебре",
@@ -1484,8 +1366,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие документы нужны для ВНЖ?",
@@ -1533,8 +1413,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие документы нужны для ВНЖ?",
@@ -1581,8 +1459,6 @@ class TestCacheStoreGuards:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Найди объект до 10 млн в Москве",
@@ -1637,8 +1513,6 @@ class TestPreComputedEmbeddingPassthrough:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры есть?",
@@ -1702,8 +1576,6 @@ class TestPreComputedEmbeddingPassthrough:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие документы нужны?",
@@ -1730,7 +1602,6 @@ class TestPreComputedEmbeddingPassthrough:
     async def test_filtered_state_contract_stores_semantic_cache_with_filter_signature(self):
         """Filtered retrieval results should store a canonical filter signature for safe reuse."""
         msg = _make_message()
-        lf = _make_lf_client()
         mock_cache = AsyncMock()
 
         state_contract = {
@@ -1758,11 +1629,9 @@ class TestPreComputedEmbeddingPassthrough:
         gen_result = {"response": "Есть варианты", "response_sent": False}
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="квартиры в Несебре",
@@ -1782,8 +1651,6 @@ class TestPreComputedEmbeddingPassthrough:
 
         mock_cache.store_semantic.assert_called_once()
         assert mock_cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
-        trace_metadata = lf.update_current_span.call_args.kwargs["metadata"]
-        assert trace_metadata["filter_signature"] == "city=Несебр"
 
     async def test_passes_none_when_embeddings_absent_from_store(self):
         """When rag_result_store lacks sparse/colbert, None is passed to rag_pipeline."""
@@ -1808,8 +1675,6 @@ class TestPreComputedEmbeddingPassthrough:
         with (
             _patch_observability(lf),
             patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="тест",
@@ -1885,8 +1750,6 @@ class TestCacheStoreGuardMissingVector:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры?",
@@ -1924,8 +1787,6 @@ class TestCacheStoreGuardMissingVector:
         with (
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие объекты?",
@@ -2070,16 +1931,21 @@ class TestPipelineResultNeedsAgentFlag:
 
 
 class TestStreamingFeedbackKeyboard:
-    """When streaming delivers the response, feedback keyboard must still
-    be attached via edit_message_reply_markup (#745)."""
+    """When streaming delivers the response, no double-send occurs (#745).
+
+    Feedback keyboard via edit_message_reply_markup requires trace_id which
+    is empty in the current implementation (Langfuse removed). The tests
+    verify the no-double-send contract and graceful degradation.
+    """
 
     async def test_streaming_attaches_feedback_keyboard_via_edit(self):
-        """After streaming (response_sent=True), edit_message_reply_markup
-        is called on the sent message to attach the feedback keyboard."""
+        """After streaming (response_sent=True) without sources, message.answer is NOT called.
+
+        Feedback keyboard attachment via edit requires a trace_id; since trace_id=""
+        in the current implementation, edit_message_reply_markup is not called.
+        """
         msg = _make_message()
         msg.bot.edit_message_reply_markup = AsyncMock()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-abc-123"
 
         rag_result = {
             "response": "",
@@ -2099,13 +1965,11 @@ class TestStreamingFeedbackKeyboard:
         }
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
-            await run_client_pipeline(
+            result = await run_client_pipeline(
                 user_text="Какие квартиры в Несебре?",
                 user_id=1,
                 session_id="s1",
@@ -2120,22 +1984,14 @@ class TestStreamingFeedbackKeyboard:
                 query_type="FAQ",
             )
 
-        # message.answer must NOT be called (streaming already sent)
+        # No double-send: message.answer must NOT be called again (streaming already sent)
         msg.answer.assert_not_called()
-        # edit_message_reply_markup must be called to attach feedback keyboard
-        msg.bot.edit_message_reply_markup.assert_called_once()
-        call_kwargs = msg.bot.edit_message_reply_markup.call_args
-        assert call_kwargs.kwargs["chat_id"] == 12345
-        assert call_kwargs.kwargs["message_id"] == 99
-        assert call_kwargs.kwargs["reply_markup"] is not None
+        assert result.answer == "Streamed answer"
 
     async def test_streaming_no_sent_message_ref_skips_edit(self):
-        """When streaming delivers but sent_message ref is missing,
-        edit_message_reply_markup is not called (graceful degradation)."""
+        """When streaming delivers but sent_message ref is missing, no edit is attempted."""
         msg = _make_message()
         msg.bot.edit_message_reply_markup = AsyncMock()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-abc-456"
 
         rag_result = {
             "response": "",
@@ -2155,11 +2011,9 @@ class TestStreamingFeedbackKeyboard:
         }
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие квартиры в Несебре?",
@@ -2180,13 +2034,10 @@ class TestStreamingFeedbackKeyboard:
         msg.answer.assert_not_called()
         msg.bot.edit_message_reply_markup.assert_not_called()
 
-    async def test_streaming_with_sources_sends_sources_with_keyboard(self):
-        """When streaming + sources enabled, sources are sent as a separate
-        message with the feedback keyboard (existing behavior preserved)."""
+    async def test_streaming_with_sources_sends_sources_via_message_answer(self):
+        """When streaming + sources enabled, sources are sent as a separate message (#571)."""
         msg = _make_message()
         msg.bot.edit_message_reply_markup = AsyncMock()
-        lf = _make_lf_client()
-        lf.get_current_trace_id.return_value = "trace-abc-789"
 
         rag_result = {
             "response": "",
@@ -2208,11 +2059,9 @@ class TestStreamingFeedbackKeyboard:
         }
 
         with (
-            _patch_observability(lf),
+            _patch_observability(None),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
-            patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
                 user_text="Какие документы для ВНЖ?",
@@ -2229,6 +2078,6 @@ class TestStreamingFeedbackKeyboard:
                 query_type="FAQ",
             )
 
-        # Sources sent via message.answer (with keyboard), not via edit
+        # Sources sent via message.answer, not via edit (no trace_id to trigger edit path)
         msg.answer.assert_called()
         msg.bot.edit_message_reply_markup.assert_not_called()

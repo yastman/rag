@@ -206,7 +206,7 @@ async def on_contact_confirm(
             await callback.message.answer("❌ CRM-интеграция недоступна.")
         return
 
-    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.crm.kommo_models import ContactCreate
 
     data = manager.dialog_data
     phone = data.get("phone", "")

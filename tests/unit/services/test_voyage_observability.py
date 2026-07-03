@@ -20,7 +20,7 @@ class TestVoyageServiceObservability:
 
     def test_embed_query_has_observe_decorator(self):
         """embed_query should have @observe decorator."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         # Check if method has langfuse observation wrapper
         method = VoyageService.embed_query
@@ -29,28 +29,28 @@ class TestVoyageServiceObservability:
 
     def test_embed_documents_has_observe_decorator(self):
         """embed_documents should have @observe decorator."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         method = VoyageService.embed_documents
         assert hasattr(method, "__wrapped__") or hasattr(method, "_langfuse_observation")
 
     def test_rerank_has_observe_decorator(self):
         """rerank should have @observe decorator."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         method = VoyageService.rerank
         assert hasattr(method, "__wrapped__") or hasattr(method, "_langfuse_observation")
 
     def test_embed_documents_matryoshka_has_observe_decorator(self):
         """embed_documents_matryoshka should have @observe decorator."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         method = VoyageService.embed_documents_matryoshka
         assert hasattr(method, "__wrapped__") or hasattr(method, "_langfuse_observation")
 
     def test_embed_query_matryoshka_has_observe_decorator(self):
         """embed_query_matryoshka should have @observe decorator."""
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         method = VoyageService.embed_query_matryoshka
         assert hasattr(method, "__wrapped__") or hasattr(method, "_langfuse_observation")
@@ -70,7 +70,7 @@ class TestVoyageServiceObservabilityIntegration:
     @pytest.fixture
     def mock_langfuse(self):
         """Mock Langfuse get_client."""
-        with patch("telegram_bot.services.voyage.get_client") as mock_get:
+        with patch("telegram_bot.services.rag.voyage.get_client") as mock_get:
             mock_client = MagicMock()
             mock_client.update_current_generation = MagicMock()
             mock_get.return_value = mock_client
@@ -84,7 +84,7 @@ class TestVoyageServiceObservabilityIntegration:
         mock_response.usage = MagicMock(total_tokens=10)
         mock_voyage_client.embed.return_value = mock_response
 
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         service = VoyageService(api_key="test-key")
 
@@ -103,7 +103,7 @@ class TestVoyageServiceObservabilityIntegration:
         mock_response.usage = MagicMock(total_tokens=20)
         mock_voyage_client.embed.return_value = mock_response
 
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         service = VoyageService(api_key="test-key")
 
@@ -126,7 +126,7 @@ class TestVoyageServiceObservabilityIntegration:
         mock_response.results = [mock_result]
         mock_voyage_client.rerank.return_value = mock_response
 
-        from telegram_bot.services.voyage import VoyageService
+        from telegram_bot.services.rag.voyage import VoyageService
 
         service = VoyageService(api_key="test-key")
 

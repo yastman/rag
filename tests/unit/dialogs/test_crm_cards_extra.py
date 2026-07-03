@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from telegram_bot.dialogs.crm_cards import format_contact_card, format_task_card
-from telegram_bot.services.kommo_models import Contact, Task
+from telegram_bot.services.crm.kommo_models import Contact, Task
 
 
 def test_format_contact_card_uses_dash_for_missing_name() -> None:

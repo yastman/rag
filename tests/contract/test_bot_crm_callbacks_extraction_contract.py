@@ -1,9 +1,9 @@
-"""Contract: clearcache handler lives in ``telegram_bot/_bot_crm_callbacks.py``.
+"""Contract: clearcache handler lives in ``telegram_bot/handlers/bot_crm_callbacks.py``.
 
 Slice #2980: decompose PropertyBot god-object into per-feature handlers.
 Pins:
 
-1. ``telegram_bot._bot_crm_callbacks`` exports ``handle_clearcache_callback``
+1. ``telegram_bot.handlers.bot_crm_callbacks`` exports ``handle_clearcache_callback``
    (async).
 2. The module has no heavy top-level imports (aiogram / langgraph /
    qdrant_client / fastapi).
@@ -20,8 +20,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MODULE_NAME = "telegram_bot._bot_crm_callbacks"
-MODULE_PATH = REPO_ROOT / "telegram_bot" / "_bot_crm_callbacks.py"
+MODULE_NAME = "telegram_bot.handlers.bot_crm_callbacks"
+MODULE_PATH = REPO_ROOT / "telegram_bot" / "handlers" / "bot_crm_callbacks.py"
 BOT_PATH = REPO_ROOT / "telegram_bot" / "bot.py"
 
 FORBIDDEN_TOP_IMPORTS = {
@@ -96,7 +96,7 @@ def test_handle_clearcache_method_delegates() -> None:
     method = _find_class_method(tree, "PropertyBot", "handle_clearcache_callback")
     assert _method_awaits_helper(method, "handle_clearcache_callback"), (
         "PropertyBot.handle_clearcache_callback must delegate to "
-        "telegram_bot._bot_crm_callbacks.handle_clearcache_callback."
+        "telegram_bot.handlers.bot_crm_callbacks.handle_clearcache_callback."
     )
 
 

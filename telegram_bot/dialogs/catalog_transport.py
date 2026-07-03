@@ -6,7 +6,7 @@ from typing import Any
 
 from telegram_bot.dialogs.funnel import format_apartment_list
 from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
-from telegram_bot.services.catalog_rendering import send_catalog_results
+from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
 
 
 async def render_catalog_results_with_keyboard(

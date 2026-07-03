@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from telegram_bot.services.topic_service import TopicService
+from telegram_bot.services.crm.topic_service import TopicService
 
 
 @pytest.fixture

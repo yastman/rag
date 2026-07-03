@@ -9,13 +9,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
-from src.runtime.services.qdrant import QdrantService
+from src.runtime.qdrant.service import QdrantService
+
+_PATCH_TARGET = "src.runtime.qdrant.service.AsyncQdrantClient"
 
 
 @pytest.fixture
 def service():
     """Create QdrantService with mocked client."""
-    with patch("src.runtime.services.qdrant.AsyncQdrantClient"):
+    with patch(_PATCH_TARGET):
         svc = QdrantService(
             url="http://localhost:6333",
             collection_name="test_collection",

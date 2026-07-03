@@ -197,7 +197,7 @@ async def test_get_my_leads_no_kommo_client():
 async def test_get_my_leads_with_mock_kommo_client():
     """My leads getter formats lead cards from kommo_client response."""
     from telegram_bot.dialogs.crm_leads import get_my_leads_data
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     fake_lead = Lead(id=10, name="Deal Alpha", budget=75000)
 
@@ -231,7 +231,7 @@ async def test_get_search_leads_results_empty():
 async def test_get_search_leads_results_with_mock_kommo():
     """Search leads results returns formatted cards from kommo."""
     from telegram_bot.dialogs.crm_leads import get_search_leads_results
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     fake_lead = Lead(id=5, name="Searched Deal", budget=30000)
 
@@ -352,7 +352,7 @@ async def test_on_pipeline_selected_saves_and_advances():
 async def test_on_lead_confirm_calls_create_lead():
     """Confirm handler calls kommo.create_lead() with correct data."""
     from telegram_bot.dialogs.crm_leads import on_lead_confirm
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     created = Lead(id=100, name="New Deal", budget=50000)
     kommo = AsyncMock()
@@ -437,7 +437,7 @@ async def test_leads_menu_getter_has_no_btn_search():
 def test_lead_card_no_raw_ids():
     """format_lead_card should not show raw status_id or pipeline_id (#731)."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=1, name="Test", budget=50000, status_id=123, pipeline_id=456)
     text, _ = format_lead_card(lead)
@@ -448,7 +448,7 @@ def test_lead_card_no_raw_ids():
 def test_lead_card_shows_contact_name():
     """format_lead_card displays contact name when contacts available (#731)."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=1, name="Test", budget=50000, contacts=[{"id": 10, "name": "Иван Петров"}])
     text, _ = format_lead_card(lead)
@@ -458,7 +458,7 @@ def test_lead_card_shows_contact_name():
 def test_lead_card_shows_task_count():
     """format_lead_card displays task_count when provided (#731)."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=1, name="Test", budget=50000)
     text, _ = format_lead_card(lead, task_count=3)
@@ -468,7 +468,7 @@ def test_lead_card_shows_task_count():
 def test_lead_card_shows_zero_tasks_by_default():
     """format_lead_card shows 0 tasks when task_count not provided (#731)."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
-    from telegram_bot.services.kommo_models import Lead
+    from telegram_bot.services.crm.kommo_models import Lead
 
     lead = Lead(id=1, name="Test")
     text, _ = format_lead_card(lead)
@@ -478,7 +478,7 @@ def test_lead_card_shows_zero_tasks_by_default():
 async def test_get_my_leads_batches_task_counts():
     """my leads getter fetches task counts and passes them to card formatter (#731)."""
     from telegram_bot.dialogs.crm_leads import get_my_leads_data
-    from telegram_bot.services.kommo_models import Lead, Task
+    from telegram_bot.services.crm.kommo_models import Lead, Task
 
     fake_lead = Lead(id=10, name="Deal Beta", budget=20000)
     fake_task = Task(id=1, text="Call", entity_id=10, is_completed=False)

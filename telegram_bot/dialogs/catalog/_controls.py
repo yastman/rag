@@ -14,7 +14,7 @@ from telegram_bot.dialogs.catalog._runtime import (
     _runtime_int,
     _update_catalog_runtime,
 )
-from telegram_bot.services.catalog_session import CatalogRuntime
+from telegram_bot.services.apartment.catalog_session import CatalogRuntime
 
 
 def _control_text(runtime: CatalogRuntime) -> str:

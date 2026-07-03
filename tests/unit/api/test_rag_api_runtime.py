@@ -61,7 +61,7 @@ async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
 
 
 async def test_query_writes_langfuse_scores() -> None:
-    """POST /query must call write_langfuse_scores for score parity with bot."""
+    """POST /query must call write_pipeline_scores for score parity with bot."""
     graph = _DummyGraph()
     app.state.graph = graph
     app.state.max_rewrite_attempts = 1
@@ -73,11 +73,11 @@ async def test_query_writes_langfuse_scores() -> None:
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=lf),
-        patch("src.scoring.write_langfuse_scores") as mock_write_scores,
+        patch("src.scoring.write_pipeline_scores") as mock_write_scores,
     ):
         await query(QueryRequest(query="test", user_id=1))
 
-    # write_langfuse_scores must be called with (lf_client, result_state)
+    # write_pipeline_scores must be called with (lf_client, result_state)
     mock_write_scores.assert_called_once()
     call_args = mock_write_scores.call_args
     assert call_args[0][0] is lf  # first arg: langfuse client
@@ -186,7 +186,7 @@ async def test_lifespan_respects_rerank_provider_none() -> None:
         patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
         patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
         patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
-        patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        patch("telegram_bot.services.rag.colbert_reranker.ColbertRerankerService") as mock_colbert,
     ):
         async with lifespan(app):
             assert app.state.max_rewrite_attempts == 2
@@ -219,7 +219,7 @@ async def test_lifespan_keeps_colbert_runtime_server_side() -> None:
         patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
         patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
         patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
-        patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        patch("telegram_bot.services.rag.colbert_reranker.ColbertRerankerService") as mock_colbert,
     ):
         async with lifespan(app):
             assert app.state.max_rewrite_attempts == 2
@@ -318,7 +318,7 @@ async def test_query_returns_fallback_on_graph_recursion_error() -> None:
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=lf),
-        patch("src.scoring.write_langfuse_scores") as mock_write_scores,
+        patch("src.scoring.write_pipeline_scores") as mock_write_scores,
     ):
         response = await query(QueryRequest(query="test", user_id=1))
 
@@ -387,7 +387,7 @@ async def test_query_graph_recursion_error_works_when_langfuse_disabled() -> Non
     with (
         patch("src.observability.propagate_attributes", return_value=nullcontext()),
         patch("src.observability.get_client", return_value=None),
-        patch("src.scoring.write_langfuse_scores") as mock_write_scores,
+        patch("src.scoring.write_pipeline_scores") as mock_write_scores,
     ):
         response = await query(QueryRequest(query="test", user_id=1))
 

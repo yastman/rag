@@ -82,7 +82,7 @@ class TestQueryPreprocessorTranslitPrecompiled:
     (at class/module init) and reused — never inside the per-query hot path.
     """
 
-    def test_translit_patterns_compiled_once(self):
+    def test_translit_patterns_compiled_once_unit(self):
         """re.compile must NOT be invoked inside the per-query hot path."""
         pp = QueryPreprocessor()
         pp.normalize_translit("warmup Burgas")
@@ -115,7 +115,7 @@ class TestQueryPreprocessorTranslitPrecompiled:
             pytest.param("Golden Sands hotel", "Золотые пески hotel", id="golden_sands"),
         ],
     )
-    def test_translit_output_unchanged(self, latin_input, expected_output):
+    def test_translit_output_unchanged_unit(self, latin_input, expected_output):
         """Byte-identical output guarantee vs. the legacy per-call re.compile version."""
         assert _pp.normalize_translit(latin_input) == expected_output
 
@@ -129,7 +129,7 @@ class TestQueryPreprocessorTranslitPrecompiled:
             pytest.param("sunny beach", "Солнечный берег", id="lower_phrase"),
         ],
     )
-    def test_translit_handles_case_insensitivity(self, query, expected):
+    def test_translit_handles_case_insensitivity_unit(self, query, expected):
         """The IGNORECASE flag must be preserved across the refactor."""
         assert _pp.normalize_translit(query) == expected
 
@@ -149,7 +149,7 @@ class TestGetRRFWeights:
             pytest.param("ЖК Елените апартаменты", 0.2, 0.8, id="zhk"),
         ],
     )
-    def test_rrf_weights(self, query, expected_dense, expected_sparse):
+    def test_rrf_weights_unit(self, query, expected_dense, expected_sparse):
         dense, sparse = _pp.get_rrf_weights(query)
         assert dense == expected_dense
         assert sparse == expected_sparse
@@ -177,7 +177,7 @@ class TestGetCacheThreshold:
             pytest.param("ID квартиры", 0.05, id="id"),
         ],
     )
-    def test_cache_threshold(self, query, expected):
+    def test_cache_threshold_unit(self, query, expected):
         assert _pp.get_cache_threshold(query) == expected
 
 

@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.nurturing_scheduler import NurturingScheduler
-from telegram_bot.services.nurturing_service import NurturingService
+from telegram_bot.services.observability.nurturing_scheduler import NurturingScheduler
+from telegram_bot.services.observability.nurturing_service import NurturingService
 
 
 # ---------------------------------------------------------------------------

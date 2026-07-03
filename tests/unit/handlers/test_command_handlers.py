@@ -154,16 +154,15 @@ class TestCmdClearcache:
     @pytest.mark.asyncio
     async def test_keyboard_has_five_rows(self, mock_bot):
         """cmd_clearcache keyboard now has 5 rows (history + all_and_history added)."""
-        from aiogram.types import InlineKeyboardMarkup
-
         from telegram_bot.handlers.command_handlers import cmd_clearcache
 
+        mock_bot._is_admin = MagicMock(return_value=True)
         message = _make_message()
         await cmd_clearcache(mock_bot, message)
 
         message.answer.assert_called_once()
         kb = message.answer.call_args.kwargs.get("reply_markup") or message.answer.call_args.args[1]
-        assert isinstance(kb, InlineKeyboardMarkup)
+        assert hasattr(kb, "inline_keyboard")
         assert len(kb.inline_keyboard) == 5
 
     @pytest.mark.asyncio
@@ -171,6 +170,7 @@ class TestCmdClearcache:
         """cc:history and cc:all_and_history buttons are present."""
         from telegram_bot.handlers.command_handlers import cmd_clearcache
 
+        mock_bot._is_admin = MagicMock(return_value=True)
         message = _make_message()
         await cmd_clearcache(mock_bot, message)
 
@@ -178,3 +178,81 @@ class TestCmdClearcache:
         all_data = {btn.callback_data for row in kb.inline_keyboard for btn in row}
         assert "cc:history" in all_data
         assert "cc:all_and_history" in all_data
+
+    @pytest.mark.asyncio
+    async def test_clearcache_requires_admin_command_rejects_non_admin(self, mock_bot):
+        """Non-admin user gets an error reply; no keyboard is sent."""
+        from telegram_bot.handlers.command_handlers import cmd_clearcache
+
+        mock_bot._is_admin = MagicMock(return_value=False)
+        message = _make_message(user_id=99999)
+        await cmd_clearcache(mock_bot, message)
+
+        message.answer.assert_called_once()
+        # Must NOT contain an InlineKeyboardMarkup (no cache tier selection)
+        call_kwargs = message.answer.call_args.kwargs
+        assert "reply_markup" not in call_kwargs or call_kwargs.get("reply_markup") is None
+
+    @pytest.mark.asyncio
+    async def test_clearcache_requires_admin_command_admin_gets_keyboard(self, mock_bot):
+        """Admin user gets the cache tier selection keyboard."""
+        from telegram_bot.handlers.command_handlers import cmd_clearcache
+
+        mock_bot._is_admin = MagicMock(return_value=True)
+        message = _make_message(user_id=1)
+        await cmd_clearcache(mock_bot, message)
+
+        message.answer.assert_called_once()
+        kb = message.answer.call_args.kwargs.get("reply_markup")
+        assert kb is not None
+        assert hasattr(kb, "inline_keyboard")
+
+
+class TestClearcacheCallbackRequiresAdmin:
+    """Admin gate for cc: callback — non-admin cannot flush caches."""
+
+    def _make_callback(self, user_id: int, data: str = "cc:all") -> MagicMock:
+        cb = MagicMock()
+        cb.data = data
+        cb.answer = AsyncMock()
+        cb.from_user = MagicMock(id=user_id)
+        cb.message = MagicMock()
+        cb.message.chat = MagicMock(id=user_id)
+        cb.message.edit_text = AsyncMock()
+        return cb
+
+    def _make_bot(self, *, is_admin: bool) -> MagicMock:
+        bot = MagicMock()
+        bot._is_admin = MagicMock(return_value=is_admin)
+        bot._cache = MagicMock()
+        bot._cache.clear_all_caches = AsyncMock(return_value={})
+        bot._cache.clear_semantic_cache = AsyncMock(return_value=0)
+        bot._cache.clear_by_tier = AsyncMock(return_value=0)
+        bot._checkpointer = None
+        bot._agent_checkpointer = None
+        return bot
+
+    @pytest.mark.asyncio
+    async def test_clearcache_requires_admin_callback_rejects_non_admin(self):
+        """Non-admin cc: callback is answered with an error; no cache is flushed."""
+        from telegram_bot._bot_crm_callbacks import handle_clearcache_callback
+
+        bot = self._make_bot(is_admin=False)
+        cb = self._make_callback(user_id=99999, data="cc:all")
+
+        await handle_clearcache_callback(bot, cb)
+
+        bot._cache.clear_all_caches.assert_not_awaited()
+        cb.answer.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_clearcache_requires_admin_callback_allows_admin(self):
+        """Admin cc:all callback flushes all caches."""
+        from telegram_bot._bot_crm_callbacks import handle_clearcache_callback
+
+        bot = self._make_bot(is_admin=True)
+        cb = self._make_callback(user_id=1, data="cc:all")
+
+        await handle_clearcache_callback(bot, cb)
+
+        bot._cache.clear_all_caches.assert_awaited_once()

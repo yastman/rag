@@ -406,7 +406,7 @@ class TestHandleApartmentFastPath:
         bot._apartments_service.search_with_filters = AsyncMock(return_value=(search_results, 2))
 
         with patch(
-            "telegram_bot.services.apartments_service.check_escalation",
+            "telegram_bot.services.apartment.apartments_service.check_escalation",
             return_value=True,
         ):
             result = await bot._handle_apartment_fast_path(
@@ -443,15 +443,15 @@ class TestHandleApartmentFastPath:
 
         with (
             patch(
-                "telegram_bot.services.apartments_service.check_escalation",
+                "telegram_bot.services.apartment.apartments_service.check_escalation",
                 return_value=False,
             ),
             patch(
-                "telegram_bot.services.apartment_formatter.format_apartment_text",
+                "telegram_bot.services.apartment.apartment_formatter.format_apartment_text",
                 return_value="Formatted apartments",
             ),
             patch(
-                "telegram_bot.services.generate_response.generate_response",
+                "telegram_bot.services.generation.generate_response.generate_response",
                 new_callable=AsyncMock,
                 return_value={"response": "Here are your apartments", "response_sent": False},
             ),

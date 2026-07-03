@@ -2,7 +2,7 @@
 
 Factory ``create_favorites_router(bot)`` returns an aiogram Router that
 registers all ``fav:`` callback handlers.
-The actual handler logic lives in ``telegram_bot._bot_favorites``.
+The actual handler logic lives in ``telegram_bot.handlers.favorites``.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 def create_favorites_router(bot: PropertyBot) -> Router:
     """Return a router with favorites callback handlers bound to *bot*."""
-    from telegram_bot import _bot_favorites
+    from telegram_bot.handlers import favorites as _bot_favorites
 
     router = Router(name="favorites_callbacks")
 

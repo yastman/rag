@@ -108,7 +108,6 @@ def test_no_stale_metadata_references_to_deleted_gdrive_modules() -> None:
     checked_files = [
         REPO_ROOT / "pyproject.toml",
         REPO_ROOT / "src" / "ingestion" / "README.md",
-        REPO_ROOT / "docs" / "engineering" / "sdk-registry.md",
         REPO_ROOT / "tests" / "data" / "known_duplicate_test_names.json",
     ]
     needles = (

@@ -26,7 +26,7 @@ def mock_redis():
 
 async def test_get_valid_token_from_cache(mock_redis):
     """Returns cached token when not expired."""
-    from telegram_bot.services.kommo_token_store import KommoTokenStore
+    from telegram_bot.services.crm.kommo_token_store import KommoTokenStore
 
     store = KommoTokenStore(redis=mock_redis, subdomain="test")
     token = await store.get_valid_token()
@@ -35,7 +35,7 @@ async def test_get_valid_token_from_cache(mock_redis):
 
 async def test_get_valid_token_refreshes_when_expired(mock_redis):
     """Refreshes token via OAuth2 when expired."""
-    from telegram_bot.services.kommo_token_store import KommoTokenStore
+    from telegram_bot.services.crm.kommo_token_store import KommoTokenStore
 
     mock_redis.hgetall = AsyncMock(
         return_value={
@@ -79,7 +79,7 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
     """
     import asyncio
 
-    from telegram_bot.services.kommo_token_store import KommoTokenStore
+    from telegram_bot.services.crm.kommo_token_store import KommoTokenStore
 
     mock_redis.hgetall = AsyncMock(
         return_value={
@@ -140,7 +140,7 @@ async def test_legacy_store_tokens_method_still_available(mock_redis):
     """Compatibility shim must preserve _store_tokens for legacy callers/scripts."""
     from unittest.mock import AsyncMock
 
-    from telegram_bot.services.kommo_token_store import KommoTokenStore
+    from telegram_bot.services.crm.kommo_token_store import KommoTokenStore
 
     storage: dict[str, str] = {}
 

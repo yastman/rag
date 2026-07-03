@@ -8,7 +8,7 @@ from telegram_bot.dialogs.crm_cards import (
     format_lead_card,
     format_task_card,
 )
-from telegram_bot.services.kommo_models import Contact, Lead, Task
+from telegram_bot.services.crm.kommo_models import Contact, Lead, Task
 
 
 # ---------------------------------------------------------------------------

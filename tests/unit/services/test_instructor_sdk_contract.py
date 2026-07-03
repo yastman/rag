@@ -16,7 +16,7 @@ PROD_ROOTS = (
 
 
 ACTIVE_STRUCTURED_OUTPUT_PATHS = [
-    REPO_ROOT / "telegram_bot" / "services" / "apartment_llm_extractor.py",
+    REPO_ROOT / "telegram_bot" / "services" / "apartment" / "apartment_llm_extractor.py",
     REPO_ROOT / "telegram_bot" / "services" / "query_analyzer.py",
     REPO_ROOT / "src" / "evaluation" / "generate_test_queries.py",
 ]

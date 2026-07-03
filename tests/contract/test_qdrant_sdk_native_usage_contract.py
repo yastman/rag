@@ -37,14 +37,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 # Extend this list rather than working around the contract.
 SCAN_FILES: list[Path] = [
     REPO_ROOT / "src" / "ingestion" / "unified" / "qdrant_writer.py",
-    REPO_ROOT / "telegram_bot" / "services" / "apartments_service.py",
+    REPO_ROOT / "telegram_bot" / "services" / "apartment" / "apartments_service.py",
     REPO_ROOT / "telegram_bot" / "services" / "qdrant.py",
-    REPO_ROOT / "src" / "retrieval" / "search_engines.py",
     # New retrieval seam added in #2576 — runtime pipeline and graph tool callers.
     REPO_ROOT / "src" / "runtime" / "retrieval" / "service.py",
     REPO_ROOT / "src" / "runtime" / "pipeline" / "rag.py",
-    REPO_ROOT / "telegram_bot" / "graph" / "nodes" / "retrieve.py",
-    REPO_ROOT / "telegram_bot" / "graph" / "tools" / "retrieve.py",
 ]
 
 # Substrings that flag a custom rank-fusion or score-boost helper. The Qdrant
@@ -228,15 +225,12 @@ def test_new_retrieval_seam_files_are_in_scan_list() -> None:
     """New runtime retrieval seam must be included in SCAN_FILES (#2576).
 
     This test pins the coverage guarantee: if a file is added to the retrieval
-    seam (src/runtime/retrieval/, src/runtime/pipeline/rag.py, or the graph
-    tool/node callers) without being added to SCAN_FILES, this test fails and
-    forces a deliberate decision.
+    seam (src/runtime/retrieval/, src/runtime/pipeline/rag.py) without being
+    added to SCAN_FILES, this test fails and forces a deliberate decision.
     """
     required = [
         REPO_ROOT / "src" / "runtime" / "retrieval" / "service.py",
         REPO_ROOT / "src" / "runtime" / "pipeline" / "rag.py",
-        REPO_ROOT / "telegram_bot" / "graph" / "nodes" / "retrieve.py",
-        REPO_ROOT / "telegram_bot" / "graph" / "tools" / "retrieve.py",
     ]
     missing_from_scan = [p for p in required if p not in SCAN_FILES]
     assert not missing_from_scan, (

@@ -10,7 +10,7 @@ import datetime
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from telegram_bot.services.kommo_models import Contact, Lead, Task
+from telegram_bot.services.crm.kommo_models import Contact, Lead, Task
 
 
 # Callback prefix constants

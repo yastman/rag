@@ -22,7 +22,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-STREAMING_MODULE = REPO_ROOT / "telegram_bot" / "_bot_streaming.py"
+STREAMING_MODULE = REPO_ROOT / "telegram_bot" / "pipeline" / "streaming.py"
 LEGACY_DRAFT_STREAMER = REPO_ROOT / "telegram_bot" / "services" / "draft_streamer.py"
 
 
@@ -57,7 +57,7 @@ def test_stream_agent_to_draft_is_defined() -> None:
     """The canonical streaming helper must remain a top-level (async) def in this module."""
     tree = ast.parse(_source(STREAMING_MODULE))
     assert _has_function(tree, "_stream_agent_to_draft"), (
-        "telegram_bot/_bot_streaming.py::_stream_agent_to_draft is the SDK-native "
+        "telegram_bot/pipeline/streaming.py::_stream_agent_to_draft is the SDK-native "
         "streaming bridge between LangGraph and Telegram. ADR-0015 pins this; "
         "rename or relocation must be reflected in the ADR and this contract."
     )
@@ -118,7 +118,7 @@ def test_legacy_draft_streamer_module_is_absent() -> None:
     """
     assert not LEGACY_DRAFT_STREAMER.exists(), (
         f"{LEGACY_DRAFT_STREAMER.relative_to(REPO_ROOT)} was removed in favour of "
-        "the SDK-native streaming path in telegram_bot/_bot_streaming.py "
+        "the SDK-native streaming path in telegram_bot/pipeline/streaming.py "
         "(ADR-0015). Re-introducing it would re-create the parallel custom "
         "streaming surface that the migration retired."
     )

@@ -25,4 +25,6 @@ VPS_NONCORE_SERVICES=(
   clickhouse
   minio
   redis-langfuse
+  mini-app-api
+  mini-app-frontend
 )

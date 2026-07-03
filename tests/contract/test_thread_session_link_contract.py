@@ -1,29 +1,26 @@
-"""LangGraph thread_id <-> Langfuse session_id linkage contract (#2224).
+"""LangGraph thread_id / session_id colocation contract (#2224).
 
-Operational hygiene: an operator who finds a Langfuse trace must be able to
-recover the LangGraph checkpointer thread for that conversation.
+Operational hygiene: an operator who investigates a conversation must be
+able to correlate the LangGraph checkpointer thread to the session context.
 
 Scope: the **supervisor (text) agent** path — the ``configurable`` dicts whose
-``thread_id`` is built by ``_supervisor_thread_id(...)``. The voice path and the
-HITL ``Command(resume=...)`` path use their own thread/session handling and are
-out of scope here (tracked as follow-ups on #2224).
+``thread_id`` is built by ``_supervisor_thread_id(...)``. The voice path and
+the HITL ``Command(resume=...)`` path use their own thread/session handling
+and are out of scope here (tracked as follow-ups on #2224).
 
-Two things are locked:
+One thing is locked:
 
 1. **Co-location** — every supervisor ``configurable`` dict carrying a
    ``_supervisor_thread_id`` thread_id must also carry ``session_id`` so the
-   LangGraph<->Langfuse mapping is always recoverable.
-2. **Trace linkage** — ``telegram_bot/bot.py`` records the checkpointer
-   ``thread_id`` on the Langfuse trace as ``langgraph_thread_id`` metadata via
-   ``propagate_attributes`` at the supervisor entry-point, so the correlation
-   is visible from the trace.
+   thread-to-session mapping is always recoverable.
 
-Design note (see ``docs/BOT_INTERNAL_STRUCTURE.md``): ``thread_id`` is
-**intentionally not unified** with ``session_id``. ``make_session_id`` is
-date-rotating (``chat-<hash>-<YYYYMMDD>``) while the checkpointer thread
-(``_supervisor_thread_id`` -> ``tg_<chat_id>``) must persist across days;
-unifying them would reset conversation memory daily. They are linked via
-metadata, not made equal.
+Note: ``TestTraceLinkage`` (Langfuse langgraph_thread_id metadata) was
+removed — Langfuse integration deleted in #2969/#3049.
+
+Design note: ``thread_id`` is **intentionally not unified** with
+``session_id``. ``make_session_id`` is date-rotating (``chat-<hash>-<YYYYMMDD>``)
+while the checkpointer thread (``_supervisor_thread_id`` -> ``tg_<chat_id>``)
+must persist across days; unifying them would reset conversation memory daily.
 """
 
 from __future__ import annotations
@@ -33,7 +30,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
+# The supervisor configurable dicts moved from bot.py to _bot_query_pipeline.py
+# during the bot decomposition (#2983). Pin the canonical location.
+_PIPELINE_PY = REPO_ROOT / "telegram_bot" / "_bot_query_pipeline.py"
 
 
 def _dict_string_keys(node: ast.Dict) -> set[str]:
@@ -71,57 +70,28 @@ def _supervisor_configurable_keysets(tree: ast.AST) -> list[set[str]]:
     return out
 
 
-def _emits_thread_id_to_trace(source: str) -> bool:
-    return "propagate_attributes" in source and "langgraph_thread_id" in source
-
-
-def _records_resume_trace_link(source: str) -> bool:
-    """bot.py stores the interrupt trace id and back-links it on resume (#2224)."""
-    return (
-        "set_pending_resume_trace_id" in source
-        and "pop_pending_resume_trace_id" in source
-        and "resumes_trace_id" in source
-    )
-
-
-def _resume_preserves_forum_thread_id(source: str) -> bool:
-    """HITL callbacks in forum topics must resume the same topic-scoped thread."""
-    return (
-        'getattr(callback.message, "message_thread_id", None)' in source
-        and "thread_id = _supervisor_thread_id(chat_id, forum_thread_id)" in source
-    )
-
-
 class TestSupervisorThreadSessionColocation:
-    def test_bot_py_exists(self) -> None:
-        assert BOT_PY.exists(), f"missing: {BOT_PY}"
+    def test_pipeline_py_exists(self) -> None:
+        assert _PIPELINE_PY.exists(), f"missing: {_PIPELINE_PY}"
 
     def test_supervisor_configurable_has_thread_and_session(self) -> None:
-        tree = ast.parse(BOT_PY.read_text(encoding="utf-8"))
+        tree = ast.parse(_PIPELINE_PY.read_text(encoding="utf-8"))
         keysets = _supervisor_configurable_keysets(tree)
         assert keysets, (
-            "expected at least one supervisor 'configurable' using _supervisor_thread_id"
+            "expected at least one supervisor 'configurable' using _supervisor_thread_id "
+            f"in {_PIPELINE_PY.relative_to(REPO_ROOT)}"
         )
         offenders = [keys for keys in keysets if "session_id" not in keys]
         assert not offenders, (
             "Every supervisor 'configurable' (thread_id via _supervisor_thread_id) "
-            "must also carry session_id so the LangGraph<->Langfuse mapping stays "
+            "must also carry session_id so the thread-to-session mapping stays "
             f"recoverable (#2224). Offending key-sets: {offenders}"
         )
 
 
-class TestTraceLinkage:
-    def test_bot_py_records_langgraph_thread_id_on_trace(self) -> None:
-        source = BOT_PY.read_text(encoding="utf-8")
-        assert _emits_thread_id_to_trace(source), (
-            "telegram_bot/bot.py must record the checkpointer thread_id on the "
-            "Langfuse trace as langgraph_thread_id metadata via "
-            "propagate_attributes(...) so operators can correlate a trace to "
-            "the LangGraph conversation state (#2224)."
-        )
-
-
-# TestHitlResumeTraceLinkage removed — HITL confirmation path deleted (#2943)
+# TestTraceLinkage removed — Langfuse integration deleted (#2969, #3049).
+# propagate_attributes is now a no-op shim; langgraph_thread_id metadata
+# is no longer meaningful. The co-location contract above is sufficient.
 
 
 class TestDetectorSelfChecks:
@@ -150,31 +120,3 @@ class TestDetectorSelfChecks:
 
     def test_bare_thread_dict_excluded(self) -> None:
         assert _supervisor_configurable_keysets(ast.parse(self._BARE_THREAD)) == []
-
-    def test_trace_linkage_detector(self) -> None:
-        assert _emits_thread_id_to_trace(
-            "with propagate_attributes(metadata={'langgraph_thread_id': tid}): pass"
-        )
-        assert not _emits_thread_id_to_trace(
-            "lf.update_current_generation(metadata={'langgraph_thread_id': tid})"
-        )
-
-    def test_resume_link_detector(self) -> None:
-        good = (
-            "set_pending_resume_trace_id(tid, parent)\n"
-            "p = pop_pending_resume_trace_id(tid)\n"
-            "propagate_attributes(metadata={'resumes_trace_id': p})\n"
-        )
-        assert _records_resume_trace_link(good)
-        # Missing the back-link metadata key -> not satisfied.
-        assert not _records_resume_trace_link(
-            "set_pending_resume_trace_id(tid, parent)\npop_pending_resume_trace_id(tid)\n"
-        )
-
-    def test_forum_thread_resume_detector(self) -> None:
-        good = (
-            '_raw_thread_id = getattr(callback.message, "message_thread_id", None)\n'
-            "thread_id = _supervisor_thread_id(chat_id, forum_thread_id)\n"
-        )
-        assert _resume_preserves_forum_thread_id(good)
-        assert not _resume_preserves_forum_thread_id("thread_id = _supervisor_thread_id(chat_id)\n")

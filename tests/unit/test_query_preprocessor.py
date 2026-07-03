@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from telegram_bot.services.query_preprocessor import QueryPreprocessor
+from telegram_bot.services.rag.query_preprocessor import QueryPreprocessor
 
 
 _preprocessor = QueryPreprocessor()

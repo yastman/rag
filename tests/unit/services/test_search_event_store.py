@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from telegram_bot.services.search_event_store import SearchEventStore, _format_filters
+from telegram_bot.services.observability.search_event_store import SearchEventStore, _format_filters
 
 
 class TestFormatFilters:

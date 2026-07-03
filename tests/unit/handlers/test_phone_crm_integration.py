@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from telegram_bot.services.kommo_models import Contact, Lead, Note, Task
+from telegram_bot.services.crm.kommo_models import Contact, Lead, Note, Task
 
 
 @pytest.fixture

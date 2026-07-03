@@ -11,6 +11,11 @@ Also owns menu-routing helpers:
   - :func:`resolve_user_role` — DB + config role resolution.
   - :func:`handle_menu_button` — ReplyKeyboard button routing.
   - :func:`handle_menu_action` — inline menu action dispatch to agent pipeline.
+
+Design exception (#1232): ``handle_menu_button`` uses ``state.update_data``
+to reset the ``bookmarks_context`` flag when the user navigates away from
+the bookmarks menu. This is a single context-flag reset (not an FSM driver)
+and is intentionally exempt from the aiogram-dialog migration rule.
 """
 
 from __future__ import annotations
@@ -97,7 +102,7 @@ async def cmd_clear(
     resets the FSM state so subsequent free-text questions are routed back to
     the supervisor / RAG path. See #1454.
     """
-    from telegram_bot.services.checkpointer_utils import (
+    from telegram_bot.services.util.checkpointer_utils import (
         _delete_checkpointer_thread,
         _supervisor_thread_id,
     )
@@ -192,7 +197,11 @@ async def cmd_metrics(bot: PropertyBot, message: Message) -> None:
 
 
 async def cmd_clearcache(bot: PropertyBot, message: Message) -> None:
-    """Handle /clearcache command - show inline keyboard to select cache tier."""
+    """Handle /clearcache command - show inline keyboard to select cache tier (admin only)."""
+    user_id = message.from_user.id if message.from_user else 0
+    if not bot._is_admin(user_id):
+        await message.answer("Недостаточно прав.")
+        return
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -336,7 +345,9 @@ async def handle_menu_button(
         ):
             return
 
-    from telegram_bot import _bot_catalog, _bot_favorites, _bot_handoff
+    from telegram_bot.handlers import bot_handoff as _bot_handoff
+    from telegram_bot.handlers import catalog as _bot_catalog
+    from telegram_bot.handlers import favorites as _bot_favorites
     from telegram_bot.handlers.demo_handler import handle_demo_button
 
     async def _handle_demo(msg: Message) -> None:

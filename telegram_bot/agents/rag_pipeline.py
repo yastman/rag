@@ -4,44 +4,33 @@ Pipeline returns CONTEXT (documents, scores, latency_stages).
 Agent generates ANSWER from that context.
 
 Steps:
-  1. _cache_check    — compute embedding, check semantic cache
-  2. _hybrid_retrieve — hybrid RRF search via Qdrant
+  1. _cache_check    — compute embedding, check semantic cache  (cache_stage.py)
+  2. _hybrid_retrieve — hybrid RRF search via Qdrant            (retrieval_stage.py)
   3. _grade_documents — score-based relevance grading
   4. _rerank          — ColBERT reranking or score-sort fallback
   5. _rewrite_query   — LLM query reformulation (loop guard)
-  6. _cache_store     — store response in semantic cache
+  6. _cache_store     — store response in semantic cache        (cache_stage.py)
 
 Orchestrator: rag_pipeline() wires steps with rewrite loop.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from typing import Any, cast
 
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
+from telegram_bot.agents.cache_stage import _cache_check
+from telegram_bot.agents.retrieval_stage import _hybrid_retrieve
 from telegram_bot.pipelines.state_contract import PreAgentStateContract
-from telegram_bot.services.cache_policy import (
-    SEMANTIC_CACHE_SCHEMA_VERSION,
-    build_cacheability_decision,
-    is_contextual_query,
-    maybe_store_semantic_response,
-    resolve_semantic_cache_signature,
-)
 from telegram_bot.services.metrics import record_pipeline_event
-from telegram_bot.services.query_filter_signal import detect_filter_sensitive_query
-from telegram_bot.services.query_preprocessor import QueryPreprocessor, expand_short_query
-from telegram_bot.services.rag_core import (
-    CACHEABLE_QUERY_TYPES,
-    check_semantic_cache,
-    compute_query_embedding,
+from telegram_bot.services.rag.cache_policy import resolve_semantic_cache_signature
+from telegram_bot.services.rag.query_filter_signal import detect_filter_sensitive_query
+from telegram_bot.services.rag.query_preprocessor import expand_short_query
+from telegram_bot.services.rag.rag_core import (
     perform_rerank,
     rewrite_query_via_llm,
-)
-from telegram_bot.services.rag_core import (
-    build_retrieved_context as _build_retrieved_context,
 )
 
 
@@ -51,529 +40,16 @@ logger = logging.getLogger(__name__)
 # 3 was too restrictive — comprehensive queries (e.g. list all ВНЖ types) were losing chunks.
 _DEFAULT_RERANK_TOP_K = 7
 _CONFIDENT_TRIM_TOP_K = 3
-_QUERY_PREPROCESSOR = QueryPreprocessor()
-
-
-async def _execute_qdrant_retrieval(
-    *,
-    qdrant: Any,
-    dense_vector: list[float],
-    sparse_vector: Any,
-    colbert_query: list[list[float]] | None,
-    filters: dict[str, str] | None,
-    top_k: int,
-    dense_weight: float,
-    sparse_weight: float,
-) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
-    has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
-    if colbert_query and has_colbert_search:
-        result = await qdrant.hybrid_search_rrf_colbert(
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            colbert_query=colbert_query,
-            filters=filters,
-            dense_weight=dense_weight,
-            sparse_weight=sparse_weight,
-            top_k=top_k,
-            return_meta=True,
-        )
-        colbert_used = True
-    else:
-        result = await qdrant.hybrid_search_rrf(
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            filters=filters,
-            dense_weight=dense_weight,
-            sparse_weight=sparse_weight,
-            top_k=top_k,
-            return_meta=True,
-        )
-        colbert_used = False
-
-    if isinstance(result, tuple) and len(result) == 2:
-        results, search_meta = result
-    else:
-        results = result
-        search_meta = {"backend_error": False, "error_type": None, "error_message": None}
-    return results, search_meta, colbert_used
-
-
-async def _run_initial_retrieval(
-    *,
-    qdrant: Any,
-    dense_vector: list[float],
-    sparse_vector: Any,
-    colbert_query: list[list[float]] | None,
-    filters: dict[str, str] | None,
-    top_k: int,
-    dense_weight: float,
-    sparse_weight: float,
-) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
-    return await _execute_qdrant_retrieval(
-        qdrant=qdrant,
-        dense_vector=dense_vector,
-        sparse_vector=sparse_vector,
-        colbert_query=colbert_query,
-        filters=filters,
-        top_k=top_k,
-        dense_weight=dense_weight,
-        sparse_weight=sparse_weight,
-    )
-
-
-async def _run_relaxed_retrieval(
-    *,
-    qdrant: Any,
-    dense_vector: list[float],
-    sparse_vector: Any,
-    colbert_query: list[list[float]] | None,
-    filters: dict[str, str] | None,
-    top_k: int,
-    dense_weight: float,
-    sparse_weight: float,
-) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
-    return await _execute_qdrant_retrieval(
-        qdrant=qdrant,
-        dense_vector=dense_vector,
-        sparse_vector=sparse_vector,
-        colbert_query=colbert_query,
-        filters=filters,
-        top_k=top_k,
-        dense_weight=dense_weight,
-        sparse_weight=sparse_weight,
-    )
 
 
 # ---------------------------------------------------------------------------
-# Step 1: Cache check
+# Step 1: Cache check (see cache_stage.py)
 # ---------------------------------------------------------------------------
 
 
-async def _cache_check(
-    query: str,
-    query_type: str,
-    user_id: int,
-    *,
-    cache: Any,
-    embeddings: Any,
-    latency_stages: dict[str, float],
-    agent_role: str | None = None,
-    pre_computed_embedding: list[float] | None = None,
-    pre_computed_sparse: Any = None,
-    pre_computed_colbert: list[list[float]] | None = None,
-    semantic_cache_already_checked: bool = False,
-    semantic_cache_filter_sensitive: bool = False,
-    semantic_cache_filter_signature: str | None = None,
-) -> dict[str, Any]:
-    """Compute embedding and check semantic cache.
-
-    Returns dict with cache_hit, cached_response, query_embedding, sparse_embedding,
-    colbert_query, and latency.
-    """
-
-    start = time.perf_counter()
-
-    # Try bundle cache first (avoids redundant BGE-M3 calls when full bundle is cached #1493)
-    bundle = None
-    _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
-    if _has_bundle_cache and pre_computed_embedding is None:
-        try:
-            maybe_bundle = await cache.get_bge_m3_query_bundle(query)
-            if (
-                maybe_bundle is not None
-                and hasattr(maybe_bundle, "dense")
-                and isinstance(maybe_bundle.dense, list)
-            ):
-                bundle = maybe_bundle
-        except Exception:
-            logger.debug("Bundle cache check failed (non-critical), skipping")
-
-    if bundle is not None:
-        embedding = bundle.dense
-        sparse = bundle.sparse
-        colbert_query = bundle.colbert
-        embeddings_cache_hit = True
-    else:
-        # Step 1: Get or compute dense embedding via shared core
-        if pre_computed_embedding:
-            logger.debug(
-                "_cache_check: reusing pre-computed embedding (%d dims)",
-                len(pre_computed_embedding),
-            )
-        try:
-            embedding, sparse, colbert_query, embeddings_cache_hit = await compute_query_embedding(
-                query,
-                cache=cache,
-                embeddings=embeddings,
-                pre_computed=pre_computed_embedding,
-                pre_computed_sparse=pre_computed_sparse,
-                pre_computed_colbert=pre_computed_colbert,
-            )
-        except Exception as exc:
-            embedding_error_type = type(exc).__name__
-            logger.error("Embedding failed: %s: %s", embedding_error_type, exc)
-            latency = time.perf_counter() - start
-            return {
-                "cache_hit": False,
-                "cached_response": None,
-                "query_embedding": None,
-                "sparse_embedding": None,
-                "embeddings_cache_hit": False,
-                "embedding_error": True,
-                "embedding_error_type": embedding_error_type,
-                "error_response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
-                "colbert_query": None,
-                "latency_stages": {**latency_stages, "cache_check": latency},
-            }
-
-    # Step 2: Check semantic cache via shared core
-    contextual_query = is_contextual_query(query)
-    if (
-        semantic_cache_already_checked
-        or contextual_query
-        or (semantic_cache_filter_sensitive and semantic_cache_filter_signature is None)
-    ):
-        hit, cached = False, None
-    else:
-        hit, cached = await check_semantic_cache(
-            query,
-            embedding,
-            query_type,
-            cache=cache,
-            agent_role=agent_role,
-            filter_signature=semantic_cache_filter_signature,
-        )
-
-    latency = time.perf_counter() - start
-
-    if hit:
-        logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
-        return {
-            "cache_hit": True,
-            "cached_response": cached,
-            "query_embedding": embedding,
-            "sparse_embedding": sparse,
-            "embeddings_cache_hit": embeddings_cache_hit,
-            "embedding_error": False,
-            "embedding_error_type": None,
-            "colbert_query": None,
-            "latency_stages": {**latency_stages, "cache_check": latency},
-        }
-
-    # ColBERT query vectors are only needed on semantic miss.
-    if colbert_query is None:
-        _has_hybrid_colbert = callable(
-            getattr(embeddings, "aembed_hybrid_with_colbert", None)
-        ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
-        _has_colbert_only = callable(
-            getattr(embeddings, "aembed_colbert_query", None)
-        ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
-
-        if _has_hybrid_colbert:
-            try:
-                _, sparse_from_hybrid, colbert_query = await embeddings.aembed_hybrid_with_colbert(
-                    query
-                )
-                if sparse is None and sparse_from_hybrid is not None:
-                    sparse = sparse_from_hybrid
-                    if not pre_computed_sparse:
-                        await cache.store_sparse_embedding(query, sparse_from_hybrid)
-                # Store full bundle for future requests (#1493)
-                if (
-                    _has_bundle_cache
-                    and embedding is not None
-                    and sparse is not None
-                    and colbert_query is not None
-                ):
-                    try:
-                        from telegram_bot.services.bge_m3_query_bundle import (
-                            BgeM3QueryVectorBundle,
-                        )
-
-                        await cache.store_bge_m3_query_bundle(
-                            query,
-                            BgeM3QueryVectorBundle(
-                                dense=embedding,
-                                sparse=sparse,
-                                colbert=colbert_query,
-                            ),
-                        )
-                    except Exception:
-                        logger.debug("Bundle store failed (non-critical), skipping")
-            except Exception:
-                logger.debug("ColBERT query encode failed (non-critical), skipping")
-        elif _has_colbert_only:
-            try:
-                colbert_query = await embeddings.aembed_colbert_query(query)
-            except Exception:
-                logger.debug("ColBERT query encode failed (non-critical), skipping")
-
-    logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
-    return {
-        "cache_hit": False,
-        "cached_response": None,
-        "query_embedding": embedding,
-        "sparse_embedding": sparse,
-        "embeddings_cache_hit": embeddings_cache_hit,
-        "embedding_error": False,
-        "embedding_error_type": None,
-        "colbert_query": colbert_query,
-        "latency_stages": {**latency_stages, "cache_check": latency},
-    }
-
-
 # ---------------------------------------------------------------------------
-# Step 2: Hybrid retrieve
+# Step 2: Hybrid retrieve (see retrieval_stage.py)
 # ---------------------------------------------------------------------------
-
-
-async def _hybrid_retrieve(
-    query: str,
-    query_embedding: list[float] | None,
-    *,
-    cache: Any,
-    sparse_embeddings: Any,
-    qdrant: Any,
-    embeddings: Any | None = None,
-    colbert_query: list[list[float]] | None = None,
-    sparse_embedding: Any = None,
-    filters: dict[str, Any] | None = None,
-    topic_hint: str | None = None,
-    top_k: int = 20,
-    latency_stages: dict[str, float],
-) -> dict[str, Any]:
-    """Retrieve documents via hybrid RRF search with caching.
-
-    Returns dict with documents, search_results_count, sparse_embedding, and latency.
-    """
-
-    dense_vector = query_embedding
-    # Initialize with pre-computed sparse from _cache_check to avoid redundant BGE-M3 call (#571)
-    sparse_vector: Any = sparse_embedding
-
-    # After rewrite, query_embedding is None — re-embed the rewritten query
-    if dense_vector is None and embeddings is not None:
-        # Check bundle cache first (avoids redundant BGE-M3 calls #1493)
-        _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
-        bundle = None
-        if _has_bundle_cache:
-            try:
-                maybe_bundle = await cache.get_bge_m3_query_bundle(query)
-                if (
-                    maybe_bundle is not None
-                    and hasattr(maybe_bundle, "dense")
-                    and isinstance(maybe_bundle.dense, list)
-                ):
-                    bundle = maybe_bundle
-            except Exception:
-                logger.debug("Bundle cache check failed (non-critical), skipping")
-
-        if bundle is not None:
-            dense_vector = bundle.dense
-            sparse_vector = bundle.sparse
-            colbert_query = bundle.colbert
-        else:
-            dense_vector = await cache.get_embedding(query)
-            if dense_vector is None:
-                sparse_cached = await cache.get_sparse_embedding(query)
-                if sparse_cached is not None:
-                    dense_vector = await embeddings.aembed_query(query)
-                    await cache.store_embedding(query, dense_vector)
-                    sparse_vector = sparse_cached
-                elif callable(
-                    getattr(embeddings, "aembed_hybrid_with_colbert", None)
-                ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert):
-                    (
-                        dense_vector,
-                        sparse_vector,
-                        colbert_query,
-                    ) = await embeddings.aembed_hybrid_with_colbert(query)
-                    await cache.store_embedding(query, dense_vector)
-                    await cache.store_sparse_embedding(query, sparse_vector)
-                    # Store full bundle for future requests (#1493)
-                    if (
-                        _has_bundle_cache
-                        and dense_vector is not None
-                        and sparse_vector is not None
-                        and colbert_query is not None
-                    ):
-                        try:
-                            from telegram_bot.services.bge_m3_query_bundle import (
-                                BgeM3QueryVectorBundle,
-                            )
-
-                            await cache.store_bge_m3_query_bundle(
-                                query,
-                                BgeM3QueryVectorBundle(
-                                    dense=dense_vector,
-                                    sparse=sparse_vector,
-                                    colbert=colbert_query,
-                                ),
-                            )
-                        except Exception:
-                            logger.debug("Bundle store failed (non-critical), skipping")
-                elif callable(
-                    getattr(embeddings, "aembed_hybrid", None)
-                ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
-                    dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
-                    await cache.store_embedding(query, dense_vector)
-                    await cache.store_sparse_embedding(query, sparse_vector)
-                else:
-
-                    async def _get_dense() -> list[float]:
-                        vec: list[float] = await embeddings.aembed_query(query)
-                        await cache.store_embedding(query, vec)
-                        return vec
-
-                    async def _get_sparse() -> Any:
-                        vec = await sparse_embeddings.aembed_query(query)
-                        await cache.store_sparse_embedding(query, vec)
-                        return vec
-
-                    dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
-
-    if not dense_vector:
-        dense_vector = []
-
-    # Step 1: Compute retrieval filters before touching the search cache.
-    colbert_search_used = False
-    normalized_query = query.strip().lower()
-    query_word_count = len(normalized_query.split()) if normalized_query else 0
-    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
-    base_filters = dict(filters) if isinstance(filters, dict) and filters else None
-    topic_filters = dict(base_filters or {})
-    if topic_hint:
-        topic_filters["topic"] = topic_hint
-
-    active_filters = dict(topic_filters) if topic_filters else None
-    relaxed_filters = dict(base_filters) if base_filters else None
-    initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
-    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
-    retrieval_relaxed_from_topic_filter = False
-    qdrant_search_attempts = 0
-    dense_weight, sparse_weight = _QUERY_PREPROCESSOR.get_rrf_weights(query)
-    if prefer_faq_doc_type and topic_hint:
-        active_filters = dict(topic_filters)
-        active_filters["doc_type"] = "faq"
-        relaxed_filters = dict(topic_filters) if topic_filters else None
-        initial_filters = dict(active_filters)
-        final_filters = dict(active_filters)
-
-    start = time.perf_counter()
-
-    # Step 2: Check search cache
-    cached_results = await cache.get_search_results(dense_vector, initial_filters)
-    if cached_results is not None:
-        latency = time.perf_counter() - start
-        logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
-        cached_ctx = _build_retrieved_context(cached_results)
-        return {
-            "documents": cached_results,
-            "search_results_count": len(cached_results),
-            "search_cache_hit": True,
-            "query_embedding": dense_vector,
-            "latency_stages": {**latency_stages, "retrieve": latency},
-            "retrieval_backend_error": False,
-            "retrieval_error_type": None,
-            "retrieved_context": cached_ctx,
-            "rerank_applied": False,
-            "colbert_query": colbert_query,
-            "initial_filters": initial_filters,
-            "final_filters": initial_filters,
-        }
-
-    # Step 3: Get sparse embedding only after a confirmed search-cache miss.
-    if sparse_vector is None:
-        sparse_vector = await cache.get_sparse_embedding(query)
-        if sparse_vector is None:
-            sparse_vector = await sparse_embeddings.aembed_query(query)
-            await cache.store_sparse_embedding(query, sparse_vector)
-
-    # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
-    if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
-        record_pipeline_event("colbert_rerank_attempted")
-    results, search_meta, colbert_used = await _run_initial_retrieval(
-        qdrant=qdrant,
-        dense_vector=dense_vector,
-        sparse_vector=sparse_vector,
-        colbert_query=colbert_query,
-        filters=active_filters,
-        top_k=top_k,
-        dense_weight=dense_weight,
-        sparse_weight=sparse_weight,
-    )
-    colbert_search_used = colbert_search_used or colbert_used
-    qdrant_search_attempts += 1
-
-    if active_filters and len(results) < 3 and active_filters != relaxed_filters:
-        record_pipeline_event("topic_filter_fallback")
-        retrieval_relaxed_from_topic_filter = True
-        fallback_filters = relaxed_filters if relaxed_filters is not None else None
-        results, search_meta, colbert_used = await _run_relaxed_retrieval(
-            qdrant=qdrant,
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            colbert_query=colbert_query,
-            filters=fallback_filters,
-            top_k=top_k,
-            dense_weight=dense_weight,
-            sparse_weight=sparse_weight,
-        )
-        colbert_search_used = colbert_search_used or colbert_used
-        qdrant_search_attempts += 1
-        final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
-
-    if relaxed_filters is not None and len(results) < 3 and final_filters != base_filters:
-        results, search_meta, colbert_used = await _run_relaxed_retrieval(
-            qdrant=qdrant,
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            colbert_query=colbert_query,
-            filters=base_filters,
-            top_k=top_k,
-            dense_weight=dense_weight,
-            sparse_weight=sparse_weight,
-        )
-        colbert_search_used = colbert_search_used or colbert_used
-        qdrant_search_attempts += 1
-        final_filters = dict(base_filters) if isinstance(base_filters, dict) else None
-
-    if not results:
-        record_pipeline_event("retrieval_zero_docs")
-
-    # Step 5: Cache results
-    if results and not search_meta.get("backend_error", False):
-        stored_filters: list[dict[str, Any] | None] = []
-        cache_targets = [final_filters] if final_filters != initial_filters else [initial_filters]
-        for cache_filters in cache_targets:
-            normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
-            if normalized_filters in stored_filters:
-                continue
-            await cache.store_search_results(dense_vector, normalized_filters, results)
-            stored_filters.append(normalized_filters)
-
-    latency = time.perf_counter() - start
-    logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
-
-    result_ctx = _build_retrieved_context(results)
-
-    return {
-        "documents": results,
-        "search_results_count": len(results),
-        "search_cache_hit": False,
-        "sparse_embedding": sparse_vector,
-        "query_embedding": dense_vector or None,
-        "latency_stages": {**latency_stages, "retrieve": latency},
-        "retrieval_backend_error": search_meta.get("backend_error", False),
-        "retrieval_error_type": search_meta.get("error_type"),
-        "retrieved_context": result_ctx,
-        "rerank_applied": colbert_search_used,
-        "colbert_query": colbert_query,
-        "qdrant_search_attempts": qdrant_search_attempts,
-        "initial_filters": initial_filters,
-        "final_filters": final_filters,
-        "retrieval_relaxed_from_topic_filter": retrieval_relaxed_from_topic_filter,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -790,81 +266,8 @@ async def _rewrite_query(
 
 
 # ---------------------------------------------------------------------------
-# Step 6: Cache store
+# Step 6: Cache store (see cache_stage.py)
 # ---------------------------------------------------------------------------
-
-
-async def _cache_store(
-    query: str,
-    response: str,
-    query_embedding: list[float] | None,
-    query_type: str,
-    user_id: int,
-    *,
-    cache: Any,
-    search_results_count: int = 0,
-    latency_stages: dict[str, float],
-    agent_role: str | None = None,
-) -> dict[str, Any]:
-    """Store response in semantic cache (allowlisted types only).
-
-    Returns dict with latency update.
-    """
-    start = time.perf_counter()
-
-    stored_semantic = False
-    if response and query_embedding and query_type in CACHEABLE_QUERY_TYPES:
-        # Legacy helper kept as a thin delegate so tests and older callsites do not
-        # carry a second cache-policy implementation.
-        decision = build_cacheability_decision(
-            result={
-                "response": response,
-                "grounded": True,
-                "legal_answer_safe": True,
-                "semantic_cache_safe_reuse": True,
-                "fallback_used": False,
-                "safe_fallback_used": False,
-                "llm_provider_model": "",
-                "llm_timeout": False,
-            },
-            query_type=query_type,
-            grounding_mode="normal",
-            documents=[{"text": response}],
-            cache_hit=False,
-            contextual=is_contextual_query(query),
-            grade_confidence=1.0,
-            confidence_threshold=0.0,
-            schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
-        )
-        try:
-            stored_semantic = await maybe_store_semantic_response(
-                cache=cache,
-                query=query,
-                response=response,
-                vector=query_embedding,
-                query_type=query_type,
-                cache_scope="rag",
-                decision=decision,
-                agent_role=agent_role,
-            )
-        except Exception as exc:
-            # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
-            # error from store_semantic must never lose the response (#524).
-            logger.warning(
-                "cache_store: semantic store failed, response preserved: %s: %s",
-                type(exc).__name__,
-                exc,
-            )
-
-        if stored_semantic:
-            logger.info("cache_store: stored=semantic (type=%s)", query_type)
-
-    latency = time.perf_counter() - start
-
-    return {
-        "stored_semantic": stored_semantic,
-        "latency_stages": {**latency_stages, "cache_store": latency},
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -1237,7 +640,7 @@ async def _expand_small_to_big(
     Qdrant document, replaces each doc's ``text`` with expanded context.
     Failures are logged but never crash the pipeline.
     """
-    from telegram_bot.services.small_to_big import (
+    from telegram_bot.services.rag.small_to_big import (
         SmallToBigMode,
         SmallToBigService,
     )

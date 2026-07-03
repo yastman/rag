@@ -42,10 +42,8 @@ SCAN_DIRS: tuple[Path, ...] = (
 # tracked follow-up PR removing the call site.
 CHUNKER_CALL_SITE_ALLOWLIST: frozenset[str] = frozenset(
     {
-        # Legacy core RAG pipeline used by the evaluation script
-        # (src/evaluation/ragas_evaluation.py imports RAGPipeline from here).
-        # Migration to make_hybrid_chunker is tracked in #1235 follow-ups.
-        "src/core/pipeline.py",
+        # Legacy pipeline.py was removed; allowlist is now empty.
+        # Add entries here only for tracked migration call sites.
     }
 )
 

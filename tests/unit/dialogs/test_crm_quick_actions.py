@@ -250,7 +250,7 @@ async def test_on_note_text_input_no_kommo_client_closes_dialog() -> None:
 @pytest.mark.asyncio
 async def test_on_task_text_input_creates_task_with_due_date_plus_one_day() -> None:
     from telegram_bot.dialogs.crm_quick_actions import on_task_text_input
-    from telegram_bot.services.kommo_models import TaskCreate
+    from telegram_bot.services.crm.kommo_models import TaskCreate
 
     kommo = AsyncMock()
     manager = _make_manager(
@@ -349,7 +349,7 @@ async def test_on_edit_field_select_date_switches_to_edit_date_state() -> None:
 @pytest.mark.asyncio
 async def test_on_edit_task_text_input_updates_via_kommo() -> None:
     from telegram_bot.dialogs.crm_quick_actions import on_edit_task_text_input
-    from telegram_bot.services.kommo_models import TaskUpdate
+    from telegram_bot.services.crm.kommo_models import TaskUpdate
 
     kommo = AsyncMock()
     manager = _make_manager(
@@ -396,7 +396,7 @@ async def test_on_edit_task_text_input_empty_warns_no_update() -> None:
 @pytest.mark.asyncio
 async def test_on_edit_task_date_input_parses_and_updates() -> None:
     from telegram_bot.dialogs.crm_quick_actions import on_edit_task_date_input
-    from telegram_bot.services.kommo_models import TaskUpdate
+    from telegram_bot.services.crm.kommo_models import TaskUpdate
 
     kommo = AsyncMock()
     manager = _make_manager(

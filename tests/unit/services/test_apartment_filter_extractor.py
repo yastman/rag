@@ -6,8 +6,8 @@ from __future__ import annotations
 import pytest
 
 from telegram_bot.constants.apartment_constants import APARTMENT_CITY_ALIASES
-from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
-from telegram_bot.services.text_utils import parse_int_with_k_suffix
+from telegram_bot.services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
+from telegram_bot.services.util.text_utils import parse_int_with_k_suffix
 
 
 _ext = ApartmentFilterExtractor()
