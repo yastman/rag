@@ -4,6 +4,10 @@ FastAPI RAG API — HTTP wrapper around the LangGraph pipeline.
 
 ## Purpose
 
+> **Status: unwired / reference** — `src/api/Dockerfile` was removed and this service is not
+> wired in `compose.yml`, `Makefile`, or CI. The Python source (`main.py`, `schemas.py`) is
+> kept as reference/prototype; it is **not** part of the active production path.
+
 Exposes a single synchronous RAG endpoint (`POST /query`) and a readiness probe (`GET /health`) for external integrations (mini app, voice, third-party clients).
 
 ## Entrypoints
