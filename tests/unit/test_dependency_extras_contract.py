@@ -11,7 +11,8 @@ PYPROJECT = Path("pyproject.toml")
 MAKEFILE = Path("Makefile")
 
 # Archived extras removed by #2640 (monolith archival epic #2596)
-ARCHIVED_EXTRAS = {"observability", "ui", "mini-app", "voice", "eval"}
+# Note: "eval" is NOT archived — it has active Makefile targets (eval-gold-gen) and ragas dep
+ARCHIVED_EXTRAS = {"observability", "ui", "mini-app", "voice"}
 
 
 def _project() -> dict:
@@ -90,7 +91,7 @@ def test_all_extra_includes_every_kept_runtime_surface() -> None:
     """`uv sync --all-extras` should cover all kept surfaces after archival (#2640)."""
     all_extra = " ".join(_project()["project"]["optional-dependencies"]["all"])
 
-    for name in ["core", "telegram", "providers", "ingest"]:
+    for name in ["core", "telegram", "providers", "docling-native"]:
         assert name in all_extra, f"'all' extra must include '{name}'"
 
     for name in ARCHIVED_EXTRAS:
