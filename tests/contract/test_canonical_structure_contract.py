@@ -35,7 +35,7 @@ REQUIRED_ACTIVE_DIRS = [
     "src/retrieval",
     "telegram_bot",
     "services/bge-m3-api",
-    "services/docling",
+    # services/docling removed in Docling native-SDK migration (phase_6508bc74ca4a)
 ]
 
 # ---------------------------------------------------------------------------
