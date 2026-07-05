@@ -90,19 +90,25 @@ docs = [
 ]
 
 
-# Docling service dependencies live in services/docling because the root
-# project talks to docling-serve over HTTP. Keeping this root extra empty avoids
-# pulling KFP/Kubernetes service-only packages into the application lockfile.
+# Docling is used as a native Python SDK in the ingestion pipeline (src/ingestion/).
+# This extra is intentionally empty — all Docling packages are in the `ingestion` extra below.
 docling = []
 
-# Native Docling ingestion pipeline (#2710: consolidates ingest + ingestion extras)
-# Install: uv sync --extra docling-native
-docling-native = [
-    "pymupdf",
-    "docling>=2.109.0",
-    "docling-core[chunking]",
-    "transformers>=4.34.0,<6.0.0",
-    "fastembed",
+# Ingestion pipeline (Docling, PyMuPDF)
+ingestion = [
+    "pymupdf>=1.26.0",
+    "docling>=2.94.0",
+    "docling-core>=2.74.1",
+    "fastembed>=0.7.4",
+]
+
+# Backward-compatible alias for existing make targets and docs.
+# NOTE (#2710): identical to `ingestion` above. Keep in sync or consolidate.
+ingest = [
+    "pymupdf>=1.26.0",
+    "docling>=2.94.0",
+    "docling-core>=2.74.1",
+    "fastembed>=0.7.4",
 ]
 
 # Evaluation / LLM-as-judge (no-patch Dependabot alert CVE-2026-6587; kept isolated — issue #2043)
@@ -112,7 +118,7 @@ eval = [
 
 # All optional dependencies (kept surfaces only; archived extras removed by #2640)
 all = [
-    "contextual-rag[core,telegram,providers,docs,docling-native,ml-local]",
+    "contextual-rag[core,telegram,providers,docs,ingest,ml-local]",
 ]
 
 # =============================================================================
