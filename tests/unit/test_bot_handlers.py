@@ -47,7 +47,7 @@ def mock_config(monkeypatch):
     monkeypatch.delenv("KOMMO_ACCESS_TOKEN", raising=False)
     return BotConfig(
         _env_file=None,
-        telegram_token="test-token",
+        telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         voyage_api_key="voyage-key",
         llm_api_key="llm-key",
         llm_base_url="https://api.example.com/v1",
@@ -90,7 +90,9 @@ def test_bot_config_reads_streaming_enabled_false(monkeypatch):
     """STREAMING_ENABLED=false should reach BotConfig."""
     monkeypatch.setenv("STREAMING_ENABLED", "false")
 
-    config = BotConfig(_env_file=None, telegram_token="test-token")
+    config = BotConfig(
+        _env_file=None, telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
+    )
 
     assert config.streaming_enabled is False
 

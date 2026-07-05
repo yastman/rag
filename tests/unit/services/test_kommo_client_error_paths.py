@@ -15,7 +15,7 @@ _DUMMY_REQ = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/1")
 @pytest.fixture
 def mock_token_store():
     store = AsyncMock()
-    store.get_valid_token = AsyncMock(return_value="test-token")
+    store.get_valid_token = AsyncMock(return_value="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi")
     store.force_refresh = AsyncMock(return_value="refreshed-token")
     return store
 
