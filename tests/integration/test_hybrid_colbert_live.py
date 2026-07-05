@@ -46,11 +46,16 @@ def check_services(live_urls: dict[str, str]) -> None:
     """Ping both services; skip if either is unreachable (Q7)."""
     import httpx
 
-    for name, url in [("Qdrant", live_urls["qdrant"]), ("BGE-M3", live_urls["bge_m3"])]:
+    # Qdrant uses /healthz, BGE-M3 uses /health
+    health_endpoints = [
+        ("Qdrant", live_urls["qdrant"], "/healthz"),
+        ("BGE-M3", live_urls["bge_m3"], "/health"),
+    ]
+    for name, url, path in health_endpoints:
         try:
-            resp = httpx.get(f"{url}/health", timeout=5)
+            resp = httpx.get(f"{url}{path}", timeout=5)
             if resp.status_code >= 400:
-                pytest.skip(f"{name} at {url} returned {resp.status_code}")
+                pytest.skip(f"{name} at {url}{path} returned {resp.status_code}")
         except Exception as exc:
             pytest.skip(f"{name} at {url} unreachable: {exc}")
 
@@ -131,7 +136,12 @@ async def test_colbert_reorders_vs_rrf(
             svec = {}
             if hybrid.lexical_weights and idx < len(hybrid.lexical_weights):
                 lw = hybrid.lexical_weights[idx]
-                svec = {"bm42": SparseVector(indices=list(lw.keys()), values=list(lw.values()))}
+                svec = {
+                    "bm42": SparseVector(
+                        indices=lw["indices"],
+                        values=lw["values"],
+                    )
+                }
             points.append(
                 PointStruct(
                     id=idx + 1,
@@ -236,7 +246,7 @@ async def test_sparse_vector_contributes_to_results(
         doc_b = PointStruct(
             id=2,
             vector={
-                "bm42": SparseVector(indices=list(lw_b.keys()), values=list(lw_b.values())),
+                "bm42": SparseVector(indices=lw_b["indices"], values=lw_b["values"]),
                 "colbert": colbert.colbert_vecs[1],
             },
             payload={"text": texts[1], "doc_id": "doc_B"},
@@ -267,7 +277,7 @@ async def test_sparse_vector_contributes_to_results(
             prefetch=[
                 Prefetch(query=q_hybrid.dense_vecs[0], using="dense", limit=10),
                 Prefetch(
-                    query=SparseVector(indices=list(q_lw.keys()), values=list(q_lw.values())),
+                    query=SparseVector(indices=q_lw["indices"], values=q_lw["values"]),
                     using="bm42",
                     limit=10,
                 ),
