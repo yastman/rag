@@ -97,7 +97,8 @@ class NativeDoclingAdapter:
                     "docling dependency"
                 )
             from docling.datamodel.base_models import InputFormat
-            from docling.datamodel.pipeline_options import PdfFormatOption, PdfPipelineOptions
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
+            from docling.document_converter import PdfFormatOption
 
             pipeline_options = PdfPipelineOptions(do_ocr=False, do_table_structure=True)
             self._converter = RuntimeDocumentConverter(
