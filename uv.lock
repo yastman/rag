@@ -618,7 +618,7 @@ all = [
     { name = "asyncpg" },
     { name = "cachetools" },
     { name = "docling" },
-    { name = "docling-core", extra = ["chunking"] },
+    { name = "docling-core" },
     { name = "fastembed" },
     { name = "flagembedding" },
     { name = "fluentogram" },
@@ -668,13 +668,6 @@ core = [
     { name = "tenacity" },
     { name = "typing-extensions" },
 ]
-docling-native = [
-    { name = "docling" },
-    { name = "docling-core", extra = ["chunking"] },
-    { name = "fastembed" },
-    { name = "pymupdf" },
-    { name = "transformers" },
-]
 docs = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
@@ -682,6 +675,18 @@ docs = [
 ]
 eval = [
     { name = "ragas" },
+]
+ingest = [
+    { name = "docling" },
+    { name = "docling-core" },
+    { name = "fastembed" },
+    { name = "pymupdf" },
+]
+ingestion = [
+    { name = "docling" },
+    { name = "docling-core" },
+    { name = "fastembed" },
+    { name = "pymupdf" },
 ]
 ml-local = [
     { name = "flagembedding" },
@@ -735,10 +740,13 @@ requires-dist = [
     { name = "aiohttp", marker = "extra == 'core'", specifier = ">=3.14.1" },
     { name = "asyncpg", marker = "extra == 'telegram'", specifier = ">=0.31.0" },
     { name = "cachetools", marker = "extra == 'telegram'", specifier = ">=5.0.0" },
-    { name = "contextual-rag", extras = ["core", "telegram", "providers", "docs", "docling-native", "ml-local"], marker = "extra == 'all'" },
-    { name = "docling", marker = "extra == 'docling-native'", specifier = ">=2.109.0" },
-    { name = "docling-core", extras = ["chunking"], marker = "extra == 'docling-native'" },
-    { name = "fastembed", marker = "extra == 'docling-native'" },
+    { name = "contextual-rag", extras = ["core", "telegram", "providers", "docs", "ingest", "ml-local"], marker = "extra == 'all'" },
+    { name = "docling", marker = "extra == 'ingest'", specifier = ">=2.94.0" },
+    { name = "docling", marker = "extra == 'ingestion'", specifier = ">=2.94.0" },
+    { name = "docling-core", marker = "extra == 'ingest'", specifier = ">=2.74.1" },
+    { name = "docling-core", marker = "extra == 'ingestion'", specifier = ">=2.74.1" },
+    { name = "fastembed", marker = "extra == 'ingest'", specifier = ">=0.7.4" },
+    { name = "fastembed", marker = "extra == 'ingestion'", specifier = ">=0.7.4" },
     { name = "flagembedding", marker = "extra == 'ml-local'" },
     { name = "fluentogram", marker = "extra == 'telegram'", specifier = ">=1.2.0" },
     { name = "httpx", specifier = ">=0.27.0" },
@@ -758,7 +766,8 @@ requires-dist = [
     { name = "pydantic", marker = "extra == 'core'", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pydantic-settings", marker = "extra == 'core'", specifier = ">=2.14.2" },
-    { name = "pymupdf", marker = "extra == 'docling-native'" },
+    { name = "pymupdf", marker = "extra == 'ingest'", specifier = ">=1.26.0" },
+    { name = "pymupdf", marker = "extra == 'ingestion'", specifier = ">=1.26.0" },
     { name = "python-dotenv" },
     { name = "python-dotenv", marker = "extra == 'core'" },
     { name = "pyyaml", specifier = ">=6.0.0" },
@@ -778,13 +787,12 @@ requires-dist = [
     { name = "tenacity", marker = "extra == 'core'", specifier = ">=8.2.0" },
     { name = "torch", marker = "extra == 'ml-local'", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", marker = "extra == 'ml-local'", specifier = ">=0.15.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "transformers", marker = "extra == 'docling-native'", specifier = ">=4.34.0,<6.0.0" },
     { name = "transformers", marker = "extra == 'ml-local'", specifier = ">=4.30.0" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "typing-extensions", marker = "extra == 'core'", specifier = ">=4.0.0" },
     { name = "uvloop", marker = "extra == 'telegram'", specifier = ">=0.21.0" },
 ]
-provides-extras = ["core", "telegram", "providers", "ml-local", "docs", "docling", "docling-native", "eval", "all"]
+provides-extras = ["core", "telegram", "providers", "ml-local", "docs", "docling", "ingestion", "ingest", "eval", "all"]
 
 [package.metadata.requires-dev]
 dev = [
