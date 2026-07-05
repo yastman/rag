@@ -100,12 +100,9 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    # Ф4: Docling model artifacts path (baked at build time)
     DOCLING_ARTIFACTS_PATH=/opt/docling/models \
-    # Ф4: HuggingFace cache paths (BGE-M3 baked at build time)
     HF_HOME=/opt/huggingface \
     HF_HUB_CACHE=/opt/huggingface/hub \
-    # Offline mode — prevent any network calls at runtime
     HF_HUB_OFFLINE=1 \
     TRANSFORMERS_OFFLINE=1
 
