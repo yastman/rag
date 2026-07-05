@@ -5,6 +5,10 @@ The deterministic, idempotent, production path lives in `src/ingestion/unified/`
 [`../src/ingestion/README.md`](../src/ingestion/README.md) and
 [`../src/ingestion/unified/AGENTS.override.md`](../src/ingestion/unified/AGENTS.override.md).
 
+For canonical decisions about Docling (in-process SDK, prohibited patterns, extras
+structure, config defaults) see
+[`DOCLING_ARCHITECTURE_AUTHORITY.md`](DOCLING_ARCHITECTURE_AUTHORITY.md).
+
 ## Pipeline
 
 ```
@@ -13,6 +17,8 @@ source file → Docling (in-process, native SDK) → chunk + embed (BGE-M3: dens
 
 - **Docling** runs in-process inside the ingestion container (native SDK, no HTTP sidecar or
   `DOCLING_URL`). PDF and other format parsing happens directly without a separate service.
+  (`docling-serve` / `DOCLING_URL` are removed and prohibited — see
+  [`DOCLING_ARCHITECTURE_AUTHORITY.md`](DOCLING_ARCHITECTURE_AUTHORITY.md).)
 - The **unified pipeline** owns chunking and the embedding writes; **BGE-M3** serves
   embeddings — see [`../services/bge-m3-api/README.md`](../services/bge-m3-api/README.md).
 
