@@ -59,7 +59,7 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 |---|---|
 | Services overview · local rules | [`../services/README.md`](../services/README.md) · [`../services/AGENTS.override.md`](../services/AGENTS.override.md) |
 | BGE-M3 embeddings API | [`../services/bge-m3-api/README.md`](../services/bge-m3-api/README.md) · [`../services/bge-m3-api/AGENTS.override.md`](../services/bge-m3-api/AGENTS.override.md) |
-| Docling parsing | [`../services/docling/README.md`](../services/docling/README.md) · [`../services/docling/AGENTS.override.md`](../services/docling/AGENTS.override.md) |
+| Docling (native SDK, in-process) | [`../src/ingestion/docling_native.py`](../src/ingestion/docling_native.py) — docling-serve removed (phase_6508bc74ca4a) |
 | Docker / Compose assets | [`../docker/README.md`](../docker/README.md) · [`../docker/ingestion/README.md`](../docker/ingestion/README.md) · [`../docker/postgres/README.md`](../docker/postgres/README.md) |
 
 ## Tests, scripts, audits

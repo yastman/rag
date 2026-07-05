@@ -84,16 +84,3 @@ async def test_bge_m3_health():
             assert resp.status == 200
             data = await resp.json()
             assert data["status"] == "ok"
-
-
-@pytest.mark.asyncio
-async def test_docling_health():
-    """Test Docling document parsing service health."""
-    if not _check_tcp("localhost", 5001):
-        pytest.skip("Docling not running on localhost:5001")
-
-    import aiohttp
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get("http://localhost:5001/health") as resp:
-            assert resp.status == 200

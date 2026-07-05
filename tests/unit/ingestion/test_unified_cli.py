@@ -145,7 +145,6 @@ def _make_config(**overrides):
     config.qdrant_url = overrides.get("qdrant_url", "http://qdrant:6333")
     config.collection_name = overrides.get("collection_name", "test_col")
     config.bge_m3_url = overrides.get("bge_m3_url", "http://bge:8000")
-    config.docling_url = overrides.get("docling_url", "http://docling:5001")
     config.database_url = overrides.get("database_url", "postgresql://test@localhost/db")
     config.sync_dir = overrides.get("sync_dir", Path("/tmp/sync"))
     config.supported_extensions = overrides.get(
@@ -174,7 +173,6 @@ class TestCmdPreflight:
         {
             "QDRANT_URL": "http://qdrant:6333",
             "BGE_M3_URL": "http://bge:8000",
-            "DOCLING_URL": "http://docling:5001",
             "INGESTION_DATABASE_URL": "postgresql://test@localhost/db",
         },
     )
@@ -211,7 +209,6 @@ class TestCmdPreflight:
         {
             "QDRANT_URL": "http://qdrant:6333",
             "BGE_M3_URL": "http://bge:8000",
-            "DOCLING_URL": "http://docling:5001",
             "INGESTION_DATABASE_URL": "postgresql://test@localhost/db",
         },
     )
@@ -246,7 +243,6 @@ class TestCmdPreflight:
         {
             "QDRANT_URL": "http://qdrant:6333",
             "BGE_M3_URL": "http://bge:8000",
-            "DOCLING_URL": "http://docling:5001",
             "INGESTION_DATABASE_URL": "postgresql://test@localhost/db",
         },
     )
@@ -351,7 +347,6 @@ class TestCmdPreflight:
         {
             "QDRANT_URL": "http://qdrant:6333",
             "BGE_M3_URL": "http://bge:8000",
-            "DOCLING_URL": "http://docling:5001",
             "INGESTION_DATABASE_URL": "postgresql://test@localhost/db",
         },
     )
