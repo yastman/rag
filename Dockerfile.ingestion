@@ -56,10 +56,9 @@ RUN .venv/bin/python -m pip install --quiet docling-tools 2>/dev/null || true &&
     echo "Docling model pre-warm step — will retry at runtime if CLI not available"
 
 # BGE-M3: HuggingFace model cache (not a Docling artifact — warm separately)
-RUN .venv/bin/python -c "
-from huggingface_hub import snapshot_download
-snapshot_download(repo_id='BAAI/bge-m3', cache_dir='/opt/huggingface/hub', ignore_patterns=['*.ot', 'flax*', 'tf_*'])
-" 2>/dev/null || echo "BGE-M3 pre-warm — will download at runtime if offline cache missing"
+# hadolint ignore=DL3059
+RUN .venv/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='BAAI/bge-m3', cache_dir='/opt/huggingface/hub', ignore_patterns=['*.ot', 'flax*', 'tf_*'])" \
+    2>/dev/null || echo "BGE-M3 pre-warm — will download at runtime if offline cache missing"
 
 # =============================================================================
 # Runtime stage
