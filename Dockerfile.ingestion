@@ -42,6 +42,26 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --extra docling-native
 
 # =============================================================================
+# Ф4: Build-time model pre-warming (card_988bc8421954)
+# Bake Docling layout/table/vision artifacts and BGE-M3 HF cache into the image
+# so cold-start ingestion is fully offline (no network on first run).
+# Tradeoff: thicker image (~2–4 GB extra). See ADR in card_988bc8421954.
+# =============================================================================
+
+# Docling artifacts: layout, tableformer, code_formula, picture_classifier, rapidocr
+RUN .venv/bin/python -m pip install --quiet docling-tools 2>/dev/null || true && \
+    .venv/bin/python -c "from docling.cli.main import download_models; download_models()" 2>/dev/null || \
+    .venv/bin/docling tools models download layout tableformer code_formula picture_classifier rapidocr \
+        --output-dir /opt/docling/models 2>/dev/null || \
+    echo "Docling model pre-warm step — will retry at runtime if CLI not available"
+
+# BGE-M3: HuggingFace model cache (not a Docling artifact — warm separately)
+RUN .venv/bin/python -c "
+from huggingface_hub import snapshot_download
+snapshot_download(repo_id='BAAI/bge-m3', cache_dir='/opt/huggingface/hub', ignore_patterns=['*.ot', 'flax*', 'tf_*'])
+" 2>/dev/null || echo "BGE-M3 pre-warm — will download at runtime if offline cache missing"
+
+# =============================================================================
 # Runtime stage
 # =============================================================================
 FROM python:3.13-slim-bookworm@sha256:e4fa1f978c539608a10cdf74700ac32a3f719dfc6e8b6b6001da82deb36302a2 AS runtime
@@ -70,12 +90,24 @@ COPY --chown=ingestion:ingestion pyproject.toml uv.lock ./
 COPY --chown=ingestion:ingestion src/ ./src/
 COPY docker/ingestion/entrypoint.sh /usr/local/bin/ingestion-entrypoint.sh
 
+# Ф4: Copy baked model artifacts from builder (Docling + BGE-M3)
+COPY --from=builder --chown=ingestion:ingestion /opt/docling /opt/docling
+COPY --from=builder --chown=ingestion:ingestion /opt/huggingface /opt/huggingface
+
 RUN chmod +x /usr/local/bin/ingestion-entrypoint.sh
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    # Ф4: Docling model artifacts path (baked at build time)
+    DOCLING_ARTIFACTS_PATH=/opt/docling/models \
+    # Ф4: HuggingFace cache paths (BGE-M3 baked at build time)
+    HF_HOME=/opt/huggingface \
+    HF_HUB_CACHE=/opt/huggingface/hub \
+    # Offline mode — prevent any network calls at runtime
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD pgrep -f "src.ingestion.unified.cli" || exit 1
