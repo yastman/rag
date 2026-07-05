@@ -30,13 +30,9 @@ def bge_rerank_app():
         mock_transformers = MagicMock()
         mock_transformers.AutoTokenizer.from_pretrained = MagicMock(return_value=MagicMock())
 
-        mock_lf = MagicMock()
-        mock_lf.observe = lambda *_a, **_k: lambda f: f
-
         mp.setitem(sys.modules, "onnxruntime", mock_ort)
         mp.setitem(sys.modules, "transformers", mock_transformers)
         mp.setitem(sys.modules, "prometheus_client", MagicMock())
-        mp.setitem(sys.modules, "langfuse", mock_lf)
         mp.syspath_prepend(_BGE_SERVICE_DIR)
         yield
         # Clean up cached service imports (not mocks — real modules imported

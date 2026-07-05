@@ -63,6 +63,10 @@ telegram = [
     "cachetools>=5.0.0",
     "asyncpg>=0.31.0",
     "uvloop>=0.21.0",
+    # LangGraph supervisor + CRM agent layer (telegram_bot/agents/, pipeline/supervisor.py)
+    # DEP003 fix: declare as direct deps (were transitively available via aiogram; now explicit)
+    "langgraph>=1.2.0",
+    "langchain-core>=1.4.0",
 ]
 
 # Optional non-OpenAI provider/contextualization adapters.
@@ -79,35 +83,15 @@ ml-local = [
     # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
     "torch>=2.0.0",
     "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
-    "transformers>=4.30.0", # For HuggingFace tokenizers in HybridChunker
+    "transformers>=4.34.0,<6.0.0", # For HuggingFace tokenizers in HybridChunker; aligned with docling-native floor
 ]
 
-# Documentation tools
-docs = [
-    "mkdocs>=1.6.0",         # Documentation generator
-    "mkdocs-material>=9.5.0",# Material theme
-    "mkdocstrings[python]>=0.25.0",  # Auto API docs
-]
-
-
-# Docling is used as a native Python SDK in the ingestion pipeline (src/ingestion/).
-# This extra is intentionally empty — all Docling packages are in the `ingestion` extra below.
-docling = []
-
-# Ingestion pipeline (Docling, PyMuPDF)
-ingestion = [
+# Native Docling SDK — ingestion pipeline (DocumentConverter + HybridChunker)
+docling-native = [
     "pymupdf>=1.26.0",
-    "docling>=2.94.0",
-    "docling-core>=2.74.1",
-    "fastembed>=0.7.4",
-]
-
-# Backward-compatible alias for existing make targets and docs.
-# NOTE (#2710): identical to `ingestion` above. Keep in sync or consolidate.
-ingest = [
-    "pymupdf>=1.26.0",
-    "docling>=2.94.0",
-    "docling-core>=2.74.1",
+    "docling>=2.109.0",
+    "docling-core[chunking]>=2.74.1",
+    "transformers>=4.34.0,<6.0.0",
     "fastembed>=0.7.4",
 ]
 
@@ -118,7 +102,7 @@ eval = [
 
 # All optional dependencies (kept surfaces only; archived extras removed by #2640)
 all = [
-    "contextual-rag[core,telegram,providers,docs,ingest,ml-local]",
+    "contextual-rag[core,telegram,providers,docling-native,ml-local]",
 ]
 
 # =============================================================================

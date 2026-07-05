@@ -31,7 +31,7 @@ def _isolate_env(monkeypatch):
 @pytest.fixture
 def mock_config() -> BotConfig:
     return BotConfig(
-        telegram_token="test-token",
+        telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         voyage_api_key="voyage-key",
         llm_api_key="llm-key",
         llm_base_url="https://api.example.com/v1",

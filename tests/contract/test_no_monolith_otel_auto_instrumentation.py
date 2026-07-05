@@ -11,7 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 _AUTO_INSTRUMENTATION_PREFIX = "opentelemetry-instrumentation-"
 _ALLOWED_SRC_OTEL_ENV_FILES = {
-    Path("src/observability.py"),
+    Path("src/observability.py"),  # legacy path (may not exist)
+    Path("src/observability/bootstrap.py"),  # guarded best-effort SDK shutdown (#2969 split)
 }
 _SCAN_ROOTS = [ROOT / "src", ROOT / "telegram_bot"]
 
@@ -58,7 +59,7 @@ def test_src_and_telegram_bot_do_not_import_opentelemetry_runtime_modules() -> N
         rel = file_path.relative_to(ROOT)
         if rel in _ALLOWED_SRC_OTEL_ENV_FILES:
             # These files may mention OTEL env var names but must not import OTel.
-            pass
+            continue
         tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(rel))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

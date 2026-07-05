@@ -17,14 +17,14 @@ cp .env.example .env     # fill in credentials (Telegram token, API keys)
 uv sync                  # core + dev tools (PEP 735 dev group)
 # optional extras, only when needed:
 uv sync --extra ml-local # local BGE-M3 / cross-encoder inference (torch)
-uv sync --extra ingest   # Docling + PyMuPDF ingestion pipeline
+uv sync --extra docling-native   # Docling + PyMuPDF ingestion pipeline (in-process)
 ```
 
 ## Bring up the sidecar stack
 
 ```bash
 make core-min-up     # minimal: Qdrant + Redis
-make core-up         # full: + BGE-M3, Docling, PostgreSQL
+make core-up         # full: + BGE-M3, PostgreSQL
 ```
 
 The retrieval stack uses dense + sparse + ColBERT from the local BGE-M3. Tunables live in `.env.example` (e.g. `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`).

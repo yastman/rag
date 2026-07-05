@@ -11,7 +11,8 @@ PYPROJECT = Path("pyproject.toml")
 MAKEFILE = Path("Makefile")
 
 # Archived extras removed by #2640 (monolith archival epic #2596)
-ARCHIVED_EXTRAS = {"observability", "ui", "mini-app", "voice", "eval"}
+# Note: "eval" is NOT archived — it has active Makefile targets (eval-gold-gen) and ragas dep
+ARCHIVED_EXTRAS = {"observability", "ui", "mini-app", "voice"}
 
 
 def _project() -> dict:
@@ -71,9 +72,9 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     extras = _project()["project"]["optional-dependencies"]
 
     assert {"aiogram", "aiogram-dialog", "fluentogram"}.issubset(_dep_names(extras["telegram"]))
-    assert {"anthropic", "groq"}.issubset(_dep_names(extras["providers"]))
-    assert "instructor" not in _dep_names(extras["providers"])
-    assert {"docling", "pymupdf", "fastembed"}.issubset(_dep_names(extras["ingestion"]))
+    # providers is intentionally empty after #2893 (anthropic/groq removed with dead module)
+    assert extras["providers"] == []
+    assert {"docling", "pymupdf", "fastembed"}.issubset(_dep_names(extras["docling-native"]))
 
 
 def test_archived_extras_removed_from_pyproject() -> None:
@@ -90,7 +91,7 @@ def test_all_extra_includes_every_kept_runtime_surface() -> None:
     """`uv sync --all-extras` should cover all kept surfaces after archival (#2640)."""
     all_extra = " ".join(_project()["project"]["optional-dependencies"]["all"])
 
-    for name in ["core", "telegram", "providers", "ingest"]:
+    for name in ["core", "telegram", "providers", "docling-native"]:
         assert name in all_extra, f"'all' extra must include '{name}'"
 
     for name in ARCHIVED_EXTRAS:

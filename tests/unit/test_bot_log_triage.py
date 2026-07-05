@@ -227,7 +227,7 @@ def _build_main_mocks() -> tuple[AsyncMock, MagicMock, dict[str, MagicMock]]:
     mock_logging_config_mod.setup_logging = mock_setup_logging
 
     mock_config_instance = MagicMock()
-    mock_config_instance.telegram_token = "test-token"
+    mock_config_instance.telegram_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
     mock_config_instance.llm_api_key = "test-api-key"
     mock_bot_config.return_value = mock_config_instance
 

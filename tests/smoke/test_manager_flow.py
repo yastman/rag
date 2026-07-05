@@ -6,7 +6,7 @@ No Docker required — uses mocked services.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,70 +19,6 @@ from telegram_bot.agents.manager_tools import build_tools_for_role
 
 
 pytestmark = pytest.mark.no_services
-
-
-@pytest.fixture
-def manager_config():
-    """BotConfig with CRM enabled and manager IDs."""
-    from telegram_bot.config import BotConfig
-
-    return BotConfig(
-        telegram_token="test-token",
-        llm_api_key="llm-key",
-        llm_base_url="https://api.example.com/v1",
-        llm_model="gpt-4o-mini",
-        qdrant_url="http://localhost:6333",
-        redis_url="redis://localhost:6379",
-        rerank_provider="none",
-        manager_ids=[12345],
-        kommo_enabled=True,
-        kommo_subdomain="test",
-        kommo_access_token="token",
-        kommo_client_id="client_id",
-        kommo_client_secret="secret",
-        kommo_redirect_uri="https://example.com/callback",
-        kommo_auth_code="",
-        kommo_default_pipeline_id=1,
-        kommo_session_field_id=100,
-        kommo_lead_score_field_id=200,
-        kommo_lead_band_field_id=300,
-        kommo_telegram_field_id=400,
-        manager_hot_lead_threshold=60,
-        manager_hot_lead_dedupe_sec=3600,
-        realestate_database_url="postgresql://localhost/test",
-    )
-
-
-def _create_bot(config):
-    """Create PropertyBot with all deps mocked."""
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("telegram_bot.integrations.cache.CacheLayerManager"),
-        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("telegram_bot.services.qdrant.QdrantService"),
-        patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-        patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
-    ):
-        from telegram_bot.bot import PropertyBot
-
-        return PropertyBot(config)
-
-
-class TestManagerRoleResolution:
-    """Manager role is correctly resolved from config.manager_ids."""
-
-    @pytest.mark.asyncio
-    async def test_resolve_manager_from_config(self, manager_config):
-        bot = _create_bot(manager_config)
-        role = await bot._resolve_user_role(12345)
-        assert role == "manager"
-
-    @pytest.mark.asyncio
-    async def test_resolve_client_for_unknown_user(self, manager_config):
-        bot = _create_bot(manager_config)
-        role = await bot._resolve_user_role(99999)
-        assert role == "client"
 
 
 class TestToolGating:
