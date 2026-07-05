@@ -731,16 +731,6 @@ ci: format-check lint type-check security test ## CI/CD pipeline checks
 # DOCUMENTATION
 # =============================================================================
 
-docs-serve: ## Serve documentation locally
-	@echo "$(BLUE)Starting documentation server...$(NC)"
-	uv run mkdocs serve
-	@echo "$(GREEN)✓ Documentation server running at http://localhost:8000$(NC)"
-
-docs-build: ## Build documentation
-	@echo "$(BLUE)Building documentation...$(NC)"
-	uv run mkdocs build
-	@echo "$(GREEN)✓ Documentation built in site/$(NC)"
-
 docs-check: ## Check Markdown relative links for broken targets
 	@echo "$(BLUE)Checking documentation links...$(NC)"
 	python3 scripts/check_markdown_links.py
