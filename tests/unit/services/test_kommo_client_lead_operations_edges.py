@@ -14,7 +14,7 @@ from telegram_bot.services.crm.kommo_models import LeadCreate, LeadUpdate
 def mock_token_store():
     """Mock KommoTokenStore."""
     store = AsyncMock()
-    store.get_valid_token = AsyncMock(return_value="test-token")
+    store.get_valid_token = AsyncMock(return_value="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi")
     store.force_refresh = AsyncMock(return_value="refreshed-token")
     return store
 

@@ -23,7 +23,7 @@ from telegram_bot.config import BotConfig
 def _make_config() -> BotConfig:
     return BotConfig(
         _env_file=None,
-        telegram_token="test-token",
+        telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         voyage_api_key="voyage-key",
         llm_api_key="llm-key",
         llm_base_url="https://api.example.com/v1",
