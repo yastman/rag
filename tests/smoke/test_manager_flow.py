@@ -27,7 +27,8 @@ def manager_config():
     from telegram_bot.config import BotConfig
 
     return BotConfig(
-        telegram_token="test-token",
+        _env_file=None,
+        telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         llm_api_key="llm-key",
         llm_base_url="https://api.example.com/v1",
         llm_model="gpt-4o-mini",
@@ -61,8 +62,8 @@ def _create_bot(config):
         patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
         patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
         patch("telegram_bot.services.qdrant.QdrantService"),
-        patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-        patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+        patch("src.runtime.graph.config.GraphConfig.create_llm"),
+        patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
     ):
         from telegram_bot.bot import PropertyBot
 
