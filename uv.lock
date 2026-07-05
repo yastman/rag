@@ -610,6 +610,8 @@ all = [
     { name = "flagembedding" },
     { name = "fluentogram" },
     { name = "httpx" },
+    { name = "langchain-core" },
+    { name = "langgraph" },
     { name = "litellm" },
     { name = "numpy" },
     { name = "openai" },
@@ -678,6 +680,8 @@ telegram = [
     { name = "asyncpg" },
     { name = "cachetools" },
     { name = "fluentogram" },
+    { name = "langchain-core" },
+    { name = "langgraph" },
     { name = "uvloop" },
 ]
 
@@ -722,6 +726,8 @@ requires-dist = [
     { name = "fluentogram", marker = "extra == 'telegram'", specifier = ">=1.2.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'core'", specifier = ">=0.27.0" },
+    { name = "langchain-core", marker = "extra == 'telegram'", specifier = ">=1.4.0" },
+    { name = "langgraph", marker = "extra == 'telegram'", specifier = ">=1.2.0" },
     { name = "litellm", specifier = ">=1.0.0" },
     { name = "litellm", marker = "extra == 'core'", specifier = ">=1.0.0" },
     { name = "numpy", specifier = ">=2.4.6" },
