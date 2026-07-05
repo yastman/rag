@@ -19,7 +19,7 @@ class TestResult:
     bot_response: str
     response_time_ms: int
     judge_result: JudgeResult
-    langfuse_trace_id: str | None = None
+    trace_id: str | None = None
     observability_ok: bool | None = None
     missing_spans: list[str] | None = None
     missing_scores: list[str] | None = None
@@ -257,7 +257,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     {% if result.observability_ok is not none %}
                     <div class="label-tag">Langfuse Trace:</div>
                     <div class="response">
-                        Trace ID: {{ result.langfuse_trace_id or "N/A" }} |
+                        Trace ID: {{ result.trace_id or "N/A" }} |
                         Observability OK: {{ result.observability_ok }}
                         {% if result.missing_spans %}
                         <br/>Missing spans: {{ result.missing_spans }}
@@ -315,7 +315,7 @@ class ReportGenerator:
                     "response_time_ms": r.response_time_ms,
                     "passed": r.passed,
                     "langfuse": {
-                        "trace_id": r.langfuse_trace_id,
+                        "trace_id": r.trace_id,
                         "observability_ok": r.observability_ok,
                         "missing_spans": r.missing_spans or [],
                         "missing_scores": r.missing_scores or [],

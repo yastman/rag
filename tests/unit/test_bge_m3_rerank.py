@@ -11,16 +11,15 @@ import numpy as np
 import pytest
 
 
-pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
-pytestmark = pytest.mark.requires_extras
-
-
 _BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
 
 
 @pytest.fixture(scope="module")
 def bge_rerank_app():
-    """Mock heavy deps and add bge-m3-api to sys.path for imports."""
+    """Mock heavy deps and add bge-m3-api to sys.path for imports.
+    Skips if fastapi is not installed (requires_extras tier).
+    """
+    pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
     with pytest.MonkeyPatch.context() as mp:
         mock_ort = MagicMock()
         mock_ort.InferenceSession = MagicMock()
@@ -90,3 +89,45 @@ class TestRerankEndpoint:
         # Doc 1: query token0 no match (0.0), token1 matches (1.0) → max per dim [0.0, 1.0] → sum=1.0
         assert len(scores) == 2
         assert all(isinstance(s, float) for s in scores)
+
+
+# ── Mock-httpx rerank tests — no fastapi required ──────────────────────────────
+
+
+class TestRerankSortOrderMocked:
+    """Rerank sort-order contract using BGEM3Client with mocked httpx.
+
+    No fastapi required — tests the client layer only.
+    """
+
+    async def test_rerank_results_sorted_by_score_descending(self) -> None:
+        """Sidecar returns results in descending score order; client preserves it."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from src.services.bge_m3_client import BGEM3Client
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        # Three docs; scores are not monotone in original order → client must keep sidecar order
+        mock_resp.json.return_value = {
+            "results": [
+                {"index": 2, "score": 0.93},
+                {"index": 0, "score": 0.75},
+                {"index": 1, "score": 0.42},
+            ],
+            "processing_time": 0.12,
+        }
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+
+        client = BGEM3Client(base_url="http://localhost:8000")
+        client._client = mock_http
+
+        result = await client.rerank("query", ["a", "b", "c"], top_k=3)
+
+        scores = [r["score"] for r in result.results]
+        assert scores == sorted(scores, reverse=True), f"scores must be descending, got: {scores}"
+        # Correct document is at the top
+        assert result.results[0]["index"] == 2

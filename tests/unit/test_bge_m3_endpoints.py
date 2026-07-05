@@ -4,21 +4,72 @@ Covers /encode/sparse, /encode/colbert, /encode/hybrid, /encode/dense,
 /health, /metrics, and config defaults.
 
 All sys.modules mocking is fixture-scoped (no module-level pollution).
+
+Gate test (no fastapi required):
+    test_encode_colbert_multivector_shape_gate — uses BGEM3Client with mocked
+    httpx; verifies colbert encode returns list-of-vectors each with 1024-dim.
 """
 
 import inspect
 import sys
 from pathlib import Path
 from typing import get_args
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import numpy as np
 import pytest
 
 
-pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
-pytestmark = pytest.mark.requires_extras
+# ── Gate test — no FastAPI required, runs in core tier ────────────────────────
+
+
+@pytest.mark.no_services
+def test_encode_colbert_multivector_shape_gate() -> None:
+    """CLOSE-GATE: colbert encode returns list-of-vectors, each with shape (1024,).
+
+    Uses BGEM3Client with mocked httpx — no live service, no fastapi.
+    The multi-vector shape is: colbert_vecs[text_i][token_j] has len 1024.
+    """
+    from src.services.bge_m3_client import BGEM3Client
+
+    # Three tokens per text, each 1024-dim — realistic ColBERT output.
+    token_vec = [0.1] * 1024
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {
+        "colbert_vecs": [[token_vec, token_vec, token_vec]],  # 1 text, 3 tokens
+        "processing_time": 0.05,
+    }
+
+    import asyncio
+
+    async def _run() -> None:
+        client = BGEM3Client(base_url="http://localhost:8000")
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_colbert(["hello world"])
+
+        # Shape assertions — the gate this card closes
+        assert isinstance(result.colbert_vecs, list), "colbert_vecs must be a list"
+        assert len(result.colbert_vecs) == 1, "one text → one entry"
+        token_vecs = result.colbert_vecs[0]
+        assert isinstance(token_vecs, list), "each text entry must be a list of token vecs"
+        assert len(token_vecs) == 3, "expected 3 token vectors"
+        for i, vec in enumerate(token_vecs):
+            assert len(vec) == 1024, f"token_vecs[{i}] must have dim 1024, got {len(vec)}"
+
+    asyncio.run(_run())
+
+
+# ── FastAPI-dependent tests — skipped when fastapi not installed ───────────────
+# importorskip is inside the bge_app fixture (not module-level) so the gate
+# test above is still collected when fastapi is absent.
+
 # ── Fake model that returns deterministic numpy arrays ──
 _DENSE_DIM = 1024
 _COLBERT_DIM = 1024
@@ -65,7 +116,9 @@ def bge_app():
     """Mock heavy deps, import bge-m3-api app, install fake model.
 
     Uses MonkeyPatch.context() for automatic teardown of sys.modules entries.
+    Skips if fastapi is not installed (requires_extras tier).
     """
+    pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
     with pytest.MonkeyPatch.context() as mp:
         mock_ort = MagicMock()
         mock_ort.InferenceSession = MagicMock()

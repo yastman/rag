@@ -314,9 +314,9 @@ test-providers-extra: ## Run optional provider/contextualization tests explicitl
 	@echo "$(GREEN)✓ Providers-extra tests complete (no tests)$(NC)"
 
 
-test-ingest-extra: ## Run optional ingestion-extra tests explicitly
+test-ingest-extra: ## Run optional ingestion-extra tests explicitly (docling-native extra)
 	@echo "$(BLUE)Running ingestion-extra tests...$(NC)"
-	uv sync --extra ingest --all-groups
+	uv sync --extra docling-native --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
 	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
 
@@ -660,7 +660,6 @@ remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	@fail=0; \
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:6333/readyz >/dev/null 2>&1"; then echo "  Qdrant: $(RED)FAIL$(NC)"; fail=1; else echo "  Qdrant: $(GREEN)OK$(NC)"; fi; \
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1"; then echo "  BGE-M3: $(RED)FAIL$(NC)"; fail=1; else echo "  BGE-M3: $(GREEN)OK$(NC)"; fi; \
-	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:3001/api/public/health >/dev/null 2>&1"; then echo "  Langfuse: $(GREEN)OK$(NC)"; else echo "  Langfuse: $(YELLOW)NOT READY$(NC)"; fi; \
 	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:5001/health >/dev/null 2>&1"; then echo "  Docling: $(GREEN)OK$(NC)"; else echo "  Docling: $(YELLOW)NOT READY$(NC)"; fi; \
 	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(YELLOW)container not found$(NC)"; fi; \
@@ -1012,11 +1011,11 @@ test-e2e-infra: ## Run live Docling + Redis + Qdrant infrastructure E2E (#2771)
 
 .PHONY: eval-gold-gen eval-gold-gen-dry
 
-eval-gold-gen: ## Generate gold set from Qdrant → Langfuse Dataset + JSONL
+eval-gold-gen: ## Generate gold set from Qdrant → JSONL
 	@echo "$(BLUE)Generating gold set from Qdrant...$(NC)"
 	uv run python scripts/generate_gold_set.py --collection gdrive_documents_bge
 
-eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only, no Langfuse)
+eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only)
 	@echo "$(BLUE)Generating gold set (dry-run)...$(NC)"
 	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
 

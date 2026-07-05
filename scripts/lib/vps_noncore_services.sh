@@ -20,11 +20,8 @@
 VPS_NONCORE_SERVICES=(
   docling
   ingestion
-  langfuse
-  langfuse-worker
   clickhouse
   minio
-  redis-langfuse
   mini-app-api
   mini-app-frontend
 )

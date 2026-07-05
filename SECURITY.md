@@ -18,4 +18,4 @@ This policy applies to the public GitHub repository. All security reports should
 - Do **not** commit secrets, API keys, passwords, tokens, or other credentials to this repository.
 - If you accidentally commit sensitive material, notify the maintainers immediately so it can be rotated and removed from history.
 - Use `.env.example` as the public contract for required environment variables.
-- Treat Telegram, Kommo, Langfuse, LiveKit, and cloud credentials as external secrets, not repository content.
+- Treat Telegram, Kommo, LiveKit, and cloud credentials as external secrets, not repository content.

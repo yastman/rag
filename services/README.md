@@ -10,7 +10,11 @@ They are referenced from the main [`compose.yml`](../compose.yml) and started as
 | Service | Purpose | Entrypoint | Docker service | Profile | Local URL |
 |---|---|---|---|---|---|
 | `bge-m3-api/` | Multi-vector embeddings (dense, sparse, ColBERT) | [`app.py`](bge-m3-api/app.py) | `bge-m3` | — (default) | http://localhost:8000 |
-| `docling/` | Document parsing (PDF → markdown/HTML) | `docling-serve` | `docling` | — (default) | http://localhost:5001 |
+
+> **Docling** runs in-process via the native Python SDK (`src/ingestion/`). There is no
+> HTTP sidecar for document parsing. The `services/docling/` directory is archived
+> reference material from the pre-migration HTTP approach and is no longer part of the
+> active stack.
 
 ## Quick Validation
 
@@ -21,11 +25,6 @@ Build and health-check a single service:
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build bge-m3
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d bge-m3
 curl -fsS http://localhost:8000/health
-
-# docling
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build docling
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d docling
-curl -fsS http://localhost:5001/health
 ```
 
 ## Tests & Checks
@@ -33,7 +32,6 @@ curl -fsS http://localhost:5001/health
 | Service | Unit tests | Dockerfile checks | Smoke tests |
 |---|---|---|---|
 | `bge-m3` | `tests/unit/test_bge_m3_endpoints.py`, `tests/unit/test_bge_m3_rerank.py` | `tests/unit/test_docker_static_validation.py` | `tests/smoke/test_zoo_smoke.py` |
-| `docling` | `tests/unit/test_docling*.py` | `tests/unit/test_dockerfile_docling_sync.py` | — |
 
 Run all relevant unit tests:
 
@@ -44,7 +42,6 @@ make test-unit
 ## Owner Boundaries
 
 - **bge-m3-api**: embedding model serving, metrics export, healthchecks
-- **docling**: document conversion, no persistent state (read-only root with `./data/docling` mount)
 
 Do not modify the application code in these directories without also verifying the corresponding Compose health checks and `make verify-compose-images` after image pin updates.
 

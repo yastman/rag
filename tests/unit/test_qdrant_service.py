@@ -1082,3 +1082,230 @@ class TestEnsureAlias:
 
         assert "alias" in caplog.text.lower()
         assert "failed" in caplog.text.lower()
+
+
+# ===========================================================================
+# Q1 — RRF/limit math in hybrid_search_rrf_colbert
+# ===========================================================================
+
+
+class TestHybridSearchRrfColbertMath:
+    """Unit tests for RRF/limit formula in hybrid_search_rrf_colbert."""
+
+    @pytest.fixture
+    def service(self):
+        svc = _make_service(validated=True)
+        svc._colbert_available = True  # bypass colbert_available check
+        return svc
+
+    def _mock_result(self, service, points=None):
+        if points is None:
+            points = [_make_mock_point()]
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=points))
+
+    async def test_top_k_5_gives_inner_limits_100_and_rrf_limit_20(self, service):
+        """top_k=5, default weights 0.6/0.4 → dense_limit=100, sparse_limit=100, rrf_limit=20."""
+        self._mock_result(service)
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1, 2], "values": [0.5, 0.5]},
+            top_k=5,
+        )
+
+        call_kwargs = service._client.query_points.call_args.kwargs
+        prefetch = call_kwargs["prefetch"]
+        assert len(prefetch) == 1
+        rrf_prefetch = prefetch[0]
+        # rrf_limit = max(top_k * 4, 20) = max(20, 20) = 20
+        assert rrf_prefetch.limit == 20
+
+        # Inner prefetch: dense + sparse
+        inner = rrf_prefetch.prefetch
+        assert len(inner) == 2
+        # dense_limit: max(int(100 * 0.6/0.6), 5) = max(100, 5) = 100
+        assert inner[0].limit == 100
+        # sparse_limit: max(int(100 * 0.4/0.4), 5) = max(100, 5) = 100
+        assert inner[1].limit == 100
+
+    async def test_rrf_k_default_60_in_rrf_query(self, service):
+        """Default rrf_k=60 is passed into RrfQuery."""
+        from qdrant_client import models as qdrant_models
+
+        self._mock_result(service)
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1], "values": [0.9]},
+            top_k=5,
+            rrf_k=60,
+        )
+        call_kwargs = service._client.query_points.call_args.kwargs
+        rrf_prefetch = call_kwargs["prefetch"][0]
+        assert isinstance(rrf_prefetch.query, qdrant_models.RrfQuery)
+        assert rrf_prefetch.query.rrf.k == 60
+
+    async def test_top_k_10_gives_rrf_limit_40(self, service):
+        """top_k=10 → rrf_limit = max(10*4, 20) = 40."""
+        self._mock_result(service)
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1], "values": [0.9]},
+            top_k=10,
+        )
+
+        rrf_prefetch = service._client.query_points.call_args.kwargs["prefetch"][0]
+        assert rrf_prefetch.limit == 40
+
+    async def test_weights_0_2_0_8_give_dense_33_sparse_200(self, service):
+        """Weights 0.2/0.8 → dense_limit=33, sparse_limit=200 (formula with default top_k=5)."""
+        self._mock_result(service)
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1], "values": [0.9]},
+            top_k=5,
+            dense_weight=0.2,
+            sparse_weight=0.8,
+        )
+
+        inner = service._client.query_points.call_args.kwargs["prefetch"][0].prefetch
+        # dense_limit = max(int(100 * 0.2/0.6), 5) = max(33, 5) = 33
+        assert inner[0].limit == 33
+        # sparse_limit = max(int(100 * 0.8/0.4), 5) = max(200, 5) = 200
+        assert inner[1].limit == 200
+
+    async def test_explicit_dense_limit_override(self, service):
+        """Explicit dense_limit=50 overrides the formula."""
+        self._mock_result(service)
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1], "values": [0.9]},
+            top_k=5,
+            dense_limit=50,
+        )
+
+        inner = service._client.query_points.call_args.kwargs["prefetch"][0].prefetch
+        assert inner[0].limit == 50
+
+    async def test_explicit_sparse_limit_override(self, service):
+        """Explicit sparse_limit=75 overrides the formula."""
+        self._mock_result(service)
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1], "values": [0.9]},
+            top_k=5,
+            sparse_limit=75,
+        )
+
+        inner = service._client.query_points.call_args.kwargs["prefetch"][0].prefetch
+        assert inner[1].limit == 75
+
+    async def test_custom_rrf_k_42_reflected(self, service):
+        """rrf_k=42 is passed through to the RrfQuery."""
+        from qdrant_client import models as qdrant_models
+
+        self._mock_result(service)
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1], "values": [0.9]},
+            top_k=5,
+            rrf_k=42,
+        )
+
+        rrf_prefetch = service._client.query_points.call_args.kwargs["prefetch"][0]
+        assert isinstance(rrf_prefetch.query, qdrant_models.RrfQuery)
+        assert rrf_prefetch.query.rrf.k == 42
+
+
+# ===========================================================================
+# Q4 — Fallback branches in hybrid_search_rrf_colbert
+# ===========================================================================
+
+
+class TestHybridSearchRrfColbertFallbacks:
+    """Test fallback branches in hybrid_search_rrf_colbert."""
+
+    @pytest.fixture
+    def service(self):
+        svc = _make_service(validated=True)
+        svc._colbert_available = True
+        return svc
+
+    async def test_branch_b_empty_colbert_query_skips_query_points(self, service):
+        """Branch B: empty colbert_query → query_points NOT called, fallback used."""
+        fallback_results = [{"id": "doc-1", "score": 0.8, "text": "fallback"}]
+        service._client.query_points = AsyncMock()
+        service.hybrid_search_rrf = AsyncMock(return_value=fallback_results)
+
+        result = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[],  # empty → fallback
+            top_k=5,
+        )
+
+        service._client.query_points.assert_not_awaited()
+        assert result == fallback_results
+
+    async def test_branch_b_none_colbert_query_skips_query_points(self, service):
+        """Branch B: None colbert_query → query_points NOT called, fallback used."""
+        fallback_results = [{"id": "doc-2", "score": 0.7, "text": "fallback2"}]
+        service._client.query_points = AsyncMock()
+        service.hybrid_search_rrf = AsyncMock(return_value=fallback_results)
+
+        # colbert_query=None should also trigger fallback (falsy)
+        result = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=None,  # type: ignore[arg-type]
+            top_k=5,
+        )
+
+        service._client.query_points.assert_not_awaited()
+        assert result == fallback_results
+
+    async def test_branch_e_generic_exception_triggers_rrf_fallback(self, service):
+        """Branch E: generic exception from query_points triggers fallback."""
+        fallback_results = [{"id": "doc-3", "score": 0.6, "text": "exc-fallback"}]
+        service._client.query_points = AsyncMock(side_effect=RuntimeError("network error"))
+        service.hybrid_search_rrf = AsyncMock(return_value=fallback_results)
+
+        result = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1], "values": [0.9]},
+            top_k=5,
+        )
+
+        # query_points was called (and raised), fallback was used
+        service._client.query_points.assert_awaited_once()
+        service.hybrid_search_rrf.assert_awaited_once()
+        assert result == fallback_results
+
+    async def test_branch_c_empty_colbert_result_rrf_empty_colbert_not_disabled(self, service):
+        """Branch C without disable: empty ColBERT + empty RRF → colbert_available stays True.
+
+        When ColBERT returns [] AND fallback RRF also returns [] the code does NOT
+        set _colbert_available=False (only non-empty RRF triggers the disable).
+        """
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
+        service.hybrid_search_rrf = AsyncMock(return_value=[])
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 128],
+            sparse_vector={"indices": [1], "values": [0.9]},
+            top_k=5,
+        )
+
+        # _colbert_available must NOT have been set to False
+        assert service._colbert_available is not False

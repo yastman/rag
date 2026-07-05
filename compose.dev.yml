@@ -52,12 +52,6 @@ services:
         limits:
           memory: ${BGE_M3_MEMORY_LIMIT:-4G}
 
-  docling:
-    profiles: ["ingest", "full"]
-    ports:
-      - "127.0.0.1:5001:5001"
-
-
   bot:
     profiles: ["bot", "full"]
     environment:

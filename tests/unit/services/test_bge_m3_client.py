@@ -114,40 +114,6 @@ class TestBGEM3Client:
         assert result.processing_time == 0.1
         assert "/encode/hybrid" in mock_http.post.call_args[0][0]
 
-    async def test_encode_hybrid_injects_langfuse_context_headers(self, client, monkeypatch):
-        from src.services import bge_m3_client as mod
-
-        monkeypatch.setattr(
-            mod,
-            "get_client",
-            lambda: MagicMock(
-                get_current_trace_id=MagicMock(
-                    return_value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                ),
-                get_current_observation_id=MagicMock(return_value="bbbbbbbbbbbbbbbb"),
-            ),
-        )
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "dense_vecs": [[0.1] * 1024],
-            "lexical_weights": [{"indices": [1], "values": [0.5]}],
-            "processing_time": 0.1,
-        }
-
-        mock_http = AsyncMock()
-        mock_http.post = AsyncMock(return_value=mock_resp)
-        mock_http.is_closed = False
-        client._client = mock_http
-
-        await client.encode_hybrid(["hello"])
-
-        headers = mock_http.post.call_args.kwargs["headers"]
-        assert headers["x-langfuse-trace-id"] == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        assert headers["x-langfuse-parent-observation-id"] == "bbbbbbbbbbbbbbbb"
-
     async def test_encode_hybrid_empty_input(self, client):
         result = await client.encode_hybrid([])
         assert result.dense_vecs == []
@@ -398,36 +364,6 @@ class TestBGEM3SyncClient:
             mock_post.assert_called_once()
             call_url = mock_post.call_args[0][0]
             assert "/encode/hybrid" in call_url
-
-    def test_encode_hybrid_sync_injects_langfuse_context_headers(self, sync_client, monkeypatch):
-        from src.services import bge_m3_client as mod
-
-        monkeypatch.setattr(
-            mod,
-            "get_client",
-            lambda: mock.MagicMock(
-                get_current_trace_id=mock.MagicMock(
-                    return_value="cccccccccccccccccccccccccccccccc",
-                ),
-                get_current_observation_id=mock.MagicMock(return_value="dddddddddddddddd"),
-            ),
-        )
-
-        mock_resp = mock.MagicMock()
-        mock_resp.json.return_value = {
-            "dense_vecs": [[0.1] * 1024],
-            "lexical_weights": [{"indices": [1, 2], "values": [0.5, 0.3]}],
-            "colbert_vecs": [[[0.1] * 1024] * 5],
-            "processing_time": 0.42,
-        }
-        mock_resp.raise_for_status = lambda: None
-
-        with mock.patch.object(sync_client._client, "post", return_value=mock_resp) as mock_post:
-            sync_client.encode_hybrid(["hello"])
-
-        headers = mock_post.call_args.kwargs["headers"]
-        assert headers["x-langfuse-trace-id"] == "cccccccccccccccccccccccccccccccc"
-        assert headers["x-langfuse-parent-observation-id"] == "dddddddddddddddd"
 
     def test_encode_hybrid_empty_input(self, sync_client):
         """Empty input returns empty HybridResult without HTTP call."""
@@ -683,3 +619,249 @@ class TestBGEM3ClientReconnectRace:
         assert second is not first
         # Original closed client never aclose()'d twice.
         first.aclose.assert_awaited_once()
+
+
+# ── New coverage: shape, rerank sort order, error/timeout handling ─────────────
+
+
+class TestEncodeShapes:
+    """Shape and dtype contracts for all four encode endpoints (mock httpx)."""
+
+    async def test_encode_dense_shape_1x1024(self, client) -> None:
+        """/encode/dense returns vectors with shape (1, 1024) and float values."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "dense_vecs": [[0.1] * 1024],
+            "processing_time": 0.01,
+        }
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_dense(["hello"])
+
+        assert len(result.vectors) == 1, "expected 1 vector for 1 input text"
+        assert len(result.vectors[0]) == 1024, "dense vector must be 1024-dim"
+        assert all(isinstance(v, float) for v in result.vectors[0]), "all values must be float"
+
+    async def test_encode_sparse_bm42_format(self, client) -> None:
+        """/encode/sparse returns BM42-style {indices, values} dict per text."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "lexical_weights": [{"indices": [5, 42, 101], "values": [0.7, 0.3, 0.9]}],
+        }
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_sparse(["hello"])
+
+        assert len(result.weights) == 1
+        w = result.weights[0]
+        assert "indices" in w, "sparse weight must have 'indices' key (BM42 format)"
+        assert "values" in w, "sparse weight must have 'values' key (BM42 format)"
+        assert len(w["indices"]) == len(w["values"]), "indices/values lengths must match"
+        assert all(isinstance(i, int) for i in w["indices"]), "indices must be ints"
+        assert all(isinstance(v, float) for v in w["values"]), "values must be floats"
+
+    async def test_encode_hybrid_returns_dense_and_sparse(self, client) -> None:
+        """/encode/hybrid response includes both dense_vecs and lexical_weights."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "dense_vecs": [[0.2] * 1024],
+            "lexical_weights": [{"indices": [1, 2], "values": [0.5, 0.3]}],
+            "processing_time": 0.05,
+        }
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_hybrid(["hello"])
+
+        assert len(result.dense_vecs) == 1, "hybrid must include dense_vecs"
+        assert len(result.dense_vecs[0]) == 1024, "dense vector must be 1024-dim"
+        assert len(result.lexical_weights) == 1, "hybrid must include lexical_weights"
+        assert "indices" in result.lexical_weights[0]
+
+    async def test_encode_colbert_multivector_each_1024_dim(self, client) -> None:
+        """/encode/colbert returns list-of-token-vecs; each token vec is 1024-dim."""
+        # 1 text, 5 tokens, each 1024-dim (typical ColBERT output).
+        token_vec = [0.1] * 1024
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "colbert_vecs": [[token_vec] * 5],
+            "processing_time": 0.08,
+        }
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_colbert(["hello world foo bar baz"])
+
+        assert isinstance(result.colbert_vecs, list)
+        assert len(result.colbert_vecs) == 1
+        token_vecs = result.colbert_vecs[0]
+        assert isinstance(token_vecs, list), "colbert output must be list-of-token-vecs"
+        assert len(token_vecs) == 5
+        for i, vec in enumerate(token_vecs):
+            assert len(vec) == 1024, f"token_vecs[{i}] must be 1024-dim"
+
+
+class TestRerankSortOrder:
+    """Rerank endpoint must return results sorted by score descending."""
+
+    async def test_rerank_sorted_by_score_descending(self, client) -> None:
+        """rerank() returns results ordered by score high→low."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        # Sidecar returns already-sorted results (contract: desc order)
+        mock_resp.json.return_value = {
+            "results": [
+                {"index": 2, "score": 0.95},
+                {"index": 0, "score": 0.72},
+                {"index": 1, "score": 0.41},
+            ],
+            "processing_time": 0.15,
+        }
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        docs = ["doc_zero", "doc_one", "doc_two"]
+        result = await client.rerank("my query", docs, top_k=3)
+
+        assert len(result.results) == 3
+        scores = [r["score"] for r in result.results]
+        assert scores == sorted(scores, reverse=True), (
+            f"rerank results must be descending by score, got: {scores}"
+        )
+        # Top result is the highest-scoring doc (index 2)
+        assert result.results[0]["index"] == 2
+        assert result.results[0]["score"] == pytest.approx(0.95)
+
+    async def test_rerank_top_k_limits_results(self, client) -> None:
+        """rerank() with top_k=2 returns at most 2 results."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "results": [
+                {"index": 1, "score": 0.88},
+                {"index": 0, "score": 0.55},
+            ],
+            "processing_time": 0.1,
+        }
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.rerank("query", ["a", "b", "c"], top_k=2)
+
+        assert len(result.results) == 2
+        call_json = mock_http.post.call_args[1]["json"]
+        assert call_json["top_k"] == 2
+
+
+class TestErrorAndTimeoutHandling:
+    """Client must handle HTTP 500 and timeout gracefully (no hang, typed error)."""
+
+    async def test_encode_dense_http500_raises_http_status_error(self, client) -> None:
+        """HTTP 500 from sidecar raises httpx.HTTPStatusError (not swallowed)."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Internal Server Error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500),
+        )
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.encode_dense(["hello"])
+
+    async def test_encode_sparse_http500_raises(self, client) -> None:
+        """HTTP 500 from /encode/sparse raises HTTPStatusError."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Internal Server Error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500),
+        )
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.encode_sparse(["hello"])
+
+    async def test_encode_colbert_http500_raises(self, client) -> None:
+        """HTTP 500 from /encode/colbert raises HTTPStatusError."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Internal Server Error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500),
+        )
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.encode_colbert(["hello"])
+
+    async def test_rerank_http500_raises(self, client) -> None:
+        """HTTP 500 from /rerank raises HTTPStatusError."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Internal Server Error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500),
+        )
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.rerank("query", ["doc1"])
+
+    async def test_encode_dense_read_timeout_raises(self, client) -> None:
+        """ReadTimeout from sidecar raises httpx.ReadTimeout (does not hang)."""
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(side_effect=httpx.ReadTimeout("timed out", request=MagicMock()))
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        with pytest.raises(httpx.ReadTimeout):
+            await client.encode_dense(["hello"])
+
+    async def test_encode_hybrid_connect_timeout_raises(self, client) -> None:
+        """ConnectTimeout (sidecar unreachable) raises httpx.ConnectTimeout."""
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(
+            side_effect=httpx.ConnectTimeout("connect timed out", request=MagicMock())
+        )
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        with pytest.raises(httpx.ConnectTimeout):
+            await client.encode_hybrid(["hello"])

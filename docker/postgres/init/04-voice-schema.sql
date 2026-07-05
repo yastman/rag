@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS call_transcripts (
     phone VARCHAR(20) NOT NULL,
     lead_data JSONB DEFAULT '{}',
     transcript JSONB DEFAULT '[]',
-    langfuse_trace_id VARCHAR(64),
+    trace_id VARCHAR(64),
     status VARCHAR(20) NOT NULL DEFAULT 'initiated',
     duration_sec INTEGER DEFAULT 0,
     validation_result JSONB,

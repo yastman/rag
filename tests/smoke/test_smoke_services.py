@@ -85,17 +85,6 @@ class TestSmokeServices:
             assert response.status_code == 200
 
     @pytest.mark.skipif(
-        not _is_port_open("localhost", 5001), reason="Docling not running (port 5001)"
-    )
-    @pytest.mark.asyncio
-    async def test_docling_health(self):
-        """Docling responds to health check."""
-        url = os.getenv("DOCLING_URL", "http://localhost:5001")
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{url}/health")
-            assert response.status_code == 200
-
-    @pytest.mark.skipif(
         not _is_port_open("localhost", 9621), reason="LightRAG not running (port 9621)"
     )
     @pytest.mark.asyncio

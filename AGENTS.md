@@ -77,6 +77,7 @@ Subsystem overrides may pin tighter commands — see the nearest `AGENTS.overrid
 - Runtime, Compose, ports, env, deploy: [`DOCKER.md`](DOCKER.md)
 - Local setup & validation: [`README.md`](README.md) (Quick Start section)
 - Tests: [`tests/README.md`](tests/README.md)
+- Docling architecture (in-process SDK, prohibited patterns, bot/ingestion split): [`docs/DOCLING_ARCHITECTURE_AUTHORITY.md`](docs/DOCLING_ARCHITECTURE_AUTHORITY.md)
 - Swarm/PR/triage process lives in the Kiro skills (`roadmap-orchestrator`, `gh-pr-review`), not in-repo docs.
 
 ## Local overrides
@@ -88,7 +89,6 @@ Scoped rules live next to the code — read the nearest one before editing that 
 - [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)
 - [`services/AGENTS.override.md`](services/AGENTS.override.md)
 - [`services/bge-m3-api/AGENTS.override.md`](services/bge-m3-api/AGENTS.override.md)
-- [`services/docling/AGENTS.override.md`](services/docling/AGENTS.override.md)
 
 ## Priority
 

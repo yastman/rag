@@ -7,16 +7,17 @@ Supported Python matrix
 | root / core / ingest | >=3.12          | 3.13           | Langfuse/pydantic.v1 compat; uv floor |
 | telegram_bot         | >=3.12          | 3.13           | Langfuse/pydantic.v1 compat           |
 | services/bge-m3-api  | (no pyproject)  | 3.14           | Independent ML service; no Langfuse   |
-| services/docling     | >=3.14          | 3.14           | docling-serve requires 3.14+          |
 
 This contract fails on:
 - root requires-python below 3.12
 - telegram_bot requires-python below 3.12
-- docling requires-python below 3.14
 
 The Langfuse-importing Docker runtime constraint (>=3.13) is enforced by
 ``test_dockerfile_runtime_policy_contract.py``. This contract covers the
 pyproject-level floor only.
+
+Note: services/docling was removed in the Docling migration (phase_6508bc74ca4a);
+its pyproject.toml row has been dropped from this matrix.
 """
 
 from __future__ import annotations
@@ -30,7 +31,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Documented minimum Python floors per component
 ROOT_REQUIRES_PYTHON_FLOOR = "3.12"
 BOT_REQUIRES_PYTHON_FLOOR = "3.12"
-DOCLING_REQUIRES_PYTHON_FLOOR = "3.14"
 
 
 def _load_toml(rel: str) -> dict:
@@ -63,17 +63,6 @@ def test_bot_requires_python_floor() -> None:
     assert floor >= BOT_REQUIRES_PYTHON_FLOOR, (
         f"telegram_bot/pyproject.toml requires-python={requires!r}; "
         f"must be >={BOT_REQUIRES_PYTHON_FLOOR} (#2623)"
-    )
-
-
-def test_docling_requires_python_floor() -> None:
-    """services/docling/pyproject.toml requires-python must be >= 3.14 (#2623)."""
-    data = _load_toml("services/docling/pyproject.toml")
-    requires = data["project"]["requires-python"]
-    floor = _extract_floor(requires)
-    assert floor >= DOCLING_REQUIRES_PYTHON_FLOOR, (
-        f"services/docling/pyproject.toml requires-python={requires!r}; "
-        f"must be >={DOCLING_REQUIRES_PYTHON_FLOOR} (#2623)"
     )
 
 

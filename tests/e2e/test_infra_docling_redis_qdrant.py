@@ -1,13 +1,16 @@
-"""Live infra E2E: Docling → Redis → Qdrant round-trip (#2771).
+"""Live infra E2E: Docling (native) → Redis → Qdrant round-trip (#2771).
 
 Proves the three-service infrastructure path:
-  1. Docling parses a small fixture Markdown doc into chunks.
+  1. Docling parses a small fixture Markdown doc into chunks via NativeDoclingAdapter.
   2. Redis caches the raw chunk text (exact key/value, no embedding needed).
   3. Qdrant receives a BGE-M3 upsert and a point can be retrieved back.
 
 Skip guards: each service is probed with a 2-second TCP/HTTP check before
 any test runs.  Missing services cause a skip, not a failure, so CI can
 collect this file without live infrastructure.
+
+NOTE: As of phase_6508bc74ca4a, docling-serve HTTP sidecar is removed.
+Docling runs in-process via NativeDoclingAdapter (docling-native extra).
 """
 
 from __future__ import annotations
@@ -18,7 +21,6 @@ import os
 import socket
 from pathlib import Path
 
-import httpx
 import pytest
 import redis.asyncio as aioredis
 
@@ -41,7 +43,6 @@ pytestmark = [pytest.mark.e2e, pytest.mark.requires_services]
 _FIXTURE_DOC = (
     Path(__file__).parent.parent / "e2e_core" / "fixtures" / "docs" / "sunny_beach_studio.md"
 )
-_DOCLING_URL = os.getenv("DOCLING_URL", "http://localhost:5001")
 _REDIS_URL_BASE = os.getenv("REDIS_URL", "redis://localhost:6379")
 _REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "dev_redis_pass")
 
@@ -62,10 +63,6 @@ def _redis_url() -> str:
     return _REDIS_URL_BASE
 
 
-def _docling_reachable() -> bool:
-    return _is_port_open("localhost", 5001)
-
-
 def _redis_reachable() -> bool:
     return _is_port_open("localhost", 6379)
 
@@ -77,16 +74,6 @@ def _qdrant_reachable() -> bool:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-async def _require_docling_or_skip() -> None:
-    """Skip if Docling is not reachable."""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{_DOCLING_URL}/health")
-            resp.raise_for_status()
-    except Exception as exc:
-        pytest.skip(f"Docling unavailable at {_DOCLING_URL}: {exc}")
 
 
 async def _require_redis_or_skip() -> str:
@@ -109,14 +96,21 @@ async def _require_redis_or_skip() -> str:
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(
-    not (_docling_reachable() and _redis_reachable() and _qdrant_reachable()),
-    reason="Docling (5001), Redis (6379), or Qdrant (6333) not reachable",
+    not (_redis_reachable() and _qdrant_reachable()),
+    reason="Redis (6379) or Qdrant (6333) not reachable",
 )
 async def test_infra_docling_chunks_cached_in_redis_and_upserted_to_qdrant() -> None:
-    """Docling → Redis cache → Qdrant upsert → point retrieval round-trip."""
+    """Docling (native) → Redis cache → Qdrant upsert → point retrieval round-trip."""
 
-    # 1. Probe Docling
-    await _require_docling_or_skip()
+    # 1. Parse fixture document via NativeDoclingAdapter (in-process, no HTTP sidecar)
+    docling = pytest.importorskip(
+        "src.ingestion.docling_native",
+        reason="docling-native extra not installed",
+    )
+    NativeDoclingAdapter = docling.NativeDoclingAdapter
+    adapter = NativeDoclingAdapter()
+    docling_chunks = adapter.chunk_file_sync(_FIXTURE_DOC)
+    assert len(docling_chunks) >= 1, "NativeDoclingAdapter returned no chunks for fixture doc"
 
     # 2. Probe Redis
     redis_url = await _require_redis_or_skip()
@@ -125,16 +119,7 @@ async def test_infra_docling_chunks_cached_in_redis_and_upserted_to_qdrant() -> 
     env = LiveE2EEnv.from_env()
     await require_live_services(env)
 
-    # 4. Call Docling to chunk the fixture document
-    from src.ingestion.docling_client import DoclingClient, DoclingConfig
-
-    config = DoclingConfig(base_url=_DOCLING_URL, max_tokens=256)
-    async with DoclingClient(config) as docling:
-        docling_chunks = await docling.chunk_file(_FIXTURE_DOC)
-
-    assert len(docling_chunks) >= 1, "Docling returned no chunks for fixture doc"
-
-    # 5. Cache the first chunk text in Redis (exact key/value)
+    # 4. Cache the first chunk text in Redis (exact key/value)
     cache_key = "e2e:infra:2771:" + hashlib.sha256(_FIXTURE_DOC.read_bytes()).hexdigest()[:16]
     chunk_payload = json.dumps([c.text for c in docling_chunks], ensure_ascii=False)
 
@@ -148,7 +133,7 @@ async def test_infra_docling_chunks_cached_in_redis_and_upserted_to_qdrant() -> 
     assert cached is not None, "Redis did not return the stored value"
     assert json.loads(cached) == [c.text for c in docling_chunks]
 
-    # 6. Upsert fixture doc into Qdrant via existing harness and query back
+    # 5. Upsert fixture doc into Qdrant via existing harness and query back
     context = make_qdrant_context(env)
     try:
         recreate_collection(env, context.collection_name)

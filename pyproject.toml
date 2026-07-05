@@ -90,9 +90,8 @@ docs = [
 ]
 
 
-# Docling service dependencies live in services/docling because the root
-# project talks to docling-serve over HTTP. Keeping this root extra empty avoids
-# pulling KFP/Kubernetes service-only packages into the application lockfile.
+# Docling is used as a native Python SDK in the ingestion pipeline (src/ingestion/).
+# This extra is intentionally empty — all Docling packages are in the `ingestion` extra below.
 docling = []
 
 # Ingestion pipeline (Docling, PyMuPDF)

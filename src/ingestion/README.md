@@ -25,8 +25,8 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 | [`chunker.py`](./chunker.py) | Document chunking strategies (fixed, semantic, sliding window) |
 | [`hybrid_chunker.py`](./hybrid_chunker.py) | Token-aware hybrid chunking helper |
 | [`document_parser.py`](./document_parser.py) | Docling-based document parsing |
-| [`docling_client.py`](./docling_client.py) | HTTP client for docling-serve (HybridChunker, profiles) |
-| [`docling_native.py`](./docling_native.py) | In-process Docling backend |
+| [`docling_common.py`](./docling_common.py) | Shared Docling contract (DoclingChunk, SUPPORTED_FORMATS, to_ingestion_chunks) |
+| [`docling_native.py`](./docling_native.py) | In-process Docling backend (NativeDoclingAdapter, HybridChunker) |
 | [`unified/config.py`](./unified/config.py) | Unified pipeline configuration |
 | [`unified/flow.py`](./unified/flow.py) | Pipeline definition (`run_once` / `run_watch`) |
 | [`unified/manifest.py`](./unified/manifest.py) | Content-hash-based stable file identity |
@@ -43,7 +43,7 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 
 - **Qdrant** — target vector database (also the source of truth for idempotency via the content-hash manifest)
 - **BGE-M3** — dense + sparse + ColBERT embeddings
-- **Docling** — document parsing (HTTP `docling_http` or `docling_native` backend)
+- **Docling** — document parsing (in-process `docling_native` backend via `docling-native` extra)
 
 ## Focused Checks
 
