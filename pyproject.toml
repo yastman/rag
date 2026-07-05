@@ -79,16 +79,8 @@ ml-local = [
     # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
     "torch>=2.0.0",
     "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
-    "transformers>=4.30.0", # For HuggingFace tokenizers in HybridChunker
+    "transformers>=4.34.0,<6.0.0", # For HuggingFace tokenizers in HybridChunker; aligned with docling-native floor
 ]
-
-# Documentation tools
-docs = [
-    "mkdocs>=1.6.0",         # Documentation generator
-    "mkdocs-material>=9.5.0",# Material theme
-    "mkdocstrings[python]>=0.25.0",  # Auto API docs
-]
-
 
 # Native Docling SDK — ingestion pipeline (DocumentConverter + HybridChunker)
 docling-native = [
@@ -106,7 +98,7 @@ eval = [
 
 # All optional dependencies (kept surfaces only; archived extras removed by #2640)
 all = [
-    "contextual-rag[core,telegram,providers,docs,docling-native,ml-local]",
+    "contextual-rag[core,telegram,providers,docling-native,ml-local]",
 ]
 
 # =============================================================================
