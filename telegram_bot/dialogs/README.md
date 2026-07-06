@@ -9,23 +9,17 @@ telegram_bot/dialogs
 
 ## Contents
 - __init__.py
-- catalog.py
+- catalog/ (catalog search dialog package)
+- filter/ (filter dialog package)
+- funnel/ (funnel dialog package)
 - catalog_transport.py
 - client_menu.py
-- crm_ai_advisor.py
 - crm_cards.py
-- crm_contacts.py
-- crm_leads.py
-- crm_notes.py
-- crm_submenu.py
-- crm_tasks.py
 - demo.py
 - faq.py
 - filter_constants.py
 - filter_dialog.py
-- funnel.py
 - handoff.py
-- manager_menu.py
 - root_nav.py
 - settings.py
 - states.py

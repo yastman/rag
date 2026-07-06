@@ -40,7 +40,11 @@ class TestIngestionReadme:
     def test_status_command_not_colbert_status(self):
         text = _read("src/ingestion/README.md")
         assert "colbert-status" not in text
-        assert "python -m src.ingestion.unified.cli status" in text
+        # 'status' was never a real subcommand of the unified CLI. The actual
+        # subcommands are run / preflight / bootstrap / schema-check /
+        # coverage-check / backfill-colbert (see unified/main.py). Assert the
+        # README documents a real one rather than a phantom `status` command.
+        assert "python -m src.ingestion.unified.cli preflight" in text
 
 
 class TestUnifiedReadme:

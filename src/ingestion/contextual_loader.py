@@ -1,7 +1,7 @@
-"""Load contextual chunks into existing RAG pipeline.
+"""Load contextual chunks into the RAG pipeline.
 
 Converts ContextualDocument objects (JSON from Claude CLI)
-into Chunk objects compatible with DocumentIndexer.
+into Chunk objects for embedding and indexing.
 """
 
 from .chunker import Chunk
@@ -20,7 +20,7 @@ def load_contextual_chunks(doc: ContextualDocument) -> list[Chunk]:
         doc: ContextualDocument from Claude CLI JSON output
 
     Returns:
-        List of Chunk objects ready for DocumentIndexer
+        List of Chunk objects ready for indexing
     """
     chunks: list[Chunk] = []
 
@@ -54,7 +54,7 @@ def load_contextual_json(json_path: str) -> list[Chunk]:
         json_path: Path to JSON file created by Claude CLI
 
     Returns:
-        List of Chunk objects ready for DocumentIndexer
+        List of Chunk objects ready for indexing
     """
     doc = ContextualDocument.load(json_path)
     return load_contextual_chunks(doc)
