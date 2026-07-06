@@ -30,7 +30,6 @@ from src.runtime.services.cache_policy import (
 )
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.handlers.error_classification import _is_checkpointer_runtime_error
-from telegram_bot.observability import propagate_attributes
 from telegram_bot.observability.state_helpers import (
     _state_control_message_id,  # card_2a71ec058138: homed to observability/
 )
@@ -850,7 +849,6 @@ async def _handle_query_supervisor(
     _supervisor_store_cache_and_trace.
     """
     from telegram_bot.agents.agent import LOCALE_TO_LANGUAGE
-    from telegram_bot.services.util.checkpointer_utils import _supervisor_thread_id
 
     classify_query = _get_classify_query()
 
@@ -863,104 +861,97 @@ async def _handle_query_supervisor(
 
     rag_result_store: dict[str, Any] = {}
     pre_agent_start = time.perf_counter()
-    langgraph_thread_id = _supervisor_thread_id(message.chat.id, forum_thread_id)
 
-    with propagate_attributes(
-        session_id=session_id,
-        user_id=str(user_id),
-        metadata={"langgraph_thread_id": langgraph_thread_id},
-        tags=["telegram", "rag", "agent"],
-    ):
-        user_text = message.text or ""
-        query_type = classify_query(user_text)
+    user_text = message.text or ""
+    query_type = classify_query(user_text)
 
-        # Step 1: Content-filter guard
-        if bot.config.content_filter_enabled:
-            blocked = await _supervisor_check_guard(
-                bot,
-                message,
-                user_text=user_text,
-                query_type=query_type,
-                pipeline_start=pipeline_start,
-                root_trace_metadata=root_trace_metadata,
-            )
-            if blocked is not None:
-                return blocked
-
-        # Step 2: Pre-agent cache check + vector prep
-        cached_response, extracted_filters, _filter_sig = await _supervisor_pre_agent_cache(
+    # Step 1: Content-filter guard
+    if bot.config.content_filter_enabled:
+        blocked = await _supervisor_check_guard(
             bot,
             message,
             user_text=user_text,
             query_type=query_type,
-            role=role,
             pipeline_start=pipeline_start,
-            pre_agent_start=pre_agent_start,
-            rag_result_store=rag_result_store,
             root_trace_metadata=root_trace_metadata,
         )
-        if cached_response is not None:
-            return cached_response
+        if blocked is not None:
+            return blocked
 
-        rag_result_store.setdefault("pre_agent_ms", (time.perf_counter() - pre_agent_start) * 1000)
+    # Step 2: Pre-agent cache check + vector prep
+    cached_response, extracted_filters, _filter_sig = await _supervisor_pre_agent_cache(
+        bot,
+        message,
+        user_text=user_text,
+        query_type=query_type,
+        role=role,
+        pipeline_start=pipeline_start,
+        pre_agent_start=pre_agent_start,
+        rag_result_store=rag_result_store,
+        root_trace_metadata=root_trace_metadata,
+    )
+    if cached_response is not None:
+        return cached_response
 
-        # Step 3: Execute core request (client-direct or assistant core)
-        response_text = await _supervisor_run_core(
+    rag_result_store.setdefault("pre_agent_ms", (time.perf_counter() - pre_agent_start) * 1000)
+
+    # Step 3: Execute core request (client-direct or assistant core)
+    response_text = await _supervisor_run_core(
+        bot,
+        message,
+        user_text=user_text,
+        user_id=user_id,
+        session_id=session_id,
+        role=role,
+        query_type=query_type,
+        language=language,
+        extracted_filters=extracted_filters,
+        rag_result_store=rag_result_store,
+        state=state,
+        dialog_manager=dialog_manager,
+        forum_thread_id=forum_thread_id,
+    )
+
+    # Step 4: Token usage from last AI message (legacy messages list is empty in core path)
+    messages: list[Any] = []
+
+    # Step 5: Send response
+    query_type = rag_result_store.get("query_type", query_type)  # type: ignore[assignment]
+
+    class _DummyCtx:
+        response_sent = False
+        history_reply_markup = None
+
+    ctx: Any = _DummyCtx()
+    if response_text and not ctx.response_sent:
+        await _send_core_response(
             bot,
-            message,
+            message=message,
+            response_text=response_text,
             user_text=user_text,
-            user_id=user_id,
-            session_id=session_id,
-            role=role,
             query_type=query_type,
-            language=language,
-            extracted_filters=extracted_filters,
             rag_result_store=rag_result_store,
-            state=state,
-            dialog_manager=dialog_manager,
+            ctx=ctx,
             forum_thread_id=forum_thread_id,
         )
 
-        # Step 4: Token usage from last AI message (legacy messages list is empty in core path)
-        messages: list[Any] = []
-
-        # Step 5: Send response
-        query_type = rag_result_store.get("query_type", query_type)  # type: ignore[assignment]
-
-        class _DummyCtx:
-            response_sent = False
-            history_reply_markup = None
-
-        ctx: Any = _DummyCtx()
-        if response_text and not ctx.response_sent:
-            await _send_core_response(
-                bot,
-                message=message,
-                response_text=response_text,
-                user_text=user_text,
-                query_type=query_type,
-                rag_result_store=rag_result_store,
-                ctx=ctx,
-                forum_thread_id=forum_thread_id,
-            )
-
-        # Step 6: Cache store + trace + scores + history
-        pre_agent_ms = float(rag_result_store.get("pre_agent_ms", 0.0) or 0.0)
-        await _supervisor_store_cache_and_trace(
-            bot,
-            message,
-            user_text=user_text,
-            response_text=response_text,
-            query_type=query_type,
-            role=role,
-            pipeline_start=pipeline_start,
-            pre_agent_ms=pre_agent_ms,
-            rag_result_store=rag_result_store,
-            root_trace_metadata=root_trace_metadata,
-            user_id=user_id,
-            session_id=session_id,
-            messages=messages,
-        )
+    # Step 6: Cache store + trace + scores + history
+    pre_agent_ms = float(rag_result_store.get("pre_agent_ms", 0.0) or 0.0)
+    await _supervisor_store_cache_and_trace(
+        bot,
+        message,
+        user_text=user_text,
+        response_text=response_text,
+        query_type=query_type,
+        role=role,
+        pipeline_start=pipeline_start,
+        pre_agent_ms=pre_agent_ms,
+        rag_result_store=rag_result_store,
+        root_trace_metadata=root_trace_metadata,
+        user_id=user_id,
+        session_id=session_id,
+        messages=messages,
+    )
 
     return response_text
 

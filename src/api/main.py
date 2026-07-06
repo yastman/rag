@@ -19,7 +19,6 @@ from langgraph.errors import GraphRecursionError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.schemas import QueryRequest, QueryResponse
-from src.observability import propagate_attributes
 
 
 logger = logging.getLogger(__name__)
@@ -237,51 +236,42 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
     )
     state["max_rewrite_attempts"] = int(getattr(app.state, "max_rewrite_attempts", 1))
 
-    trace_kwargs: dict[str, Any] = {
-        "session_id": session_id,
-        "user_id": str(req.user_id),
-        "metadata": {"source": req.channel},
-        "tags": ["api", "rag", req.channel],
-        "as_baggage": True,
-    }
-
-    with propagate_attributes(**trace_kwargs):
-        try:
-            result = await app.state.graph.ainvoke(state)
-        except GraphRecursionError:
-            elapsed_ms = (time.perf_counter() - start) * 1000
-            fallback_response = (
-                "Запрос слишком сложный — достигнут лимит обработки. Попробуйте упростить его."
-            )
-            fallback_result: dict[str, Any] = {
-                "input_type": "api",
-                "query_type": "ERROR",
-                "pipeline_wall_ms": elapsed_ms,
-                "e2e_latency_ms": elapsed_ms,
-                "user_perceived_wall_ms": elapsed_ms,
-                "cache_hit": False,
-                "search_results_count": 0,
-                "rerank_applied": False,
-                "response": fallback_response,
-            }
-            write_pipeline_scores(None, fallback_result)
-            return QueryResponse(
-                response=fallback_response,
-                query_type="ERROR",
-                cache_hit=False,
-                documents_count=0,
-                rerank_applied=False,
-                latency_ms=round(elapsed_ms, 1),
-                context=[],
-            )
-
+    try:
+        result = await app.state.graph.ainvoke(state)
+    except GraphRecursionError:
         elapsed_ms = (time.perf_counter() - start) * 1000
-        result["pipeline_wall_ms"] = elapsed_ms
-        result["e2e_latency_ms"] = elapsed_ms
-        summarize_s = result.get("latency_stages", {}).get("summarize", 0)
-        result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
+        fallback_response = (
+            "Запрос слишком сложный — достигнут лимит обработки. Попробуйте упростить его."
+        )
+        fallback_result: dict[str, Any] = {
+            "input_type": "api",
+            "query_type": "ERROR",
+            "pipeline_wall_ms": elapsed_ms,
+            "e2e_latency_ms": elapsed_ms,
+            "user_perceived_wall_ms": elapsed_ms,
+            "cache_hit": False,
+            "search_results_count": 0,
+            "rerank_applied": False,
+            "response": fallback_response,
+        }
+        write_pipeline_scores(None, fallback_result)
+        return QueryResponse(
+            response=fallback_response,
+            query_type="ERROR",
+            cache_hit=False,
+            documents_count=0,
+            rerank_applied=False,
+            latency_ms=round(elapsed_ms, 1),
+            context=[],
+        )
 
-        write_pipeline_scores(None, result)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    result["pipeline_wall_ms"] = elapsed_ms
+    result["e2e_latency_ms"] = elapsed_ms
+    summarize_s = result.get("latency_stages", {}).get("summarize", 0)
+    result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
+
+    write_pipeline_scores(None, result)
 
     return QueryResponse(
         response=result.get("response", ""),

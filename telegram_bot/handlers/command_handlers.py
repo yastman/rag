@@ -390,7 +390,6 @@ async def handle_menu_action(
     from telegram_bot.agents.context import BotContext
     from telegram_bot.agents.tool_assembly import build_agent_tools
     from telegram_bot.constants import split_telegram_response as _split
-    from telegram_bot.observability import propagate_attributes
     from telegram_bot.tracing_context import make_session_id
 
     if callback.from_user is None or callback.message is None:
@@ -441,23 +440,18 @@ async def handle_menu_action(
 
     rag_result_store: dict[str, Any] = {}
 
-    with propagate_attributes(
-        session_id=session_id,
-        user_id=str(user_id),
-        tags=["telegram", "menu", "agent"],
-    ):
-        callbacks: list[Any] = []
-        async with ChatActionSender.typing(bot=aiogram_bot, chat_id=chat_id):  # type: ignore[arg-type]
-            result = await bot._ainvoke_supervisor_with_recovery(
-                agent=agent,
-                tools=tools,
-                role=role,
-                user_text=query_text,
-                chat_id=chat_id,
-                callbacks=callbacks,
-                bot_context=ctx,
-                rag_result_store=rag_result_store,
-            )
+    callbacks: list[Any] = []
+    async with ChatActionSender.typing(bot=aiogram_bot, chat_id=chat_id):  # type: ignore[arg-type]
+        result = await bot._ainvoke_supervisor_with_recovery(
+            agent=agent,
+            tools=tools,
+            role=role,
+            user_text=query_text,
+            chat_id=chat_id,
+            callbacks=callbacks,
+            bot_context=ctx,
+            rag_result_store=rag_result_store,
+        )
 
     messages = result.get("messages", [])
     response_text = ""

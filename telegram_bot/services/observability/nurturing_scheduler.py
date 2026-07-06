@@ -14,8 +14,6 @@ from typing import Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from telegram_bot.observability import propagate_attributes
-
 
 logger = logging.getLogger(__name__)
 
@@ -94,10 +92,9 @@ class NurturingScheduler:
     async def run_nurturing_dispatch(self) -> None:
         """Dispatch pending nurturing messages (called by scheduler)."""
         try:
-            with propagate_attributes(tags=["job", "nurturing"]):
-                batch = getattr(self._config, "nurturing_dispatch_batch", 20)
-                count = await self._nurturing.dispatch_pending(batch_size=batch)
-                logger.info("Nurturing dispatch completed: %d messages sent", count)
+            batch = getattr(self._config, "nurturing_dispatch_batch", 20)
+            count = await self._nurturing.dispatch_pending(batch_size=batch)
+            logger.info("Nurturing dispatch completed: %d messages sent", count)
         except Exception:
             logger.exception("Nurturing dispatch failed")
             raise
@@ -107,12 +104,11 @@ class NurturingScheduler:
         import datetime as dt
 
         try:
-            with propagate_attributes(tags=["job", "analytics"]):
-                today = dt.date.today()
-                snapshots = await self._analytics.build_daily_snapshot(metric_date=today)
-                if snapshots:
-                    await self._analytics.persist_snapshots(snapshots=snapshots)
-                logger.info("Funnel rollup completed: %d stages", len(snapshots))
+            today = dt.date.today()
+            snapshots = await self._analytics.build_daily_snapshot(metric_date=today)
+            if snapshots:
+                await self._analytics.persist_snapshots(snapshots=snapshots)
+            logger.info("Funnel rollup completed: %d stages", len(snapshots))
         except Exception:
             logger.exception("Funnel rollup failed")
             raise
