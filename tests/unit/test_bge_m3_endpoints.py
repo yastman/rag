@@ -399,6 +399,64 @@ class TestWarmup:
         fake_model.encode = orig_encode
 
 
+# ── Unit tests for _lexical_weights_to_qdrant_sparse converter ──
+
+
+def _import_lexical_weights_fn():
+    """Import _lexical_weights_to_qdrant_sparse with heavy deps mocked out."""
+    heavy_mocks = {
+        "onnxruntime": MagicMock(),
+        "fastapi": MagicMock(),
+        "transformers": MagicMock(),
+        "prometheus_client": MagicMock(),
+        "opentelemetry": MagicMock(),
+        "opentelemetry.context": MagicMock(),
+        "opentelemetry.propagate": MagicMock(),
+    }
+    # prometheus_client needs specific Counter/Gauge/Histogram constructors
+    for attr in ("Counter", "Gauge", "Histogram"):
+        setattr(heavy_mocks["prometheus_client"], attr, MagicMock(return_value=MagicMock()))
+    heavy_mocks["prometheus_client"].make_asgi_app = MagicMock(return_value=MagicMock())
+
+    with pytest.MonkeyPatch.context() as mp:
+        for mod, mock in heavy_mocks.items():
+            mp.setitem(sys.modules, mod, mock)
+        mp.syspath_prepend(_BGE_SERVICE_DIR)
+        sys.modules.pop("app", None)
+        import app as _app_module
+
+        fn = _app_module._lexical_weights_to_qdrant_sparse
+        sys.modules.pop("app", None)
+    return fn
+
+
+@pytest.mark.no_services
+def test_lexical_weights_to_qdrant_sparse_raw_format() -> None:
+    """Non-passthrough branch: {token_id: weight} dict is converted to indices+values."""
+    _lexical_weights_to_qdrant_sparse = _import_lexical_weights_fn()
+
+    raw = [{0: 0.5, 1: 0.3}]
+    result = _lexical_weights_to_qdrant_sparse(raw)
+
+    assert len(result) == 1
+    item = result[0]
+    assert "indices" in item
+    assert "values" in item
+    assert item["indices"] == [0, 1]
+    assert item["values"] == [0.5, 0.3]
+
+
+@pytest.mark.no_services
+def test_lexical_weights_to_qdrant_sparse_passthrough() -> None:
+    """Passthrough branch: already-Qdrant-format dicts are returned unchanged."""
+    _lexical_weights_to_qdrant_sparse = _import_lexical_weights_fn()
+
+    already_qdrant = [{"indices": [10, 20], "values": [0.8, 0.4]}]
+    result = _lexical_weights_to_qdrant_sparse(already_qdrant)
+
+    assert result == already_qdrant
+
+
 # ── Unit tests for _onnx_sparse_to_qdrant converter ──
 
 
