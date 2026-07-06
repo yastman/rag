@@ -13,7 +13,7 @@ tests/
 ├── contract/            # Static contracts: trace families, span coverage, error shapes
 ├── integration/         # Service-aware paths and real component interaction
 ├── smoke/               # Quick health checks against live services
-├── eval/                # RAG evaluation fixtures and ground_truth dataset
+├── eval/                # RAG evaluation (RAGAS, ground_truth.json)
 ├── baseline/            # (empty; Langfuse baseline metrics removed, #2844)
 ├── benchmark/           # Performance comparisons (RRF vs DBSF, parser vs Docling, etc.)
 ├── chaos/               # Resilience tests (service failures, LLM fallbacks)
@@ -129,6 +129,14 @@ uv run python scripts/e2e/runner.py --group immigration # specific group
 session file, `getMe` username match, `getWebhookInfo` empty, polling
 lock state) before delegating to `scripts.e2e.quick_test` for one safe
 query. Use it to gate "make bot is healthy" against "make bot answers".
+
+### RAG evaluation
+```bash
+make eval-rag                # RAGAS on ground_truth.json
+make eval-rag-quick          # 10-sample subset
+make eval-rag-full           # RAGAS + DeepEval
+```
+
 
 ### Baseline / observability
 

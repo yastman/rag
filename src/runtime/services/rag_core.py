@@ -28,6 +28,19 @@ _MAX_CONTEXT_SNIPPET = 500  # chars per doc for judge evaluation
 CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED", "GENERAL"})
 
 
+def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
+    """Return True when caller passed the deprecated client-side ColBERT service."""
+    if reranker is None:
+        return False
+
+    try:
+        from src.runtime.services.colbert_reranker import ColbertRerankerService
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+    return isinstance(reranker, ColbertRerankerService)
+
+
 # ---------------------------------------------------------------------------
 # H2: Context builder
 # ---------------------------------------------------------------------------
