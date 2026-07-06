@@ -569,7 +569,7 @@ exclude_lines = [
 #   langgraph, anthropic, groq) should not gate the production lint.
 # - per_rule_ignores DEP001: remaining optional/conditional imports that are
 #   not declared in pyproject.toml because they live in optional extras or
-#   archived CRM paths (langchain_core, langgraph, fluent_compiler, apscheduler,
+#   archived CRM paths (langchain_core, langgraph, fluent_compiler,
 #   voyageai, FlagEmbedding, anyio).
 # - per_rule_ignores DEP002: packages declared as optional extras that are not
 #   imported in the scoped src/+telegram_bot/ scan (aiohttp and requests are
@@ -597,7 +597,6 @@ DEP001 = [
     "langchain_core",
     "langgraph",
     "fluent_compiler",
-    "apscheduler",
     "anyio",
 ]
 # Optional extras not imported in the production src/+telegram_bot/ scan
