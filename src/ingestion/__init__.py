@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 __all__ = [
     "ContextualChunk",
     "ContextualDocument",
-    "DocumentIndexer",
     "load_contextual_chunks",
     "load_contextual_json",
 ]
@@ -22,7 +21,6 @@ __all__ = [
 if TYPE_CHECKING:
     from .contextual_loader import load_contextual_chunks, load_contextual_json
     from .contextual_schema import ContextualChunk, ContextualDocument
-    from .indexer import DocumentIndexer
 
 
 _LAZY_ATTRS = {
@@ -30,7 +28,6 @@ _LAZY_ATTRS = {
     "load_contextual_json": (".contextual_loader", "load_contextual_json"),
     "ContextualChunk": (".contextual_schema", "ContextualChunk"),
     "ContextualDocument": (".contextual_schema", "ContextualDocument"),
-    "DocumentIndexer": (".indexer", "DocumentIndexer"),
 }
 
 
