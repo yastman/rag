@@ -333,3 +333,9 @@ class BGEM3SyncClient:
     def close(self) -> None:
         """Close the underlying httpx client."""
         self._client.close()
+
+    def __enter__(self) -> BGEM3SyncClient:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()

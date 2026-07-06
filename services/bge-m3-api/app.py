@@ -514,8 +514,8 @@ async def encode_dense(request: EncodeRequest):
             partial_failures=partial_failures,
         )
     except Exception as e:
-        logger.error(f"Dense encoding error: {e!s}")
-        raise HTTPException(500, f"Encoding failed: {e!s}")
+        logger.error("Dense encoding error", exc_info=e)
+        raise HTTPException(500, "Encoding failed: internal error")
 
 
 @app.post("/encode/sparse", response_model=SparseResponse)
@@ -539,8 +539,8 @@ async def encode_sparse(request: EncodeRequest):
             partial_failures=partial_failures,
         )
     except Exception as e:
-        logger.error(f"Sparse encoding error: {e!s}")
-        raise HTTPException(500, f"Encoding failed: {e!s}")
+        logger.error("Sparse encoding error", exc_info=e)
+        raise HTTPException(500, "Encoding failed: internal error")
 
 
 @app.post("/encode/colbert", response_model=ColbertResponse)
@@ -564,8 +564,8 @@ async def encode_colbert(request: EncodeRequest):
             partial_failures=partial_failures,
         )
     except Exception as e:
-        logger.error(f"ColBERT encoding error: {e!s}")
-        raise HTTPException(500, f"Encoding failed: {e!s}")
+        logger.error("ColBERT encoding error", exc_info=e)
+        raise HTTPException(500, "Encoding failed: internal error")
 
 
 @app.post("/encode/hybrid", response_model=HybridResponse)
@@ -596,8 +596,8 @@ async def encode_hybrid(request: EncodeRequest):
             partial_failures=partial_failures,
         )
     except Exception as e:
-        logger.error(f"Hybrid encoding error: {e!s}")
-        raise HTTPException(500, f"Encoding failed: {e!s}")
+        logger.error("Hybrid encoding error", exc_info=e)
+        raise HTTPException(500, "Encoding failed: internal error")
 
 
 @app.post("/rerank", response_model=RerankResponse)
@@ -660,8 +660,8 @@ async def rerank(request: RerankRequest):
         return RerankResponse(results=results, processing_time=processing_time)
 
     except Exception as e:
-        logger.error(f"Rerank error: {e!s}")
-        raise HTTPException(500, f"Rerank failed: {e!s}")
+        logger.error("Rerank error", exc_info=e)
+        raise HTTPException(500, "Rerank failed: internal error")
 
 
 # Mount Prometheus metrics
