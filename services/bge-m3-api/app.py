@@ -51,11 +51,17 @@ class ONNXEmbeddingModel:
     and ``colbert_vecs`` keys, preserving the existing endpoint contracts.
     """
 
+    EXPECTED_OUTPUTS = ["dense_vecs", "sparse_vecs", "colbert_vecs"]
+
     def __init__(self, session: onnxruntime.InferenceSession, tokenizer):
         self.session = session
         self.tokenizer = tokenizer
         self._input_names = [inp.name for inp in session.get_inputs()]
         self._output_names = [out.name for out in session.get_outputs()]
+        assert self._output_names == self.EXPECTED_OUTPUTS, (
+            f"ONNX model output order changed: expected {self.EXPECTED_OUTPUTS}, "
+            f"got {self._output_names}"
+        )
         logger.info("ONNX inputs: %s, outputs: %s", self._input_names, self._output_names)
 
     def encode(
