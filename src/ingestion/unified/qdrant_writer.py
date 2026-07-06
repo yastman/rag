@@ -626,12 +626,27 @@ class QdrantHybridWriter:
             sparse_embeddings = hybrid_result.lexical_weights
             colbert_embeddings = hybrid_result.colbert_vecs or []
 
+            # Indices the encoder flagged as invalid (empty/whitespace texts). The
+            # server still returns full-cardinality output with sentinel vectors at
+            # these positions — writing those poison vectors would silently corrupt
+            # the index, so skip them here. (card_06c91625a24c)
+            poison_indices = {pf["index"] for pf in hybrid_result.partial_failures if "index" in pf}
+            if poison_indices:
+                logger.warning(
+                    "Skipping %d chunk(s) with poison vectors for %s (indices=%s)",
+                    len(poison_indices),
+                    source_path,
+                    sorted(poison_indices),
+                )
+
             # Step 3: Build points
             points: list[PointStruct] = []
             new_ids: list[str] = []
             for i, (chunk, dense_vec, sparse_emb) in enumerate(
                 zip(chunks, all_dense_embeddings, sparse_embeddings, strict=True)
             ):
+                if i in poison_indices:
+                    continue
                 chunk_location = self.get_chunk_location(chunk, i)
                 point_id = self.generate_point_id(file_id, chunk_location)
                 payload = self.build_payload(
