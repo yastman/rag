@@ -1,64 +1,35 @@
 # src/retrieval/
 
-Benchmark/evaluation search strategy implementations for vector retrieval.
-
-## Purpose
-
-Keep synchronous retrieval strategies available for benchmarks, experiments, and evaluation. Production runtime retrieval composes `src.adapters.embeddings` with the canonical `src.runtime.services.qdrant.QdrantService` gateway through `src.runtime.retrieval`.
+Reranking and topic-classification helpers for retrieval. Production hybrid search itself
+lives in `src.runtime` (`QdrantService` + `RetrievalService`); this package holds the
+cross-encoder reranker and a lightweight topic classifier used to tune retrieval. It does
+**not** export search engine classes — the old `create_search_engine` benchmark variants
+were removed; `__init__.py` only marks the package.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| [`__init__.py`](./__init__.py) | Exports `create_search_engine` and search engine classes |
-| [`reranker.py`](./reranker.py) | Cross-encoder reranking (ms-marco-MiniLM, +10-15% NDCG) |
-| [`topic_classifier.py`](./topic_classifier.py) | Lightweight topic/doc-type classification for retrieval tuning |
-
-## Search Engine Variants
-
-| Engine | Method | Typical Latency |
-|--------|--------|-----------------|
-| `BaselineSearchEngine` | Dense only | ~0.5s |
-| `HybridRRFColBERTSearchEngine` | Dense + Sparse + ColBERT rerank | ~1.0s |
-| `DBSFColBERTSearchEngine` | DBSF + ColBERT | ~0.9s |
-
-## Entrypoints
-
-| Entrypoint | Role |
-|------------|------|
-| `src.retrieval.create_search_engine(settings)` | Benchmark/eval factory that returns the configured engine |
-| `search_engines.py` engine classes | Direct instantiation for evaluation and testing |
+| [`__init__.py`](./__init__.py) | Package exports |
+| [`reranker.py`](./reranker.py) | Cross-encoder reranking (+NDCG on the top-k) |
+| [`topic_classifier.py`](./topic_classifier.py) | Lightweight topic / doc-type classification for retrieval tuning |
 
 ## Boundaries
 
-- Retrieval code is **query-only**. It must not write to Qdrant or modify collections.
-- Production runtime retrieval should use `src.runtime.retrieval.RetrievalService`; `src/retrieval/search_engines.py` is benchmark/eval-only.
-- **Score shapes and payload fields** are coupled to `src/ingestion/unified/qdrant_writer.py`. If the ingestion payload contract changes, retrieval filters and result parsing may need updates.
-- `topic_classifier.py` is advisory only; retrieval must still work when classification returns `None`.
-
-## Related Runtime Services
-
-- **Qdrant** — vector database
-- **BGE-M3** — embeddings provider (local REST)
-- **Voyage** — alternative embeddings provider
+- Retrieval code is **query-only** — it must not write to Qdrant or modify collections.
+- Production runtime retrieval uses `src.runtime.retrieval.RetrievalService` over `src.runtime.qdrant.QdrantService`.
+- `topic_classifier.py` is advisory only; retrieval must still work when it returns `None`.
+- Score shapes / payload fields are coupled to [`../ingestion/unified/qdrant_writer.py`](../ingestion/unified/qdrant_writer.py); if the ingestion payload contract changes, reranking/parsing may need updates.
 
 ## Focused Checks
 
 ```bash
-# Unit tests
-pytest src/retrieval/
-
-# Type-check
 make check
-
-# Evaluation AB test (archived under archive/evaluation/)
-# python -m archive.evaluation.run_ab_test --help
+pytest src/retrieval/
 ```
 
 ## See Also
 
-- [`../ingestion/`](../ingestion/) — Chunk production and payload contract
-- [`../../telegram_bot/services/qdrant.py`](../../telegram_bot/services/qdrant.py) — Async Qdrant service used by the bot
-- [`../../DOCKER.md`](../../DOCKER.md) — Docker orchestration and service dependencies
-- [`../../docs/LOCAL-DEVELOPMENT.md`](../../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder
-- [`../../docs/runbooks/README.md`](../../docs/runbooks/README.md) — Operational troubleshooting
+- [`../runtime/qdrant/service.py`](../runtime/qdrant/service.py) — production Qdrant search gateway
+- [`../ingestion/`](../ingestion/) — chunk production and payload contract
+- [`../../docs/LOCAL-DEVELOPMENT.md`](../../docs/LOCAL-DEVELOPMENT.md) — local setup and validation ladder

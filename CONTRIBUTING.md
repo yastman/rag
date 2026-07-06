@@ -5,8 +5,7 @@ Thank you for your interest in contributing.
 ## Getting Started
 
 - Read [`README.md`](README.md) for project overview.
-- Follow [`docs/ONBOARDING.md`](docs/ONBOARDING.md) for the full onboarding guide.
-- See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for day-to-day development workflow.
+- See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for setup and the day-to-day development workflow.
 
 ## Development Workflow
 

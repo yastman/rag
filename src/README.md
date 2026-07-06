@@ -1,59 +1,62 @@
 # src/
 
-Shared domain, retrieval, ingestion, and API code for the contextual RAG system.
+Shared domain, retrieval, ingestion, runtime engine, and API code for the RAG system.
 
 ## Purpose
 
-Contains all non-transport logic: document ingestion, vector search, model contextualization, evaluation, and the standalone RAG API. `telegram_bot/` imports from here; most of `src/` stays Telegram-agnostic. `src/api/` is an adapter that intentionally reuses the Telegram LangGraph pipeline (via `telegram_bot.graph.graph.build_graph()`) until that pipeline is extracted into a shared location.
+Contains all non-transport logic: the public boundary (`core/`), the shared runtime engine
+(`runtime/`), document ingestion, retrieval, model contextualization, and embedding/LLM
+adapters. `telegram_bot/` imports from here; `src/` stays Telegram-agnostic. The runtime
+kernel is now extracted to `src/runtime/`, so `src/api/` imports
+`src.runtime.graph.builder.build_pipeline()` (no longer `telegram_bot.*`).
 
 ## Entrypoints
 
 | Surface | Entrypoint | Role |
 |---------|------------|------|
-| Ingestion (current) | `src.ingestion.unified.cli` | Unified pipeline CLI |
-| Retrieval | `src.retrieval.create_search_engine` | Factory for search engine variants |
-| API | `src.api.main:app` | FastAPI application for HTTP RAG queries |
-| Voice | `src.voice.agent` | LiveKit voice agent (deferred) |
-| Evaluation | `src.evaluation.smoke_test` | Smoke tests and RAG quality evaluation |
+| Public boundary | `src.core.assistant.run_assistant_request` | Single entrypoint used by all adapters + the golden E2E |
+| RAG engine | `src.runtime.pipeline.rag.rag_pipeline` | cache → hybrid search → grade → rerank → optional rewrite |
+| Ingestion | `src.ingestion.unified.cli` | Unified ingestion pipeline CLI |
+| API (unwired / reference) | `src.api.main:app` | FastAPI HTTP RAG wrapper — not wired in compose/CI |
 
 ## Directory Guide
 
 | Directory | Concern |
 |-----------|---------|
-| `api/` | FastAPI RAG API — thin wrapper around LangGraph pipeline |
+| `adapters/` | Embedding + LLM provider adapters (BGE-M3, OpenAI, LiteLLM) |
+| `api/` | FastAPI RAG API — unwired/reference wrapper around the runtime pipeline |
 | `config/` | Shared settings, constants, and Qdrant collection policy |
-| `contextualization/` | Claude-based contextualized embedding generation |
-| `core/` | Legacy RAG pipeline orchestrator |
-| `evaluation/` | Smoke tests, RAGAS, AB tests, tracing integration |
-| `governance/` | Compliance and policy helpers |
+| `contextualization/` | LLM-based contextualized embedding generation (Claude / OpenAI / Groq) |
+| `core/` | Public boundary: Protocol DI contracts (`contracts.py`) + `assistant.py` entrypoint |
 | `ingestion/` | Document parsing, chunking, indexing, unified pipeline |
-| `models/` | BGE-M3 contextualized embedding model wrappers |
-| `retrieval/` | Search engines (baseline, hybrid RRF, DBSF+ColBERT) |
-| `security/` | Security utilities |
+| `models/` | Embedding model singletons + domain models |
+| `observability/` | Structured-logging helpers + no-op `@observe` shim (Langfuse removed) |
+| `retrieval/` | Reranking + topic classification (benchmark/eval strategies) |
+| `runtime/` | Shared runtime engine: graph, pipeline, generation, qdrant, retrieval, grounding, llm |
+| `security/` | PII redaction and security utilities |
+| `services/` | Shared service clients (BGE-M3, Voyage, Kommo, handoff state) |
 | `utils/` | Shared helpers |
-| `voice/` | LiveKit voice agent and SIP setup (deferred by default) |
 
 ## Boundaries
 
-- **Shared/domain `src/` modules should stay Telegram-agnostic.** `src/api/` is an explicit adapter exception: it reuses the Telegram LangGraph pipeline (graph, state, observability, scoring) until that pipeline is extracted into a shared location.
+- **`src/` stays Telegram-agnostic.** The runtime kernel is extracted to `src/runtime/`; `src/api/` imports `src.runtime.graph.*`, not `telegram_bot.*`.
 - **Ingestion determinism and resumability** are owned by `src/ingestion/` and `src/ingestion/unified/`. Do not change manifest identity, hashing, or collection semantics without careful review.
-- **LangGraph state contracts** are defined in `telegram_bot/graph/state.py`; `src/api/` reuses the same pipeline but does not redefine state shapes.
+- **Graph state contracts** live in `src/runtime/graph/state.py`; adapters reuse the same pipeline and do not redefine state shapes.
 
 ## Related Runtime Services
 
-- **Qdrant** — vector database (used by retrieval, ingestion, and history)
-- **PostgreSQL** — ingestion flow state for unified ingestion
-- **Redis** — caching and rate limiting (used indirectly via `telegram_bot/` services)
+- **Qdrant** — vector database (retrieval, ingestion, history)
+- **PostgreSQL** — persistent state (conversation, ingestion tracking)
+- **Redis** — caching and rate limiting
 - **BGE-M3 / Voyage** — embedding providers
-- **Docling** — document parsing
+- **Docling** — in-process document parsing (native SDK)
 - Structured logging — observability
-- **LiveKit** — voice infrastructure (deferred/off by default)
 
 ## Focused Checks
 
 ```bash
 make check
-pytest src/retrieval/ src/ingestion/unified/ src/api/
+pytest src/ingestion/unified/ src/api/
 ```
 
 ## See Also

@@ -8,14 +8,13 @@ Automation, indexing, benchmarking, validation, and maintenance scripts.
 |----------|---------|---------|
 | **Indexing** | `index_*.py` | Chunk, embed, and load documents into Qdrant |
 | **Setup** | `setup_*.py`, `qdrant_ensure_indexes.py` | Collection schema and score configs |
-| **Validation** | `validate_*.py`, `check_image_drift.py`, `run_legal_grounding_audit.py` | Query correctness, trace validation, and drift checks |
-| **Benchmarks** | `benchmark_*.py`, `test_*_ab.py`, `test_quantization_ab.py` | A/B and throughput comparisons |
-| **Experiment** | `run_experiment.py`, `generate_test_properties.py` | Synthetic data and experiment runners |
+| **Validation** | `validate_*.py`, `check_image_drift.py`, `check_services.sh` | Query correctness and drift checks |
+| **Benchmarks** | `benchmark_*.py`, `benchmark/*_ab.py` | A/B and throughput comparisons |
+| **Experiment** | `eval/run_experiment.py`, `generate_test_properties.py` | Synthetic data and experiment runners |
 | **Maintenance** | `qdrant_snapshot.py`, `reindex_to_binary.py` | Disaster recovery and migration |
-| **Ops** | `test_release_health_vps.sh`, `test_bot_health.sh`, `smoke-zoo.sh` | Deployment and health checks |
-| **Hygiene** | Native `make git-hygiene`, `make git-hygiene-fix`, `make repo-cleanup`, `make repo-cleanup-force` targets | Repo hygiene |
-| **Alerting** | Prometheus-based alerting (see `services/`) | Monitoring and triage |
-| **CRM / Seeding** | `kommo_seed.py`, `update_advisor_prompts.py` | CRM seeding and prompt updates |
+| **Ops / health** | `probe/release_health_vps.sh`, `smoke-zoo.sh`, `check_services.sh` | Deployment and health checks |
+| **Swarm / CI** | `launch_kiro_worker.sh`, `accept_worker_report.py`, `ci/*.py` | tmux worker orchestration and CI gates |
+| **Hygiene** | Native `make git-hygiene`, `make repo-cleanup` targets | Repo hygiene |
 
 ## Usage
 

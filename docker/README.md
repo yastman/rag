@@ -4,43 +4,23 @@ This directory contains configuration files, scripts, and initialization assets 
 
 ## Layout
 
-### `litellm/`
+### `qdrant/`
 
-LiteLLM Proxy configuration that defines the model routing, fallbacks, and provider aliases used by the bot and voice agent.
+Qdrant vector-store configuration mounted into the `qdrant` container.
 
-- **`config.yaml`** — Model list (Cerebras, Groq, OpenAI), fallback chains, rate limits, and key management. Referenced as a Compose ConfigMap/volume mount.
-
-### `livekit/`
-
-LiveKit server configuration for the voice-agent path.
-
-- **`livekit.yaml`** — API keys, port bindings, and RTC settings. The `LIVEKIT_API_SECRET` is interpolated from environment at runtime.
-
-### `monitoring/`
-
-Observability stack configuration for local/dev alerting and log aggregation.
-
-- **`loki.yaml`** — Loki log aggregation server config (filesystem storage, Ruler alerting).
-- **`promtail.yaml`** — Promtail agent config that scrapes Docker container logs and pushes to Loki.
-- **`alertmanager.yaml`** — Alertmanager routing and receivers (Telegram integration).
-- **`rules/`** — Loki alerting rules:
-  - `infrastructure.yaml`
-  - `telegram-bot.yaml`
-  - `ingestion.yaml`
-  - `extended-services.yaml`
+- **`config.yaml`** — storage, quantization, and service settings.
 
 ### `postgres/init/`
 
 Database initialization scripts executed on first Postgres startup.
 
 - **`00-init-databases.sql`** — Creates application databases.
-- **`02-cocoindex.sql`** — CocoIndex ingestion schema.
+- **`02-cocoindex.sql`** — Legacy CocoIndex schema (CocoIndex removed; script retained for existing volumes).
 - **`03-unified-ingestion-alter.sql`** — Unified ingestion extensions.
-- **`04-voice-schema.sql`** — Voice agent transcript schema.
+- **`04-voice-schema.sql`** — Voice transcript schema.
 - **`05-realestate-schema.sql`** — Real-estate domain tables.
-- **`06-lead-scoring-sync.sql`** — Lead scoring sync schema.
-- **`07-nurturing-funnel-analytics.sql`** — Funnel analytics schema.
 - **`08-user-favorites.sql`** — User favorites schema.
+- **`09-drop-orphaned-scheduler-voice-tables.sql`** — Drops orphaned scheduler/voice tables.
 
 ### `ingestion/`
 
@@ -62,4 +42,4 @@ make verify-compose-images
 
 - [`../DOCKER.md`](../DOCKER.md) — Full Compose operations guide.
 - [`../docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation.
-- [`../services/README.md`](../services/README.md) — Service container index (bge-m3, docling).
+- [`../services/README.md`](../services/README.md) — Service container index (bge-m3).

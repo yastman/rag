@@ -14,9 +14,8 @@ tests/
 ├── integration/         # Service-aware paths and real component interaction
 ├── smoke/               # Quick health checks against live services
 ├── eval/                # RAG evaluation (RAGAS, ground_truth.json)
-├── baseline/            # Langfuse baseline metrics and threshold checks
+├── baseline/            # (empty; Langfuse baseline metrics removed, #2844)
 ├── benchmark/           # Performance comparisons (RRF vs DBSF, parser vs Docling, etc.)
-├── observability/       # Trace/contract CLI and collector infrastructure tests
 ├── chaos/               # Resilience tests (service failures, LLM fallbacks)
 ├── load/                # Load/throughput and Redis eviction tests
 ├── e2e/                 # End-to-end pipeline and Telegram E2E tests
@@ -38,7 +37,7 @@ These are the default gate for PRs and local development.
 
 | What | Scope | Coverage threshold |
 |------|-------|--------------------|
-| `make test` | unit + critical graph paths (`tests/unit/`, `tests/integration/test_graph_paths.py`) | none |
+| `make test` | core gate: `test-core` + `tests/integration/test_graph_paths.py` + no-service lane | none |
 | `make test-contract` | contract only (`tests/contract/`) | none |
 | Local PR readiness | `make check && make test && make test-contract` | coverage remains a separate `make test-cov` check |
 
@@ -51,7 +50,6 @@ Run these selectively, not on every save.
 | Smoke | `tests/smoke/` | Live service health and routing sanity | Minutes |
 | Eval | `tests/eval/` | RAG quality (faithfulness, relevance) | Minutes |
 | Benchmark | `tests/benchmark/` | Parser/reranker throughput comparisons | Varies |
-| Observability | `tests/observability/` | Trace collector/manager infrastructure | Varies |
 | Chaos | `tests/chaos/` | Degraded-service behavior and fallbacks | Minutes |
 | Load | `tests/load/` | Concurrent throughput and cache eviction | Minutes |
 | E2E | `tests/e2e/` | Full-stack pipeline and Telegram flows | Slow |
@@ -109,7 +107,6 @@ make test-nightly            # chaos + smoke + slow unit
 ```bash
 make e2e-test                # pytest E2E suite (live services)
 make e2e-telegram-test       # Telegram userbot runner
-make e2e-test-traces-core    # required #1307 core Telethon trace gate
 make bot-response-smoke      # #2192: prove make bot actually answers
 ```
 
@@ -132,8 +129,6 @@ uv run python scripts/e2e/runner.py --group immigration # specific group
 session file, `getMe` username match, `getWebhookInfo` empty, polling
 lock state) before delegating to `scripts.e2e.quick_test` for one safe
 query. Use it to gate "make bot is healthy" against "make bot answers".
-
-The `e2e-test-traces-core` target runs the required #1307 Telethon scenarios with Langfuse validation (`E2E_VALIDATE_LANGFUSE=1`). Ensure the bot is running locally (`make bot`) before executing this gate.
 
 ### RAG evaluation
 ```bash
@@ -190,12 +185,12 @@ See `pyproject.toml` for the full marker list (including exclusions for old API 
 | `unit/test_qdrant_service.py` | QdrantService with mocked client |
 | `unit/test_voyage_service.py` | VoyageService with mocked API |
 | `unit/test_small_to_big.py` | Small-to-big chunk expansion |
-| `unit/test_ragas_evaluation.py` | RAG evaluation metrics |
+| `regression/test_rag_core_regression.py` | RAG core regression suite |
 | `unit/test_local_compose_contract.py` | Compose config validation |
-| `contract/test_trace_families_contract.py` | Required trace family coverage |
-| `contract/test_span_coverage_contract.py` | Span coverage gates |
+| `contract/test_layering_contract.py` | Architecture layering contract |
+| `contract/test_no_langfuse_sdk_import_contract.py` | No Langfuse SDK imports remain |
 | `integration/test_graph_paths.py` | LangGraph path validation (no Docker) |
-| `integration/test_qdrant_connection.py` | Real Qdrant connection |
+| `integration/test_qdrant_service.py` | Real Qdrant service integration |
 | `smoke/test_preflight.py` | Qdrant/Redis preflight checks |
 | `eval/ground_truth.json` | Q&A pairs for RAG evaluation |
 

@@ -12,9 +12,8 @@ They are referenced from the main [`compose.yml`](../compose.yml) and started as
 | `bge-m3-api/` | Multi-vector embeddings (dense, sparse, ColBERT) | [`app.py`](bge-m3-api/app.py) | `bge-m3` | — (default) | http://localhost:8000 |
 
 > **Docling** runs in-process via the native Python SDK (`src/ingestion/`). There is no
-> HTTP sidecar for document parsing. The `services/docling/` directory is archived
-> reference material from the pre-migration HTTP approach and is no longer part of the
-> active stack.
+> HTTP sidecar for document parsing — the former `services/docling/` HTTP sidecar has been
+> removed.
 
 ## Quick Validation
 

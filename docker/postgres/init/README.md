@@ -13,9 +13,8 @@ docker/postgres/init
 - 03-unified-ingestion-alter.sql
 - 04-voice-schema.sql
 - 05-realestate-schema.sql
-- 06-lead-scoring-sync.sql
-- 07-nurturing-funnel-analytics.sql
 - 08-user-favorites.sql
+- 09-drop-orphaned-scheduler-voice-tables.sql
 
 ## Parent
 - [..](..)
