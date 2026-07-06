@@ -39,7 +39,6 @@ PYPROJECTS = [
     REPO / "telegram_bot" / "pyproject.toml",
     REPO / "mini_app" / "pyproject.toml",
     REPO / "services" / "bge-m3-api" / "pyproject.toml",
-    REPO / "services" / "user-base" / "pyproject.toml",
     REPO / "services" / "docling" / "pyproject.toml",
 ]
 
