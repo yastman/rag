@@ -65,8 +65,9 @@ def test_encode_colbert_multivector_shape_gate() -> None:
 
 
 # ── FastAPI-dependent tests — skipped when fastapi not installed ───────────────
-# importorskip is inside the bge_app fixture (not module-level) so the gate
-# test above is still collected when fastapi is absent.
+# importorskip is replaced by an explicit pytest.skip() inside fixtures so the
+# gate test above still collects when fastapi is absent, but the skip message
+# is actionable: "run via: make test-bge-extras".
 
 # ── Fake model that returns deterministic numpy arrays ──
 _DENSE_DIM = 1024
@@ -114,9 +115,12 @@ def bge_app():
     """Mock heavy deps, import bge-m3-api app, install fake model.
 
     Uses MonkeyPatch.context() for automatic teardown of sys.modules entries.
-    Skips if fastapi is not installed (requires_extras tier).
+    Requires fastapi (bge-extras lane: uv sync --extra bge-extras).
     """
-    pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+    import importlib
+
+    if importlib.util.find_spec("fastapi") is None:
+        pytest.skip("fastapi not installed — run via: make test-bge-extras")
     with pytest.MonkeyPatch.context() as mp:
         mock_ort = MagicMock()
         mock_ort.InferenceSession = MagicMock()
@@ -213,32 +217,8 @@ class TestEncodeHybrid:
         assert "lexical_weights" in data
         assert "colbert_vecs" in data
 
-    async def test_traceparent_header_is_extracted(self, client, bge_app, monkeypatch):
-        app_module = bge_app["app_module"]
-        captured: dict[str, str | object] = {}
-
-        def fake_extract(headers):
-            captured["traceparent"] = headers.get("traceparent")
-            return "extracted-context"
-
-        attach = MagicMock(return_value="attached-token")
-        detach = MagicMock()
-        monkeypatch.setattr(app_module.propagate, "extract", fake_extract)
-        monkeypatch.setattr(app_module, "attach", attach)
-        monkeypatch.setattr(app_module, "detach", detach)
-
-        resp = await client.post(
-            "/encode/hybrid",
-            json={"texts": ["hello"]},
-            headers={"traceparent": "00-11111111111111111111111111111111-2222222222222222-01"},
-        )
-
-        assert resp.status_code == 200
-        assert captured["traceparent"] == (
-            "00-11111111111111111111111111111111-2222222222222222-01"
-        )
-        attach.assert_called_once_with("extracted-context")
-        detach.assert_called_once_with("attached-token")
+    # test_traceparent_header_is_extracted removed: OTel propagate removed from app.py
+    # (OpenTelemetry fully removed, card_81add5ba4a66). No traceparent handling to test.
 
 
 class TestEncodeDense:
@@ -373,6 +353,112 @@ class TestPartialFailureIsolation:
             fake_model.encode = original_encode  # restore original method
 
 
+# ── ONNX output contract tests ─────────────────────────────────────────────────
+
+
+def _make_mock_session(output_names: list[str]) -> MagicMock:
+    """Return a mock InferenceSession whose get_outputs() returns the given names."""
+    mock_session = MagicMock()
+    mock_outputs = []
+    for name in output_names:
+        out = MagicMock()
+        out.name = name
+        mock_outputs.append(out)
+    mock_session.get_outputs.return_value = mock_outputs
+    mock_session.get_inputs.return_value = []
+    return mock_session
+
+
+def _import_onnx_model_class():
+    """Import ONNXEmbeddingModel with heavy deps mocked (no real ONNX/transformers)."""
+    heavy_mocks = {
+        "onnxruntime": MagicMock(),
+        "fastapi": MagicMock(),
+        "transformers": MagicMock(),
+        "prometheus_client": MagicMock(),
+        "opentelemetry": MagicMock(),
+        "opentelemetry.context": MagicMock(),
+        "opentelemetry.propagate": MagicMock(),
+    }
+    for attr in ("Counter", "Gauge", "Histogram"):
+        setattr(heavy_mocks["prometheus_client"], attr, MagicMock(return_value=MagicMock()))
+    heavy_mocks["prometheus_client"].make_asgi_app = MagicMock(return_value=MagicMock())
+
+    with pytest.MonkeyPatch.context() as mp:
+        for mod, mock in heavy_mocks.items():
+            mp.setitem(sys.modules, mod, mock)
+        mp.syspath_prepend(_BGE_SERVICE_DIR)
+        sys.modules.pop("app", None)
+        import app as _app_module
+
+        cls = _app_module.ONNXEmbeddingModel
+        sys.modules.pop("app", None)
+    return cls
+
+
+@pytest.mark.no_services
+def test_onnx_output_order_correct_names_initialises_ok() -> None:
+    """ONNXEmbeddingModel.__init__ succeeds when output names match expected order."""
+    ONNXEmbeddingModel = _import_onnx_model_class()
+    session = _make_mock_session(["dense_vecs", "sparse_vecs", "colbert_vecs"])
+    model = ONNXEmbeddingModel(session=session, tokenizer=MagicMock())
+    assert model._output_names == ["dense_vecs", "sparse_vecs", "colbert_vecs"]
+
+
+@pytest.mark.no_services
+def test_onnx_output_order_mismatch_raises_assertion() -> None:
+    """ONNXEmbeddingModel.__init__ raises AssertionError when output order is wrong."""
+    ONNXEmbeddingModel = _import_onnx_model_class()
+    session = _make_mock_session(["colbert_vecs", "dense_vecs", "sparse_vecs"])
+    with pytest.raises(AssertionError, match="ONNX model output order changed"):
+        ONNXEmbeddingModel(session=session, tokenizer=MagicMock())
+
+
+@pytest.mark.no_services
+def test_onnx_output_name_mismatch_wrong_names_raises_assertion() -> None:
+    """ONNXEmbeddingModel.__init__ raises AssertionError when output names differ."""
+    ONNXEmbeddingModel = _import_onnx_model_class()
+    session = _make_mock_session(["output_0", "output_1", "output_2"])
+    with pytest.raises(AssertionError, match="ONNX model output order changed"):
+        ONNXEmbeddingModel(session=session, tokenizer=MagicMock())
+
+
+@pytest.mark.no_services
+def test_get_model_file_not_found_raises(tmp_path) -> None:
+    """get_model() raises FileNotFoundError when the ONNX model file doesn't exist."""
+    heavy_mocks = {
+        "onnxruntime": MagicMock(),
+        "fastapi": MagicMock(),
+        "transformers": MagicMock(),
+        "prometheus_client": MagicMock(),
+        "opentelemetry": MagicMock(),
+        "opentelemetry.context": MagicMock(),
+        "opentelemetry.propagate": MagicMock(),
+    }
+    for attr in ("Counter", "Gauge", "Histogram"):
+        setattr(heavy_mocks["prometheus_client"], attr, MagicMock(return_value=MagicMock()))
+    heavy_mocks["prometheus_client"].make_asgi_app = MagicMock(return_value=MagicMock())
+
+    with pytest.MonkeyPatch.context() as mp:
+        for mod, mock in heavy_mocks.items():
+            mp.setitem(sys.modules, mod, mock)
+        mp.syspath_prepend(_BGE_SERVICE_DIR)
+        sys.modules.pop("app", None)
+        import app as _app_module
+
+        # Reset global session so get_model() re-runs the load path
+        _app_module._onnx_session = None
+        # Point ONNX_MODEL_DIR to a temp dir with no model file
+        _app_module.settings = MagicMock()
+        _app_module.settings.ONNX_MODEL_DIR = str(tmp_path)
+        _app_module.settings.NUM_THREADS = 1
+
+        with pytest.raises(FileNotFoundError):
+            _app_module.get_model()
+
+        sys.modules.pop("app", None)
+
+
 class TestWarmup:
     async def test_warmup_skips_colbert(self, bge_app):
         """Lifespan warmup avoids ColBERT to keep startup memory bounded."""
@@ -397,6 +483,72 @@ class TestWarmup:
             f"got return_colbert_vecs={warmup_kwargs.get('return_colbert_vecs')}"
         )
         fake_model.encode = orig_encode
+
+
+# ── Unit tests for _lexical_weights_to_qdrant_sparse converter ──
+
+
+def _import_lexical_weights_fn():
+    """Import _lexical_weights_to_qdrant_sparse with heavy deps mocked out.
+
+    Saves and restores sys.modules["app"] so module-scoped fixtures (bge_app)
+    that already imported app are not corrupted by this helper's reload.
+    """
+    heavy_mocks = {
+        "onnxruntime": MagicMock(),
+        "fastapi": MagicMock(),
+        "transformers": MagicMock(),
+        "prometheus_client": MagicMock(),
+        "opentelemetry": MagicMock(),
+        "opentelemetry.context": MagicMock(),
+        "opentelemetry.propagate": MagicMock(),
+    }
+    # prometheus_client needs specific Counter/Gauge/Histogram constructors
+    for attr in ("Counter", "Gauge", "Histogram"):
+        setattr(heavy_mocks["prometheus_client"], attr, MagicMock(return_value=MagicMock()))
+    heavy_mocks["prometheus_client"].make_asgi_app = MagicMock(return_value=MagicMock())
+
+    _saved_app = sys.modules.get("app")
+    with pytest.MonkeyPatch.context() as mp:
+        for mod, mock in heavy_mocks.items():
+            mp.setitem(sys.modules, mod, mock)
+        mp.syspath_prepend(_BGE_SERVICE_DIR)
+        sys.modules.pop("app", None)
+        import app as _app_module
+
+        fn = _app_module._lexical_weights_to_qdrant_sparse
+        sys.modules.pop("app", None)
+    # Restore original app module so module-scoped fixtures stay valid.
+    if _saved_app is not None:
+        sys.modules["app"] = _saved_app
+    return fn
+
+
+@pytest.mark.no_services
+def test_lexical_weights_to_qdrant_sparse_raw_format() -> None:
+    """Non-passthrough branch: {token_id: weight} dict is converted to indices+values."""
+    _lexical_weights_to_qdrant_sparse = _import_lexical_weights_fn()
+
+    raw = [{0: 0.5, 1: 0.3}]
+    result = _lexical_weights_to_qdrant_sparse(raw)
+
+    assert len(result) == 1
+    item = result[0]
+    assert "indices" in item
+    assert "values" in item
+    assert item["indices"] == [0, 1]
+    assert item["values"] == [0.5, 0.3]
+
+
+@pytest.mark.no_services
+def test_lexical_weights_to_qdrant_sparse_passthrough() -> None:
+    """Passthrough branch: already-Qdrant-format dicts are returned unchanged."""
+    _lexical_weights_to_qdrant_sparse = _import_lexical_weights_fn()
+
+    already_qdrant = [{"indices": [10, 20], "values": [0.8, 0.4]}]
+    result = _lexical_weights_to_qdrant_sparse(already_qdrant)
+
+    assert result == already_qdrant
 
 
 # ── Unit tests for _onnx_sparse_to_qdrant converter ──
@@ -505,6 +657,22 @@ class TestOnnxSparseToQdrant:
 class TestRunEncode:
     """Tests for the shared ``_run_encode`` helper that backs all encode endpoints."""
 
+    @pytest.fixture(autouse=True)
+    def _patch_get_model(self, bge_app):
+        """Patch app.get_model so _run_encode never tries to load a real ONNX file.
+
+        When TestRunEncode runs after other test classes, the module-scoped
+        bge_app mock may be unwound (sys.modules["app"] popped) and re-imported
+        clean. The re-imported module has _onnx_session=None and a real get_model,
+        so _run_encode raises FileNotFoundError. Patching in this autouse fixture
+        ensures get_model returns the FakeONNXModel for every test in this class.
+        """
+        import sys
+
+        if "app" in sys.modules:
+            app_module = sys.modules["app"]
+            app_module.get_model = bge_app["app_module"].get_model
+
     async def test_dense_only_returns_dense_vecs(self, bge_app):
         """_run_encode with return_dense=True returns dense_vecs in first slot."""
         from app import EncodeRequest, _run_encode
@@ -583,3 +751,26 @@ class TestRunEncode:
         # Valid indices have real vectors
         assert any(v != 0.0 for v in dense[0])
         assert any(v != 0.0 for v in dense[2])
+
+
+# ── Encode limit tests ──
+
+
+class TestEncodeMaxItems:
+    """Tests for ENCODE_MAX_ITEMS upper-bound validation on /encode/* endpoints."""
+
+    async def test_over_limit_returns_422(self, client, bge_app):
+        """POST /encode/dense with len(texts) > ENCODE_MAX_ITEMS → 422 Unprocessable Entity."""
+        from app import ENCODE_MAX_ITEMS
+
+        too_many = ["text"] * (ENCODE_MAX_ITEMS + 1)
+        resp = await client.post("/encode/dense", json={"texts": too_many})
+        assert resp.status_code == 422
+
+    async def test_at_limit_returns_200(self, client, bge_app):
+        """POST /encode/dense with len(texts) == ENCODE_MAX_ITEMS → 200 OK."""
+        from app import ENCODE_MAX_ITEMS
+
+        at_limit = ["text"] * ENCODE_MAX_ITEMS
+        resp = await client.post("/encode/dense", json={"texts": at_limit})
+        assert resp.status_code == 200

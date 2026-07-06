@@ -12,9 +12,7 @@ from typing import Any
 
 import numpy as np
 import onnxruntime
-from fastapi import FastAPI, HTTPException, Request
-from opentelemetry import propagate
-from opentelemetry.context import attach, detach
+from fastapi import FastAPI, HTTPException
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
 from transformers import AutoTokenizer
@@ -53,11 +51,17 @@ class ONNXEmbeddingModel:
     and ``colbert_vecs`` keys, preserving the existing endpoint contracts.
     """
 
+    EXPECTED_OUTPUTS = ["dense_vecs", "sparse_vecs", "colbert_vecs"]
+
     def __init__(self, session: onnxruntime.InferenceSession, tokenizer):
         self.session = session
         self.tokenizer = tokenizer
         self._input_names = [inp.name for inp in session.get_inputs()]
         self._output_names = [out.name for out in session.get_outputs()]
+        assert self._output_names == self.EXPECTED_OUTPUTS, (
+            f"ONNX model output order changed: expected {self.EXPECTED_OUTPUTS}, "
+            f"got {self._output_names}"
+        )
         logger.info("ONNX inputs: %s, outputs: %s", self._input_names, self._output_names)
 
     def encode(
@@ -174,30 +178,6 @@ def compute_maxsim_scores(
 async def lifespan(app: FastAPI):
     """Eager model loading + bounded warmup encode at startup."""
     global _warmed_up
-    # Activate OTEL auto-instrumentation (#2225). The SDK-native
-    # FastAPIInstrumentor.instrument_app(app) replaces the bespoke
-    # @app.middleware('http') extract_trace_context defined below with a
-    # standard ASGI middleware that:
-    #   * extracts traceparent / baggage from incoming headers automatically;
-    #   * adds http.method / http.route / http.status_code semantic attrs;
-    #   * sets the OTEL context for every @observe span downstream.
-    # Activation is best-effort so a missing optional dep does not block boot.
-    try:  # pragma: no cover — exercised via service smoke tests
-        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
-        if not getattr(app, "_is_instrumented_by_opentelemetry", False):
-            FastAPIInstrumentor.instrument_app(app)
-            logger.info("FastAPIInstrumentor activated (#2225)")
-    except Exception:
-        logger.warning("FastAPIInstrumentor activation skipped", exc_info=True)
-
-    try:  # pragma: no cover
-        from opentelemetry.instrumentation.logging import LoggingInstrumentor
-
-        LoggingInstrumentor().instrument(set_logging_format=False)
-    except Exception:
-        logger.debug("LoggingInstrumentor activation skipped", exc_info=True)
-
     logger.info("Starting model warmup...")
     start = time.time()
     model = get_model()
@@ -221,17 +201,6 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
-
-
-@app.middleware("http")
-async def extract_trace_context(request: Request, call_next):
-    """Attach incoming W3C trace context so service spans join caller traces."""
-    context = propagate.extract(request.headers)
-    token = attach(context)
-    try:
-        return await call_next(request)
-    finally:
-        detach(token)
 
 
 def get_model():
@@ -268,11 +237,16 @@ def get_model():
     return ONNXEmbeddingModel(_onnx_session, _tokenizer)
 
 
+# Encode limits
+ENCODE_MAX_ITEMS: int = 64  # Max texts per encode request (unbounded → OOM/DoS on CPU-ONNX)
+
+
 # Pydantic models
 class EncodeRequest(BaseModel):
-    texts: list[str] = Field(..., description="List of texts to encode")
+    texts: list[str] = Field(
+        ..., description="List of texts to encode", max_length=ENCODE_MAX_ITEMS
+    )
     max_length: int = Field(settings.MAX_LENGTH, description="Max token length")
-    batch_size: int = Field(settings.BATCH_SIZE, description="Batch size for processing")
 
 
 class PartialFailure(BaseModel):
@@ -436,7 +410,7 @@ async def _run_encode(
         valid_texts = [request.texts[i] for i in valid_indices]
         embeddings = model.encode(
             valid_texts,
-            batch_size=request.batch_size,
+            batch_size=settings.BATCH_SIZE,
             max_length=request.max_length,
             return_dense=return_dense,
             return_sparse=return_sparse,
@@ -514,8 +488,8 @@ async def encode_dense(request: EncodeRequest):
             partial_failures=partial_failures,
         )
     except Exception as e:
-        logger.error(f"Dense encoding error: {e!s}")
-        raise HTTPException(500, f"Encoding failed: {e!s}")
+        logger.error("Dense encoding error", exc_info=e)
+        raise HTTPException(500, "Encoding failed: internal error")
 
 
 @app.post("/encode/sparse", response_model=SparseResponse)
@@ -539,8 +513,8 @@ async def encode_sparse(request: EncodeRequest):
             partial_failures=partial_failures,
         )
     except Exception as e:
-        logger.error(f"Sparse encoding error: {e!s}")
-        raise HTTPException(500, f"Encoding failed: {e!s}")
+        logger.error("Sparse encoding error", exc_info=e)
+        raise HTTPException(500, "Encoding failed: internal error")
 
 
 @app.post("/encode/colbert", response_model=ColbertResponse)
@@ -564,8 +538,8 @@ async def encode_colbert(request: EncodeRequest):
             partial_failures=partial_failures,
         )
     except Exception as e:
-        logger.error(f"ColBERT encoding error: {e!s}")
-        raise HTTPException(500, f"Encoding failed: {e!s}")
+        logger.error("ColBERT encoding error", exc_info=e)
+        raise HTTPException(500, "Encoding failed: internal error")
 
 
 @app.post("/encode/hybrid", response_model=HybridResponse)
@@ -596,8 +570,8 @@ async def encode_hybrid(request: EncodeRequest):
             partial_failures=partial_failures,
         )
     except Exception as e:
-        logger.error(f"Hybrid encoding error: {e!s}")
-        raise HTTPException(500, f"Encoding failed: {e!s}")
+        logger.error("Hybrid encoding error", exc_info=e)
+        raise HTTPException(500, "Encoding failed: internal error")
 
 
 @app.post("/rerank", response_model=RerankResponse)
@@ -660,8 +634,8 @@ async def rerank(request: RerankRequest):
         return RerankResponse(results=results, processing_time=processing_time)
 
     except Exception as e:
-        logger.error(f"Rerank error: {e!s}")
-        raise HTTPException(500, f"Rerank failed: {e!s}")
+        logger.error("Rerank error", exc_info=e)
+        raise HTTPException(500, "Rerank failed: internal error")
 
 
 # Mount Prometheus metrics

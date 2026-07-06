@@ -11,8 +11,6 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from telegram_bot.observability import observe
-
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +113,6 @@ class NurturingService:
             records,
         )
 
-    @observe(name="nurturing-batch-run")
     async def run_once(self, *, limit: int = 100) -> int:
         """Select candidates, enqueue, return count."""
         candidates = await self.select_candidates(limit=limit)
@@ -171,7 +168,6 @@ class NurturingService:
         logger.info("NurturingDispatch: sent %d/%d", sent, len(rows))
         return sent
 
-    @observe(name="nurturing-llm-generate", capture_input=False, capture_output=False)
     async def _generate_nurturing_message(self, preferences: dict[str, Any]) -> str:
         """Generate personalized nurturing message via LLM or template fallback."""
         prefs_text = ", ".join(f"{k}: {v}" for k, v in preferences.items()) or "general interest"

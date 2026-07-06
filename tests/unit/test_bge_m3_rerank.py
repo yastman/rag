@@ -17,9 +17,12 @@ _BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
 @pytest.fixture(scope="module")
 def bge_rerank_app():
     """Mock heavy deps and add bge-m3-api to sys.path for imports.
-    Skips if fastapi is not installed (requires_extras tier).
+    Requires fastapi (bge-extras lane: uv sync --extra bge-extras).
     """
-    pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+    import importlib
+
+    if importlib.util.find_spec("fastapi") is None:
+        pytest.skip("fastapi not installed — run via: make test-bge-extras")
     with pytest.MonkeyPatch.context() as mp:
         mock_ort = MagicMock()
         mock_ort.InferenceSession = MagicMock()

@@ -8,7 +8,6 @@ telegram_bot/config
 
 
 ## Contents
-- mini_app.yaml
 - services.yaml
 
 ## Parent

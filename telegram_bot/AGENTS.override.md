@@ -26,6 +26,6 @@
 
 ## References
 - `telegram_bot/README.md`
-- `docs/PIPELINE_OVERVIEW.md`
+- `docs/README.md`
 - `docs/LOCAL-DEVELOPMENT.md`
-- `docs/PROJECT_STACK.md`
+- `DOCKER.md`

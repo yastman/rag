@@ -38,13 +38,19 @@ def _build_payload(
 
 def _parse_dense_response(data: dict[str, Any]) -> DenseResult:
     """Parse /encode/dense response JSON into DenseResult."""
-    return DenseResult(vectors=data["dense_vecs"], processing_time=data.get("processing_time"))
+    return DenseResult(
+        vectors=data["dense_vecs"],
+        processing_time=data.get("processing_time"),
+        partial_failures=data.get("partial_failures", []),
+    )
 
 
 def _parse_sparse_response(data: dict[str, Any]) -> SparseResult:
     """Parse /encode/sparse response JSON into SparseResult."""
     return SparseResult(
-        weights=data["lexical_weights"], processing_time=data.get("processing_time")
+        weights=data["lexical_weights"],
+        processing_time=data.get("processing_time"),
+        partial_failures=data.get("partial_failures", []),
     )
 
 
@@ -53,6 +59,7 @@ def _parse_colbert_response(data: dict[str, Any]) -> ColbertResult:
     return ColbertResult(
         colbert_vecs=data["colbert_vecs"],
         processing_time=data.get("processing_time"),
+        partial_failures=data.get("partial_failures", []),
     )
 
 
@@ -63,6 +70,7 @@ def _parse_hybrid_response(data: dict[str, Any]) -> HybridResult:
         lexical_weights=data["lexical_weights"],
         colbert_vecs=data.get("colbert_vecs"),
         processing_time=data.get("processing_time"),
+        partial_failures=data.get("partial_failures", []),
     )
 
 
@@ -72,6 +80,7 @@ class DenseResult:
 
     vectors: list[list[float]]
     processing_time: float | None = None
+    partial_failures: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -80,6 +89,7 @@ class SparseResult:
 
     weights: list[dict[str, Any]]
     processing_time: float | None = None
+    partial_failures: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -90,6 +100,7 @@ class HybridResult:
     lexical_weights: list[dict[str, Any]]
     colbert_vecs: list[list[list[float]]] | None = None
     processing_time: float | None = None
+    partial_failures: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -98,6 +109,7 @@ class RerankResult:
 
     results: list[dict[str, Any]] = field(default_factory=list)
     processing_time: float | None = None
+    partial_failures: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -106,6 +118,7 @@ class ColbertResult:
 
     colbert_vecs: list[list[list[float]]]
     processing_time: float | None = None
+    partial_failures: list[dict[str, Any]] = field(default_factory=list)
 
 
 class BGEM3Client:
@@ -236,6 +249,7 @@ class BGEM3Client:
         return RerankResult(
             results=[{"index": r["index"], "score": r["score"]} for r in data["results"]],
             processing_time=data.get("processing_time"),
+            partial_failures=data.get("partial_failures", []),
         )
 
     @bge_retry
@@ -282,6 +296,7 @@ class BGEM3SyncClient:
         self.batch_size = batch_size
         self._client = httpx.Client(timeout=timeout)
 
+    @bge_retry
     def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors (sync)."""
         if not texts:
@@ -293,6 +308,7 @@ class BGEM3SyncClient:
         resp.raise_for_status()
         return _parse_dense_response(resp.json())
 
+    @bge_retry
     def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors (sync)."""
         if not texts:
@@ -304,6 +320,7 @@ class BGEM3SyncClient:
         resp.raise_for_status()
         return _parse_sparse_response(resp.json())
 
+    @bge_retry
     def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors (sync)."""
         if not texts:
@@ -315,6 +332,7 @@ class BGEM3SyncClient:
         resp.raise_for_status()
         return _parse_colbert_response(resp.json())
 
+    @bge_retry
     def encode_hybrid(self, texts: list[str]) -> HybridResult:
         """Encode texts to dense + sparse + colbert in a single /encode/hybrid call.
 
@@ -333,3 +351,9 @@ class BGEM3SyncClient:
     def close(self) -> None:
         """Close the underlying httpx client."""
         self._client.close()
+
+    def __enter__(self) -> BGEM3SyncClient:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()

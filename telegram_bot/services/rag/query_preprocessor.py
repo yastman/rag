@@ -16,10 +16,6 @@ from telegram_bot.integrations.prompt_manager import get_prompt_with_object
 logger = logging.getLogger(__name__)
 
 
-def _update_current_span(**kwargs: Any) -> None:
-    """No-op stub — tracing removed (#2844)."""
-
-
 _SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = {
     "рассрочки": "какие варианты рассрочки при покупке квартиры",
     "рассрочка": "какие варианты рассрочки при покупке квартиры",

@@ -8,8 +8,8 @@ still used by the runtime: ``mask_pii`` (PII masking for safe payloads) and
 ``propagate_attributes`` (a no-op context manager preserved as a stable
 context-propagation seam for callers).
 
-``traced_pipeline``, ``_disable_otel_exporter``, and ``_is_endpoint_reachable``
-are no-op / thin shims kept for import-compatibility (#2844, #2969).
+``traced_pipeline`` is a no-op / thin shim kept for import-compatibility
+(#2844, #2969). OpenTelemetry has been fully removed (card_81add5ba4a66).
 """
 
 from __future__ import annotations
@@ -18,12 +18,6 @@ import contextlib
 from collections.abc import Iterator
 from typing import Any
 
-from src.observability.bootstrap import (
-    disable_otel_exporter as _disable_otel_exporter,
-)
-from src.observability.bootstrap import (
-    is_endpoint_reachable as _is_endpoint_reachable,
-)
 from src.observability.scores import (
     compute_checkpointer_overhead_proxy_ms,
     score,
@@ -86,17 +80,14 @@ def observe(name: str = "", **_kw: Any) -> Any:
 def get_client() -> Any:
     """No-op observability-client accessor — Langfuse removed (#2844, #2969).
 
-    Always returns ``None`` so ``lf = get_client(); if lf is not None: ...``
-    call sites collapse to a no-op. Kept as a stable seam for the few callers
-    (rag_core._update_current_span) that guard on a client being present.
+    Always returns ``None``. Kept as a stable seam in case future callers
+    need a client guard.
     """
     # ponytail: tracing client is gone; None makes every guarded call a no-op.
     return None
 
 
 __all__ = [
-    "_disable_otel_exporter",
-    "_is_endpoint_reachable",
     "compute_checkpointer_overhead_proxy_ms",
     "get_client",
     "mask_pii",

@@ -78,7 +78,6 @@ class TestMainFunction:
                     "telegram_bot.logging_config": mock_logging_config_mod,
                 },
             ),
-            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -118,7 +117,6 @@ class TestMainFunction:
                     "telegram_bot.logging_config": mock_logging_config_mod,
                 },
             ),
-            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -158,7 +156,6 @@ class TestMainFunction:
                     "telegram_bot.logging_config": mock_logging_config_mod,
                 },
             ),
-            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -200,7 +197,6 @@ class TestMainFunction:
                     "telegram_bot.logging_config": mock_logging_config_mod,
                 },
             ),
-            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -248,7 +244,6 @@ class TestMainFunction:
                     "telegram_bot.logging_config": mock_logging_config_mod,
                 },
             ),
-            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 

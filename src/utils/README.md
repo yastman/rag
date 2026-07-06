@@ -11,21 +11,13 @@ Keeps document-structure parsing and JSON serialization helpers isolated from pi
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Utility exports |
+| [`product_events.py`](./product_events.py) | Product / telemetry event payload helpers (used by `src.core.telemetry`) |
 | [`serialization.py`](./serialization.py) | NumPy-to-Python type conversion helpers |
 
-## Structure Parser
+## Product Events
 
-Extracts structure from Ukrainian Criminal Code:
-- Article numbers (Arabic, Roman, Ukrainian words)
-- Chapter/section hierarchy
-- Cross-references between articles
-
-```python
-from src.utils.structure_parser import parse_article_number
-
-article = parse_article_number("Стаття 121")  # Returns: "121"
-article = parse_article_number("Стаття сто двадцять перша")  # Returns: "121"
-```
+`product_events.py` builds structured product / telemetry event payloads emitted by
+`src.core.telemetry` (answer served, retrieval outcome, …). Keep it dependency-light.
 
 ## Serialization
 

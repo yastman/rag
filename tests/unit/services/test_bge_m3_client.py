@@ -2,11 +2,36 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from unittest import mock
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+
+
+# Pure-mock tests — no Docker / network. Marked so the core `no_services` gate
+# (`-m 'no_services and not requires_extras and not slow'`) actually runs them.
+pytestmark = pytest.mark.no_services
+
+
+@pytest.fixture(autouse=True)
+def _instant_retry_backoff(monkeypatch):
+    """Neutralise tenacity's exponential back-off so retry tests are instant.
+
+    bge_retry now retries 429/503/5xx and transport errors; without this the
+    HTTP-error and timeout tests would each sleep through the real back-off.
+    tenacity resolves its sleep fn at call time (``time.sleep`` for sync,
+    ``asyncio.sleep`` for async), so patching the module attrs zeroes the wait
+    for both paths.
+    """
+
+    async def _no_async_sleep(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr(asyncio, "sleep", _no_async_sleep)
 
 
 @pytest.fixture
@@ -865,3 +890,98 @@ class TestErrorAndTimeoutHandling:
 
         with pytest.raises(httpx.ConnectTimeout):
             await client.encode_hybrid(["hello"])
+
+
+# ── Retry policy: bge_retry must retry 429/503 for sync + async (card_7cc460feaec0) ──
+
+
+def _http_status_error(status_code: int) -> httpx.HTTPStatusError:
+    return httpx.HTTPStatusError(
+        f"status {status_code}",
+        request=MagicMock(),
+        response=MagicMock(status_code=status_code),
+    )
+
+
+def _failing_resp(status_code: int) -> MagicMock:
+    """Response mock whose raise_for_status() raises HTTPStatusError(status_code)."""
+    resp = MagicMock()
+    resp.raise_for_status.side_effect = _http_status_error(status_code)
+    return resp
+
+
+def _dense_ok_resp() -> MagicMock:
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    resp.json.return_value = {"dense_vecs": [[0.1] * 1024]}
+    return resp
+
+
+class TestBGERetryPolicy:
+    """bge_retry retries 429/503 (transient sidecar overload) but not client errors."""
+
+    def test_bge_retry_configured_for_http_status(self):
+        """bge_retry has retry_on_http_status enabled and covers 429 + 503."""
+        from src.services._retry import RETRYABLE_HTTP_STATUS_CODES
+
+        assert 429 in RETRYABLE_HTTP_STATUS_CODES
+        assert 503 in RETRYABLE_HTTP_STATUS_CODES
+
+    def test_sync_encode_dense_retries_on_503_then_succeeds(self, sync_client):
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(
+            side_effect=[_failing_resp(503), _failing_resp(503), _dense_ok_resp()]
+        )
+
+        result = sync_client.encode_dense(["hello"])
+
+        assert len(result.vectors) == 1
+        assert sync_client._client.post.call_count == 3  # 2 retries then success
+
+    def test_sync_encode_hybrid_retries_on_429_then_succeeds(self, sync_client):
+        ok = MagicMock()
+        ok.raise_for_status = MagicMock()
+        ok.json.return_value = {
+            "dense_vecs": [[0.1] * 1024],
+            "lexical_weights": [{"indices": [1], "values": [0.5]}],
+        }
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(side_effect=[_failing_resp(429), ok])
+
+        result = sync_client.encode_hybrid(["hello"])
+
+        assert len(result.dense_vecs) == 1
+        assert sync_client._client.post.call_count == 2
+
+    def test_sync_encode_dense_exhausts_retries_and_reraises(self, sync_client):
+        """After max_attempts consecutive 503s the error is reraised (reraise=True)."""
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(return_value=_failing_resp(503))
+
+        with pytest.raises(httpx.HTTPStatusError):
+            sync_client.encode_dense(["hello"])
+
+        assert sync_client._client.post.call_count == 3  # max_attempts, no infinite loop
+
+    def test_sync_encode_dense_does_not_retry_on_400(self, sync_client):
+        """A non-retryable client error (400) fails fast without retry."""
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(return_value=_failing_resp(400))
+
+        with pytest.raises(httpx.HTTPStatusError):
+            sync_client.encode_dense(["hello"])
+
+        assert sync_client._client.post.call_count == 1  # no retry on 400
+
+    async def test_async_encode_dense_retries_on_503_then_succeeds(self, client):
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(
+            side_effect=[_failing_resp(503), _failing_resp(503), _dense_ok_resp()]
+        )
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_dense(["hello"])
+
+        assert len(result.vectors) == 1
+        assert mock_http.post.call_count == 3

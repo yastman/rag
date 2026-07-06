@@ -101,9 +101,10 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
     DOCLING_ARTIFACTS_PATH=/opt/docling/models \
     HF_HOME=/opt/huggingface \
-    HF_HUB_CACHE=/opt/huggingface/hub \
-    HF_HUB_OFFLINE=1 \
-    TRANSFORMERS_OFFLINE=1
+    HF_HUB_CACHE=/opt/huggingface/hub
+# HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE are set conditionally in entrypoint.sh:
+# enforced only when the baked HF model cache is non-empty (pre-warm succeeded);
+# omitted otherwise so the container can download at runtime.
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD pgrep -f "src.ingestion.unified.cli" || exit 1

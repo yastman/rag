@@ -24,7 +24,6 @@ Behavior
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
 from src.runtime.graph.state import Message as AIMessage
@@ -43,7 +42,6 @@ from src.runtime.graph.nodes.guard import (
     _INJECTION_THRESHOLD,
     detect_injection,
 )
-from telegram_bot.observability import get_client
 
 
 logger = logging.getLogger(__name__)
@@ -81,17 +79,14 @@ class GuardMiddleware(AgentMiddleware):
         runtime: Runtime,
     ) -> dict[str, Any] | None:
         """Run regex injection detection; short-circuit in hard mode."""
-        t0 = time.perf_counter()
         query = _extract_query(state)
         if not query:
             return None
 
         _, risk_score, pattern = detect_injection(query)
         detected = risk_score >= _INJECTION_THRESHOLD
-        elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
         if not detected:
-            self._observe(detected=False, risk=0.0, pattern=None, elapsed_ms=elapsed_ms)
             return None
 
         logger.warning(
@@ -101,7 +96,6 @@ class GuardMiddleware(AgentMiddleware):
             pattern,
             query,
         )
-        self._observe(detected=True, risk=risk_score, pattern=pattern, elapsed_ms=elapsed_ms)
 
         if self.guard_mode == "hard":
             return {
@@ -110,22 +104,3 @@ class GuardMiddleware(AgentMiddleware):
             }
         # soft / log: detection recorded; agent continues.
         return None
-
-    @staticmethod
-    def _observe(*, detected: bool, risk: float, pattern: str | None, elapsed_ms: float) -> None:
-        """Record a Langfuse span output mirroring guard_node's observability."""
-        try:
-            client = get_client()
-        except Exception:  # pragma: no cover — observability must never raise
-            return
-        try:
-            client.update_current_span(
-                output={
-                    "injection_detected": detected,
-                    "risk_score": risk,
-                    "pattern": pattern,
-                    "elapsed_ms": elapsed_ms,
-                }
-            )
-        except Exception:  # pragma: no cover — defensive
-            logger.debug("Langfuse update_current_span failed", exc_info=True)

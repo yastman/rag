@@ -60,8 +60,7 @@ class ClaudeContextualizer(ContextualizeProvider):
 
         Thin delegate to ``ContextualizeProvider.contextualize_batch`` (#1533),
         which provides the shared concurrent per-chunk dispatch (TaskGroup +
-        semaphore) with per-chunk fallback to ``context_method="none"``. The
-        ``@observe`` span name keeps provider-specific tracing intact.
+        semaphore) with per-chunk fallback to ``context_method="none"``.
         """
         _ = context_window
         return await self.contextualize_batch(chunks, query)
