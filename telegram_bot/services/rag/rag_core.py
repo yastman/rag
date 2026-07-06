@@ -34,6 +34,19 @@ _REWRITE_PROMPT = (
 )
 
 
+def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
+    """Return True when caller passed the deprecated client-side ColBERT service."""
+    if reranker is None:
+        return False
+
+    try:
+        from telegram_bot.services.rag.colbert_reranker import ColbertRerankerService
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+    return isinstance(reranker, ColbertRerankerService)
+
+
 # ---------------------------------------------------------------------------
 # H2: Context builder
 # ---------------------------------------------------------------------------
