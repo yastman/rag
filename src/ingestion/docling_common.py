@@ -19,7 +19,7 @@ from src.ingestion.chunker import Chunk
 # ---------------------------------------------------------------------------
 
 SUPPORTED_FORMATS: frozenset[str] = frozenset(
-    {".pdf", ".docx", ".doc", ".html", ".htm", ".md", ".txt", ".xlsx", ".csv"}
+    {".pdf", ".docx", ".doc", ".html", ".htm", ".md", ".txt", ".xlsx", ".csv", ".pptx"}
 )
 
 
@@ -56,6 +56,7 @@ def get_mime_type(suffix: str) -> str:
         ".txt": "text/plain",
         ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         ".csv": "text/csv",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     }
     return mime_types.get(suffix, "application/octet-stream")
 
