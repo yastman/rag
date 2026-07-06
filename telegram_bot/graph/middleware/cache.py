@@ -55,7 +55,6 @@ imports themselves.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from typing import Any, NotRequired
@@ -73,7 +72,6 @@ except ModuleNotFoundError:  # langgraph is an optional extra
 
 # CACHEABLE_QUERY_TYPES moved to pipeline; import from canonical location
 from src.runtime.pipeline.rag import _cacheable_query_types as _get_cacheable_types
-from telegram_bot.observability import get_client
 from telegram_bot.services.rag.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
@@ -262,19 +260,6 @@ class SemanticCacheMiddleware(AgentMiddleware):
             # graph routes those types past cache_check via classify_node.
             return None
 
-        lf = get_client()
-        try:
-            lf.update_current_span(
-                input={
-                    "query_preview": query[:120],
-                    "query_len": len(query),
-                    "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-                    "query_type": query_type,
-                }
-            )
-        except Exception:  # pragma: no cover — observability must never raise
-            logger.debug("update_current_span (cache before) failed", exc_info=True)
-
         start = time.perf_counter()
 
         try:
@@ -285,17 +270,6 @@ class SemanticCacheMiddleware(AgentMiddleware):
             embedding_error_type = type(exc).__name__
             logger.error("Cache middleware embedding failed: %s: %s", embedding_error_type, exc)
             latency = time.perf_counter() - start
-            try:
-                lf.update_current_span(
-                    level="ERROR",
-                    output={
-                        "embedding_error": True,
-                        "embedding_error_type": embedding_error_type,
-                        "duration_ms": round(latency * 1000, 1),
-                    },
-                )
-            except Exception:  # pragma: no cover
-                logger.debug("update_current_span (cache embed-error) failed", exc_info=True)
             # On embedding failure we surface the graceful fallback message
             # the legacy node returned and still short-circuit, so no half
             # answer leaks through. Mirrors lines 89–106 of cache.py.
@@ -336,17 +310,6 @@ class SemanticCacheMiddleware(AgentMiddleware):
 
         if hit:
             logger.info("cache_middleware HIT (%.3fs, type=%s)", latency, query_type)
-            try:
-                lf.update_current_span(
-                    output={
-                        "cache_hit": True,
-                        "embeddings_cache_hit": embeddings_cache_hit,
-                        "hit_layer": "semantic",
-                        "duration_ms": round(latency * 1000, 1),
-                    }
-                )
-            except Exception:  # pragma: no cover
-                logger.debug("update_current_span (cache HIT) failed", exc_info=True)
             return {
                 "messages": [AIMessage(content=cached or "")],
                 "jump_to": "end",
@@ -380,17 +343,6 @@ class SemanticCacheMiddleware(AgentMiddleware):
                     )
 
         logger.info("cache_middleware MISS (%.3fs, type=%s)", latency, query_type)
-        try:
-            lf.update_current_span(
-                output={
-                    "cache_hit": False,
-                    "embeddings_cache_hit": embeddings_cache_hit,
-                    "hit_layer": "none",
-                    "duration_ms": round(latency * 1000, 1),
-                }
-            )
-        except Exception:  # pragma: no cover
-            logger.debug("update_current_span (cache MISS) failed", exc_info=True)
         return {
             "cache_hit": False,
             "cached_response": None,
@@ -449,9 +401,8 @@ class SemanticCacheMiddleware(AgentMiddleware):
             schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
         )
 
-        stored = False
         try:
-            stored = await maybe_store_semantic_response(
+            await maybe_store_semantic_response(
                 cache=self.cache,
                 query=query,
                 response=response,
@@ -470,11 +421,6 @@ class SemanticCacheMiddleware(AgentMiddleware):
                 type(exc).__name__,
                 exc,
             )
-
-        try:
-            get_client().update_current_span(output={"stored": stored, "stored_semantic": stored})
-        except Exception:  # pragma: no cover
-            logger.debug("update_current_span (cache_store) failed", exc_info=True)
 
         # Surface the same observability fields the legacy node wrote into
         # the state so ``_handle_query_supervisor``'s post-processing block

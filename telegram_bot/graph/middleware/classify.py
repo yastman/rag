@@ -28,7 +28,6 @@ no LLM. It exists purely to lift the legacy classify routing into the
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import Any, NotRequired
 
@@ -49,10 +48,6 @@ from src.runtime.graph.nodes.classify import (
     _get_chitchat_response,
     classify_query,
 )
-from telegram_bot.observability import get_client
-
-
-logger = logging.getLogger(__name__)
 
 
 def _latency_stages(state: AgentState[Any]) -> dict[str, float]:
@@ -127,13 +122,6 @@ class ClassifyMiddleware(AgentMiddleware):
         t0 = time.perf_counter()
         query_type = classify_query(query)
         latency = time.perf_counter() - t0
-
-        try:
-            get_client().update_current_span(
-                output={"query_type": query_type, "duration_ms": round(latency * 1000, 2)}
-            )
-        except Exception:  # pragma: no cover — observability must never raise
-            logger.debug("classify update_current_span failed", exc_info=True)
 
         latency_stages = {**_latency_stages(state), "classify": latency}
 

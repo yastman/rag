@@ -21,7 +21,6 @@ from src.runtime.services.cache_policy import (
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
-from telegram_bot.observability import propagate_attributes
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.services.generation.generate_response import generate_response
 from telegram_bot.services.generation.telegram_formatting import (
@@ -486,9 +485,6 @@ async def _pipeline_postprocess(
             )
         except Exception:
             logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
-
-    with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
-        pass  # trace context propagation seam
 
     result.update(
         {
