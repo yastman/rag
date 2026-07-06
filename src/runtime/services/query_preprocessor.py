@@ -26,10 +26,6 @@ from src.runtime.llm import create_litellm_chat_client
 logger = logging.getLogger(__name__)
 
 
-def _update_current_span(**kwargs: Any) -> None:
-    """No-op stub — tracing removed (#2844)."""
-
-
 _SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = _DOMAIN_SHORT_FINANCE
 
 
@@ -80,13 +76,6 @@ class HyDEGenerator:
         Returns:
             Hypothetical document text for embedding
         """
-        _update_current_span(
-            input={
-                "query_preview": query[:120],
-                "model": self.model,
-            },
-        )
-
         try:
             system_prompt = get_prompt("hyde", fallback=self.HYDE_SYSTEM_PROMPT)
             create_kwargs: dict[str, Any] = {
@@ -105,12 +94,6 @@ class HyDEGenerator:
             hypothetical_doc = response.choices[0].message.content or query
             logger.info("HyDE generated doc for '%s': %s...", query, hypothetical_doc[:100])
 
-            _update_current_span(
-                output={
-                    "document_preview": hypothetical_doc[:200],
-                    "tokens_estimated": len(hypothetical_doc.split()),
-                },
-            )
             return hypothetical_doc
 
         except (
@@ -119,17 +102,9 @@ class HyDEGenerator:
             openai.APITimeoutError,
         ) as e:
             logger.error("HyDE generation API error: %s", e)
-            _update_current_span(
-                level="ERROR",
-                status_message=f"HyDE API error: {str(e)[:200]}",
-            )
             return query
         except Exception as e:
             logger.error("HyDE generation failed (%s): %s", type(e).__name__, e)
-            _update_current_span(
-                level="ERROR",
-                status_message=str(e)[:200],
-            )
             return query
 
     async def close(self):

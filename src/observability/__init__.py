@@ -80,9 +80,8 @@ def observe(name: str = "", **_kw: Any) -> Any:
 def get_client() -> Any:
     """No-op observability-client accessor — Langfuse removed (#2844, #2969).
 
-    Always returns ``None`` so ``lf = get_client(); if lf is not None: ...``
-    call sites collapse to a no-op. Kept as a stable seam for the few callers
-    (rag_core._update_current_span) that guard on a client being present.
+    Always returns ``None``. Kept as a stable seam in case future callers
+    need a client guard.
     """
     # ponytail: tracing client is gone; None makes every guarded call a no-op.
     return None
