@@ -223,8 +223,8 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "LOG_CORRELATION_SOURCE": "Operator-provided log dump path for manual correlation checks; no Python runtime reader",
     "MLFLOW_TRACKING_URI": "Read by mlflow CLI tooling, not the bot",
     # --- Evaluation / LLM-as-judge vars ------------------------------------
-    "EVAL_LLM_API_KEY": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
-    "EVAL_LLM_BASE_URL": "Read by ragas/evaluation optional extra; not imported in the lean core runtime",
+    "EVAL_LLM_API_KEY": "Was read by ragas/evaluation optional extra (ragas removed, issue #2043); key kept for operator reference",
+    "EVAL_LLM_BASE_URL": "Was read by ragas/evaluation optional extra (ragas removed, issue #2043); key kept for operator reference",
     "OPENAI_BASE_URL": "OpenAI SDK base URL override; consumed by SDK at import time, not directly by Python code in this repo",
     "REDIS_HOST": "Read by compose services; not consumed by Python code in this repo",
     "REDIS_PORT": "Read by compose services; not consumed by Python code in this repo",

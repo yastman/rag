@@ -57,7 +57,6 @@ CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH) -v --tb=shor
 PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/test_document_parser.py \
 	tests/unit/test_evaluator.py \
-	tests/unit/test_ragas_evaluation.py \
 	tests/unit/api \
 	tests/unit/evaluation \
 	tests/unit/ingestion \

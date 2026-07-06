@@ -95,11 +95,6 @@ docling-native = [
     "fastembed>=0.7.4",
 ]
 
-# Evaluation / LLM-as-judge (no-patch Dependabot alert CVE-2026-6587; kept isolated — issue #2043)
-eval = [
-    "ragas",
-]
-
 # bge-m3-api service test dependencies (FastAPI endpoint tests)
 # Only needed to run tests/unit/test_bge_m3_endpoints.py + test_bge_m3_rerank.py
 # Install: uv sync --extra bge-extras

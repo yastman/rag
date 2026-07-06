@@ -11,7 +11,7 @@ PYPROJECT = Path("pyproject.toml")
 MAKEFILE = Path("Makefile")
 
 # Archived extras removed by #2640 (monolith archival epic #2596)
-# Note: "eval" is NOT archived — it has active Makefile targets (eval-gold-gen) and ragas dep
+# Note: "eval" was also removed in #2043 (ragas CVE-2026-6587 — dead dep, zero imports)
 ARCHIVED_EXTRAS = {"observability", "ui", "mini-app", "voice"}
 
 
@@ -53,7 +53,6 @@ def test_base_dependencies_are_core_only() -> None:
         "docling",
         "cocoindex",
         "fastembed",
-        "ragas",
         "datasets",
         "pandas",
         "livekit-agents",
@@ -61,6 +60,7 @@ def test_base_dependencies_are_core_only() -> None:
         "pillow",
         "langfuse",
         "apscheduler",
+        "ragas",
     }
 
     assert expected_core.issubset(base)
