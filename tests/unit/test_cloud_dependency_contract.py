@@ -52,15 +52,6 @@ def test_aws_google_cloud_storage_clients_are_not_locked() -> None:
         assert f'name = "{package}"' not in text
 
 
-def test_googleapis_common_protos_is_only_opentelemetry_transitive() -> None:
-    text = LOCKFILE.read_text()
-
-    assert 'name = "googleapis-common-protos"' in text
-    assert 'name = "opentelemetry-exporter-otlp-proto-grpc"' in text
-    assert 'name = "opentelemetry-exporter-otlp-proto-http"' in text
-    assert text.count('{ name = "googleapis-common-protos" }') == 2
-
-
 def test_runtime_code_does_not_import_cloud_storage_sdks() -> None:
     offenders: list[str] = []
     for root in RUNTIME_ROOTS:

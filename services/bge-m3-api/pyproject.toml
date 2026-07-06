@@ -16,16 +16,6 @@ dependencies = [
     "pydantic-settings==2.14.2",
     # Monitoring & Metrics
     "prometheus-client==0.25.0",
-    # Observability
-    "opentelemetry-api>=1.39.0",
-    # OTEL auto-instrumentation (#2225). FastAPIInstrumentor closes the gap
-    # between the manual @app.middleware('http') below and the SDK-native
-    # ASGI instrumentation that adds http.* semantic attributes for free.
-    # HTTPX/Redis instrumentors trace any outbound calls this service makes
-    # in the future (none today, kept for parity).
-    "opentelemetry-instrumentation-fastapi>=0.58b0",
-    "opentelemetry-instrumentation-httpx>=0.58b0",
-    "opentelemetry-instrumentation-logging>=0.58b0",
     # Utilities
     "numpy==2.4.6",
     "scipy==1.17.1",
@@ -60,16 +50,6 @@ constraint-dependencies = [
     "importlib-metadata>=8.9.0",
     "markdown-it-py>=4.2.0",
     "onnxruntime>=1.27.0",
-    "opentelemetry-api>=1.41.1",
-    "opentelemetry-exporter-otlp-proto-common>=1.41.1",
-    "opentelemetry-exporter-otlp-proto-http>=1.41.1",
-    "opentelemetry-instrumentation>=0.62b1",
-    "opentelemetry-instrumentation-asgi>=0.62b1",
-    "opentelemetry-instrumentation-fastapi>=0.62b1",
-    "opentelemetry-proto>=1.41.1",
-    "opentelemetry-sdk>=1.41.1",
-    "opentelemetry-semantic-conventions>=0.62b1",
-    "opentelemetry-util-http>=0.62b1",
     "packaging>=26.2",
     "pytest-asyncio>=1.4.0",
     "regex>=2026.5.9",

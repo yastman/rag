@@ -184,9 +184,6 @@ services:
       BUSINESS_HOURS_TZ: "${BUSINESS_HOURS_TZ:-Europe/Sofia}"
       # Real Estate DB
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
-      # Observability
-      OTEL_SERVICE_NAME: "bot"
-      OTEL_PROPAGATORS: "${OTEL_PROPAGATORS:-tracecontext,baggage}"
     depends_on:
       postgres:
         condition: service_healthy
