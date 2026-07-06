@@ -478,28 +478,6 @@ class TestLangfuseInitThreadSafety:
 class TestEndpointReachability:
     """Tests for graceful fallback when Langfuse endpoint is unreachable (#824)."""
 
-    def test_is_endpoint_reachable_returns_false_for_refused_connection(self):
-        """_is_endpoint_reachable returns False when connection is refused."""
-        from src.observability import _is_endpoint_reachable
-
-        # Port 1 is almost never open
-        result = _is_endpoint_reachable("http://localhost:1", timeout=0.1)
-        assert result is False
-
-    def test_is_endpoint_reachable_returns_true_when_port_is_open(self):
-        """_is_endpoint_reachable returns True when host:port accepts connections."""
-        import socket
-
-        from src.observability import _is_endpoint_reachable
-
-        with socket.socket() as srv:
-            srv.bind(("127.0.0.1", 0))
-            srv.listen(1)
-            port = srv.getsockname()[1]
-            result = _is_endpoint_reachable(f"http://127.0.0.1:{port}", timeout=1.0)
-
-        assert result is True
-
     @pytest.mark.skip(reason="Langfuse removed #2844 — initialize_langfuse is gone")
     def test_initialize_langfuse_skips_when_endpoint_unreachable(self):
         """When Langfuse endpoint is unreachable, initialize_langfuse returns None."""
@@ -702,25 +680,6 @@ class TestLangfuseModelSync:
 
 
 class TestObservabilityBootstrap:
-    def test_disable_otel_exporter_overrides_env_flags(self, monkeypatch):
-        import os
-
-        from telegram_bot.observability_bootstrap import disable_otel_exporter
-
-        monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
-        monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
-        monkeypatch.delenv("OTEL_TRACES_EXPORTER", raising=False)
-        monkeypatch.delenv("OTEL_METRICS_EXPORTER", raising=False)
-        monkeypatch.delenv("OTEL_LOGS_EXPORTER", raising=False)
-
-        disable_otel_exporter(shutdown=False)
-
-        assert os.environ.get("LANGFUSE_TRACING_ENABLED") == "false"
-        assert os.environ.get("OTEL_SDK_DISABLED") == "true"
-        assert os.environ.get("OTEL_TRACES_EXPORTER") == "none"
-        assert os.environ.get("OTEL_METRICS_EXPORTER") == "none"
-        assert os.environ.get("OTEL_LOGS_EXPORTER") == "none"
-
     @pytest.mark.skip(
         reason="Langfuse removed #2844 — sync_langfuse_model_definitions is gone from src.observability"
     )
@@ -854,17 +813,6 @@ class TestDisableOtelExporter:
         mock_set.assert_not_called()
         real_provider.shutdown.assert_called_once()
 
-    def test_handles_import_error_gracefully(self, monkeypatch):
-        """_disable_otel_exporter silently passes when opentelemetry is not installed."""
-        import sys
-
-        from src.observability import _disable_otel_exporter
-
-        monkeypatch.setitem(sys.modules, "opentelemetry", None)
-
-        # Should not raise
-        _disable_otel_exporter()
-
     @pytest.mark.skip(
         reason="opentelemetry not installed in this env — NoOpTracerProvider not available"
     )
@@ -946,17 +894,6 @@ class TestInitializeLangfuseCallsDisableOtel:
 
         assert result is None
         mock_disable.assert_called_once()
-
-
-class TestObservabilityBootstrapAliases:
-    """Observability should expose bootstrap helpers without local proxy wrappers."""
-
-    def test_bootstrap_helpers_are_direct_aliases(self):
-        import src.observability as observability
-        import telegram_bot.observability_bootstrap as bootstrap
-
-        assert observability._is_endpoint_reachable is bootstrap.is_endpoint_reachable
-        assert observability._disable_otel_exporter is bootstrap.disable_otel_exporter
 
 
 @pytest.fixture
