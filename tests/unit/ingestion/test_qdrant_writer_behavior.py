@@ -297,6 +297,48 @@ class TestUpsertChunksSyncBehavior:
         # Replacement points become live first; stale ids are swept after.
         assert call_order == ["upsert", "delete"]
 
+    def test_poison_index_skipped_and_warning_logged(
+        self, writer, mock_qdrant_client, mock_bge_client, caplog
+    ):
+        """Chunk at a partial_failures index is skipped; only the valid chunk is upserted."""
+        import logging
+
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+        # 2-chunk batch; index 1 is poisoned
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024, [0.9] * 1024],
+            lexical_weights=[
+                {"indices": [1], "values": [0.5]},
+                {"indices": [2], "values": [0.7]},
+            ],
+            colbert_vecs=[[[0.1] * 128] * 5, [[0.9] * 128] * 5],
+            partial_failures=[{"index": 1, "reason": "empty text"}],
+        )
+
+        chunk_a = _make_chunk(text="valid chunk", order=0)
+        chunk_b = _make_chunk(text="", order=1)
+
+        with caplog.at_level(logging.WARNING, logger="src.ingestion.unified.qdrant_writer"):
+            stats = writer.upsert_chunks_sync([chunk_a, chunk_b], "fid", "/p", {}, "col")
+
+        # Exactly 1 point built (the valid one)
+        points = mock_qdrant_client.upsert.call_args.kwargs["points"]
+        assert len(points) == 1, "Expected exactly 1 point (poison index skipped)"
+
+        # Vectors come from index 0, not index 1
+        dense_vec = points[0].vector["dense"]
+        assert dense_vec[0] == pytest.approx(0.1), "Dense vector must come from index 0"
+        assert dense_vec[0] != pytest.approx(0.9), "Must NOT use index 1 (poison) vectors"
+
+        # Warning was emitted for the skipped index
+        assert any(
+            "poison" in rec.message.lower() or "skip" in rec.message.lower()
+            for rec in caplog.records
+        ), "Expected a warning about skipped poison index"
+
+        assert stats.errors is None
+        assert stats.points_upserted == 1
+
     def test_stats_points_upserted_matches_chunk_count(
         self, writer, mock_qdrant_client, mock_bge_client
     ):

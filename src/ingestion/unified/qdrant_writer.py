@@ -630,7 +630,7 @@ class QdrantHybridWriter:
             # server still returns full-cardinality output with sentinel vectors at
             # these positions — writing those poison vectors would silently corrupt
             # the index, so skip them here. (card_06c91625a24c)
-            poison_indices = {pf["index"] for pf in hybrid_result.partial_failures}
+            poison_indices = {pf["index"] for pf in hybrid_result.partial_failures if "index" in pf}
             if poison_indices:
                 logger.warning(
                     "Skipping %d chunk(s) with poison vectors for %s (indices=%s)",
