@@ -34,19 +34,6 @@ _REWRITE_PROMPT = (
 )
 
 
-def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
-    """Return True when caller passed the deprecated client-side ColBERT service."""
-    if reranker is None:
-        return False
-
-    try:
-        from telegram_bot.services.rag.colbert_reranker import ColbertRerankerService
-    except (ImportError, ModuleNotFoundError):
-        return False
-
-    return isinstance(reranker, ColbertRerankerService)
-
-
 # ---------------------------------------------------------------------------
 # H2: Context builder
 # ---------------------------------------------------------------------------
@@ -158,13 +145,6 @@ async def perform_rerank(
     """
     if not documents:
         return ([], False, False)
-
-    if _is_deprecated_colbert_reranker(reranker):
-        logger.warning(
-            "perform_rerank: ignoring deprecated ColbertRerankerService; "
-            "server-side Qdrant ColBERT is the only supported ColBERT path"
-        )
-        reranker = None
 
     if reranker is not None:
         _cache_get = getattr(cache, "get_rerank_results", None) if cache is not None else None
