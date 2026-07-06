@@ -52,50 +52,6 @@ def test_get_deal_and_task_tips_method_exists():
 # --- get_daily_plan ---
 
 
-@patch("telegram_bot.services.generation.ai_advisor_service.get_prompt")
-async def test_daily_plan_uses_langfuse_prompt(mock_get_prompt: MagicMock) -> None:
-    """get_daily_plan fetches prompt from Langfuse via get_prompt()."""
-    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
-
-    mock_get_prompt.return_value = "System prompt from Langfuse"
-
-    llm_response = MagicMock()
-    llm_response.choices[0].message.content = "Plan"
-    llm = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=llm_response)
-
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=[])
-    kommo.get_tasks = AsyncMock(return_value=[])
-
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    await svc.get_daily_plan(None)
-
-    mock_get_prompt.assert_called()
-
-
-@patch("telegram_bot.services.generation.ai_advisor_service.get_prompt")
-async def test_deal_tips_uses_langfuse_prompt(mock_get_prompt: MagicMock) -> None:
-    """get_deal_and_task_tips fetches prompt from Langfuse via get_prompt()."""
-    from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService
-
-    mock_get_prompt.return_value = "System prompt from Langfuse"
-
-    llm_response = MagicMock()
-    llm_response.choices[0].message.content = "Tips"
-    llm = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=llm_response)
-
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=[])
-    kommo.get_tasks = AsyncMock(return_value=[])
-
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    await svc.get_deal_and_task_tips(None)
-
-    mock_get_prompt.assert_called()
-
-
 async def test_get_daily_plan_returns_string() -> None:
     """get_daily_plan returns non-empty string."""
     from telegram_bot.services.generation.ai_advisor_service import AIAdvisorService

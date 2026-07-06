@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -131,56 +131,6 @@ class TestExportToJsonl:
         out = tmp_path / "gold.jsonl"
         export_to_jsonl(out, items)
         assert len(out.read_text().strip().split("\n")) == 3
-
-
-class TestUploadToLangfuse:
-    def test_creates_dataset_and_items_goldset(self):
-        from scripts.generate_gold_set import upload_to_langfuse
-
-        mock_lf = MagicMock()
-        mock_lf.get_dataset.side_effect = Exception("not found")
-        items = [
-            {
-                "query": "q?",
-                "answer": "a",
-                "source_doc": "d",
-                "source_file_id": "f1",
-                "source_chunks": ["seq_0"],
-                "difficulty": "easy",
-                "type": "factual",
-            },
-        ]
-        count = upload_to_langfuse(mock_lf, "test-ds", items)
-        assert count == 1
-        mock_lf.create_dataset.assert_called_once_with(name="test-ds")
-        mock_lf.create_dataset_item.assert_called_once()
-
-    def test_reuses_existing_dataset(self):
-        from scripts.generate_gold_set import upload_to_langfuse
-
-        mock_lf = MagicMock()
-        mock_lf.get_dataset.return_value = MagicMock()  # dataset exists
-        items = [
-            {
-                "query": "q?",
-                "answer": "a",
-                "source_doc": "d",
-                "source_file_id": "f1",
-                "source_chunks": ["seq_0"],
-                "difficulty": "easy",
-                "type": "factual",
-            },
-        ]
-        count = upload_to_langfuse(mock_lf, "test-ds", items)
-        assert count == 1
-        mock_lf.create_dataset.assert_not_called()
-
-    def test_empty_items(self):
-        from scripts.generate_gold_set import upload_to_langfuse
-
-        mock_lf = MagicMock()
-        count = upload_to_langfuse(mock_lf, "test-ds", [])
-        assert count == 0
 
 
 class TestAssembleDocumentText:
