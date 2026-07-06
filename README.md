@@ -149,7 +149,7 @@ The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The
 
 - **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
 
-**Langfuse removed** — Langfuse integration is fully removed. All SDK imports and `@observe` decorators are gone from `src/` and `telegram_bot/`. Observability is through structured logs.
+**Langfuse removed** — Langfuse SDK and tracing are fully removed (no `from langfuse` imports anywhere). The `@observe` decorators that remain are local **no-op shims** (`src.observability` / `telegram_bot.observability`) — not tracing. Observability is through structured logs.
 
 
 The active production adapter is Telegram (`telegram_bot/`). Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
