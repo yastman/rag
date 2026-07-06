@@ -91,6 +91,7 @@ class QdrantHybridWriter:
             base_url=self.bge_m3_url,
             timeout=bge_m3_timeout,
             batch_size=self.BGE_M3_BATCH_SIZE,
+            max_length=1024,  # chunks are contextualized (headings prepended) → can exceed 512
         )
         self._dense_semaphore = threading.Semaphore(max(1, bge_m3_concurrency))
         logger.info("QdrantHybridWriter BGE-M3 URL: %s", self.bge_m3_url)
