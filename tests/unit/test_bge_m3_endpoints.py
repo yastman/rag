@@ -373,6 +373,112 @@ class TestPartialFailureIsolation:
             fake_model.encode = original_encode  # restore original method
 
 
+# ── ONNX output contract tests ─────────────────────────────────────────────────
+
+
+def _make_mock_session(output_names: list[str]) -> MagicMock:
+    """Return a mock InferenceSession whose get_outputs() returns the given names."""
+    mock_session = MagicMock()
+    mock_outputs = []
+    for name in output_names:
+        out = MagicMock()
+        out.name = name
+        mock_outputs.append(out)
+    mock_session.get_outputs.return_value = mock_outputs
+    mock_session.get_inputs.return_value = []
+    return mock_session
+
+
+def _import_onnx_model_class():
+    """Import ONNXEmbeddingModel with heavy deps mocked (no real ONNX/transformers)."""
+    heavy_mocks = {
+        "onnxruntime": MagicMock(),
+        "fastapi": MagicMock(),
+        "transformers": MagicMock(),
+        "prometheus_client": MagicMock(),
+        "opentelemetry": MagicMock(),
+        "opentelemetry.context": MagicMock(),
+        "opentelemetry.propagate": MagicMock(),
+    }
+    for attr in ("Counter", "Gauge", "Histogram"):
+        setattr(heavy_mocks["prometheus_client"], attr, MagicMock(return_value=MagicMock()))
+    heavy_mocks["prometheus_client"].make_asgi_app = MagicMock(return_value=MagicMock())
+
+    with pytest.MonkeyPatch.context() as mp:
+        for mod, mock in heavy_mocks.items():
+            mp.setitem(sys.modules, mod, mock)
+        mp.syspath_prepend(_BGE_SERVICE_DIR)
+        sys.modules.pop("app", None)
+        import app as _app_module
+
+        cls = _app_module.ONNXEmbeddingModel
+        sys.modules.pop("app", None)
+    return cls
+
+
+@pytest.mark.no_services
+def test_onnx_output_order_correct_names_initialises_ok() -> None:
+    """ONNXEmbeddingModel.__init__ succeeds when output names match expected order."""
+    ONNXEmbeddingModel = _import_onnx_model_class()
+    session = _make_mock_session(["dense_vecs", "sparse_vecs", "colbert_vecs"])
+    model = ONNXEmbeddingModel(session=session, tokenizer=MagicMock())
+    assert model._output_names == ["dense_vecs", "sparse_vecs", "colbert_vecs"]
+
+
+@pytest.mark.no_services
+def test_onnx_output_order_mismatch_raises_assertion() -> None:
+    """ONNXEmbeddingModel.__init__ raises AssertionError when output order is wrong."""
+    ONNXEmbeddingModel = _import_onnx_model_class()
+    session = _make_mock_session(["colbert_vecs", "dense_vecs", "sparse_vecs"])
+    with pytest.raises(AssertionError, match="ONNX model output order changed"):
+        ONNXEmbeddingModel(session=session, tokenizer=MagicMock())
+
+
+@pytest.mark.no_services
+def test_onnx_output_name_mismatch_wrong_names_raises_assertion() -> None:
+    """ONNXEmbeddingModel.__init__ raises AssertionError when output names differ."""
+    ONNXEmbeddingModel = _import_onnx_model_class()
+    session = _make_mock_session(["output_0", "output_1", "output_2"])
+    with pytest.raises(AssertionError, match="ONNX model output order changed"):
+        ONNXEmbeddingModel(session=session, tokenizer=MagicMock())
+
+
+@pytest.mark.no_services
+def test_get_model_file_not_found_raises(tmp_path) -> None:
+    """get_model() raises FileNotFoundError when the ONNX model file doesn't exist."""
+    heavy_mocks = {
+        "onnxruntime": MagicMock(),
+        "fastapi": MagicMock(),
+        "transformers": MagicMock(),
+        "prometheus_client": MagicMock(),
+        "opentelemetry": MagicMock(),
+        "opentelemetry.context": MagicMock(),
+        "opentelemetry.propagate": MagicMock(),
+    }
+    for attr in ("Counter", "Gauge", "Histogram"):
+        setattr(heavy_mocks["prometheus_client"], attr, MagicMock(return_value=MagicMock()))
+    heavy_mocks["prometheus_client"].make_asgi_app = MagicMock(return_value=MagicMock())
+
+    with pytest.MonkeyPatch.context() as mp:
+        for mod, mock in heavy_mocks.items():
+            mp.setitem(sys.modules, mod, mock)
+        mp.syspath_prepend(_BGE_SERVICE_DIR)
+        sys.modules.pop("app", None)
+        import app as _app_module
+
+        # Reset global session so get_model() re-runs the load path
+        _app_module._onnx_session = None
+        # Point ONNX_MODEL_DIR to a temp dir with no model file
+        _app_module.settings = MagicMock()
+        _app_module.settings.ONNX_MODEL_DIR = str(tmp_path)
+        _app_module.settings.NUM_THREADS = 1
+
+        with pytest.raises(FileNotFoundError):
+            _app_module.get_model()
+
+        sys.modules.pop("app", None)
+
+
 class TestWarmup:
     async def test_warmup_skips_colbert(self, bge_app):
         """Lifespan warmup avoids ColBERT to keep startup memory bounded."""
