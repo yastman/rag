@@ -65,8 +65,9 @@ def test_encode_colbert_multivector_shape_gate() -> None:
 
 
 # ── FastAPI-dependent tests — skipped when fastapi not installed ───────────────
-# importorskip is inside the bge_app fixture (not module-level) so the gate
-# test above is still collected when fastapi is absent.
+# importorskip is replaced by an explicit pytest.skip() inside fixtures so the
+# gate test above still collects when fastapi is absent, but the skip message
+# is actionable: "run via: make test-bge-extras".
 
 # ── Fake model that returns deterministic numpy arrays ──
 _DENSE_DIM = 1024
@@ -114,9 +115,12 @@ def bge_app():
     """Mock heavy deps, import bge-m3-api app, install fake model.
 
     Uses MonkeyPatch.context() for automatic teardown of sys.modules entries.
-    Skips if fastapi is not installed (requires_extras tier).
+    Requires fastapi (bge-extras lane: uv sync --extra bge-extras).
     """
-    pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+    import importlib
+
+    if importlib.util.find_spec("fastapi") is None:
+        pytest.skip("fastapi not installed — run via: make test-bge-extras")
     with pytest.MonkeyPatch.context() as mp:
         mock_ort = MagicMock()
         mock_ort.InferenceSession = MagicMock()
@@ -213,32 +217,8 @@ class TestEncodeHybrid:
         assert "lexical_weights" in data
         assert "colbert_vecs" in data
 
-    async def test_traceparent_header_is_extracted(self, client, bge_app, monkeypatch):
-        app_module = bge_app["app_module"]
-        captured: dict[str, str | object] = {}
-
-        def fake_extract(headers):
-            captured["traceparent"] = headers.get("traceparent")
-            return "extracted-context"
-
-        attach = MagicMock(return_value="attached-token")
-        detach = MagicMock()
-        monkeypatch.setattr(app_module.propagate, "extract", fake_extract)
-        monkeypatch.setattr(app_module, "attach", attach)
-        monkeypatch.setattr(app_module, "detach", detach)
-
-        resp = await client.post(
-            "/encode/hybrid",
-            json={"texts": ["hello"]},
-            headers={"traceparent": "00-11111111111111111111111111111111-2222222222222222-01"},
-        )
-
-        assert resp.status_code == 200
-        assert captured["traceparent"] == (
-            "00-11111111111111111111111111111111-2222222222222222-01"
-        )
-        attach.assert_called_once_with("extracted-context")
-        detach.assert_called_once_with("attached-token")
+    # test_traceparent_header_is_extracted removed: OTel propagate removed from app.py
+    # (OpenTelemetry fully removed, card_81add5ba4a66). No traceparent handling to test.
 
 
 class TestEncodeDense:
@@ -509,7 +489,11 @@ class TestWarmup:
 
 
 def _import_lexical_weights_fn():
-    """Import _lexical_weights_to_qdrant_sparse with heavy deps mocked out."""
+    """Import _lexical_weights_to_qdrant_sparse with heavy deps mocked out.
+
+    Saves and restores sys.modules["app"] so module-scoped fixtures (bge_app)
+    that already imported app are not corrupted by this helper's reload.
+    """
     heavy_mocks = {
         "onnxruntime": MagicMock(),
         "fastapi": MagicMock(),
@@ -524,6 +508,7 @@ def _import_lexical_weights_fn():
         setattr(heavy_mocks["prometheus_client"], attr, MagicMock(return_value=MagicMock()))
     heavy_mocks["prometheus_client"].make_asgi_app = MagicMock(return_value=MagicMock())
 
+    _saved_app = sys.modules.get("app")
     with pytest.MonkeyPatch.context() as mp:
         for mod, mock in heavy_mocks.items():
             mp.setitem(sys.modules, mod, mock)
@@ -533,6 +518,9 @@ def _import_lexical_weights_fn():
 
         fn = _app_module._lexical_weights_to_qdrant_sparse
         sys.modules.pop("app", None)
+    # Restore original app module so module-scoped fixtures stay valid.
+    if _saved_app is not None:
+        sys.modules["app"] = _saved_app
     return fn
 
 

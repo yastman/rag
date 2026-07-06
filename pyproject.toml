@@ -100,6 +100,14 @@ eval = [
     "ragas",
 ]
 
+# bge-m3-api service test dependencies (FastAPI endpoint tests)
+# Only needed to run tests/unit/test_bge_m3_endpoints.py + test_bge_m3_rerank.py
+# Install: uv sync --extra bge-extras
+bge-extras = [
+    "fastapi>=0.100.0",
+    "httpx>=0.27.0",
+]
+
 # All optional dependencies (kept surfaces only; archived extras removed by #2640)
 all = [
     "contextual-rag[core,telegram,providers,docling-native,ml-local]",
