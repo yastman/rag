@@ -11,6 +11,7 @@
 	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
 	docker-clean docker-clean-aggressive
 	test-contract \
+	test-tooling \
 	release-polling-lock \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
@@ -381,6 +382,11 @@ test-contract: ## Run static contract tests (no Docker; optional SDK lanes exclu
 	@echo "$(BLUE)Running static contract tests...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
 	@echo "$(GREEN)✓ Static contract tests complete$(NC)"
+
+test-tooling: ## Run swarm/Kiro tooling tests (scripts/tests/ — guards ~/.kiro/skills, launcher, orchestrator)
+	@echo "$(BLUE)Running swarm/Kiro tooling tests...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest scripts/tests/ -p no:xdist -q --timeout=30
+	@echo "$(GREEN)✓ Swarm/Kiro tooling tests complete$(NC)"
 
 
 test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))

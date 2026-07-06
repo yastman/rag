@@ -3,7 +3,7 @@
 
 Machine mirror of the human-readable contract in
 ``.kiro/steering/swarm-worker-contract.md``. A contract test
-(``tests/contract/test_swarm_acceptance_mechanical_contract.py``) asserts the
+(``scripts/tests/test_swarm_acceptance_mechanical_contract.py``) asserts the
 required code-changing field set here equals the steering contract, so the
 schema can never silently drift from the prose.
 
