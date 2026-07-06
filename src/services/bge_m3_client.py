@@ -282,6 +282,7 @@ class BGEM3SyncClient:
         self.batch_size = batch_size
         self._client = httpx.Client(timeout=timeout)
 
+    @bge_retry
     def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors (sync)."""
         if not texts:
@@ -293,6 +294,7 @@ class BGEM3SyncClient:
         resp.raise_for_status()
         return _parse_dense_response(resp.json())
 
+    @bge_retry
     def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors (sync)."""
         if not texts:
@@ -304,6 +306,7 @@ class BGEM3SyncClient:
         resp.raise_for_status()
         return _parse_sparse_response(resp.json())
 
+    @bge_retry
     def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors (sync)."""
         if not texts:
@@ -315,6 +318,7 @@ class BGEM3SyncClient:
         resp.raise_for_status()
         return _parse_colbert_response(resp.json())
 
+    @bge_retry
     def encode_hybrid(self, texts: list[str]) -> HybridResult:
         """Encode texts to dense + sparse + colbert in a single /encode/hybrid call.
 
