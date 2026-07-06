@@ -44,27 +44,6 @@ def generate_doc_id(source: str) -> str:
     return hashlib.sha256(source.encode()).hexdigest()[:16]
 
 
-def get_mime_type(suffix: str) -> str:
-    """Get MIME type for file extension."""
-    mime_types = {
-        ".pdf": "application/pdf",
-        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ".doc": "application/msword",
-        ".html": "text/html",
-        ".htm": "text/html",
-        ".md": "text/markdown",
-        ".txt": "text/plain",
-        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ".csv": "text/csv",
-    }
-    return mime_types.get(suffix, "application/octet-stream")
-
-
-def is_supported(suffix: str) -> bool:
-    """Return True if the file extension is in SUPPORTED_FORMATS."""
-    return suffix.lower() in SUPPORTED_FORMATS
-
-
 def to_ingestion_chunks(
     docling_chunks: list[DoclingChunk],
     source: str,
