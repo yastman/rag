@@ -64,18 +64,15 @@ RuntimeDocumentConverter: Any | None = _load_runtime_document_converter()
 
 
 class NativeDoclingAdapter:
-    """Native Docling adapter with the same chunk contract as DoclingClient.
+    """Native Docling adapter for unified ingestion.
 
-    Uses ``HybridChunker`` over the in-process ``DoclingDocument`` instead of
-    a docling-serve REST round-trip. Behaviour parity with
-    ``DoclingClient.chunk_file_sync`` is preserved through ``DoclingChunk``
-    objects: ``text``, ``seq_no``, ``headings`` (from ``chunk.meta.headings``),
-    plus a ``parser`` metadata marker so downstream consumers can attribute
-    chunks to this code path.
+    Uses ``HybridChunker`` over the in-process ``DocumentConverter`` to produce
+    ``DoclingChunk`` objects: ``text``, ``seq_no``, ``headings`` (from
+    ``chunk.meta.headings``), plus a ``parser`` metadata marker so downstream
+    consumers can attribute chunks to this code path.
     """
 
-    # Expose the same SUPPORTED_FORMATS as DoclingClient for callers that
-    # reference it via the adapter.  Includes .pptx (Docling native support).
+    # Supported file extensions — aligns with UnifiedConfig.supported_extensions.
     SUPPORTED_FORMATS = SUPPORTED_FORMATS
 
     def __init__(
@@ -134,9 +131,9 @@ class NativeDoclingAdapter:
     ) -> list[DoclingChunk]:
         """Convert a document natively and chunk it via ``HybridChunker``.
 
-        The ``contextualize`` flag preserves the DoclingClient contract:
-        contextualized embedding text uses ``HybridChunker.contextualize`` when
-        available, while callers can still request raw chunk text.
+        The ``contextualize`` flag controls whether ``HybridChunker.contextualize``
+        is applied (prepends heading context to each chunk text for richer embeddings).
+        Falls back to raw chunk text when the method is unavailable.
         """
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
