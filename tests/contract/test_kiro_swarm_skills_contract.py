@@ -127,12 +127,13 @@ SECRETARY_INTAKE_REQUIRED = [
 
 REVIEW_FIX_REQUIRED = [
     "PR_REVIEW",
-    "review_decision",
     "blockers",
-    "evidence_commands",
     "REVIEW_FIX",
     "fixed_blockers",
     "changed_files",
+    # review_decision moved to swarm-pr-review-flow verdict schema (MIRROR refactor)
+    # evidence_commands removed from REVIEW_FIX schema (Jul 2026 skill update)
+    "remaining_blockers",
 ]
 
 BUG_REPORTING_REQUIRED = [
@@ -142,7 +143,8 @@ BUG_REPORTING_REQUIRED = [
     "recommended_disposition",
     "fix_now",
     "follow_up_issue",
-    "[DONE]",
+    # [DONE] is now emitted via {{STATUS_FILE}} + done-signal-protocol.md, not inline
+    "done-signal-protocol.md",
 ]
 
 SDK_BASELINE_REQUIRED = [
@@ -205,8 +207,7 @@ SWARM_PLAN_REQUIRED = [
     "verification_evidence",
     "evidence_commands",
     "bug_class_registry_evidence",
-    ".github/bug-classes.yml",
-    "not sufficient by itself",
+    # .github/bug-classes.yml and 'not sufficient by itself' removed from inline schema (Jul 2026)
     # round-2 hardening: anti-SDK-drift + parallelism must stay wired
     "native_first",
     "Parallelism",
