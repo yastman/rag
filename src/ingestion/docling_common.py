@@ -19,7 +19,7 @@ from src.ingestion.chunker import Chunk
 # ---------------------------------------------------------------------------
 
 SUPPORTED_FORMATS: frozenset[str] = frozenset(
-    {".pdf", ".docx", ".doc", ".html", ".htm", ".md", ".txt", ".xlsx", ".csv"}
+    {".pdf", ".docx", ".doc", ".html", ".htm", ".md", ".txt", ".xlsx", ".csv", ".pptx"}
 )
 
 

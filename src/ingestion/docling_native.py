@@ -75,7 +75,7 @@ class NativeDoclingAdapter:
     """
 
     # Expose the same SUPPORTED_FORMATS as DoclingClient for callers that
-    # reference it via the adapter.
+    # reference it via the adapter.  Includes .pptx (Docling native support).
     SUPPORTED_FORMATS = SUPPORTED_FORMATS
 
     def __init__(
