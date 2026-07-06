@@ -529,3 +529,32 @@ class TestHybridEncodingRegression:
         assert not hasattr(writer, "use_local_embeddings"), (
             "use_local_embeddings flag removed in #2631; BGE-M3 is the only path"
         )
+
+
+# ---------------------------------------------------------------------------
+# max_length fix — card_3b628029eafd
+# ---------------------------------------------------------------------------
+
+
+class TestWriterMaxLength:
+    """QdrantHybridWriter must pass max_length=1024 to BGEM3SyncClient (card_3b628029eafd).
+
+    Chunks are contextualized (HybridChunker prepends headings), so embed inputs
+    can exceed 512 tokens.  Setting 1024 prevents silent tail truncation.
+    """
+
+    def test_bge_client_initialized_with_max_length_1024(self):
+        """BGEM3SyncClient is constructed with max_length=1024, not the 512 default."""
+        with (
+            patch("src.ingestion.unified.qdrant_writer.QdrantClient"),
+            patch("src.services.bge_m3_client.BGEM3SyncClient") as mock_cls,
+        ):
+            mock_cls.return_value = MagicMock()
+            QdrantHybridWriter(qdrant_url="http://localhost:6333")
+
+        mock_cls.assert_called_once()
+        _, kwargs = mock_cls.call_args
+        assert kwargs.get("max_length") == 1024, (
+            f"Expected max_length=1024, got {kwargs.get('max_length')!r}. "
+            "Contextualized chunks can exceed 512 tokens."
+        )
