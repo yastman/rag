@@ -60,8 +60,11 @@ def make_retry_decorator(
     )
 
 
+# The BGE-M3 sidecar is a single-worker CPU-ONNX process that returns 429/503
+# under load. Retry on those (and the other transient 5xx in
+# RETRYABLE_HTTP_STATUS_CODES) as well as transport errors, not just timeouts.
 bge_retry = make_retry_decorator(
-    retry_on_http_status=False,
+    retry_on_http_status=True,
     initial=0.5,
     max_=4,
     jitter=1,
