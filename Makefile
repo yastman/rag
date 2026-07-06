@@ -2,7 +2,7 @@
 	deps-audit vuln-audit arch-lint complexity docs-coverage audit \
 	dead-code-check deps-check \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-providers-extra test-ingest-extra \
+	test-telegram-adapter test-providers-extra test-ingest-extra test-bge-extras \
 	smoke-fast smoke-zoo \
 	ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-logs \
@@ -319,6 +319,18 @@ test-ingest-extra: ## Run optional ingestion-extra tests explicitly (docling-nat
 	uv sync --extra docling-native --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
 	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
+
+# bge-m3-api FastAPI endpoint tests — require fastapi (bge-extras).
+# These are silently skipped by importorskip in the core/unit gates (fastapi absent).
+# Run this lane explicitly after: make core-up  (Qdrant + BGE-M3 sidecars not required).
+test-bge-extras: ## Run BGE-M3 FastAPI endpoint tests (bge-extras extra — installs fastapi)
+	@echo "$(BLUE)Running bge-m3-api endpoint tests (bge-extras)...$(NC)"
+	uv sync --extra bge-extras --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest \
+	  tests/unit/test_bge_m3_endpoints.py \
+	  tests/unit/test_bge_m3_rerank.py \
+	  -q --timeout=30 -m "not slow and not requires_services"
+	@echo "$(GREEN)✓ BGE-extras tests complete$(NC)"
 
 
 
