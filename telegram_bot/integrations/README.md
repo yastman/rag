@@ -8,9 +8,9 @@ External service wrappers and adapters for the Telegram bot. Provides focused ad
 
 | File | Role |
 |------|------|
-| [`cache.py`](./cache.py) `CacheLayerManager` | 5-tier Redis cache (semantic, embeddings, sparse, search, rerank) |
-| [`embeddings.py`](./embeddings.py) | Embedding provider wrappers |
-| [`prompt_manager.py`](./prompt_manager.py) | Prompt registry and template loading |
+| [`cache.py`](./cache.py) | Re-export shim → `src.runtime.integrations.cache.CacheLayerManager` (5-tier Redis cache; #3010) |
+| [`embeddings.py`](./embeddings.py) | Embedding provider wrappers (shim → `src.runtime.integrations`) |
+| [`prompt_manager.py`](./prompt_manager.py) | Prompt registry / template loading (shim → `src.runtime.integrations`) |
 | [`prompt_templates.py`](./prompt_templates.py) | Static prompt template definitions |
 | [`memory.py`](./memory.py) | Conversation memory adapter |
 | [`polling_lock.py`](./polling_lock.py) | Telegram polling lock to prevent duplicate workers |

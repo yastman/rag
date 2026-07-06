@@ -21,7 +21,7 @@ Exposes a single synchronous RAG endpoint (`POST /query`) and a readiness probe 
 
 ## Boundaries
 
-- **Thin wrapper**: the API delegates 100 % of RAG logic to `telegram_bot.pipelines.graph_compat.build_graph()`. No retrieval or generation logic lives here.
+- **Thin wrapper**: the API delegates 100 % of RAG logic to `src.runtime.graph.builder.build_pipeline()`. No retrieval or generation logic lives here.
 - **No Telegram imports** in request handling. The API is transport-agnostic.
 - Observability parity with the bot: structured logging only (Langfuse removed #2844).
 
@@ -47,5 +47,5 @@ curl http://localhost:8080/health
 
 ## See Also
 
-- [`../../telegram_bot/graph/`](../../telegram_bot/graph/) — LangGraph pipeline implementation
-- [`../../telegram_bot/services/`](../../telegram_bot/services/) — Services reused by the API lifespan
+- [`../runtime/graph/`](../runtime/graph/) — pipeline builder (`build_pipeline`) the API lifespan calls
+- [`../runtime/`](../runtime/) — services reused by the API lifespan (`QdrantService`, `CacheLayerManager`)

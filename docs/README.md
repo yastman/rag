@@ -43,6 +43,7 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 | Retrieval | [`../src/retrieval/README.md`](../src/retrieval/README.md) |
 | Ingestion (overview · unified · apartments) | [`../src/ingestion/README.md`](../src/ingestion/README.md) · [`../src/ingestion/unified/AGENTS.override.md`](../src/ingestion/unified/AGENTS.override.md) · [`../src/ingestion/apartments/README.md`](../src/ingestion/apartments/README.md) |
 | Contextualization · models · utils · security | [`../src/contextualization/README.md`](../src/contextualization/README.md) · [`../src/models/README.md`](../src/models/README.md) · [`../src/utils/README.md`](../src/utils/README.md) · [`../src/security/README.md`](../src/security/README.md) |
+| Adapters · service clients · observability | [`../src/adapters/README.md`](../src/adapters/README.md) · [`../src/services/README.md`](../src/services/README.md) · [`../src/observability/README.md`](../src/observability/README.md) |
 
 ## Adapter — `telegram_bot/`
 
@@ -52,6 +53,8 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 | Handlers · agents · dialogs · services | [`../telegram_bot/handlers/README.md`](../telegram_bot/handlers/README.md) · [`../telegram_bot/agents/README.md`](../telegram_bot/agents/README.md) · [`../telegram_bot/dialogs`](../telegram_bot/dialogs) · [`../telegram_bot/services/README.md`](../telegram_bot/services/README.md) |
 | Integrations · pipelines · keyboards · middlewares | [`../telegram_bot/integrations/README.md`](../telegram_bot/integrations/README.md) · [`../telegram_bot/pipelines/README.md`](../telegram_bot/pipelines/README.md) · [`../telegram_bot/keyboards/README.md`](../telegram_bot/keyboards/README.md) · [`../telegram_bot/middlewares/README.md`](../telegram_bot/middlewares/README.md) |
 | Constants · config · models · locales | [`../telegram_bot/constants/README.md`](../telegram_bot/constants/README.md) · [`../telegram_bot/config/README.md`](../telegram_bot/config/README.md) · [`../telegram_bot/models/README.md`](../telegram_bot/models/README.md) · [`../telegram_bot/locales/README.md`](../telegram_bot/locales/README.md) |
+| Query pipeline · lifecycle · preflight | [`../telegram_bot/pipeline/README.md`](../telegram_bot/pipeline/README.md) · [`../telegram_bot/lifecycle/README.md`](../telegram_bot/lifecycle/README.md) · [`../telegram_bot/preflight/README.md`](../telegram_bot/preflight/README.md) |
+| Observability · graph (legacy façade) | [`../telegram_bot/observability/README.md`](../telegram_bot/observability/README.md) · [`../telegram_bot/graph/README.md`](../telegram_bot/graph/README.md) |
 
 ## Sidecar services & infra
 
@@ -70,10 +73,23 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 | Scripts · local rules · E2E helpers | [`../scripts/README.md`](../scripts/README.md) · [`../scripts/AGENTS.override.md`](../scripts/AGENTS.override.md) · [`../scripts/e2e/README.md`](../scripts/e2e/README.md) |
 | Audits | [`audits/runtime-infra-config-audit-2026-06.md`](audits/runtime-infra-config-audit-2026-06.md) |
 
-## Known gaps (tracked, not yet written)
+## Guides & runbooks
 
-Several historical guides under `docs/engineering/`, `docs/runbooks/`, and top-level
-`docs/*.md` (LOCAL-DEVELOPMENT, INGESTION, QDRANT_STACK, HITL, …) are referenced by older
-READMEs but were removed in a docs cleanup and are **not yet restored**. The restore-vs-descope
-decision and the dead-link repair are tracked on the roadmap (codeindexer phase
-"P16 · Documentation & navigation"). Until then, this hub is the source of truth for what exists.
+| You want… | Read |
+|---|---|
+| Local setup + the validation ladder | [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) |
+| Ingestion pipeline (unified, docling, idempotency) | [`INGESTION.md`](INGESTION.md) |
+| Docling architecture authority (in-process SDK, prohibited patterns) | [`DOCLING_ARCHITECTURE_AUTHORITY.md`](DOCLING_ARCHITECTURE_AUTHORITY.md) |
+| Operational runbooks (services, preflight, self-hosted runner) | [`runbooks/README.md`](runbooks/README.md) |
+| Writing tests (tiers, markers, fixtures) | [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md) |
+
+## Planned docs (not yet written)
+
+Referenced by governance contracts / older READMEs but do **not** exist yet. Tracked for a
+restore-or-descope decision on the roadmap; until written, this hub is the source of truth
+for what exists.
+
+- `BOT_INTERNAL_STRUCTURE.md`
+- `ONBOARDING.md`
+- `DEVELOPER_GUIDE.md`
+- `TROUBLESHOOTING_CACHE.md`

@@ -7,13 +7,12 @@ Document ingestion: parsing, chunking, embedding, and indexing into Qdrant.
 Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two paths exist:
 
 1. **Current path** (`unified/`) — incremental pipeline with deterministic file identity (content-hash manifest) and replace semantics. CocoIndex was removed (#2834); the pipeline now drives Docling → BGE-M3 → Qdrant directly.
-2. **Legacy local wrappers** (`chunker.py`, `indexer.py`, `service.py`) — standalone helpers retained for compatibility; deprecated GDrive-specific modules were retired in favor of `unified/`.
+2. **Legacy local wrappers** (`chunker.py`, `indexer.py`) — standalone helpers retained for compatibility; deprecated GDrive-specific modules were retired in favor of `unified/`.
 
 ## Entrypoints
 
 | Entrypoint | Role |
 |------------|------|
-| `src.ingestion.service` | High-level service for directory ingestion (legacy wrapper) |
 | `src.ingestion.unified.cli` | Unified pipeline CLI: `run` (+`--watch`), `preflight`, `bootstrap`, `schema-check`, `coverage-check`, `backfill-colbert` |
 | `src.ingestion.unified.flow` `run_once()` / `run_watch()` | Pipeline assembly and execution (reads `SYNC_DIR`) |
 | `src.ingestion.unified.qdrant_writer` `QdrantHybridWriter` | Writes hybrid vectors (dense + sparse + ColBERT) to Qdrant |

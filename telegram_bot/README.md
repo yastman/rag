@@ -28,7 +28,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 - **Redis** — caching, throttling, user context
 - **BGE-M3** — dense + sparse embeddings (local REST API)
 - Structured logging — observability (optional)
-- **LiveKit** — voice calls (archived; see `archive/voice/`)
+- Voice input — handled in-process via `dialogs/` (catalog + demo dialogs); no LiveKit sidecar
 
 ## Focused Checks
 
@@ -36,23 +36,27 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 # Lint and type-check
 make check
 
-# Focused bot/runtime unit tests
-uv run pytest tests/unit/graph/test_graph.py tests/unit/pipelines/test_client_pipeline.py tests/unit/test_preflight.py -v
-
-# Service-dependent local preflight helper
-make test-bot-health
+# Core gate (fast) + broader unit/graph gate
+make test-core
+make test
 ```
 
 ## Directory Guide
 
 | Directory | Concern |
 |-----------|---------|
+| `handlers/` | Per-feature handlers extracted from `bot.py` (#2983): commands, catalog, favorites, handoff, CRM callbacks, feedback |
 | `agents/` | Agent SDK tools and RAG pipeline functions |
-| `dialogs/` | Funnel dialogs and filter extraction UI |
-| `integrations/` | Embeddings, cache, prompt manager |
-| `middlewares/` | Aiogram middlewares (throttling, errors) |
-| `pipelines/` | Client-direct pipeline entrypoints and graph-compat facade |
-| `services/` | Bot services (Qdrant, cache, query analysis, response generation) |
+| `dialogs/` | aiogram-dialog packages: catalog, filter, funnel + demo/viewing/settings |
+| `pipeline/` | Supervisor + pre-agent + streaming (agent orchestration) |
+| `pipelines/` | Client-direct pipeline entrypoints and the `graph_compat` facade |
+| `lifecycle/` | Bot startup/teardown, postgres bootstrap, service wiring |
+| `graph/` | Thin graph state + middleware (nodes moved to `src/runtime/graph/`) |
+| `integrations/` | Embeddings, cache, prompt manager, memory (several are shims to `src.runtime.integrations`) |
+| `observability/` | Trace/context helpers + no-op `@observe` shim (Langfuse removed) |
+| `middlewares/` | Aiogram middlewares (throttling, errors, i18n) |
+| `services/` | Bot services: `rag/`, `apartment/`, `crm/`, `generation/`, `observability/`, `util/` |
+| `preflight/` | Startup health checks (Redis, Qdrant, external deps) |
 
 ## See Also
 
