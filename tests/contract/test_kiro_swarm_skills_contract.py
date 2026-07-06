@@ -287,6 +287,52 @@ def test_all_expected_skills_exist() -> None:
     assert not missing, f"Missing skills: {missing}"
 
 
+# --- Orchestrator code-boundary guard (bypass hardening, card: swarm off-rail) ---
+
+GUARD_BLOCKS_FILE = SKILLS_DIR / "shared" / "orchestrator-guard-blocks.md"
+
+
+def test_orchestrator_code_boundary_guard_block_exists() -> None:
+    """The canonical Orchestrator Code-Boundary + Failed-Work Rule must be present.
+
+    Closes the off-rail bypass: orchestrator (a) doing worker work in its own
+    context, (b) adopting a [FAILED]/[BLOCKED] worker's worktree and merging it,
+    (c) self-playing acceptance/review for its own dispatched work. A prose rule
+    that can be silently deleted is no rule — this pins the load-bearing literals.
+    """
+    assert GUARD_BLOCKS_FILE.exists(), f"{GUARD_BLOCKS_FILE} missing"
+    normalized = " ".join(GUARD_BLOCKS_FILE.read_text(encoding="utf-8").split())
+    for literal in (
+        "Orchestrator Code-Boundary + Failed-Work Rule",
+        "is NEVER adopted",
+        "already written",
+        "paired Opus",
+        "One context, one role",
+    ):
+        assert literal in normalized, (
+            f"orchestrator-guard-blocks.md: missing guard literal: {literal!r}"
+        )
+
+
+@pytest.mark.parametrize("entry", ["roadmap-orchestrator", "swarm-orchestrator"])
+def test_orchestrator_entries_reference_code_boundary(entry: str) -> None:
+    """Both orchestrator entry skills must WIRE the canonical guard block.
+
+    A rule that lives only in the shared file but is never referenced from the
+    entry an agent actually loads can be silently ignored under a /goal
+    throughput incentive — the incident's root cause.
+    """
+    skill_file = SKILLS_DIR / entry / "SKILL.md"
+    assert skill_file.exists(), f"{skill_file} missing"
+    normalized = " ".join(skill_file.read_text(encoding="utf-8").split())
+    assert "orchestrator-guard-blocks.md" in normalized, (
+        f"{entry}: must reference shared/orchestrator-guard-blocks.md"
+    )
+    assert "Code-Boundary" in normalized or "Failed-Work" in normalized, (
+        f"{entry}: must name the Orchestrator Code-Boundary + Failed-Work Rule block"
+    )
+
+
 # --- Script tests ---
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
