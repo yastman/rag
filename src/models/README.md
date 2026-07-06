@@ -11,7 +11,6 @@ Keeps heavy ML imports lazy so normal imports do not require local model extras.
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Exports `get_bge_m3_model`, `get_sentence_transformer` |
-| [`embedding_model.py`](./embedding_model.py) | Singleton BGE-M3 (`FlagEmbedding`) and `SentenceTransformer` |
 | [`apartment.py`](./apartment.py) | Apartment domain model (live real-estate domain) |
 
 ## Usage
@@ -48,4 +47,3 @@ uv run pytest tests/unit/utils/test_embedding_model.py tests/unit/test_contextua
 ## See Also
 
 - [`src/retrieval/`](../retrieval/) — Uses models for search
-- [`../services/voyage.py`](../services/voyage.py) — Voyage AI embedding client (`VoyageService`)

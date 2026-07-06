@@ -12,7 +12,6 @@ Protocol-based providers; the low-level SDK clients they wrap stay in
 |--------|------|------|
 | `EmbeddingProvider` | [`embeddings/base.py`](./embeddings/base.py) | Provider Protocol |
 | `BgeM3EmbeddingProvider` | [`embeddings/bge_m3.py`](./embeddings/bge_m3.py) | BGE-M3 via the self-hosted API |
-| `LocalBgeM3Provider` | [`embeddings/local_bge_m3.py`](./embeddings/local_bge_m3.py) | In-process BGE-M3 (local ML extra) |
 | `OpenAIEmbeddingProvider` | [`embeddings/openai_embeddings.py`](./embeddings/openai_embeddings.py) | OpenAI embeddings |
 
 ### `llm/`
