@@ -1,7 +1,7 @@
-"""Shared contract for Docling adapters (HTTP and native).
+"""Shared types and helpers for the Docling native adapter.
 
-Contains types and helpers used by both ``DoclingClient`` (HTTP sidecar) and
-``NativeDoclingAdapter`` (in-process SDK).
+Contains shared types (``DoclingChunk``) and helpers used by
+``NativeDoclingAdapter`` (in-process SDK, the sole active Docling path).
 """
 
 from __future__ import annotations
