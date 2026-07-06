@@ -237,11 +237,16 @@ def get_model():
     return ONNXEmbeddingModel(_onnx_session, _tokenizer)
 
 
+# Encode limits
+ENCODE_MAX_ITEMS: int = 64  # Max texts per encode request (unbounded → OOM/DoS on CPU-ONNX)
+
+
 # Pydantic models
 class EncodeRequest(BaseModel):
-    texts: list[str] = Field(..., description="List of texts to encode")
+    texts: list[str] = Field(
+        ..., description="List of texts to encode", max_length=ENCODE_MAX_ITEMS
+    )
     max_length: int = Field(settings.MAX_LENGTH, description="Max token length")
-    batch_size: int = Field(settings.BATCH_SIZE, description="Batch size for processing")
 
 
 class PartialFailure(BaseModel):
@@ -405,7 +410,7 @@ async def _run_encode(
         valid_texts = [request.texts[i] for i in valid_indices]
         embeddings = model.encode(
             valid_texts,
-            batch_size=request.batch_size,
+            batch_size=settings.BATCH_SIZE,
             max_length=request.max_length,
             return_dense=return_dense,
             return_sparse=return_sparse,

@@ -751,3 +751,26 @@ class TestRunEncode:
         # Valid indices have real vectors
         assert any(v != 0.0 for v in dense[0])
         assert any(v != 0.0 for v in dense[2])
+
+
+# ── Encode limit tests ──
+
+
+class TestEncodeMaxItems:
+    """Tests for ENCODE_MAX_ITEMS upper-bound validation on /encode/* endpoints."""
+
+    async def test_over_limit_returns_422(self, client, bge_app):
+        """POST /encode/dense with len(texts) > ENCODE_MAX_ITEMS → 422 Unprocessable Entity."""
+        from app import ENCODE_MAX_ITEMS
+
+        too_many = ["text"] * (ENCODE_MAX_ITEMS + 1)
+        resp = await client.post("/encode/dense", json={"texts": too_many})
+        assert resp.status_code == 422
+
+    async def test_at_limit_returns_200(self, client, bge_app):
+        """POST /encode/dense with len(texts) == ENCODE_MAX_ITEMS → 200 OK."""
+        from app import ENCODE_MAX_ITEMS
+
+        at_limit = ["text"] * ENCODE_MAX_ITEMS
+        resp = await client.post("/encode/dense", json={"texts": at_limit})
+        assert resp.status_code == 200
