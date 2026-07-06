@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from telegram_bot.observability import observe
 from telegram_bot.services.crm.kommo_tokens import KommoTokenStore as _CanonicalKommoTokenStore
 
 
@@ -38,7 +37,6 @@ class KommoTokenStore(_CanonicalKommoTokenStore):
         )
         self._refresh_lock = asyncio.Lock()
 
-    @observe(name="kommo-token-refresh", capture_input=False, capture_output=False)
     async def force_refresh(self) -> str:
         """Serialize refresh calls to avoid concurrent refresh-token races."""
         async with self._refresh_lock:

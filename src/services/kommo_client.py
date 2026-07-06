@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
-from src.observability import observe
 from src.services._retry import kommo_retry
 from src.services.kommo_models import (
     Contact,
@@ -128,7 +127,6 @@ class KommoClient:
 
     # --- Leads ---
 
-    @observe(name="kommo-create-lead")
     async def create_lead(self, lead: LeadCreate) -> Lead:
         """POST /api/v4/leads."""
         data = await self._request(
@@ -137,13 +135,11 @@ class KommoClient:
         item = data["_embedded"]["leads"][0]
         return Lead(**item)
 
-    @observe(name="kommo-get-lead")
     async def get_lead(self, lead_id: int) -> Lead:
         """GET /api/v4/leads/{id}."""
         data = await self._request("GET", f"/leads/{lead_id}")
         return Lead(**data)
 
-    @observe(name="kommo-update-lead")
     async def update_lead(self, lead_id: int, update: LeadUpdate) -> Lead:
         """PATCH /api/v4/leads/{id}."""
         data = await self._request(
@@ -151,7 +147,6 @@ class KommoClient:
         )
         return Lead(**data)
 
-    @observe(name="kommo-search-leads")
     async def search_leads(
         self,
         query: str | None = None,
@@ -182,7 +177,6 @@ class KommoClient:
             leads.append(Lead(**lead_data))
         return leads
 
-    @observe(name="kommo-get-tasks")
     async def get_tasks(
         self,
         responsible_user_id: int | None = None,
@@ -207,7 +201,6 @@ class KommoClient:
 
     # --- Contacts ---
 
-    @observe(name="kommo-upsert-contact")
     async def upsert_contact(self, phone: str, contact: ContactCreate) -> Contact:
         """Find by phone or create new contact. Smart update: fills empty name fields."""
         data = await self._request("GET", "/contacts", params={"query": phone})
@@ -241,14 +234,12 @@ class KommoClient:
         item = data["_embedded"]["contacts"][0]
         return Contact(**item)
 
-    @observe(name="kommo-get-contacts")
     async def get_contacts(self, query: str) -> list[Contact]:
         """GET /api/v4/contacts?query=..."""
         data = await self._request("GET", "/contacts", params={"query": query})
         items = data.get("_embedded", {}).get("contacts", [])
         return [Contact(**c) for c in items]
 
-    @observe(name="kommo-update-contact")
     async def update_contact(self, contact_id: int, update: ContactUpdate) -> Contact:
         """PATCH /api/v4/contacts/{id}."""
         data = await self._request(
@@ -260,7 +251,6 @@ class KommoClient:
 
     # --- Notes ---
 
-    @observe(name="kommo-add-note")
     async def add_note(self, entity_type: str, entity_id: int, text: str) -> Note:
         """POST /api/v4/{entity_type}/{id}/notes."""
         data = await self._request(
@@ -273,14 +263,12 @@ class KommoClient:
 
     # --- Tasks ---
 
-    @observe(name="kommo-create-task")
     async def create_task(self, task: TaskCreate) -> Task:
         """POST /api/v4/tasks."""
         data = await self._request("POST", "/tasks", json=[task.model_dump(exclude_none=True)])
         item = data["_embedded"]["tasks"][0]
         return Task(**item)
 
-    @observe(name="kommo-update-task")
     async def update_task(self, task_id: int, update: TaskUpdate) -> Task:
         """PATCH /api/v4/tasks/{id} (#697)."""
         data = await self._request(
@@ -290,7 +278,6 @@ class KommoClient:
         )
         return Task(**data)
 
-    @observe(name="kommo-complete-task")
     async def complete_task(self, task_id: int, result_text: str | None = None) -> Task:
         """PATCH /api/v4/tasks/{id} — mark task as completed (#697)."""
         payload: dict = {"is_completed": True}
@@ -301,7 +288,6 @@ class KommoClient:
 
     # --- Links ---
 
-    @observe(name="kommo-link-contact")
     async def link_contact_to_lead(self, lead_id: int, contact_id: int) -> None:
         """POST /api/v4/leads/{id}/link."""
         await self._request(
@@ -312,7 +298,6 @@ class KommoClient:
 
     # --- Pipelines ---
 
-    @observe(name="kommo-list-pipelines")
     async def list_pipelines(self) -> list[Pipeline]:
         """GET /api/v4/leads/pipelines."""
         data = await self._request("GET", "/leads/pipelines")
@@ -321,7 +306,6 @@ class KommoClient:
 
     # --- Lead Scores (compatibility path for supervisor tools/tests) ---
 
-    @observe(name="kommo-update-lead-score")
     async def update_lead_score(self, *, lead_id: int, payload: dict, idempotency_key: str) -> dict:
         """PATCH /api/v4/leads/{id} with score custom fields."""
         return await self._request(

@@ -6,14 +6,6 @@ Extracted to avoid ~300 LOC duplication between:
 
 Core functions are pure computation (no spans, no PipelineMetrics).
 Adapters (pipeline / nodes) handle span tracking, metrics, and state wrapping.
-
-Observability (#2162):
-    Each orchestration helper carries an ``@observe`` decorator with
-    ``capture_input=False`` and ``capture_output=False`` so that the trace tree
-    contains a stable span for every helper without leaking raw
-    user query text, embedding vectors, or document text. Curated
-    high-signal metadata (cache hit, query type, top-k, vector dim) is added
-    inside each function.
 """
 
 from __future__ import annotations
@@ -22,7 +14,6 @@ import asyncio
 import logging
 from typing import Any
 
-from telegram_bot.observability import observe
 from telegram_bot.services.rag.bge_m3_query_bundle import BgeM3QueryVectorBundle
 from telegram_bot.services.rag.cache_policy import is_contextual_query
 
@@ -61,7 +52,6 @@ def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-build-context", capture_input=False, capture_output=False)
 def build_retrieved_context(
     results: list[dict[str, Any]],
     limit: int = 5,
@@ -92,7 +82,6 @@ def build_retrieved_context(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-rewrite-query", capture_input=False, capture_output=False)
 async def rewrite_query_via_llm(
     query: str,
     *,
@@ -137,7 +126,6 @@ async def rewrite_query_via_llm(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-perform-rerank", capture_input=False, capture_output=False)
 async def perform_rerank(
     query: str,
     documents: list[dict[str, Any]],
@@ -214,7 +202,6 @@ async def perform_rerank(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-compute-query-embedding", capture_input=False, capture_output=False)
 async def compute_query_embedding(
     query: str,
     *,
@@ -328,7 +315,6 @@ async def compute_query_embedding(
     return (dense, sparse, None, False)
 
 
-@observe(name="rag-core-check-semantic-cache", capture_input=False, capture_output=False)
 async def check_semantic_cache(
     query: str,
     vector: list[float],
