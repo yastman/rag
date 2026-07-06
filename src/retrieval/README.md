@@ -11,7 +11,6 @@ were removed; `__init__.py` only marks the package.
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Package exports |
-| [`reranker.py`](./reranker.py) | Cross-encoder reranking (+NDCG on the top-k) |
 | [`topic_classifier.py`](./topic_classifier.py) | Lightweight topic / doc-type classification for retrieval tuning |
 
 ## Boundaries

@@ -10,7 +10,6 @@ performance (e.g. `from src.services.bge_m3_client import BGEM3SyncClient`).
 |------|---------|
 | [`bge_m3_client.py`](./bge_m3_client.py) | BGE-M3 embeddings HTTP client (`BGEM3Client` / `BGEM3SyncClient`) |
 | [`bge_m3_query_bundle.py`](./bge_m3_query_bundle.py) | Query-side dense+sparse+ColBERT bundle helper |
-| [`voyage.py`](./voyage.py) | Voyage AI embedding client (`VoyageService`; optional `voyage` extra) |
 | [`vectorizers.py`](./vectorizers.py) | Vectorizer helpers over the embedding clients |
 | [`kommo_client.py`](./kommo_client.py) · [`kommo_tokens.py`](./kommo_tokens.py) · [`kommo_models.py`](./kommo_models.py) | Kommo CRM REST client, token store, and models |
 | [`handoff_state.py`](./handoff_state.py) | Human-handoff (HITL) state helper |
