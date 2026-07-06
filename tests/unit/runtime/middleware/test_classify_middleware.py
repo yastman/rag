@@ -44,7 +44,10 @@ def _runtime() -> MagicMock:
 def _stub_observability(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = MagicMock()
     fake.update_current_span = MagicMock()
-    monkeypatch.setattr("telegram_bot.graph.middleware.classify.get_client", lambda: fake)
+    # raising=False: get_client was removed from this module when Langfuse was stripped (#2844)
+    monkeypatch.setattr(
+        "telegram_bot.graph.middleware.classify.get_client", lambda: fake, raising=False
+    )
 
 
 @pytest.fixture

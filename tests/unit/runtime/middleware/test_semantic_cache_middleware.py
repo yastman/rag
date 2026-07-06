@@ -74,7 +74,10 @@ def _stub_observability(monkeypatch: pytest.MonkeyPatch) -> None:
     """Silence observability so tests do not depend on Langfuse internals."""
     fake_client = MagicMock()
     fake_client.update_current_span = MagicMock()
-    monkeypatch.setattr("telegram_bot.graph.middleware.cache.get_client", lambda: fake_client)
+    # raising=False: get_client was removed from this module when Langfuse was stripped (#2844)
+    monkeypatch.setattr(
+        "telegram_bot.graph.middleware.cache.get_client", lambda: fake_client, raising=False
+    )
 
 
 @pytest.fixture
