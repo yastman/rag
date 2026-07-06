@@ -657,6 +657,22 @@ class TestOnnxSparseToQdrant:
 class TestRunEncode:
     """Tests for the shared ``_run_encode`` helper that backs all encode endpoints."""
 
+    @pytest.fixture(autouse=True)
+    def _patch_get_model(self, bge_app):
+        """Patch app.get_model so _run_encode never tries to load a real ONNX file.
+
+        When TestRunEncode runs after other test classes, the module-scoped
+        bge_app mock may be unwound (sys.modules["app"] popped) and re-imported
+        clean. The re-imported module has _onnx_session=None and a real get_model,
+        so _run_encode raises FileNotFoundError. Patching in this autouse fixture
+        ensures get_model returns the FakeONNXModel for every test in this class.
+        """
+        import sys
+
+        if "app" in sys.modules:
+            app_module = sys.modules["app"]
+            app_module.get_model = bge_app["app_module"].get_model
+
     async def test_dense_only_returns_dense_vecs(self, bge_app):
         """_run_encode with return_dense=True returns dense_vecs in first slot."""
         from app import EncodeRequest, _run_encode
