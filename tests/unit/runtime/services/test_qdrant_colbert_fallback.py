@@ -25,7 +25,7 @@ The 4 call sites become a single line each. The test below pins:
 
 We avoid touching the integration tests around ``hybrid_search_rrf_colbert``
 itself (those are covered by ``tests/integration/test_colbert_backfill.py``
-and ``tests/unit/agents/test_rag_pipeline.py``) — this file targets the
+and ``tests/unit/runtime/test_rag_pipeline.py``) — this file targets the
 extracted seam only.
 """
 
