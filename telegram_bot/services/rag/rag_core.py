@@ -6,24 +6,14 @@ Extracted to avoid ~300 LOC duplication between:
 
 Core functions are pure computation (no spans, no PipelineMetrics).
 Adapters (pipeline / nodes) handle span tracking, metrics, and state wrapping.
-
-Observability (#2162):
-    Each orchestration helper carries an ``@observe`` decorator with
-    ``capture_input=False`` and ``capture_output=False`` so that the trace tree
-    contains a stable span for every helper without leaking raw
-    user query text, embedding vectors, or document text. Curated
-    high-signal metadata (cache hit, query type, top-k, vector dim) is added
-    inside each function.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from typing import Any
 
-from telegram_bot.observability import get_client, observe
 from telegram_bot.services.rag.bge_m3_query_bundle import BgeM3QueryVectorBundle
 from telegram_bot.services.rag.cache_policy import is_contextual_query
 
@@ -44,14 +34,6 @@ _REWRITE_PROMPT = (
 )
 
 
-def _update_current_span(**kwargs: Any) -> None:
-    """Best-effort ``update_current_span`` wrapper; no-op when no client."""
-    lf = get_client()
-    if lf is not None:
-        with contextlib.suppress(Exception):
-            lf.update_current_span(**kwargs)
-
-
 def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
     """Return True when caller passed the deprecated client-side ColBERT service."""
     if reranker is None:
@@ -70,7 +52,6 @@ def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-build-context", capture_input=False, capture_output=False)
 def build_retrieved_context(
     results: list[dict[str, Any]],
     limit: int = 5,
@@ -93,10 +74,6 @@ def build_retrieved_context(
                 "chunk_location": meta.get("chunk_location", ""),
             }
         )
-    _update_current_span(
-        input={"docs_in": len(results), "limit": limit},
-        output={"snippets_out": len(ctx), "snippet_chars_max": _MAX_CONTEXT_SNIPPET},
-    )
     return ctx
 
 
@@ -105,7 +82,6 @@ def build_retrieved_context(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-rewrite-query", capture_input=False, capture_output=False)
 async def rewrite_query_via_llm(
     query: str,
     *,
@@ -141,19 +117,7 @@ async def rewrite_query_via_llm(
     actual_model = getattr(response, "model", config.rewrite_model) or config.rewrite_model
 
     if not rewritten or rewritten == query:
-        _update_current_span(
-            input={"query_chars": len(query), "rewrite_model": config.rewrite_model},
-            output={"effective": False, "model": actual_model},
-        )
         return (query, False, actual_model)
-    _update_current_span(
-        input={"query_chars": len(query), "rewrite_model": config.rewrite_model},
-        output={
-            "effective": True,
-            "model": actual_model,
-            "rewritten_chars": len(rewritten),
-        },
-    )
     return (rewritten, True, actual_model)
 
 
@@ -162,7 +126,6 @@ async def rewrite_query_via_llm(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-perform-rerank", capture_input=False, capture_output=False)
 async def perform_rerank(
     query: str,
     documents: list[dict[str, Any]],
@@ -194,10 +157,6 @@ async def perform_rerank(
         Callers should sort/trim on the no-reranker path if needed.
     """
     if not documents:
-        _update_current_span(
-            input={"docs_in": 0, "top_k": top_k},
-            output={"docs_out": 0, "rerank_applied": False, "rerank_cache_hit": False},
-        )
         return ([], False, False)
 
     if _is_deprecated_colbert_reranker(reranker):
@@ -216,14 +175,6 @@ async def perform_rerank(
         if _has_get_rerank and _cache_get is not None:
             cached_reranked = await _cache_get(query, documents, top_k)
             if cached_reranked is not None:
-                _update_current_span(
-                    input={"docs_in": len(documents), "top_k": top_k},
-                    output={
-                        "docs_out": len(cached_reranked),
-                        "rerank_applied": True,
-                        "rerank_cache_hit": True,
-                    },
-                )
                 return (cached_reranked, True, True)
 
         # May raise — callers handle error + fallback sort
@@ -240,25 +191,9 @@ async def perform_rerank(
         if _has_store_rerank and _cache_store is not None:
             await _cache_store(query, documents, top_k, reranked)
 
-        _update_current_span(
-            input={"docs_in": len(documents), "top_k": top_k},
-            output={
-                "docs_out": len(reranked),
-                "rerank_applied": True,
-                "rerank_cache_hit": False,
-            },
-        )
         return (reranked, True, False)
 
     # No reranker — return documents as-is; callers sort/trim as needed
-    _update_current_span(
-        input={"docs_in": len(documents), "top_k": top_k},
-        output={
-            "docs_out": len(documents),
-            "rerank_applied": False,
-            "rerank_cache_hit": False,
-        },
-    )
     return (documents, False, False)
 
 
@@ -267,7 +202,6 @@ async def perform_rerank(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-core-compute-query-embedding", capture_input=False, capture_output=False)
 async def compute_query_embedding(
     query: str,
     *,
@@ -307,15 +241,6 @@ async def compute_query_embedding(
     """
     # Path 1: caller already has pre-computed vectors
     if pre_computed is not None:
-        _update_current_span(
-            input={"query_chars": len(query), "source": "pre_computed"},
-            output={
-                "dense_dim": len(pre_computed),
-                "has_sparse": pre_computed_sparse is not None,
-                "has_colbert": pre_computed_colbert is not None,
-                "from_cache": False,
-            },
-        )
         return (pre_computed, pre_computed_sparse, pre_computed_colbert, False)
 
     # Determine capabilities
@@ -334,15 +259,6 @@ async def compute_query_embedding(
     if _has_bundle_get:
         bundle = await cache.get_bge_m3_query_bundle(query)
         if isinstance(bundle, BgeM3QueryVectorBundle) and bundle.is_complete():
-            _update_current_span(
-                input={"query_chars": len(query), "source": "bundle_cache"},
-                output={
-                    "dense_dim": len(bundle.dense),
-                    "has_sparse": bundle.sparse is not None,
-                    "has_colbert": bundle.colbert is not None,
-                    "from_cache": True,
-                },
-            )
             return (bundle.dense, bundle.sparse, bundle.colbert, True)
 
     # Path 3: full bundle compute (cache miss + aembed_hybrid_with_colbert available)
@@ -373,15 +289,6 @@ async def compute_query_embedding(
             except Exception:
                 logger.debug("Legacy embedding store failed (non-critical), skipping")
 
-            _update_current_span(
-                input={"query_chars": len(query), "source": "bundle_compute"},
-                output={
-                    "dense_dim": len(dense),
-                    "has_sparse": sparse is not None,
-                    "has_colbert": colbert is not None,
-                    "from_cache": False,
-                },
-            )
             return (dense, sparse, colbert, False)
 
     # Path 4: legacy dense cache
@@ -389,15 +296,6 @@ async def compute_query_embedding(
     from_cache = dense is not None
 
     if dense is not None:
-        _update_current_span(
-            input={"query_chars": len(query), "source": "legacy_dense_cache"},
-            output={
-                "dense_dim": len(dense),
-                "has_sparse": False,
-                "has_colbert": False,
-                "from_cache": True,
-            },
-        )
         return (dense, None, None, from_cache)
 
     # Path 5: legacy model compute
@@ -414,19 +312,9 @@ async def compute_query_embedding(
         await cache.store_embedding(query, dense)
         sparse = None
 
-    _update_current_span(
-        input={"query_chars": len(query), "source": "legacy_compute"},
-        output={
-            "dense_dim": len(dense),
-            "has_sparse": sparse is not None,
-            "has_colbert": False,
-            "from_cache": False,
-        },
-    )
     return (dense, sparse, None, False)
 
 
-@observe(name="rag-core-check-semantic-cache", capture_input=False, capture_output=False)
 async def check_semantic_cache(
     query: str,
     vector: list[float],
@@ -453,24 +341,8 @@ async def check_semantic_cache(
         - response: The cached response string, or None on miss
     """
     if query_type not in CACHEABLE_QUERY_TYPES:
-        _update_current_span(
-            input={
-                "query_type": query_type,
-                "query_chars": len(query),
-                "vector_dim": len(vector),
-            },
-            output={"cache_hit": False, "skipped_reason": "non_cacheable_query_type"},
-        )
         return (False, None)
     if is_contextual_query(query):
-        _update_current_span(
-            input={
-                "query_type": query_type,
-                "query_chars": len(query),
-                "vector_dim": len(vector),
-            },
-            output={"cache_hit": False, "skipped_reason": "contextual_query"},
-        )
         return (False, None)
 
     cached = await cache.check_semantic(
@@ -480,17 +352,6 @@ async def check_semantic_cache(
         cache_scope="rag",
         agent_role=agent_role,
         filter_signature=filter_signature,
-    )
-
-    _update_current_span(
-        input={
-            "query_type": query_type,
-            "query_chars": len(query),
-            "vector_dim": len(vector),
-            "agent_role": agent_role,
-            "has_filter_signature": filter_signature is not None,
-        },
-        output={"cache_hit": bool(cached)},
     )
 
     if cached:
