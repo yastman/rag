@@ -74,7 +74,8 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     assert {"aiogram", "aiogram-dialog", "fluentogram"}.issubset(_dep_names(extras["telegram"]))
     # providers is intentionally empty after #2893 (anthropic/groq removed with dead module)
     assert extras["providers"] == []
-    assert {"docling", "pymupdf", "fastembed"}.issubset(_dep_names(extras["docling-native"]))
+    assert {"docling", "fastembed"}.issubset(_dep_names(extras["docling-native"]))
+    assert "pymupdf" not in _dep_names(extras["docling-native"])  # removed with document_parser.py
 
 
 def test_archived_extras_removed_from_pyproject() -> None:
