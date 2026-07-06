@@ -407,14 +407,12 @@ async def index_fixture_documents(
 ) -> int:
     """Index all Markdown fixture docs into the ephemeral Qdrant collection."""
 
+    import asyncio
+
     from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
-    class _NoColbertQdrantHybridWriter(QdrantHybridWriter):
-        def _embed_colbert(self, texts: list[str]) -> list[list[list[float]]]:
-            return []
-
     selected_ids = set(document_ids or [])
-    writer = _NoColbertQdrantHybridWriter(
+    writer = QdrantHybridWriter(
         qdrant_url=env.qdrant_url,
         qdrant_api_key=env.qdrant_api_key,
         bge_m3_url=env.bge_m3_url,
@@ -431,17 +429,18 @@ async def index_fixture_documents(
                 document_name=path.name,
                 extra_metadata={"headings": [_extract_title(path)]},
             )
-            stats = await writer.upsert_chunks(
-                chunks=[chunk],
-                file_id=path.stem,
-                source_path=str(path),
-                file_metadata={
+            stats = await asyncio.to_thread(
+                writer.upsert_chunks_sync,
+                [chunk],
+                path.stem,
+                str(path),
+                {
                     "file_name": path.name,
                     "mime_type": "text/markdown",
                     "language": "en",
                     "source_type": "fixture",
                 },
-                collection_name=collection_name,
+                collection_name,
             )
             total += stats.points_upserted
     finally:

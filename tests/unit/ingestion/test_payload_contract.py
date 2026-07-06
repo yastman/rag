@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -135,36 +134,11 @@ def _make_writer_with_mocks(mock_bge_client: MagicMock) -> QdrantHybridWriter:
     """Create QdrantHybridWriter bypassing __init__ and inject mock BGE client."""
     writer = QdrantHybridWriter.__new__(QdrantHybridWriter)
     writer._bge_client = mock_bge_client
-    writer._dense_semaphore = threading.Semaphore(1)
     return writer
 
 
 class TestColbertVectorInUpsert:
     """Writer includes colbert multivectors in upserted points."""
-
-    def test_embed_colbert_returns_nested_list(self):
-        """_embed_colbert returns list[list[list[float]]] from bge_client."""
-        mock_bge = MagicMock()
-        colbert_result = MagicMock()
-        colbert_result.colbert_vecs = [[[0.1] * 1024, [0.2] * 1024]]
-        mock_bge.encode_colbert.return_value = colbert_result
-
-        writer = _make_writer_with_mocks(mock_bge)
-
-        result = writer._embed_colbert(["hello"])
-
-        mock_bge.encode_colbert.assert_called_once_with(["hello"])
-        assert result == [[[0.1] * 1024, [0.2] * 1024]]
-
-    def test_embed_colbert_empty_returns_empty(self):
-        """_embed_colbert with empty input returns [] without calling bge_client."""
-        mock_bge = MagicMock()
-        writer = _make_writer_with_mocks(mock_bge)
-
-        result = writer._embed_colbert([])
-
-        mock_bge.encode_colbert.assert_not_called()
-        assert result == []
 
     def test_upsert_chunks_sync_point_has_colbert_vector(self):
         """upsert_chunks_sync points include 'colbert' key when use_local_embeddings=True."""
