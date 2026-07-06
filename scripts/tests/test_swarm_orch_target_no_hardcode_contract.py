@@ -14,7 +14,7 @@ What is allowed in skill files:
 What is forbidden in skill files:
   ORCH_TARGET="claude:orch-<anything>-<timestamp>-<hex>"  # hardcoded
 
-Pinned by: tests/contract/test_swarm_orch_target_no_hardcode_contract.py
+Pinned by: scripts/tests/test_swarm_orch_target_no_hardcode_contract.py
 """
 
 from __future__ import annotations
