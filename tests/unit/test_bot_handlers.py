@@ -11,10 +11,6 @@ from types import SimpleNamespace
 import pytest
 
 
-# Skip entire module if aiogram not installed
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
-
 # Local stub replacing langchain_core.messages.AIMessageChunk.
 # Tests only need the .content attribute for streaming-chunk assertions.
 @dataclass

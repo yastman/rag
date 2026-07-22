@@ -605,7 +605,7 @@ all = [
     { name = "tenacity" },
     { name = "transformers" },
     { name = "typing-extensions" },
-    { name = "uvloop" },
+    { name = "uvloop", marker = "sys_platform != 'win32'" },
 ]
 bge-extras = [
     { name = "fastapi" },
@@ -643,7 +643,7 @@ telegram = [
     { name = "fluentogram" },
     { name = "langchain-core" },
     { name = "langgraph" },
-    { name = "uvloop" },
+    { name = "uvloop", marker = "sys_platform != 'win32'" },
 ]
 
 [package.dev-dependencies]
@@ -719,7 +719,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'docling-native'", specifier = ">=4.34.0,<6.0.0" },
     { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "typing-extensions", marker = "extra == 'core'", specifier = ">=4.0.0" },
-    { name = "uvloop", marker = "extra == 'telegram'", specifier = ">=0.21.0" },
+    { name = "uvloop", marker = "sys_platform != 'win32' and extra == 'telegram'", specifier = ">=0.21.0" },
 ]
 provides-extras = ["core", "telegram", "providers", "docling-native", "bge-extras", "all"]
 

@@ -15,10 +15,14 @@ production-like deploys).
 Local dev uses both base and override:
 
 ```
-COMPOSE_FILE=compose.yml:compose.dev.yml
+docker compose -f compose.yml -f compose.dev.yml
 ```
 
-This is the default in `.env.example` and used by all `make` targets.
+Used by all `make` targets.
+
+> **Docker Desktop (Windows):** The default Linux engine (WSL2 backend) makes all
+> `docker compose` commands work identically. Use Windows absolute paths
+> (e.g., `C:\path\to\dir`) for host bind mounts and build contexts in `.env`.
 
 ## Profiles
 
@@ -114,6 +118,11 @@ BGE_M3_ONNX_MODEL_HOST_DIR=./path/to/bge_m3_onnx_int8
 The directory must contain `model.int8.onnx` (and its `.data` sidecar) before
 running `docker compose build bge-m3`.
 
+Windows example (Docker Desktop Linux engine):
+```powershell
+$env:BGE_M3_ONNX_MODEL_HOST_DIR = "C:\data\models\bge_m3_onnx_int8"
+```
+
 ## Redis TTL Policy (volatile-lfu safety audit)
 
 Redis runs with `--maxmemory-policy volatile-lfu` (`compose.yml:65`): only keys
@@ -171,6 +180,22 @@ model load).
 | `qdrant_data` | `qdrant` |
 | `hf_cache` | `bge-m3` |
 | `ingestion-manifest` | `ingestion` |
+
+
+## Worktree Cleanup
+
+Orphaned Docker volumes from removed git worktrees can be cleaned up safely:
+
+```bash
+# Dry-run — list orphaned volumes
+make docker-clean-orphan-worktree-volumes
+
+# Apply — delete orphaned volumes
+make docker-clean-orphan-worktree-volumes-apply
+```
+
+The underlying script (`scripts/cleanup_orphaned_worktree_volumes.sh`) defaults to
+dry-run mode and protects active worktrees and long-lived project volumes.
 
 ## Security Defaults
 

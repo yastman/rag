@@ -21,8 +21,8 @@ Build and health-check a single service:
 
 ```bash
 # bge-m3
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build bge-m3
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d bge-m3
+docker compose -f compose.yml -f compose.dev.yml build bge-m3
+docker compose -f compose.yml -f compose.dev.yml up -d bge-m3
 curl -fsS http://localhost:8000/health
 ```
 

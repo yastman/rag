@@ -32,8 +32,17 @@ os.environ.setdefault("OTEL_LOGS_EXPORTER", "none")
 os.environ.setdefault("LANGFUSE_ENABLED", "false")
 os.environ.setdefault("LANGFUSE_HOST", "http://localhost:3001")
 
-# Load environment variables before any imports
-load_dotenv()
+# Load environment variables before any imports (respect PYTHON_DOTENV_DISABLED)
+# python-dotenv truthy values: 1, true, t, yes, y (case-insensitive)
+_env_disabled = os.environ.get("PYTHON_DOTENV_DISABLED", "").strip().lower() in (
+    "1",
+    "true",
+    "t",
+    "yes",
+    "y",
+)
+if not _env_disabled:
+    load_dotenv()
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

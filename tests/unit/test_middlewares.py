@@ -1,13 +1,8 @@
 """Unit tests for telegram_bot/middlewares/."""
 
-import pytest
-
-
-# Skip entire module if aiogram not installed
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from aiogram import Dispatcher
 from aiogram.types import CallbackQuery, Message, User
 

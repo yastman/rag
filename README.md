@@ -109,10 +109,12 @@ The current domain (real-estate/apartments) lives entirely in the adapter and se
 Prerequisites: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), Docker with Compose.
 
 > Runtime: Docker Compose only. No k8s, no Mini App, no CRM/Kommo integration.
+> Commands below are Linux/POSIX. See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for
+> PowerShell (Windows) equivalents.
 
 ```bash
 cp .env.example .env          # fill in credentials
-make core-min-up              # start Qdrant + Redis (minimal)
+make core-min-up              # start Qdrant + Redis via compose.core.yml (minimal)
 # or
 make core-up                  # start full sidecar stack (adds BGE-M3, PostgreSQL)
 ```
@@ -130,6 +132,8 @@ make docker-bot-up
 Notable configurable env vars (see `.env.example`): `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`.
 
 ## Validation
+
+> Linux/POSIX only. `make` targets require a POSIX shell.
 
 ```bash
 make check          # Ruff lint + MyPy type checking (non-strict; disallow_untyped_defs=false)

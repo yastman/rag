@@ -4,11 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
-
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
 from telegram_bot.config import BotConfig
 
 

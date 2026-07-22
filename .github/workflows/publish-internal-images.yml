@@ -33,9 +33,6 @@ jobs:
           - image_name: rag-ingestion
             build_context: .
             dockerfile: Dockerfile.ingestion
-          - image_name: rag-docling
-            build_context: ./services/docling
-            dockerfile: services/docling/Dockerfile
           - image_name: rag-bge-m3
             build_context: ./services/bge-m3-api
             dockerfile: services/bge-m3-api/Dockerfile

@@ -38,9 +38,9 @@ def test_makefile_exposes_core_min_and_core_up_targets() -> None:
     """Issue #2485 requires documented make entrypoints."""
     text = MAKEFILE.read_text()
 
-    assert "CORE_MIN_COMPOSE_FILE := compose.core.yml" in text
+    assert "CORE_MIN_COMPOSE_FILE := -f compose.core.yml" in text
     assert "core-min-up: ## Start minimal core services only (qdrant + redis)" in text
-    assert "COMPOSE_FILE=$(CORE_MIN_COMPOSE_FILE) $(COMPOSE_CMD) up -d" in text
+    assert "docker compose $(CORE_MIN_COMPOSE_FILE) up -d" in text
     assert "core-up: docker-core-up ## Start the full default local compose core" in text
 
 

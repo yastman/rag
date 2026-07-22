@@ -1634,7 +1634,7 @@ requires-dist = [
     { name = "phonenumbers", specifier = ">=9.0.30" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "qdrant-client", specifier = ">=1.14.0" },
+    { name = "qdrant-client", specifier = ">=1.18.0" },
     { name = "redis", specifier = ">=5.0.0" },
     { name = "redisvl", specifier = ">=0.3.0" },
     { name = "tenacity", specifier = ">=8.2.0" },

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,7 @@ def test_script_uses_required_shell_safety_flags() -> None:
     assert "set -euo pipefail" in text
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="requires shellcheck binary")
 def test_script_passes_shellcheck() -> None:
     """Lint guard: shellcheck (if available) must be clean on the script."""
     if shutil.which("shellcheck") is None:
@@ -87,6 +89,7 @@ def test_redis_check_falls_back_to_docker_exec_when_host_redis_cli_missing(
     )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="requires Bash shell")
 def test_redis_check_classifies_missing_dependency_clearly(tmp_path: Path) -> None:
     """When neither host redis-cli nor docker is available, the script must
     print a precise dependency error rather than treating Redis as down.
@@ -111,6 +114,7 @@ def test_redis_check_classifies_missing_dependency_clearly(tmp_path: Path) -> No
     ), f"script must report missing dependency clearly; got:\n{combined}"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="requires Bash shell")
 def test_script_continues_after_redis_dependency_failure(tmp_path: Path) -> None:
     """If the Redis check fails because of a missing dependency, the script
     must still attempt the other independent checks (Qdrant, bge-m3, etc.).

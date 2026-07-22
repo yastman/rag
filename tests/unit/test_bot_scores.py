@@ -7,9 +7,6 @@ from dataclasses import dataclass
 import pytest
 
 
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
-
 # Local stub replacing langchain_core.messages.AIMessageChunk.
 @dataclass
 class AIMessageChunk:

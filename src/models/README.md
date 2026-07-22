@@ -35,8 +35,6 @@ st = get_sentence_transformer("BAAI/bge-m3")
 
 - Does not own retrieval algorithms or Qdrant search behavior.
 - Does not own provider/model selection policy outside model-loading helpers.
-- Local ML dependencies are optional; install the `ml-local` extra when running real local models.
-- Voyage AI dependencies are optional; install the `voyage` extra (`uv sync --extra voyage`) for contextualized embeddings.
 
 ## Focused checks
 
