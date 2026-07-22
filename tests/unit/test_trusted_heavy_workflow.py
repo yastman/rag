@@ -16,32 +16,38 @@ def _load_workflow() -> dict:
     return data
 
 
-def test_trusted_heavy_runs_only_on_builtin_linux_self_hosted_labels() -> None:
-    """Self-hosted PR checks must use the pr-fast label group."""
+def test_trusted_heavy_pr_jobs_use_github_hosted_runners() -> None:
+    """PR fast-gate and contract-test jobs must run on GitHub-hosted ubuntu-latest."""
     data = _load_workflow()
-    for job_key, job in data["jobs"].items():
-        if "self-hosted" not in str(job.get("runs-on", "")):
-            continue
-        labels = job.get("runs-on")
-        assert labels == ["self-hosted", "Linux", "X64", "pr-fast"], (
-            f"{job_key} must run on [self-hosted, Linux, X64, pr-fast], got {labels!r}"
+    pr_jobs = ("fast-tests", "heavy-contract-tests")
+    for job_key in pr_jobs:
+        job = data["jobs"].get(job_key)
+        assert job is not None, f"{job_key} must exist"
+        assert job.get("runs-on") == "ubuntu-latest", (
+            f"{job_key} must run on ubuntu-latest, got {job.get('runs-on')!r}"
         )
 
 
-def test_trusted_heavy_self_hosted_jobs_have_timeout() -> None:
-    """Every self-hosted job in trusted-heavy must declare timeout-minutes: 20."""
+def test_trusted_heavy_pr_jobs_have_timeout() -> None:
+    """Every PR gate job in trusted-heavy must declare timeout-minutes: 20."""
     data = _load_workflow()
-    for job_key, job in data["jobs"].items():
-        if "self-hosted" not in str(job.get("runs-on", "")):
-            continue
+    pr_jobs = ("fast-tests", "heavy-contract-tests")
+    for job_key in pr_jobs:
+        job = data["jobs"].get(job_key)
+        assert job is not None, f"{job_key} must exist"
         timeout = job.get("timeout-minutes")
         assert timeout == 20, f"{job_key} must set timeout-minutes: 20, got {timeout!r}"
 
 
-def test_trusted_heavy_workflow_is_manual_only() -> None:
-    """Trusted-heavy is manual-only and must not create required PR checks."""
+def test_trusted_heavy_workflow_triggers_on_pr_and_manual() -> None:
+    """Trusted-heavy runs on pull_request to dev/main and workflow_dispatch."""
     data = _load_workflow()
-    assert data["on"] == {"workflow_dispatch": None}
+    triggers = data.get("on", {})
+    assert "pull_request" in triggers, "must trigger on pull_request"
+    assert triggers["pull_request"].get("branches") == ["dev", "main"], (
+        "pull_request must target dev and main branches"
+    )
+    assert "workflow_dispatch" in triggers, "must support manual dispatch"
 
 
 def test_trusted_heavy_has_github_hosted_path_filter() -> None:
@@ -128,11 +134,12 @@ def test_heavy_contract_tests_is_authoritative_for_trusted_risk_paths() -> None:
 
 
 def test_trusted_heavy_skips_untrusted_fork_prs() -> None:
-    """Self-hosted runner must not execute untrusted fork pull_request code."""
+    """PR gate jobs must not execute untrusted fork pull_request code."""
     data = _load_workflow()
-    for job_key, job in data["jobs"].items():
-        if "self-hosted" not in str(job.get("runs-on", "")):
-            continue
+    pr_jobs = ("fast-tests", "heavy-contract-tests")
+    for job_key in pr_jobs:
+        job = data["jobs"].get(job_key)
+        assert job is not None, f"{job_key} must exist"
         condition = str(job.get("if", ""))
         assert "github.event.pull_request.head.repo.full_name == github.repository" in condition, (
             f"{job_key} must restrict pull_request jobs to same-repository branches"
