@@ -22,8 +22,6 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 | File | Purpose |
 |------|---------|
 | [`chunker.py`](./chunker.py) | Document chunking strategies (fixed, semantic, sliding window) |
-| [`hybrid_chunker.py`](./hybrid_chunker.py) | Token-aware hybrid chunking helper |
-| [`document_parser.py`](./document_parser.py) | Docling-based document parsing |
 | [`docling_common.py`](./docling_common.py) | Shared Docling contract (DoclingChunk, SUPPORTED_FORMATS, to_ingestion_chunks) |
 | [`docling_native.py`](./docling_native.py) | In-process Docling backend (NativeDoclingAdapter, HybridChunker) |
 | [`unified/config.py`](./unified/config.py) | Unified pipeline configuration |

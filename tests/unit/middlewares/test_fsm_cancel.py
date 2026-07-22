@@ -4,9 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
 from telegram_bot.middlewares.fsm_cancel import FSMCancelMiddleware
 
 

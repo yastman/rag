@@ -318,7 +318,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - groq>=0.4.0
   - transformers>=4.30.0
   - mlflow>=2.22.1
-  - ragas>=0.2.10
   - langfuse>=3.0.0
   - datasets>=3.0.0
   - cachetools>=5.3.0
@@ -453,7 +452,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ML Platform Integration**
   - MLflow experiment tracking (port 5000)
   - Langfuse LLM tracing (port 3001)
-  - RAGAS evaluation framework
   - OpenTelemetry distributed tracing
 - **2-Level Redis Cache**
   - Level 1: Embeddings cache (7 days TTL)

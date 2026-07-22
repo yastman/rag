@@ -11,7 +11,6 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Public API exports (VoyageService, CacheService, QdrantService, etc.) |
-| [`rag/voyage.py`](./rag/voyage.py) | Voyage AI gateway: embeddings + reranking (optional `voyage` extra) |
 | [`qdrant.py`](./qdrant.py) | Re-export shim → `src.runtime.qdrant.QdrantService` (the real hybrid dense+sparse+ColBERT gateway) |
 | [`rag/query_preprocessor.py`](./rag/query_preprocessor.py) | Rule-based preprocessing: translit normalization, dynamic RRF weights |
 | [`rag/query_analyzer.py`](./rag/query_analyzer.py) | LLM-based filter extraction (price, city, rooms) from natural language |

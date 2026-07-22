@@ -11,6 +11,7 @@
 	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
 	docker-clean docker-clean-aggressive
 	test-contract \
+	test-tooling \
 	release-polling-lock \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
@@ -57,7 +58,6 @@ CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH) -v --tb=shor
 PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/test_document_parser.py \
 	tests/unit/test_evaluator.py \
-	tests/unit/test_ragas_evaluation.py \
 	tests/unit/api \
 	tests/unit/evaluation \
 	tests/unit/ingestion \
@@ -314,7 +314,7 @@ test-providers-extra: ## Run optional provider/contextualization tests explicitl
 	@echo "$(GREEN)✓ Providers-extra tests complete (no tests)$(NC)"
 
 
-test-ingest-extra: ## Run optional ingestion-extra tests explicitly (docling-native extra)
+test-ingest-extra: ## Run optional ingestion-extra tests explicitly (in-process docling)
 	@echo "$(BLUE)Running ingestion-extra tests...$(NC)"
 	uv sync --extra docling-native --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
@@ -382,6 +382,11 @@ test-contract: ## Run static contract tests (no Docker; optional SDK lanes exclu
 	@echo "$(BLUE)Running static contract tests...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
 	@echo "$(GREEN)✓ Static contract tests complete$(NC)"
+
+test-tooling: ## Run swarm/Kiro tooling tests (scripts/tests/ — guards ~/.kiro/skills, launcher, orchestrator)
+	@echo "$(BLUE)Running swarm/Kiro tooling tests...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest scripts/tests/ -p no:xdist -q --timeout=30
+	@echo "$(GREEN)✓ Swarm/Kiro tooling tests complete$(NC)"
 
 
 test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
@@ -528,12 +533,11 @@ docker-clean-orphan-worktree-volumes-apply: ## Delete Docker volumes from remove
 # DOCKER PROFILES
 # =============================================================================
 
-# Common compose command with --compatibility to enforce deploy.resources.limits
-COMPOSE_CMD := docker compose --compatibility
-LOCAL_COMPOSE_FILE := compose.yml:compose.dev.yml
-CORE_MIN_COMPOSE_FILE := compose.core.yml
-# Local dev env fallback: use .env if present, otherwise safe CI fixture values
-LOCAL_COMPOSE_CMD := COMPOSE_FILE=$(LOCAL_COMPOSE_FILE) $(COMPOSE_CMD) --env-file $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
+# Compose command — no --compatibility (Docker Compose v5 rejects it)
+COMPOSE_CMD := docker compose
+CORE_MIN_COMPOSE_FILE := -f compose.core.yml
+# Local dev: explicit -f flags instead of colon COMPOSE_FILE
+LOCAL_COMPOSE_CMD := docker compose -f compose.yml -f compose.dev.yml --env-file $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
 # Runtime env for E2E trace gates: allow worktrees to point at the main checkout .env
 RAG_RUNTIME_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)
 export RAG_RUNTIME_ENV_FILE
@@ -550,7 +554,7 @@ REMOTE_DOCKER_HOST ?=
 REMOTE_DOCKER_IP ?=
 REMOTE_DOCKER_REPO ?=
 REMOTE_DOCKER_PATH ?= /opt/homebrew/bin:/usr/local/bin
-REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
+REMOTE_COMPOSE_FILE ?= -f compose.yml -f compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
@@ -572,11 +576,11 @@ remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docke
 
 remote-compose-config: ## Render remote Compose config (service names only, no secrets)
 	@echo "$(BLUE)Remote Compose config ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` config --services"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` config --services"
 
 remote-docker-ps: ## Show remote Compose container names, status, and ports
 	@echo "$(BLUE)Remote Docker containers ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
 
 remote-env-sync: ## Sync local .env to remote MacBook repo (fails if local .env missing)
 	@echo "$(BLUE)Syncing .env to remote $(REMOTE_DOCKER_HOST)...$(NC)"
@@ -604,52 +608,52 @@ remote-env-check: ## Verify remote .env exists and report missing required varia
 
 remote-core-up: ## Start minimal RAG bot core on remote MacBook Docker
 	@echo "$(BLUE)Starting minimal RAG bot core on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d $(REMOTE_CORE_SERVICES)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d $(REMOTE_CORE_SERVICES)"
 	@echo "$(GREEN)Remote core stack started$(NC)"
 
 remote-core-ps: ## Show remote core container status
 	@echo "$(BLUE)Remote core containers ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}' $(REMOTE_CORE_SERVICES)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}' $(REMOTE_CORE_SERVICES)"
 
 remote-core-logs: ## Show recent remote core logs
 	@echo "$(BLUE)Remote core logs ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 $(REMOTE_CORE_SERVICES)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 $(REMOTE_CORE_SERVICES)"
 
 
 remote-bot-up: ## Start remote bot container
 	@echo "$(BLUE)Starting remote bot on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d bot"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d bot"
 	@echo "$(GREEN)✓ Remote bot started$(NC)"
 
 remote-bot-restart: ## Recreate remote bot container
 	@echo "$(BLUE)Restarting remote bot on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d --force-recreate bot"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d --force-recreate bot"
 	@echo "$(GREEN)✓ Remote bot restarted$(NC)"
 
 remote-bot-logs: ## Show recent remote bot logs
 	@echo "$(BLUE)Remote bot logs ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 bot"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 bot"
 
 remote-local-up: ## Start the local-service subset on remote MacBook Docker
 	@echo "$(BLUE)Starting local service subset on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` up -d $(LOCAL_SERVICES)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` up -d $(LOCAL_SERVICES)"
 	@echo "$(GREEN)✓ Local service subset started on remote$(NC)"
 
 remote-local-down: ## Stop remote MacBook compose stack
 	@echo "$(BLUE)Stopping remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full down"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full down"
 	@echo "$(GREEN)✓ Remote stack stopped$(NC)"
 
 remote-local-logs: ## Show recent remote MacBook compose logs
 	@echo "$(BLUE)Remote compose logs ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full logs --tail 120"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full logs --tail 120"
 	@echo "$(GREEN)✓ Remote compose logs shown$(NC)"
 
 remote-core-health: ## Check minimal RAG bot core health on remote MacBook Docker
 	@echo "$(BLUE)Remote core health ($(REMOTE_DOCKER_HOST))...$(NC)"
 	@fail=0; \
-	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('postgres',5432),('redis',6379)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
-	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
+	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('postgres',5432),('redis',6379)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
+	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(RED)container not found$(NC)"; fail=1; fi; \
 	exit $$fail
 
@@ -672,8 +676,7 @@ remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	@fail=0; \
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:6333/readyz >/dev/null 2>&1"; then echo "  Qdrant: $(RED)FAIL$(NC)"; fail=1; else echo "  Qdrant: $(GREEN)OK$(NC)"; fi; \
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1"; then echo "  BGE-M3: $(RED)FAIL$(NC)"; fail=1; else echo "  BGE-M3: $(GREEN)OK$(NC)"; fi; \
-	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:5001/health >/dev/null 2>&1"; then echo "  Docling: $(GREEN)OK$(NC)"; else echo "  Docling: $(YELLOW)NOT READY$(NC)"; fi; \
-	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
+	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(YELLOW)container not found$(NC)"; fi; \
 	exit $$fail
 
@@ -681,7 +684,7 @@ remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 
 core-min-up: ## Start minimal core services only (qdrant + redis)
 	@echo "$(BLUE)Starting minimal core services (qdrant + redis)...$(NC)"
-	COMPOSE_FILE=$(CORE_MIN_COMPOSE_FILE) $(COMPOSE_CMD) up -d
+	docker compose $(CORE_MIN_COMPOSE_FILE) up -d
 	@echo "$(GREEN)✓ Minimal core services started$(NC)"
 
 core-up: docker-core-up ## Start the full default local compose core
@@ -803,19 +806,18 @@ qa: all-checks test ## Full quality assurance
 .PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate release-polling-lock run-bot bot
 LOCAL_SERVICES := postgres redis qdrant bge-m3
 
-LOCAL_INGEST_SERVICES := docling
+LOCAL_INGEST_SERVICES := ingestion
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
 
 local-up:  ## Start local Docker services (bot runs via make run-bot)
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_SERVICES)
 	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
 
-local-service-health: ## Check health of local services: Qdrant, Redis, BGE-M3, Docling
+local-service-health: ## Check health of local services: Qdrant, Redis, BGE-M3, Ingestion
 	@bash scripts/check_services.sh
-
-local-up-ingest:  ## Start local services + docling for ingestion workflows
-	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_ALL_SERVICES)
-	@echo "$(GREEN)✓ Local services + docling started$(NC)"
+local-up-ingest:  ## Start local services + ingestion for ingestion workflows
+	$(LOCAL_COMPOSE_CMD) --profile ingest up -d $(LOCAL_ALL_SERVICES)
+	@echo "$(GREEN)✓ Local services + ingestion started$(NC)"
 
 release-polling-lock:  ## Delete the local Redis Telegram polling lock after confirming no bot is alive
 	@$(ENV_LOAD) \
@@ -917,7 +919,7 @@ local-ps:  ## Show local Docker status
 	$(LOCAL_COMPOSE_CMD) ps $(LOCAL_ALL_SERVICES)
 
 local-build:  ## Rebuild local Docker services
-	$(LOCAL_COMPOSE_CMD) build bge-m3 docling
+	$(LOCAL_COMPOSE_CMD) build bge-m3 ingestion
 
 local-redis-recreate:  ## Recreate local Redis container after REDIS_PASSWORD/.env changes
 	@echo "$(BLUE)Recreating local Redis container with current .env values...$(NC)"
@@ -1001,8 +1003,7 @@ e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
 
-test-e2e-infra: ## Run live Docling + Redis + Qdrant infrastructure E2E (#2771)
-	@echo "$(BLUE)Running live infra E2E: Docling + Redis + Qdrant...$(NC)"
+test-e2e-infra: ## Run live infrastructure E2E: ingestion + Redis + Qdrant (#2771)
 	$(UV_RUN_NO_SYNC) pytest tests/e2e/test_infra_docling_redis_qdrant.py -v --tb=short -m "e2e and requires_services"
 	@echo "$(GREEN)✓ Infra E2E complete$(NC)"
 

@@ -11,7 +11,7 @@ PYPROJECT = Path("pyproject.toml")
 MAKEFILE = Path("Makefile")
 
 # Archived extras removed by #2640 (monolith archival epic #2596)
-# Note: "eval" is NOT archived — it has active Makefile targets (eval-gold-gen) and ragas dep
+# Note: "eval" was also removed in #2043 (ragas CVE-2026-6587 — dead dep, zero imports)
 ARCHIVED_EXTRAS = {"observability", "ui", "mini-app", "voice"}
 
 
@@ -53,7 +53,6 @@ def test_base_dependencies_are_core_only() -> None:
         "docling",
         "cocoindex",
         "fastembed",
-        "ragas",
         "datasets",
         "pandas",
         "livekit-agents",
@@ -61,6 +60,7 @@ def test_base_dependencies_are_core_only() -> None:
         "pillow",
         "langfuse",
         "apscheduler",
+        "ragas",
     }
 
     assert expected_core.issubset(base)
@@ -74,7 +74,8 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     assert {"aiogram", "aiogram-dialog", "fluentogram"}.issubset(_dep_names(extras["telegram"]))
     # providers is intentionally empty after #2893 (anthropic/groq removed with dead module)
     assert extras["providers"] == []
-    assert {"docling", "pymupdf", "fastembed"}.issubset(_dep_names(extras["docling-native"]))
+    assert {"docling", "fastembed"}.issubset(_dep_names(extras["docling-native"]))
+    assert "pymupdf" not in _dep_names(extras["docling-native"])  # removed with document_parser.py
 
 
 def test_archived_extras_removed_from_pyproject() -> None:

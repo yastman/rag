@@ -1,31 +1,32 @@
 # Self-Hosted GitHub Actions Runner
 
-Operational runbook for the self-hosted runners that power
-`.github/workflows/nightly-heavy.yml` (heavy-tier tests) and
-`.github/workflows/trusted-heavy.yml` (PR fast-gate and heavy contract tests).
+Operational runbook for the self-hosted runner that powers
+`.github/workflows/nightly-heavy.yml` (heavy-tier tests). PR fast-gate
+and contract-test jobs in `.github/workflows/trusted-heavy.yml` run
+on GitHub-hosted `ubuntu-latest` runners.
 
 ---
 
 ## What this is
 
-Two GitHub Actions self-hosted runner instances are registered for this repo,
-each carrying a distinct label group:
+A GitHub Actions self-hosted runner instance is registered for this repo,
+carrying the `nightly-heavy` label group:
 
 | Label group | Labels | Used by |
 |---|---|---|
-| `pr-fast` | `self-hosted, Linux, X64, pr-fast` | `trusted-heavy.yml` (fast-tests, heavy-contract-tests jobs) |
 | `nightly-heavy` | `self-hosted, Linux, X64, nightly-heavy` | `nightly-heavy.yml` (heavy-tier job) |
 
-The `pr-fast` runner gates pull-request CI. The `nightly-heavy` runner runs
-the full test suite including `requires_extras`, `load`, `chaos`, `e2e`, and
-`benchmark` markers — tests that need BGE-M3 and ColBERT models loaded locally.
+This runner runs the full test suite including `requires_extras`, `load`,
+`chaos`, `e2e`, and `benchmark` markers — tests that need BGE-M3 and ColBERT
+models loaded locally. PR fast-gate and contract-test jobs no longer depend
+on self-hosted runners; they run on GitHub-hosted `ubuntu-latest`.
 
 ---
 
 ## Resource requirements
 
-Both workflows use `pytest -n auto`. The `nightly-heavy` job additionally loads
-BGE-M3 + ColBERT models, so it needs more RAM and disk.
+The `nightly-heavy` workflow uses `pytest -n auto` and loads BGE-M3 + ColBERT
+models, so the runner needs more RAM and disk than typical GitHub-hosted runners.
 
 | Resource | Minimum |
 |---|---|
@@ -40,33 +41,28 @@ BGE-M3 + ColBERT models, so it needs more RAM and disk.
 
 ## Registration
 
-Each label group requires a separate runner registration. Use the GitHub web UI
+The `nightly-heavy` runner requires a single registration. Use the GitHub web UI
 or `gh` CLI:
 
 1. Go to **Settings → Actions → Runners → New self-hosted runner** in the repo.
 2. Select **Linux / x64**.
 3. Follow the download and configure steps GitHub shows.
-4. When prompted for labels, enter the appropriate group:
-   - `pr-fast` runner: `pr-fast`
-   - `nightly-heavy` runner: `nightly-heavy`
+4. When prompted for labels, enter: `nightly-heavy`
    (The `self-hosted`, `Linux`, `X64` labels are added automatically.)
 
-Each runner lives in its own directory (e.g. `~/actions-runner-pr-fast/` and
-`~/actions-runner-nightly-heavy/`).
+The runner lives in its own directory (e.g. `~/actions-runner-nightly-heavy/`).
 
 ---
 
 ## WSL autostart
 
-The runners must survive host or WSL restarts. An autostart script already
-exists at `~/bin/start-github-runner-rag.sh`. Update it to start **both runner
-dirs** when both are registered:
+The runner must survive host or WSL restarts. An autostart script exists at
+`~/bin/start-github-runner-rag.sh`. Example content:
 
 ```bash
 #!/usr/bin/env bash
 # ~/bin/start-github-runner-rag.sh
-# Starts both runners in the background.
-nohup ~/actions-runner-pr-fast/run.sh &
+# Starts the nightly-heavy runner in the background.
 nohup ~/actions-runner-nightly-heavy/run.sh &
 ```
 
@@ -80,19 +76,17 @@ Wire it into your WSL profile (`.bashrc`, `.profile`, or `/etc/wsl.conf`
 Use the diagnostic script:
 
 ```bash
-scripts/check_self_hosted_runner.sh               # check both label groups
-scripts/check_self_hosted_runner.sh --pr-only     # check only pr-fast
+scripts/check_self_hosted_runner.sh               # check nightly-heavy label group
 ```
 
 The script calls the GitHub Actions runners API via `gh` and prints runner
 status, labels, and busy state. Exit codes:
 
-- `0` — all required label groups have at least one online runner.
-- `1` — a runner is missing, offline, or a label group is absent.
+- `0` — the required label group has at least one online runner.
+- `1` — runner is missing, offline, or the label group is absent.
 - `2` — bad arguments or missing prerequisites (`gh`, `jq`).
 
 Prerequisites: `gh` authenticated with `repo` + `actions:read` scopes, `jq`.
-
 ---
 
 ## Troubleshooting
@@ -114,8 +108,6 @@ and restart.
 exactly. If you re-register a runner, verify labels with
 `scripts/check_self_hosted_runner.sh`.
 
----
-
 ## Temporary disable (maintenance)
 
 To mute `nightly-heavy.yml` while the runner is down:
@@ -125,9 +117,6 @@ To mute `nightly-heavy.yml` while the runner is down:
    back.
 2. Alternatively, `workflow_dispatch` can be left as the only trigger — remove
    the `schedule:` entry temporarily to stop automatic runs.
-3. **Comment out** the `runs-on: [self-hosted, …]` line in the workflow and
-   replace it with `runs-on: ubuntu-latest` if the job must run on hosted
-   runners during the outage.
 
 ---
 
@@ -135,4 +124,4 @@ To mute `nightly-heavy.yml` while the runner is down:
 
 - `scripts/check_self_hosted_runner.sh` — diagnostic script
 - `.github/workflows/nightly-heavy.yml` — heavy-tier workflow that depends on this runner
-- `.github/workflows/trusted-heavy.yml` — PR fast-gate workflow (`pr-fast` label)
+- `.github/workflows/trusted-heavy.yml` — PR fast-gate workflow (uses GitHub-hosted runners)

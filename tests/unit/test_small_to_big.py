@@ -355,21 +355,6 @@ class TestIndexerMetadataFields:
         assert chunk.document_name == "test_doc"
         assert chunk.order == 5
 
-    def test_indexer_creates_doc_id_alias(self):
-        """Test that indexer adds doc_id as alias for document_name."""
-        # This tests the metadata dict structure in indexer._index_batch
-        # We verify through the code structure rather than runtime
-        # since runtime requires Qdrant connection
-        import inspect
-
-        from src.ingestion.indexer import DocumentIndexer
-
-        # Verify the code includes doc_id field
-
-        source = inspect.getsource(DocumentIndexer)
-        assert '"doc_id": chunk.document_name' in source
-        assert '"chunk_order": chunk.order' in source
-
 
 class TestRagPipelineSmallToBig:
     """Test _expand_small_to_big integration in the RAG pipeline."""

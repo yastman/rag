@@ -1,10 +1,5 @@
 """Unit tests for simplified I18nMiddleware (H5 refactor)."""
 
-import pytest
-
-
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram import Dispatcher

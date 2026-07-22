@@ -7,7 +7,7 @@ dependencies = [
     # Core assistant/runtime path. `uv sync --no-dev` intentionally installs
     # only these lean dependencies; optional product surfaces live in extras.
     "openai",
-    "qdrant-client>=1.17.1",  # Vector database client (weighted RRF, relevance feedback)
+    "qdrant-client>=1.18.0",  # Vector database client (weighted RRF, relevance feedback)
     "redis>=7.1.0",
     "redisvl>=0.18.2",
     "pydantic>=2.0.0",         # DEP003: used directly in src/ and telegram_bot/ (#2822)
@@ -38,7 +38,7 @@ dependencies = [
 # are not already in [project.dependencies].
 core = [
     "openai",
-    "qdrant-client>=1.17.1",
+    "qdrant-client>=1.18.0",
     "redis>=7.1.0",
     "redisvl>=0.18.2",
     "pydantic>=2.0.0",
@@ -62,7 +62,7 @@ telegram = [
     "fluentogram>=1.2.0",
     "cachetools>=5.0.0",
     "asyncpg>=0.31.0",
-    "uvloop>=0.21.0",
+    "uvloop>=0.21.0 ; sys_platform != 'win32'",
     # LangGraph supervisor + CRM agent layer (telegram_bot/agents/, pipeline/supervisor.py)
     # DEP003 fix: declare as direct deps (were transitively available via aiogram; now explicit)
     "langgraph>=1.2.0",
@@ -73,31 +73,12 @@ telegram = [
 # #2893: anthropic and groq removed (only used by dead contextualization module).
 providers = []
 
-# Local ML models (torch, FlagEmbedding, sentence-transformers)
-# Only needed when running local model inference (BGE-M3, cross-encoder, etc.)
-# Install: uv sync --extra ml-local
-ml-local = [
-    "FlagEmbedding",
-    "scipy",
-    "sentence-transformers",
-    # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
-    "torch>=2.0.0",
-    "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
-    "transformers>=4.34.0,<6.0.0", # For HuggingFace tokenizers in HybridChunker; aligned with docling-native floor
-]
-
 # Native Docling SDK — ingestion pipeline (DocumentConverter + HybridChunker)
 docling-native = [
-    "pymupdf>=1.26.0",
     "docling>=2.109.0",
     "docling-core[chunking]>=2.74.1",
     "transformers>=4.34.0,<6.0.0",
     "fastembed>=0.7.4",
-]
-
-# Evaluation / LLM-as-judge (no-patch Dependabot alert CVE-2026-6587; kept isolated — issue #2043)
-eval = [
-    "ragas",
 ]
 
 # bge-m3-api service test dependencies (FastAPI endpoint tests)
@@ -108,9 +89,11 @@ bge-extras = [
     "httpx>=0.27.0",
 ]
 
+# bge-m3-api service test dependencies (FastAPI endpoint tests)
+
 # All optional dependencies (kept surfaces only; archived extras removed by #2640)
 all = [
-    "contextual-rag[core,telegram,providers,docling-native,ml-local]",
+    "contextual-rag[core,telegram,providers,docling-native]",
 ]
 
 # =============================================================================
@@ -142,11 +125,6 @@ dev = [
     "radon>=6.0.1",
     "interrogate>=1.7.0",
 ]
-
-# =============================================================================
-# UV: CPU-only PyTorch (no CUDA — VPS has no GPU)
-# SDK pattern from Context7: https://github.com/astral-sh/uv/blob/main/docs/guides/integration/pytorch.md
-# =============================================================================
 
 # =============================================================================
 # UV: Dependency Overrides
@@ -189,19 +167,6 @@ constraint-dependencies = [
     "yarl>=1.24.2",
     "zipp>=4.1.0",
     "openai>=2.37.0",
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu" },
-]
-torchvision = [
-    { index = "pytorch-cpu" },
 ]
 
 # =============================================================================
@@ -362,10 +327,6 @@ warn_unused_configs = true
 disallow_untyped_defs = false  # Set to true for strict mode
 ignore_missing_imports = true  # Ignore missing stubs for now
 explicit_package_bases = true  # Resolve duplicate module names in services/
-
-[[tool.mypy.overrides]]
-module = "FlagEmbedding.*"
-ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "src.retrieval.topic_classifier"
@@ -569,11 +530,10 @@ exclude_lines = [
 #   langgraph, anthropic, groq) should not gate the production lint.
 # - per_rule_ignores DEP001: remaining optional/conditional imports that are
 #   not declared in pyproject.toml because they live in optional extras or
-#   archived CRM paths (langchain_core, langgraph, fluent_compiler, apscheduler,
-#   voyageai, FlagEmbedding, anyio).
+#   archived CRM paths (langchain_core, langgraph, fluent_compiler, anyio).
 # - per_rule_ignores DEP002: packages declared as optional extras that are not
 #   imported in the scoped src/+telegram_bot/ scan (aiohttp and requests are
-#   intentional safety-pins per #2710; ml-local / docs / ingest extras are
+#   intentional safety-pins per #2710; docs / ingest extras are
 #   not used in the production path being scanned).
 # - per_rule_ignores DEP003: anyio is a transitive dep used directly in
 #   src/ingestion/docling_client.py — not worth adding as a direct dep now.
@@ -592,22 +552,15 @@ extend_exclude = [
 [tool.deptry.per_rule_ignores]
 # Optional/archived imports not in pyproject.toml dependencies
 DEP001 = [
-    "FlagEmbedding",
-    "voyageai",
     "langchain_core",
     "langgraph",
     "fluent_compiler",
-    "apscheduler",
     "anyio",
 ]
 # Optional extras not imported in the production src/+telegram_bot/ scan
 DEP002 = [
     "aiohttp",
     "requests",
-    "FlagEmbedding",
-    "scipy",
-    "torch",
-    "torchvision",
     "transformers",
     "mkdocs",
     "mkdocs-material",
@@ -616,7 +569,6 @@ DEP002 = [
     "docling-core",
     "fastembed",
     "contextual-rag",
-    "sentence-transformers",
     "pymupdf",
 ]
 # Transitive deps used directly — acceptable, not worth adding as direct dep

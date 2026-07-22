@@ -68,7 +68,6 @@ class ONNXEmbeddingModel:
         self,
         texts: list[str],
         *,
-        batch_size: int = 12,
         max_length: int = 2048,
         return_dense: bool = False,
         return_sparse: bool = False,
@@ -80,6 +79,9 @@ class ONNXEmbeddingModel:
         - ``dense_vecs``: ``np.ndarray`` of shape ``[B, 1024]`` (float32)
         - ``lexical_weights``: ``list[dict[int, float]]`` (Qdrant sparse format)
         - ``colbert_vecs``: ``list[np.ndarray]``, each ``[seq_len, 1024]`` (float32)
+
+        Note: batch_size param was dropped — ONNX INT8 runs a single session.run
+        for the whole request; chunked batching would require re-tokenising.
         """
         result: dict[str, Any] = {}
 
@@ -183,7 +185,6 @@ async def lifespan(app: FastAPI):
     model = get_model()
     model.encode(
         ["warmup query"],
-        batch_size=1,
         max_length=64,
         return_dense=True,
         return_sparse=True,
@@ -410,7 +411,6 @@ async def _run_encode(
         valid_texts = [request.texts[i] for i in valid_indices]
         embeddings = model.encode(
             valid_texts,
-            batch_size=settings.BATCH_SIZE,
             max_length=request.max_length,
             return_dense=return_dense,
             return_sparse=return_sparse,
@@ -580,6 +580,10 @@ async def rerank(request: RerankRequest):
     Rerank documents using ColBERT MaxSim.
 
     Returns documents sorted by relevance score (highest first).
+
+    Note: no live client — kept for completeness. The only consumer
+    (card_d884443ae301) was removed; this endpoint is maintained but
+    unused by the active pipeline.
     """
     encode_requests_total.labels(encode_type="rerank").inc()
 
@@ -606,7 +610,6 @@ async def rerank(request: RerankRequest):
         all_texts = [query, *documents]
         embeddings = model.encode(
             all_texts,
-            batch_size=min(len(all_texts), 12),
             max_length=request.max_length,
             return_dense=False,
             return_sparse=False,

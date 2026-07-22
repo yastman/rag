@@ -5,26 +5,22 @@ Dependabot alerts with no upstream patched version:
 
 - ``diskcache`` CVE-2025-69872 (medium) — vulnerable range ``<=5.6.3``,
   patched version: none.
-- ``ragas`` CVE-2026-6587 (low) — vulnerable range ``>=0.2.3, <=0.4.3``,
-  patched version: none.
+- ``ragas`` CVE-2026-6587 (low) — removed entirely from the project (#2043);
+  previously lived in the optional ``eval`` extra.
 
 The audit decision (see
-``docs/security/no-patch-dependency-alerts.md``) is to keep both
-packages confined to the optional ``eval`` extra and the
-``src/evaluation/`` evaluation pipeline so the production bot/API runtime
-is not exposed.
+``docs/security/no-patch-dependency-alerts.md``) was to confine ragas to the
+optional ``eval`` extra; ragas has since been removed entirely (issue #2043).
+diskcache must remain transitive-only.
 
-This test prevents accidental drift back into production code or the
-default install. The four invariants are:
+This test prevents accidental re-introduction of ragas and ensures
+diskcache stays transitive. The invariants enforced are:
 
-1. ``ragas`` lives ONLY under ``[project.optional-dependencies].eval`` —
-   it must not appear in ``[project].dependencies`` or in any other
-   pyproject (telegram_bot, mini_app, services).
+1. ``ragas`` must not appear in any pyproject (root, telegram_bot, services).
 2. ``diskcache`` is transitive-only — it must not appear in any
    ``[project]`` or ``[project.optional-dependencies]`` block in any
    pyproject.
-3. ``import ragas`` / ``from ragas`` is restricted to
-   ``src/evaluation/`` and ``tests/`` (mocks).
+3. ``import ragas`` / ``from ragas`` must not appear in any first-party code.
 4. ``import diskcache`` / ``from diskcache`` does not appear anywhere in
    first-party code or tests (we only consume it transitively).
 """
@@ -43,7 +39,6 @@ PYPROJECTS = [
     REPO / "telegram_bot" / "pyproject.toml",
     REPO / "mini_app" / "pyproject.toml",
     REPO / "services" / "bge-m3-api" / "pyproject.toml",
-    REPO / "services" / "user-base" / "pyproject.toml",
     REPO / "services" / "docling" / "pyproject.toml",
 ]
 
@@ -71,48 +66,22 @@ def _dep_name(spec: str) -> str:
     return re.split(r"[\s<>=!~\[]", spec, maxsplit=1)[0].strip().lower()
 
 
-# ── ragas isolation ────────────────────────────────────────────────────
+# ── ragas removal guard ────────────────────────────────────────────────
 
 
-def test_ragas_not_in_root_pyproject_dependencies() -> None:
-    cfg = _load_pyproject(REPO / "pyproject.toml")
-    names = {_dep_name(s) for s in _project_dep_strings(cfg)}
-    assert "ragas" not in names, (
-        "ragas is a no-patch Dependabot alert (CVE-2026-6587) with limited "
-        "exposure scope; it must remain in [project.optional-dependencies].eval"
-        " and not be promoted to [project].dependencies (issue #2043)."
-    )
-
-
-def test_ragas_only_in_eval_extra() -> None:
-    cfg = _load_pyproject(REPO / "pyproject.toml")
-    extras = _project_optional_dep_strings(cfg)
-    where_ragas_appears = sorted(
-        name for name, deps in extras.items() if any(_dep_name(s) == "ragas" for s in deps)
-    )
-    assert where_ragas_appears == ["eval"], (
-        f"ragas must appear in exactly one optional extra ('eval'), but found "
-        f"in: {where_ragas_appears}. See issue #2043."
-    )
-
-
-def test_ragas_absent_from_subpackage_pyprojects() -> None:
-    """ragas must not leak into bot/mini-app/service pyprojects."""
+def test_ragas_absent_from_all_pyprojects() -> None:
+    """ragas (CVE-2026-6587) was removed entirely; guard against re-introduction."""
     for path in PYPROJECTS:
-        if not path.exists() or (path.name == "pyproject.toml" and path.parent == REPO):
-            # Skip the root pyproject — that one is asserted by the two tests
-            # above.
-            if path == REPO / "pyproject.toml":
-                continue
-            if not path.exists():
-                continue
+        if not path.exists():
+            continue
         cfg = _load_pyproject(path)
         names = {_dep_name(s) for s in _project_dep_strings(cfg)}
         names |= {
             _dep_name(s) for deps in _project_optional_dep_strings(cfg).values() for s in deps
         }
         assert "ragas" not in names, (
-            f"{path.relative_to(REPO)} must not depend on ragas (issue #2043)."
+            f"{path.relative_to(REPO)} must not depend on ragas (CVE-2026-6587, issue #2043). "
+            "ragas was removed from the project; do not re-introduce it."
         )
 
 
@@ -120,11 +89,7 @@ def test_ragas_absent_from_subpackage_pyprojects() -> None:
 
 
 def test_diskcache_is_transitive_only() -> None:
-    """diskcache must not appear as a direct dependency in any pyproject.
-
-    It is allowed to land in ``uv.lock`` because ``ragas`` pulls it in
-    transitively when the optional ``eval`` extra is installed.
-    """
+    """diskcache must not appear as a direct dependency in any pyproject."""
     for path in PYPROJECTS:
         if not path.exists():
             continue
@@ -138,7 +103,7 @@ def test_diskcache_is_transitive_only() -> None:
                 f"{path.relative_to(REPO)} declares diskcache as a {bucket_name} "
                 f"dependency; CVE-2025-69872 has no upstream patch and the "
                 f"agreed mitigation in issue #2043 is to keep diskcache "
-                "transitive-only via ragas."
+                "transitive-only."
             )
 
 
@@ -190,19 +155,13 @@ def test_diskcache_not_imported_in_first_party_code() -> None:
     )
 
 
-def test_ragas_only_imported_under_src_evaluation() -> None:
-    """All first-party ragas imports must be under src/evaluation/."""
-    allowed_prefix = REPO / "src" / "evaluation"
+def test_ragas_not_imported_in_first_party_code() -> None:
+    """ragas (CVE-2026-6587) was removed; guard against re-introduction via import."""
     offenders: list[str] = []
     for path in _python_files():
-        text = path.read_text(encoding="utf-8")
-        if not _imports(text, "ragas"):
-            continue
-        try:
-            path.relative_to(allowed_prefix)
-        except ValueError:
+        if _imports(path.read_text(encoding="utf-8"), "ragas"):
             offenders.append(str(path.relative_to(REPO)))
     assert offenders == [], (
-        "ragas imports must be confined to src/evaluation/ (issue #2043). "
-        f"Found ragas imports outside that directory in: {offenders}."
+        "ragas must not be imported anywhere (CVE-2026-6587, issue #2043). "
+        f"Found ragas imports in: {offenders}."
     )

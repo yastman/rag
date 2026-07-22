@@ -407,3 +407,50 @@ def test_to_ingestion_chunks_doc_id_differs_for_different_sources(sample_md_path
     doc_id_a = (chunks_a[0].extra_metadata or {})["doc_id"]
     doc_id_b = (chunks_b[0].extra_metadata or {})["doc_id"]
     assert doc_id_a != doc_id_b
+
+
+# ---------------------------------------------------------------------------
+# Format alignment: SUPPORTED_FORMATS vs UnifiedConfig.supported_extensions
+# ---------------------------------------------------------------------------
+
+
+def test_pptx_in_docling_common_supported_formats() -> None:
+    """.pptx must be in docling_common.SUPPORTED_FORMATS (bug fix: was missing)."""
+    from src.ingestion.docling_common import SUPPORTED_FORMATS
+
+    assert ".pptx" in SUPPORTED_FORMATS, (
+        ".pptx admitted by UnifiedConfig.supported_extensions but was missing from "
+        "docling_common.SUPPORTED_FORMATS, causing ValueError every 60s during watch-mode poll"
+    )
+
+
+def test_docling_common_formats_subset_of_unified_config() -> None:
+    """Every extension in docling_common.SUPPORTED_FORMATS must be in UnifiedConfig.supported_extensions.
+
+    This catches future drift: if docling gains a new format it must be
+    declared in UnifiedConfig too.
+    """
+    from src.ingestion.docling_common import SUPPORTED_FORMATS
+    from src.ingestion.unified.config import UnifiedConfig
+
+    config = UnifiedConfig()
+    extra = SUPPORTED_FORMATS - config.supported_extensions
+    assert not extra, (
+        f"Extensions in docling_common.SUPPORTED_FORMATS but not in "
+        f"UnifiedConfig.supported_extensions: {extra!r}"
+    )
+
+
+def test_native_adapter_accepts_pptx(tmp_path: Path) -> None:
+    """.pptx files must not raise ValueError in NativeDoclingAdapter.chunk_file_sync."""
+    pptx_file = tmp_path / "slides.pptx"
+    pptx_file.write_bytes(b"fake pptx content")
+
+    converter = _FakeConverter()
+    chunker = _FakeChunker([_FakeChunk(text="Slide 1.", meta=_FakeChunkMeta(headings=[]))])
+    adapter = NativeDoclingAdapter(max_tokens=80, converter=converter, chunker=chunker)
+
+    # Should not raise ValueError("Unsupported format: .pptx")
+    chunks = adapter.chunk_file_sync(pptx_file)
+    assert len(chunks) == 1
+    assert chunks[0].text == "Slide 1."

@@ -159,13 +159,6 @@ async def perform_rerank(
     if not documents:
         return ([], False, False)
 
-    if _is_deprecated_colbert_reranker(reranker):
-        logger.warning(
-            "perform_rerank: ignoring deprecated ColbertRerankerService; "
-            "server-side Qdrant ColBERT is the only supported ColBERT path"
-        )
-        reranker = None
-
     if reranker is not None:
         _cache_get = getattr(cache, "get_rerank_results", None) if cache is not None else None
         _cache_store = getattr(cache, "store_rerank_results", None) if cache is not None else None

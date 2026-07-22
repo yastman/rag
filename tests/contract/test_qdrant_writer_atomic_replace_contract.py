@@ -55,7 +55,7 @@ def _self_method_calls(func: ast.AST) -> list[str]:
     return calls
 
 
-@pytest.mark.parametrize("func_name", ["upsert_chunks", "upsert_chunks_sync"])
+@pytest.mark.parametrize("func_name", ["upsert_chunks_sync"])
 def test_upsert_does_not_call_destructive_delete_helpers(func_name: str) -> None:
     """``upsert_chunks*`` must not call ``delete_file`` / ``delete_file_sync``."""
     func = _load_function(func_name)
@@ -72,7 +72,7 @@ def test_upsert_does_not_call_destructive_delete_helpers(func_name: str) -> None
     ).strip()
 
 
-@pytest.mark.parametrize("func_name", ["upsert_chunks", "upsert_chunks_sync"])
+@pytest.mark.parametrize("func_name", ["upsert_chunks_sync"])
 def test_upsert_calls_post_upsert_stale_sweep(func_name: str) -> None:
     """``upsert_chunks*`` must perform the stale-id sweep after the upsert."""
     func = _load_function(func_name)
@@ -87,7 +87,7 @@ def test_upsert_calls_post_upsert_stale_sweep(func_name: str) -> None:
     ).strip()
 
 
-@pytest.mark.parametrize("func_name", ["upsert_chunks", "upsert_chunks_sync"])
+@pytest.mark.parametrize("func_name", ["upsert_chunks_sync"])
 def test_stale_sweep_runs_after_upsert(func_name: str) -> None:
     """Inside the function body, ``_upsert_points_in_batches`` must precede
     ``_delete_stale_points_sync``."""

@@ -71,16 +71,6 @@ def test_core_services_are_always_enabled():
     assert not profiled_core, f"Core services must be profile-free: {profiled_core}"
 
 
-def test_docling_is_profile_gated():
-    """Docling is optional (ingest workflow only) and must be profile-gated."""
-    data = _load_compose()
-    services = data.get("services", {})
-
-    assert "docling" in services, "docling service must exist in compose.yml"
-    profiles = services["docling"].get("profiles") or []
-    assert "ingest" in profiles, "docling must be in the 'ingest' profile"
-
-
 def test_compose_has_no_duplicate_host_ports():
     """No two services should bind the same host port in short syntax."""
     data = _load_compose()

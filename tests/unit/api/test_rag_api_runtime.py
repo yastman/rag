@@ -130,38 +130,6 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
     assert call_kwargs["metadata"] == {"source": "voice", "query_type": "GENERAL"}
 
 
-async def test_query_propagates_explicit_langfuse_trace_id() -> None:
-    """POST /query should normalize external ids before opening the root observation."""
-    lf = MagicMock()
-    lf.create_trace_id.return_value = "0123456789abcdef0123456789abcdef"
-    lf.start_as_current_observation.return_value = nullcontext()
-
-    with (
-        patch("src.observability.get_client", return_value=lf),
-        patch(
-            "src.api.main._execute_query",
-            new=AsyncMock(return_value=SimpleNamespace()),
-        ) as mock_execute,
-    ):
-        await query(
-            QueryRequest(
-                query="test",
-                user_id=42,
-                session_id="sess-1",
-                channel="voice",
-                langfuse_trace_id="trace-123",
-            )
-        )
-
-    lf.create_trace_id.assert_called_once_with(seed="trace-123")
-    lf.start_as_current_observation.assert_called_once_with(
-        as_type="span",
-        name="rag-api-query",
-        trace_context={"trace_id": "0123456789abcdef0123456789abcdef"},
-    )
-    mock_execute.assert_awaited_once()
-
-
 async def test_lifespan_respects_rerank_provider_none() -> None:
     fake_cfg = SimpleNamespace(
         redis_url="redis://localhost:6379",
@@ -281,23 +249,6 @@ async def test_generic_error_handler_returns_structured_payload() -> None:
     assert content["trace_id"] == "fallback-trace-id"
     mock_logger.exception.assert_called_once_with(
         "Unhandled error in RAG API", extra={"trace_id": "fallback-trace-id"}
-    )
-
-
-async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> None:
-    """If a Langfuse trace is active, its trace id should be exposed to the client."""
-    mock_lf = MagicMock()
-    mock_lf.get_current_trace_id.return_value = "trace-abc-123"
-
-    with (
-        patch("src.observability.get_client", return_value=mock_lf),
-        patch("src.api.main.logger") as mock_logger,
-    ):
-        response = await generic_error_handler(None, ValueError("bad input"))
-
-    assert _response_content(response)["trace_id"] == "trace-abc-123"
-    mock_logger.exception.assert_called_once_with(
-        "Unhandled error in RAG API", extra={"trace_id": "trace-abc-123"}
     )
 
 

@@ -65,7 +65,7 @@ Does this change affect Docker Compose, k8s manifests, service startup, or produ
 - [ ] Environment variable or secret contract change
 - [ ] Database migration or collection schema change
 
-If runtime-impacting, note the verification you ran (e.g., `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services`):
+If runtime-impacting, note the verification you ran (e.g., `docker compose -f compose.yml -f compose.dev.yml config --services`):
 > ___________
 
 ## Screenshots / Demo

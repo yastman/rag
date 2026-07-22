@@ -1,12 +1,11 @@
 """Contract: no stale service-level ``requirements.txt`` manifests (#1620).
 
-Two ``requirements.txt`` files used to live alongside ``pyproject.toml``
-files at:
+A ``requirements.txt`` file used to live alongside the ``pyproject.toml``
+file at:
 
 - ``telegram_bot/requirements.txt``
-- ``services/user-base/requirements.txt``
 
-They drifted from the active manifests (e.g. ``langfuse>=3.0.0`` while
+It drifted from the active manifests (e.g. ``langfuse>=3.0.0`` while
 ``pyproject.toml`` requires ``>=4.0.0,<5.0``; ``sentence-transformers>=2.2.0``
 while ``pyproject.toml`` uses ``>=3.2.0``). Docker builds do not consume
 them — every Dockerfile in this repo runs ``uv sync`` against
@@ -28,10 +27,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-FORBIDDEN: tuple[Path, ...] = (
-    REPO_ROOT / "telegram_bot" / "requirements.txt",
-    REPO_ROOT / "services" / "user-base" / "requirements.txt",
-)
+FORBIDDEN: tuple[Path, ...] = (REPO_ROOT / "telegram_bot" / "requirements.txt",)
 
 
 @pytest.mark.parametrize("path", FORBIDDEN, ids=lambda p: str(p.relative_to(REPO_ROOT)))

@@ -15,7 +15,6 @@
 
 import json as _json
 import logging
-import threading
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -31,7 +30,6 @@ from qdrant_client.models import (
     SparseVector,
 )
 
-from src.ingestion.unified.observability import try_update_ingestion_trace
 from src.retrieval.topic_classifier import classify_chunk_topic, classify_doc_type
 
 
@@ -91,33 +89,12 @@ class QdrantHybridWriter:
             base_url=self.bge_m3_url,
             timeout=bge_m3_timeout,
             batch_size=self.BGE_M3_BATCH_SIZE,
+            max_length=1024,  # chunks are contextualized (headings prepended) → can exceed 512
         )
-        self._dense_semaphore = threading.Semaphore(max(1, bge_m3_concurrency))
         logger.info("QdrantHybridWriter BGE-M3 URL: %s", self.bge_m3_url)
         logger.info("QdrantHybridWriter BGE-M3 timeout: %ss", bge_m3_timeout)
         logger.info("QdrantHybridWriter dense: local BGE-M3 (concurrency=%d)", bge_m3_concurrency)
         logger.info("QdrantHybridWriter sparse: BGE-M3 /encode/sparse")
-
-    def _embed_sparse(self, texts: list[str]) -> list[dict[str, list]]:
-        """Generate sparse embeddings via BGEM3SyncClient.
-
-        Returns list of dicts with 'indices' and 'values' keys.
-        """
-        if not texts:
-            return []
-        result = self._bge_client.encode_sparse(texts)
-        return result.weights
-
-    def _embed_colbert(self, texts: list[str]) -> list[list[list[float]]]:
-        """Generate ColBERT multivectors via BGEM3SyncClient.
-
-        Returns list of token vector lists (one per document).
-        Each document's colbert is list[list[float]] (num_tokens x 1024).
-        """
-        if not texts:
-            return []
-        result = self._bge_client.encode_colbert(texts)
-        return result.colbert_vecs
 
     @staticmethod
     def _to_sparse_vector(sparse_emb: Any) -> SparseVector:
@@ -164,23 +141,6 @@ class QdrantHybridWriter:
 
         # Fallback
         return f"chunk_{index}"
-
-    def _embed_documents_local(self, texts: list[str]) -> list[list[float]]:
-        """Embed documents using BGEM3SyncClient.
-
-        Args:
-            texts: List of document texts
-
-        Returns:
-            List of 1024-dim dense embedding vectors
-        """
-        if not texts:
-            return []
-        # Semaphore covers entire call including internal batching.
-        # bge_m3_concurrency defaults to 1; ingestion runs sequentially.
-        with self._dense_semaphore:
-            result = self._bge_client.encode_dense(texts)
-        return result.vectors
 
     @staticmethod
     def _infer_language(source_path: str, file_metadata: dict[str, Any]) -> str:
@@ -371,164 +331,6 @@ class QdrantHybridWriter:
             total_upserted += len(batch)
 
         return total_upserted
-
-    async def delete_file(self, file_id: str, collection_name: str) -> int:
-        """Delete all points for a file.
-
-        Uses metadata.file_id filter (more reliable than flat file_id).
-        """
-        try_update_ingestion_trace(
-            command="qdrant-delete-file",
-            status="started",
-            metadata={"collection": collection_name},
-        )
-        # Count before delete
-        count_result = self.client.count(
-            collection_name=collection_name,
-            count_filter=Filter(
-                must=[FieldCondition(key="metadata.file_id", match=MatchValue(value=file_id))]
-            ),
-        )
-        count = count_result.count
-
-        if count > 0:
-            # Delete by metadata.file_id (canonical SDK shape: wrap Filter in FilterSelector)
-            self.client.delete(
-                collection_name=collection_name,
-                points_selector=FilterSelector(
-                    filter=Filter(
-                        must=[
-                            FieldCondition(
-                                key="metadata.file_id",
-                                match=MatchValue(value=file_id),
-                            )
-                        ]
-                    )
-                ),
-            )
-            logger.info(f"Deleted {count} points for file_id={file_id}")
-
-        try_update_ingestion_trace(
-            command="qdrant-delete-file",
-            status="completed",
-            metadata={"collection": collection_name, "points_deleted": count},
-        )
-        return count
-
-    async def upsert_chunks(
-        self,
-        chunks: list[Any],
-        file_id: str,
-        source_path: str,
-        file_metadata: dict[str, Any],
-        collection_name: str,
-    ) -> WriteStats:
-        """Upsert chunks with atomic replace semantics (#1602).
-
-        1. Generate embeddings and build replacement points first.
-        2. Upsert replacement points with deterministic IDs (overwrites the
-           same chunk_locations in place).
-        3. Only after a successful upsert, delete points whose IDs belong to
-           ``file_id`` but are not part of the new batch (stale orphans).
-
-        If any step before the stale-id sweep fails, no destructive delete is
-        executed, so the previous good version of the document remains
-        searchable.
-        """
-        stats = WriteStats()
-        try_update_ingestion_trace(
-            command="qdrant-upsert-chunks",
-            status="started",
-            metadata={"collection": collection_name, "chunks": len(chunks)},
-        )
-
-        if not chunks:
-            try_update_ingestion_trace(
-                command="qdrant-upsert-chunks",
-                status="completed",
-                metadata={"collection": collection_name, "chunks": 0},
-            )
-            return stats
-
-        try:
-            # Step 1: Extract texts
-            texts = [chunk.text for chunk in chunks]
-
-            # Step 2: Generate embeddings (BGE-M3 dense + sparse + colbert).
-            # Any failure here exits via `except` BEFORE any destructive call.
-            dense_embeddings = self._embed_documents_local(texts)
-            sparse_embeddings = self._embed_sparse(texts)
-            colbert_embeddings = self._embed_colbert(texts)
-
-            # Step 3: Build points
-            points: list[PointStruct] = []
-            new_ids: list[str] = []
-            for i, (chunk, dense_vec, sparse_emb) in enumerate(
-                zip(chunks, dense_embeddings, sparse_embeddings, strict=True)
-            ):
-                chunk_location = self.get_chunk_location(chunk, i)
-                point_id = self.generate_point_id(file_id, chunk_location)
-                payload = self.build_payload(
-                    chunk, file_id, source_path, chunk_location, file_metadata
-                )
-
-                vector_dict: dict = {
-                    "dense": dense_vec,
-                    "bm42": self._to_sparse_vector(sparse_emb),
-                }
-                if colbert_embeddings:
-                    vector_dict["colbert"] = colbert_embeddings[i]
-
-                point = PointStruct(
-                    id=point_id,
-                    vector=vector_dict,
-                    payload=payload,
-                )
-                points.append(point)
-                new_ids.append(point_id)
-
-            # Step 4: Upsert replacement points first (deterministic IDs
-            # overwrite same-location points, so readers always see a valid
-            # version of the document during the swap).
-            stats.points_upserted = self._upsert_points_in_batches(
-                collection_name=collection_name,
-                points=points,
-                source_path=source_path,
-            )
-
-            # Step 5: Sweep stale orphans (old points for this file_id that
-            # are not part of the new batch). Safe because Step 4 succeeded.
-            stats.points_deleted = self._delete_stale_points_sync(
-                file_id=file_id,
-                collection_name=collection_name,
-                new_ids=set(new_ids),
-            )
-
-            logger.info(
-                f"Upserted {stats.points_upserted} points for {source_path} "
-                f"(swept {stats.points_deleted} stale points)"
-            )
-
-        except Exception as e:
-            stats.errors = [str(e)]
-            logger.error(f"Error upserting chunks: {e}", exc_info=True)
-            try_update_ingestion_trace(
-                command="qdrant-upsert-chunks",
-                status="error",
-                metadata={"collection": collection_name, "error_type": type(e).__name__},
-            )
-            return stats
-
-        try_update_ingestion_trace(
-            command="qdrant-upsert-chunks",
-            status="completed",
-            metadata={
-                "collection": collection_name,
-                "points_deleted": stats.points_deleted,
-                "points_upserted": stats.points_upserted,
-            },
-        )
-        return stats
 
     def delete_file_sync(self, file_id: str, collection_name: str) -> int:
         """Sync version of delete_file.

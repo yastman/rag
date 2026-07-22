@@ -9,7 +9,6 @@ guard, service clients).
 """
 
 import asyncio
-import os
 
 import httpx
 import pytest
@@ -40,19 +39,6 @@ def require_live_services(qdrant_url, redis_url):
             pytest.skip("Redis not available")
 
     asyncio.run(check_redis())
-
-
-@pytest.fixture(scope="module")
-async def voyage_service():
-    """VoyageService for embeddings."""
-    api_key = os.getenv("VOYAGE_API_KEY")
-    if not api_key:
-        pytest.skip("VOYAGE_API_KEY not set")
-    try:
-        from telegram_bot.services.rag.voyage import VoyageService
-    except Exception as exc:  # pragma: no cover - depends on optional third-party packages
-        pytest.skip(f"Voyage stack unavailable in this environment: {exc}")
-    return VoyageService(api_key=api_key)
 
 
 @pytest.fixture(scope="module")

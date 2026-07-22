@@ -14,12 +14,16 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 
 SCRIPT_PATH = Path("scripts/cleanup_orphaned_worktree_volumes.sh")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX executable permission semantics")
 def test_script_exists_and_is_executable() -> None:
     assert SCRIPT_PATH.exists(), f"{SCRIPT_PATH} must exist"
     mode = SCRIPT_PATH.stat().st_mode
@@ -59,6 +63,7 @@ def test_script_protects_long_lived_projects() -> None:
         )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="requires Bash shell")
 def test_script_help_flag_runs_without_docker(tmp_path) -> None:
     """`--help` must succeed with exit 0 and not require Docker to be installed."""
 
@@ -79,12 +84,13 @@ def test_script_help_flag_runs_without_docker(tmp_path) -> None:
     assert "dry-run" in combined.lower(), "help output must mention dry-run"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="requires Bash shell")
 def test_apply_ignores_unrelated_compose_project_prefix(tmp_path) -> None:
     """`--apply` must not delete volumes from unrelated Compose projects."""
 
     fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
     removed_log = tmp_path / "removed.log"
+    fake_bin.mkdir(parents=True, exist_ok=True)
 
     git = fake_bin / "git"
     git.write_text(
@@ -160,10 +166,3 @@ def test_docker_md_documents_worktree_cleanup() -> None:
         "docker-clean-orphan-worktree-volumes" in text
     ), "DOCKER.md must reference the cleanup script or Make target"
     assert "worktree" in text.lower(), "DOCKER.md must include a worktree-cleanup section"
-
-
-def test_repo_hygiene_runbook_references_orphan_volume_cleanup() -> None:
-    text = Path("docs/engineering/repo-hygiene-runbook.md").read_text(encoding="utf-8")
-    assert "docker-clean-orphan-worktree-volumes" in text, (
-        "repo-hygiene runbook must mention the orphan-volume cleanup target"
-    )

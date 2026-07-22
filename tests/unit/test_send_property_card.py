@@ -3,12 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-
-import pytest
-
-
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.bot import PropertyBot

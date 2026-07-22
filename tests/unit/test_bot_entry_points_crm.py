@@ -6,11 +6,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
-
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
 from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 

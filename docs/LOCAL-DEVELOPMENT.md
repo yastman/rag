@@ -12,31 +12,67 @@ and [`README.md`](README.md) for the documentation map.
 
 ## First-time setup
 
+### Linux / POSIX
+
 ```bash
 cp .env.example .env     # fill in credentials (Telegram token, API keys)
 uv sync                  # core + dev tools (PEP 735 dev group)
-# optional extras, only when needed:
-uv sync --extra ml-local # local BGE-M3 / cross-encoder inference (torch)
-uv sync --extra docling-native   # Docling + PyMuPDF ingestion pipeline (in-process)
+uv sync --extra telegram # bot dependencies (aiogram, LangGraph)
+# optional: uv sync --extra docling-native   # Docling + PyMuPDF ingestion pipeline
+```
+
+### Windows (PowerShell)
+
+```powershell
+Copy-Item .env.example .env        # fill in credentials
+uv sync                            # core + dev tools (Python 3.12)
+uv sync --extra telegram           # bot dependencies
+# optional: uv sync --extra docling-native   # Docling + PyMuPDF ingestion
+# Preflight validation:
+scripts/windows_preflight.ps1
 ```
 
 ## Bring up the sidecar stack
+
+### Linux / POSIX
 
 ```bash
 make core-min-up     # minimal: Qdrant + Redis
 make core-up         # full: + BGE-M3, PostgreSQL
 ```
 
+### Windows (PowerShell)
+
+```powershell
+# Minimal: Qdrant + Redis (standalone core stack)
+docker compose -f compose.core.yml up -d
+
+# Full: + BGE-M3, PostgreSQL
+docker compose -f compose.yml -f compose.dev.yml up -d
+```
+
 The retrieval stack uses dense + sparse + ColBERT from the local BGE-M3. Tunables live in `.env.example` (e.g. `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`).
 
 ## Run the bot
+
+### Linux / POSIX
 
 ```bash
 make run-bot          # run natively against the running sidecars
 make docker-bot-up    # run the bot inside the Compose stack
 ```
 
+### Windows (PowerShell)
+
+```powershell
+# Run natively (sidecars must be running first)
+uv run python -m telegram_bot.main
+```
+
 ## Validate before you push
+
+> The `make` commands below are Linux/POSIX only. On Windows run tests via
+> `uv run pytest` directly (see [`tests/README.md`](../tests/README.md)).
 
 | Command | What it checks |
 |---|---|

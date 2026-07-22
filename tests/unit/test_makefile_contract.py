@@ -86,15 +86,17 @@ def test_release_polling_lock_is_phony() -> None:
     assert "release-polling-lock" in combined
 
 
-# --- #1282 Local services docling contract tests ---
+# --- #1282 Local services ingestion contract tests ---
 
 
-def test_local_services_excludes_docling() -> None:
+def test_local_services_excludes_ingestion() -> None:
     text = _makefile_text()
     match = re.search(r"^LOCAL_SERVICES\s*:=\s*(.+)$", text, re.MULTILINE)
     assert match, "LOCAL_SERVICES not found in Makefile"
     services = match.group(1).strip().split()
-    assert "docling" not in services, f"docling must not be in LOCAL_SERVICES (found {services!r})"
+    assert "ingestion" not in services, (
+        f"ingestion must not be in LOCAL_SERVICES (found {services!r})"
+    )
 
 
 def test_local_services_includes_postgres_for_native_bot_favorites() -> None:
@@ -108,12 +110,14 @@ def test_local_services_includes_postgres_for_native_bot_favorites() -> None:
     )
 
 
-def test_local_ingest_services_includes_docling() -> None:
+def test_local_ingest_services_includes_ingestion() -> None:
     text = _makefile_text()
     match = re.search(r"^LOCAL_INGEST_SERVICES\s*:=\s*(.+)$", text, re.MULTILINE)
     assert match, "LOCAL_INGEST_SERVICES not found in Makefile"
     services = match.group(1).strip().split()
-    assert "docling" in services, f"docling must be in LOCAL_INGEST_SERVICES (found {services!r})"
+    assert "ingestion" in services, (
+        f"ingestion must be in LOCAL_INGEST_SERVICES (found {services!r})"
+    )
 
 
 def test_local_all_services_combines_both_sets() -> None:

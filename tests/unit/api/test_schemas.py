@@ -13,7 +13,7 @@ class TestQueryRequest:
         assert req.user_id == 0
         assert req.session_id == ""
         assert req.channel == "api"
-        assert req.langfuse_trace_id is None
+        assert req.trace_id is None
 
     def test_valid_request_full(self):
         req = QueryRequest(
@@ -21,13 +21,13 @@ class TestQueryRequest:
             user_id=12345,
             session_id="sess-abc",
             channel="telegram",
-            langfuse_trace_id="trace-xyz",
+            trace_id="trace-xyz",
         )
         assert req.query == "квартиры в Несебр"
         assert req.user_id == 12345
         assert req.session_id == "sess-abc"
         assert req.channel == "telegram"
-        assert req.langfuse_trace_id == "trace-xyz"
+        assert req.trace_id == "trace-xyz"
 
     def test_query_min_length_1(self):
         with pytest.raises(ValidationError):
@@ -49,12 +49,12 @@ class TestQueryRequest:
         req = QueryRequest(query="test")
         assert req.channel == "api"
 
-    def test_langfuse_trace_id_optional(self):
+    def test_trace_id_optional(self):
         req = QueryRequest(query="test")
-        assert req.langfuse_trace_id is None
+        assert req.trace_id is None
 
-        req2 = QueryRequest(query="test", langfuse_trace_id="trace-abc")
-        assert req2.langfuse_trace_id == "trace-abc"
+        req2 = QueryRequest(query="test", trace_id="trace-abc")
+        assert req2.trace_id == "trace-abc"
 
 
 class TestQueryResponse:

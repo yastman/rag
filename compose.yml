@@ -1,5 +1,5 @@
 # Base configuration — all services, no ports exposed.
-# Use with override: COMPOSE_FILE=compose.yml:compose.dev.yml
+# Use with override: docker compose -f compose.yml -f compose.dev.yml up -d
 # See DOCKER.md and docs/LOCAL-DEVELOPMENT.md
 
 x-logging: &default-logging

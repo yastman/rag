@@ -87,7 +87,6 @@ class FakeONNXModel:
         self,
         texts,
         *,
-        batch_size=12,
         max_length=2048,
         return_dense=False,
         return_sparse=False,

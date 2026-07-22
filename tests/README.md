@@ -137,6 +137,7 @@ make eval-rag-quick          # 10-sample subset
 make eval-rag-full           # RAGAS + DeepEval
 ```
 
+
 ### Baseline / observability
 
 > `tests/baseline/` was removed in P19 (Langfuse integration removed, #2844). The `make baseline-smoke` and `make baseline-compare` targets are no longer available. Observability is through structured logs.
@@ -145,7 +146,7 @@ make eval-rag-full           # RAGAS + DeepEval
 When changing `compose*.yml`, Dockerfiles, or service definitions, verify the effective config:
 
 ```bash
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services
+docker compose -f compose.yml -f compose.dev.yml config --services
 ```
 
 CI uses `tests/fixtures/compose.ci.env` for interpolation validation:
@@ -183,7 +184,6 @@ See `pyproject.toml` for the full marker list (including exclusions for old API 
 | File | Description |
 |------|-------------|
 | `unit/test_qdrant_service.py` | QdrantService with mocked client |
-| `unit/test_voyage_service.py` | VoyageService with mocked API |
 | `unit/test_small_to_big.py` | Small-to-big chunk expansion |
 | `regression/test_rag_core_regression.py` | RAG core regression suite |
 | `unit/test_local_compose_contract.py` | Compose config validation |
@@ -194,11 +194,6 @@ See `pyproject.toml` for the full marker list (including exclusions for old API 
 | `smoke/test_preflight.py` | Qdrant/Redis preflight checks |
 | `eval/ground_truth.json` | Q&A pairs for RAG evaluation |
 
-Voyage-dependent tests (unit/test_voyage_service.py, unit/test_contextualized_embeddings.py, etc.) are guarded with `pytest.mark.requires_extras` and require:
-
-```bash
-uv sync --extra voyage
-```
 
 ## Writing Tests
 

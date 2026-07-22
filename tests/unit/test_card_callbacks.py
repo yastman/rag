@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
-
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from telegram_bot.bot import PropertyBot
 from tests.unit._bot_config_factory import make_full_bot_config as _make_config

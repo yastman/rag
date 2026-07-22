@@ -62,16 +62,6 @@ def test_bge_m3_dockerfile_python_version_consistency() -> None:
     )
 
 
-def test_docling_dockerfile_python_version_consistency() -> None:
-    text = Path("services/docling/Dockerfile").read_text(encoding="utf-8")
-    builder_ver = _get_builder_python_version(text)
-    runtime_ver = _get_runtime_python_version(text)
-    assert builder_ver == runtime_ver, (
-        f"services/docling/Dockerfile: builder Python {builder_ver} != runtime Python {runtime_ver}. "
-        "Binary wheels compiled for one version break on another."
-    )
-
-
 def test_voice_dockerfile_python_version_consistency() -> None:
     text = Path("archive/voice/Dockerfile").read_text(encoding="utf-8")
     builder_ver = _get_builder_python_version(text)

@@ -20,6 +20,9 @@ The ONNX INT8 model (`model.int8.onnx` + `model.int8.onnx.data`) is baked into t
 
 For local development with Docker, set `BGE_M3_ONNX_MODEL_HOST_DIR` in `.env` to the absolute host path containing `model.int8.onnx` and `model.int8.onnx.data`.
 
+Windows example (Docker Desktop Linux engine):
+BGE_M3_ONNX_MODEL_HOST_DIR=C:\data\models\bge_m3_onnx_int8
+
 ## Docker
 
 - **Service name**: `bge-m3`
@@ -32,7 +35,7 @@ For local development with Docker, set `BGE_M3_ONNX_MODEL_HOST_DIR` in `.env` to
 ## Quick Start
 
 ```bash
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d bge-m3
+docker compose -f compose.yml -f compose.dev.yml up -d bge-m3
 curl -fsS http://localhost:8000/health
 ```
 

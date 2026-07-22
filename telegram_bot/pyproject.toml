@@ -7,7 +7,7 @@ dependencies = [
     "aiogram>=3.29.0",
     "aiogram-dialog>=2.4.0",
     "httpx>=0.28.0",
-    "qdrant-client>=1.14.0",  # v1.14+ for FormulaQuery score boosting
+    "qdrant-client>=1.18.0",  # v1.18+ unified pin (telegram_bot pyproject)
     # grpcio is intentionally NOT declared directly (#2241). qdrant-client
     # pins grpcio>=1.41.0 as a hard dependency, so the Qdrant gRPC transport
     # (prefer_grpc=True) keeps it available transitively. A redundant direct

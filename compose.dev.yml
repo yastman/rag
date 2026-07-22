@@ -1,5 +1,5 @@
 # compose.dev.yml — Development overrides: ports, colbert reranking, ML profile-gating.
-# Usage: COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d
+# Usage: docker compose -f compose.yml -f compose.dev.yml up -d
 #
 # Docker credentials must come from .env or an explicit --env-file. The make
 # targets fall back to tests/fixtures/compose.ci.env when .env is absent.

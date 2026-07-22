@@ -18,7 +18,6 @@ DOCKERFILES = [
     "Dockerfile.ingestion",
     "telegram_bot/Dockerfile",
     "services/bge-m3-api/Dockerfile",
-    "services/docling/Dockerfile",
 ]
 
 # Images that import telegram_bot.observability (which imports langfuse) must not
@@ -196,30 +195,6 @@ def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
     assert "python3.13" in text or "python:3.13" in text, (
         f"{dockerfile} must use Python 3.13 runtime for langfuse SDK compatibility"
     )
-
-
-def test_docling_read_only_has_explanatory_comment() -> None:
-    """docling overrides read_only: false and must have an explanatory comment like litellm (#1510)."""
-    text = COMPOSE_FILE.read_text()
-    # Find the docling service block by locating the next service at the same indent
-    docling_start = text.find("  docling:")
-    assert docling_start != -1, "docling service not found in compose.yml"
-    # Services are separated by a blank line followed by "  <service-name>:" at column 0
-    next_service = text.find("\n\n  ", docling_start + 1)
-    block = text[docling_start : next_service if next_service != -1 else None]
-    assert "read_only: false" in block, "docling must set read_only: false"
-    # The comment should appear before read_only: false in the same block
-    lines = block.splitlines()
-    for i, line in enumerate(lines):
-        if "read_only: false" in line:
-            # Check preceding 2 lines for a comment
-            preceding = "\n".join(lines[max(0, i - 2) : i])
-            assert "#" in preceding, (
-                "docling read_only: false must have an explanatory comment nearby"
-            )
-            break
-    else:
-        pytest.fail("read_only: false not found in docling block")
 
 
 def test_qdrant_stack_doc_matches_compose_version() -> None:

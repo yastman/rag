@@ -5,6 +5,11 @@ The ``.github/workflows/nightly-heavy.yml`` workflow runs heavy-tier tests
 self-hosted GitHub Actions runner. If the runner goes offline or its labels
 drift, the nightly job silently queues forever or fails.
 
+PR gates (``trusted-heavy.yml``) run on GitHub-hosted ``ubuntu-latest``
+runners and do NOT require self-hosted infrastructure. Only the nightly-heavy
+workflow depends on a self-hosted runner — the WSL autostart docs in
+the runbook apply exclusively to that context.
+
 There is no in-repo way to query a runner registration from CI (admin scope
 is needed). The mitigation is to ship operator-runnable artifacts that make
 "is the runner alive?" cheap to verify and well-documented:
@@ -219,12 +224,12 @@ def test_diagnostic_script_mentions_label_groups() -> None:
     )
 
 
-def test_runbook_documents_pr_fast_label() -> None:
-    """Runbook must describe the ``pr-fast`` runner label."""
+def test_runbook_documents_pr_gates_on_ubuntu() -> None:
+    """Runbook must note that PR gates now run on ubuntu-latest, not self-hosted."""
     text = RUNBOOK.read_text(encoding="utf-8").lower()
-    assert "pr-fast" in text, (
-        f"{RUNBOOK.relative_to(REPO_ROOT)} must mention the 'pr-fast' label "
-        "so operators understand the PR fast-gate runner requirement."
+    assert "ubuntu-latest" in text, (
+        f"{RUNBOOK.relative_to(REPO_ROOT)} must mention that PR gates run on "
+        "ubuntu-latest so operators know the self-hosted runner is only for nightly-heavy."
     )
 
 
@@ -245,7 +250,23 @@ def test_runbook_documents_wsl_autostart() -> None:
         "WSL autostart script '~/bin/start-github-runner-rag.sh' so "
         "operators know it already exists and should be updated, not created."
     )
-    assert "both runner dirs" in text or "both runners" in text.lower(), (
-        f"{RUNBOOK.relative_to(REPO_ROOT)} must mention that the autostart "
-        "script should start both runner directories when both are registered."
-    )
+    # WSL autostart docs apply only to the nightly-heavy self-hosted runner context.
+    # PR gates run on ubuntu-latest and do not need WSL autostart.
+
+
+TRUSTED_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-heavy.yml"
+
+
+def test_trusted_heavy_pr_gates_use_github_hosted_runners() -> None:
+    """PR gate jobs in trusted-heavy.yml must NOT use self-hosted runners."""
+    assert TRUSTED_WORKFLOW.exists(), "trusted-heavy.yml must exist"
+    data = yaml.safe_load(TRUSTED_WORKFLOW.read_text(encoding="utf-8"))
+    jobs = data.get("jobs") or {}
+    pr_jobs = ("fast-tests", "heavy-contract-tests")
+    for job_key in pr_jobs:
+        job = jobs.get(job_key)
+        assert job is not None, f"trusted-heavy.yml must define {job_key}"
+        runs_on = job.get("runs-on")
+        assert runs_on == "ubuntu-latest", (
+            f"{job_key} must run on ubuntu-latest (not self-hosted), got {runs_on!r}"
+        )

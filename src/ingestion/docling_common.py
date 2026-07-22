@@ -1,7 +1,7 @@
-"""Shared contract for Docling adapters (HTTP and native).
+"""Shared types and helpers for the Docling native adapter.
 
-Contains types and helpers used by both ``DoclingClient`` (HTTP sidecar) and
-``NativeDoclingAdapter`` (in-process SDK).
+Contains shared types (``DoclingChunk``) and helpers used by
+``NativeDoclingAdapter`` (in-process SDK, the sole active Docling path).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from src.ingestion.chunker import Chunk
 # ---------------------------------------------------------------------------
 
 SUPPORTED_FORMATS: frozenset[str] = frozenset(
-    {".pdf", ".docx", ".doc", ".html", ".htm", ".md", ".txt", ".xlsx", ".csv"}
+    {".pdf", ".docx", ".doc", ".html", ".htm", ".md", ".txt", ".xlsx", ".csv", ".pptx"}
 )
 
 
@@ -42,27 +42,6 @@ class DoclingChunk:
 def generate_doc_id(source: str) -> str:
     """Generate document ID from source name (SHA-256 prefix)."""
     return hashlib.sha256(source.encode()).hexdigest()[:16]
-
-
-def get_mime_type(suffix: str) -> str:
-    """Get MIME type for file extension."""
-    mime_types = {
-        ".pdf": "application/pdf",
-        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ".doc": "application/msword",
-        ".html": "text/html",
-        ".htm": "text/html",
-        ".md": "text/markdown",
-        ".txt": "text/plain",
-        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ".csv": "text/csv",
-    }
-    return mime_types.get(suffix, "application/octet-stream")
-
-
-def is_supported(suffix: str) -> bool:
-    """Return True if the file extension is in SUPPORTED_FORMATS."""
-    return suffix.lower() in SUPPORTED_FORMATS
 
 
 def to_ingestion_chunks(

@@ -2,9 +2,6 @@
 
 import pytest
 
-
-pytest.importorskip("aiogram", reason="aiogram not installed")
-
 from telegram_bot.keyboards.phone_keyboard import (
     build_phone_keyboard,
     is_phone_attempt,
