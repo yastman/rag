@@ -72,6 +72,25 @@ jobs:
       - name: Ruff format check
         run: uvx ruff format --target-version py312 --check src/ telegram_bot/ services/ scripts/
 
+
+  actionlint:
+    name: GitHub Actions Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install development tools
+        run: uv sync --frozen --group dev
+
+      - name: Validate GitHub Actions workflows
+        run: uv run --frozen pre-commit run actionlint --all-files --hook-stage pre-push
+
   uv-lock:
     name: Lockfile Check
     runs-on: ubuntu-latest

@@ -1,95 +1,136 @@
-# AGENTS.md
+# AGENTS.md — OMP runbook for rag-fresh
 
-Repo gateway for agents. First thing to read in a session. Keep it short — link to
-canonical docs, don't copy them here.
+Operational routing only. Product/CLI facts live in `README.md`; read it only when needed.
 
-## What this is
+## Bootstrap
 
-A self-hostable RAG question-answer chatbot. User asks in natural language → retrieve
-grounded context from documents in Qdrant → an LLM returns a cited answer. Telegram is
-the live adapter; the live domain is real-estate/apartments, and the domain layer
-(prompts, tools, constants) is replaceable. One Python process — in-process function
-calls, not microservices.
+1. Project identity: `rag-fresh`; canonical checkout:
+   `C:\Dev\projects-wsl-migrated-2026-07-13\rag-fresh`.
+2. Current checkout/worktree: `git rev-parse --show-toplevel`.
+3. Classify the request and take only its route below. Do not preload docs, roadmap, cards, or code.
 
-The live bot is a RAG Q&A core (💬 Ask a question) plus a feature menu (apartment search,
-viewing booking, manager handoff/HITL, bookmarks, services, demo). Direction: harden to
-senior-grade while keeping every feature — epic **#2983** (remove cruft, decompose
-`bot.py` into per-feature handlers, freeze entry contracts; no over-engineering).
+Main dynamically selects matching live skills for itself and delegated agents when this materially
+reduces risk, context, or execution cost; explicit user choices take precedence. Pass skill names
+with owned target/base, never their contents, and read each once per session. Skills never expand
+ownership or mutation permissions.
 
-## The spine (the one flow worth memorising)
+Always chat in Russian. Keep meeting data local, never expose `FIREFLIES_API_KEY`, never delete
+ignored `data/fireflies/` or historical `data/meetgeek/`, preserve original bytes/traceability,
+and require explicit `FIREFLIES_LIVE_SMOKE=1` for live calls.
 
-```
-run_assistant_request        src/core/assistant.py
-  → run_assistant_pipeline   src/runtime/pipeline/assistant_pipeline.py
-    → classify_query
-    → rag_pipeline           src/runtime/pipeline/rag.py   (cache → hybrid search → grade → rerank → optional rewrite loop)
-    → generate_answer        src/runtime/generation/service.py
-```
+## Local quality contract
 
-Layering: `telegram_bot/` = adapter · `src/core/` = public boundary (Protocol-based DI via
-`contracts.py`) · `src/runtime/` = engine.
+- After the first checkout, install both hooks with
+  `uv run pre-commit install --hook-type pre-commit --hook-type pre-push`.
+- Use `make test` for a test-only run (`uv run pytest` on Windows without GNU Make).
+- Use `make check` when no push follows or an explicit preflight is needed. On Windows without GNU
+  Make, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`.
+- Pre-commit is the fast feedback loop and may rewrite staged files; inspect and restage its changes.
+- Pre-push is the full gate when pushing. It does not rewrite tracked source but may create ignored
+  caches; it runs Ruff, full-history Gitleaks, strict mypy, pytest, Bandit, and actionlint. Never
+  duplicate the same full gate on an unchanged candidate SHA.
+- Do not bypass either hook with `--no-verify` unless the user explicitly directs it. Live
+  Fireflies smoke tests are never part of the full local gate.
+- GitHub's advisory guard independently checks Gitleaks, Ruff lint/format, and actionlint only. It
+  does not replace a passing local gate. If a second developer or merge bot joins, move pytest,
+  mypy, and Bandit into required CI.
 
-**Langfuse SDK fully removed** (#2844, #2969) — no `langfuse` dependency, no `from langfuse` imports anywhere. The `@observe` decorators that remain across `src/` and `telegram_bot/` are now local **no-op shims** (`src.observability` / `telegram_bot.observability`), not tracing. Observability is stdlib logging only.
+## Routes
 
-## Navigate code (index-first)
+| Request | Route |
+| --- | --- |
+| `выполни фазу <exact-id>` | Use the solo phase flow below. |
+| `выполни карточку <exact-id>` | Fetch `memory_cards(action="get", id=CARD_ID, compact=false)`, take its `phase_id`, then use the solo phase flow. |
+| Partial phase ID/name | Resolve once through the bounded CodeIndexer route, then use the solo phase flow. |
+| Code question/change | CodeGraph first; CodeIndexer only when semantic/history/diff context helps. |
+| Bug/test failure | Check CodeIndexer `solutions`, then diagnose before changing code. |
+| External API/library docs | Use Context7; delegate to `librarian` when research can run independently. |
+| Download/process meeting | Ask for explicit authorization to use the matching project skill named in `README.md`. |
+| Review | Fix the exact target and Git base; exclude unrelated dirty-checkout changes. The owning writer or reviewer inspects the complete target diff. Main verifies target/base, changed-file scope, integration state, refs, checks, and evidence, and may inspect the raw diff whenever risk or uncertainty warrants it. |
+| Actual merge/rebase conflict | Resolve from Git's authoritative conflict state. |
 
-This repo is indexed by the **codeindexer** + **codegraph** MCP servers. Use them instead of
-`grep`/`find`/`cat`/`sed` — start with `search_code` / `find_*`, resolve names via
-`projects(action="list", query=...)`, widen a hit with `read_chunk` / `read_file_range`.
-Depth, tool map, cost limits and footguns live in the global skill
-**`using-codeindex-codegraph`** (loaded on demand). A standalone `grep`/`rg`/`find` on an
-indexed path is blocked by a hook — append `# nogrep` to bypass.
+## MCP/tool responsibilities
 
-## Planning & state (in codeindexer, not GitHub)
+- **CodeIndexer** (`project="rag-fresh"`): phase/card lifecycle, semantic/symbol/exact search,
+  solutions, reports, cross-session memory, and semantic diff review. Never call `projects(list)`
+  for this known project. If CodeIndexer is unavailable, do not emulate or mutate roadmap/card
+  lifecycle; report the missing capability.
+- **CodeGraph**: use MCP when exposed, otherwise `codegraph explore`; current source,
+  callers/callees, flows, edit targets, affected tests, and blast radius. Set `projectPath` to the
+  current worktree root for MCP. Start capped (`maxFiles=3-4`); make narrower follow-ups only for a
+  concrete gap, new symbol, or reported staleness. On `worktreeMismatch` or staleness, read only
+  affected files; never trust another branch's source.
+- **Context7**: versioned external library/API documentation only; use official primary
+  documentation when unavailable, and never use either for repository state.
+- **Git**: authoritative files, diff, commits, branches, and worktrees.
+- **GitHub**: PR, CI, merge, and remote delivery evidence; never roadmap state.
 
-Roadmap, phases, and todo/decision cards for this project live in the **codeindexer** memory
-store — not GitHub issues. Start a session with `briefing(project="rag-fresh")` for open cards +
-active phases + gotchas; use `roadmap` (phases) and `memory_cards` (todos/decisions) for what's
-next (currently ~13 phases / 115 cards). Epic labels like **#2983** are card tags there. Record
-non-obvious fixes with `solutions(add)`.
+Default CodeIndexer code query: `search_code(mode="cascade", compact=true)`, then refine. Before
+review, record the exact target and base. Use `review_diff` when exposed; otherwise diff-aware
+`search_code(..., since=<base>)`. Git is authoritative: target WIP = that worktree's `git diff` plus
+`git diff --cached`; committed target = `git diff <target-base>...<target-head>`. Confirm findings
+against that exact diff and inspect index freshness, truncation, ambiguity, confidence, provenance,
+and truth boundaries; dynamic CodeGraph edges remain confidence-scored evidence.
 
-## Verify before claiming done
+## Orchestration
 
-CI runs hygiene/static only (Secret Scan, Semgrep, Lint, Lockfile, Compose Config). Python
-tests are local/manual — run the right gate yourself:
+The live task schema and OMP routing are authoritative for roles, models, isolation options, and
+delegation depth. Never duplicate or invent runtime configuration here.
 
-| Gate | Scope | When |
-|---|---|---|
-| `make test-core` | monolith core (91 tests, ~8s) | core changes — run first |
-| `make test` | unit + graph paths | adapter/service changes |
-| `make test-contract` | static contract tests | contract changes |
-| `make test-full` | all tiers (heavy) | manual pre-merge only |
+Main owns intent, scope, cross-slice contracts, lifecycle, integration decisions, and final
+acceptance. Treat its context as a scarce integration resource: keep bulk exploration, files, raw
+logs, docs, and working diffs with their owning agents; return decision-grade, retrievable evidence.
 
-Core changes → `make test-core` first. Adapter/service changes → `make test-core` + `make test`.
-Subsystem overrides may pin tighter commands — see the nearest `AGENTS.override.md`.
+Children receive context files and runtime-forwarded rules, but not conversation history or informal
+parent discoveries. Give each task self-contained decisions, constraints, ownership, and acceptance.
+Agents may delegate within live depth policy; reuse an addressable agent when continuity beats fresh context.
 
-## Safety & hygiene
+When exposed and useful for high-volume or machine-consumed results, prefer compact `outputSchema`
+covering decision/blocker, artifacts, verification, risks, and evidence; use prose when validation
+adds more fragility than value. Use `reviewer` only when risk or uncertainty warrants it. Children
+never push, PR, merge, clean worktrees, mutate CodeIndexer, or commit without Main authorization.
 
-- Prefer local/test environments. Do **not** touch production, VPS, secrets, SSH, cloud
-  credentials, or real CRM write paths unless the task explicitly requires it. Redact secrets.
-- Don't start non-trivial edits in a dirty checkout — use an isolated git worktree.
-- Use additional skills only when the task matches their trigger; don't cascade into unrelated
-  skills on your own.
+Choose write isolation from the live task schema and persistent-worktree needs; use one worktree per
+concurrent writer, not per card. Agent completion is not integration: verify apply state, target
+refs, errors, checks, and retained artifacts; handle them only when automatic integration failed.
 
-## Canonical docs
+## Solo phase flow
 
-- Overview / navigation: [`README.md`](README.md)
-- Runtime, Compose, ports, env, deploy: [`DOCKER.md`](DOCKER.md)
-- Local setup & validation: [`README.md`](README.md) (Quick Start section)
-- Tests: [`tests/README.md`](tests/README.md)
-- Docling architecture (in-process SDK, prohibited patterns, bot/ingestion split): [`docs/DOCLING_ARCHITECTURE_AUTHORITY.md`](docs/DOCLING_ARCHITECTURE_AUTHORITY.md)
-- Swarm/PR/triage process lives in the Kiro skills (`roadmap-orchestrator`, `gh-pr-review`), not in-repo docs.
+1. Fetch phase and cards in parallel:
+   `roadmap(action="show", phase_id=ID)` and
+   `memory_cards(action="get", phase_id=ID, compact=true)`. Skip project discovery, briefing,
+   roadmap list/next, and full-card preload. Before executing or reviewing a selected card, fetch
+   `memory_cards(action="get", id=CARD_ID, compact=false)`; never expand unrelated cards.
+2. Main validates dependencies/acceptance, then `git fetch origin`.
+3. Resume or create the persistent `phase/<phase-id>` worktree. Inspect
+   `git worktree list --porcelain` and `git show-ref --verify refs/heads/phase/<phase-id>`: resume a
+   verified linked worktree, attach one for an existing branch, or create both from fresh
+   `origin/dev` only when absent. The canonical checkout may contain user WIP and need not be clean.
+   A new phase-worktree must be clean; preserve and inspect a resumed dirty phase-worktree, and never
+   reset, clean, stash, remove, or recreate it automatically.
+4. Make one initial capped CodeGraph query for the card's symbols/files/flow/blast radius. Repeat
+   only for a concrete missing or new symbol, ambiguity, truncation, or reported staleness. Use
+   CodeIndexer search only for missing semantic/history context.
+5. Implement the smallest coherent change, run focused tests and `git diff --check`, and have the
+   assigned writer inspect the complete target diff. Fix and repeat until required checks pass.
+6. Main chooses review, PR, and delivery topology from risk, collaboration, and repository policy.
+   After all cards, combine their committed outputs, require a clean tracked state, `git fetch
+   origin`, merge fresh `origin/dev` without rebasing, and record candidate and tested-origin SHAs.
+7. Run one full gate on that candidate: pre-push when pushing, otherwise `make check`. Immediately
+   before integration fetch again; if `origin/dev` moved, repeat merge, commit, SHA recording, and
+   gate. PR is optional; push or merge the exact candidate into `dev` without rewriting history.
+8. After external integration, `git fetch origin` and prove the candidate is an ancestor of
+   `origin/dev`. Only then mark cards and phase DONE and remove clean persistent worktrees.
 
-## Local overrides
+Use CodeIndexer `solutions` as diagnostic evidence. Fix candidate or integration regressions before
+delivery; record reproducible unrelated bugs as deduplicated cards. Main decides whether discovered
+issues block the current phase.
 
-Scoped rules live next to the code — read the nearest one before editing that area:
+Partial ID: `roadmap(action="list", project="rag-fresh", id_substring=fragment)`; paginate only while
+`has_more=true`, then exact flow. Name: compact roadmap list, paginate only while `has_more=true`,
+disambiguate locally. If a phase command has no ID or name, ask for one; use
+`briefing(project="rag-fresh")` only for an explicit “what should I work on next?” request.
 
-- [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
-- [`src/ingestion/unified/AGENTS.override.md`](src/ingestion/unified/AGENTS.override.md)
-- [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)
-- [`services/AGENTS.override.md`](services/AGENTS.override.md)
-- [`services/bge-m3-api/AGENTS.override.md`](services/bge-m3-api/AGENTS.override.md)
-
-## Priority
-
-Nearest `AGENTS.override.md` > this file > linked canonical docs.
+Failed/stale local gates, review, push, integration, or ancestry leave work unfinished and
+worktrees recoverable. A missing PR or native pre-PR status is not evidence of failure: full local
+gate evidence and ancestry in `origin/dev` are authoritative.
