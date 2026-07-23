@@ -22,7 +22,9 @@ cannot fall out of cross-link sync with the workflow file they describe.
 from __future__ import annotations
 
 import os
+import shutil
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -33,6 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "nightly-heavy.yml"
 RUNBOOK = REPO_ROOT / "docs" / "runbooks" / "SELF_HOSTED_RUNNER.md"
 SCRIPT = REPO_ROOT / "scripts" / "check_self_hosted_runner.sh"
+HOSTED_PR_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-heavy.yml"
 
 
 def test_nightly_heavy_workflow_exists() -> None:
@@ -197,35 +200,50 @@ def test_runbook_documents_disable_procedure() -> None:
     )
 
 
-def test_diagnostic_script_supports_pr_only_flag() -> None:
-    """Script must expose a ``--pr-only`` mode that requires only ``pr-fast``."""
-    text = SCRIPT.read_text(encoding="utf-8")
-    assert "--pr-only" in text, (
-        f"{SCRIPT.relative_to(REPO_ROOT)} must accept a '--pr-only' flag "
-        "for operators who only need the pr-fast runner online."
+def test_diagnostic_help_describes_only_nightly_heavy_runner() -> None:
+    """The operator-facing diagnostic must cover the sole self-hosted lane."""
+    if os.name == "nt":
+        pytest.skip("the runner diagnostic is exercised with bash on Linux CI")
+
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is required to exercise the runner diagnostic")
+
+    result = subprocess.run(
+        [bash, str(SCRIPT), "--help"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False,
+        text=True,
     )
 
-
-def test_diagnostic_script_mentions_label_groups() -> None:
-    """Script must document the ``pr-fast`` and ``nightly-heavy`` label groups."""
-    text = SCRIPT.read_text(encoding="utf-8")
-    assert "pr-fast" in text, (
-        f"{SCRIPT.relative_to(REPO_ROOT)} must mention the 'pr-fast' label "
-        "group so operators know which label the PR fast-gate runner needs."
-    )
-    assert "nightly-heavy" in text, (
-        f"{SCRIPT.relative_to(REPO_ROOT)} must mention the 'nightly-heavy' label "
-        "group so operators know which label the nightly runner needs."
-    )
+    assert result.returncode == 0, result.stderr
+    assert "nightly-heavy" in result.stdout
+    assert "pr-fast" not in result.stdout
+    assert "--pr-only" not in result.stdout
 
 
-def test_runbook_documents_pr_fast_label() -> None:
-    """Runbook must describe the ``pr-fast`` runner label."""
-    text = RUNBOOK.read_text(encoding="utf-8").lower()
-    assert "pr-fast" in text, (
-        f"{RUNBOOK.relative_to(REPO_ROOT)} must mention the 'pr-fast' label "
-        "so operators understand the PR fast-gate runner requirement."
-    )
+def test_trusted_pr_workflow_stays_hosted_without_xdist() -> None:
+    """PR checks stay independent of the nightly self-hosted runner."""
+    data = yaml.safe_load(HOSTED_PR_WORKFLOW.read_text(encoding="utf-8"))
+    triggers = data.get("on", data.get(True))
+    assert "pull_request" in triggers
+
+    jobs = data.get("jobs") or {}
+    assert jobs, "trusted-heavy.yml must define hosted PR jobs"
+    assert all(job.get("runs-on") == "ubuntu-latest" for job in jobs.values())
+
+    commands = [
+        step["run"]
+        for job in jobs.values()
+        for step in job.get("steps", [])
+        if isinstance(step, dict) and isinstance(step.get("run"), str)
+    ]
+    assert not any(
+        flag in command
+        for command in commands
+        for flag in ("-n ", "--numprocesses", "--dist", "xdist")
+    ), "hosted PR jobs must not use xdist"
 
 
 def test_runbook_documents_nightly_heavy_label() -> None:
@@ -237,15 +255,10 @@ def test_runbook_documents_nightly_heavy_label() -> None:
     )
 
 
-def test_runbook_documents_wsl_autostart() -> None:
-    """Runbook must document WSL profile autostart via ``~/bin/start-github-runner-rag.sh``."""
+def test_runbook_documents_nightly_only_wsl_autostart() -> None:
+    """Autostart must launch only the runner used by nightly-heavy.yml."""
     text = RUNBOOK.read_text(encoding="utf-8")
-    assert "start-github-runner-rag.sh" in text, (
-        f"{RUNBOOK.relative_to(REPO_ROOT)} must reference the existing "
-        "WSL autostart script '~/bin/start-github-runner-rag.sh' so "
-        "operators know it already exists and should be updated, not created."
-    )
-    assert "both runner dirs" in text or "both runners" in text.lower(), (
-        f"{RUNBOOK.relative_to(REPO_ROOT)} must mention that the autostart "
-        "script should start both runner directories when both are registered."
-    )
+    assert "start-github-runner-rag.sh" in text
+    assert "actions-runner-nightly-heavy/run.sh" in text
+    assert "pr-fast" not in text
+    assert "--pr-only" not in text

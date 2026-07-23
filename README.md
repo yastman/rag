@@ -106,13 +106,15 @@ The current domain (real-estate/apartments) lives entirely in the adapter and se
 
 ## Quick Start
 
-Prerequisites: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), Docker with Compose.
+Prerequisites: Python 3.12, [`uv`](https://docs.astral.sh/uv/), Docker with Compose.
 
 > Runtime: Docker Compose only. No k8s, no Mini App, no CRM/Kommo integration.
 > Commands below are Linux/POSIX. See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for
 > PowerShell (Windows) equivalents.
 
 ```bash
+uv sync                       # core + dev tools
+uv sync --extra telegram      # bot dependencies
 cp .env.example .env          # fill in credentials
 make core-min-up              # start Qdrant + Redis via compose.core.yml (minimal)
 # or

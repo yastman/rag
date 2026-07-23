@@ -6,9 +6,9 @@ and [`README.md`](README.md) for the documentation map.
 
 ## Prerequisites
 
-- **Python 3.12+**
+- **Python 3.12**
 - **[`uv`](https://docs.astral.sh/uv/)** — dependency + venv manager
-- **Docker** with the Compose plugin
+- **Docker** with the Compose plugin (Docker Desktop's Linux engine on Windows)
 
 ## First-time setup
 
@@ -24,12 +24,13 @@ uv sync --extra telegram # bot dependencies (aiogram, LangGraph)
 ### Windows (PowerShell)
 
 ```powershell
+uv python install 3.12
 Copy-Item .env.example .env        # fill in credentials
-uv sync                            # core + dev tools (Python 3.12)
-uv sync --extra telegram           # bot dependencies
-# optional: uv sync --extra docling-native   # Docling + PyMuPDF ingestion
+uv sync --python 3.12              # core + dev tools
+uv sync --python 3.12 --extra telegram # bot dependencies
+# optional: uv sync --python 3.12 --extra docling-native # Docling + PyMuPDF ingestion
 # Preflight validation:
-scripts/windows_preflight.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Static
 ```
 
 ## Bring up the sidecar stack

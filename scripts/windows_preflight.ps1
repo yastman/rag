@@ -16,7 +16,8 @@
 
 param(
     [ValidateSet('Static', 'Tests', 'Live')]
-    [string]$Mode = 'Static'
+    [string]$Mode = 'Static',
+    [string]$OperatorEnvFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,6 +36,79 @@ function Test-Tool([string]$Name, [scriptblock]$VersionCmd) {
     $out = & $VersionCmd 2>&1
     if ($LASTEXITCODE -eq 0) { Write-Pass "$Name available" }
     else { Write-Fail "$Name NOT available" }
+}
+
+function Get-DotenvValue([string]$Path, [string]$Name) {
+    $line = Get-Content -LiteralPath $Path | Where-Object {
+        $_ -match "^\s*(?:export\s+)?$([regex]::Escape($Name))\s*="
+    } | Select-Object -First 1
+    if ($null -eq $line) { return $null }
+
+    $value = ($line -replace "^\s*(?:export\s+)?$([regex]::Escape($Name))\s*=", '').Trim()
+    if ($value.Length -ge 2 -and $value[0] -eq $value[$value.Length - 1] -and
+        ($value[0] -eq '"' -or $value[0] -eq "'")) {
+        $value = $value.Substring(1, $value.Length - 2)
+    }
+    return $value
+}
+
+function Test-OperatorReadiness([string]$Root, [string]$EnvFile) {
+    Write-Host "`n[Operator configuration]" -ForegroundColor White
+    if (-not (Test-Path -LiteralPath $EnvFile -PathType Leaf)) {
+        Write-Fail "operator env file missing: $EnvFile -- copy .env.example to .env and set BGE_M3_ONNX_MODEL_HOST_DIR"
+        return
+    }
+    Write-Pass "operator env file: $EnvFile"
+
+    $modelPath = Get-DotenvValue $EnvFile 'BGE_M3_ONNX_MODEL_HOST_DIR'
+    if ([string]::IsNullOrWhiteSpace($modelPath)) {
+        Write-Fail "BGE_M3_ONNX_MODEL_HOST_DIR missing in $EnvFile"
+        return
+    }
+    if ($modelPath -match '^/mnt/' -or $modelPath -match '^\\\\wsl') {
+        Write-Fail "BGE_M3_ONNX_MODEL_HOST_DIR must be a native Windows path, not '$modelPath'"
+        return
+    }
+
+    $resolvedModelPath = if ([System.IO.Path]::IsPathRooted($modelPath)) {
+        $modelPath
+    } else {
+        Join-Path $Root $modelPath
+    }
+    if (Test-Path -LiteralPath $resolvedModelPath -PathType Container) {
+        Write-Pass "BGE-M3 model directory ready: $resolvedModelPath"
+    } else {
+        Write-Fail "BGE_M3_ONNX_MODEL_HOST_DIR does not exist: $resolvedModelPath"
+    }
+
+    foreach ($modelFile in @('model.int8.onnx', 'model.int8.onnx.data')) {
+        $modelFilePath = Join-Path $resolvedModelPath $modelFile
+        if (Test-Path -LiteralPath $modelFilePath -PathType Leaf) {
+            Write-Pass "BGE-M3 model artifact ready: $modelFilePath"
+        } else {
+            Write-Fail "BGE-M3 model artifact missing: $modelFilePath"
+        }
+    }
+
+    $gdrivePath = Get-DotenvValue $EnvFile 'GDRIVE_SYNC_DIR'
+    if ([string]::IsNullOrWhiteSpace($gdrivePath)) {
+        Write-Fail "GDRIVE_SYNC_DIR missing in $EnvFile"
+        return
+    }
+    if ($gdrivePath -match '^/mnt/' -or $gdrivePath -match '^\\\\wsl') {
+        Write-Fail "GDRIVE_SYNC_DIR must be a native Windows path, not '$gdrivePath'"
+        return
+    }
+    $resolvedGdrivePath = if ([System.IO.Path]::IsPathRooted($gdrivePath)) {
+        $gdrivePath
+    } else {
+        Join-Path $Root $gdrivePath
+    }
+    if (Test-Path -LiteralPath $resolvedGdrivePath -PathType Container) {
+        Write-Pass "Google Drive sync directory ready: $resolvedGdrivePath"
+    } else {
+        Write-Fail "GDRIVE_SYNC_DIR does not exist: $resolvedGdrivePath"
+    }
 }
 
 # ── Static ───────────────────────────────────────────────────────────────────
@@ -99,6 +173,9 @@ function Invoke-Static {
         else { Write-Info "repo path: $root" }
     } else { Write-Info "non-Windows host: $($env:OS)" }
 
+    $operatorEnv = if ($OperatorEnvFile) { $OperatorEnvFile } else { Join-Path $root '.env' }
+    Test-OperatorReadiness $root $operatorEnv
+
     Write-Host "`n[Docker Compose config]" -ForegroundColor White
     $envFile = [System.IO.Path]::Combine($root, "tests", "fixtures", "compose.ci.env")
     if (Test-Path $envFile) {
@@ -126,6 +203,10 @@ function Invoke-Tests {
         [System.IO.Path]::Combine($root, "tests", "unit", "core")
         [System.IO.Path]::Combine($root, "tests", "unit", "runtime")
         [System.IO.Path]::Combine($root, "tests", "contract", "test_runtime_no_telegram_bot_coupling_contract.py")
+        [System.IO.Path]::Combine($root, "tests", "contract", "test_windows_preflight_contract.py")
+        [System.IO.Path]::Combine($root, "tests", "unit", "scripts", "test_cleanup_orphaned_worktree_volumes.py")
+        [System.IO.Path]::Combine($root, "tests", "unit", "scripts", "test_smoke_zoo.py")
+        [System.IO.Path]::Combine($root, "tests", "unit", "test_logging_config.py")
     )
     $testArgs = @(
         'run', '--no-sync', '--python', '3.12',
@@ -136,7 +217,7 @@ function Invoke-Tests {
         '-m', 'not requires_extras and not slow'
     ) + $testPaths
 
-    Write-Host "  Running: uv run --no-sync --python 3.12 python -m pytest tests/unit/core tests/unit/runtime test_runtime_no_telegram_bot_coupling_contract.py ..." -ForegroundColor White
+    Write-Host "  Running focused core, runtime, Windows acceptance, and contract tests..." -ForegroundColor White
     Push-Location $root
     $out = & uv $testArgs 2>&1
     $ec = $LASTEXITCODE

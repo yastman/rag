@@ -73,6 +73,30 @@ jobs:
         run: uvx ruff format --target-version py312 --check src/ telegram_bot/ services/ scripts/
 
 
+  windows-smoke:
+    name: Windows Smoke
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra telegram
+
+      - name: Run static preflight with CI fixture
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Static -OperatorEnvFile tests/fixtures/compose.ci.env
+
+      - name: Run focused preflight tests
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Tests
+
   actionlint:
     name: GitHub Actions Lint
     runs-on: ubuntu-latest

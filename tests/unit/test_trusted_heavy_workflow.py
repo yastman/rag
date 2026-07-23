@@ -21,9 +21,7 @@ def test_trusted_heavy_jobs_run_on_github_hosted() -> None:
     data = _load_workflow()
     for job_key, job in data["jobs"].items():
         labels = job.get("runs-on")
-        assert labels == "ubuntu-latest", (
-            f"{job_key} must run on ubuntu-latest, got {labels!r}"
-        )
+        assert labels == "ubuntu-latest", f"{job_key} must run on ubuntu-latest, got {labels!r}"
 
 
 def test_trusted_heavy_execution_jobs_have_timeout() -> None:
@@ -46,6 +44,7 @@ def test_trusted_heavy_workflow_triggers_on_pull_request() -> None:
     assert "workflow_dispatch" in triggers, (
         "trusted-heavy must also support manual dispatch for ad-hoc testing"
     )
+
 
 def test_trusted_heavy_has_github_hosted_path_filter() -> None:
     """A GitHub-hosted path-filter job gates downstream execution jobs."""
@@ -79,6 +78,7 @@ def test_trusted_heavy_path_filter_covers_risk_paths() -> None:
     ):
         assert token in script
 
+
 def test_fast_tests_is_authoritative_for_trusted_risk_paths() -> None:
     """Fast Tests is the first PR gate promoted out of shadow."""
     data = _load_workflow()
@@ -90,8 +90,10 @@ def test_fast_tests_is_authoritative_for_trusted_risk_paths() -> None:
         "Fast Tests must not stay shadow once promoted to a candidate required gate."
     )
 
-    run_steps = [step for step in fast["steps"] if step.get("run") == "make test"]
-    assert run_steps, "Fast Tests must run `make test`"
+    run_steps = [
+        step for step in fast["steps"] if step.get("run") == "PYTEST_PARALLEL_ARGS= make test"
+    ]
+    assert run_steps, "Fast Tests must run `make test` with xdist disabled"
     assert all(step.get("continue-on-error") is not True for step in run_steps)
 
 
@@ -109,8 +111,12 @@ def test_fast_tests_runs_repo_compile_gate_before_make_test() -> None:
     assert "make compile-python" in run_commands, (
         "Fast Tests must run the repo-wide compile-python guardrail before make test."
     )
-    assert "make test" in run_commands, "Fast Tests must still run `make test`."
-    assert run_commands.index("make compile-python") < run_commands.index("make test")
+    assert "PYTEST_PARALLEL_ARGS= make test" in run_commands, (
+        "Fast Tests must still run `make test` with xdist disabled."
+    )
+    assert run_commands.index("make compile-python") < run_commands.index(
+        "PYTEST_PARALLEL_ARGS= make test"
+    )
 
 
 def test_heavy_contract_tests_is_authoritative_for_trusted_risk_paths() -> None:
@@ -121,8 +127,12 @@ def test_heavy_contract_tests_is_authoritative_for_trusted_risk_paths() -> None:
     assert job["name"] == "Heavy Contract Tests"
     assert job["needs"] == "changes"
     assert job.get("continue-on-error") is not True
-    test_steps = [step for step in job.get("steps", []) if step.get("run") == "make test-contract"]
-    assert test_steps, "heavy-contract-tests must run `make test-contract`"
+    test_steps = [
+        step
+        for step in job.get("steps", [])
+        if step.get("run") == "PYTEST_PARALLEL_ARGS= make test-contract"
+    ]
+    assert test_steps, "heavy-contract-tests must run `make test-contract` with xdist disabled"
     for step in test_steps:
         assert step.get("continue-on-error") is not True, (
             f"heavy-contract-tests step {step.get('name')!r} must fail on regressions"
@@ -139,7 +149,9 @@ def test_trusted_heavy_hosted_jobs_run_for_fork_prs() -> None:
         assert "needs.changes.outputs.run_heavy == 'true'" in condition, (
             f"{job_key} must run only when the path filter says tests are needed"
         )
-        assert "github.event.pull_request.head.repo.full_name == github.repository" not in condition, (
+        assert (
+            "github.event.pull_request.head.repo.full_name == github.repository" not in condition
+        ), (
             f"{job_key} must not restrict to same-repository branches because "
             f"it runs on a GitHub-hosted runner safe for fork PRs"
         )
@@ -161,6 +173,22 @@ def test_trusted_heavy_contains_contract_and_fast_gate_jobs() -> None:
     )
     assert "make test-contract" in commands
     assert "make test" in commands
+
+
+def test_hosted_pr_targets_disable_xdist() -> None:
+    """Hosted PR test targets must override the local xdist default serially."""
+    data = _load_workflow()
+    commands = [
+        step["run"]
+        for job_key in ("fast-tests", "heavy-contract-tests")
+        for step in data["jobs"][job_key]["steps"]
+        if isinstance(step.get("run"), str) and "make test" in step["run"]
+    ]
+    assert commands == [
+        "PYTEST_PARALLEL_ARGS= make test",
+        "PYTEST_PARALLEL_ARGS= make test-contract",
+    ]
+    assert all("-n" not in command and "--dist" not in command for command in commands)
 
 
 MAKEFILE = Path("Makefile")
