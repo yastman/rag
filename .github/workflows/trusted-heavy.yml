@@ -53,11 +53,8 @@ jobs:
   fast-tests:
     name: Fast Tests
     needs: changes
-    if: >
-      needs.changes.outputs.run_heavy == 'true' &&
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, Linux, X64, pr-fast]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -101,11 +98,8 @@ jobs:
   heavy-contract-tests:
     name: Heavy Contract Tests
     needs: changes
-    if: >
-      needs.changes.outputs.run_heavy == 'true' &&
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, Linux, X64, pr-fast]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
