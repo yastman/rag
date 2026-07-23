@@ -15,21 +15,21 @@ Scope: recovery evidence at `C:/Dev/projects-wsl-migrated-2026-07-13/rag-fresh-r
 | Genesis `C:/Dev/projects-wsl-migrated-2026-07-13/rag-fresh/..rag-fresh-genesis-agents` | `chore/genesis-agents` / `ba00dda12fe4d006130399712c65f56e880abe5d` | Clean; no unique commits versus `origin/dev` (which is one commit ahead) | **Inference: SUPERSEDED; retain pending owner decision.** |
 | Hosted-CI `C:/Dev/projects-wsl-migrated-2026-07-13/rag-fresh-ci-baseline-fix` | `fix/hosted-ci-baseline-20260722` / `b78be3b36ea48bd67704544ff948d401af179d7e` | Clean; exact remote twin; five genuinely unique patch-ids versus `origin/dev` | **Decision: KEEP.** Upstream repaired to `origin/fix/hosted-ci-baseline-20260722`. |
 | p30-clean `C:/Dev/projects-wsl-migrated-2026-07-13/rag-fresh-p30-clean` | `fix/windows-native-development-clean-20260722` / `e1c8cc533533f748eb5912c0c96f147fdde5bf70` | `+3/-87` versus `origin/dev`; 21 staged, 7 unstaged, 2 untracked | **Decision: KEEP.** Restore pointer: `p30-clean/RESTORE-NOTE.txt`; bundle: `p30-clean/branch.bundle`. |
-| p30-final `C:/Dev/projects-wsl-migrated-2026-07-13/rag-fresh-p30-final` | `fix/windows-p30-final-20260723` / `ba00dda12fe4d006130399712c65f56e880abe5d` | Four unstaged, two untracked; no unique commits versus `origin/dev` | **Inference: SUPERSEDED after recovery; retain pending owner decision.** Restore pointer: `p30-final/METADATA.md`. |
+| p30-final `C:/Dev/projects-wsl-migrated-2026-07-13/rag-fresh-p30-final` | `fix/windows-p30-final-20260723` / `ba00dda12fe4d006130399712c65f56e880abe5d` | Four unstaged, two untracked; no unique commits versus `origin/dev` | **Inference: SUPERSEDED after recovery; retain pending owner decision.** Restore pointer: `p30-final/RESTORE-NOTE.txt`. |
 | R0 phase | See baseline above | Clean before this manifest | **Decision: retain as recovery record.** |
 
 ## Recovery artifacts and integrity
 
-- Canonical: `canonical/SHA256SUMS.txt`, `canonical/FILE-INVENTORY.txt`, `canonical/RESTORE.txt`, and `canonical/HEAD-METADATA.txt` identify the restore base and artifacts. A post-snapshot `sha256sum -c` verified four listed files, but **did not fully verify** this manifest: `canonical_source_status.before` is absent from `canonical/` (it is at recovery-root) and `FILE-INVENTORY.txt` no longer matches its listed digest. Treat canonical checksums as evidence requiring owner review, not as a clean verification.
-- p30-clean: `p30-clean/SHA256SUMS.txt`, `p30-clean/INVENTORY.txt`, and `p30-clean/RESTORE-NOTE.txt`; all seven listed restore artifacts verified with `sha256sum -c`. `git bundle verify p30-clean/branch.bundle` reported a complete SHA-1 history containing `e1c8cc533533f748eb5912c0c96f147fdde5bf70`.
-- p30-final: `p30-final/METADATA.md` records SHA-256 values for `unstaged.patch`, `untracked.tar`, and duplicate untracked-file copies; it supplies the restore commands. No standalone checksum manifest was present.
-- Stash backup: `stash-0/RESTORE_NOTE.md`, `stash-0/sha256sums.txt`, and `stash-0/stash-metadata.json`; stash `stash@{0}` is commit `53dde6deedc8af20b8c63f8c5f8fd1ba89a92dc8`, based on `466ec7398037ddf2094395b9c2e221062c622bc9`. All payload entries verified; the listed digest for `sha256sums.txt` itself mismatches its current contents, so do not claim a whole-manifest clean verification.
+- Canonical: `canonical/SHA256SUMS.txt`, `canonical/FILE-INVENTORY.txt`, `canonical/RESTORE.txt`, and `canonical/HEAD-METADATA.txt` identify the restore base and artifacts. `sha256sum -c SHA256SUMS.txt` verified all seven entries, including both recovery-root status snapshots.
+- p30-clean: `p30-clean/SHA256SUMS.txt`, `p30-clean/INVENTORY.txt`, and `p30-clean/RESTORE-NOTE.txt`; Git for Windows `sha256sum -c SHA256SUMS.txt` verified all eight listed artifacts, including `branch.bundle`. `git bundle verify p30-clean/branch.bundle` reported a complete SHA-1 history containing `e1c8cc533533f748eb5912c0c96f147fdde5bf70`.
+- p30-final: `p30-final/SHA256SUMS.txt`, `p30-final/METADATA.md`, and `p30-final/RESTORE-NOTE.txt`; `sha256sum -c SHA256SUMS.txt` verified all seven listed artifacts.
+- Stash backup: `stash-0/RESTORE_NOTE.md`, `stash-0/sha256sums.txt`, and `stash-0/stash-metadata.json`; `sha256sum -c sha256sums.txt` verified all seven listed artifacts. Stash `stash@{0}` is commit `53dde6deedc8af20b8c63f8c5f8fd1ba89a92dc8`, based on `466ec7398037ddf2094395b9c2e221062c622bc9`.
 
 ## Checks and boundaries
 
 - `git fsck --full --no-reflogs` exited 0. It reported many dangling objects, but no corruption; dangling-object retention or pruning is outside this recovery action.
 - Canonical `git diff --check` exited 0 with only an LF/CRLF warning.
-- No claim is made that any dirty worktree was reconciled, restored, deleted, or otherwise resolved.
+- Restore notes use disposable clean worktrees and saved `git apply --binary` patches; destructive cleanup remains deferred.
 
 ## Deferred destructive actions — owner confirmation required
 
