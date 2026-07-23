@@ -1,6 +1,7 @@
 """Unit test specific fixtures for isolation."""
 
 import contextlib
+import importlib
 import sys
 from unittest.mock import MagicMock
 
@@ -270,14 +271,18 @@ def pytest_configure(config):
         _saved_modules["cachetools"] = sys.modules.get("cachetools")
         sys.modules["cachetools"] = MagicMock()
         _mocked_module_names.append("cachetools")
+    # -- langchain_core detection without static import ----------------------
+    # Use importlib.util.find_spec to check availability instead of a direct
+    # static import, avoiding unnecessary module loading in the core gate.
+    _langchain_core_spec = importlib.util.find_spec("langchain_core")
+    _langchain_core_real = (
+        "langchain_core" in sys.modules and not isinstance(sys.modules["langchain_core"], MagicMock)
+    ) or _langchain_core_spec is not None
+    if _langchain_core_real and "langchain_core" not in sys.modules:
+        import langchain_core  # noqa: F401 — register in sys.modules so CRM tools can import it
 
-    # langchain_core is installed; mark as real so CRM tools can import it.
-    with contextlib.suppress(ImportError):
-        import langchain_core  # noqa: F401
+        _saved_modules["langchain_core"] = None
     # -- langchain_core (optional archived CRM dep) -------------------------
-    _langchain_core_real = "langchain_core" in sys.modules and not isinstance(
-        sys.modules["langchain_core"], MagicMock
-    )
     if not _langchain_core_real:
         _lc_mods = [
             "langchain_core",

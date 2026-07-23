@@ -700,7 +700,7 @@ class TestCommandHandlers:
         assert "bot_cmd_metrics_test_sentinel_total" in call_args
 
     @pytest.mark.skip(reason="cmd_call removed — LiveKit/voice path archived")
-    async def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
+    def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
         """`/call` dispatch metadata should include langfuse_trace_id for continuity (#609)."""
         # cmd_call was removed with the voice path
 
