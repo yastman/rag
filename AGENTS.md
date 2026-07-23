@@ -1,6 +1,6 @@
 # AGENTS.md — OMP runbook for rag-fresh
 
-Operational routing only. Product/CLI facts live in `README.md`; read it only when needed.
+Operational routing only. Product/runtime facts live in `README.md`; read it only when needed.
 
 ## Bootstrap
 
@@ -14,23 +14,14 @@ reduces risk, context, or execution cost; explicit user choices take precedence.
 with owned target/base, never their contents, and read each once per session. Skills never expand
 ownership or mutation permissions.
 
-Always chat in Russian. Keep meeting data local, never expose `FIREFLIES_API_KEY`, never delete
-ignored `data/fireflies/` or historical `data/meetgeek/`, preserve original bytes/traceability,
-and require explicit `FIREFLIES_LIVE_SMOKE=1` for live calls.
 
 ## Local quality contract
 
-- After the first checkout, install both hooks with
-  `uv run pre-commit install --hook-type pre-commit --hook-type pre-push`.
-- Use `make test` for a test-only run (`uv run pytest` on Windows without GNU Make).
-- Use `make check` when no push follows or an explicit preflight is needed. On Windows without GNU
-  Make, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1`.
-- Pre-commit is the fast feedback loop and may rewrite staged files; inspect and restage its changes.
-- Pre-push is the full gate when pushing. It does not rewrite tracked source but may create ignored
-  caches; it runs Ruff, full-history Gitleaks, strict mypy, pytest, Bandit, and actionlint. Never
-  duplicate the same full gate on an unchanged candidate SHA.
-- Do not bypass either hook with `--no-verify` unless the user explicitly directs it. Live
-  Fireflies smoke tests are never part of the full local gate.
+- Core changes: run `make test-core` first.
+- Adapter or service changes: run `make test-core`, then `make test`.
+- Contract changes: run `make test-contract`.
+- Use `make test-full` only for a manual pre-merge full-suite check.
+- Run focused tests before the broader gate when the changed path has a narrower command.
 - GitHub's advisory guard independently checks Gitleaks, Ruff lint/format, and actionlint only. It
   does not replace a passing local gate. If a second developer or merge bot joins, move pytest,
   mypy, and Bandit into required CI.
@@ -45,7 +36,6 @@ and require explicit `FIREFLIES_LIVE_SMOKE=1` for live calls.
 | Code question/change | CodeGraph first; CodeIndexer only when semantic/history/diff context helps. |
 | Bug/test failure | Check CodeIndexer `solutions`, then diagnose before changing code. |
 | External API/library docs | Use Context7; delegate to `librarian` when research can run independently. |
-| Download/process meeting | Ask for explicit authorization to use the matching project skill named in `README.md`. |
 | Review | Fix the exact target and Git base; exclude unrelated dirty-checkout changes. The owning writer or reviewer inspects the complete target diff. Main verifies target/base, changed-file scope, integration state, refs, checks, and evidence, and may inspect the raw diff whenever risk or uncertainty warrants it. |
 | Actual merge/rebase conflict | Resolve from Git's authoritative conflict state. |
 
@@ -116,7 +106,7 @@ refs, errors, checks, and retained artifacts; handle them only when automatic in
 6. Main chooses review, PR, and delivery topology from risk, collaboration, and repository policy.
    After all cards, combine their committed outputs, require a clean tracked state, `git fetch
    origin`, merge fresh `origin/dev` without rebasing, and record candidate and tested-origin SHAs.
-7. Run one full gate on that candidate: pre-push when pushing, otherwise `make check`. Immediately
+7. Run `make test-full` once on that candidate. Immediately
    before integration fetch again; if `origin/dev` moved, repeat merge, commit, SHA recording, and
    gate. PR is optional; push or merge the exact candidate into `dev` without rewriting history.
 8. After external integration, `git fetch origin` and prove the candidate is an ancestor of
