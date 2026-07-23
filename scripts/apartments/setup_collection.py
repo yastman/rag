@@ -1,6 +1,9 @@
 """Create apartments Qdrant collection with vectors and payload indexes."""
 
-from qdrant_client import QdrantClient, models
+import argparse
+import sys
+
+from qdrant_client import QdrantClient
 from qdrant_client.models import (
     BinaryQuantization,
     BinaryQuantizationConfig,
@@ -11,6 +14,14 @@ from qdrant_client.models import (
     MultiVectorConfig,
     SparseVectorParams,
     VectorParams,
+)
+
+from scripts._qdrant_collection_setup import (
+    APARTMENT_PAYLOAD_INDEX_FIELDS,
+    get_qdrant_client,
+)
+from scripts._qdrant_collection_setup import (
+    create_payload_indexes as create_collection_payload_indexes,
 )
 
 
@@ -52,43 +63,21 @@ def create_apartments_collection(client: QdrantClient) -> None:
 
 
 def create_payload_indexes(client: QdrantClient) -> None:
-    """Create indexes for apartment payload fields (top-level, no metadata. prefix)."""
-    indexes = {
-        # Keyword (facets + exact match)
-        "complex_name": models.PayloadSchemaType.KEYWORD,
-        "city": models.PayloadSchemaType.KEYWORD,
-        "section": models.PayloadSchemaType.KEYWORD,
-        "apartment_number": models.PayloadSchemaType.KEYWORD,
-        "view_primary": models.PayloadSchemaType.KEYWORD,
-        "view_tags": models.PayloadSchemaType.KEYWORD,
-        # Integer (lookup + range)
-        "rooms": models.PayloadSchemaType.INTEGER,
-        "floor": models.PayloadSchemaType.INTEGER,
-        # Float (range + order_by)
-        "price_eur": models.PayloadSchemaType.FLOAT,
-        "area_m2": models.PayloadSchemaType.FLOAT,
-        # Bool
-        "is_furnished": models.PayloadSchemaType.BOOL,
-        "is_promotion": models.PayloadSchemaType.BOOL,
-    }
-
-    for field_name, schema in indexes.items():
-        try:
-            client.create_payload_index(
-                collection_name=COLLECTION_NAME,
-                field_name=field_name,
-                field_schema=schema,
-            )
-            print(f"  Index: {field_name} ({schema})")
-        except Exception as e:
-            print(f"  Warning: {field_name}: {e}")
+    """Create indexes for the apartment payload contract."""
+    create_collection_payload_indexes(client, COLLECTION_NAME, APARTMENT_PAYLOAD_INDEX_FIELDS)
 
 
-if __name__ == "__main__":
-    import os
+def main(argv: list[str] | None = None) -> int:
+    """Create the apartments collection and its payload indexes."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args(argv)
 
-    url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    client = QdrantClient(url=url)
+    client = get_qdrant_client()
     create_apartments_collection(client)
     create_payload_indexes(client)
     print("Done.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

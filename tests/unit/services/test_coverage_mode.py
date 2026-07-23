@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from src.runtime.services.coverage_mode import cap_results_per_doc, detect_coverage_mode
 from telegram_bot.graph.state import make_initial_state
-from telegram_bot.services.rag.coverage_mode import cap_results_per_doc, detect_coverage_mode
 
 
 def test_detect_coverage_mode_matches_enumeration_query() -> None:

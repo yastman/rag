@@ -24,6 +24,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 from typing import TYPE_CHECKING
 
 from qdrant_client.models import FieldCondition, Filter, MatchValue
@@ -64,6 +65,43 @@ def get_mime_type(relative_path: str) -> str:
 # Global manifest instance, initialised by run_once before scanning so that
 # file_id_from_content() can resolve stable, rename-aware ids.
 _manifest: FileManifest | None = None
+
+
+_source_locks: dict[str, Lock] = {}
+_source_locks_guard = Lock()
+
+
+def _lock_for_source(source_path: str) -> Lock:
+    """Return the process-local lock for replacements of one stable source."""
+    with _source_locks_guard:
+        return _source_locks.setdefault(source_path, Lock())
+
+
+def _file_ids_for_source(client: object, collection_name: str, source_path: str) -> set[str]:
+    """Return every file id currently stored for one stable source path."""
+    source_filter = Filter(
+        must=[FieldCondition(key="metadata.source", match=MatchValue(value=source_path))]
+    )
+    file_ids: set[str] = set()
+    offset = None
+    while True:
+        records, offset = client.scroll(  # type: ignore[attr-defined]
+            collection_name=collection_name,
+            scroll_filter=source_filter,
+            limit=256,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        for record in records:
+            payload = getattr(record, "payload", None)
+            if payload is None and isinstance(record, dict):
+                payload = record.get("payload")
+            metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+            if file_id := metadata.get("file_id"):
+                file_ids.add(str(file_id))
+        if offset is None:
+            return file_ids
 
 
 def file_id_from_content(filename: str, content: bytes | None) -> str:
@@ -168,22 +206,23 @@ def _ingest_directory(
                 "modified_time": datetime.now(UTC).isoformat(),
             }
 
-            # Sweep any prior version of this file before re-upserting. When
-            # content changes the manifest mints a NEW file_id, so the old
-            # version's points live under a different file_id that the
-            # post-upsert stale sweep (keyed on the new file_id) can't reach.
-            # source_path is stable across content changes — delete by it.
-            writer.delete_by_source_path_sync(source_path=rel, collection_name=collection)
-
-            stats = writer.upsert_chunks_sync(
-                chunks=chunks,
-                file_id=file_id,
-                source_path=rel,
-                file_metadata=file_metadata,
-                collection_name=collection,
-            )
-            if stats.errors:
-                raise RuntimeError("; ".join(stats.errors))
+            # A changed manifest entry gets a new file id. Snapshot and replace
+            # under the stable-source lock so a failed replacement preserves the
+            # old searchable points and concurrent replacements cannot sweep each
+            # other's new ids.
+            with _lock_for_source(rel):
+                old_file_ids = _file_ids_for_source(writer.client, collection, rel)
+                stats = writer.upsert_chunks_sync(
+                    chunks=chunks,
+                    file_id=file_id,
+                    source_path=rel,
+                    file_metadata=file_metadata,
+                    collection_name=collection,
+                )
+                if stats.errors:
+                    raise RuntimeError("; ".join(stats.errors))
+                for old_file_id in old_file_ids - {file_id}:
+                    writer.delete_file_sync(file_id=old_file_id, collection_name=collection)
 
             result.processed += 1
             logger.info("Indexed %s (%d chunks)", rel, stats.points_upserted)

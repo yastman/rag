@@ -61,42 +61,6 @@ def mock_bge_client():
 
 
 @pytest.fixture
-def mock_voyage():
-    """Mock VoyageService client (Voyage API path)."""
-    voyage = MagicMock()
-    voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-    voyage._model_docs = "voyage-4-large"
-    return voyage
-
-
-@pytest.fixture
-def writer_voyage(mock_qdrant_client, mock_bge_client, mock_voyage):
-    """QdrantHybridWriter using Voyage for dense embeddings."""
-    with (
-        patch(
-            "src.ingestion.unified.qdrant_writer.QdrantClient",
-            return_value=mock_qdrant_client,
-        ),
-        patch(
-            "src.services.bge_m3_client.BGEM3SyncClient",
-            return_value=mock_bge_client,
-        ),
-        patch(
-            "src.services.voyage.VoyageService",
-            return_value=mock_voyage,
-        ),
-    ):
-        w = QdrantHybridWriter(
-            qdrant_url="http://localhost:6333",
-        )
-    # After construction, inject mocks so tests can set side_effects.
-    w.client = mock_qdrant_client
-    w._bge_client = mock_bge_client
-    w.voyage = mock_voyage
-    yield w
-
-
-@pytest.fixture
 def writer_local(mock_qdrant_client, mock_bge_client):
     """QdrantHybridWriter using local BGE-M3 for all embeddings."""
     with (

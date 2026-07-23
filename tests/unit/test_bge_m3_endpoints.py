@@ -10,9 +10,12 @@ Gate test (no fastapi required):
     httpx; verifies colbert encode returns list-of-vectors each with 1024-dim.
 """
 
+import asyncio
+import logging
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import numpy as np
@@ -350,6 +353,66 @@ class TestPartialFailureIsolation:
             assert resp.status_code == 500
         finally:
             fake_model.encode = original_encode  # restore original method
+
+
+@pytest.mark.requires_extras
+def test_hybrid_partial_failures_flow_from_service_through_writer(bge_app, caplog) -> None:
+    """Empty inputs emitted by the service must be skipped before Qdrant upsert."""
+    from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
+    from src.services.bge_m3_client import BGEM3SyncClient
+
+    qdrant = MagicMock()
+    qdrant.count.return_value = MagicMock(count=0)
+    qdrant.scroll.return_value = ([], None)
+
+    async def dispatch(request: httpx.Request) -> httpx.Response:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=bge_app["app"]), base_url="http://service"
+        ) as service_client:
+            response = await service_client.request(
+                request.method,
+                request.url.path,
+                content=request.content,
+                headers=request.headers,
+            )
+        return httpx.Response(
+            response.status_code,
+            content=response.content,
+            headers=response.headers,
+            request=request,
+        )
+
+    bge_client = BGEM3SyncClient(base_url="http://service")
+    bge_client._client = httpx.Client(
+        transport=httpx.MockTransport(lambda request: asyncio.run(dispatch(request)))
+    )
+    with (
+        patch("src.ingestion.unified.qdrant_writer.QdrantClient", return_value=qdrant),
+        patch("src.services.bge_m3_client.BGEM3SyncClient", return_value=bge_client),
+    ):
+        writer = QdrantHybridWriter(qdrant_url="http://qdrant")
+
+    chunks = [
+        SimpleNamespace(
+            text=text,
+            order=index,
+            extra_metadata={},
+            document_name="test.pdf",
+            page_range=None,
+            section=None,
+            chunk_id=index,
+        )
+        for index, text in enumerate(("valid chunk", "", " \t "))
+    ]
+    try:
+        with caplog.at_level(logging.WARNING, logger="src.ingestion.unified.qdrant_writer"):
+            stats = writer.upsert_chunks_sync(chunks, "fid", "/p", {}, "col")
+    finally:
+        bge_client.close()
+
+    points = qdrant.upsert.call_args.kwargs["points"]
+    assert len(points) == stats.points_upserted == 1
+    assert any("indices=[1, 2]" in record.message for record in caplog.records)
 
 
 # ── ONNX output contract tests ─────────────────────────────────────────────────

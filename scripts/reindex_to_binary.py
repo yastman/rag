@@ -22,14 +22,29 @@ from typing import Any, cast
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 
-# Import collection setup from sibling script
-from setup_binary_collection import (
-    collection_exists,
-    create_binary_collection,
-    create_payload_indexes,
-    get_binary_collection_name,
-    print_collection_info,
-)
+
+# Import collection setup from sibling script.
+try:
+    from scripts._qdrant_collection_setup import get_qdrant_client as _get_qdrant_client
+except ModuleNotFoundError:
+    from _qdrant_collection_setup import get_qdrant_client as _get_qdrant_client
+
+try:
+    from scripts.setup_binary_collection import (
+        collection_exists,
+        create_binary_collection,
+        create_payload_indexes,
+        get_binary_collection_name,
+        print_collection_info,
+    )
+except ModuleNotFoundError:
+    from setup_binary_collection import (
+        collection_exists,
+        create_binary_collection,
+        create_payload_indexes,
+        get_binary_collection_name,
+        print_collection_info,
+    )
 
 
 @dataclass
@@ -43,15 +58,8 @@ class ReindexStats:
 
 
 def get_qdrant_client() -> QdrantClient:
-    """Create Qdrant client from environment variables."""
-    url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    api_key = os.getenv("QDRANT_API_KEY")
-
-    return QdrantClient(
-        url=url,
-        api_key=api_key,
-        timeout=120,  # Longer timeout for batch operations
-    )
+    """Create the longer-timeout Qdrant client used for batch reindexing."""
+    return _get_qdrant_client(timeout=120, announce=False)
 
 
 def get_source_collection_info(client: QdrantClient, collection_name: str) -> dict:

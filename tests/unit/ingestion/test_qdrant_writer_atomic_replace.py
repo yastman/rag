@@ -64,18 +64,18 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
     was upserted.
     """
 
-    def test_voyage_embedding_failure_does_not_call_delete(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+    def test_bge_m3_embedding_failure_does_not_call_delete(
+        self, writer_local, mock_qdrant_client, mock_bge_client
     ):
         """When hybrid embedding raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=5)
-        mock_bge_client.encode_hybrid.side_effect = RuntimeError("Voyage API down")
+        mock_bge_client.encode_hybrid.side_effect = RuntimeError("BGE-M3 embedding failed")
 
         chunk = _make_chunk()
-        stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
-        assert "Voyage API down" in stats.errors[0]
+        assert "BGE-M3 embedding failed" in stats.errors[0]
         # The destructive delete must not have run before the failed embed
         mock_qdrant_client.delete.assert_not_called()
         # And no upsert happened either, so points_upserted stays 0
@@ -83,14 +83,14 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
         mock_qdrant_client.upsert.assert_not_called()
 
     def test_sparse_embedding_failure_does_not_call_delete(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer_local, mock_qdrant_client, mock_bge_client
     ):
         """When BGE-M3 hybrid encode raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
         mock_bge_client.encode_hybrid.side_effect = RuntimeError("BGE-M3 timeout")
 
         chunk = _make_chunk()
-        stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
         assert "BGE-M3 timeout" in stats.errors[0]
@@ -113,14 +113,14 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
         mock_qdrant_client.upsert.assert_not_called()
 
     def test_upsert_failure_does_not_call_delete(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer_local, mock_qdrant_client, mock_bge_client
     ):
         """When the upsert call to Qdrant raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=4)
         mock_qdrant_client.upsert.side_effect = RuntimeError("Qdrant upsert failed")
 
         chunk = _make_chunk()
-        stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
         assert "Qdrant upsert failed" in stats.errors[0]
@@ -135,7 +135,7 @@ class TestSuccessPathOrderingIsUpsertThenDelete:
     """
 
     def test_upsert_called_before_delete_on_success(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer_local, mock_qdrant_client, mock_bge_client
     ):
         """Calls to client.upsert must precede client.delete in time."""
         call_order: list[str] = []
@@ -152,7 +152,7 @@ class TestSuccessPathOrderingIsUpsertThenDelete:
         mock_qdrant_client.upsert.side_effect = lambda **_: call_order.append("upsert")
 
         chunk = _make_chunk()
-        stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is None
         # Upsert must come before any delete
@@ -175,7 +175,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
     """
 
     def test_stale_delete_uses_id_based_selector_when_orphans_exist(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer_local, mock_qdrant_client, mock_bge_client
     ):
         """When stale chunks exist (old ids not in the new batch), delete uses HasId."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
@@ -194,7 +194,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         )
 
         chunk = _make_chunk(text="text 0", order=0)
-        stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is None
         assert stats.points_upserted == 1
@@ -226,7 +226,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         assert new_chunk_id not in deleted_ids
 
     def test_no_stale_delete_when_every_old_id_is_replaced(
-        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+        self, writer_local, mock_qdrant_client, mock_bge_client
     ):
         """If every existing point is replaced by an upsert with the same id, skip delete."""
         mock_qdrant_client.count.return_value = MagicMock(count=2)
@@ -244,7 +244,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         )
 
         chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(2)]
-        stats = writer_voyage.upsert_chunks_sync(chunks, "file_1", "/p", {}, "col")
+        stats = writer_local.upsert_chunks_sync(chunks, "file_1", "/p", {}, "col")
 
         assert stats.errors is None
         assert stats.points_upserted == 2

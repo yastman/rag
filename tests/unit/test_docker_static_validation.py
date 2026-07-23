@@ -32,6 +32,9 @@ COMPOSE_CI_ENV = Path("tests/fixtures/compose.ci.env")
 COMPOSE_FILE = Path("compose.yml")
 ENV_EXAMPLE = Path(".env.example")
 QDRANT_STACK_DOC = Path("docs/QDRANT_STACK.md")
+QDRANT_IMAGE = (
+    "qdrant/qdrant:v1.18.3@sha256:0bd98fa7977f1e75694779359ca4e212822e5a71334e28421182f72f209d5286"
+)
 
 
 def _docker_available() -> bool:
@@ -195,6 +198,15 @@ def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
     assert "python3.13" in text or "python:3.13" in text, (
         f"{dockerfile} must use Python 3.13 runtime for langfuse SDK compatibility"
     )
+
+
+@pytest.mark.parametrize("compose_file", [COMPOSE_FILE, Path("compose.core.yml")])
+def test_qdrant_image_uses_verified_v1183_pin(compose_file: Path) -> None:
+    """Both compose variants must use the verified Qdrant v1.18.3 manifest pin."""
+    import yaml
+
+    compose = yaml.safe_load(compose_file.read_text())
+    assert compose["services"]["qdrant"]["image"] == QDRANT_IMAGE
 
 
 def test_qdrant_stack_doc_matches_compose_version() -> None:
