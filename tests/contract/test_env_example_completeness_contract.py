@@ -126,6 +126,7 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "JUDGE_SAMPLE_RATE": "LLM-judge runtime sampling rate; eval-suite only",
     "REPO_BASE_BRANCH": "scripts/lib base-branch resolver; CI/dev tooling",
     "PR_GUARDRAILS_CHANGED_FILES": "PR guardrails test override; CI/dev tooling",
+    "SKILLS_DIR": "Test-only / scripts env var for .kiro/skills path override; consumed by scripts/tests/*contract.py and shell CI scripts, not operator bot config",
     # --- OpenTelemetry SDK internals (set per-service in Compose, not .env) -
     "UV_LINK_MODE": "uv-only; documented in CONTRIBUTING/Makefile",
     "UV_PROJECT_ENVIRONMENT": "uv-only; managed by uv",
@@ -234,6 +235,8 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
         "the scanner only detects AliasChoices(), not plain alias=; "
         "legitimate operator-facing setting for voice E2E scenarios (#1486)"
     ),
+    # --- BGE-M3 / Docling / Tokenizers env kept for operator docs -----------
+    "DOCLING_TOKENIZER": "Not read by Python code; kept for operator reference per .env.example comment",
 }
 
 

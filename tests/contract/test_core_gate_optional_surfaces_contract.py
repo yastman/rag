@@ -89,11 +89,21 @@ def test_make_test_does_not_run_optional_surface_paths_or_targets() -> None:
 
 
 def test_optional_surface_files_use_registered_requires_extras_marker() -> None:
+    """Optional surface files must use the ``requires_extras`` marker.
+
+    Files in directories listed in ``OPTIONAL_REQUIRES_EXTRAS_DIRS`` must
+    carry ``pytest.mark.requires_extras`` either as a module-level
+    ``pytestmark`` variable or as individual test/method decorators.
+
+    Mixed files (those with both fast-lane and extras-heavy tests) use
+    per-test ``@pytest.mark.requires_extras`` decorators so fast-lane tests
+    remain accessible in the core deterministic gate.
+    """
     missing: list[str] = []
     for rel_dir in OPTIONAL_REQUIRES_EXTRAS_DIRS:
         for test_file in sorted((REPO_ROOT / rel_dir).glob("test*.py")):
             text = test_file.read_text(encoding="utf-8")
-            if "pytestmark" not in text or "pytest.mark.requires_extras" not in text:
+            if "pytest.mark.requires_extras" not in text:
                 missing.append(str(test_file.relative_to(REPO_ROOT)))
 
     assert missing == []

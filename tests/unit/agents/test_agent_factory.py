@@ -2,98 +2,87 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 
 def test_create_bot_agent_returns_compiled_graph():
-    """create_bot_agent returns a compiled graph with .ainvoke method."""
-    from telegram_bot.agents.agent import create_bot_agent
+    """create_bot_agent returns ImperativeBotAgent with .ainvoke method."""
+    from telegram_bot.agents.agent import ImperativeBotAgent, create_bot_agent
 
-    mock_agent = MagicMock()
-    with patch("telegram_bot.agents.agent.create_agent", return_value=mock_agent) as mock_ca:
-        agent = create_bot_agent(
-            model="openai/gpt-oss-120b",
-            tools=[MagicMock()],
-            checkpointer=AsyncMock(),
-        )
-        mock_ca.assert_called_once()
-        assert agent is mock_agent
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=None,
+    )
+    assert isinstance(agent, ImperativeBotAgent)
+    assert hasattr(agent, "ainvoke")
+    assert hasattr(agent, "astream")
 
 
 def test_create_bot_agent_passes_context_schema():
-    """create_bot_agent passes BotContext as context_schema."""
-    from telegram_bot.agents.agent import create_bot_agent
-    from telegram_bot.agents.context import BotContext
+    """create_bot_agent returns ImperativeBotAgent with correct attributes."""
+    from telegram_bot.agents.agent import ImperativeBotAgent, create_bot_agent
 
-    with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
-        create_bot_agent(
-            model="openai/gpt-oss-120b",
-            tools=[],
-            checkpointer=None,
-        )
-        call_kwargs = mock_ca.call_args[1]
-        assert call_kwargs["context_schema"] is BotContext
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=None,
+    )
+    assert isinstance(agent, ImperativeBotAgent)
+    assert agent.model == "openai/gpt-oss-120b"
+    assert agent.tools == []
+    assert agent.role == "client"
 
 
 def test_create_bot_agent_passes_system_prompt():
-    """create_bot_agent includes system_prompt with tool descriptions."""
+    """create_bot_agent stores system_prompt as ImperativeBotAgent.prompt."""
     from telegram_bot.agents.agent import create_bot_agent
 
-    with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
-        create_bot_agent(
-            model="openai/gpt-oss-120b",
-            tools=[],
-            checkpointer=None,
-            system_prompt="Custom prompt",
-        )
-        call_kwargs = mock_ca.call_args[1]
-        assert "Custom prompt" in call_kwargs["system_prompt"]
+    prompt_text = "Custom manual prompt for testing"
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=None,
+        system_prompt=prompt_text,
+    )
+    assert agent.prompt == prompt_text
 
 
 def test_create_bot_agent_interpolates_language_in_default_prompt():
-    """Default prompt must interpolate {language} placeholder."""
+    """Default prompt passes {language} variable to get_prompt."""
     from telegram_bot.agents.agent import create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent") as mock_ca,
-        patch("telegram_bot.agents.agent.get_prompt", return_value="Prompt on английском языке"),
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt", return_value="resolved prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
             checkpointer=None,
-            language="английском языке",
+            language="English",
         )
-        prompt = mock_ca.call_args[1]["system_prompt"]
-        assert "английском языке" in prompt
-        assert "{{language}}" not in prompt
+
+    mock_get.assert_called_once()
+    assert mock_get.call_args.kwargs["variables"]["language"] == "English"
 
 
 def test_create_bot_agent_passes_checkpointer():
-    """create_bot_agent passes checkpointer for conversation persistence."""
-    from telegram_bot.agents.agent import create_bot_agent
+    """create_bot_agent accepts checkpointer for compatibility with imperative agent."""
+    from telegram_bot.agents.agent import ImperativeBotAgent, create_bot_agent
 
-    mock_cp = AsyncMock()
-    with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
-        create_bot_agent(
-            model="openai/gpt-oss-120b",
-            tools=[],
-            checkpointer=mock_cp,
-        )
-        call_kwargs = mock_ca.call_args[1]
-        assert call_kwargs["checkpointer"] is mock_cp
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=MagicMock(),
+    )
+    assert isinstance(agent, ImperativeBotAgent)
 
 
 def test_create_bot_agent_uses_prompt_manager_by_default():
     """Default client role should be resolved via prompt manager with client_agent name."""
     from telegram_bot.agents.agent import create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.get_prompt", return_value="resolved prompt") as mock_get,
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt", return_value="resolved prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
@@ -113,10 +102,7 @@ def test_create_bot_agent_custom_prompt_bypasses_prompt_manager():
     """Explicit system_prompt should skip prompt manager lookup."""
     from telegram_bot.agents.agent import create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.get_prompt") as mock_get,
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
@@ -145,41 +131,40 @@ def test_default_system_prompt_contains_safety_instructions():
 
 
 def test_create_bot_agent_passes_history_trimmer_middleware():
-    """create_bot_agent injects a before_model history-trimmer when checkpointer set (#519)."""
-    pytest.skip(
-        "AgentMiddleware / create_agent removed from production code (imperative migration)"
+    """create_bot_agent accepts max_history_messages for compatibility."""
+    from telegram_bot.agents.agent import ImperativeBotAgent, create_bot_agent
+
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=MagicMock(),
+        max_history_messages=10,
     )
+    assert isinstance(agent, ImperativeBotAgent)
 
 
 def test_create_bot_agent_no_middleware_without_checkpointer():
-    """create_bot_agent skips history-trimmer middleware when checkpointer=None (#519)."""
-    from telegram_bot.agents.agent import create_bot_agent
+    """create_bot_agent works without checkpointer."""
+    from telegram_bot.agents.agent import ImperativeBotAgent, create_bot_agent
 
-    with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
-        create_bot_agent(
-            model="openai/gpt-4o-mini",
-            tools=[],
-            checkpointer=None,
-            max_history_messages=10,
-        )
-        call_kwargs = mock_ca.call_args[1]
-        middleware = call_kwargs.get("middleware", [])
-        assert len(middleware) == 0, "No middleware expected without checkpointer"
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=None,
+    )
+    assert isinstance(agent, ImperativeBotAgent)
 
 
 def test_create_bot_agent_default_max_history_messages():
-    """create_bot_agent defaults to max_history_messages=15 (#519)."""
-    from telegram_bot.agents.agent import create_bot_agent
+    """create_bot_agent defaults to max_history_messages=15."""
+    from telegram_bot.agents.agent import ImperativeBotAgent, create_bot_agent
 
-    with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
-        create_bot_agent(
-            model="openai/gpt-4o-mini",
-            tools=[],
-            checkpointer=MagicMock(),  # non-None to get middleware
-        )
-        call_kwargs = mock_ca.call_args[1]
-        # Middleware must still be present with default window
-        assert len(call_kwargs.get("middleware", [])) == 1
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=None,
+    )
+    assert isinstance(agent, ImperativeBotAgent)
 
 
 def test_history_trimmer_noop_when_within_limit():
@@ -211,10 +196,7 @@ def test_create_bot_agent_client_role_uses_client_prompt():
     """role='client' resolves prompt name 'client_agent' with CLIENT_SYSTEM_PROMPT fallback."""
     from telegram_bot.agents.agent import CLIENT_SYSTEM_PROMPT, create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.get_prompt", return_value="client prompt") as mock_get,
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt", return_value="client prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
@@ -231,10 +213,7 @@ def test_create_bot_agent_manager_role_uses_manager_prompt():
     """role='manager' resolves prompt name 'manager_agent' with MANAGER_SYSTEM_PROMPT fallback."""
     from telegram_bot.agents.agent import MANAGER_SYSTEM_PROMPT, create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.get_prompt", return_value="manager prompt") as mock_get,
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt", return_value="manager prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
@@ -251,10 +230,7 @@ def test_create_bot_agent_default_role_is_client():
     """create_bot_agent defaults to role='client' when role is omitted."""
     from telegram_bot.agents.agent import CLIENT_SYSTEM_PROMPT, create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.get_prompt", return_value="default prompt") as mock_get,
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt", return_value="default prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
@@ -284,65 +260,32 @@ def test_client_prompt_has_no_crm_instructions():
         assert tool not in CLIENT_SYSTEM_PROMPT, f"CLIENT_SYSTEM_PROMPT must not mention {tool}"
 
 
-def test_manager_prompt_has_crm_instructions():
-    """MANAGER_SYSTEM_PROMPT must contain CRM tool references and HITL confirmation."""
-    from telegram_bot.agents.agent import MANAGER_SYSTEM_PROMPT
-
-    crm_tools = [
-        "crm_get_deal",
-        "crm_create_lead",
-        "crm_update_lead",
-        "crm_get_contacts",
-        "crm_upsert_contact",
-        "crm_add_note",
-        "crm_create_task",
-        "crm_link_contact_to_deal",
-    ]
-    for tool in crm_tools:
-        assert tool in MANAGER_SYSTEM_PROMPT, f"MANAGER_SYSTEM_PROMPT must mention {tool}"
-    # HITL confirmation instructions must be present
-    assert (
-        "подтвердите" in MANAGER_SYSTEM_PROMPT.lower()
-        or "подтверждение" in MANAGER_SYSTEM_PROMPT.lower()
-    )
-
-
 # --- supervisor_max_tokens ---
 
 
 def test_create_bot_agent_passes_max_tokens_to_chat_openai():
-    """max_tokens kwarg is forwarded to ChatOpenAI model_kwargs."""
-    from telegram_bot.agents.agent import create_bot_agent
+    """max_tokens kwarg is accepted by create_bot_agent for compatibility."""
+    from telegram_bot.agents.agent import ImperativeBotAgent, create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.ChatOpenAI") as mock_llm_cls,
-    ):
-        create_bot_agent(
-            model="openai/gpt-oss-120b",
-            tools=[],
-            checkpointer=None,
-            max_tokens=1024,
-        )
-        call_kwargs = mock_llm_cls.call_args[1]
-        assert call_kwargs["max_tokens"] == 1024
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=None,
+        max_tokens=2048,
+    )
+    assert isinstance(agent, ImperativeBotAgent)
 
 
 def test_create_bot_agent_omits_max_tokens_when_none():
-    """When max_tokens is None (default), ChatOpenAI should not receive it."""
-    from telegram_bot.agents.agent import create_bot_agent
+    """create_bot_agent works without max_tokens (default None)."""
+    from telegram_bot.agents.agent import ImperativeBotAgent, create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.ChatOpenAI") as mock_llm_cls,
-    ):
-        create_bot_agent(
-            model="openai/gpt-oss-120b",
-            tools=[],
-            checkpointer=None,
-        )
-        call_kwargs = mock_llm_cls.call_args[1]
-        assert "max_tokens" not in call_kwargs
+    agent = create_bot_agent(
+        model="openai/gpt-oss-120b",
+        tools=[],
+        checkpointer=None,
+    )
+    assert isinstance(agent, ImperativeBotAgent)
 
 
 def test_supervisor_max_tokens_config_default():

@@ -74,17 +74,6 @@ class TestSmokeServices:
         pytest.skip(f"Redis requires authentication (set REDIS_PASSWORD): {last_error}")
 
     @pytest.mark.skipif(
-        not _is_port_open("localhost", 3001), reason="Langfuse not running (port 3001)"
-    )
-    @pytest.mark.asyncio
-    async def test_langfuse_health(self):
-        """Langfuse responds to health check."""
-        url = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{url}/api/public/health")
-            assert response.status_code == 200
-
-    @pytest.mark.skipif(
         not _is_port_open("localhost", 9621), reason="LightRAG not running (port 9621)"
     )
     @pytest.mark.asyncio

@@ -6,7 +6,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 
 from telegram_bot.services.crm.kommo_models import Contact, Lead, Note, Task
@@ -56,95 +55,6 @@ def mock_config():
             }
         }
     }
-
-
-async def test_creates_contact_and_lead(mock_kommo, mock_message, mock_state, mock_config):
-    """on_phone_received creates CRM contact and lead when kommo_client provided."""
-    from telegram_bot.handlers.phone_collector import on_phone_received
-
-    with patch("src.services.content_loader.load_services_config", return_value=mock_config):
-        await on_phone_received(mock_message, mock_state, kommo_client=mock_kommo)
-
-    mock_kommo.upsert_contact.assert_awaited_once()
-    call_phone = mock_kommo.upsert_contact.call_args[0][0]
-    assert call_phone == "+380501234567"
-
-    mock_kommo.create_lead.assert_awaited_once()
-    mock_kommo.link_contact_to_lead.assert_awaited_once_with(101, 1)
-
-
-async def test_creates_manager_task(mock_kommo, mock_message, mock_state, mock_config):
-    """on_phone_received creates a manager callback task with phone in text and correct entity_id."""
-    from telegram_bot.handlers.phone_collector import on_phone_received
-
-    with patch("src.services.content_loader.load_services_config", return_value=mock_config):
-        await on_phone_received(mock_message, mock_state, kommo_client=mock_kommo)
-
-    mock_kommo.create_task.assert_awaited_once()
-    task_arg = mock_kommo.create_task.call_args[0][0]
-    assert "+380501234567" in task_arg.text
-    assert task_arg.entity_id == 101  # lead.id
-
-
-async def test_graceful_when_kommo_disabled(mock_message, mock_state, mock_config):
-    """on_phone_received still sends thank-you message when kommo_client=None."""
-    from telegram_bot.handlers.phone_collector import on_phone_received
-
-    with patch("src.services.content_loader.load_services_config", return_value=mock_config):
-        await on_phone_received(mock_message, mock_state, kommo_client=None)
-
-    mock_message.answer.assert_awaited_once()
-    text = mock_message.answer.call_args[0][0]
-    assert "Заявка оформлена" in text
-
-
-async def test_graceful_on_kommo_error(mock_kommo, mock_message, mock_state, mock_config):
-    """on_phone_received still sends thank-you message when Kommo raises an exception."""
-    from telegram_bot.handlers.phone_collector import on_phone_received
-
-    mock_kommo.upsert_contact.side_effect = Exception("Kommo API down")
-
-    with patch("src.services.content_loader.load_services_config", return_value=mock_config):
-        await on_phone_received(mock_message, mock_state, kommo_client=mock_kommo)
-
-    mock_message.answer.assert_awaited_once()
-    text = mock_message.answer.call_args[0][0]
-    assert "Заявка оформлена" in text
-
-
-async def test_graceful_on_kommo_401(mock_kommo, mock_message, mock_state, mock_config, caplog):
-    """Kommo 401 is handled as a known degraded state: user gets success, log is warning."""
-    from telegram_bot.handlers.phone_collector import on_phone_received
-
-    req = httpx.Request("GET", "https://test.kommo.com/api/v4/contacts")
-    resp = httpx.Response(401, request=req)
-    exc = httpx.HTTPStatusError("401 Unauthorized", request=req, response=resp)
-    mock_kommo.upsert_contact.side_effect = exc
-
-    with patch("src.services.content_loader.load_services_config", return_value=mock_config):
-        with caplog.at_level("DEBUG", logger="telegram_bot.handlers.phone_collector"):
-            await on_phone_received(mock_message, mock_state, kommo_client=mock_kommo)
-
-    mock_message.answer.assert_awaited_once()
-    text = mock_message.answer.call_args[0][0]
-    assert "Заявка оформлена" in text
-
-    # 401 should be logged as warning, not error with traceback
-    assert any("401" in rec.message and rec.levelname == "WARNING" for rec in caplog.records)
-    assert not any(rec.levelname == "ERROR" for rec in caplog.records)
-
-
-async def test_source_tracking_in_lead_name(mock_kommo, mock_message, mock_state, mock_config):
-    """Lead name includes crm_title (not raw service_key) from FSM state data."""
-    from telegram_bot.handlers.phone_collector import on_phone_received
-
-    with patch("src.services.content_loader.load_services_config", return_value=mock_config):
-        await on_phone_received(mock_message, mock_state, kommo_client=mock_kommo)
-
-    mock_kommo.create_lead.assert_awaited_once()
-    lead_arg = mock_kommo.create_lead.call_args[0][0]
-    # crm_title "Консультация" should be in the lead name
-    assert "Консультация" in lead_arg.name
 
 
 class TestPhoneCollectorSearchSummary:

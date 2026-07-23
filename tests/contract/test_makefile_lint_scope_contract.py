@@ -27,7 +27,7 @@ REPO = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO / "Makefile"
 CI_YML = REPO / ".github" / "workflows" / "ci.yml"
 
-REQUIRED_PATHS = ["src/", "telegram_bot/", "mini_app/", "services/", "scripts/"]
+REQUIRED_PATHS = ["src/", "telegram_bot/", "services/", "scripts/"]
 
 
 def _makefile_text() -> str:

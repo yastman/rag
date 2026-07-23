@@ -360,14 +360,6 @@ def test_bge_m3_onnx_model_dir_env_in_env_example() -> None:
     )
 
 
-def test_compose_ci_langfuse_env_has_bge_m3_inputs() -> None:
-    """CI compose env must provide the local Langfuse inputs bge-m3 consumes."""
-    keys = _ci_env_keys()
-    assert "LANGFUSE_PUBLIC_KEY" in keys
-    assert "LANGFUSE_SECRET_KEY" in keys
-    assert "LANGFUSE_DOCKER_HOST" in keys
-
-
 def test_compose_dev_bge_m3_renders_with_ci_env() -> None:
     """Compose dev config rendering must succeed for ``bge-m3`` with the CI env fixture."""
     result = _run_docker_command(

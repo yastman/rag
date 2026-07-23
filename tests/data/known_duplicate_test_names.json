@@ -105,18 +105,13 @@
     "tests/unit/ingestion/test_qdrant_hybrid_target.py",
     "tests/unit/ingestion/test_unified_manifest.py"
   ],
-  "test_docling_health": [
-    "tests/integration/test_docker_services.py",
-    "tests/smoke/test_smoke_services.py"
-  ],
   "test_empty_query": [
     "tests/unit/services/test_filter_extractor.py",
     "tests/unit/services/test_voyage_integration.py"
   ],
   "test_empty_results": [
     "tests/unit/dialogs/test_funnel.py",
-    "tests/unit/retrieval/test_search_engines.py",
-    "tests/unit/test_run_experiment.py"
+    "tests/unit/retrieval/test_search_engines.py"
   ],
   "test_empty_string": [
     "tests/unit/graph/test_guard_node.py",

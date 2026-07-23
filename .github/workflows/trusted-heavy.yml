@@ -53,11 +53,8 @@ jobs:
   fast-tests:
     name: Fast Tests
     needs: changes
-    if: >
-      needs.changes.outputs.run_heavy == 'true' &&
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, Linux, X64, pr-fast]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -74,7 +71,7 @@ jobs:
         run: uv venv --python 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra telegram
 
       - name: Compile repo Python files (#2320)
         run: make compile-python
@@ -85,13 +82,14 @@ jobs:
       - name: Run fast tests with coverage gate
         # cov-fail-under ratcheted to 9 — safe floor below measured 9.80% combined
         # baseline (card_d880b32250dc / docs/audits/coverage-baseline.md).
-        # Run only on src/core + src/runtime (the units exercised by the fast suite).
+        # Run only on tests/unit/ sequentially (no -n/dist=worksteal) to avoid
+        # nonexistent tests/core + tests/runtime paths previously listed.
         # Raise the ratchet as coverage grows; do NOT set to aspirational 80.
         run: >
+          PYTHONDONTWRITEBYTECODE=1
           PYTHONPATH=scripts/covfix
-          uv run pytest tests/unit/ tests/core/ tests/runtime/
+          uv run pytest tests/unit/
           --ignore=tests/unit/telegram_bot
-          -n auto --dist=worksteal
           -q --timeout=30
           -m "not legacy_api and not requires_extras and not slow"
           --cov=src --cov=telegram_bot
@@ -101,11 +99,8 @@ jobs:
   heavy-contract-tests:
     name: Heavy Contract Tests
     needs: changes
-    if: >
-      needs.changes.outputs.run_heavy == 'true' &&
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, Linux, X64, pr-fast]
+    if: needs.changes.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -122,7 +117,7 @@ jobs:
         run: uv venv --python 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra telegram
 
       - name: Run contract tests
         run: make test-contract

@@ -139,3 +139,65 @@ def test_rag_api_main_imports_scoring_from_src() -> None:
         f"#1948 slice 5 regression: {RAG_API_MAIN.relative_to(REPO_ROOT)} "
         "must not import from telegram_bot.scoring anymore."
     )
+
+
+# ---------------------------------------------------------------------------
+# 6. Behavioral contract — no-op writers and real compute helper
+# ---------------------------------------------------------------------------
+
+
+NOOP_SCORERS: tuple[str, ...] = (
+    "score",
+    "write_crm_scores",
+    "write_history_scores",
+    "write_pipeline_scores",
+    "write_scores",
+)
+
+
+class _BrokenClient:
+    """Sentinel that raises if a no-op mistakenly touches it."""
+
+    def __getattr__(self, name: str) -> None:
+        msg = f"No-op must not call client.{name} — tracing removed since #2844."
+        raise AssertionError(msg)
+
+
+@pytest.mark.parametrize("name", NOOP_SCORERS)
+def test_scoring_noop_returns_none(name: str) -> None:
+    """Every no-op writer must return ``None`` when called with typical args
+    and must NOT call any client method on the provided ``lf`` object.
+    """
+    mod = importlib.import_module("src.scoring")
+    fn = getattr(mod, name)
+
+    broken = _BrokenClient()
+    result = None  # sentinel
+    if name == "score":
+        result = fn(broken, "test-trace", name="test", value=1.0)
+    elif name == "write_crm_scores":
+        result = fn(broken, [], trace_id="test-trace")
+    elif name == "write_history_scores":
+        result = fn(broken, "test-trace", count=5, latency_ms=10.0)
+    elif name == "write_pipeline_scores" or name == "write_scores":
+        result = fn(broken, {}, trace_id="test-trace")
+
+    assert result is None, f"{name} must return None, got {result!r}"
+
+
+def test_compute_checkpointer_overhead_proxy_ms_real_behavior() -> None:
+    """The compute helper must still compute real values (not a no-op)."""
+    mod = importlib.import_module("src.scoring")
+    fn = mod.compute_checkpointer_overhead_proxy_ms
+
+    # No stages → full wall time returned
+    assert fn({}, 100.0) == 100.0, "No latency_stages → full wall time."
+
+    # Stages subtracted
+    result = {"latency_stages": {"retrieval": 0.05, "generation": 0.03}}
+    # overhead = 100.0 - (0.05+0.03)*1000 = 100.0 - 80.0 = 20.0
+    assert fn(result, 100.0) == 20.0, "Wall time minus stage latencies."
+
+    # Clipped to zero when stages exceed wall time
+    result2 = {"latency_stages": {"slow": 0.2}}
+    assert fn(result2, 0.1) == 0.0, "Negative overhead clipped to zero."

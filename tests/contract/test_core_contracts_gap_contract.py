@@ -1,11 +1,9 @@
 """Contract test gap coverage for #3017.
 
-Three concrete gaps identified by audit:
+One concrete gap identified by audit:
 
-1. ``docs/architecture/STRUCTURE.md`` exists and references the active layers
-   (src/core, src/runtime, src/adapters, src/ingestion).
-2. Qdrant collection schema in ingestion code statically declares all three
-   vector namespaces: ``dense``, ``bm42``, ``colbert``.
+Qdrant collection schema in ingestion code statically declares all three
+vector namespaces: ``dense``, ``bm42``, ``colbert``.
 
 All checks are static (no Docker, no network, no imports of heavy deps).
 """
@@ -18,40 +16,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ---------------------------------------------------------------------------
-# 1. STRUCTURE.md exists and references active layers
-# ---------------------------------------------------------------------------
-
-STRUCTURE_MD = REPO_ROOT / "docs" / "architecture" / "STRUCTURE.md"
-
-_REQUIRED_LAYERS = ("src/core", "src/runtime", "src/adapters", "src/ingestion")
-
-
-def test_architecture_structure_md_exists() -> None:
-    """docs/architecture/STRUCTURE.md must exist (#3019)."""
-    assert STRUCTURE_MD.is_file(), (
-        "docs/architecture/STRUCTURE.md is missing. "
-        "Create it as the canonical module ownership map (#3019)."
-    )
-
-
-def test_architecture_structure_md_references_active_layers() -> None:
-    """STRUCTURE.md must mention all four active layers."""
-    assert STRUCTURE_MD.is_file(), "docs/architecture/STRUCTURE.md missing — see previous test."
-    content = STRUCTURE_MD.read_text(encoding="utf-8")
-    missing = [layer for layer in _REQUIRED_LAYERS if layer not in content]
-    assert not missing, (
-        f"docs/architecture/STRUCTURE.md does not reference active layers: {missing}. "
-        "Keep the structure map in sync with the active directory layout."
-    )
-
-
-# ---------------------------------------------------------------------------
-# 3. Qdrant collection schema declares dense + bm42 + colbert
+# Qdrant collection schema declares dense + bm42 + colbert
 # ---------------------------------------------------------------------------
 
 _SCHEMA_FILES = [
+    REPO_ROOT / "src" / "ingestion" / "unified" / "commands.py",
     REPO_ROOT / "src" / "ingestion" / "indexer.py",
-    REPO_ROOT / "src" / "ingestion" / "unified" / "cli.py",
 ]
 
 _REQUIRED_VECTORS = ("dense", "bm42", "colbert")

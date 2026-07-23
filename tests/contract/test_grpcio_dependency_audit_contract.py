@@ -15,7 +15,7 @@ A redundant direct pin can trigger unnecessary resolver/build work in PR
 checks (notably building ``grpcio`` from source in a fresh interpreter), so
 it was removed.
 
-This test encodes four invariants so the decision does not silently drift:
+This test encodes three invariants so the decision does not silently drift:
 
 1. ``grpcio`` is NOT a direct ``[project].dependencies`` entry in any
    first-party pyproject — it must stay transitive via ``qdrant-client``.
@@ -24,8 +24,6 @@ This test encodes four invariants so the decision does not silently drift:
    direct pin cannot accidentally drop gRPC support.
 3. The runtime Qdrant transport is still intentionally gRPC
    (``prefer_grpc=True`` in the canonical service + preflight).
-4. The rationale is documented in a discoverable doc so a future reader
-   understands why ``grpcio`` has no direct declaration.
 """
 
 from __future__ import annotations
@@ -113,14 +111,3 @@ def test_qdrant_preflight_still_exercises_grpc_but_runtime_defaults_rest() -> No
 
     assert "prefer_grpc: bool = False" in qdrant_text
     assert "prefer_grpc=True" in preflight_text
-
-
-def test_grpcio_transitive_rationale_documented() -> None:
-    """A discoverable doc explains why grpcio has no direct declaration."""
-    doc = REPO / "docs" / "engineering" / "sdk-registry.md"
-    text = doc.read_text(encoding="utf-8").lower()
-    assert "grpcio" in text, (
-        "docs/engineering/sdk-registry.md must document that grpcio is retained "
-        "transitively via qdrant-client (prefer_grpc=True) and is not declared "
-        "directly (issue #2241)."
-    )

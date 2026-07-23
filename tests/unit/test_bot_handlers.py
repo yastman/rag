@@ -71,8 +71,8 @@ def _create_bot(mock_config):
         patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings") as mock_emb,
         patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
         patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
-        patch("telegram_bot.graph.config.GraphConfig.create_llm") as mock_llm,
-        patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+        patch("src.runtime.graph.config.GraphConfig.create_llm") as mock_llm,
+        patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
     ):
         patches = {
             "bot": mock_bot,
@@ -243,8 +243,8 @@ class TestPropertyBotInit:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings") as mock_emb,
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
             patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
         ):
             bot = PropertyBot(mock_config)
 
@@ -263,8 +263,8 @@ class TestPropertyBotInit:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
         ):
             PropertyBot(mock_config)
 
@@ -280,8 +280,8 @@ class TestPropertyBotInit:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService"),
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
             patch(
                 "telegram_bot.services.rag.colbert_reranker.ColbertRerankerService"
             ) as mock_colbert,
@@ -700,7 +700,7 @@ class TestCommandHandlers:
         assert "bot_cmd_metrics_test_sentinel_total" in call_args
 
     @pytest.mark.skip(reason="cmd_call removed — LiveKit/voice path archived")
-    async def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
+    def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
         """`/call` dispatch metadata should include langfuse_trace_id for continuity (#609)."""
         # cmd_call was removed with the voice path
 
@@ -2300,8 +2300,8 @@ class TestSetupMiddlewares:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService"),
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
         ):
             PropertyBot(mock_config)
 
@@ -5598,8 +5598,8 @@ class TestPropertyBotApartmentPipeline:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService"),
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
         ):
             bot = PropertyBot(mock_config)
 
@@ -5614,8 +5614,8 @@ class TestPropertyBotApartmentPipeline:
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService"),
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
             patch.dict(
                 sys.modules,
                 {"telegram_bot.services.apartment.apartment_llm_extractor": None},

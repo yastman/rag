@@ -115,6 +115,7 @@ def test_flow_reingest_changed(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.requires_extras
 @pytest.mark.skipif(
     not os.getenv("RUN_INTEGRATION_TESTS"),
     reason="Integration tests require RUN_INTEGRATION_TESTS=1 and live services",

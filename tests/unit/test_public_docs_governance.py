@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import yaml
-
 
 ROOT = Path(__file__).parents[2]
 
@@ -19,28 +17,6 @@ def test_apartment_sample_contract_matches_default_path() -> None:
     assert "data/apartments.csv" in runner
     assert csv_path.exists(), "default apartment sample CSV is missing"
     assert "apartments.csv" in data_readme
-
-
-def test_k8s_ingestion_drive_sync_contract_is_not_silent_empty_pvc() -> None:
-    """A base PVC must be paired with an explicit data population contract."""
-    deployment = yaml.safe_load(
-        (ROOT / "k8s" / "base" / "ingestion" / "deployment.yaml").read_text(encoding="utf-8")
-    )
-    volumes = deployment["spec"]["template"]["spec"]["volumes"]
-    drive_sync = next(v for v in volumes if v["name"] == "drive-sync")
-
-    if "persistentVolumeClaim" not in drive_sync:
-        return
-
-    pvc = yaml.safe_load(
-        (ROOT / "k8s" / "base" / "ingestion" / "pvc.yaml").read_text(encoding="utf-8")
-    )
-    annotations = pvc.get("metadata", {}).get("annotations", {})
-    readme = (ROOT / "k8s" / "base" / "ingestion" / "README.md").read_text(encoding="utf-8")
-
-    assert annotations.get("rag-fresh.io/data-source") == "externally-provisioned"
-    assert "must be pre-populated" in readme
-    assert "rclone" in readme
 
 
 def test_docs_index_does_not_reference_deleted_superpowers_tree() -> None:

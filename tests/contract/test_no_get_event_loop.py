@@ -65,7 +65,7 @@ def _find_get_event_loop_calls(source: str, file_path: Path) -> list[tuple[Path,
 
 def _format_new_offenders_message(new_offenders: list[tuple[Path, int]]) -> str:
     offender_lines = "\n".join(
-        f"  {p.relative_to(REPO_ROOT)}:{lineno}" for p, lineno in new_offenders
+        f"  {p.relative_to(REPO_ROOT).as_posix()}:{lineno}" for p, lineno in new_offenders
     )
     return (
         "New asyncio.get_event_loop() calls outside the allowlist (#1639):\n"
