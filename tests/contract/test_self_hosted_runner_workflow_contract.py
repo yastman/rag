@@ -202,22 +202,9 @@ def test_runbook_documents_disable_procedure() -> None:
     )
 
 
-def test_diagnostic_script_supports_pr_only_flag() -> None:
-    """Script must expose a ``--pr-only`` mode that requires only ``pr-fast``."""
+def test_diagnostic_script_mentions_label_group() -> None:
+    """Script must document the ``nightly-heavy`` label group."""
     text = SCRIPT.read_text(encoding="utf-8")
-    assert "--pr-only" in text, (
-        f"{SCRIPT.relative_to(REPO_ROOT)} must accept a '--pr-only' flag "
-        "for operators who only need the pr-fast runner online."
-    )
-
-
-def test_diagnostic_script_mentions_label_groups() -> None:
-    """Script must document the ``pr-fast`` and ``nightly-heavy`` label groups."""
-    text = SCRIPT.read_text(encoding="utf-8")
-    assert "pr-fast" in text, (
-        f"{SCRIPT.relative_to(REPO_ROOT)} must mention the 'pr-fast' label "
-        "group so operators know which label the PR fast-gate runner needs."
-    )
     assert "nightly-heavy" in text, (
         f"{SCRIPT.relative_to(REPO_ROOT)} must mention the 'nightly-heavy' label "
         "group so operators know which label the nightly runner needs."

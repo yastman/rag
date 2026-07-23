@@ -182,16 +182,18 @@ async def test_lifespan_respects_rerank_provider_none() -> None:
     fake_graph = MagicMock()
 
     with (
-        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
-        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
-        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
-        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
-        patch("telegram_bot.services.rag.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        patch("src.runtime.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("src.runtime.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("src.runtime.services.qdrant.QdrantService", return_value=fake_qdrant),
+        patch(
+            "src.runtime.graph.builder.build_pipeline", return_value=fake_graph
+        ) as mock_build_pipeline,
+        patch("src.runtime.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
     ):
         async with lifespan(app):
             assert app.state.max_rewrite_attempts == 2
 
-    assert mock_build_graph.call_args.kwargs["reranker"] is None
+    assert mock_build_pipeline.call_args.kwargs["reranker"] is None
     mock_colbert.assert_not_called()
 
 
@@ -215,16 +217,18 @@ async def test_lifespan_keeps_colbert_runtime_server_side() -> None:
     fake_graph = MagicMock()
 
     with (
-        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
-        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
-        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
-        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
-        patch("telegram_bot.services.rag.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        patch("src.runtime.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("src.runtime.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("src.runtime.services.qdrant.QdrantService", return_value=fake_qdrant),
+        patch(
+            "src.runtime.graph.builder.build_pipeline", return_value=fake_graph
+        ) as mock_build_pipeline,
+        patch("src.runtime.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
     ):
         async with lifespan(app):
             assert app.state.max_rewrite_attempts == 2
 
-    assert mock_build_graph.call_args.kwargs["reranker"] is None
+    assert mock_build_pipeline.call_args.kwargs["reranker"] is None
     mock_colbert.assert_not_called()
 
 
@@ -250,10 +254,10 @@ async def test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings() -> 
     fake_graph = MagicMock()
 
     with (
-        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
-        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
-        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
-        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph),
+        patch("src.runtime.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("src.runtime.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("src.runtime.services.qdrant.QdrantService", return_value=fake_qdrant),
+        patch("src.runtime.graph.builder.build_pipeline", return_value=fake_graph),
         patch("src.api.main.logger.warning") as mock_warning,
     ):
         async with lifespan(app):

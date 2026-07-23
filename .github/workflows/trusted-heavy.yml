@@ -74,7 +74,7 @@ jobs:
         run: uv venv --python 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra telegram
 
       - name: Compile repo Python files (#2320)
         run: make compile-python
@@ -123,7 +123,7 @@ jobs:
         run: uv venv --python 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra telegram
 
       - name: Run contract tests
         run: make test-contract

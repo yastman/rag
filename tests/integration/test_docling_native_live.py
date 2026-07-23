@@ -14,6 +14,8 @@ import pytest
 
 # Skip if docling is not installed
 docling = pytest.importorskip("docling")
+pytestmark = pytest.mark.no_services
+
 
 from src.ingestion.docling_native import NativeDoclingAdapter
 

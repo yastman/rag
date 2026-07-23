@@ -5,6 +5,10 @@ Split #2816: extracted ``_handle_manager``, ``_handle_group_message``,
 
 ``PropertyBot`` retains thin wrappers so aiogram registration in
 ``_register_handlers`` and existing callers are unchanged.
+
+Raw FSM exception #1232: ``state.set_state(HandoffStates.active)`` is a
+re-entry guard only; the qualification flow runs in ``dialogs/handoff.py``
+(``HandoffSG``).
 """
 
 from __future__ import annotations

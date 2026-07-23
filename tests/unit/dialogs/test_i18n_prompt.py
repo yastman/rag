@@ -23,10 +23,7 @@ def test_create_bot_agent_passes_role_context_to_prompt_manager():
     """create_bot_agent includes role_context in variables passed to get_prompt."""
     from telegram_bot.agents.agent import create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.get_prompt", return_value="prompt") as mock_get,
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt", return_value="prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
@@ -46,10 +43,7 @@ def test_client_role_context_mentions_client():
     """role='client' passes role_context about helping clients."""
     from telegram_bot.agents.agent import create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.get_prompt", return_value="prompt") as mock_get,
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt", return_value="prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
@@ -65,10 +59,7 @@ def test_manager_role_context_mentions_crm():
     """role='manager' passes role_context about CRM."""
     from telegram_bot.agents.agent import create_bot_agent
 
-    with (
-        patch("telegram_bot.agents.agent.create_agent"),
-        patch("telegram_bot.agents.agent.get_prompt", return_value="prompt") as mock_get,
-    ):
+    with patch("telegram_bot.agents.agent.get_prompt", return_value="prompt") as mock_get:
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],

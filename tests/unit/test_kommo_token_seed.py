@@ -19,7 +19,7 @@ def mock_redis():
 
 class TestKommoAccessTokenSeed:
     async def test_seed_access_token_when_redis_empty(self, mock_redis):
-        from telegram_bot.bot import _seed_kommo_access_token
+        from telegram_bot._bot_kommo import _seed_kommo_access_token
 
         seeded = await _seed_kommo_access_token(
             redis=mock_redis,
@@ -39,7 +39,7 @@ class TestKommoAccessTokenSeed:
         mock_redis.hgetall = AsyncMock(
             return_value={b"access_token": b"existing", b"refresh_token": b"rf"}
         )
-        from telegram_bot.bot import _seed_kommo_access_token
+        from telegram_bot._bot_kommo import _seed_kommo_access_token
 
         seeded = await _seed_kommo_access_token(
             redis=mock_redis,
@@ -50,7 +50,7 @@ class TestKommoAccessTokenSeed:
         mock_redis.hset.assert_not_called()
 
     async def test_skip_seed_when_no_access_token(self, mock_redis):
-        from telegram_bot.bot import _seed_kommo_access_token
+        from telegram_bot._bot_kommo import _seed_kommo_access_token
 
         seeded = await _seed_kommo_access_token(
             redis=mock_redis,

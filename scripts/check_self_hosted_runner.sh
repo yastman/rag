@@ -1,29 +1,26 @@
 #!/usr/bin/env bash
 # scripts/check_self_hosted_runner.sh
 #
-# Diagnostic for the self-hosted GitHub Actions runners that
-# .github/workflows/trusted-heavy.yml and
-# .github/workflows/nightly-heavy.yml depend on.
+# Diagnostic for the self-hosted GitHub Actions runner that
+# .github/workflows/nightly-heavy.yml depends on.
 #
-# Closes #1531 and follow-up runner scheduling hardening: PR and nightly
-# self-hosted jobs use explicit label groups. If the matching runner is not
+# Closes #1531 and follow-up runner scheduling hardening: the nightly-heavy
+# self-hosted job uses an explicit label group. If the matching runner is not
 # registered + online, the corresponding job queues forever.
 #
-# The repo uses two custom label groups on self-hosted runners:
-#   - pr-fast:      runner with labels self-hosted, Linux, X64, pr-fast
+# The repo uses one custom label group on self-hosted runners:
 #   - nightly-heavy: runner with labels self-hosted, Linux, X64, nightly-heavy
 #
 # This script is operator-runnable. It does not mutate anything.
 #
 # Usage:
-#   scripts/check_self_hosted_runner.sh             # require both label groups (default)
-#   scripts/check_self_hosted_runner.sh --pr-only   # require only pr-fast
+#   scripts/check_self_hosted_runner.sh               # require nightly-heavy (default)
 #   scripts/check_self_hosted_runner.sh --owner X --repo Y
 #   OWNER=X REPO=Y scripts/check_self_hosted_runner.sh
 #   scripts/check_self_hosted_runner.sh --help
 #
 # Exit codes:
-#   0  required label groups have at least one online runner
+#   0  required label group has at least one online runner
 #   1  no runner registered, all runners offline, or label group missing
 #   2  invalid arguments / missing prerequisites (gh, jq)
 
@@ -33,20 +30,16 @@ SCRIPT_NAME="$(basename "$0")"
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/check_self_hosted_runner.sh [--pr-only] [--owner OWNER --repo REPO]
+Usage: scripts/check_self_hosted_runner.sh [--owner OWNER --repo REPO]
 
 Verifies that the required self-hosted GitHub Actions runners are registered
 and online for this repository.
 
-Label groups required by default:
-  pr-fast:        self-hosted, Linux, X64, pr-fast
-                    (used by trusted-heavy.yml fast-tests and
-                     heavy-contract-tests jobs)
+Required label group:
   nightly-heavy:  self-hosted, Linux, X64, nightly-heavy
                     (used by nightly-heavy.yml heavy-tier job)
 
 Options:
-  --pr-only       Require only the pr-fast label group (skip nightly-heavy)
   --owner OWNER   GitHub owner/org (default: parsed from `gh repo view`)
   --repo REPO     Repository name  (default: parsed from `gh repo view`)
   -h, --help      Show this help and exit
@@ -61,11 +54,11 @@ Prerequisites:
   - `jq` for JSON parsing
 
 Exit codes:
-  0   required label groups have at least one online runner each
+  0   required label group has an online runner
   1   no runners, or every runner is offline, or required label group missing
   2   missing prerequisites or invalid arguments
 
-Resource checklist (both workflows use pytest -n auto; nightly also loads
+Resource checklist (nightly-heavy.yml uses pytest -n auto and loads
 BGE-M3 + ColBERT models):
   - CPU:   >= 4 vCPU recommended
   - RAM:   >= 8 GiB recommended
@@ -75,6 +68,7 @@ BGE-M3 + ColBERT models):
 USAGE
 }
 
+
 err() {
   printf '%s: %s\n' "${SCRIPT_NAME}" "$*" >&2
 }
@@ -82,8 +76,8 @@ err() {
 resource_checklist() {
   cat <<'CHECKLIST'
 
-Resource checklist (both workflows use pytest -n auto;
-nightly also loads BGE-M3 + ColBERT models):
+Resource checklist (nightly-heavy.yml uses pytest -n auto
+and loads BGE-M3 + ColBERT models):
   [ ] CPU:   >= 4 vCPU
   [ ] RAM:   >= 8 GiB
   [ ] Disk:  >= 20 GiB free for uv cache + model weights + pytest artifacts
@@ -93,14 +87,10 @@ nightly also loads BGE-M3 + ColBERT models):
 CHECKLIST
 }
 
-# Label-group definition: a human name, the exact labels a runner must carry,
-# and the workflows that depend on it.
 declare -A LABEL_GROUP_NAMES
-LABEL_GROUP_NAMES[pr-fast]="self-hosted, Linux, X64, pr-fast"
 LABEL_GROUP_NAMES[nightly-heavy]="self-hosted, Linux, X64, nightly-heavy"
 
 declare -A LABEL_GROUP_PURPOSE
-LABEL_GROUP_PURPOSE[pr-fast]="trusted-heavy.yml (fast-tests, heavy-contract-tests)"
 LABEL_GROUP_PURPOSE[nightly-heavy]="nightly-heavy.yml (heavy-tier)"
 
 # ---------------------------------------------------------------------------
@@ -147,17 +137,12 @@ fail_label_group() {
 
 OWNER="${OWNER:-}"
 REPO="${REPO:-}"
-PR_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
       usage
       exit 0
-      ;;
-    --pr-only)
-      PR_ONLY=1
-      shift
       ;;
     --owner)
       [[ $# -ge 2 ]] || { err "--owner requires a value"; exit 2; }
@@ -201,11 +186,7 @@ if [[ -z "${OWNER}" || -z "${REPO}" ]]; then
 fi
 
 printf 'Checking self-hosted runners for %s/%s ...\n' "${OWNER}" "${REPO}"
-if [[ "${PR_ONLY}" -eq 1 ]]; then
-  printf 'Mode: --pr-only (only pr-fast label group is required)\n'
-else
-  printf 'Mode: default (both pr-fast and nightly-heavy label groups required)\n'
-fi
+printf 'Required label group: nightly-heavy\n'
 
 # Query the runners API. If the call itself fails (auth, scope, network),
 # treat it as a hard failure (exit 1) so the nightly-heavy gate stays red.
@@ -222,11 +203,7 @@ count="$(printf '%s' "${runners_json}" | jq 'length')"
 
 if [[ "${count}" -eq 0 ]]; then
   err "no self-hosted runners are registered on ${OWNER}/${REPO}"
-  if [[ "${PR_ONLY}" -eq 1 ]]; then
-    err "trusted-heavy.yml PR jobs will queue forever until at least one runner registers with label 'pr-fast'"
-  else
-    err "trusted-heavy.yml AND nightly-heavy.yml will queue forever until runners register with labels 'pr-fast' and 'nightly-heavy'"
-  fi
+  err "nightly-heavy.yml will queue forever until a runner registers with label 'nightly-heavy'"
   resource_checklist
   exit 1
 fi
@@ -244,29 +221,20 @@ if [[ "${online}" -eq 0 ]]; then
   exit 1
 fi
 
-# Verify required label groups.
+# Verify required label group.
 exit_code=0
 
-if ! check_label_group "pr-fast" "${runners_json}"; then
-  fail_label_group "pr-fast"
+if ! check_label_group "nightly-heavy" "${runners_json}"; then
+  fail_label_group "nightly-heavy"
   exit_code=1
 else
-  printf '\npr-fast label group: OK\n'
-fi
-
-if [[ "${PR_ONLY}" -eq 0 ]]; then
-  if ! check_label_group "nightly-heavy" "${runners_json}"; then
-    fail_label_group "nightly-heavy"
-    exit_code=1
-  else
-    printf 'nightly-heavy label group: OK\n'
-  fi
+  printf '\nnightly-heavy label group: OK\n'
 fi
 
 if [[ "${exit_code}" -eq 0 ]]; then
-  printf '\nOK: all required label groups have at least one online runner.\n'
+  printf '\nOK: required label group has at least one online runner.\n'
 else
-  printf '\nFAIL: one or more required label groups are missing or offline.\n'
+  printf '\nFAIL: required label group is missing or offline.\n'
 fi
 
 resource_checklist

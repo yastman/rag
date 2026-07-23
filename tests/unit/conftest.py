@@ -2,9 +2,7 @@
 
 import contextlib
 import sys
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 
 # =============================================================================
@@ -48,7 +46,15 @@ def pytest_configure(config):
         _mocked_module_names.append("FlagEmbedding")
 
     # -- aiogram (optional Telegram runtime dep) -----------------------------
-    _aiogram_real = "aiogram" in sys.modules and not isinstance(sys.modules["aiogram"], MagicMock)
+    _aiogram_real = False
+    try:
+        import aiogram  # noqa: F401 — use real module if installed
+
+        _aiogram_real = True
+    except ImportError:
+        _aiogram_real = "aiogram" in sys.modules and not isinstance(
+            sys.modules["aiogram"], MagicMock
+        )
     if not _aiogram_real:
         # Build proper State/StatesGroup stubs that support class-level State attrs.
         class _State:
@@ -145,11 +151,16 @@ def pytest_configure(config):
         sys.modules["aiogram.fsm.state"] = _fsm_state_mod
         _aiogram_submodules.extend(["aiogram.fsm", "aiogram.fsm.context", "aiogram.fsm.state"])
         _mocked_module_names.extend(_aiogram_submodules)
-
     # -- aiogram_dialog (optional dialog framework dep) ----------------------
-    _dialog_real = "aiogram_dialog" in sys.modules and not isinstance(
-        sys.modules["aiogram_dialog"], MagicMock
-    )
+    _dialog_real = False
+    try:
+        import aiogram_dialog  # noqa: F401 — use real module if installed
+
+        _dialog_real = True
+    except ImportError:
+        _dialog_real = "aiogram_dialog" in sys.modules and not isinstance(
+            sys.modules["aiogram_dialog"], MagicMock
+        )
     if not _dialog_real:
 
         class _UnknownIntent(Exception):
@@ -182,9 +193,15 @@ def pytest_configure(config):
         _mocked_module_names.extend(_dialog_submodules)
 
     # -- langgraph (removed dep — tests use Runtime as a context container) --
-    _langgraph_real = "langgraph" in sys.modules and not isinstance(
-        sys.modules["langgraph"], MagicMock
-    )
+    _langgraph_real = False
+    try:
+        import langgraph  # noqa: F401 — use real module if installed
+
+        _langgraph_real = True
+    except ImportError:
+        _langgraph_real = "langgraph" in sys.modules and not isinstance(
+            sys.modules["langgraph"], MagicMock
+        )
     if not _langgraph_real:
         _langgraph_submodules = [
             "langgraph",
@@ -225,6 +242,11 @@ def pytest_configure(config):
         sys.modules["anthropic"] = MagicMock()
         _mocked_module_names.append("anthropic")
 
+    # Force real import so the check below doesn't mock an installed dep.
+    with contextlib.suppress(ImportError):
+        import fluent_compiler  # noqa: F401
+    with contextlib.suppress(ImportError):
+        import fluentogram  # noqa: F401
     # -- fluent_compiler / fluentogram (optional i18n dep) ------------------
     _fluent_real = "fluent_compiler" in sys.modules and not isinstance(
         sys.modules["fluent_compiler"], MagicMock
@@ -249,6 +271,9 @@ def pytest_configure(config):
         sys.modules["cachetools"] = MagicMock()
         _mocked_module_names.append("cachetools")
 
+    # langchain_core is installed; mark as real so CRM tools can import it.
+    with contextlib.suppress(ImportError):
+        import langchain_core  # noqa: F401
     # -- langchain_core (optional archived CRM dep) -------------------------
     _langchain_core_real = "langchain_core" in sys.modules and not isinstance(
         sys.modules["langchain_core"], MagicMock
@@ -277,137 +302,3 @@ def pytest_unconfigure(config):
             sys.modules[mod_name] = original  # type: ignore[assignment]
     _mocked_module_names.clear()
     _saved_modules.clear()
-
-
-@pytest.fixture(autouse=True)
-def mock_get_client(isolate_otel_langfuse):
-    """Mock telegram_bot.bot.get_client for unit tests that already imported it.
-
-    Autouse fixture — no test signature changes needed.
-    Uses a shared MagicMock that tests can inspect via
-    ``telegram_bot.bot.get_client`` if they need the reference.
-
-    Lazy-patch behavior (#conftest-coverage-blocker fix): the fixture skips
-    patching when ``telegram_bot.bot`` is NOT already in ``sys.modules``.
-
-    Why: Eagerly resolving ``"telegram_bot.bot.get_client"`` triggers the
-    full ``telegram_bot.bot`` import chain (langgraph, qdrant_client,
-    numpy, …). Under ``pytest --cov`` the numpy C-extension
-    (``numpy._core._multiarray_umath``) raises
-    ``ImportError: cannot load module more than once per process`` because
-    coverage's PEP 669 / pkgutil walk re-traverses the package tree. The
-    failure surfaces as ``AttributeError: module 'telegram_bot' has no
-    attribute 'bot'`` for every unit test in this directory.
-
-    Tests that actually exercise ``telegram_bot.bot.get_client`` already
-    import the module before this fixture runs (via ``from
-    telegram_bot.bot import …`` at module top), so the lazy gate is
-    invisible to them. Tests that never touch the bot module (the vast
-    majority) no longer pay the cost of triggering the heavy import chain.
-
-    ``isolate_otel_langfuse`` is requested first so OTEL/Langfuse env
-    vars are set BEFORE we attempt the patch, in case a future bot import
-    introduces OTEL initialization side effects.
-
-    ``create=True`` keeps the patch safe even if a future refactor moves
-    ``get_client`` out of ``telegram_bot.bot``.
-    """
-    if "telegram_bot.bot" not in sys.modules:
-        # Bot module not loaded — no test in this run is exercising it,
-        # so patching is unnecessary and would re-trigger the import chain.
-        yield MagicMock()
-        return
-
-    mock = MagicMock()
-    with patch("telegram_bot.bot.get_client", return_value=mock, create=True):
-        yield mock
-
-
-@pytest.fixture(autouse=True)
-def mock_rag_pipeline_get_client():
-    """Patch src.runtime.pipeline.rag.get_client for unit tests that use _hybrid_retrieve.
-
-    Uses create=True so the patch is safe even when the module is imported
-    for the first time inside the test body. This avoids get_client()
-    returning None (no active Langfuse trace), which would fail with
-    AttributeError on lf.update_current_span().
-    """
-    mock = MagicMock()
-    with patch("src.runtime.pipeline.rag.get_client", return_value=mock, create=True):
-        yield mock
-
-
-@pytest.fixture(autouse=True)
-def isolate_otel_langfuse(monkeypatch):
-    """Block OTEL/Langfuse network calls in unit tests.
-
-    Uses env vars + targeted patches only.  Does NOT manipulate sys.modules
-    because deleting/replacing modules breaks import references in other
-    tests running in the same xdist worker process.
-    """
-    # Reset prompt_manager singleton so it uses fresh env vars each test
-    from src.runtime.integrations.prompt_manager import _reset_client
-
-    _reset_client()
-
-    # Force environment variables (override, not setdefault)
-    monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
-    monkeypatch.setenv("OTEL_TRACES_EXPORTER", "none")
-    monkeypatch.setenv("OTEL_METRICS_EXPORTER", "none")
-    monkeypatch.setenv("OTEL_LOGS_EXPORTER", "none")
-    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
-    monkeypatch.setenv("LANGFUSE_ENABLED", "false")
-    monkeypatch.setenv("LANGFUSE_HOST", "")
-    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
-    monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
-    # Disable the uvicorn-based metrics server in unit tests (#2139).
-    # bot.start() would otherwise try to bind a real listening port
-    # (TELEGRAM_BOT_METRICS_PORT / 9092 — see #2190), causing SystemExit
-    # when the port is unavailable (e.g. in CI with concurrent workers).
-    monkeypatch.setenv("TELEGRAM_BOT_METRICS_ENABLED", "0")
-
-    # Create no-op mocks
-    mock_noop = MagicMock()
-
-    # Patch at entry points to prevent any network initialization.
-    # Do NOT patch "langfuse.Langfuse" — the patch() call itself imports
-    # langfuse and can corrupt module state on stop().  Instead, patch the
-    # higher-level wrappers that our code actually calls.
-    patches = [
-        # Langfuse — patch our wrapper, not the SDK class directly
-        patch("telegram_bot.services.observability.get_client", lambda: mock_noop),
-        # Fallback: patch low-level OTEL exporters
-        patch(
-            "opentelemetry.exporter.otlp.proto.grpc.trace_exporter.OTLPSpanExporter",
-            mock_noop,
-        ),
-        patch(
-            "opentelemetry.exporter.otlp.proto.grpc.metric_exporter.OTLPMetricExporter",
-            mock_noop,
-        ),
-        patch("opentelemetry.sdk.trace.export.BatchSpanProcessor", mock_noop),
-        patch(
-            "opentelemetry.sdk.metrics.export.PeriodicExportingMetricReader",
-            mock_noop,
-        ),
-    ]
-
-    for p in patches:
-        # #1601: narrow suppression — only swallow expected optional-import
-        # failures (the patched module/class is intentionally missing in some
-        # envs) and lazy-attribute resolution misses (telegram_bot.services
-        # raises AttributeError from its lazy import handler when the target
-        # symbol is provided by a sibling package, not the package itself).
-        # Anything else (TypeError, ValueError, etc.) is a real isolation
-        # bug we want to surface.
-        with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError):
-            p.start()
-
-    yield
-
-    for p in patches:
-        # RuntimeError is raised by mock.patch when the start failed
-        # earlier and stop has no original to restore. AttributeError
-        # mirrors the start-time guard above.
-        with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError, RuntimeError):
-            p.stop()

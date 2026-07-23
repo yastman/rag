@@ -3,6 +3,10 @@
 Split #2816: extracted ``_handle_bookmarks``, ``handle_fav_add``,
 ``handle_fav_remove``, ``handle_fav_viewing``, ``handle_fav_viewing_all``,
 ``handle_favorite_callback`` as module-level functions.
+
+Raw FSM exception #1232: ``state.update_data(bookmarks_context=True)``
+stores the bookmarks navigation context; same data-flag pattern as
+``command_handlers.py``.
 """
 
 from __future__ import annotations

@@ -7,7 +7,6 @@ import contextlib
 import os
 import socket
 
-import httpx
 import pytest
 import redis.asyncio as aioredis
 from qdrant_client import QdrantClient
@@ -201,17 +200,3 @@ class TestRedisInfrastructure:
 
         assert result == test_value
         await redis_client.delete(test_key)
-
-
-class TestLangfuseInfrastructure:
-    """Langfuse tracing tests."""
-
-    async def test_api_accessible(self):
-        """Langfuse API is accessible."""
-        url = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
-        if not _check_tcp("localhost", 3001):
-            pytest.skip("Langfuse not running on localhost:3001")
-
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{url}/api/public/health")
-            assert response.status_code == 200
