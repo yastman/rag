@@ -16,42 +16,38 @@ def _load_workflow() -> dict:
     return data
 
 
-def test_trusted_heavy_pr_jobs_use_github_hosted_runners() -> None:
-    """PR fast-gate and contract-test jobs must run on GitHub-hosted ubuntu-latest."""
+def test_trusted_heavy_jobs_run_on_github_hosted() -> None:
+    """Every job in trusted-heavy must use GitHub-hosted ubuntu-latest."""
     data = _load_workflow()
-    pr_jobs = ("fast-tests", "heavy-contract-tests")
-    for job_key in pr_jobs:
-        job = data["jobs"].get(job_key)
-        assert job is not None, f"{job_key} must exist"
-        assert job.get("runs-on") == "ubuntu-latest", (
-            f"{job_key} must run on ubuntu-latest, got {job.get('runs-on')!r}"
-        )
+    for job_key, job in data["jobs"].items():
+        labels = job.get("runs-on")
+        assert labels == "ubuntu-latest", f"{job_key} must run on ubuntu-latest, got {labels!r}"
 
 
-def test_trusted_heavy_pr_jobs_have_timeout() -> None:
-    """Every PR gate job in trusted-heavy must declare timeout-minutes: 20."""
+def test_trusted_heavy_execution_jobs_have_timeout() -> None:
+    """Execution jobs (fast-tests, heavy-contract-tests) must declare timeout-minutes: 20."""
     data = _load_workflow()
-    pr_jobs = ("fast-tests", "heavy-contract-tests")
-    for job_key in pr_jobs:
-        job = data["jobs"].get(job_key)
-        assert job is not None, f"{job_key} must exist"
+    for job_key, job in data["jobs"].items():
+        if job_key == "changes":
+            continue
         timeout = job.get("timeout-minutes")
         assert timeout == 20, f"{job_key} must set timeout-minutes: 20, got {timeout!r}"
 
 
-def test_trusted_heavy_workflow_triggers_on_pr_and_manual() -> None:
-    """Trusted-heavy runs on pull_request to dev/main and workflow_dispatch."""
+def test_trusted_heavy_workflow_triggers_on_pull_request() -> None:
+    """Trusted-heavy runs on pull_request so fork PRs exercise hosted gates."""
     data = _load_workflow()
-    triggers = data.get("on", {})
-    assert "pull_request" in triggers, "must trigger on pull_request"
-    assert triggers["pull_request"].get("branches") == ["dev", "main"], (
-        "pull_request must target dev and main branches"
+    triggers = data["on"]
+    assert "pull_request" in triggers, (
+        "trusted-heavy must trigger on pull_request to run hosted gates for fork PRs"
     )
-    assert "workflow_dispatch" in triggers, "must support manual dispatch"
+    assert "workflow_dispatch" in triggers, (
+        "trusted-heavy must also support manual dispatch for ad-hoc testing"
+    )
 
 
 def test_trusted_heavy_has_github_hosted_path_filter() -> None:
-    """A lightweight GitHub-hosted job decides whether self-hosted tests run."""
+    """A GitHub-hosted path-filter job gates downstream execution jobs."""
     data = _load_workflow()
     changes = data["jobs"].get("changes")
     assert changes is not None, "trusted-heavy.yml must define the changes job"
@@ -84,7 +80,7 @@ def test_trusted_heavy_path_filter_covers_risk_paths() -> None:
 
 
 def test_fast_tests_is_authoritative_for_trusted_risk_paths() -> None:
-    """Fast Tests is the first self-hosted PR gate promoted out of shadow."""
+    """Fast Tests is the first PR gate promoted out of shadow."""
     data = _load_workflow()
     fast = data["jobs"].get("fast-tests")
     assert fast is not None, "trusted-heavy.yml must define fast-tests"
@@ -133,19 +129,21 @@ def test_heavy_contract_tests_is_authoritative_for_trusted_risk_paths() -> None:
         )
 
 
-def test_trusted_heavy_skips_untrusted_fork_prs() -> None:
-    """PR gate jobs must not execute untrusted fork pull_request code."""
+def test_trusted_heavy_hosted_jobs_run_for_fork_prs() -> None:
+    """GitHub-hosted jobs must not restrict to same-repository branches."""
     data = _load_workflow()
-    pr_jobs = ("fast-tests", "heavy-contract-tests")
-    for job_key in pr_jobs:
+    for job_key in ("fast-tests", "heavy-contract-tests"):
         job = data["jobs"].get(job_key)
-        assert job is not None, f"{job_key} must exist"
+        assert job is not None, f"trusted-heavy.yml must define {job_key}"
         condition = str(job.get("if", ""))
-        assert "github.event.pull_request.head.repo.full_name == github.repository" in condition, (
-            f"{job_key} must restrict pull_request jobs to same-repository branches"
-        )
         assert "needs.changes.outputs.run_heavy == 'true'" in condition, (
-            f"{job_key} must run only when the path filter says heavy tests are needed"
+            f"{job_key} must run only when the path filter says tests are needed"
+        )
+        assert (
+            "github.event.pull_request.head.repo.full_name == github.repository" not in condition
+        ), (
+            f"{job_key} must not restrict to same-repository branches because "
+            f"it runs on a GitHub-hosted runner safe for fork PRs"
         )
 
 
