@@ -7,10 +7,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-TARGET = ROOT / "telegram_bot" / "services" / "generate_response.py"
-# #3034: stage helpers live in split modules after generate_response.py decomposition
-_STREAMING_CONTEXT = ROOT / "telegram_bot" / "services" / "_streaming_context.py"
-_STREAM_EXECUTION = ROOT / "telegram_bot" / "services" / "_stream_execution.py"
+TARGET = ROOT / "telegram_bot" / "services" / "generation" / "generate_response.py"
+# #3034: stage helpers live beside the canonical generation service.
+_STREAMING_CONTEXT = ROOT / "telegram_bot" / "services" / "generation" / "_streaming_context.py"
+_STREAM_EXECUTION = ROOT / "telegram_bot" / "services" / "generation" / "_stream_execution.py"
 MAX_GENERATE_RESPONSE_COMPLEXITY = 20
 MAX_STREAMING_STAGE_COMPLEXITY = 25  # #2926: _generate_streaming_response decomposed
 

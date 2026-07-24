@@ -1,18 +1,15 @@
 """Contract: pre-existing exact-duplicate test files removed (#1996).
 
-Three test files were byte-identical copies of canonical unit-test files.
+Three integration test files were byte-identical copies of unit-test files.
 They were removed in PR #1996 to stop pytest-xdist from silently merging or
 skipping identically-named tests living under different paths and to shrink
 the ratchet allowlist in ``tests/data/known_duplicate_test_names.json``.
 
-Canonical (kept) location -> redundant copy (deleted):
-
-* ``tests/unit/services/test_voyage_integration.py``
-  vs ``tests/integration/test_voyage_integration.py``
-* ``tests/unit/ingestion/test_contextual_integration.py``
-  vs ``tests/integration/test_contextual_integration.py``
-* ``tests/unit/test_redis_url.py``
-  vs ``tests/integration/test_redis_url.py``
+The duplicate integration paths must remain absent. Of their original
+unit-tier counterparts, only ``tests/unit/test_redis_url.py`` remains:
+the Voyage integration test was removed with the dead Voyage dependency,
+and the contextual integration test was removed with the dead contextual
+loader. Those later removals do not weaken the #1996 deduplication invariant.
 
 If new tests genuinely need to live under ``tests/integration/``, give them
 unique filenames; do not re-introduce the same module name.
@@ -31,11 +28,7 @@ DELETED_DUPLICATES = (
     "tests/integration/test_redis_url.py",
 )
 
-CANONICAL_KEPT = (
-    "tests/unit/services/test_voyage_integration.py",
-    "tests/unit/ingestion/test_contextual_integration.py",
-    "tests/unit/test_redis_url.py",
-)
+CANONICAL_KEPT = ("tests/unit/test_redis_url.py",)
 
 
 def test_duplicate_integration_test_files_are_absent() -> None:
