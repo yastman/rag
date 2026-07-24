@@ -42,7 +42,7 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 | Config / settings | [`../src/config/README.md`](../src/config/README.md) |
 | Retrieval | [`../src/retrieval/README.md`](../src/retrieval/README.md) |
 | Ingestion (overview · unified · apartments) | [`../src/ingestion/README.md`](../src/ingestion/README.md) · [`../src/ingestion/unified/AGENTS.override.md`](../src/ingestion/unified/AGENTS.override.md) · [`../src/ingestion/apartments/README.md`](../src/ingestion/apartments/README.md) |
-| Contextualization · models · utils · security | [`../src/contextualization/README.md`](../src/contextualization/README.md) · [`../src/models/README.md`](../src/models/README.md) · [`../src/utils/README.md`](../src/utils/README.md) · [`../src/security/README.md`](../src/security/README.md) |
+| Models · utils · security | [`../src/models/README.md`](../src/models/README.md) · [`../src/utils/README.md`](../src/utils/README.md) · [`../src/security/README.md`](../src/security/README.md) |
 | Adapters · service clients · observability | [`../src/adapters/README.md`](../src/adapters/README.md) · [`../src/services/README.md`](../src/services/README.md) · [`../src/observability/README.md`](../src/observability/README.md) |
 
 ## Adapter — `telegram_bot/`
