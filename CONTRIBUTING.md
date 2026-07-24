@@ -14,11 +14,19 @@ Thank you for your interest in contributing.
 3. Run the local verification ladder before pushing:
 
 ```bash
-make pre-push          # lint + format-check
-make check             # alias: lint + type-check
-uv run pytest tests/unit -q
-docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
+make dev-setup        # first setup: dependencies, commit/push hooks, services
+make check            # commit-level lint + type checking
+make pre-push         # manual push gate: lint + format-check + core tests
+make test-core        # scope gate for core/runtime changes
+make test             # scope gate for adapter/service changes
+make test-contract    # scope gate for contract changes
+make candidate-check  # authoritative local delivery gate
+make test-full        # major-candidate gate; manual and local only
 ```
+
+GitHub runs no pytest. On Windows, run the direct `uv run --no-sync pytest ...` commands
+documented in [`tests/README.md`](tests/README.md); use WSL or a container for Linux portability
+and release verification.
 
 4. Open a pull request against `dev`.
 

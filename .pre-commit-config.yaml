@@ -43,6 +43,23 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: core-tests
+        name: Core pytest gate
+        entry: >-
+          uv run --no-sync --python 3.12 pytest
+          tests/unit/core/
+          tests/unit/runtime/
+          tests/regression/
+          tests/characterization/
+          tests/contract/test_runtime_no_telegram_bot_coupling_contract.py
+          tests/contract/test_layering_no_telegram_bot_imports_contract.py
+          --ignore=tests/unit/core/test_pipeline.py
+          -q --timeout=30 -m "not requires_extras and not slow"
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
   # Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
   # Best Practice 2025: Run linter BEFORE formatter (lint -> format order)
   # Documentation: https://docs.astral.sh/ruff/integrations/

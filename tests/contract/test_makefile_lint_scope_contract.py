@@ -3,8 +3,8 @@ all first-class Python packages.
 
 Historically `make lint` / `make format` / `make pylint` / `make security`
 only covered `src/` and `telegram_bot/`, leaving real production code in
-`mini_app/`, `services/` (`bge-m3-api`), and
-`scripts/` (e.g. `scripts/e2e/`) outside the local quality gate. The
+`services/` (`bge-m3-api`, `docling`) and `scripts/` (e.g. `scripts/e2e/`)
+outside the local quality gate. The
 pre-commit hook covers everything, so a developer who skips pre-commit
 could land unformatted code in the missing scopes (a `ruff format --check`
 on `scripts/` originally surfaced one such drift).
@@ -27,7 +27,7 @@ REPO = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO / "Makefile"
 CI_YML = REPO / ".github" / "workflows" / "ci.yml"
 
-REQUIRED_PATHS = ["src/", "telegram_bot/", "mini_app/", "services/", "scripts/"]
+REQUIRED_PATHS = ["src/", "telegram_bot/", "services/", "scripts/"]
 
 
 def _makefile_text() -> str:

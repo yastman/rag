@@ -1,4 +1,1 @@
-self-hosted-runner:
-  labels:
-    - pr-fast
-    - nightly-heavy
+{}

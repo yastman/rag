@@ -97,6 +97,16 @@ def test_check_frozen_runs_both_lint_and_typecheck_no_sync() -> None:
     assert "mypy" in joined, "check-frozen must run 'mypy' via the no-sync runner (#2296)."
 
 
+def test_candidate_gate_delegates_to_read_only_test_targets() -> None:
+    """Candidate delivery composes existing no-sync test targets."""
+    text = _makefile_text()
+    assert re.search(
+        r"^candidate-check:\s*check-frozen\s+test\s+test-contract\b",
+        text,
+        re.MULTILINE,
+    )
+
+
 def test_uv_run_no_sync_macro_is_no_sync() -> None:
     """The shared $(UV_RUN_NO_SYNC) macro itself must resolve to a no-sync run."""
     text = _makefile_text()
