@@ -11,6 +11,7 @@ from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedR
 
 from src.runtime.qdrant.service import QdrantService
 
+
 _PATCH_TARGET = "src.runtime.qdrant.service.AsyncQdrantClient"
 
 
@@ -119,3 +120,44 @@ class TestQdrantErrorSignal:
         assert results[0]["id"] == "doc_1"
         assert meta["backend_error"] is False
         assert meta["error_type"] is None
+
+
+class TestQdrantCollectionSafety:
+    """Test strict-mode configuration and observable quantization fallback."""
+
+    async def test_strict_mode_serializes_qdrant_1_18_guardrails(self, service):
+        """SDK config carries the new server-side batch and memory limits."""
+        await service._apply_strict_mode()
+
+        strict_config = service._client.update_collection.await_args.kwargs["strict_mode_config"]
+
+        assert strict_config.model_dump(exclude_none=True) == {
+            "enabled": True,
+            "max_query_limit": 100,
+            "max_timeout": 30,
+            "search_max_hnsw_ef": 512,
+            "search_max_batchsize": 10,
+            "max_resident_memory_percent": 80,
+        }
+
+    async def test_quantization_fallback_emits_metric_and_remains_visible(self):
+        """Reindex fallback is observable instead of silently changing requested mode."""
+        with patch(_PATCH_TARGET):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+                quantization_mode="binary",
+            )
+        service._client = AsyncMock()
+        collection = MagicMock()
+        collection.name = "test_collection"
+        service._client.get_collections.return_value = MagicMock(collections=[collection])
+
+        with patch("src.runtime.qdrant.service.record_pipeline_event") as record_event:
+            await service.ensure_collection()
+
+        assert service.collection_name == "test_collection"
+        assert service.requested_quantization_mode == "binary"
+        assert service.quantization_mode == "off"
+        assert service.quantization_degraded is True
+        record_event.assert_called_once_with("qdrant.quantization_fallback")

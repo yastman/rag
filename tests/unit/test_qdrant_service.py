@@ -48,6 +48,88 @@ def _metric_records(caplog, metric_name: str):
     ]
 
 
+class TestQdrantServiceQuantizationMode:
+    """Test quantization collection selection and observable degradation."""
+
+    @pytest.mark.parametrize(
+        ("mode", "collection_name"),
+        [
+            pytest.param("scalar", "test_collection_scalar", id="scalar"),
+            pytest.param("binary", "test_collection_binary", id="binary"),
+            pytest.param("off", "test_collection", id="off"),
+        ],
+    )
+    async def test_mode_selects_collection_for_query(self, mode, collection_name):
+        """Each mode queries its exact collection instead of the base by accident."""
+        with patch(_PATCH_TARGET):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+                quantization_mode=mode,
+            )
+        service._client = AsyncMock()
+        service._collection_validated = True
+        service._colbert_available = False
+        service._client.query_points = AsyncMock(
+            return_value=MagicMock(points=[_make_mock_point()])
+        )
+
+        await service.hybrid_search_rrf(dense_vector=[0.1] * 1024)
+
+        assert service.collection_name == collection_name
+        assert service.requested_quantization_mode == mode
+        assert service.quantization_mode == mode
+        assert service.quantization_degraded is False
+        assert service._client.query_points.call_args.kwargs["collection_name"] == collection_name
+
+    @pytest.mark.parametrize("mode", ["scalar", "binary"])
+    async def test_missing_quantized_collection_degrades_observably(self, mode):
+        """A missing suffix falls back only with explicit requested/effective state."""
+        with patch(_PATCH_TARGET):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+                quantization_mode=mode,
+            )
+        service._client = AsyncMock()
+        base_collection = MagicMock()
+        base_collection.name = "test_collection"
+        service._client.get_collections = AsyncMock(
+            return_value=MagicMock(collections=[base_collection])
+        )
+        service._refresh_collection_capabilities = AsyncMock()
+        service._apply_strict_mode = AsyncMock()
+        service._ensure_alias = AsyncMock()
+        service._client.query_points = AsyncMock(
+            return_value=MagicMock(points=[_make_mock_point()])
+        )
+
+        await service.hybrid_search_rrf(dense_vector=[0.1] * 1024)
+
+        assert service.requested_quantization_mode == mode
+        assert service.quantization_mode == "off"
+        assert service.collection_name == "test_collection"
+        assert service.quantization_degraded is True
+        assert service._client.query_points.call_args.kwargs["collection_name"] == "test_collection"
+
+    @pytest.mark.parametrize("mode", ["scalar", "binary", "off"])
+    async def test_missing_requested_and_base_collections_raise(self, mode):
+        """No collection available fails loudly rather than querying a guessed name."""
+        with patch(_PATCH_TARGET):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+                quantization_mode=mode,
+            )
+        service._client = AsyncMock()
+        service._client.get_collections = AsyncMock(return_value=MagicMock(collections=[]))
+
+        with pytest.raises(RuntimeError, match="not found"):
+            await service.hybrid_search_rrf(dense_vector=[0.1] * 1024)
+
+        service._client.query_points.assert_not_awaited()
+
+
 class TestQdrantServiceQuantization:
     """Test quantization search parameters."""
 
@@ -153,6 +235,33 @@ class TestQdrantServiceQuantization:
         assert search_params.quantization.ignore is False
         assert search_params.quantization.rescore is True  # default
         assert search_params.quantization.oversampling == 2.0  # default
+
+    async def test_binary_quantized_hybrid_search_wires_rrf_and_rescore(self, service):
+        """Binary collection search sends RRF fusion and quantization parameters."""
+        from qdrant_client import models as qdrant_models
+
+        service.set_quantization_mode("binary")
+        service._collection_validated = True
+        service._client.query_points = AsyncMock(
+            return_value=MagicMock(points=[_make_mock_point()])
+        )
+
+        await service.hybrid_search_rrf(
+            dense_vector=[0.1] * 1024,
+            sparse_vector={"indices": [1], "values": [0.5]},
+            quantization_ignore=False,
+            quantization_rescore=True,
+            quantization_oversampling=2.0,
+        )
+
+        call_kwargs = service._client.query_points.call_args.kwargs
+        assert call_kwargs["collection_name"] == "test_collection_binary"
+        assert len(call_kwargs["prefetch"]) == 2
+        assert isinstance(call_kwargs["query"], qdrant_models.RrfQuery)
+        assert call_kwargs["query"].rrf.k == 60
+        assert call_kwargs["search_params"].quantization.ignore is False
+        assert call_kwargs["search_params"].quantization.rescore is True
+        assert call_kwargs["search_params"].quantization.oversampling == 2.0
 
 
 class TestQdrantServiceBatchSearch:

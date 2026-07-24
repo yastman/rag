@@ -1,59 +1,51 @@
 """Regression guard: setup_collection.py must use models.PayloadSchemaType.BOOL for is_furnished."""
 
+import subprocess
+import sys
+from pathlib import Path
 from unittest import mock
 
 from qdrant_client import models
 
 
-class TestSetupCollectionSchemaTypes:
-    """Contract guard: payload indexes must use typed schema constants, not string literals."""
+APARTMENT_INDEX_ORACLE = {
+    "complex_name": models.PayloadSchemaType.KEYWORD,
+    "city": models.PayloadSchemaType.KEYWORD,
+    "section": models.PayloadSchemaType.KEYWORD,
+    "apartment_number": models.PayloadSchemaType.KEYWORD,
+    "view_primary": models.PayloadSchemaType.KEYWORD,
+    "view_tags": models.PayloadSchemaType.KEYWORD,
+    "rooms": models.PayloadSchemaType.INTEGER,
+    "floor": models.PayloadSchemaType.INTEGER,
+    "price_eur": models.PayloadSchemaType.FLOAT,
+    "area_m2": models.PayloadSchemaType.FLOAT,
+    "is_furnished": models.PayloadSchemaType.BOOL,
+    "is_promotion": models.PayloadSchemaType.BOOL,
+}
 
-    def test_is_furnished_uses_payload_schema_type_bool(self):
-        """is_furnished must be indexed with models.PayloadSchemaType.BOOL, not the string 'bool'."""
-        with mock.patch("scripts.apartments.setup_collection.QdrantClient") as MockClient:
-            mock_client = MockClient.return_value
-            mock_client.collection_exists.return_value = True  # skip create_collection
 
-            from scripts.apartments.setup_collection import create_payload_indexes
+def test_apartment_setup_uses_the_literal_top_level_payload_oracle() -> None:
+    """The real apartment payload's field names and types are indexed unchanged."""
+    from scripts.apartments.setup_collection import create_payload_indexes
 
-            create_payload_indexes(mock_client)
+    client = mock.MagicMock()
+    create_payload_indexes(client)
 
-            calls = mock_client.create_payload_index.call_args_list
-            is_furnished_call = None
-            for call in calls:
-                kwargs = call.kwargs or call[1]
-                if kwargs.get("field_name") == "is_furnished":
-                    is_furnished_call = kwargs
-                    break
+    actual = {
+        call.kwargs["field_name"]: call.kwargs["field_schema"]
+        for call in client.create_payload_index.call_args_list
+    }
+    assert actual == APARTMENT_INDEX_ORACLE
 
-            assert is_furnished_call is not None, (
-                "create_payload_index was not called for is_furnished"
-            )
-            assert is_furnished_call["field_schema"] is models.PayloadSchemaType.BOOL, (
-                f"expected models.PayloadSchemaType.BOOL, got {is_furnished_call['field_schema']!r}"
-            )
 
-    def test_is_promotion_uses_payload_schema_type_bool(self):
-        """is_promotion must also be indexed with models.PayloadSchemaType.BOOL."""
-        with mock.patch("scripts.apartments.setup_collection.QdrantClient") as MockClient:
-            mock_client = MockClient.return_value
-            mock_client.collection_exists.return_value = True
+def test_apartment_setup_module_help_requires_no_qdrant() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.apartments.setup_collection", "--help"],
+        cwd=Path(__file__).parents[3],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
-            from scripts.apartments.setup_collection import create_payload_indexes
-
-            create_payload_indexes(mock_client)
-
-            calls = mock_client.create_payload_index.call_args_list
-            is_promotion_call = None
-            for call in calls:
-                kwargs = call.kwargs or call[1]
-                if kwargs.get("field_name") == "is_promotion":
-                    is_promotion_call = kwargs
-                    break
-
-            assert is_promotion_call is not None, (
-                "create_payload_index was not called for is_promotion"
-            )
-            assert is_promotion_call["field_schema"] is models.PayloadSchemaType.BOOL, (
-                f"expected models.PayloadSchemaType.BOOL, got {is_promotion_call['field_schema']!r}"
-            )
+    assert result.returncode == 0
+    assert "Create apartments Qdrant collection" in result.stdout

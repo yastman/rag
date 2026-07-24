@@ -7,6 +7,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 
@@ -25,6 +26,12 @@ def _response_content(response) -> dict:
     if hasattr(response, "content"):
         return response.content
     return json.loads(response.body.decode("utf-8"))
+
+
+async def _deep_health() -> httpx.Response:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        return await client.get("/health?deep=true")
 
 
 class _DummyGraph:
@@ -352,3 +359,63 @@ async def test_query_graph_recursion_error_works_when_langfuse_disabled() -> Non
     assert "лимит" in response.response.lower() or "limit" in response.response.lower()
     # When Langfuse is disabled, scores must not be written
     mock_write_scores.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("component", "secret"),
+    [
+        ("cache", "redis://:redis-secret@cache.internal:6379/0"),
+        ("qdrant", "https://qdrant-secret@qdrant.internal:6333"),
+    ],
+)
+async def test_health_route_redacts_backend_failure_details(
+    monkeypatch: pytest.MonkeyPatch, component: str, secret: str
+) -> None:
+    cache = SimpleNamespace(ping=AsyncMock(return_value=True))
+    qdrant = SimpleNamespace(health=AsyncMock(return_value=None))
+    if component == "cache":
+        cache.ping.side_effect = RuntimeError(secret)
+    else:
+        qdrant.health.side_effect = RuntimeError(secret)
+    monkeypatch.setattr(app.state, "cache", cache, raising=False)
+    monkeypatch.setattr(app.state, "qdrant", qdrant, raising=False)
+
+    with (
+        patch("src.api.main._resolve_trace_id", return_value=f"{component}-trace-id"),
+        patch("src.api.main.logger") as mock_logger,
+    ):
+        response = await _deep_health()
+
+    payload = response.json()
+    component_payload = payload["components"][component]
+    assert response.status_code == 503
+    assert component_payload == {"status": "error", "trace_id": f"{component}-trace-id"}
+    assert secret not in response.text
+    assert mock_logger.exception.call_args.kwargs["extra"] == {"trace_id": f"{component}-trace-id"}
+
+
+async def test_health_route_exposes_qdrant_quantization_degradation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        app.state, "cache", SimpleNamespace(ping=AsyncMock(return_value=True)), raising=False
+    )
+    monkeypatch.setattr(
+        app.state,
+        "qdrant",
+        SimpleNamespace(
+            quantization_degraded=True,
+            requested_quantization_mode="binary",
+            quantization_mode="off",
+        ),
+        raising=False,
+    )
+
+    response = await _deep_health()
+
+    assert response.status_code == 503
+    assert response.json()["components"]["qdrant"] == {
+        "status": "degraded",
+        "requested_quantization_mode": "binary",
+        "effective_quantization_mode": "off",
+    }

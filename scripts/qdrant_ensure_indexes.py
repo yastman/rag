@@ -13,35 +13,35 @@ Usage:
 """
 
 import argparse
-import os
 import sys
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.exceptions import UnexpectedResponse
-from qdrant_client.models import PayloadSchemaType
 
 
-KEYWORD_FIELDS = [
-    "file_id",
-    "metadata.file_id",
-    "metadata.doc_id",
-    "metadata.source",
-    "metadata.file_name",
-    "metadata.mime_type",
-    "metadata.topic",
-    "metadata.doc_type",
-]
+try:
+    from scripts._qdrant_collection_setup import (
+        GDRIVE_PAYLOAD_INDEX_FIELDS,
+        create_payload_indexes,
+    )
+    from scripts._qdrant_collection_setup import (
+        get_qdrant_client as _get_qdrant_client,
+    )
+except ModuleNotFoundError:
+    from _qdrant_collection_setup import (
+        GDRIVE_PAYLOAD_INDEX_FIELDS,
+        create_payload_indexes,
+    )
+    from _qdrant_collection_setup import (
+        get_qdrant_client as _get_qdrant_client,
+    )
 
-INTEGER_FIELDS = [
-    "metadata.order",
-    "metadata.chunk_id",
-]
+
+PAYLOAD_INDEX_FIELDS = GDRIVE_PAYLOAD_INDEX_FIELDS
 
 
 def get_qdrant_client() -> QdrantClient:
-    url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    api_key = os.getenv("QDRANT_API_KEY")
-    return QdrantClient(url=url, api_key=api_key, timeout=30)
+    """Create the short-timeout Qdrant client used by this maintenance script."""
+    return _get_qdrant_client(timeout=30, announce=False)
 
 
 def ensure_indexes(client: QdrantClient, collection: str) -> None:
@@ -51,49 +51,30 @@ def ensure_indexes(client: QdrantClient, collection: str) -> None:
         client: Connected Qdrant client.
         collection: Collection name to index.
     """
-    for field in KEYWORD_FIELDS:
-        try:
-            client.create_payload_index(
-                collection_name=collection,
-                field_name=field,
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
-            print(f"  OK: {field} (keyword)")
-        except UnexpectedResponse as e:
-            if "already exists" in str(e).lower() or e.status_code in (400, 409):
-                print(f"  SKIP: {field} already indexed")
-            else:
-                print(f"  ERROR: {field}: {e}", file=sys.stderr)
-
-    for field in INTEGER_FIELDS:
-        try:
-            client.create_payload_index(
-                collection_name=collection,
-                field_name=field,
-                field_schema=PayloadSchemaType.INTEGER,
-            )
-            print(f"  OK: {field} (integer)")
-        except UnexpectedResponse as e:
-            if "already exists" in str(e).lower() or e.status_code in (400, 409):
-                print(f"  SKIP: {field} already indexed")
-            else:
-                print(f"  ERROR: {field}: {e}", file=sys.stderr)
+    create_payload_indexes(client, collection, PAYLOAD_INDEX_FIELDS)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
+    """Ensure configured payload indexes exist."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--collection",
         default="gdrive_documents_bge",
         help="Qdrant collection name (default: gdrive_documents_bge)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    client = get_qdrant_client()
-    print(f"Ensuring indexes for collection: {args.collection}")
-    ensure_indexes(client, args.collection)
+    try:
+        client = get_qdrant_client()
+        print(f"Ensuring indexes for collection: {args.collection}")
+        ensure_indexes(client, args.collection)
+    except Exception as error:
+        print(f"FAIL: could not ensure indexes for '{args.collection}': {error}", file=sys.stderr)
+        return 1
+
     print("Done.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

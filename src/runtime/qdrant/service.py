@@ -74,7 +74,8 @@ class QdrantService:
             timeout=timeout,
         )
         self._base_collection_name = collection_name
-        self._quantization_mode = quantization_mode.lower()
+        self._requested_quantization_mode = quantization_mode.lower()
+        self._quantization_mode = self._requested_quantization_mode
         self._collection_name = self._get_collection_name(collection_name, quantization_mode)
         self._dense_vector_name = dense_vector_name
         self._sparse_vector_name = sparse_vector_name
@@ -104,6 +105,21 @@ class QdrantService:
         return self._collection_name
 
     @property
+    def requested_quantization_mode(self) -> str:
+        """Get the configured quantization mode, before any fallback."""
+        return self._requested_quantization_mode
+
+    @property
+    def quantization_mode(self) -> str:
+        """Get the effective quantization mode used by the active collection."""
+        return self._quantization_mode
+
+    @property
+    def quantization_degraded(self) -> bool:
+        """Whether a requested quantized collection fell back to the base collection."""
+        return self._requested_quantization_mode != self._quantization_mode
+
+    @property
     def client(self) -> AsyncQdrantClient:
         """Expose underlying client for helper services (e.g., small-to-big)."""
         return self._client
@@ -114,7 +130,8 @@ class QdrantService:
         Args:
             mode: New quantization mode ('off', 'scalar', 'binary')
         """
-        self._quantization_mode = mode.lower()
+        self._requested_quantization_mode = mode.lower()
+        self._quantization_mode = self._requested_quantization_mode
         self._collection_name = self._get_collection_name(self._base_collection_name, mode)
         self._collection_validated = False
         logger.info(f"QdrantService: switched to {self._collection_name} (mode={mode})")
@@ -126,7 +143,8 @@ class QdrantService:
           - max_query_limit=100  — caps result set size per query
           - max_timeout=30       — prevents queries from blocking too long
           - search_max_hnsw_ef=512 — caps HNSW graph traversal depth
-
+          - search_max_batchsize=10 — caps batch searches to the configured batch size
+          - max_resident_memory_percent=80 — rejects writes before memory exhaustion
         Called after ensure_collection() during initialization. Non-blocking:
         if the server does not support StrictModeConfig (older version or error),
         a warning is logged and startup continues.
@@ -137,6 +155,8 @@ class QdrantService:
                 max_query_limit=100,
                 max_timeout=30,
                 search_max_hnsw_ef=512,
+                search_max_batchsize=10,
+                max_resident_memory_percent=80,
             )
             await self._client.update_collection(
                 collection_name=self._collection_name,
@@ -144,7 +164,8 @@ class QdrantService:
             )
             logger.info(
                 "QdrantService: strict mode applied to '%s' "
-                "(max_query_limit=100, max_timeout=30, search_max_hnsw_ef=512)",
+                "(max_query_limit=100, max_timeout=30, search_max_hnsw_ef=512, "
+                "search_max_batchsize=10, max_resident_memory_percent=80)",
                 self._collection_name,
             )
         except Exception as exc:
@@ -219,10 +240,10 @@ class QdrantService:
             )
 
     async def ensure_collection(self) -> None:
-        """Ensure the configured collection exists; fallback to base collection if needed.
+        """Ensure the configured collection exists and signal quantization fallback.
 
-        This prevents hard failures when quantization_mode points to a suffix collection
-        that hasn't been created/reindexed yet.
+        A missing scalar/binary collection uses the base collection during a blue/green
+        reindex, but emits a metric and exposes ``quantization_degraded`` for health.
         """
 
         if self._collection_validated:
@@ -248,12 +269,14 @@ class QdrantService:
         # Fallback: use base collection if it exists.
         if self._base_collection_name in names:
             logger.warning(
-                "QdrantService: collection '%s' not found, falling back to base '%s'",
+                "QdrantService: requested quantized collection '%s' not found; "
+                "falling back to base '%s'. Reindex the requested collection.",
                 self._collection_name,
                 self._base_collection_name,
             )
             self._collection_name = self._base_collection_name
             self._quantization_mode = "off"
+            record_pipeline_event("qdrant.quantization_fallback")
             self._collection_validated = True
             await self._refresh_collection_capabilities()
             await self._apply_strict_mode()

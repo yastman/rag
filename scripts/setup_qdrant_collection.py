@@ -18,7 +18,6 @@ import os
 import sys
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import (
     BinaryQuantization,
     BinaryQuantizationConfig,
@@ -34,39 +33,46 @@ from qdrant_client.models import (
 )
 
 
+try:
+    from scripts._qdrant_collection_setup import (
+        collection_exists,
+        delete_collection,
+        get_qdrant_client,
+    )
+    from scripts._qdrant_collection_setup import (
+        create_payload_indexes as _create_payload_indexes,
+    )
+except ModuleNotFoundError:
+    from _qdrant_collection_setup import (
+        collection_exists,
+        delete_collection,
+        get_qdrant_client,
+    )
+    from _qdrant_collection_setup import (
+        create_payload_indexes as _create_payload_indexes,
+    )
+
+
 # Vector dimensions (BGE-M3)
 DENSE_DIMENSION = 1024
 
 
-def get_qdrant_client() -> QdrantClient:
-    """Create Qdrant client from environment variables."""
-    url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    api_key = os.getenv("QDRANT_API_KEY")
-
-    print(f"Connecting to Qdrant at {url}...")
-
-    return QdrantClient(
-        url=url,
-        api_key=api_key,
-        timeout=60,
-    )
-
-
-def collection_exists(client: QdrantClient, collection_name: str) -> bool:
-    """Check if collection exists."""
-    try:
-        client.get_collection(collection_name)
-        return True
-    except (UnexpectedResponse, Exception):
-        return False
-
-
-def delete_collection(client: QdrantClient, collection_name: str) -> None:
-    """Delete collection if exists."""
-    if collection_exists(client, collection_name):
-        print(f"Deleting existing collection: {collection_name}")
-        client.delete_collection(collection_name)
-        print(f"  Deleted: {collection_name}")
+PAYLOAD_INDEX_FIELDS = (
+    (
+        PayloadSchemaType.KEYWORD,
+        (
+            "file_id",
+            "metadata.file_id",
+            "metadata.doc_id",
+            "metadata.source",
+            "metadata.file_name",
+            "metadata.mime_type",
+            "metadata.topic",
+            "metadata.doc_type",
+        ),
+    ),
+    (PayloadSchemaType.INTEGER, ("metadata.order", "metadata.chunk_id")),
+)
 
 
 def create_collection(client: QdrantClient, collection_name: str) -> None:
@@ -128,56 +134,8 @@ def create_collection(client: QdrantClient, collection_name: str) -> None:
 
 
 def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
-    """Create indexes on payload fields for fast filtering and deletion.
-
-    Indexes match the payload contract in qdrant_writer.py:
-    - file_id (flat): fast delete by file
-    - metadata.file_id: filter by file in queries
-    - metadata.source: filter by source path
-    - metadata.file_name: filter by filename
-    - metadata.mime_type: filter by document type
-    """
-    print("Creating payload indexes...")
-
-    # Keyword indexes (exact match filtering + deletion)
-    keyword_fields = [
-        "file_id",  # Flat field for fast delete
-        "metadata.file_id",  # Nested field for query filtering
-        "metadata.doc_id",  # Small-to-big doc grouping
-        "metadata.source",  # Source path filtering
-        "metadata.file_name",  # Filename filtering
-        "metadata.mime_type",  # Document type filtering
-        "metadata.topic",  # Topic pre-filter routing
-        "metadata.doc_type",  # Content-layer doc type filtering
-    ]
-
-    for field in keyword_fields:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
-            print(f"  Created keyword index: {field}")
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
-
-    # Integer indexes for ordering/pagination
-    integer_fields = [
-        "metadata.order",  # Chunk ordering for small-to-big
-        "metadata.chunk_id",  # Chunk position
-    ]
-
-    for field in integer_fields:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.INTEGER,
-            )
-            print(f"  Created integer index: {field}")
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
+    """Create this collection's payload indexes."""
+    _create_payload_indexes(client, collection_name, PAYLOAD_INDEX_FIELDS)
 
 
 def print_collection_info(client: QdrantClient, collection_name: str) -> None:

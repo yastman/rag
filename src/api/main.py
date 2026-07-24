@@ -184,8 +184,10 @@ async def health(deep: bool = False) -> JSONResponse:
                     overall_ok = False
             else:
                 components["cache"] = {"status": "ok"}
-        except Exception as exc:
-            components["cache"] = {"status": "error", "detail": str(exc)}
+        except Exception:
+            trace_id = _resolve_trace_id()
+            logger.exception("Deep health cache check failed", extra={"trace_id": trace_id})
+            components["cache"] = {"status": "error", "trace_id": trace_id}
             overall_ok = False
 
     qdrant = getattr(app.state, "qdrant", None)
@@ -199,11 +201,21 @@ async def health(deep: bool = False) -> JSONResponse:
                 result = probe()
                 if hasattr(result, "__await__"):
                     await result
-                components["qdrant"] = {"status": "ok"}
+            if getattr(qdrant, "quantization_degraded", False):
+                components["qdrant"] = {
+                    "status": "degraded",
+                    "requested_quantization_mode": getattr(
+                        qdrant, "requested_quantization_mode", "unknown"
+                    ),
+                    "effective_quantization_mode": getattr(qdrant, "quantization_mode", "unknown"),
+                }
+                overall_ok = False
             else:
                 components["qdrant"] = {"status": "ok"}
-        except Exception as exc:
-            components["qdrant"] = {"status": "error", "detail": str(exc)}
+        except Exception:
+            trace_id = _resolve_trace_id()
+            logger.exception("Deep health Qdrant check failed", extra={"trace_id": trace_id})
+            components["qdrant"] = {"status": "error", "trace_id": trace_id}
             overall_ok = False
 
     return JSONResponse(

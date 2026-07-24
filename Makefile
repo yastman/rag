@@ -1084,7 +1084,7 @@ ingest-unified-logs: ## Show ingestion service logs
 
 qdrant-audit-indexes: ## Audit Qdrant payload indexes — PASS/FAIL with missing fields (#3074)
 	@echo "$(BLUE)Auditing Qdrant payload indexes for $${QDRANT_COLLECTION:-gdrive_documents_bge}...$(NC)"
-	uv run python scripts/qdrant_audit_indexes.py
+	uv run python -m scripts.qdrant_audit_indexes
 
 qdrant-backup: ## Create Qdrant collection snapshots (all collections)
 	@echo "$(BLUE)Creating Qdrant snapshots...$(NC)"

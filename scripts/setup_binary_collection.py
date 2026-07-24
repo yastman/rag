@@ -16,7 +16,6 @@ import os
 import sys
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import (
     BinaryQuantization,
     BinaryQuantizationConfig,
@@ -30,53 +29,77 @@ from qdrant_client.models import (
 )
 
 
+try:
+    from scripts._qdrant_collection_setup import (
+        collection_exists,
+        delete_collection,
+        get_qdrant_client,
+        payload_index_types,
+    )
+    from scripts._qdrant_collection_setup import (
+        create_payload_indexes as _create_payload_indexes,
+    )
+except ModuleNotFoundError:
+    from _qdrant_collection_setup import (
+        collection_exists,
+        delete_collection,
+        get_qdrant_client,
+        payload_index_types,
+    )
+    from _qdrant_collection_setup import (
+        create_payload_indexes as _create_payload_indexes,
+    )
+
+
 # Vector dimensions (Voyage voyage-4-large)
 DENSE_DIMENSION = 1024
 
 
-def get_qdrant_client() -> QdrantClient:
-    """Create Qdrant client from environment variables."""
-    url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    api_key = os.getenv("QDRANT_API_KEY")
-
-    print(f"Connecting to Qdrant at {url}...")
-
-    return QdrantClient(
-        url=url,
-        api_key=api_key,
-        timeout=60,
-    )
+PAYLOAD_INDEX_FIELDS = (
+    (
+        PayloadSchemaType.KEYWORD,
+        ("file_id", "metadata.file_id", "metadata.doc_id", "metadata.source"),
+    ),
+    (PayloadSchemaType.INTEGER, ("metadata.order", "metadata.chunk_order")),
+    (
+        PayloadSchemaType.KEYWORD,
+        (
+            "metadata.document_name",
+            "metadata.doc_id",
+            "metadata.article_number",
+            "metadata.city",
+            "metadata.source_type",
+            "metadata.source",
+            "metadata.topic",
+            "metadata.doc_type",
+            "metadata.jurisdiction",
+            "metadata.audience",
+            "metadata.language",
+        ),
+    ),
+    (
+        PayloadSchemaType.INTEGER,
+        (
+            "metadata.price",
+            "metadata.rooms",
+            "metadata.area",
+            "metadata.floor",
+            "metadata.floors",
+            "metadata.distance_to_sea",
+            "metadata.bathrooms",
+            "metadata.chunk_id",
+            "metadata.order",
+        ),
+    ),
+    (PayloadSchemaType.BOOL, ("metadata.furnished", "metadata.year_round")),
+)
 
 
 def get_binary_collection_name(base_name: str) -> str:
-    """Get the binary collection name from a base collection name.
-
-    Args:
-        base_name: Base collection name (e.g., 'contextual_bulgaria_voyage')
-
-    Returns:
-        Binary collection name with '_binary' suffix
-    """
+    """Get the binary collection name from a base collection name."""
     if base_name.endswith("_binary"):
         return base_name
     return f"{base_name}_binary"
-
-
-def collection_exists(client: QdrantClient, collection_name: str) -> bool:
-    """Check if collection exists."""
-    try:
-        client.get_collection(collection_name)
-        return True
-    except (UnexpectedResponse, Exception):
-        return False
-
-
-def delete_collection(client: QdrantClient, collection_name: str) -> None:
-    """Delete collection if exists."""
-    if collection_exists(client, collection_name):
-        print(f"Deleting existing collection: {collection_name}")
-        client.delete_collection(collection_name)
-        print(f"  Deleted: {collection_name}")
 
 
 def create_binary_collection(client: QdrantClient, collection_name: str) -> None:
@@ -135,108 +158,8 @@ def create_binary_collection(client: QdrantClient, collection_name: str) -> None
 
 
 def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
-    """Create indexes on payload fields for fast filtering."""
-    print("Creating payload indexes...")
-
-    # Required indexes for unified ingestion (flat for fast delete)
-    required_keyword_fields = [
-        "file_id",  # Flat, for fast delete
-        "metadata.file_id",  # In metadata
-        "metadata.doc_id",  # For small-to-big
-        "metadata.source",  # For citations
-    ]
-
-    for field in required_keyword_fields:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
-            print(f"  Created keyword index (required): {field}")
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
-
-    # Required integer indexes for unified ingestion (small-to-big sorting)
-    required_integer_fields = [
-        "metadata.order",  # For small-to-big sorting
-        "metadata.chunk_order",  # Alias
-    ]
-
-    for field in required_integer_fields:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.INTEGER,
-            )
-            print(f"  Created integer index (required): {field}")
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
-
-    # Keyword indexes for text filtering
-    keyword_fields = [
-        "metadata.document_name",
-        "metadata.doc_id",
-        "metadata.article_number",
-        "metadata.city",
-        "metadata.source_type",
-        "metadata.source",
-        "metadata.topic",
-        "metadata.doc_type",
-    ]
-
-    for field in keyword_fields:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
-            print(f"  Created keyword index: {field}")
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
-
-    # Integer indexes for numeric filtering (range queries)
-    integer_fields = [
-        "metadata.price",
-        "metadata.rooms",
-        "metadata.area",
-        "metadata.floor",
-        "metadata.floors",
-        "metadata.distance_to_sea",
-        "metadata.bathrooms",
-        "metadata.chunk_id",
-        "metadata.order",
-    ]
-
-    for field in integer_fields:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.INTEGER,
-            )
-            print(f"  Created integer index: {field}")
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
-
-    # Boolean indexes
-    boolean_fields = [
-        "metadata.furnished",
-        "metadata.year_round",
-    ]
-
-    for field in boolean_fields:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.BOOL,
-            )
-            print(f"  Created boolean index: {field}")
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
+    """Create this collection's payload indexes."""
+    _create_payload_indexes(client, collection_name, PAYLOAD_INDEX_FIELDS)
 
 
 def verify_collection_indexes(client: QdrantClient, collection_name: str) -> list[str]:
@@ -245,18 +168,7 @@ def verify_collection_indexes(client: QdrantClient, collection_name: str) -> lis
     Returns:
         List of missing index names (empty if all present)
     """
-    required_indexes = {
-        # Keyword indexes (required for unified ingestion)
-        "file_id": "keyword",
-        "metadata.file_id": "keyword",
-        "metadata.doc_id": "keyword",
-        "metadata.source": "keyword",
-        "metadata.topic": "keyword",
-        "metadata.doc_type": "keyword",
-        # Integer indexes (required for small-to-big)
-        "metadata.order": "integer",
-        "metadata.chunk_order": "integer",
-    }
+    required_indexes = payload_index_types(PAYLOAD_INDEX_FIELDS)
 
     try:
         info = client.get_collection(collection_name)
