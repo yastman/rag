@@ -68,8 +68,12 @@ async def test_binary_collection_ingest_and_hybrid_search(
             top_k=2,
         )
 
-        assert results
-        assert results[0]["metadata"]["file_name"] in {
+        assert len(results) == 2
+        assert [result["score"] for result in results] == sorted(
+            (result["score"] for result in results),
+            reverse=True,
+        )
+        assert {result["metadata"]["file_name"] for result in results} == {
             "sunny_beach_studio.md",
             "sunny_beach_2bed.md",
         }
