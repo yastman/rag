@@ -76,6 +76,9 @@ docling-native = [
     "docling-core[chunking]>=2.74.1",
     "transformers>=4.34.0,<6.0.0",
     "fastembed>=0.7.4",
+    # Explicit so uv can bind Docling's transitive ML runtime to the CPU index.
+    "torch>=2.2.0",
+    "torchvision>=0.17.0",
 ]
 
 # bge-m3-api service test dependencies (FastAPI endpoint tests)
@@ -165,6 +168,17 @@ constraint-dependencies = [
     "zipp>=4.1.0",
     "openai>=2.37.0",
 ]
+
+[tool.uv.sources]
+# Docling pulls torch/torchvision transitively. Keep ingestion CPU-only on every
+# platform instead of resolving PyPI's CUDA-enabled Linux wheels.
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 # =============================================================================
 # RUFF CONFIGURATION (Modern Python Linter + Formatter, 2025)

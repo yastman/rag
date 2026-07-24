@@ -21,6 +21,9 @@ import pytest
 from src.ingestion.unified.config import UnifiedConfig
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 # ---------------------------------------------------------------------------
 # Helpers — mirrors the pattern from test_unified_flow_stateless.py
 # ---------------------------------------------------------------------------
