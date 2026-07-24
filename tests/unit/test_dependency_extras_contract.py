@@ -12,7 +12,7 @@ MAKEFILE = Path("Makefile")
 
 # Archived extras removed by #2640 (monolith archival epic #2596)
 # Note: "eval" was also removed in #2043 (ragas CVE-2026-6587 — dead dep, zero imports)
-ARCHIVED_EXTRAS = {"observability", "ui", "mini-app", "voice"}
+ARCHIVED_EXTRAS = {"observability", "providers", "ui", "mini-app", "voice"}
 
 
 def _project() -> dict:
@@ -72,8 +72,6 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     extras = _project()["project"]["optional-dependencies"]
 
     assert {"aiogram", "aiogram-dialog", "fluentogram"}.issubset(_dep_names(extras["telegram"]))
-    # providers is intentionally empty after #2893 (anthropic/groq removed with dead module)
-    assert extras["providers"] == []
     assert {"docling", "fastembed"}.issubset(_dep_names(extras["docling-native"]))
     assert "pymupdf" not in _dep_names(extras["docling-native"])  # removed with document_parser.py
 
@@ -92,7 +90,7 @@ def test_all_extra_includes_every_kept_runtime_surface() -> None:
     """`uv sync --all-extras` should cover all kept surfaces after archival (#2640)."""
     all_extra = " ".join(_project()["project"]["optional-dependencies"]["all"])
 
-    for name in ["core", "telegram", "providers", "docling-native"]:
+    for name in ["core", "telegram", "docling-native"]:
         assert name in all_extra, f"'all' extra must include '{name}'"
 
     for name in ARCHIVED_EXTRAS:
