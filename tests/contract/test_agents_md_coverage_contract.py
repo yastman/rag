@@ -18,10 +18,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 # Directories that must expose AGENTS guidance to coding agents.
 # Each entry is repo-root-relative.
 REQUIRED_DIRS: list[str] = [
+    "telegram_bot",
+    "src/ingestion/unified",
     "scripts",
     "services",
     "services/bge-m3-api",
-    "services/docling",
 ]
 
 
