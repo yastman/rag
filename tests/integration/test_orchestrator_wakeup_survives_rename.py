@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -34,6 +35,7 @@ SET_ORCH = REPO_ROOT / "scripts" / "set_orchestrator_window.sh"
 pytestmark = [
     pytest.mark.no_services,
     pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux not available on PATH"),
+    pytest.mark.skipif(sys.platform == "win32", reason="requires POSIX bash/tmux"),
 ]
 
 
