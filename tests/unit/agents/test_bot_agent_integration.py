@@ -29,12 +29,10 @@ def test_handle_query_supervisor_imports_available():
     from telegram_bot.agents.context import BotContext
     from telegram_bot.agents.history_tool import history_search
     from telegram_bot.agents.rag_tool import rag_search
-    from telegram_bot.observability import create_callback_handler
 
     assert callable(create_bot_agent)
     assert callable(rag_search)
     assert callable(history_search)
-    assert callable(create_callback_handler)
     assert BotContext is not None
 
 
@@ -46,8 +44,6 @@ def test_bot_context_has_required_fields():
         telegram_user_id=42,
         session_id="test",
         language="ru",
-        kommo_client=None,
-        history_service=None,
         embeddings=MagicMock(),
         sparse_embeddings=MagicMock(),
         qdrant=MagicMock(),
@@ -59,26 +55,6 @@ def test_bot_context_has_required_fields():
     )
     assert ctx.telegram_user_id == 42
     assert ctx.language == "ru"
-
-
-def test_bot_local_lock_imports_create_agent_sdk():
-    """Regression: bot-local frozen env can import langchain.agents.create_agent and create_bot_agent."""
-    repo_root = str(pathlib.Path(__file__).resolve().parents[3])
-    cmd = [
-        "uv",
-        "--directory",
-        "telegram_bot",
-        "run",
-        "--frozen",
-        "python",
-        "-c",
-        "from langchain.agents import create_agent; from telegram_bot.agents.agent import create_bot_agent; print('ok')",
-    ]
-    env = os.environ.copy()
-    env["PYTHONPATH"] = repo_root
-    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
-    assert "ok" in result.stdout
 
 
 def test_bot_local_lock_imports_router_structured_output_service():

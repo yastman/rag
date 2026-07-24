@@ -159,7 +159,6 @@ async def _run_handle_query_supervisor(
         patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
         patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
         patch("telegram_bot.bot.propagate_attributes"),
-        patch("telegram_bot.bot.create_callback_handler", return_value=None),
     ):
         message = _make_message()
         if streaming:
@@ -878,7 +877,6 @@ class TestHistoryScores:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
@@ -1015,7 +1013,6 @@ class TestTextPathFeedbackButtons:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
@@ -1052,7 +1049,6 @@ class TestTextPathFeedbackButtons:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
@@ -1088,7 +1084,6 @@ class TestTextPathFeedbackButtons:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
@@ -1123,7 +1118,6 @@ class TestTextPathFeedbackButtons:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
@@ -1179,7 +1173,6 @@ class TestTextPathSemanticCacheStore:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
@@ -1228,7 +1221,6 @@ class TestTextPathSemanticCacheStore:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
@@ -1277,7 +1269,6 @@ class TestTextPathSemanticCacheStore:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
@@ -1326,7 +1317,6 @@ class TestTextPathSemanticCacheStore:
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cas.typing.return_value = _make_typing_cm()
