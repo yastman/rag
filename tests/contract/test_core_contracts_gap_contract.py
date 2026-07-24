@@ -1,10 +1,10 @@
 """Contract test gap coverage for #3017.
 
-Three concrete gaps identified by audit:
+Two concrete gaps identified by audit:
 
 1. ``docs/architecture/STRUCTURE.md`` exists and references the active layers
    (src/core, src/runtime, src/adapters, src/ingestion).
-2. Qdrant collection schema in ingestion code statically declares all three
+2. The authoritative Qdrant collection setup statically declares all three
    vector namespaces: ``dense``, ``bm42``, ``colbert``.
 
 All checks are static (no Docker, no network, no imports of heavy deps).
@@ -46,22 +46,19 @@ def test_architecture_structure_md_references_active_layers() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3. Qdrant collection schema declares dense + bm42 + colbert
+# 2. Qdrant collection schema declares dense + bm42 + colbert
 # ---------------------------------------------------------------------------
 
-_SCHEMA_FILES = [
-    REPO_ROOT / "src" / "ingestion" / "indexer.py",
-    REPO_ROOT / "src" / "ingestion" / "unified" / "cli.py",
-]
+_SCHEMA_FILES = [REPO_ROOT / "scripts" / "setup_qdrant_collection.py"]
 
 _REQUIRED_VECTORS = ("dense", "bm42", "colbert")
 
 
 def test_qdrant_collection_schema_declares_required_vector_names() -> None:
-    """Ingestion code that calls create_collection must declare dense, bm42, colbert.
+    """Authoritative collection setup must declare dense, bm42, and colbert.
 
-    Verifies statically that the BGE-M3 full profile schema is wired in the
-    ingestion layer, preventing silent schema regression (#3018/#3012).
+    Verifies statically that the BGE-M3 full profile schema is wired into the
+    setup used for local and deployed collections (#3018/#3012).
     """
     inspected = 0
     for schema_file in _SCHEMA_FILES:
