@@ -3,6 +3,11 @@
 Split #2816: extracted ``_handle_manager``, ``_handle_group_message``,
 ``_complete_handoff``, ``_close_handoff`` as module-level functions.
 
+Raw FSM access is an intentional #1232 boundary exception: this module
+maintains the single ``HandoffStates.active`` re-entry guard owned by
+``handlers/handoff.py``, and manager-group ``/close`` messages must clear the
+client's state by storage key because they have no client ``FSMContext``.
+
 ``PropertyBot`` retains thin wrappers so aiogram registration in
 ``_register_handlers`` and existing callers are unchanged.
 """
