@@ -44,7 +44,7 @@ def _iter_python_files(directories: list[Path]) -> list[Path]:
     for d in directories:
         if not d.exists():
             continue
-        files.extend(p for p in d.rglob("*.py") if "/.venv/" not in str(p))
+        files.extend(p for p in d.rglob("*.py") if ".venv" not in p.parts)
     return files
 
 
