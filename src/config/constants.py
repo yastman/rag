@@ -120,7 +120,6 @@ class BatchSizes:
     QUERIES = 10  # Number of queries to batch
     EMBEDDINGS = 32  # Number of texts to embed at once
     DOCUMENTS = 16  # Number of documents in ingestion
-    CONTEXT = 5  # Number of chunks for contextualization
 
 
 @dataclass

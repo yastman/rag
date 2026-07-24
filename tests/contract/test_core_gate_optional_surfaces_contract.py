@@ -7,9 +7,8 @@ therefore limited to the core gate plus the no-service graph-path check.
 After #2638: archived surface targets (test-api-adapter, test-legacy-graph-extra,
 test-voice-extra, test-eval-extra, test-observability-extra, test-optional-surfaces)
 are removed from the Makefile. The remaining explicit opt-in targets are
-test-telegram-adapter, test-providers-extra, and test-ingest-extra.
-Exclusion variables (PYTEST_LEGACY_GRAPH_PATHS, PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS)
-remain defined for the broad test-unit lane to avoid collecting extras-dependent tests.
+test-telegram-adapter and test-ingest-extra. Exclusion variables remain defined
+for the broad test-unit lane to avoid collecting extras-dependent tests.
 """
 
 from __future__ import annotations
@@ -33,17 +32,14 @@ OPTIONAL_SURFACE_TOKENS = (
     "tests/unit/ingestion",
     "tests/unit/evaluation",
     "tests/unit/observability",
-    "tests/unit/contextualization",
     "tests/unit/graph",
     "tests/unit/mini_app",
     "test-telegram-adapter",
     "test-api-adapter",
-    "test-providers-extra",
     "test-legacy-graph-extra",
     "test-ingest-extra",
 )
 # Remaining explicit opt-in targets after #2638 cleanup.
-# test-providers-extra is kept as a no-op stub after #2893 removed contextualization tests.
 OPTIONAL_TARGETS = (
     "test-telegram-adapter",
     "test-ingest-extra",
@@ -130,9 +126,8 @@ def test_langfuse_baseline_diagnostics_are_not_required_gate_dependencies() -> N
 def test_broad_unit_exclusions_are_defined_and_applied() -> None:
     """Exclusion variables must remain defined and applied in the broad test-unit lane.
 
-    After #2638: test-legacy-graph-extra and test-api-adapter are removed.
-    The exclusion variables (PYTEST_LEGACY_GRAPH_PATHS, PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS)
-    are kept as definitions so test-unit does not accidentally collect extras-dependent tests.
+    After #2638: archived optional targets are removed. Remaining exclusion variables
+    keep the broad lane from collecting extras-dependent tests.
     """
     text = _makefile_text()
 
@@ -140,7 +135,6 @@ def test_broad_unit_exclusions_are_defined_and_applied() -> None:
     required_vars = (
         "PYTEST_TELEGRAM_ADAPTER_PATHS",
         "PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS",
-        "PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS",
         "PYTEST_LEGACY_GRAPH_PATHS",
     )
     for var_name in required_vars:

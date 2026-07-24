@@ -69,9 +69,6 @@ telegram = [
     "langchain-core>=1.4.0",
 ]
 
-# Optional non-OpenAI provider/contextualization adapters.
-# #2893: anthropic and groq removed (only used by dead contextualization module).
-providers = []
 
 # Native Docling SDK — ingestion pipeline (DocumentConverter + HybridChunker)
 docling-native = [
@@ -93,7 +90,7 @@ bge-extras = [
 
 # All optional dependencies (kept surfaces only; archived extras removed by #2640)
 all = [
-    "contextual-rag[core,telegram,providers,docling-native]",
+    "contextual-rag[core,telegram,docling-native]",
 ]
 
 # =============================================================================
@@ -525,9 +522,8 @@ exclude_lines = [
 # - experimental_namespace_package: src/ and telegram_bot/ are in-repo
 #   namespace packages (not PyPI packages), so DEP001 on intra-repo imports
 #   is a false positive suppressed by this flag.
-# - extend_exclude: src/api/ and src/contextualization/ are archived/reference
-#   code not on the active production path; their optional deps (fastapi,
-#   langgraph, anthropic, groq) should not gate the production lint.
+# - extend_exclude: archived/reference code and non-package support trees
+#   should not gate the production lint.
 # - per_rule_ignores DEP001: remaining optional/conditional imports that are
 #   not declared in pyproject.toml because they live in optional extras or
 #   archived CRM paths (langchain_core, langgraph, fluent_compiler, anyio).
@@ -542,7 +538,6 @@ exclude_lines = [
 experimental_namespace_package = true
 extend_exclude = [
     "src/api",
-    "src/contextualization",
     "scripts",
     "services",
     "archive",

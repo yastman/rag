@@ -2,7 +2,7 @@
 	deps-audit vuln-audit arch-lint complexity docs-coverage audit \
 	dead-code-check deps-check \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-providers-extra test-ingest-extra test-bge-extras \
+	test-telegram-adapter test-ingest-extra test-bge-extras \
 	smoke-fast smoke-zoo \
 	ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-logs \
@@ -98,13 +98,10 @@ PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_thread_routing.py \
 	tests/unit/test_topic_service_init.py
 PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB := $(addprefix --ignore-glob=,$(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS))
-PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS :=
-# #2893: contextualization 3-provider strategy removed (dead code, 0 prod callers).
-# Variable kept as an empty list so PYTEST_OPTIONAL_PROVIDER_IGNORE still compiles.
 PYTEST_LEGACY_GRAPH_PATHS :=
 PYTEST_OPTIONAL_ADAPTER_IGNORE := $(addprefix --ignore=,$(PYTEST_TELEGRAM_ADAPTER_PATHS))
 PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB := $(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)
-PYTEST_OPTIONAL_PROVIDER_IGNORE := $(addprefix --ignore=,$(PYTEST_PROVIDER_CONTEXTUALIZATION_PATHS) $(PYTEST_LEGACY_GRAPH_PATHS))
+PYTEST_OPTIONAL_PROVIDER_IGNORE := $(addprefix --ignore=,$(PYTEST_LEGACY_GRAPH_PATHS))
 
 
 
@@ -308,10 +305,6 @@ test-telegram-adapter: ## Run Telegram adapter unit tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_TELEGRAM_ADAPTER_PATHS) $(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Telegram adapter tests complete$(NC)"
 
-
-test-providers-extra: ## Run optional provider/contextualization tests explicitly (no-op: #2893 removed)
-	@echo "$(BLUE)No provider/contextualization tests remain after #2893 removal.$(NC)"
-	@echo "$(GREEN)✓ Providers-extra tests complete (no tests)$(NC)"
 
 
 test-ingest-extra: ## Run optional ingestion-extra tests explicitly (in-process docling)
