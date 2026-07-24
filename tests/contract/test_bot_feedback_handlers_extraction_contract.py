@@ -27,6 +27,11 @@ import importlib
 import inspect
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = pytest.mark.requires_extras
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODULE_NAME = "telegram_bot.handlers.feedback_handlers"

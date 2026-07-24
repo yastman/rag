@@ -18,7 +18,7 @@ SCAN_DIRS: tuple[Path, ...] = (
     REPO_ROOT / "telegram_bot",
     REPO_ROOT / "src",
 )
-EXCLUDE_DIRS: tuple[str, ...] = ("/tests/", "/.venv/", "/__pycache__/")
+EXCLUDE_DIRS: frozenset[str] = frozenset(("tests", ".venv", "__pycache__"))
 
 CONTEXT_BREAKING_ALLOWLIST: dict[str, str] = {}
 
@@ -29,8 +29,7 @@ def _iter_python_files() -> list[Path]:
         if not directory.exists():
             continue
         for path in directory.rglob("*.py"):
-            path_str = str(path)
-            if any(fragment in path_str for fragment in EXCLUDE_DIRS):
+            if not EXCLUDE_DIRS.isdisjoint(path.relative_to(REPO_ROOT).parts):
                 continue
             files.append(path)
     return files

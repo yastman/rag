@@ -35,6 +35,9 @@ from types import SimpleNamespace
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 NEW_MODULE = REPO_ROOT / "telegram_bot" / "pipeline" / "streaming.py"
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"

@@ -16,7 +16,7 @@ SCAN_DIRS = [
     REPO_ROOT / "telegram_bot",
     REPO_ROOT / "src",
 ]
-EXCLUDE_DIRS = ["tests/", ".venv/"]
+EXCLUDE_DIRS = ("tests", ".venv")
 
 # Only these files are permitted to call update_current_span(level="ERROR"/"WARNING")
 ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
@@ -78,8 +78,8 @@ def _collect_error_span_calls(
         if not directory.exists():
             continue
         for py_file in directory.rglob("*.py"):
-            rel_path_str = str(py_file.relative_to(REPO_ROOT))
-            if any(ex in rel_path_str for ex in exclude):
+            rel_path = py_file.relative_to(REPO_ROOT)
+            if not exclude.isdisjoint(rel_path.parts):
                 continue
             try:
                 tree = ast.parse(py_file.read_text())
@@ -123,8 +123,7 @@ def _collect_python_files(
         if not directory.exists():
             continue
         for py_file in directory.rglob("*.py"):
-            rel_path_str = str(py_file.relative_to(REPO_ROOT))
-            if any(ex in rel_path_str for ex in exclude):
+            if not exclude.isdisjoint(py_file.relative_to(REPO_ROOT).parts):
                 continue
             files.append(py_file)
     return files
