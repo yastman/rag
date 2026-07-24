@@ -64,9 +64,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "telegram_bot/services/rag/query_preprocessor.py": ["ERROR"],
     # History service — records ERROR span when conversation history save/load fails.
     "telegram_bot/services/history_service.py": ["ERROR"],
-    # Semantic cache middleware — records ERROR span on embedding failure path
-    # (WIP aiogram-dialog middleware migration, #2050–2052).
-    "telegram_bot/graph/middleware/cache.py": ["ERROR"],
 }
 
 
