@@ -25,7 +25,7 @@ POLLING_LOCK_KEY ?= telegram-bot:polling
 RELEASE_POLLING_LOCK_FORCE ?= 0
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
-LINT_PATHS := src/ telegram_bot/ mini_app/ services/ scripts/
+LINT_PATHS := src/ telegram_bot/ services/ scripts/
 
 # Default target
 .DEFAULT_GOAL := help
@@ -729,7 +729,7 @@ docker-ps: ## Show Docker service status
 # DEVELOPMENT WORKFLOW
 # =============================================================================
 
-dev-setup: install-dev docker-up ## Complete development setup
+dev-setup: install-dev setup-hooks docker-up ## Complete development setup
 	@echo "$(GREEN)✓✓✓ Development environment ready! ✓✓✓$(NC)"
 	@echo "$(YELLOW)Next steps:$(NC)"
 	@echo "  1. Copy .env.example to .env"
@@ -787,9 +787,9 @@ check-frozen: ## Read-only check: fail if .venv is stale, then lint + type-check
 	@$(UV_RUN_NO_SYNC) mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
 	@echo "$(GREEN)✓ Frozen check complete$(NC)"
 
-candidate-check: check-frozen ## Candidate/review check alias (read-only after env preflight)
+candidate-check: check-frozen test test-contract ## Authoritative local delivery gate
 
-pre-push: lint format-check ## Pre-push gate (lint + format-check)
+pre-push: lint format-check test-core ## Pre-push gate (lint + format-check + core tests)
 	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"
 
 fix: lint-fix format ## Fix all auto-fixable issues

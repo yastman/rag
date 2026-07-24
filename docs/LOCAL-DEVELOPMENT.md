@@ -18,6 +18,7 @@ and [`README.md`](README.md) for the documentation map.
 cp .env.example .env     # fill in credentials (Telegram token, API keys)
 uv sync                  # core + dev tools (PEP 735 dev group)
 uv sync --extra telegram # bot dependencies (aiogram, LangGraph)
+make setup-hooks         # install commit and push hooks
 # optional: uv sync --extra docling-native   # Docling + PyMuPDF ingestion pipeline
 ```
 
@@ -27,6 +28,8 @@ uv sync --extra telegram # bot dependencies (aiogram, LangGraph)
 Copy-Item .env.example .env        # fill in credentials
 uv sync                            # core + dev tools (Python 3.12)
 uv sync --extra telegram           # bot dependencies
+uv run pre-commit install
+uv run pre-commit install --hook-type pre-push
 # optional: uv sync --extra docling-native   # Docling + PyMuPDF ingestion
 # Preflight validation:
 scripts/windows_preflight.ps1
@@ -76,21 +79,25 @@ uv run python -m telegram_bot.main
 
 | Command | What it checks |
 |---|---|
-| `make check` | Ruff lint + MyPy |
+| Commit | Automatic pre-commit hooks; `make check` runs Ruff lint + MyPy |
+| Push | Automatic pre-push hooks; `make pre-push` manually runs lint + format check + core tests |
 | `make test-core` | Monolith core gate (~91 tests, ~8s) — run first for any `src/core` or `src/runtime` change |
 | `make test` | Unit + critical graph paths — for adapter/service changes |
 | `make test-contract` | Static contract tests (trace/schema/architecture) |
+| Candidate | `make candidate-check` is the authoritative local delivery gate (`check-frozen` + `test` + `test-contract`) |
+| Major candidate | `make test-full` runs all local tiers manually |
 | `make test-cov` | Coverage report (`[tool.coverage]` `fail_under=80`) — currently a manual gate |
 | `make e2e-core-live` | Golden E2E: indexes a fixture corpus and runs the full spine through `run_assistant_request` (needs `make core-up`) |
 | `make qdrant-audit-indexes` | Audit Qdrant payload indexes |
 
-Recommended local PR readiness: `make check && make test && make test-contract`.
+Run `make candidate-check` before delivery.
 Core changes → run `make test-core` first. Subsystem `AGENTS.override.md` files may pin
 tighter commands — read the nearest one before editing an area.
 
-> CI runs **static/lint guardrails only** (Ruff, MyPy, Semgrep, lockfile, Compose config).
-> The pytest suites are local/manual. See [`../tests/README.md`](../tests/README.md) for the
-> full tier→command map and [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md)
+> GitHub runs no pytest. All pytest suites are local. On Windows the pre-push core hook invokes
+> `uv run --no-sync pytest` directly, without requiring Make. Run Linux portability and release
+> verification locally through WSL or a container. See [`../tests/README.md`](../tests/README.md)
+> for direct commands and [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md)
 > for conventions.
 
 ## Operational checks
