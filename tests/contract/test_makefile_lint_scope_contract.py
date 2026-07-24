@@ -3,7 +3,7 @@ all first-class Python packages.
 
 Historically `make lint` / `make format` / `make pylint` / `make security`
 only covered `src/` and `telegram_bot/`, leaving real production code in
-`mini_app/`, `services/` (`bge-m3-api`, `docling`), and
+`mini_app/`, `services/` (`bge-m3-api`), and
 `scripts/` (e.g. `scripts/e2e/`) outside the local quality gate. The
 pre-commit hook covers everything, so a developer who skips pre-commit
 could land unformatted code in the missing scopes (a `ruff format --check`
