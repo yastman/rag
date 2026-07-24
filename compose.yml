@@ -150,7 +150,7 @@ services:
     logging: *default-logging
     environment:
       # Telegram
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       # Local embeddings (matches VPS production)
       BGE_M3_URL: http://bge-m3:8000
       BGE_M3_TIMEOUT: "${BGE_M3_TIMEOUT:-120}"
@@ -231,7 +231,7 @@ services:
       - MANIFEST_DIR=/data/manifest
     volumes:
       - type: bind
-        source: ${GDRIVE_SYNC_DIR:-/tmp/drive-sync-empty}
+        source: ${GDRIVE_SYNC_DIR:-./data/drive-sync-empty}
         target: /data/drive-sync
         read_only: true
         bind:

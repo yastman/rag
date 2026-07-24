@@ -380,7 +380,7 @@ test-unit-extras: ## Run optional-extra unit tests only
 
 test-contract: ## Run static contract tests (no Docker; optional SDK lanes excluded by markers)
 	@echo "$(BLUE)Running static contract tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ $(PYTEST_PARALLEL_ARGS) -q --timeout=30
 	@echo "$(GREEN)✓ Static contract tests complete$(NC)"
 
 test-tooling: ## Run swarm/Kiro tooling tests (scripts/tests/ — guards ~/.kiro/skills, launcher, orchestrator)
@@ -799,7 +799,7 @@ qa: all-checks test ## Full quality assurance
 	@echo "$(GREEN)✓✓✓ Full QA complete! ✓✓✓$(NC)"
 
 # =============================================================================
-# Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
+# Local Development (compose.yml + compose.dev.yml via explicit -f flags)
 # =============================================================================
 
 

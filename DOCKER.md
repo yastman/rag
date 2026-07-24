@@ -12,17 +12,17 @@ production-like deploys).
 | `compose.dev.yml` | Dev overrides — ports, relaxed caps, dev tuning |
 | `compose.core.yml` | Minimal core (Qdrant + Redis only, no auth) |
 
-Local dev uses both base and override:
+Use explicit files; do not set `COMPOSE_FILE`:
 
+```bash
+docker compose -f compose.yml -f compose.dev.yml up -d
 ```
-docker compose -f compose.yml -f compose.dev.yml
-```
 
-Used by all `make` targets.
+`make` targets use this pair on Linux/POSIX.
 
-> **Docker Desktop (Windows):** The default Linux engine (WSL2 backend) makes all
-> `docker compose` commands work identically. Use Windows absolute paths
-> (e.g., `C:\path\to\dir`) for host bind mounts and build contexts in `.env`.
+> **Docker Desktop (Windows):** Use the Linux engine (WSL2 backend). Explicit
+> `-f` flags work unchanged; use Windows absolute paths (e.g., `C:\path\to\dir`)
+> for host bind mounts and build contexts in `.env`.
 
 ## Profiles
 
@@ -86,6 +86,14 @@ make docker-down
 make docker-clean
 ```
 
+Windows PowerShell equivalents:
+
+```powershell
+docker compose -f compose.core.yml up -d
+docker compose -f compose.yml -f compose.dev.yml up -d
+docker compose -f compose.yml -f compose.dev.yml down
+```
+
 Native bot run (bot as host process, sidecars in Compose):
 
 ```bash
@@ -103,6 +111,7 @@ Copy `.env.example` to `.env` and fill in at minimum:
 | `REDIS_PASSWORD` | all profiles | Any non-empty string for local dev |
 | `TELEGRAM_BOT_TOKEN` | `bot` profile | From @BotFather |
 | `BGE_M3_ONNX_MODEL_HOST_DIR` | `bge-m3` build | Path to ONNX INT8 model dir; baked into image at build time |
+| `GDRIVE_SYNC_DIR` | `ingest` profile | Shared host directory containing exported Drive files |
 | `CEREBRAS_API_KEY` / `GROQ_API_KEY` / `OPENAI_API_KEY` | LLM calls | At least one required |
 
 ## BGE-M3 Build Requirement
@@ -120,8 +129,22 @@ running `docker compose build bge-m3`.
 
 Windows example (Docker Desktop Linux engine):
 ```powershell
-$env:BGE_M3_ONNX_MODEL_HOST_DIR = "C:\data\models\bge_m3_onnx_int8"
+$env:BGE_M3_ONNX_MODEL_HOST_DIR = "C:/data/models/bge_m3_onnx_int8"
 ```
+
+## Ingestion Bind Source
+
+`GDRIVE_SYNC_DIR` is mounted read-only by the `ingest` profile. Set it to the
+directory containing the exported Drive files before running `make docker-ingest-up`.
+On Windows Docker Desktop, use a drive shared with Docker and forward slashes:
+
+```powershell
+$env:GDRIVE_SYNC_DIR = "C:/Users/you/Documents/drive-sync"
+```
+
+When it is unset, Compose creates `./data/drive-sync-empty` in the repository
+and ingests no documents. This makes config rendering portable; it is not a
+source of documents.
 
 ## Redis TTL Policy (volatile-lfu safety audit)
 

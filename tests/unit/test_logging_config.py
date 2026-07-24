@@ -346,10 +346,10 @@ class TestSetupLogging:
         assert logging.getLogger("aiogram_dialog.manager.message_manager").level == logging.WARNING
         assert logging.getLogger("qdrant_client").level == logging.WARNING
 
-    def test_setup_logging_logs_configuration(self):
+    def test_setup_logging_logs_configuration(self, tmp_path):
         """Test that setup logs its configuration."""
         with patch("telegram_bot.logging_config.logging.info") as mock_info:
-            setup_logging(level="DEBUG", json_format=False, log_file="/tmp/test.log")
+            setup_logging(level="DEBUG", json_format=False, log_file=str(tmp_path / "test.log"))
 
             # Verify info was called with configuration message
             mock_info.assert_called()

@@ -85,6 +85,15 @@ uv run pytest tests/unit/test_<module>.py -q
 make test-contract
 ```
 
+### Windows (PowerShell)
+`make` and Bash examples are POSIX-only. Run the implemented preflight:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Static
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Tests
+uv run --no-sync --python 3.12 python -m pytest tests/contract -q -n 0
+```
+
 ### Integration tests (requires services)
 ```bash
 make test-integration        # graph paths only (~5s, no Docker)

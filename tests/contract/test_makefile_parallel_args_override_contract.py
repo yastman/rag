@@ -45,6 +45,7 @@ PARALLEL_VAR = "$(PYTEST_PARALLEL_ARGS)"
 # (`-n 2 --dist=worksteal`) flows through.
 OVERRIDABLE_TARGETS = (
     "test",
+    "test-contract",
     "test-unit",
     "test-fast",
     "test-all-fast",
