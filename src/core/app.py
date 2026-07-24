@@ -15,15 +15,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from src.core.assistant import run_assistant_request
 from src.core.contracts import AssistantResult, CoreDependencies, UserContext
-
-
-DependencyBuilder = Callable[[object | None], CoreDependencies]
 
 
 @dataclass(slots=True)
@@ -50,23 +46,6 @@ class AssistantApp:
 
         return cls(config=config, dependencies=dependencies)
 
-    @classmethod
-    def from_config(
-        cls,
-        config: object | None = None,
-        *,
-        dependency_builder: DependencyBuilder | None = None,
-    ) -> AssistantApp:
-        """Build an app from config, optionally using a dependency builder.
-
-        When no builder is supplied the app remains in skeleton mode; this is
-        useful for import-only SDK tests and documentation examples that should
-        not initialize live Qdrant, LLM, embedding, or cache clients.
-        """
-
-        dependencies = dependency_builder(config) if dependency_builder is not None else None
-        return cls(config=config, dependencies=dependencies)
-
     async def run_text(
         self,
         query: str,
@@ -88,4 +67,4 @@ class AssistantApp:
         )
 
 
-__all__ = ["AssistantApp", "DependencyBuilder"]
+__all__ = ["AssistantApp"]
