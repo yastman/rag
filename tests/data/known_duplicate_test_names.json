@@ -35,43 +35,6 @@
     "tests/unit/dialogs/test_filter_constants.py",
     "tests/unit/dialogs/test_funnel_results.py"
   ],
-  "test_contextualize_single_success": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_single_tracks_cost": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_single_tracks_tokens": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_single_uses_correct_model": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_single_with_query": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_sync_success": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_sync_tracks_tokens": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_sync_with_query": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
   "test_creates_collection_when_missing": [
     "tests/unit/ingestion/test_unified_cli.py",
     "tests/unit/services/test_history_service.py"

@@ -679,7 +679,7 @@ requires-dist = [
     { name = "aiohttp", marker = "extra == 'core'", specifier = ">=3.14.1" },
     { name = "asyncpg", marker = "extra == 'telegram'", specifier = ">=0.31.0" },
     { name = "cachetools", marker = "extra == 'telegram'", specifier = ">=5.0.0" },
-    { name = "contextual-rag", extras = ["core", "telegram", "providers", "docling-native"], marker = "extra == 'all'" },
+    { name = "contextual-rag", extras = ["core", "telegram", "docling-native"], marker = "extra == 'all'" },
     { name = "docling", marker = "extra == 'docling-native'", specifier = ">=2.109.0" },
     { name = "docling-core", extras = ["chunking"], marker = "extra == 'docling-native'", specifier = ">=2.74.1" },
     { name = "fastapi", marker = "extra == 'bge-extras'", specifier = ">=0.100.0" },
@@ -721,7 +721,7 @@ requires-dist = [
     { name = "typing-extensions", marker = "extra == 'core'", specifier = ">=4.0.0" },
     { name = "uvloop", marker = "sys_platform != 'win32' and extra == 'telegram'", specifier = ">=0.21.0" },
 ]
-provides-extras = ["core", "telegram", "providers", "docling-native", "bge-extras", "all"]
+provides-extras = ["core", "telegram", "docling-native", "bge-extras", "all"]
 
 [package.metadata.requires-dev]
 dev = [

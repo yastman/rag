@@ -249,14 +249,12 @@ class TestBatchSizes:
         assert BatchSizes.QUERIES == 10
         assert BatchSizes.EMBEDDINGS == 32
         assert BatchSizes.DOCUMENTS == 16
-        assert BatchSizes.CONTEXT == 5
 
     def test_all_values_are_positive_integers(self):
         """Verify all batch sizes are positive integers."""
         assert isinstance(BatchSizes.QUERIES, int) and BatchSizes.QUERIES > 0
         assert isinstance(BatchSizes.EMBEDDINGS, int) and BatchSizes.EMBEDDINGS > 0
         assert isinstance(BatchSizes.DOCUMENTS, int) and BatchSizes.DOCUMENTS > 0
-        assert isinstance(BatchSizes.CONTEXT, int) and BatchSizes.CONTEXT > 0
 
 
 class TestRetrievalStages:
