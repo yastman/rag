@@ -11,14 +11,11 @@ Evidence from the audit:
 - Both modules depended on ``voyageai`` being present. After #1773 made
   ``voyageai`` an optional extra, the tests were collection-breaking in the
   default environment and were guarded with ``pytest.importorskip("voyageai")``.
-- The unified ingestion pipeline (``src.ingestion.unified``) already provides
-  equivalent GDrive coverage via ``GDriveManifest`` + ``unified_gdrive_export``.
-  Keeping two surfaces active creates maintenance hazard and keeps Voyage in
-  scope for the default collection path.
+- Unified ingestion now consumes local files and uses ``FileManifest`` for
+  stable file identity. It intentionally has no Google Drive behavior.
 
-Decision: delete the deprecated modules and their dedicated tests.
-The unified ingestion surface (``src.ingestion.unified``) is the canonical owner
-for any future GDrive behavior.
+Decision: delete the deprecated modules and their dedicated tests. The
+local-file unified ingestion surface is the canonical owner for ingestion.
 """
 
 from __future__ import annotations
@@ -133,24 +130,14 @@ def test_no_stale_metadata_references_to_deleted_gdrive_modules() -> None:
     )
 
 
-def test_unified_ingestion_gdrive_surface_present() -> None:
-    """The unified ingestion pipeline must retain GDrive coverage so removal
-    of the deprecated modules does not reduce functional scope."""
+def test_unified_ingestion_file_manifest_surface_present() -> None:
+    """Unified ingestion must retain local-file identity after GDrive removal."""
     manifest_path = REPO_ROOT / "src" / "ingestion" / "unified" / "manifest.py"
     flow_path = REPO_ROOT / "src" / "ingestion" / "unified" / "flow.py"
 
-    assert manifest_path.exists(), (
-        "src/ingestion/unified/manifest.py missing — unified GDriveManifest "
-        "surface is gone. Do not remove it."
-    )
-    assert flow_path.exists(), (
-        "src/ingestion/unified/flow.py missing — unified GDrive export is gone."
-    )
-
     manifest_src = manifest_path.read_text(encoding="utf-8")
-    assert "GDriveManifest" in manifest_src, (
-        "GDriveManifest class was removed from unified manifest.py."
-    )
+    assert "class FileManifest:" in manifest_src
 
     flow_src = flow_path.read_text(encoding="utf-8")
-    assert "gdrive" in flow_src.lower(), "GDrive support seems absent from unified/flow.py."
+    assert "from src.ingestion.unified.manifest import FileManifest" in flow_src
+    assert "_manifest = FileManifest(" in flow_src

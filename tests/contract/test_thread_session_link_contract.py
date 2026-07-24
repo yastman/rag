@@ -30,9 +30,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-# The supervisor configurable dicts moved from bot.py to _bot_query_pipeline.py
-# during the bot decomposition (#2983). Pin the canonical location.
-_PIPELINE_PY = REPO_ROOT / "telegram_bot" / "_bot_query_pipeline.py"
+# Supervisor invocation moved from _bot_query_pipeline.py to pipeline/supervisor.py.
+# Pin the current owner of both text-agent configurable dictionaries.
+_PIPELINE_PY = REPO_ROOT / "telegram_bot" / "pipeline" / "supervisor.py"
 
 
 def _dict_string_keys(node: ast.Dict) -> set[str]:
