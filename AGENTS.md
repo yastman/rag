@@ -39,6 +39,17 @@ ownership or mutation permissions.
 | Review | Fix the exact target and Git base; exclude unrelated dirty-checkout changes. The owning writer or reviewer inspects the complete target diff. Main verifies target/base, changed-file scope, integration state, refs, checks, and evidence, and may inspect the raw diff whenever risk or uncertainty warrants it. |
 | Actual merge/rebase conflict | Resolve from Git's authoritative conflict state. |
 
+## Scoped guidance
+
+Before editing one of these areas, read its nearest scoped override:
+
+- [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
+- [`src/ingestion/unified/AGENTS.override.md`](src/ingestion/unified/AGENTS.override.md)
+- [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)
+- [`services/AGENTS.override.md`](services/AGENTS.override.md)
+- [`services/bge-m3-api/AGENTS.override.md`](services/bge-m3-api/AGENTS.override.md)
+
+
 ## MCP/tool responsibilities
 
 - **CodeIndexer** (`project="rag-fresh"`): phase/card lifecycle, semantic/symbol/exact search,
