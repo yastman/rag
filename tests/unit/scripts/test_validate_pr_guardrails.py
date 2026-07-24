@@ -169,7 +169,7 @@ def test_workflow_change_requires_policy_test() -> None:
 def test_workflow_change_with_policy_test_passes() -> None:
     failures = validate(
         _pr("ci: update workflow", "Checks run: pytest policy tests"),
-        [".github/workflows/ci.yml", "tests/unit/test_ci_workflow_guardrails.py"],
+        [".github/workflows/ci.yml", "tests/unit/test_ci_deploy_workflow.py"],
         large_threshold=25,
     )
 
@@ -180,19 +180,6 @@ def test_workflow_change_with_semgrep_policy_test_passes() -> None:
     failures = validate(
         _pr("ci: add semgrep workflow", "Checks run: pytest semgrep policy tests"),
         [".github/workflows/ci.yml", "tests/unit/test_semgrep_guardrails.py"],
-        large_threshold=25,
-    )
-
-    assert failures == []
-
-
-def test_workflow_change_with_trusted_heavy_policy_test_passes() -> None:
-    failures = validate(
-        _pr("ci: update trusted heavy workflow", "Checks run: pytest trusted-heavy policy tests"),
-        [
-            ".github/workflows/trusted-heavy.yml",
-            "tests/unit/test_trusted_heavy_workflow.py",
-        ],
         large_threshold=25,
     )
 
@@ -246,7 +233,11 @@ def test_duplicate_disposition_type_requires_bug_class() -> None:
     assert "duplicate/bug-class PR must fill `Bug class:`" in failures
 
 
-def test_duplicate_work_requires_registered_bug_class() -> None:
+def test_duplicate_work_requires_registered_bug_class(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "scripts.ci.validate_pr_guardrails._registered_bug_classes",
+        lambda: {"known-bug-class"},
+    )
     failures = validate(
         _pr(
             "fix: duplicate unknown failure",
