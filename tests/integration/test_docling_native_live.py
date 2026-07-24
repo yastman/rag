@@ -12,6 +12,12 @@ from pathlib import Path
 import pytest
 
 
+pytestmark = [
+    pytest.mark.requires_extras,
+    pytest.mark.no_services,
+]
+
+
 # Skip if docling is not installed
 docling = pytest.importorskip("docling")
 
@@ -21,7 +27,6 @@ from src.ingestion.docling_native import NativeDoclingAdapter
 FIXTURE_MD = Path("tests/e2e_core/fixtures/docs/sunny_beach_studio.md")
 
 
-@pytest.mark.requires_extras
 class TestNativeDoclingAdapterLive:
     """Live parity tests — real HybridChunker, no fakes."""
 
