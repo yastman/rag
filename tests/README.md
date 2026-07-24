@@ -39,7 +39,11 @@ These are the default gate for PRs and local development.
 |------|-------|--------------------|
 | `make test` | core gate: `test-core` + `tests/integration/test_graph_paths.py` + no-service lane | none |
 | `make test-contract` | contract only (`tests/contract/`) | none |
-| Local PR readiness | `make check && make test && make test-contract` | coverage remains a separate `make test-cov` check |
+| Local delivery gate | `make candidate-check` (`check-frozen` + `test` + `test-contract`) | coverage remains a separate `make test-cov` check |
+
+Commit hooks handle fast file checks. Push hooks add static/security checks and the core pytest
+gate. GitHub runs no pytest; local results are authoritative. Run `make test-full` for a major
+candidate and use WSL or a container for Linux portability and release verification.
 
 ### Heavy / runtime checks (services or credentials required)
 Run these selectively, not on every save.

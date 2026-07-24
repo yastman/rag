@@ -408,11 +408,13 @@ def test_test_full_uses_bounded_parallelism_by_default() -> None:
 
 
 def test_candidate_check_is_read_only_frozen_gate() -> None:
-    """`make candidate-check` must fail on stale env before no-sync lint/type checks."""
+    """`make candidate-check` must run the complete local delivery gate."""
     text = _makefile_text()
-    assert re.search(r"^candidate-check:\s*check-frozen\b", text, re.MULTILINE), (
-        "candidate-check must depend on check-frozen"
-    )
+    assert re.search(
+        r"^candidate-check:\s*check-frozen\s+test\s+test-contract\b",
+        text,
+        re.MULTILINE,
+    ), "candidate-check must depend on check-frozen, test, and test-contract"
     block_match = re.search(
         r"^check-frozen:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
         text,

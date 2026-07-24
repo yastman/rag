@@ -136,16 +136,22 @@ Notable configurable env vars (see `.env.example`): `QDRANT_QUANTIZATION_MODE`, 
 > Linux/POSIX only. `make` targets require a POSIX shell.
 
 ```bash
-make check          # Ruff lint + MyPy type checking (non-strict; disallow_untyped_defs=false)
-make test-core      # Fast core gate (~91 tests, ~8s) — run first for any src/core or src/runtime change
-make test           # Broader fast gate (unit + graph paths) — run for adapter/service changes
-make e2e-core-live  # Golden E2E: indexes fixture corpus, runs full spine through run_assistant_request
+make dev-setup       # Install dependencies, commit/push hooks, and local services
+make check           # Commit-level Ruff lint + MyPy type checking
+make pre-push        # Manual push gate: lint, format check, and core tests
+make test-core       # Scope gate for src/core or src/runtime changes
+make test            # Scope gate for adapter/service changes
+make test-contract   # Scope gate for contract changes
+make candidate-check # Authoritative local delivery gate
+make test-full       # Major-candidate gate; manual and local only
+make e2e-core-live   # Golden E2E: indexes fixture corpus, runs full spine through run_assistant_request
 make qdrant-audit-indexes  # Audit Qdrant payload indexes
 ```
 
 `make e2e-core-live` is the main proof of the core path. It exercises classification, retrieval, generation fallback, and runs without Telegram or voice. It requires local Qdrant and BGE-M3 running (`make core-up`).
 
-CI runs static/lint guardrails only (Ruff, MyPy, Semgrep, lockfile check). Pytest suites are local/manual.
+Commit and push hooks run automatically after `make dev-setup`. GitHub runs no pytest; all pytest
+suites are local. Run Linux portability and release verification through WSL or a container.
 
 ## Honest Current State
 

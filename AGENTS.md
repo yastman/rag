@@ -17,13 +17,17 @@ ownership or mutation permissions.
 
 ## Local quality contract
 
+- `make dev-setup` installs both commit and push hooks. Commit hooks run fast file checks; push
+  hooks run static/security checks and the cross-platform core pytest gate.
 - Core changes: run `make test-core` first.
 - Adapter or service changes: run `make test-core`, then `make test`.
 - Contract changes: run `make test-contract`.
+- Delivery gate: run `make candidate-check` (`check-frozen`, `test`, and `test-contract`).
 - Use `make test-full` only for a manual pre-merge full-suite check.
 - Run focused tests before the broader gate when the changed path has a narrower command.
-- GitHub's advisory guard independently checks Gitleaks, Ruff lint/format, and actionlint only. It
-  does not replace a passing local gate. If a second developer or merge bot joins, move pytest,
+- GitHub runs no pytest. Its advisory guard independently checks Gitleaks, Ruff lint/format, and
+  actionlint only; it does not replace a passing local gate. Linux portability and release checks
+  remain local through WSL or a container. If a second developer or merge bot joins, move pytest,
   mypy, and Bandit into required CI.
 
 ## Routes
