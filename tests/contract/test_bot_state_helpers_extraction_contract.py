@@ -23,6 +23,11 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = pytest.mark.requires_extras
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
