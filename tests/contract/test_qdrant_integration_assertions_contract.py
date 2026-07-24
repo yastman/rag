@@ -8,18 +8,17 @@ that anything was actually read:
   wrapper test only port-checked Qdrant before asserting the helper. So a
   brand-new empty Qdrant gave a green test.
 
-- ``tests/integration/test_hybrid_search_sparse.py`` — the test executed
-  search queries and printed result counts but never asserted that any
-  query returned at least one result. Sparse search returning zero hits
-  for every probe query was reported as success.
+- ``tests/integration/test_hybrid_colbert_live.py`` — the live hybrid test
+  proves that a sparse-only document is absent from dense-only results and
+  present once the BM42 prefetch participates.
 
 This contract uses AST inspection to keep both files honest:
 
 1. The wrapper ``test_qdrant_read`` must skip when collections are empty
    or the candidate collection has zero points, instead of returning
    success.
-2. ``test_hybrid_search_with_sparse`` must contain an assertion that
-   checks query results were non-empty (e.g. ``assert ... > 0``).
+2. ``test_sparse_vector_contributes_to_results`` must assert that the
+   sparse-only document is included by hybrid retrieval.
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 QDRANT_READ = REPO_ROOT / "tests" / "integration" / "test_qdrant_read.py"
-HYBRID_SPARSE = REPO_ROOT / "tests" / "integration" / "test_hybrid_search_sparse.py"
+HYBRID_SPARSE = REPO_ROOT / "tests" / "integration" / "test_hybrid_colbert_live.py"
 
 
 def _function(tree: ast.AST, name: str) -> ast.FunctionDef:
@@ -123,30 +122,26 @@ def test_qdrant_read_helper_does_not_return_true_on_empty_collections() -> None:
                 )
 
 
-def test_hybrid_search_with_sparse_asserts_nonempty_results() -> None:
-    """``test_hybrid_search_with_sparse`` must assert at least one query returned hits (#1631)."""
+def test_hybrid_search_with_sparse_asserts_sparse_result_included() -> None:
+    """Live hybrid search must prove the sparse-only document is retrieved (#1631)."""
     assert HYBRID_SPARSE.exists(), f"missing: {HYBRID_SPARSE}"
     tree = ast.parse(HYBRID_SPARSE.read_text(encoding="utf-8"))
-    test_func = _function(tree, "test_hybrid_search_with_sparse")
+    test_func = _function(tree, "test_sparse_vector_contributes_to_results")
 
-    # Pull every Assert in the function body and inspect their condition source.
-    assert_sources: list[str] = []
-    for node in ast.walk(test_func):
-        if isinstance(node, ast.Assert):
-            try:
-                assert_sources.append(ast.unparse(node.test))
-            except Exception:  # pragma: no cover - defensive
-                continue
-
-    has_nonempty_results_assertion = any(
-        ("> 0" in src or ">= 1" in src or "any(" in src or " is True" in src)
-        and any(tok in src.lower() for tok in ("result", "hit", "total", "found", "len(", "count"))
-        for src in assert_sources
+    inclusion_asserts = [
+        ast.unparse(node.test)
+        for node in ast.walk(test_func)
+        if isinstance(node, ast.Assert)
+        and isinstance(node.test, ast.Compare)
+        and any(isinstance(operator, ast.In) for operator in node.test.ops)
+    ]
+    has_sparse_result_assertion = any(
+        "sparse_dense" in source.lower() for source in inclusion_asserts
     )
-    assert has_nonempty_results_assertion, (
-        "test_hybrid_search_with_sparse must assert that the search path "
-        "actually returned data (e.g. `assert total_results > 0`). "
-        f"Found assertions: {assert_sources!r}"
+    assert has_sparse_result_assertion, (
+        "test_sparse_vector_contributes_to_results must assert that the "
+        "sparse-only document appears in sparse+dense results. "
+        f"Found inclusion assertions: {inclusion_asserts!r}"
     )
 
 

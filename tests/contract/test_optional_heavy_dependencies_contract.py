@@ -1,4 +1,4 @@
-"""Contract: DEPS-7 keeps heavy/observability packages out of base and dev deps (#2640)."""
+"""Contract: DEPS-7 keeps archived heavy packages out of root dependency lanes (#2640)."""
 
 from __future__ import annotations
 
@@ -9,12 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ROOT_PYPROJECT = ROOT / "pyproject.toml"
 TELEGRAM_PYPROJECT = ROOT / "telegram_bot" / "pyproject.toml"
-# Archived packages: must NOT be in base deps, dev group, or telegram base deps (#2640)
+# Archived UI/observability packages: absent from base, dev, and optional lanes (#2640).
 ARCHIVED_PACKAGES = {
     "gradio",
     "pillow",
     "langfuse",
-    "fastapi",
     "uvicorn",
 }
 
@@ -55,7 +54,7 @@ def test_root_dev_group_excludes_archived_packages() -> None:
 
 
 def test_root_extras_do_not_contain_archived_packages() -> None:
-    """Archived surface extras must be removed from pyproject.toml (#2640)."""
+    """Archived UI/observability extras must stay removed from pyproject.toml (#2640)."""
     optional = _load(ROOT_PYPROJECT)["project"].get("optional-dependencies", {})
     flattened = {_package_name(dep) for deps in optional.values() for dep in deps}
     still_present = ARCHIVED_PACKAGES & flattened

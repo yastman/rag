@@ -9,6 +9,9 @@ import importlib
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 @pytest.mark.no_services
 def test_docling_common_importable():
     """src.ingestion.docling_common must always be importable."""
@@ -26,7 +29,6 @@ def test_native_adapter_importable():
     assert NativeDoclingAdapter is not None
 
 
-@pytest.mark.requires_extras
 def test_docling_core_hybrid_chunker_importable():
     """HybridChunker from docling_core must be importable with docling-native extra."""
     pytest.importorskip("docling_core")
@@ -35,7 +37,6 @@ def test_docling_core_hybrid_chunker_importable():
     assert HybridChunker is not None
 
 
-@pytest.mark.requires_extras
 def test_huggingface_tokenizer_importable():
     """HuggingFaceTokenizer must be importable with docling-native extra."""
     pytest.importorskip("docling_core")

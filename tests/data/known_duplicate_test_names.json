@@ -106,40 +106,9 @@
     "tests/integration/test_ingestion_e2e.py",
     "tests/unit/test_ingestion_service.py"
   ],
-  "test_get_stats_after_processing": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py"
-  ],
-  "test_get_stats_initial_values": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py"
-  ],
-  "test_get_system_prompt": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py"
-  ],
-  "test_get_user_prompt_with_query": [
-    "tests/unit/contextualization/test_base.py",
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py"
-  ],
-  "test_get_user_prompt_without_query": [
-    "tests/unit/contextualization/test_base.py",
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py"
-  ],
-  "test_init_creates_async_client": [
-    "tests/integration/test_qdrant_service.py",
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
   "test_init_creates_client": [
     "tests/baseline/test_collector.py",
     "tests/unit/test_indexer.py"
-  ],
-  "test_init_creates_sync_client": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
   ],
   "test_init_custom_params": [
     "tests/unit/test_hyde.py",
@@ -148,14 +117,6 @@
   "test_init_defaults": [
     "tests/unit/test_hyde.py",
     "tests/unit/test_ingestion_service.py"
-  ],
-  "test_init_with_settings": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_init_without_settings_uses_default": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
   ],
   "test_invalid_prefix_returns_none": [
     "tests/unit/test_feedback.py",

@@ -62,6 +62,15 @@ EXEMPTED_HANDLERS: dict[str, frozenset[str]] = {
     # not a state-machine driver. The flag is consumed by _bot_favorites and
     # clears leftover context across menu transitions (#1232 design exception).
     "command_handlers.py": frozenset({"#1232"}),
+    # bot_handoff is the extracted boundary for the same single
+    # HandoffStates.active guard declared by handlers/handoff.py. Manager
+    # /close messages also clear client state by storage key because no client
+    # FSMContext exists in the manager-group update (#1232 design exception).
+    "bot_handoff.py": frozenset({"#1232", "HandoffStates.active"}),
+    # favorites stores bookmark-card message IDs for later UI cleanup plus the
+    # bookmarks_context navigation flag consumed by command_handlers. Neither
+    # value drives a conversation state machine (#1232 design exception).
+    "favorites.py": frozenset({"#1232", "bookmarks_context"}),
 }
 
 
@@ -187,11 +196,11 @@ def test_exemption_list_is_minimal() -> None:
     """The exemption list must not grow without an explicit code review.
 
     This is a *forward-only* guardrail: the count is pinned to the
-    current accepted set (2 files). Adding a new exemption forces a
+    current accepted set (5 files). Adding a new exemption forces a
     same-PR update to this number, which forces a reviewer to consider
     whether the exception is really justified.
     """
-    expected_count = 3
+    expected_count = 5
     actual_count = len(EXEMPTED_HANDLERS)
     assert actual_count == expected_count, (
         f"EXEMPTED_HANDLERS has {actual_count} entries but the contract "

@@ -3,6 +3,10 @@
 Split #2816: extracted ``_handle_bookmarks``, ``handle_fav_add``,
 ``handle_fav_remove``, ``handle_fav_viewing``, ``handle_fav_viewing_all``,
 ``handle_favorite_callback`` as module-level functions.
+
+The ``state.update_data`` call is an intentional #1232 boundary exception:
+it stores bookmark-card message IDs for later UI cleanup and the
+``bookmarks_context`` navigation flag; it does not drive a conversation FSM.
 """
 
 from __future__ import annotations
