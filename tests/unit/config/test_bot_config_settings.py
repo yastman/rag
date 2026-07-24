@@ -164,12 +164,16 @@ class TestBotConfigIsPydanticSettings:
         assert cfg.handoff_enabled is False
 
     def test_managers_group_id_empty_string_does_not_crash(self, monkeypatch):
-        """Empty MANAGERS_GROUP_ID should parse as None, not crash (#2149)."""
+        """Empty MANAGERS_GROUP_ID should parse as None, not crash (#2149).
+
+        Pass handoff_enabled=False via constructor kwarg to isolate from the
+        running environment (where HANDOFF_ENABLED may be set to true).
+        """
         monkeypatch.setenv("MANAGERS_GROUP_ID", "")
 
         from telegram_bot.config import BotConfig
 
-        cfg = BotConfig(_env_file=None)
+        cfg = BotConfig(handoff_enabled=False, _env_file=None)
         assert cfg.managers_group_id is None
 
     def test_redis_url_infers_password_loaded_from_env_file(self, monkeypatch, tmp_path):

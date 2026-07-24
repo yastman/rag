@@ -200,6 +200,7 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "BGE_M3_ONNX_MODEL_HOST_DIR": "Consumed by Compose named-context interpolation (compose.yml) at build time; not read by Python",
     "MINIO_API_PORT": "Consumed by compose.dev.yml host-port interpolation for the MinIO API; not read by Python",
     "MINIO_CONSOLE_PORT": "Consumed by compose.dev.yml host-port interpolation for the MinIO console; not read by Python",
+    "COLBERT_TIMEOUT": "compose.dev.yml forwards it to BGE-M3 service, not read by repository Python",
     # --- Service credentials consumed by service entrypoints ---------------
     "REDIS_MAXMEMORY": "Read by redis container CMD args, not Python",
     "CLICKHOUSE_PASSWORD": "Read by clickhouse image entrypoint",

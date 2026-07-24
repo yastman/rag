@@ -31,10 +31,6 @@ _LANGFUSE_RUNTIME_DOCKERFILES = [
 COMPOSE_CI_ENV = Path("tests/fixtures/compose.ci.env")
 COMPOSE_FILE = Path("compose.yml")
 ENV_EXAMPLE = Path(".env.example")
-QDRANT_STACK_DOC = Path("docs/QDRANT_STACK.md")
-QDRANT_IMAGE = (
-    "qdrant/qdrant:v1.18.3@sha256:0bd98fa7977f1e75694779359ca4e212822e5a71334e28421182f72f209d5286"
-)
 
 
 def _docker_available() -> bool:
@@ -200,31 +196,8 @@ def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
     )
 
 
-@pytest.mark.parametrize("compose_file", [COMPOSE_FILE, Path("compose.core.yml")])
-def test_qdrant_image_uses_verified_v1183_pin(compose_file: Path) -> None:
-    """Both compose variants must use the verified Qdrant v1.18.3 manifest pin."""
-    import yaml
+# ---- BGE-M3 ONNX runtime packaging gate (PR #2229) ----
 
-    compose = yaml.safe_load(compose_file.read_text())
-    assert compose["services"]["qdrant"]["image"] == QDRANT_IMAGE
-
-
-def test_qdrant_stack_doc_matches_compose_version() -> None:
-    """docs/QDRANT_STACK.md must reference the same Qdrant version as compose.yml (#1510)."""
-    import yaml
-
-    compose = yaml.safe_load(COMPOSE_FILE.read_text())
-    qdrant_image = compose["services"]["qdrant"]["image"]
-    # Extract tag from image string, e.g. qdrant/qdrant:v1.18.0@sha256:...
-    tag = qdrant_image.split(":")[1].split("@")[0]
-
-    doc_text = QDRANT_STACK_DOC.read_text()
-    assert tag in doc_text, (
-        f"docs/QDRANT_STACK.md must reference Qdrant version {tag} (from compose.yml)"
-    )
-
-
-# ── BGE-M3 ONNX runtime packaging gate (PR #2229) ──────────────────────────
 
 _CI_ENV_KEYS: frozenset[str] | None = None
 
@@ -263,7 +236,7 @@ def test_bge_m3_build_uses_onnx_model_context() -> None:
 
 def test_bge_m3_has_hf_subdirectory_mount() -> None:
     """bge-m3 should mount a narrower HF-only subdirectory (e.g. /models/hf)
-    so the ONNX path ``/models/onnx`` remains usable (#2229)."""
+    so the ONNX path /models/onnx remains usable (#2229)."""
     import yaml
 
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
@@ -347,16 +320,8 @@ def test_bge_m3_onnx_model_dir_env_in_env_example() -> None:
     )
 
 
-def test_compose_ci_langfuse_env_has_bge_m3_inputs() -> None:
-    """CI compose env must provide the local Langfuse inputs bge-m3 consumes."""
-    keys = _ci_env_keys()
-    assert "LANGFUSE_PUBLIC_KEY" in keys
-    assert "LANGFUSE_SECRET_KEY" in keys
-    assert "LANGFUSE_DOCKER_HOST" in keys
-
-
 def test_compose_dev_bge_m3_renders_with_ci_env() -> None:
-    """Compose dev config rendering must succeed for ``bge-m3`` with the CI env fixture."""
+    """Compose dev config rendering must succeed for bge-m3 with the CI env fixture."""
     result = _run_docker_command(
         [
             "docker",

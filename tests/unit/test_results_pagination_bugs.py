@@ -2,26 +2,33 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from telegram_bot.bot import PropertyBot
+from telegram_bot.lifecycle.services import Services
 from tests.unit._bot_config_factory import make_full_bot_config as _make_config
 
 
 def _create_bot() -> PropertyBot:
     config = _make_config()
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("telegram_bot.integrations.cache.CacheLayerManager"),
-        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("telegram_bot.services.qdrant.QdrantService"),
-        patch("src.runtime.graph.config.GraphConfig.create_llm"),
-        patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
-    ):
-        return PropertyBot(config)
+    services = Services(
+        graph_config=MagicMock(),
+        cache=MagicMock(),
+        hybrid=MagicMock(),
+        embeddings=MagicMock(),
+        sparse=MagicMock(),
+        qdrant=MagicMock(),
+        qdrant_apartments=MagicMock(),
+        apartments_service=MagicMock(),
+        reranker=None,
+        llm=MagicMock(),
+        apartment_pipeline=MagicMock(),
+        redis_monitor=MagicMock(),
+        i18n_hub=None,
+    )
+    return PropertyBot(config, _services=services)
 
 
 def _make_callback() -> MagicMock:

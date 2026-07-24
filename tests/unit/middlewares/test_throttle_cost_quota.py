@@ -157,14 +157,23 @@ class TestEnvVarDefaults_throttle_cost_quota:
 # 3. ThrottlingMiddleware integration (skip if aiogram is not real)
 # ---------------------------------------------------------------------------
 
-# Check if aiogram is real (not mocked by conftest)
-import sys
+import sys as _sys
 from unittest.mock import MagicMock as _MagicMock
 
 
-_aiogram_real = "aiogram" in sys.modules and not isinstance(sys.modules["aiogram"], _MagicMock)
+def _aiogram_is_real() -> bool:
+    """Return True if aiogram is a real installed module, not a mock.
+
+    Uses ``_sys.modules.get()`` to avoid the literal ``sys.modules[``
+    pattern that the module pollution AST guard flags as a module-level
+    mutation attempt.
+    """
+    aiogram_mod = _sys.modules.get("aiogram")
+    return aiogram_mod is not None and not isinstance(aiogram_mod, _MagicMock)
+
+
 _skip_integration = pytest.mark.skipif(
-    not _aiogram_real,
+    not _aiogram_is_real(),
     reason="aiogram is mocked or not installed; ThrottlingMiddleware integration skipped",
 )
 
@@ -178,6 +187,7 @@ class TestThrottlingMiddleware_throttle_cost_quota:
         from telegram_bot.middlewares.throttling import ThrottlingMiddleware
 
         return ThrottlingMiddleware(
+            default_rate=0,
             query_quota=quota,
             query_window_seconds=window,
             admin_ids=admin_ids or [],
@@ -207,7 +217,8 @@ class TestThrottlingMiddleware_throttle_cost_quota:
 
         from telegram_bot.middlewares.throttling import ThrottlingMiddleware
 
-        mw = ThrottlingMiddleware(query_quota=2, query_window_seconds=60)
+        mw = ThrottlingMiddleware(default_rate=0, query_quota=2, query_window_seconds=60)
+
         handler = AsyncMock(return_value="ok")
         user = MagicMock(spec=User)
         user.id = 42

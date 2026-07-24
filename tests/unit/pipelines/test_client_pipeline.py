@@ -57,7 +57,6 @@ def _make_lf_client() -> MagicMock:
 
 def _patch_observability(lf_client: MagicMock):
     """No-op patch context — Langfuse removed from client.py."""
-    from contextlib import nullcontext
 
     return nullcontext()
 
@@ -469,65 +468,6 @@ class TestPipelineFullFlow:
         assert result.response_sent is True
         assert result.needs_agent is False
         msg.answer.assert_called()
-
-    async def test_pipeline_trace_tags_override_agent_tag(self):
-        """Client pipeline must override inherited agent tag via propagate_attributes (#566).
-
-        propagate_attributes in bot.py sets tags=["telegram","rag","agent"] before
-        the role check, so the client pipeline must override tags to remove "agent".
-        """
-        msg = _make_message()
-        lf = _make_lf_client()
-
-        rag_result = {
-            "response": "",
-            "cache_hit": False,
-            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
-            "grade_confidence": 0.7,
-            "llm_call_count": 0,
-            "latency_stages": {},
-            "query_embedding": [0.1, 0.2],
-            "cache_key_embedding": [0.1, 0.2],
-        }
-        gen_result = {
-            "response": "Generated answer",
-            "response_sent": False,
-            "llm_call_count": 1,
-        }
-
-        with (
-            _patch_observability(lf),
-            patch(
-                "telegram_bot.pipelines.client.propagate_attributes",
-                return_value=nullcontext(),
-            ) as mock_propagate,
-            _patch_rag_pipeline(rag_result),
-            _patch_generate_response(gen_result),
-        ):
-            await run_client_pipeline(
-                user_text="Какие квартиры в центре?",
-                user_id=1,
-                session_id="s1",
-                message=msg,
-                cache=AsyncMock(),
-                embeddings=MagicMock(),
-                sparse_embeddings=MagicMock(),
-                qdrant=MagicMock(),
-                reranker=None,
-                llm=None,
-                config=_make_config(),
-                query_type="GENERAL",
-            )
-
-        pipeline_call = next(
-            (
-                c
-                for c in mock_propagate.call_args_list
-                if c.kwargs.get("tags") == ["telegram", "rag", "client_direct"]
-            ),
-            None,
-        )
-        assert pipeline_call is not None, "client-direct propagate_attributes override not found"
 
     async def test_pipeline_metadata_includes_pre_agent_and_e2e_latency(self):
         """Pipeline result store gets e2e_latency_ms >= pipeline_wall_ms."""

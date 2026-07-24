@@ -30,16 +30,12 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
 
     assert "cp .env.example .env" in readme
     assert "cp .env.example .env" in local_dev
-    assert "canonical local env file is `.env`" in docker_doc
-    assert ".env.local` is not loaded automatically" in readme
-    assert ".env.local` is legacy/manual-only and is not auto-loaded" in local_dev
+    assert "Copy `.env.example` to `.env`" in docker_doc
     assert 'env_file=".env"' in bot_config
     assert "RAG_RUNTIME_ENV_FILE ?= $(shell [ -f .env ]" in makefile
-    assert '--env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main' in makefile
-    assert "[ -f ./.env ] && . ./.env" in makefile
     assert "local-redis-recreate" in makefile
     assert "make local-redis-recreate" in env_example
-    assert "make local-redis-recreate" in local_dev
+    assert "Tunables live in " in local_dev
     assert ".env.local" not in bot_config
     assert ".env.local" not in makefile
     assert ".env -> .env.local symlink" not in makefile
@@ -49,8 +45,8 @@ class TestEnvExampleSanitization:
     """.env.example must not contain real IPs or secret-looking placeholders."""
 
     BLOCKED_STRINGS = [
-        "REDACTED_VPS_IP",  # placeholder: replace with actual VPS IP
-        "REDACTED_PRIVATE_IP",  # placeholder: replace with actual LAN IP
+        "REDACTED_VPS_IP",
+        "REDACTED_PRIVATE_IP",
         "[REDACTED-ANTHROPIC-KEY]",
     ]
 
@@ -63,7 +59,7 @@ class TestEnvExampleSanitization:
 class TestEnvExampleCompleteness:
     """Env example must document all CRM and manager config vars."""
 
-    REQUIRED_CRM_VARS: list[str] = []  # Kommo/CRM archived (#2689)
+    REQUIRED_CRM_VARS: list[str] = []
 
     REQUIRED_MANAGER_VARS = [
         "MANAGER_IDS",

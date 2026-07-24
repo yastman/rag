@@ -52,7 +52,7 @@ async def test_manager_get_funnel_analytics_returns_report():
     analytics_tool = next(t for t in tools if t.name == "manager_get_funnel_analytics")
 
     config = {"configurable": {"role": "manager"}}
-    result = await analytics_tool.ainvoke({"query": "show funnel"}, config=config)
+    result = await analytics_tool(query="show funnel", config=config)
 
     assert "inquiry" in result
     analytics_service.get_latest_summary.assert_called_once()
@@ -66,7 +66,7 @@ async def test_manager_get_funnel_analytics_denies_client():
     analytics_tool = next(t for t in tools if t.name == "manager_get_funnel_analytics")
 
     config = {"configurable": {"role": "client"}}
-    result = await analytics_tool.ainvoke({"query": "show funnel"}, config=config)
+    result = await analytics_tool(query="show funnel", config=config)
 
     assert "Access denied" in result
 
@@ -81,7 +81,7 @@ async def test_manager_run_nurturing_batch_returns_count():
     batch_tool = next(t for t in tools if t.name == "manager_run_nurturing_batch")
 
     config = {"configurable": {"role": "manager"}}
-    result = await batch_tool.ainvoke({"query": "run now"}, config=config)
+    result = await batch_tool(query="run now", config=config)
 
     assert "15" in result
     nurturing_service.run_once.assert_called_once()
@@ -93,8 +93,6 @@ def _make_bot_context(role: str = "client") -> BotContext:
         telegram_user_id=1,
         session_id="chat-test",
         language="ru",
-        kommo_client=None,
-        history_service=None,
         embeddings=AsyncMock(),
         sparse_embeddings=AsyncMock(),
         qdrant=AsyncMock(),
@@ -119,7 +117,7 @@ async def test_manager_analytics_allows_manager_via_bot_context():
 
     ctx = _make_bot_context(role="manager")
     config = {"configurable": {"bot_context": ctx}}
-    result = await analytics_tool.ainvoke({"query": "show funnel"}, config=config)
+    result = await analytics_tool(query="show funnel", config=config)
 
     assert "Access denied" not in result
     analytics_service.get_latest_summary.assert_called_once()
@@ -135,7 +133,7 @@ async def test_manager_analytics_denies_client_via_bot_context():
 
     ctx = _make_bot_context(role="client")
     config = {"configurable": {"bot_context": ctx}}
-    result = await analytics_tool.ainvoke({"query": "show funnel"}, config=config)
+    result = await analytics_tool(query="show funnel", config=config)
 
     assert "Access denied" in result
 
@@ -152,7 +150,7 @@ async def test_nurturing_batch_allows_manager_via_bot_context():
 
     ctx = _make_bot_context(role="manager")
     config = {"configurable": {"bot_context": ctx}}
-    result = await batch_tool.ainvoke({"query": "run now"}, config=config)
+    result = await batch_tool(query="run now", config=config)
 
     assert "Access denied" not in result
     assert "7" in result

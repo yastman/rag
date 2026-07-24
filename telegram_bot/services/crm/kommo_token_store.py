@@ -6,7 +6,6 @@ This module keeps backward-compatible import path and serialized refresh behavio
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from telegram_bot.services.crm.kommo_tokens import KommoTokenStore as _CanonicalKommoTokenStore
@@ -35,12 +34,6 @@ class KommoTokenStore(_CanonicalKommoTokenStore):
             subdomain=subdomain,
             redirect_uri=redirect_uri,
         )
-        self._refresh_lock = asyncio.Lock()
-
-    async def force_refresh(self) -> str:
-        """Serialize refresh calls to avoid concurrent refresh-token races."""
-        async with self._refresh_lock:
-            return await super().force_refresh()
 
     async def _store_tokens(
         self,

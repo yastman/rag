@@ -99,6 +99,7 @@ class NurturingService:
         records = [
             (
                 c.id,
+                c.user_id,
                 scheduled_for,
                 json.dumps({"user_id": c.user_id, "preferences": c.preferences}),
             )
@@ -106,8 +107,8 @@ class NurturingService:
         ]
         await self._pool.executemany(
             """
-            INSERT INTO nurturing_jobs (lead_score_id, scheduled_for, payload)
-            VALUES ($1, $2, $3::jsonb)
+            INSERT INTO nurturing_jobs (lead_score_id, user_id, scheduled_for, payload)
+            VALUES ($1, $2, $3, $4::jsonb)
             ON CONFLICT (lead_score_id, scheduled_for) DO NOTHING
             """,
             records,
@@ -149,10 +150,10 @@ class NurturingService:
 
         sent = 0
         for row in rows:
-            user_id = row["user_id"]
             payload = (
                 json.loads(row["payload"]) if isinstance(row["payload"], str) else row["payload"]
-            )
+            ) or {}
+            user_id = row["user_id"] if row["user_id"] is not None else payload.get("user_id")
             try:
                 message = await self._generate_nurturing_message(payload.get("preferences", {}))
                 await self._bot.send_message(chat_id=user_id, text=message)

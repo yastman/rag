@@ -33,13 +33,13 @@ def _function_complexity(function: ast.AsyncFunctionDef | ast.FunctionDef) -> in
 def _collect_functions(path: Path) -> dict[str, int]:
     return {
         node.name: _function_complexity(node)
-        for node in ast.walk(ast.parse(path.read_text()))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
 
 
 def test_generate_response_is_thin_wrapper() -> None:
-    module = ast.parse(TARGET.read_text())
+    module = ast.parse(TARGET.read_text(encoding="utf-8"))
     functions = [
         node
         for node in module.body

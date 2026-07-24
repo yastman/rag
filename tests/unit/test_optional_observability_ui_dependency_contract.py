@@ -6,11 +6,8 @@ import re
 import tomllib
 from pathlib import Path
 
-import yaml
-
 
 PYPROJECT = Path("pyproject.toml")
-COMPOSE_DEV = Path("compose.dev.yml")
 # These packages must NOT appear in base deps or dev group after archival (#2640)
 ARCHIVED_PACKAGES = {"gradio", "pillow", "langfuse"}
 
@@ -43,13 +40,3 @@ def test_archived_packages_not_in_dev_group() -> None:
         f"Archived packages still in [dependency-groups.dev]: {sorted(still_present)}. "
         "Remove them as part of #2640."
     )
-
-
-def test_langfuse_self_host_services_stay_profile_gated() -> None:
-    compose = yaml.safe_load(COMPOSE_DEV.read_text())
-    services = compose["services"]
-    langfuse_stack = {"clickhouse", "minio", "redis-langfuse", "langfuse-worker", "langfuse"}
-
-    for service_name in langfuse_stack:
-        profiles = set(services[service_name].get("profiles", []))
-        assert "ml" in profiles, f"{service_name} must stay behind the ml profile"

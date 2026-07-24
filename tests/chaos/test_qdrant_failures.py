@@ -4,9 +4,25 @@ Tests verify graceful degradation when Qdrant is unavailable or times out.
 These tests focus on the QdrantService's error handling behavior.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from src.runtime.services.qdrant import QdrantService
+
+
+_PATCH_TARGET = "src.runtime.qdrant.service.AsyncQdrantClient"
+
+
+def _make_service(**kwargs) -> QdrantService:
+    """Build QdrantService with constructor client mocked out."""
+    defaults = {
+        "url": "http://localhost:6333",
+        "collection_name": "test_collection",
+    }
+    defaults.update(kwargs)
+    with patch(_PATCH_TARGET):
+        return QdrantService(**defaults)
 
 
 class TestQdrantExceptionHandling:
@@ -24,12 +40,7 @@ class TestQdrantExceptionHandling:
     )
     async def test_exception_returns_empty_results(self, exc_class, exc_msg):
         """Verify search returns empty list on any exception."""
-        from src.runtime.services.qdrant import QdrantService
-
-        service = QdrantService(
-            url="http://localhost:6333",
-            collection_name="test_collection",
-        )
+        service = _make_service()
 
         mock_client = MagicMock()
         mock_client.query_points = AsyncMock(side_effect=exc_class(exc_msg))
@@ -54,13 +65,7 @@ class TestQdrantRecovery:
         - third call returns the recovered point with id/score/text intact
         - the underlying client is invoked exactly 3 times
         """
-
-        from src.runtime.services.qdrant import QdrantService
-
-        service = QdrantService(
-            url="http://localhost:6333",
-            collection_name="test_collection",
-        )
+        service = _make_service()
 
         mock_client = MagicMock()
         call_count = 0
@@ -122,24 +127,12 @@ class TestQdrantServiceInitialization:
     )
     def test_qdrant_service_init_with_different_modes(self, mode, expected_suffix):
         """Verify QdrantService initializes correctly with different modes."""
-        from src.runtime.services.qdrant import QdrantService
-
-        service = QdrantService(
-            url="http://localhost:6333",
-            collection_name="test_collection",
-            quantization_mode=mode,
-        )
+        service = _make_service(quantization_mode=mode)
         assert service.collection_name == f"test_collection{expected_suffix}"
 
     def test_qdrant_mode_switching(self):
         """Verify mode switching updates collection name."""
-        from src.runtime.services.qdrant import QdrantService
-
-        service = QdrantService(
-            url="http://localhost:6333",
-            collection_name="test_collection",
-            quantization_mode="off",
-        )
+        service = _make_service(quantization_mode="off")
 
         assert service.collection_name == "test_collection"
 

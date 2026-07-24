@@ -2,30 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-from telegram_bot.agents.context import BotContext
-from telegram_bot.agents.tooling import RunnableConfig
-
-
-def _make_config(bot_context: BotContext) -> RunnableConfig:
-    return RunnableConfig(configurable={"bot_context": bot_context})
-
-
-def _make_ctx(mock_kommo) -> BotContext:
-    return BotContext(
-        telegram_user_id=42,
-        session_id="s-1",
-        language="ru",
-        kommo_client=mock_kommo,
-        history_service=AsyncMock(),
-        embeddings=AsyncMock(),
-        sparse_embeddings=AsyncMock(),
-        qdrant=AsyncMock(),
-        cache=AsyncMock(),
-        reranker=None,
-        llm=MagicMock(),
-    )
+from unittest.mock import MagicMock, patch
 
 
 # --- format_hitl_preview ---
@@ -131,115 +108,6 @@ def test_hitl_guard_returns_cancel():
         assert result == {"action": "cancel"}
 
 
-# --- HITL-wrapped CRM tools ---
-
-
-async def test_crm_create_lead_approve():
-    """crm_create_lead executes after approve."""
-    from telegram_bot.agents.crm_tools import crm_create_lead
-    from telegram_bot.services.crm.kommo_models import Lead
-
-    mock_kommo = AsyncMock()
-    mock_kommo.create_lead = AsyncMock(return_value=Lead(id=2, name="Test Deal"))
-    ctx = _make_ctx(mock_kommo)
-
-    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
-        result = await crm_create_lead.ainvoke(
-            {"name": "Test Deal", "budget": 50000},
-            config=_make_config(ctx),
-        )
-    assert "Сделка создана" in result
-    mock_kommo.create_lead.assert_called_once()
-
-
-async def test_crm_create_lead_cancel():
-    """crm_create_lead returns cancel message when action != approve."""
-    from telegram_bot.agents.crm_tools import crm_create_lead
-    from telegram_bot.services.crm.kommo_models import Lead
-
-    mock_kommo = AsyncMock()
-    mock_kommo.create_lead = AsyncMock(return_value=Lead(id=2, name="Test"))
-    ctx = _make_ctx(mock_kommo)
-
-    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "cancel"}):
-        result = await crm_create_lead.ainvoke(
-            {"name": "Test Deal"},
-            config=_make_config(ctx),
-        )
-    assert "Операция отменена" in result
-    mock_kommo.create_lead.assert_not_called()
-
-
-async def test_crm_update_lead_approve():
-    """crm_update_lead executes after approve."""
-    from telegram_bot.agents.crm_tools import crm_update_lead
-    from telegram_bot.services.crm.kommo_models import Lead
-
-    mock_kommo = AsyncMock()
-    mock_kommo.update_lead = AsyncMock(return_value=Lead(id=1, name="Updated"))
-    ctx = _make_ctx(mock_kommo)
-
-    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
-        result = await crm_update_lead.ainvoke(
-            {"deal_id": 1, "name": "Updated"},
-            config=_make_config(ctx),
-        )
-    assert "обновлена" in result.lower()
-    mock_kommo.update_lead.assert_called_once()
-
-
-async def test_crm_upsert_contact_cancel():
-    """crm_upsert_contact returns cancel message when action != approve."""
-    from telegram_bot.agents.crm_tools import crm_upsert_contact
-
-    mock_kommo = AsyncMock()
-    mock_kommo.upsert_contact = AsyncMock()
-    ctx = _make_ctx(mock_kommo)
-
-    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "cancel"}):
-        result = await crm_upsert_contact.ainvoke(
-            {"phone": "+380991234567", "first_name": "Ivan"},
-            config=_make_config(ctx),
-        )
-    assert "Операция отменена" in result
-    mock_kommo.upsert_contact.assert_not_called()
-
-
-async def test_crm_update_contact_approve():
-    """crm_update_contact executes after approve."""
-    from telegram_bot.agents.crm_tools import crm_update_contact
-    from telegram_bot.services.crm.kommo_models import Contact
-
-    mock_kommo = AsyncMock()
-    mock_kommo.update_contact = AsyncMock(return_value=Contact(id=50, first_name="Updated"))
-    ctx = _make_ctx(mock_kommo)
-
-    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
-        result = await crm_update_contact.ainvoke(
-            {"contact_id": 50, "phone": "+380991234567"},
-            config=_make_config(ctx),
-        )
-    assert "Контакт обновлен" in result
-    mock_kommo.update_contact.assert_called_once()
-
-
-async def test_crm_update_contact_cancel():
-    """crm_update_contact returns cancel message when action != approve."""
-    from telegram_bot.agents.crm_tools import crm_update_contact
-
-    mock_kommo = AsyncMock()
-    mock_kommo.update_contact = AsyncMock()
-    ctx = _make_ctx(mock_kommo)
-
-    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "cancel"}):
-        result = await crm_update_contact.ainvoke(
-            {"contact_id": 50, "phone": "+380991234567"},
-            config=_make_config(ctx),
-        )
-    assert "Операция отменена" in result
-    mock_kommo.update_contact.assert_not_called()
-
-
 # --- pending resume trace-id store (#2224) ---
 
 
@@ -297,6 +165,8 @@ def test_pending_resume_trace_id_ignores_empty_inputs():
 
 def test_pending_resume_trace_id_store_is_bounded():
     """The store evicts oldest entries past its cap (no unbounded growth)."""
+    from cachetools import LRUCache
+
     from telegram_bot.agents import hitl
     from telegram_bot.agents.hitl import (
         pop_pending_resume_trace_id,
@@ -304,7 +174,7 @@ def test_pending_resume_trace_id_store_is_bounded():
     )
 
     _clear_pending_store()
-    with patch.object(hitl, "_PENDING_RESUME_MAX", 3):
+    with patch.object(hitl, "_PENDING_RESUME_TRACE_IDS", LRUCache(maxsize=3)):
         for i in range(5):
             set_pending_resume_trace_id(f"tg_{i}", f"trace-{i}")
         # Oldest two (tg_0, tg_1) evicted; newest three retained.

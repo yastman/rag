@@ -74,10 +74,14 @@ async def test_enqueue_updates_uses_executemany(fake_pool):
     fake_pool.executemany.assert_called_once()
     sql = fake_pool.executemany.call_args[0][0]
     assert "nurturing_jobs" in sql
+    assert "user_id" in sql
     assert "ON CONFLICT" in sql
 
     records = fake_pool.executemany.call_args[0][1]
     assert len(records) == 2
+    assert records[0][1] == 99
+    assert records[1][1] == 100
+    assert '"user_id": 99' in records[0][3] or '"user_id":99' in records[0][3].replace(" ", "")
 
 
 @pytest.mark.asyncio
@@ -88,3 +92,50 @@ async def test_run_once_selects_and_enqueues(fake_pool):
     assert count == 2
     fake_pool.fetch.assert_called_once()
     fake_pool.executemany.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_pending_prefers_column_user_id(fake_pool):
+    bot = AsyncMock()
+    fake_pool.fetch = AsyncMock(
+        return_value=[
+            _make_row(
+                id=7,
+                user_id=42,
+                payload={"user_id": 99, "preferences": {"budget": "100k"}},
+                status="pending",
+            )
+        ]
+    )
+    svc = NurturingService(pool=fake_pool, bot=bot)
+
+    sent = await svc.dispatch_pending(batch_size=5)
+
+    assert sent == 1
+    bot.send_message.assert_awaited_once()
+    assert bot.send_message.await_args.kwargs["chat_id"] == 42
+    fake_pool.execute.assert_awaited_once_with(
+        "UPDATE nurturing_jobs SET status = 'sent' WHERE id = $1", 7
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_pending_falls_back_to_payload_user_id(fake_pool):
+    bot = AsyncMock()
+    fake_pool.fetch = AsyncMock(
+        return_value=[
+            _make_row(
+                id=8,
+                user_id=None,
+                payload={"user_id": 77, "preferences": {}},
+                status="pending",
+            )
+        ]
+    )
+    svc = NurturingService(pool=fake_pool, bot=bot)
+
+    sent = await svc.dispatch_pending(batch_size=5)
+
+    assert sent == 1
+    bot.send_message.assert_awaited_once()
+    assert bot.send_message.await_args.kwargs["chat_id"] == 77

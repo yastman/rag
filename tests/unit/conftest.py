@@ -1,6 +1,7 @@
 """Unit test specific fixtures for isolation."""
 
 import contextlib
+import importlib
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -46,6 +47,18 @@ def pytest_configure(config):
         mock_flag.BGEM3FlagModel = MagicMock()
         sys.modules["FlagEmbedding"] = mock_flag
         _mocked_module_names.append("FlagEmbedding")
+    # Use installed runtime dependencies; stub only genuinely missing extras.
+    for module_name in (
+        "aiogram",
+        "aiogram_dialog",
+        "cachetools",
+        "langchain_core",
+        "langgraph",
+        "fluent_compiler",
+        "fluentogram",
+    ):
+        with contextlib.suppress(ImportError):
+            importlib.import_module(module_name)
 
     # -- aiogram (optional Telegram runtime dep) -----------------------------
     _aiogram_real = "aiogram" in sys.modules and not isinstance(sys.modules["aiogram"], MagicMock)
@@ -187,7 +200,7 @@ def pytest_configure(config):
     )
     if not _langgraph_real:
         _langgraph_submodules = [
-            "langgraph",
+            "langgraph.graph",
             "langgraph.runtime",
             "langgraph.types",
             "langgraph.checkpoint",
@@ -201,6 +214,30 @@ def pytest_configure(config):
         for mod_name in _langgraph_submodules:
             _saved_modules[mod_name] = sys.modules.get(mod_name)
             sys.modules[mod_name] = MagicMock()
+
+        # Make compiled graph.ainvoke awaitable for unit tests
+        async def _fake_ainvoke(state):
+            return {
+                "results_relevant": True,
+                "summary": "test summary",
+                "guard_blocked": False,
+                "rewrite_count": 0,
+            }
+
+        _langgraph_graph = sys.modules["langgraph.graph"]
+        _langgraph_graph.StateGraph = MagicMock()
+        _langgraph_graph.StateGraph.return_value.compile.return_value.ainvoke = _fake_ainvoke
+        _langgraph_graph.END = "__end__"
+        _langgraph_graph.START = "__start__"
+
+        class _GraphRecursionError(Exception):
+            """Minimal langgraph.errors.GraphRecursionError stub for except/raise."""
+
+        _langgraph_errors_mod = MagicMock()
+        _langgraph_errors_mod.GraphRecursionError = _GraphRecursionError
+        _saved_modules["langgraph.errors"] = sys.modules.get("langgraph.errors")
+        sys.modules["langgraph.errors"] = _langgraph_errors_mod
+        _langgraph_submodules.append("langgraph.errors")
         _mocked_module_names.extend(_langgraph_submodules)
 
     # -- asyncpg (optional postgres dep) ------------------------------------
@@ -239,15 +276,6 @@ def pytest_configure(config):
             _saved_modules[mod_name] = sys.modules.get(mod_name)
             sys.modules[mod_name] = MagicMock()
         _mocked_module_names.extend(_fluent_mods)
-
-    # -- cachetools (optional caching dep) ----------------------------------
-    _cachetools_real = "cachetools" in sys.modules and not isinstance(
-        sys.modules["cachetools"], MagicMock
-    )
-    if not _cachetools_real:
-        _saved_modules["cachetools"] = sys.modules.get("cachetools")
-        sys.modules["cachetools"] = MagicMock()
-        _mocked_module_names.append("cachetools")
 
     # -- langchain_core (optional archived CRM dep) -------------------------
     _langchain_core_real = "langchain_core" in sys.modules and not isinstance(

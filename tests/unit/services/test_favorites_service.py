@@ -6,7 +6,6 @@ import datetime as dt
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from asyncpg import UniqueViolationError
 
 from telegram_bot.services.favorites_service import Favorite, FavoritesService, _parse_jsonb
 
@@ -98,8 +97,19 @@ async def test_add(mock_pool: MagicMock) -> None:
     mock_pool.fetchrow.assert_awaited_once()
 
 
-async def test_add_duplicate_returns_none(mock_pool: MagicMock) -> None:
-    mock_pool.fetchrow.side_effect = UniqueViolationError("")
+async def test_add_duplicate_returns_none(
+    mock_pool: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Unit conftest may stub ``asyncpg`` with MagicMock when the real package
+    # is not pre-imported, so UniqueViolationError is not a BaseException.
+    # Pin a real exception on the module object production catches against.
+    import telegram_bot.services.favorites_service as fav_mod
+
+    class _UniqueViolationError(Exception):
+        """Test double for asyncpg.UniqueViolationError under unit stubs."""
+
+    monkeypatch.setattr(fav_mod.asyncpg, "UniqueViolationError", _UniqueViolationError)
+    mock_pool.fetchrow.side_effect = _UniqueViolationError("")
 
     svc = FavoritesService(pool=mock_pool)
     result = await svc.add(

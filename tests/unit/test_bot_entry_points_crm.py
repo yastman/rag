@@ -33,17 +33,57 @@ def _make_config() -> BotConfig:
 
 
 def _create_bot() -> PropertyBot:
+    """Create PropertyBot with deps mocked at actual lookup sites."""
+    # Unit conftest may stub aiogram CallbackData / BaseMiddleware as MagicMock.
+    # Patch filter + middleware setup at the actual lookup sites used during init.
+    # Prefer the _services DI seam so build_services is not exercised here.
+    from telegram_bot.lifecycle.services import Services
+
     config = _make_config()
+    services = Services(
+        graph_config=MagicMock(),
+        cache=MagicMock(),
+        hybrid=MagicMock(),
+        embeddings=MagicMock(),
+        sparse=MagicMock(),
+        qdrant=MagicMock(),
+        qdrant_apartments=MagicMock(),
+        apartments_service=MagicMock(),
+        reranker=None,
+        llm=MagicMock(),
+        apartment_pipeline=MagicMock(),
+        redis_monitor=MagicMock(),
+        i18n_hub=None,
+    )
+    _cb_filter = MagicMock(name="CallbackData.filter")
     with (
         patch("telegram_bot.bot.Bot"),
-        patch("telegram_bot.integrations.cache.CacheLayerManager"),
-        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("telegram_bot.services.qdrant.QdrantService"),
-        patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-        patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+        patch("telegram_bot.bot.setup_throttling_middleware"),
+        patch("telegram_bot.bot.setup_error_handler"),
+        patch("telegram_bot.bot.FSMCancelMiddleware", MagicMock()),
+        patch(
+            "telegram_bot.handlers.demo_handler.DemoCB.filter",
+            create=True,
+            return_value=_cb_filter,
+        ),
+        patch("telegram_bot.bot.FeedbackCB.filter", create=True, return_value=_cb_filter),
+        patch(
+            "telegram_bot.bot.FeedbackReasonCB.filter",
+            create=True,
+            return_value=_cb_filter,
+        ),
+        patch(
+            "telegram_bot.handlers.favorites_callbacks.FavoriteCB.filter",
+            create=True,
+            return_value=_cb_filter,
+        ),
+        patch(
+            "telegram_bot.handlers.results_callbacks.ResultsCB.filter",
+            create=True,
+            return_value=_cb_filter,
+        ),
     ):
-        return PropertyBot(config)
+        return PropertyBot(config, _services=services)
 
 
 def _make_message(text: str = "test") -> MagicMock:
@@ -217,8 +257,13 @@ async def test_fav_viewing_passes_single_object() -> None:
     state = _make_state()
     cb = _make_callback("fav:viewing:prop-42")
     dialog_manager = AsyncMock()
+    # Unit conftest may stub CallbackData as MagicMock; pass a real-shaped
+    # callback_data so action dispatch does not depend on FavoriteCB().
+    callback_data = SimpleNamespace(action="viewing", apartment_id="prop-42")
 
-    await bot.handle_favorite_callback(cb, state, dialog_manager=dialog_manager)
+    await bot.handle_favorite_callback(
+        cb, state, callback_data=callback_data, dialog_manager=dialog_manager
+    )
 
     dialog_manager.start.assert_awaited_once()
     call_args = dialog_manager.start.call_args

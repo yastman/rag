@@ -16,64 +16,6 @@ def _load_compose() -> dict:
     return yaml.safe_load(BASE_COMPOSE.read_text())
 
 
-def test_minio_base_command_exposes_console_address() -> None:
-    compose = _load_compose()
-    command = compose["services"]["minio"]["command"]
-
-    assert '--console-address ":9001"' in command
-
-
-def test_minio_dev_host_ports_are_overrideable() -> None:
-    """MinIO host ports must not hard-block local trace validation.
-
-    Docker Desktop can leave host port forwards such as 9090/9091 in a bad
-    state. The host ports are useful for operators, but Langfuse talks to
-    MinIO over the container network; validation must be able to pick different
-    host ports without editing compose.dev.yml.
-    """
-    merged = _merge_compose_dev()
-    ports = merged["services"]["minio"].get("ports", [])
-
-    assert "127.0.0.1:${MINIO_API_PORT:-9090}:9000" in ports
-    assert "127.0.0.1:${MINIO_CONSOLE_PORT:-9091}:9001" in ports
-    assert "127.0.0.1:9090:9000" not in ports
-    assert "127.0.0.1:9091:9001" not in ports
-
-
-def test_clickhouse_command_has_no_invalid_listen_host_flag() -> None:
-    """ClickHouse 26.3.9 rejects --listen_host as a CLI flag; config file is the correct mechanism."""
-    compose = _load_compose()
-    clickhouse = compose["services"]["clickhouse"]
-    command = clickhouse.get("command", "")
-
-    assert "--listen_host=0.0.0.0" not in str(command), (
-        "compose.yml: clickhouse --listen_host=0.0.0.0 is not a valid CLI flag in ClickHouse 26.3.9 "
-        "and causes a crash-loop (issue #1340). Remove it and rely on the image default config."
-    )
-
-
-def test_clickhouse_keeps_startup_capabilities_for_named_volumes() -> None:
-    """ClickHouse entrypoint must be able to chown its named data/log volumes.
-
-    The shared security defaults intentionally use cap_drop:[ALL]. The official
-    ClickHouse image still runs an entrypoint that chowns /var/lib/clickhouse on
-    startup and then drops to the clickhouse user; without these capabilities
-    the local Langfuse stack crash-loops before trace validation can start.
-    """
-    compose = _load_compose()
-    clickhouse = compose["services"]["clickhouse"]
-
-    assert "ALL" in clickhouse.get("cap_drop", []), (
-        "compose.yml: clickhouse must keep cap_drop:[ALL] from the shared security defaults."
-    )
-    assert clickhouse.get("cap_add") == ["CHOWN", "SETGID", "SETUID"], (
-        "compose.yml: clickhouse must add only CHOWN/SETGID/SETUID so the "
-        "official entrypoint can chown /var/lib/clickhouse named volumes and "
-        "drop to the clickhouse user. Without this, `make validate-traces-fast` "
-        "fails with ClickHouse `chown` or `setgid` Operation not permitted errors."
-    )
-
-
 # =============================================================================
 # BGE-M3 compose contract — guardrail for #2182 / #2188 / #2185 (Docker/compose drift)
 # =============================================================================

@@ -133,16 +133,6 @@ async def test_on_menu_action_manager_rebinds_from_user_to_callback_actor():
     assert passed_message.from_user is callback.from_user
 
 
-def test_crm_submenu_is_navigation_hub():
-    """CRM submenu (#697 refactor) uses Start buttons — no action dispatching."""
-    from telegram_bot.dialogs.crm_submenu import crm_submenu_dialog
-    from telegram_bot.dialogs.states import CRMMenuSG
-
-    # Verify dialog uses CRMMenuSG.main state (not old CrmSubmenuSG)
-    states = [w.get_state() for w in crm_submenu_dialog.windows.values()]
-    assert CRMMenuSG.main in states
-
-
 def test_handle_menu_action_exists_on_property_bot():
     """PropertyBot has a handle_menu_action method."""
     method = get_property_bot_method("handle_menu_action")

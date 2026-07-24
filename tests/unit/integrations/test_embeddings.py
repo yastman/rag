@@ -336,7 +336,7 @@ class TestBGEM3HybridRetry:
                 await emb.aembed_hybrid("test")
 
     async def test_no_retry_on_http_status_error(self):
-        """Does NOT retry on HTTP 500 (status error = not transient transport)."""
+        """Retries on HTTP 500 (bge_retry retries RETRYABLE_HTTP_STATUS_CODES including 500)."""
         call_count = 0
 
         async def mock_post(*args, **kwargs):
@@ -353,7 +353,7 @@ class TestBGEM3HybridRetry:
             with pytest.raises(httpx.HTTPStatusError):
                 await emb.aembed_hybrid("test")
 
-        assert call_count == 1  # No retries
+        assert call_count == 3  # 1 original + 2 retries (bge_retry retries HTTP 500)
 
 
 class TestBGEM3HybridTimeout:

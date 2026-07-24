@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -14,24 +14,10 @@ def mock_history_service():
     return svc
 
 
-@pytest.fixture()
-def _patch_observe():
-    """Disable Langfuse @observe for unit tests."""
-    with patch("telegram_bot.agents.history_graph.nodes.observe", lambda **_kw: lambda f: f):
-        with patch("telegram_bot.agents.history_graph.nodes.get_client") as mock_lf:
-            mock_lf.return_value = AsyncMock(
-                update_current_span=lambda **_kw: None,
-                score_current_trace=lambda **_kw: None,
-                create_score=lambda **_kw: None,
-                get_current_trace_id=lambda: "test-trace",
-            )
-            yield mock_lf
-
-
 # --- retrieve node ---
 
 
-async def test_retrieve_node_calls_service(mock_history_service, _patch_observe):
+async def test_retrieve_node_calls_service(mock_history_service):
     """retrieve_node calls HistoryService.search_user_history with user_id and query."""
     from telegram_bot.agents.history_graph.nodes import history_retrieve_node
 
@@ -66,7 +52,7 @@ async def test_retrieve_node_calls_service(mock_history_service, _patch_observe)
     assert "retrieve" in result["latency_stages"]
 
 
-async def test_retrieve_node_empty_results(mock_history_service, _patch_observe):
+async def test_retrieve_node_empty_results(mock_history_service):
     """retrieve_node returns empty results when nothing found."""
     from telegram_bot.agents.history_graph.nodes import history_retrieve_node
 
@@ -85,7 +71,7 @@ async def test_retrieve_node_empty_results(mock_history_service, _patch_observe)
     assert result["results"] == []
 
 
-async def test_retrieve_node_service_error_returns_empty(mock_history_service, _patch_observe):
+async def test_retrieve_node_service_error_returns_empty(mock_history_service):
     """Service exception returns empty results, no raise."""
     from telegram_bot.agents.history_graph.nodes import history_retrieve_node
 
@@ -118,7 +104,7 @@ _GRADE_STATE_BASE = {
 }
 
 
-async def test_grade_node_high_score_relevant(_patch_observe):
+async def test_grade_node_high_score_relevant():
     """Results with score > 0.7 are marked relevant."""
     from telegram_bot.agents.history_graph.nodes import history_grade_node
 
@@ -137,7 +123,7 @@ async def test_grade_node_high_score_relevant(_patch_observe):
     assert result["results_relevant"] is True
 
 
-async def test_grade_node_low_score_not_relevant(_patch_observe):
+async def test_grade_node_low_score_not_relevant():
     """Results with all scores < 0.7 are marked not relevant."""
     from telegram_bot.agents.history_graph.nodes import history_grade_node
 
@@ -156,7 +142,7 @@ async def test_grade_node_low_score_not_relevant(_patch_observe):
     assert result["results_relevant"] is False
 
 
-async def test_grade_node_empty_results(_patch_observe):
+async def test_grade_node_empty_results():
     """Empty results → not relevant."""
     from telegram_bot.agents.history_graph.nodes import history_grade_node
 
@@ -165,7 +151,7 @@ async def test_grade_node_empty_results(_patch_observe):
     assert result["results_relevant"] is False
 
 
-async def test_grade_node_filters_low_scores(_patch_observe):
+async def test_grade_node_filters_low_scores():
     """Grade node filters out results below threshold."""
     from telegram_bot.agents.history_graph.nodes import history_grade_node
 
@@ -192,7 +178,7 @@ async def test_grade_node_filters_low_scores(_patch_observe):
     assert len(result["results"]) == 1
 
 
-async def test_grade_node_custom_threshold_lower(_patch_observe):
+async def test_grade_node_custom_threshold_lower():
     """Lower custom threshold accepts results that default 0.7 would reject (#433)."""
     from telegram_bot.agents.history_graph.nodes import history_grade_node
 
@@ -212,7 +198,7 @@ async def test_grade_node_custom_threshold_lower(_patch_observe):
     assert len(result["results"]) == 1
 
 
-async def test_grade_node_custom_threshold_higher(_patch_observe):
+async def test_grade_node_custom_threshold_higher():
     """Higher custom threshold rejects results that default 0.7 would accept (#433)."""
     from telegram_bot.agents.history_graph.nodes import history_grade_node
 
@@ -232,7 +218,7 @@ async def test_grade_node_custom_threshold_higher(_patch_observe):
     assert len(result["results"]) == 0
 
 
-async def test_grade_node_no_fallback_top3_on_miss(_patch_observe):
+async def test_grade_node_no_fallback_top3_on_miss():
     """When no results pass threshold, returns empty list (not top-3 fallback) (#433)."""
     from telegram_bot.agents.history_graph.nodes import history_grade_node
 
@@ -252,7 +238,7 @@ async def test_grade_node_no_fallback_top3_on_miss(_patch_observe):
 # --- rewrite node ---
 
 
-async def test_rewrite_node_reformulates_query(_patch_observe):
+async def test_rewrite_node_reformulates_query():
     """rewrite_node calls LLM to reformulate query."""
     from telegram_bot.agents.history_graph.nodes import history_rewrite_node
 
@@ -278,7 +264,7 @@ async def test_rewrite_node_reformulates_query(_patch_observe):
     mock_llm.chat.completions.create.assert_called_once()
 
 
-async def test_rewrite_node_llm_failure_keeps_query(_patch_observe):
+async def test_rewrite_node_llm_failure_keeps_query():
     """LLM failure keeps original query."""
     from telegram_bot.agents.history_graph.nodes import history_rewrite_node
 
@@ -331,7 +317,7 @@ def test_route_history_grade_exhausted():
 # --- summarize node ---
 
 
-async def test_summarize_node_calls_llm(_patch_observe):
+async def test_summarize_node_calls_llm():
     """summarize_node calls LLM with history context and returns summary."""
     from telegram_bot.agents.history_graph.nodes import history_summarize_node
 
@@ -365,7 +351,7 @@ async def test_summarize_node_calls_llm(_patch_observe):
     mock_llm.chat.completions.create.assert_called_once()
 
 
-async def test_summarize_node_empty_results_fallback(_patch_observe):
+async def test_summarize_node_empty_results_fallback():
     """Empty results produce fallback message without LLM call."""
     from telegram_bot.agents.history_graph.nodes import history_summarize_node
 
@@ -386,7 +372,7 @@ async def test_summarize_node_empty_results_fallback(_patch_observe):
     mock_llm.chat.completions.create.assert_not_called()
 
 
-async def test_summarize_node_llm_failure_returns_raw(_patch_observe):
+async def test_summarize_node_llm_failure_returns_raw():
     """LLM failure falls back to raw formatted results."""
     from telegram_bot.agents.history_graph.nodes import history_summarize_node
 
@@ -435,7 +421,7 @@ _GUARD_STATE_BASE = {
 }
 
 
-async def test_guard_node_clean_query_passes(_patch_observe):
+async def test_guard_node_clean_query_passes():
     """Clean query passes guard without blocking."""
     from telegram_bot.agents.history_graph.nodes import history_guard_node
 
@@ -446,7 +432,7 @@ async def test_guard_node_clean_query_passes(_patch_observe):
     assert "guard" in result["latency_stages"]
 
 
-async def test_guard_node_injection_blocked_hard(_patch_observe):
+async def test_guard_node_injection_blocked_hard():
     """Injection query blocked in hard mode."""
     from telegram_bot.agents.history_graph.nodes import history_guard_node
 
@@ -458,7 +444,7 @@ async def test_guard_node_injection_blocked_hard(_patch_observe):
     assert "summary" in result  # blocked response set
 
 
-async def test_guard_node_injection_soft_mode(_patch_observe):
+async def test_guard_node_injection_soft_mode():
     """Injection detected in soft mode: flagged but not blocked, continues to retrieve."""
     from telegram_bot.agents.history_graph.nodes import history_guard_node
 
@@ -470,7 +456,7 @@ async def test_guard_node_injection_soft_mode(_patch_observe):
     assert "summary" not in result  # no blocked response
 
 
-async def test_guard_node_injection_log_mode(_patch_observe):
+async def test_guard_node_injection_log_mode():
     """Injection detected in log mode: not blocked, continues."""
     from telegram_bot.agents.history_graph.nodes import history_guard_node
 
@@ -481,7 +467,7 @@ async def test_guard_node_injection_log_mode(_patch_observe):
     assert result["guard_reason"] is None
 
 
-async def test_guard_node_russian_injection_blocked(_patch_observe):
+async def test_guard_node_russian_injection_blocked():
     """Russian injection pattern detected and blocked."""
     from telegram_bot.agents.history_graph.nodes import history_guard_node
 
@@ -518,76 +504,3 @@ def test_route_history_guard_soft_not_blocked():
     # guard_blocked=False even with a reason doesn't trigger __end__
     state = {"guard_blocked": False, "guard_reason": "injection"}
     assert route_history_guard(state) == "retrieve"
-
-
-# --- Langfuse scores ---
-
-
-def test_write_history_scores():
-    """write_history_scores writes 5 scores with explicit trace_id (#435, #464)."""
-    from unittest.mock import MagicMock
-
-    from telegram_bot.agents.history_graph.nodes import write_history_scores
-
-    mock_lf = MagicMock()
-
-    result = {
-        "results": [{"score": 0.9}],
-        "results_relevant": True,
-        "rewrite_count": 1,
-        "latency_stages": {"retrieve": 0.1, "grade": 0.01, "summarize": 0.3},
-    }
-    write_history_scores(mock_lf, result, trace_id="test-trace-id")
-
-    score_names = {c.kwargs["name"] for c in mock_lf.create_score.call_args_list}
-    assert "history_results_count" in score_names
-    assert "history_relevance" in score_names
-    assert "history_rewrite_count" in score_names
-    assert "history_latency_ms" in score_names
-    assert "history_cache_hit" in score_names
-    # All scores use explicit trace_id
-    for call in mock_lf.create_score.call_args_list:
-        assert call.kwargs["trace_id"] == "test-trace-id"
-
-
-def test_write_history_scores_cache_hit_true():
-    """history_cache_hit score is 1.0 when cache hit (#464)."""
-    from unittest.mock import MagicMock
-
-    from telegram_bot.agents.history_graph.nodes import write_history_scores
-
-    mock_lf = MagicMock()
-    result = {
-        "results": [],
-        "results_relevant": True,
-        "rewrite_count": 0,
-        "latency_stages": {},
-        "history_cache_hit": True,
-    }
-    write_history_scores(mock_lf, result, trace_id="trace-cache-hit")
-
-    cache_hit_call = next(
-        c for c in mock_lf.create_score.call_args_list if c.kwargs["name"] == "history_cache_hit"
-    )
-    assert cache_hit_call.kwargs["value"] == 1.0
-
-
-def test_write_history_scores_cache_hit_false():
-    """history_cache_hit score is 0.0 when no cache hit (#464)."""
-    from unittest.mock import MagicMock
-
-    from telegram_bot.agents.history_graph.nodes import write_history_scores
-
-    mock_lf = MagicMock()
-    result = {
-        "results": [{"score": 0.9}],
-        "results_relevant": True,
-        "rewrite_count": 0,
-        "latency_stages": {"retrieve": 0.1},
-    }
-    write_history_scores(mock_lf, result, trace_id="trace-no-hit")
-
-    cache_hit_call = next(
-        c for c in mock_lf.create_score.call_args_list if c.kwargs["name"] == "history_cache_hit"
-    )
-    assert cache_hit_call.kwargs["value"] == 0.0

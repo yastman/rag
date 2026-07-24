@@ -1,4 +1,4 @@
-"""Tests for nurturing + funnel Langfuse scores (#390)."""
+"""Tests for nurturing + funnel Langfuse scores (#390, #2844)."""
 
 from telegram_bot.scoring import write_pipeline_scores
 
@@ -25,7 +25,8 @@ class FakeLangfuse:
         return self._scores.get(name)
 
 
-def test_write_pipeline_scores_includes_nurturing_and_funnel_metrics():
+def test_write_pipeline_scores_is_noop_for_nurturing_metrics():
+    """Tracing removed (#2844): nurturing/funnel keys are not written as scores."""
     lf = FakeLangfuse()
     result = {
         "nurturing_batch_size": 12,
@@ -36,14 +37,10 @@ def test_write_pipeline_scores_includes_nurturing_and_funnel_metrics():
     }
     write_pipeline_scores(lf, result, trace_id=_FAKE_TRACE_ID)
 
-    assert lf.has_score("nurturing_batch_size")
-    assert lf.get_score("nurturing_batch_size") == 12.0
-    assert lf.has_score("nurturing_sent_count")
-    assert lf.get_score("nurturing_sent_count") == 9.0
-    assert lf.has_score("funnel_conversion_rate")
-    assert lf.get_score("funnel_conversion_rate") == 0.31
-    assert lf.has_score("funnel_dropoff_rate")
-    assert lf.get_score("funnel_dropoff_rate") == 0.69
+    assert not lf.has_score("nurturing_batch_size")
+    assert not lf.has_score("nurturing_sent_count")
+    assert not lf.has_score("funnel_conversion_rate")
+    assert not lf.has_score("funnel_dropoff_rate")
 
 
 def test_write_pipeline_scores_skips_missing_nurturing_keys():

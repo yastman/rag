@@ -165,12 +165,18 @@ def test_streaming_path_still_uses_send_message_draft_directly() -> None:
     Guards against accidentally re-introducing a custom streamer class. The
     SDK path is `agent.astream(..., stream_mode=["messages", "values"])`
     plus `bot.send_message_draft(...)` — nothing in between.
+
+    Implementation may live in ``bot.py``, a legacy ``_bot_*.py`` split, or
+    the extracted ``pipeline/streaming.py`` module (#1265 / #2816).
     """
-    # Pattern may live in bot.py or in a _bot_*.py split module (#2816)
     bot_pkg = REPO_ROOT / "telegram_bot"
-    bot_sources = "\n".join(
-        p.read_text(encoding="utf-8") for p in bot_pkg.glob("bot.py")
-    ) + "\n".join(p.read_text(encoding="utf-8") for p in bot_pkg.glob("_bot_*.py"))
+    source_paths = [
+        *bot_pkg.glob("bot.py"),
+        *bot_pkg.glob("_bot_*.py"),
+        *bot_pkg.glob("pipeline/*.py"),
+        *bot_pkg.glob("pipeline/**/*.py"),
+    ]
+    bot_sources = "\n".join(p.read_text(encoding="utf-8") for p in source_paths if p.is_file())
     assert "bot.send_message_draft" in bot_sources, (
         "Streaming path must call `bot.send_message_draft(...)` directly (#1671)."
     )

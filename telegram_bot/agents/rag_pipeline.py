@@ -95,7 +95,7 @@ async def _grade_documents(
     top_score = max(scores)
     score_gap = detect_score_gap(sorted(scores, reverse=True))
 
-    from telegram_bot.graph.config import GraphConfig
+    from src.runtime.graph.config import GraphConfig
 
     config = GraphConfig.from_env()
     relevant = top_score > config.relevance_threshold_rrf
@@ -235,7 +235,7 @@ async def _rewrite_query(
         }
 
     try:
-        from telegram_bot.graph.config import GraphConfig
+        from src.runtime.graph.config import GraphConfig
 
         config = GraphConfig.from_env()
         if llm is None:
@@ -308,7 +308,7 @@ async def rag_pipeline(
             even when the agent reformulates them differently. Falls back to query
             when empty (voice path, direct calls).
     """
-    from telegram_bot.graph.config import GraphConfig
+    from src.runtime.graph.config import GraphConfig
 
     config = GraphConfig.from_env()
 

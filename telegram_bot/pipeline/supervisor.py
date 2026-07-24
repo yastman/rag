@@ -16,6 +16,7 @@ import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from aiogram.utils.chat_action import ChatActionSender
 
@@ -351,8 +352,8 @@ async def _handle_pre_agent_cache_hit(
     rag_result_store["cache_key_embedding"] = dense
     pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
     rag_result_store["pre_agent_ms"] = pre_agent_ms
-    _raw_tid = ""
-    tid = ""
+    tid = uuid4().hex[:16]
+    rag_result_store["request_id"] = tid
     reply_markup = None
     if tid and query_type not in _NO_RAG_QUERY_TYPES:
         from telegram_bot.feedback import build_feedback_keyboard
@@ -394,8 +395,7 @@ async def _send_core_response(
     forum_thread_id: int | None,
 ) -> None:
     """Send response with feedback keyboard and source attribution."""
-    _raw_trace_id = ""
-    trace_id = ""
+    trace_id = str(rag_result_store.get("request_id", "") or "")
 
     reply_markup = None
     if trace_id and query_type and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
@@ -736,6 +736,7 @@ async def _supervisor_run_core(
 
     response_text = core_result.response_text
     rag_result_store["query_type"] = core_result.request_type or query_type
+    rag_result_store["request_id"] = core_result.request_id
     rag_result_store["cache_hit"] = core_result.cache_hit
     rag_result_store["rerank_applied"] = core_result.rerank_applied
     rag_result_store["sources_count"] = core_result.documents_count

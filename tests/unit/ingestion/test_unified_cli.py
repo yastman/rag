@@ -96,28 +96,57 @@ class TestSetupLogging:
     """Verify logging configuration."""
 
     def test_default_level_info(self):
-        from src.ingestion.unified.cli import setup_logging
+        from src.ingestion.unified.main import setup_logging
 
         root = logging.getLogger()
-        # Reset handlers so basicConfig can set the level
-        root.handlers.clear()
-        setup_logging(verbose=False)
-        assert root.level == logging.INFO
+        prev_level = root.level
+        prev_handlers = list(root.handlers)
+        try:
+            # Reset handlers so basicConfig can set the level
+            root.handlers.clear()
+            setup_logging(verbose=False)
+            assert root.level == logging.INFO
+        finally:
+            root.handlers.clear()
+            root.handlers.extend(prev_handlers)
+            root.setLevel(prev_level)
 
     def test_verbose_level_debug(self):
-        from src.ingestion.unified.cli import setup_logging
+        from src.ingestion.unified.main import setup_logging
 
         root = logging.getLogger()
-        root.handlers.clear()
-        setup_logging(verbose=True)
-        assert root.level == logging.DEBUG
+        prev_level = root.level
+        prev_handlers = list(root.handlers)
+        try:
+            root.handlers.clear()
+            setup_logging(verbose=True)
+            assert root.level == logging.DEBUG
+        finally:
+            root.handlers.clear()
+            root.handlers.extend(prev_handlers)
+            root.setLevel(prev_level)
 
     def test_noisy_loggers_quieted(self):
-        from src.ingestion.unified.cli import setup_logging
+        from src.ingestion.unified.main import setup_logging
 
-        setup_logging()
-        assert logging.getLogger("httpx").level == logging.WARNING
-        assert logging.getLogger("httpcore").level == logging.WARNING
+        root = logging.getLogger()
+        httpx_logger = logging.getLogger("httpx")
+        httpcore_logger = logging.getLogger("httpcore")
+        prev_level = root.level
+        prev_handlers = list(root.handlers)
+        prev_httpx = httpx_logger.level
+        prev_httpcore = httpcore_logger.level
+        try:
+            root.handlers.clear()
+            setup_logging()
+            assert httpx_logger.level == logging.WARNING
+            assert httpcore_logger.level == logging.WARNING
+        finally:
+            root.handlers.clear()
+            root.handlers.extend(prev_handlers)
+            root.setLevel(prev_level)
+            httpx_logger.setLevel(prev_httpx)
+            httpcore_logger.setLevel(prev_httpcore)
 
 
 # ---------------------------------------------------------------------------
@@ -427,7 +456,7 @@ class TestResolveQuantizationConfig:
     def test_binary_returns_binary_quantization(self):
         from qdrant_client.models import BinaryQuantization
 
-        from src.ingestion.unified.cli import _resolve_quantization_config
+        from src.ingestion.unified.commands import _resolve_quantization_config
 
         result = _resolve_quantization_config("binary")
         assert isinstance(result, BinaryQuantization)
@@ -436,7 +465,7 @@ class TestResolveQuantizationConfig:
     def test_scalar_returns_scalar_quantization(self):
         from qdrant_client.models import ScalarQuantization, ScalarType
 
-        from src.ingestion.unified.cli import _resolve_quantization_config
+        from src.ingestion.unified.commands import _resolve_quantization_config
 
         result = _resolve_quantization_config("scalar")
         assert isinstance(result, ScalarQuantization)
@@ -445,21 +474,21 @@ class TestResolveQuantizationConfig:
         assert result.scalar.always_ram is True
 
     def test_off_returns_none(self):
-        from src.ingestion.unified.cli import _resolve_quantization_config
+        from src.ingestion.unified.commands import _resolve_quantization_config
 
         assert _resolve_quantization_config("off") is None
 
     def test_default_is_binary(self):
         from qdrant_client.models import BinaryQuantization
 
-        from src.ingestion.unified.cli import _resolve_quantization_config
+        from src.ingestion.unified.commands import _resolve_quantization_config
 
         # No argument → default "binary"
         result = _resolve_quantization_config()
         assert isinstance(result, BinaryQuantization)
 
     def test_invalid_raises_value_error(self):
-        from src.ingestion.unified.cli import _resolve_quantization_config
+        from src.ingestion.unified.commands import _resolve_quantization_config
 
         with pytest.raises(ValueError, match="QDRANT_QUANTIZATION_MODE"):
             _resolve_quantization_config("unknown")
@@ -685,9 +714,9 @@ class TestCmdSchemaCheck:
 class TestMainDispatch:
     """Test main() routes commands correctly."""
 
-    @patch("src.ingestion.unified.cli.cmd_run", return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.cmd_run", return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_dispatches_run(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "run"])
 
@@ -697,9 +726,9 @@ class TestMainDispatch:
         assert result == 0
         mock_cmd.assert_called_once()
 
-    @patch("src.ingestion.unified.cli.cmd_preflight", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.cmd_preflight", new_callable=AsyncMock, return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_dispatches_preflight(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "preflight"])
 
@@ -709,9 +738,9 @@ class TestMainDispatch:
         assert result == 0
         mock_cmd.assert_awaited_once()
 
-    @patch("src.ingestion.unified.cli.cmd_bootstrap", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.cmd_bootstrap", new_callable=AsyncMock, return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_dispatches_bootstrap(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "bootstrap"])
 
@@ -721,9 +750,9 @@ class TestMainDispatch:
         assert result == 0
         mock_cmd.assert_awaited_once()
 
-    @patch("src.ingestion.unified.cli.cmd_schema_check", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.cmd_schema_check", new_callable=AsyncMock, return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_dispatches_schema_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "schema-check", "--require-colbert"])
 
@@ -733,26 +762,26 @@ class TestMainDispatch:
         assert result == 0
         mock_cmd.assert_awaited_once()
 
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_calls_load_dotenv(self, mock_dotenv, mock_logging, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "run"])
 
         from src.ingestion.unified.cli import main
 
-        with patch("src.ingestion.unified.cli.cmd_run", return_value=0):
+        with patch("src.ingestion.unified.main.cmd_run", return_value=0):
             main()
 
         mock_dotenv.assert_called_once()
 
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_verbose_flag_passed(self, mock_dotenv, mock_logging, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "-v", "run"])
 
         from src.ingestion.unified.cli import main
 
-        with patch("src.ingestion.unified.cli.cmd_run", return_value=0):
+        with patch("src.ingestion.unified.main.cmd_run", return_value=0):
             main()
 
         mock_logging.assert_called_once_with(True)
@@ -771,28 +800,28 @@ class TestMainFlushesIngestionTraces:
     """
 
     def test_main_flushes_on_success(self):
-        from src.ingestion.unified import cli
+        from src.ingestion.unified import main as ingestion_main
 
         with (
-            patch.object(cli, "cmd_run", return_value=0) as mock_cmd,
-            patch.object(cli, "flush_ingestion_traces") as mock_flush,
+            patch.object(ingestion_main, "cmd_run", return_value=0) as mock_cmd,
+            patch.object(ingestion_main, "flush_ingestion_traces") as mock_flush,
             patch("sys.argv", ["unified", "run"]),
         ):
-            result = cli.main()
+            result = ingestion_main.main()
 
         assert result == 0
         mock_cmd.assert_called_once()
         mock_flush.assert_called_once_with()
 
     def test_main_flushes_even_when_command_raises(self):
-        from src.ingestion.unified import cli
+        from src.ingestion.unified import main as ingestion_main
 
         with (
-            patch.object(cli, "cmd_run", side_effect=RuntimeError("boom")),
-            patch.object(cli, "flush_ingestion_traces") as mock_flush,
+            patch.object(ingestion_main, "cmd_run", side_effect=RuntimeError("boom")),
+            patch.object(ingestion_main, "flush_ingestion_traces") as mock_flush,
             patch("sys.argv", ["unified", "run"]),
             pytest.raises(RuntimeError, match="boom"),
         ):
-            cli.main()
+            ingestion_main.main()
 
         mock_flush.assert_called_once_with()

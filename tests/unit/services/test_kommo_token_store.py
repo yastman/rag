@@ -99,9 +99,11 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
 
     call_log: list[str] = []
     can_proceed = asyncio.Event()
+    task1_at_http = asyncio.Event()
 
     async def controlled_post(*args, **kwargs):
         call_log.append("http_start")
+        task1_at_http.set()
         await can_proceed.wait()
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
@@ -119,9 +121,8 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
         mock_httpx.return_value.post = controlled_post
 
         task1 = asyncio.create_task(store.force_refresh())
-        await asyncio.sleep(0)  # Let task1 acquire lock and reach controlled_post
+        await task1_at_http.wait()  # Deterministic: wait until task1 is actually in controlled_post
         task2 = asyncio.create_task(store.force_refresh())
-        await asyncio.sleep(0)  # Let task2 try to acquire lock
 
         # With lock: task1 is in controlled_post (http_start logged), task2 waits for lock
         assert call_log == ["http_start"], (

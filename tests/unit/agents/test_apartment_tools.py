@@ -40,9 +40,11 @@ class TestApartmentSearchTool:
         )
 
         config = {"configurable": {"bot_context": ctx}}
-        result = await apartment_search.ainvoke(
-            {"query": "двушка до 200к", "rooms": 2, "max_price_eur": 200000},
+        result = await apartment_search(
+            query="двушка до 200к",
             config=config,
+            rooms=2,
+            max_price_eur=200000,
         )
 
         assert "Premier Fort Beach" in result
@@ -67,8 +69,8 @@ class TestApartmentSearchTool:
         )
 
         config = {"configurable": {"bot_context": ctx}}
-        result = await apartment_search.ainvoke(
-            {"query": "пентхаус на крыше"},
+        result = await apartment_search(
+            query="пентхаус на крыше",
             config=config,
         )
 
@@ -91,8 +93,8 @@ class TestApartmentSearchTool:
         ctx.embeddings.aembed_hybrid_with_colbert = AsyncMock(return_value=(dense, sparse, colbert))
 
         config = {"configurable": {"bot_context": ctx}}
-        await apartment_search.ainvoke(
-            {"query": "студия у моря"},
+        await apartment_search(
+            query="студия у моря",
             config=config,
         )
 
@@ -112,8 +114,8 @@ class TestApartmentSearchTool:
         )
 
         config = {"configurable": {"bot_context": ctx}}
-        result = await apartment_search.ainvoke(
-            {"query": "любая квартира"},
+        result = await apartment_search(
+            query="любая квартира",
             config=config,
         )
 
@@ -151,9 +153,11 @@ class TestApartmentSearchTool:
         ctx.search_event_store = mock_store
 
         config = {"configurable": {"bot_context": ctx}}
-        await apartment_search.ainvoke(
-            {"query": "двушка", "rooms": 2, "max_price_eur": 150000},
+        await apartment_search(
+            query="двушка",
             config=config,
+            rooms=2,
+            max_price_eur=150000,
         )
 
         mock_store.append.assert_called_once()
@@ -178,7 +182,7 @@ class TestApartmentSearchTool:
         ctx.search_event_store = None
 
         config = {"configurable": {"bot_context": ctx}}
-        result = await apartment_search.ainvoke({"query": "test"}, config=config)
+        result = await apartment_search(query="test", config=config)
 
         assert "не найдены" in result
 
@@ -214,7 +218,7 @@ class TestApartmentSearchTool:
         ctx.search_event_store = mock_store
 
         config = {"configurable": {"bot_context": ctx}}
-        result = await apartment_search.ainvoke({"query": "test"}, config=config)
+        result = await apartment_search(query="test", config=config)
 
         assert "X" in result  # поиск прошёл несмотря на ошибку store
 
@@ -232,7 +236,6 @@ def test_bot_context_has_apartment_pipeline_field() -> None:
         telegram_user_id=1,
         session_id="s",
         language="ru",
-        kommo_client=None,
         embeddings=MagicMock(),
         sparse_embeddings=MagicMock(),
         qdrant=MagicMock(),
@@ -296,7 +299,7 @@ class TestPipelineFallback:
 
         ctx = self._make_ctx(pipeline=pipeline)
         config = {"configurable": {"bot_context": ctx}}
-        await apartment_search.ainvoke({"query": "двушка до 200к"}, config=config)
+        await apartment_search(query="двушка до 200к", config=config)
 
         pipeline.extract.assert_awaited_once_with("двушка до 200к")
         call_kwargs = ctx.apartments_service.search_with_filters.await_args
@@ -311,7 +314,7 @@ class TestPipelineFallback:
         ctx = self._make_ctx(pipeline=pipeline)
         config = {"configurable": {"bot_context": ctx}}
 
-        await apartment_search.ainvoke({"query": "двушка", "rooms": 2}, config=config)
+        await apartment_search(query="двушка", config=config, rooms=2)
 
         pipeline.extract.assert_not_awaited()
 
@@ -324,7 +327,7 @@ class TestPipelineFallback:
 
         ctx = self._make_ctx(pipeline=pipeline)
         config = {"configurable": {"bot_context": ctx}}
-        await apartment_search.ainvoke({"query": "однушка у моря"}, config=config)
+        await apartment_search(query="однушка у моря", config=config)
 
         ctx.embeddings.aembed_hybrid_with_colbert.assert_awaited_once_with("у моря")
 
@@ -338,7 +341,7 @@ class TestPipelineFallback:
         config = {"configurable": {"bot_context": ctx}}
 
         # Must not raise; search proceeds normally
-        result = await apartment_search.ainvoke({"query": "студия"}, config=config)
+        result = await apartment_search(query="студия", config=config)
 
         ctx.embeddings.aembed_hybrid_with_colbert.assert_awaited_once_with("студия")
         call_kwargs = ctx.apartments_service.search_with_filters.await_args
@@ -352,7 +355,7 @@ class TestPipelineFallback:
         ctx = self._make_ctx(pipeline=None)
         config = {"configurable": {"bot_context": ctx}}
 
-        await apartment_search.ainvoke({"query": "апартаменты"}, config=config)
+        await apartment_search(query="апартаменты", config=config)
 
         ctx.embeddings.aembed_hybrid_with_colbert.assert_awaited_once_with("апартаменты")
         call_kwargs = ctx.apartments_service.search_with_filters.await_args

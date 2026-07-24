@@ -9,6 +9,7 @@ import logging
 import time
 from numbers import Real
 from typing import Any, cast
+from uuid import uuid4
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 from src.runtime.grounding.policy import get_grounding_mode
@@ -636,7 +637,7 @@ async def run_client_pipeline(
         config=config,
         message=message,
     )
-    trace_id = ""
+    trace_id = uuid4().hex[:16]
     await _pipeline_respond(
         message=message,
         result=result,

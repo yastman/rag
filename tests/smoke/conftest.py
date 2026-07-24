@@ -41,7 +41,7 @@ def require_live_services(qdrant_url, redis_url):
     asyncio.run(check_redis())
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def qdrant_service(qdrant_url, qdrant_api_key, qdrant_collection):
     """QdrantService for search.
 
@@ -57,7 +57,7 @@ async def qdrant_service(qdrant_url, qdrant_api_key, qdrant_collection):
     await service.close()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def cache_service(redis_url):
     """CacheLayerManager for caching."""
     service = CacheLayerManager(redis_url=redis_url)

@@ -2,26 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
-
-import pytest
+from unittest.mock import AsyncMock
 
 
-@pytest.fixture()
-def _patch_observe():
-    """Disable Langfuse @observe for tests."""
-    with patch("telegram_bot.agents.history_graph.nodes.observe", lambda **_kw: lambda f: f):
-        with patch("telegram_bot.agents.history_graph.nodes.get_client") as mock_lf:
-            mock_lf.return_value = AsyncMock(
-                update_current_span=lambda **_kw: None,
-                score_current_trace=lambda **_kw: None,
-                create_score=lambda **_kw: None,
-                get_current_trace_id=lambda: "test-trace",
-            )
-            yield mock_lf
-
-
-def test_graph_compiles(_patch_observe):
+def test_graph_compiles():
     """build_history_graph() returns a compiled graph."""
     from telegram_bot.agents.history_graph.graph import build_history_graph
 
@@ -32,7 +16,7 @@ def test_graph_compiles(_patch_observe):
     assert hasattr(graph, "ainvoke")
 
 
-async def test_graph_full_path_relevant(_patch_observe):
+async def test_graph_full_path_relevant():
     """Full path: retrieve (relevant) → grade → summarize."""
     from telegram_bot.agents.history_graph.graph import build_history_graph
     from telegram_bot.agents.history_graph.state import make_history_state
@@ -64,7 +48,7 @@ async def test_graph_full_path_relevant(_patch_observe):
     svc.search_user_history.assert_called_once()
 
 
-async def test_graph_rewrite_path(_patch_observe):
+async def test_graph_rewrite_path():
     """Path: retrieve (not relevant) → grade → rewrite → retrieve → grade → summarize."""
     from telegram_bot.agents.history_graph.graph import build_history_graph
     from telegram_bot.agents.history_graph.state import make_history_state
@@ -114,7 +98,7 @@ async def test_graph_rewrite_path(_patch_observe):
     assert call_count == 2  # 2 retrieve calls
 
 
-async def test_graph_empty_results_path(_patch_observe):
+async def test_graph_empty_results_path():
     """Empty results path: retrieve → grade → rewrite → retrieve → grade → summarize (empty).
 
     With max_rewrite_attempts=1 and empty results, the graph does:
@@ -145,7 +129,7 @@ async def test_graph_empty_results_path(_patch_observe):
 # --- Guard integration tests (#432) ---
 
 
-async def test_graph_guard_blocks_injection(_patch_observe):
+async def test_graph_guard_blocks_injection():
     """Guard node blocks injection query — graph returns early with blocked summary."""
     from telegram_bot.agents.history_graph.graph import build_history_graph
     from telegram_bot.agents.history_graph.state import make_history_state
@@ -167,7 +151,7 @@ async def test_graph_guard_blocks_injection(_patch_observe):
     svc.search_user_history.assert_not_called()
 
 
-async def test_graph_guard_clean_query_proceeds(_patch_observe):
+async def test_graph_guard_clean_query_proceeds():
     """Clean query passes guard and completes full pipeline."""
     from telegram_bot.agents.history_graph.graph import build_history_graph
     from telegram_bot.agents.history_graph.state import make_history_state
@@ -200,7 +184,7 @@ async def test_graph_guard_clean_query_proceeds(_patch_observe):
     svc.search_user_history.assert_called_once()
 
 
-async def test_graph_guard_disabled_skips_guard(_patch_observe):
+async def test_graph_guard_disabled_skips_guard():
     """content_filter_enabled=False: no guard node, query goes directly to retrieve."""
     from telegram_bot.agents.history_graph.graph import build_history_graph
     from telegram_bot.agents.history_graph.state import make_history_state
@@ -239,7 +223,7 @@ async def test_graph_guard_disabled_skips_guard(_patch_observe):
     assert result["guard_blocked"] is False
 
 
-async def test_graph_guard_log_mode_continues(_patch_observe):
+async def test_graph_guard_log_mode_continues():
     """guard_mode=log: injection detected but not blocked, continues to retrieve."""
     from telegram_bot.agents.history_graph.graph import build_history_graph
     from telegram_bot.agents.history_graph.state import make_history_state

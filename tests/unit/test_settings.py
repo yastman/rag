@@ -187,20 +187,17 @@ class TestFeatureFlags:
 
             assert settings.enable_caching is True
             assert settings.enable_query_expansion is True
-            assert settings.enable_langfuse is True
 
     def test_feature_flags_false_parsing(self):
         """Test that 'false' string is parsed correctly."""
         env_vars = {
             "OPENAI_API_KEY": "test-key",
             "ENABLE_CACHING": "false",
-            "ENABLE_LANGFUSE": "False",
         }
         with patch.dict(os.environ, env_vars, clear=False):
             settings = Settings(api_provider="openai")
 
             assert settings.enable_caching is False
-            assert settings.enable_langfuse is False
 
 
 class TestToDict:

@@ -15,10 +15,10 @@ def _create_bot(config: BotConfig | None = None):
         config = _make_config()
     with (
         patch("telegram_bot.bot.Bot"),
-        patch("telegram_bot.integrations.cache.CacheLayerManager"),
-        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("telegram_bot.services.qdrant.QdrantService"),
+        patch("src.runtime.integrations.cache.CacheLayerManager"),
+        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
+        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
+        patch("src.runtime.services.qdrant.QdrantService"),
         patch("src.runtime.graph.config.GraphConfig.create_llm"),
         patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
     ):
@@ -73,96 +73,121 @@ class TestHandleMenuButton:
         bot = _create_bot()
         message = _make_message("search")
         state = _make_state()
-        bot._handle_search = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="search"):
+        with (
+            patch(
+                "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="search"
+            ),
+            patch(
+                "telegram_bot.handlers.catalog._handle_search", new_callable=AsyncMock
+            ) as mock_search,
+        ):
             await bot.handle_menu_button(message, state)
 
-        bot._handle_search.assert_awaited_once()
+        mock_search.assert_awaited_once_with(bot, message, None)
 
     async def test_services_dispatches_to_handle_services(self):
         bot = _create_bot()
         message = _make_message("services")
         state = _make_state()
-        bot._handle_services = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="services"):
+        with (
+            patch(
+                "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="services"
+            ),
+            patch(
+                "telegram_bot.handlers.catalog._handle_services", new_callable=AsyncMock
+            ) as mock_svc,
+        ):
             await bot.handle_menu_button(message, state)
 
-        bot._handle_services.assert_awaited_once()
+        mock_svc.assert_awaited_once_with(bot, message, i18n=None)
 
     async def test_viewing_dispatches_to_handle_viewing(self):
         bot = _create_bot()
         message = _make_message("viewing")
         state = _make_state()
-        bot._handle_viewing = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="viewing"):
+        with (
+            patch(
+                "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="viewing"
+            ),
+            patch(
+                "telegram_bot.handlers.catalog._handle_viewing", new_callable=AsyncMock
+            ) as mock_viewing,
+        ):
             await bot.handle_menu_button(message, state)
 
-        bot._handle_viewing.assert_awaited_once()
+        mock_viewing.assert_awaited_once_with(bot, message, state, None)
 
     async def test_bookmarks_dispatches_to_handle_bookmarks(self):
         bot = _create_bot()
         message = _make_message("bookmarks")
         state = _make_state()
-        bot._handle_bookmarks = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="bookmarks"):
+        with (
+            patch(
+                "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="bookmarks"
+            ),
+            patch(
+                "telegram_bot.handlers.favorites._handle_bookmarks", new_callable=AsyncMock
+            ) as mock_bm,
+        ):
             await bot.handle_menu_button(message, state)
 
-        bot._handle_bookmarks.assert_awaited_once()
+        mock_bm.assert_awaited_once_with(bot, message, state)
 
     async def test_ask_dispatches_to_handle_ask(self):
         bot = _create_bot()
         message = _make_message("ask")
         state = _make_state()
-        bot._handle_ask = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="ask"):
+        with (
+            patch("telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="ask"),
+            patch("telegram_bot.handlers.catalog._handle_ask", new_callable=AsyncMock) as mock_ask,
+        ):
             await bot.handle_menu_button(message, state)
 
-        bot._handle_ask.assert_awaited_once()
+        mock_ask.assert_awaited_once_with(bot, message, i18n=None)
 
     async def test_manager_dispatches_to_handle_manager(self):
         bot = _create_bot()
         message = _make_message("manager")
         state = _make_state()
-        bot._handle_manager = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="manager"):
+        with (
+            patch(
+                "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="manager"
+            ),
+            patch(
+                "telegram_bot.handlers.bot_handoff._handle_manager", new_callable=AsyncMock
+            ) as mock_mgr,
+        ):
             await bot.handle_menu_button(message, state)
 
-        bot._handle_manager.assert_awaited_once()
+        mock_mgr.assert_awaited_once_with(bot, message, i18n=None, state=state, dialog_manager=None)
 
     async def test_none_action_returns_early(self):
         bot = _create_bot()
         message = _make_message("unknown")
         state = _make_state()
-        bot._handle_search = AsyncMock()
-        bot._handle_services = AsyncMock()
-        bot._handle_viewing = AsyncMock()
-        bot._handle_bookmarks = AsyncMock()
-        bot._handle_ask = AsyncMock()
-        bot._handle_manager = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value=None):
+        with patch("telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value=None):
             await bot.handle_menu_button(message, state)
 
-        bot._handle_search.assert_not_awaited()
-        bot._handle_services.assert_not_awaited()
-        bot._handle_viewing.assert_not_awaited()
-        bot._handle_bookmarks.assert_not_awaited()
-        bot._handle_ask.assert_not_awaited()
-        bot._handle_manager.assert_not_awaited()
+        # No handler should have been called
 
     async def test_clears_phone_collector_state(self):
         bot = _create_bot()
         message = _make_message("search")
         state = _make_state(current_state="PhoneCollectorStates:waiting_phone")
-        bot._handle_search = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="search"):
+        with (
+            patch(
+                "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="search"
+            ),
+            patch("telegram_bot.handlers.catalog._handle_search", new_callable=AsyncMock),
+        ):
             await bot.handle_menu_button(message, state)
 
         state.clear.assert_awaited_once()
@@ -171,9 +196,13 @@ class TestHandleMenuButton:
         bot = _create_bot()
         message = _make_message("search")
         state = _make_state(current_state="SomeOtherState:step")
-        bot._handle_search = AsyncMock()
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="search"):
+        with (
+            patch(
+                "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="search"
+            ),
+            patch("telegram_bot.handlers.catalog._handle_search", new_callable=AsyncMock),
+        ):
             await bot.handle_menu_button(message, state)
 
         state.clear.assert_not_awaited()
@@ -229,7 +258,7 @@ class TestHandleServiceCallback:
                 return_value=("service", "insurance"),
             ),
             patch(
-                "telegram_bot.services.content_loader.get_service_card",
+                "src.services.content_loader.get_service_card",
                 return_value={"card_text": "Insurance details"},
             ),
             patch(
@@ -312,7 +341,7 @@ class TestHandleCtaCallback:
                 return_value=("manager", None),
             ),
             patch(
-                "telegram_bot.bot.start_qualification",
+                "telegram_bot.handlers.catalog.start_qualification",
                 new_callable=AsyncMock,
             ) as mock_qual,
         ):

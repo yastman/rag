@@ -32,7 +32,8 @@ def _tracked_python_files() -> list[Path]:
         text=True,
     )
     files = [ROOT / line for line in output.splitlines() if line]
-    assert files, "contract scan found no tracked production Python files"
+    files = [file_path for file_path in files if file_path.exists()]
+    assert files, "contract scan found no tracked production Python files that exist on disk"
     return files
 
 

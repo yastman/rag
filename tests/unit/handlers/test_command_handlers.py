@@ -56,10 +56,10 @@ class TestCreateCommandsRouter:
         assert router.name == "commands"
 
     def test_router_has_all_command_handlers_registered(self, mock_bot):
-        """Router registers handlers for all 9 commands."""
+        """Router registers handlers for all 7 commands."""
         router = create_commands_router(mock_bot)
-        # Check message handlers count (9 command handlers)
-        assert len(router.message.handlers) == 9
+        # Check message handlers count (7 command handlers)
+        assert len(router.message.handlers) == 7
 
 
 class TestCmdHelp:
@@ -235,7 +235,7 @@ class TestClearcacheCallbackRequiresAdmin:
     @pytest.mark.asyncio
     async def test_clearcache_requires_admin_callback_rejects_non_admin(self):
         """Non-admin cc: callback is answered with an error; no cache is flushed."""
-        from telegram_bot._bot_crm_callbacks import handle_clearcache_callback
+        from telegram_bot.handlers.bot_crm_callbacks import handle_clearcache_callback
 
         bot = self._make_bot(is_admin=False)
         cb = self._make_callback(user_id=99999, data="cc:all")
@@ -247,8 +247,7 @@ class TestClearcacheCallbackRequiresAdmin:
 
     @pytest.mark.asyncio
     async def test_clearcache_requires_admin_callback_allows_admin(self):
-        """Admin cc:all callback flushes all caches."""
-        from telegram_bot._bot_crm_callbacks import handle_clearcache_callback
+        from telegram_bot.handlers.bot_crm_callbacks import handle_clearcache_callback
 
         bot = self._make_bot(is_admin=True)
         cb = self._make_callback(user_id=1, data="cc:all")

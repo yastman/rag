@@ -1,7 +1,6 @@
 """Contract locks for the native-git script migration (closes #1726 partial).
 
-The audit in ``docs/engineering/script-native-migration-matrix.md`` made
-two destructive decisions that are easy to regress accidentally:
+Destructive decisions that are easy to regress accidentally:
 
 1. ``scripts/git_hygiene.py`` was removed outright (closes #2891). The
    ``scripts/archive/`` directory was deleted too — git history is the
@@ -56,8 +55,7 @@ def test_audited_script_deleted(active_path: Path, archived_name: str) -> None:
     """Both scripts deleted outright; git history is the archive (#2891)."""
     assert not active_path.exists(), (
         f"{active_path.relative_to(REPO_ROOT)} reappeared at the active path. "
-        f"Per docs/engineering/script-native-migration-matrix.md, this script "
-        f"is deleted. Use the native-git path or a new audit decision."
+        f"This script is deleted (#2891). Use the native-git path or a new audit decision."
     )
     archived = ARCHIVE / archived_name
     assert not archived.exists(), (
@@ -90,8 +88,7 @@ def test_git_hygiene_target_uses_native_git() -> None:
     missing = [cmd for cmd in required if cmd not in body]
     assert not missing, (
         f"`make git-hygiene` lost native-git commands: {missing}. "
-        f"Per docs/engineering/script-native-migration-matrix.md, this target "
-        f"must call git directly."
+        f"This target must call git directly (#2891)."
     )
 
 
@@ -142,34 +139,3 @@ def test_issue_hygiene_target_invokes_issue_queue_audit() -> None:
         "`make issue-hygiene` lost reference to scripts/issue_queue_audit.py"
     )
     assert (SCRIPTS / "issue_queue_audit.py").exists()
-
-
-# ------------- Migration matrix structural contract ------------------------------
-
-
-def test_migration_matrix_documents_decisions_for_audited_scripts() -> None:
-    """The matrix must record the explicit decision for each audited script.
-
-    Decisions per audit:
-      - git_hygiene.py:        archived
-      - repo_cleanup.sh:       archived
-      - pr_queue_audit.py:     keep custom audit wrapper
-      - issue_queue_audit.py:  keep custom audit wrapper
-    """
-    matrix = (REPO_ROOT / "docs" / "engineering" / "script-native-migration-matrix.md").read_text(
-        encoding="utf-8"
-    )
-
-    assert "scripts/git_hygiene.py" in matrix
-    assert "scripts/repo_cleanup.sh" in matrix
-    assert "scripts/pr_queue_audit.py" in matrix
-    assert "scripts/issue_queue_audit.py" in matrix
-    # Decision keywords surface in the matrix body.
-    assert "archived" in matrix.lower(), (
-        "migration matrix lost the 'archived' decision keyword for "
-        "scripts/git_hygiene.py / scripts/repo_cleanup.sh"
-    )
-    assert "keep custom audit wrapper" in matrix, (
-        "migration matrix lost the 'keep custom audit wrapper' decision for "
-        "pr_queue_audit.py / issue_queue_audit.py"
-    )

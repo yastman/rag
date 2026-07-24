@@ -10,11 +10,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
-pytest.importorskip(
-    "langchain_core", reason="langchain_core not installed; skip manager flow smoke tests"
-)
-
 from telegram_bot.agents.manager_tools import build_tools_for_role
 
 

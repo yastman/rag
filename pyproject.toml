@@ -465,6 +465,7 @@ addopts = """
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 timeout = 30
 markers = [
     "unit: Unit tests with mocks (fast, no external deps)",

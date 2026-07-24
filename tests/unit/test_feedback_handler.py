@@ -151,87 +151,28 @@ class TestParseFeedbackCallbackReasonPath:
         assert parse_feedback_callback("fb:1:") is None
 
 
-class TestHandleFeedbackLangfuse:
-    """Tests for handle_feedback writing scores via get_langfuse_client (#277)."""
-
-    async def test_creates_score_with_idempotency_id(self):
-        """get_langfuse_client().create_score() called with correct args including id."""
-        mock_lf = MagicMock()
-        callback = AsyncMock()
-        callback.data = "fb:1:trace123abc"
-        callback.from_user = MagicMock()
-        callback.from_user.id = 42
-        callback.message = AsyncMock()
-
-        from telegram_bot import bot as bot_module
-        from telegram_bot.bot import PropertyBot
-
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
-
-        mock_lf.create_score.assert_called_once_with(
-            trace_id="trace123abc",
-            name="user_feedback",
-            value=1.0,
-            data_type="NUMERIC",
-            comment="user_id:42",
-            score_id="trace123abc-user_feedback",
-        )
-        mock_lf.flush.assert_not_called()
-        callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
-
-    async def test_no_score_when_langfuse_disabled(self):
-        """Feedback score NOT written when get_langfuse_client returns None."""
-        callback = AsyncMock()
-        callback.data = "fb:1:trace123abc"
-        callback.from_user = MagicMock()
-        callback.from_user.id = 42
-        callback.message = AsyncMock()
-
-        from telegram_bot import bot as bot_module
-        from telegram_bot.bot import PropertyBot
-
-        with patch.object(bot_module, "get_langfuse_client", return_value=None):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
-
-        # Should complete without error — no create_score call
-        callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
-
-
 class TestHandleFeedback2Step:
     """Tests for the 2-step dislike flow (#755)."""
 
-    async def test_dislike_shows_reason_keyboard_not_score(self):
-        """fb:0:trace → show reason keyboard, NO score written."""
-        mock_lf = MagicMock()
+    async def test_dislike_shows_reason_keyboard(self):
+        """fb:0:trace → show reason keyboard, no score written."""
         callback = AsyncMock()
         callback.data = "fb:0:trace123abc"
         callback.from_user = MagicMock()
         callback.from_user.id = 42
         callback.message = AsyncMock()
 
-        from telegram_bot import bot as bot_module
         from telegram_bot.bot import PropertyBot
 
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
+        bot_instance = MagicMock(spec=PropertyBot)
+        bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
+            bot_instance, PropertyBot
+        )
+        await bot_instance.handle_feedback(callback)
 
-        mock_lf.create_score.assert_not_called()
         callback.message.edit_reply_markup.assert_awaited_once()
         called_markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
-        # Reason keyboard: 3 rows × 2 buttons
+        # Reason keyboard: 3 rows x 2 buttons
         assert len(called_markup.inline_keyboard) == 3
 
     async def test_dislike_answers_callback(self):
@@ -242,114 +183,35 @@ class TestHandleFeedback2Step:
         callback.from_user.id = 42
         callback.message = AsyncMock()
 
-        from telegram_bot import bot as bot_module
         from telegram_bot.bot import PropertyBot
 
-        with patch.object(bot_module, "get_langfuse_client", return_value=None):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
+        bot_instance = MagicMock(spec=PropertyBot)
+        bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
+            bot_instance, PropertyBot
+        )
+        await bot_instance.handle_feedback(callback)
 
         callback.answer.assert_awaited_once()
 
-    async def test_reason_selected_writes_two_scores(self):
-        """fb:r:wt:trace → create_score called twice: user_feedback + user_feedback_reason."""
-        mock_lf = MagicMock()
-        callback = AsyncMock()
-        callback.data = "fb:r:wt:trace123abc"
-        callback.from_user = MagicMock()
-        callback.from_user.id = 42
-        callback.message = AsyncMock()
-
-        from telegram_bot import bot as bot_module
-        from telegram_bot.bot import PropertyBot
-
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
-
-        assert mock_lf.create_score.call_count == 2
-        score_names = {c.kwargs["name"] for c in mock_lf.create_score.call_args_list}
-        assert "user_feedback" in score_names
-        assert "user_feedback_reason" in score_names
-
-    async def test_reason_score_values_correct(self):
-        """fb:r:ha:trace → user_feedback=0 NUMERIC + user_feedback_reason='hallucination' CATEGORICAL."""
-        mock_lf = MagicMock()
-        callback = AsyncMock()
-        callback.data = "fb:r:ha:trace123abc"
-        callback.from_user = MagicMock()
-        callback.from_user.id = 42
-        callback.message = AsyncMock()
-
-        from telegram_bot import bot as bot_module
-        from telegram_bot.bot import PropertyBot
-
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
-
-        calls_by_name = {c.kwargs["name"]: c for c in mock_lf.create_score.call_args_list}
-        assert calls_by_name["user_feedback"].kwargs["value"] == 0.0
-        assert calls_by_name["user_feedback"].kwargs["data_type"] == "NUMERIC"
-        assert calls_by_name["user_feedback_reason"].kwargs["value"] == "hallucination"
-        assert calls_by_name["user_feedback_reason"].kwargs["data_type"] == "CATEGORICAL"
-
-    async def test_reason_score_idempotency_ids(self):
-        """fb:r:fm:trace → both scores have stable score_id."""
-        mock_lf = MagicMock()
-        callback = AsyncMock()
-        callback.data = "fb:r:fm:trace123abc"
-        callback.from_user = MagicMock()
-        callback.from_user.id = 42
-        callback.message = AsyncMock()
-
-        from telegram_bot import bot as bot_module
-        from telegram_bot.bot import PropertyBot
-
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
-
-        calls_by_name = {c.kwargs["name"]: c for c in mock_lf.create_score.call_args_list}
-        assert calls_by_name["user_feedback"].kwargs["score_id"] == "trace123abc-user_feedback"
-        assert (
-            calls_by_name["user_feedback_reason"].kwargs["score_id"]
-            == "trace123abc-user_feedback_reason"
-        )
-
     async def test_reason_selected_shows_confirmation_keyboard(self):
-        """fb:r:fm:trace → edit_reply_markup with 1-button confirmation."""
+        """fb:r:*:trace → edit_reply_markup with 1-button confirmation."""
         callback = AsyncMock()
         callback.data = "fb:r:fm:trace123abc"
         callback.from_user = MagicMock()
         callback.from_user.id = 42
         callback.message = AsyncMock()
 
-        from telegram_bot import bot as bot_module
         from telegram_bot.bot import PropertyBot
 
-        with patch.object(bot_module, "get_langfuse_client", return_value=None):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
+        bot_instance = MagicMock(spec=PropertyBot)
+        bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
+            bot_instance, PropertyBot
+        )
+        await bot_instance.handle_feedback(callback)
 
         callback.message.edit_reply_markup.assert_awaited_once()
         called_markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
-        # Confirmation: 1 row × 1 button
+        # Confirmation: 1 row x 1 button
         assert len(called_markup.inline_keyboard) == 1
 
     async def test_reason_selected_answers_thanks(self):
@@ -360,15 +222,13 @@ class TestHandleFeedback2Step:
         callback.from_user.id = 42
         callback.message = AsyncMock()
 
-        from telegram_bot import bot as bot_module
         from telegram_bot.bot import PropertyBot
 
-        with patch.object(bot_module, "get_langfuse_client", return_value=None):
-            bot_instance = MagicMock(spec=PropertyBot)
-            bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
-                bot_instance, PropertyBot
-            )
-            await bot_instance.handle_feedback(callback)
+        bot_instance = MagicMock(spec=PropertyBot)
+        bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
+            bot_instance, PropertyBot
+        )
+        await bot_instance.handle_feedback(callback)
 
         callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
 

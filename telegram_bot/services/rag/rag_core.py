@@ -34,19 +34,6 @@ _REWRITE_PROMPT = (
 )
 
 
-def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
-    """Return True when caller passed the deprecated client-side ColBERT service."""
-    if reranker is None:
-        return False
-
-    try:
-        from telegram_bot.services.rag.colbert_reranker import ColbertRerankerService
-    except (ImportError, ModuleNotFoundError):
-        return False
-
-    return isinstance(reranker, ColbertRerankerService)
-
-
 # ---------------------------------------------------------------------------
 # H2: Context builder
 # ---------------------------------------------------------------------------
@@ -102,7 +89,7 @@ async def rewrite_query_via_llm(
     Raises:
         Exception: propagates LLM errors to caller (adapter handles fallback).
     """
-    from telegram_bot.graph.config import GraphConfig
+    from src.runtime.graph.config import GraphConfig
 
     config = GraphConfig.from_env()
     prompt = _REWRITE_PROMPT.format(query=query)
@@ -141,7 +128,6 @@ async def perform_rerank(
         documents: Retrieved document dicts with "text" and "score" keys.
         cache: Optional cache instance with get_rerank_results / store_rerank_results.
         reranker: Optional reranker instance with .rerank() method.
-            Deprecated ColbertRerankerService inputs are ignored.
         top_k: Number of documents to return.
 
     Returns:

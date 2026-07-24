@@ -105,23 +105,24 @@ async def test_kommo_429_retries_then_succeeds():
 
 
 @pytest.mark.asyncio
-async def test_kommo_401_refreshes_token_and_recovers():
+async def test_kommo_401_refreshes_token_and_recovers(httpx_mock):
     """Kommo 401 should force token refresh and retry request."""
+    import re
+
     token_store = AsyncMock()
     token_store.get_valid_token = AsyncMock(return_value="expired")
     token_store.force_refresh = AsyncMock(return_value="fresh-token")
     client = KommoClient(subdomain="testcompany", token_store=token_store)
 
-    req = httpx.Request("GET", "https://testcompany.kommo.com/api/v4/leads")
-    resp_401 = httpx.Response(401, request=req)
-    resp_200 = httpx.Response(
-        200,
+    url = re.compile(r"https://testcompany\.kommo\.com/api/v4/leads(?:\?.*)?$")
+    httpx_mock.add_response(url=url, method="GET", status_code=401)
+    httpx_mock.add_response(
+        url=url,
+        method="GET",
         json={"_embedded": {"leads": [{"id": 2, "name": "Lead B"}]}},
-        request=req,
     )
 
-    with patch.object(client._client, "request", side_effect=[resp_401, resp_200]):
-        leads = await client.search_leads(responsible_user_id=7, limit=5)
+    leads = await client.search_leads(responsible_user_id=7, limit=5)
 
     assert len(leads) == 1
     assert leads[0].id == 2

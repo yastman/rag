@@ -51,6 +51,7 @@ class TestTextRagChatSurface:
         msg.answer = AsyncMock()
 
         rag_result = {
+            "response": "",
             "query_type": "FAQ",
             "documents": [{"content": "Квартиры от 50 000 EUR.", "id": "doc1"}],
             "reranked_documents": [],
@@ -61,7 +62,10 @@ class TestTextRagChatSurface:
             "search_latency": 0.2,
             "rerank_latency": 0.0,
             "confidence_score": 0.9,
+            "grade_confidence": 0.9,
             "grounded": True,
+            "latency_stages": {},
+            "llm_call_count": 0,
         }
         gen_result = {
             "response": "Квартиры от 50 000 EUR.",
@@ -70,17 +74,11 @@ class TestTextRagChatSurface:
             "model": "gpt-4o-mini",
             "grounded": True,
             "ground_truth_used": False,
+            "response_sent": False,
+            "llm_call_count": 1,
         }
 
         with (
-            patch(
-                "telegram_bot.pipelines.client.get_client",
-                return_value=MagicMock(
-                    get_current_trace_id=MagicMock(return_value=""),
-                    update_current_span=MagicMock(),
-                    create_score=MagicMock(),
-                ),
-            ),
             patch(
                 "telegram_bot.pipelines.client.rag_pipeline",
                 new=AsyncMock(return_value=rag_result),
@@ -90,28 +88,6 @@ class TestTextRagChatSurface:
                 new=AsyncMock(return_value=gen_result),
             ),
             patch("telegram_bot.pipelines.client.send_html_messages", new=AsyncMock()),
-            patch("telegram_bot.pipelines.client.write_pipeline_scores", new=AsyncMock()),
-            patch(
-                "telegram_bot.pipelines.client.maybe_store_semantic_response",
-                new=AsyncMock(),
-            ),
-            patch(
-                "telegram_bot.pipelines.client.resolve_semantic_cache_signature",
-                return_value=None,
-            ),
-            patch(
-                "telegram_bot.pipelines.client.build_cacheability_decision",
-                return_value=MagicMock(should_store=False, reason="test"),
-            ),
-            patch(
-                "telegram_bot.pipelines.client.get_grounding_mode",
-                return_value="grounded",
-            ),
-            patch(
-                "telegram_bot.pipelines.client.get_query_topic_hint",
-                return_value=None,
-            ),
-            patch("telegram_bot.pipelines.client.propagate_attributes"),
         ):
             result = await run_client_pipeline(
                 user_text="Сколько стоят квартиры?",
@@ -129,8 +105,8 @@ class TestTextRagChatSurface:
                     streaming_enabled=False,
                     relevance_threshold_rrf=0.005,
                     get_collection_name=MagicMock(return_value="test_col"),
-                    langfuse_env="test",
                 ),
+                query_type="FAQ",
             )
 
         assert result is not None

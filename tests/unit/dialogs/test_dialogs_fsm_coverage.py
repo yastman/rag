@@ -53,8 +53,9 @@ _NOISE_PARTS: frozenset[str] = frozenset(
 
 # (StatesGroup class name, expected state attribute names) — locked from #1093
 EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
+    # Live dialog groups
     "ClientMenuSG": ("main",),
-    "SettingsSG": ("main", "language", "crm"),
+    "SettingsSG": ("main", "language"),
     "FunnelSG": (
         "city",
         "property_type",
@@ -72,27 +73,6 @@ EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "ViewingSG": ("date",),
     "FaqSG": ("main",),
-    "CrmSubmenuSG": ("main",),
-    "CRMMenuSG": ("main",),
-    "CreateLeadSG": ("name", "budget", "pipeline", "summary"),
-    "CreateContactSG": ("first_name", "last_name", "phone", "email", "summary"),
-    "CreateTaskSG": ("text", "task_type", "lead_id", "due_date", "summary"),
-    "TasksMenuSG": ("main",),
-    "MyTasksSG": ("filter", "list"),
-    "CreateNoteSG": ("entity_type", "entity_id", "text", "summary"),
-    "SearchSG": ("query", "results"),
-    "LeadsMenuSG": ("main",),
-    "MyLeadsSG": ("main",),
-    "SearchLeadsSG": ("query", "results"),
-    "ContactsMenuSG": ("main",),
-    "SearchContactsSG": ("query", "results"),
-    "CrmQuickActionSG": (
-        "waiting_note",
-        "waiting_task",
-        "edit_task_choose_field",
-        "edit_task_text",
-        "edit_task_date",
-    ),
     "HandoffSG": ("goal", "contact"),
     "FilterSG": (
         "hub",
@@ -108,6 +88,27 @@ EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "CatalogSG": ("results", "empty", "details"),
     "DemoSG": ("intro", "results"),
+    # Archived compatibility stubs (kept for ImportError safety, not on active path)
+    "AIAdvisorSG": ("main", "loading", "result"),
+    "CrmQuickActionSG": (
+        "waiting_note",
+        "waiting_task",
+        "edit_task_choose_field",
+        "edit_task_text",
+        "edit_task_date",
+    ),
+    "ContactsMenuSG": ("main",),
+    "CreateContactSG": ("name", "phone", "email", "confirm"),
+    "SearchContactsSG": ("query", "results"),
+    "LeadsMenuSG": ("main",),
+    "CRMMenuSG": ("main",),
+    "ManagerMenuSG": ("main",),
+    "CreateLeadSG": ("name", "phone", "budget", "confirm"),
+    "SearchSG": ("query", "results"),
+    "CreateNoteSG": ("text", "confirm"),
+    "CreateTaskSG": ("title", "due_date", "confirm"),
+    "MyTasksSG": ("main", "task_detail"),
+    "TasksMenuSG": ("main",),
 }
 
 
@@ -160,20 +161,10 @@ def _extract_state_references(file_path: Path, group_name: str) -> list[str]:
     return pattern.findall(text)
 
 
-WIZARD_STEP_FILES: dict[str, tuple[Path, tuple[str, ...]]] = {
-    "CreateLeadSG": (
-        DIALOGS_DIR / "crm_leads.py",
-        ("name", "budget", "pipeline", "summary"),
-    ),
-    "CreateContactSG": (
-        DIALOGS_DIR / "crm_contacts.py",
-        ("first_name", "last_name", "phone", "email", "summary"),
-    ),
-    "CreateTaskSG": (
-        DIALOGS_DIR / "crm_tasks.py",
-        ("text", "task_type", "lead_id", "due_date", "summary"),
-    ),
-}
+# No multi-step wizards with documented step order remain after CRM removal.
+# FunnelSG windows are defined in funnel/_windows.py and follow the state
+# declaration order; no external ordering contract exists for it.
+WIZARD_STEP_FILES: dict[str, tuple[Path, tuple[str, ...]]] = {}
 
 
 @pytest.mark.parametrize("group_name", list(WIZARD_STEP_FILES.keys()))
@@ -242,10 +233,43 @@ def _state_is_referenced(group_name: str, state_name: str, dialog_sources: str) 
 #   is superseded by ``CRMMenuSG``.
 # Removing them is out of scope for #1093 — flagged here so the contract is
 # explicit and a future cleanup PR can drop the allowlist + the unused classes.
+# Archived CRM states are kept as compatibility stubs in states.py but are NOT
+# referenced by any production dialog/handler. They are grandfathered here so
+# test_every_declared_state_is_referenced_by_a_dialog does not flag them.
 _EXTERNALLY_REFERENCED_ALLOWLIST: set[tuple[str, str]] = {
+    # Archived -- not on active production path
+    ("AIAdvisorSG", "main"),
+    ("AIAdvisorSG", "loading"),
+    ("AIAdvisorSG", "result"),
+    ("CrmQuickActionSG", "waiting_note"),
+    ("CrmQuickActionSG", "waiting_task"),
+    ("CrmQuickActionSG", "edit_task_choose_field"),
+    ("CrmQuickActionSG", "edit_task_text"),
+    ("CrmQuickActionSG", "edit_task_date"),
+    ("ContactsMenuSG", "main"),
+    ("CreateContactSG", "name"),
+    ("CreateContactSG", "phone"),
+    ("CreateContactSG", "email"),
+    ("CreateContactSG", "confirm"),
+    ("SearchContactsSG", "query"),
+    ("SearchContactsSG", "results"),
+    ("LeadsMenuSG", "main"),
+    ("CRMMenuSG", "main"),
+    ("ManagerMenuSG", "main"),
+    ("CreateLeadSG", "name"),
+    ("CreateLeadSG", "phone"),
+    ("CreateLeadSG", "budget"),
+    ("CreateLeadSG", "confirm"),
     ("SearchSG", "query"),
     ("SearchSG", "results"),
-    ("CrmSubmenuSG", "main"),
+    ("CreateNoteSG", "text"),
+    ("CreateNoteSG", "confirm"),
+    ("CreateTaskSG", "title"),
+    ("CreateTaskSG", "due_date"),
+    ("CreateTaskSG", "confirm"),
+    ("MyTasksSG", "main"),
+    ("MyTasksSG", "task_detail"),
+    ("TasksMenuSG", "main"),
 }
 
 
@@ -257,8 +281,8 @@ def test_every_declared_state_is_referenced_by_a_dialog() -> None:
     a few groups are still wired through raw aiogram FSM in
     ``telegram_bot/handlers/`` (e.g. the phone collector handler) rather
     than through aiogram-dialog windows. ``CrmQuickActionSG`` was migrated
-    in #2053 and is now driven by ``crm_quick_actions_dialog``; see #1232
-    for the remaining migration targets.
+
+
     """
     sources = "\n".join(p.read_text(encoding="utf-8") for p in _all_production_files())
 
@@ -302,11 +326,7 @@ def test_all_production_files_excludes_noise_dirs(
 
 
 WIZARD_ENTRY_AND_TERMINAL: dict[str, tuple[Path, str, str]] = {
-    "CreateLeadSG": (DIALOGS_DIR / "crm_leads.py", "name", "summary"),
-    "CreateContactSG": (DIALOGS_DIR / "crm_contacts.py", "first_name", "summary"),
-    "CreateTaskSG": (DIALOGS_DIR / "crm_tasks.py", "text", "summary"),
-    "CreateNoteSG": (DIALOGS_DIR / "crm_notes.py", "entity_type", "summary"),
-    "FunnelSG": (DIALOGS_DIR / "funnel.py", "city", "summary"),
+    "FunnelSG": (DIALOGS_DIR / "funnel" / "_windows.py", "city", "summary"),
 }
 
 

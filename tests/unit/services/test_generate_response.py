@@ -551,8 +551,18 @@ async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> No
 @pytest.mark.asyncio
 async def test_generate_response_non_streaming_has_ttft_ms() -> None:
     """Non-streaming path must report ttft_ms > 0 from LLM call wall time (#571)."""
-    config, _client = _make_non_streaming_config(answer="Ответ без стриминга")
-    MagicMock()
+    config, client = _make_non_streaming_config(answer="Ответ без стриминга")
+
+    # Instant AsyncMock returns can collapse to 0.0 ms on coarse Windows clocks
+    # (GetTickCount64 ~15.6ms). sleep(0.01) still zeros ~36% of samples; use 20ms.
+    original_response = await client.chat.completions.create()
+
+    async def _delayed_create(*_args, **_kwargs):
+        await asyncio.sleep(0.02)
+        return original_response
+
+    client.chat.completions.create = AsyncMock(side_effect=_delayed_create)
+    config.create_llm.return_value = client
 
     result = await generate_response(
         query="Тест таймингов",

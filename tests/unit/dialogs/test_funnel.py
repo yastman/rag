@@ -533,8 +533,6 @@ async def test_zero_suggestion_removes_floor_and_refreshes_summary():
 @pytest.mark.asyncio
 async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch):
     """on_summary_search should search, send cards via property_bot, then close dialog."""
-    spawn_mock = MagicMock()
-    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", spawn_mock)
 
     mock_svc = MagicMock()
     mock_svc.scroll_with_filters = AsyncMock(
@@ -963,7 +961,6 @@ _APT_PAYLOAD = {
 
 
 def _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock):
-    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
     callback = MagicMock()
     callback.from_user = MagicMock(id=123)
     callback.message = MagicMock()
@@ -1178,7 +1175,6 @@ class TestFormatApartmentList:
 @pytest.mark.asyncio
 async def test_on_summary_search_list_mode_sends_text(monkeypatch):
     """When button.widget_id == 'search_list', sends HTML text instead of photo cards."""
-    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
 
     mock_svc = MagicMock()
     mock_svc.scroll_with_filters = AsyncMock(

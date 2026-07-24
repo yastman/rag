@@ -26,11 +26,8 @@ def test_release_smoke_asserts_removed_services_absent() -> None:
     for service in [
         "docling",
         "ingestion",
-        "langfuse",
-        "langfuse-worker",
         "clickhouse",
         "minio",
-        "redis-langfuse",
     ]:
         assert service in noncore_services
     assert "VPS_NONCORE_SERVICES" in script
@@ -83,7 +80,7 @@ def test_release_gate_script_core_required_vars_are_minimal() -> None:
         assert var in script
     core_section = script.split("optional_profile_vars", 1)[0]
     assert "CEREBRAS_API_KEY" in script
-    for var in ["CLICKHOUSE_PASSWORD", "MINIO_ROOT_PASSWORD", "LANGFUSE_REDIS_PASSWORD"]:
+    for var in ["CLICKHOUSE_PASSWORD", "MINIO_ROOT_PASSWORD"]:
         assert var not in core_section
 
 
@@ -118,7 +115,6 @@ def test_release_gate_script_optional_profile_vars_are_gated() -> None:
         "ENCRYPTION_KEY",
         "CLICKHOUSE_PASSWORD",
         "MINIO_ROOT_PASSWORD",
-        "LANGFUSE_REDIS_PASSWORD",
     ]:
         assert var in script
 
@@ -137,7 +133,7 @@ def test_release_gate_script_uses_safe_env_parsing() -> None:
     assert "Invalid .env line" in script
 
 
-# ── VPS cleanup-script contract tests ──────────────────────────────────
+# VPS cleanup-script contract tests
 
 
 def test_vps_cleanup_script_uses_explicit_allowlist() -> None:
@@ -147,7 +143,7 @@ def test_vps_cleanup_script_uses_explicit_allowlist() -> None:
         "vps_clickhouse_data",
         "vps_clickhouse_logs",
         "vps_minio_data",
-        "vps_langfuse_redis_data",
+        "vps_ingestion-manifest",
     ]:
         assert volume in script
     assert "vps_docling_cache" not in script
@@ -176,7 +172,7 @@ def test_release_gate_has_disk_pressure_blocker() -> None:
     assert "disk usage" in script.lower()
 
 
-# ── Healthcheck contract tests (PR #1256 runtime blockers) ──────────────
+# Healthcheck contract tests (PR #1256 runtime blockers)
 
 
 def _extract_healthcheck_cmd(dockerfile: Path) -> str:

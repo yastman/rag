@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from src.ingestion.unified.observability import update_ingestion_trace
@@ -12,38 +10,40 @@ from src.ingestion.unified.observability import update_ingestion_trace
 pytestmark = pytest.mark.requires_extras
 
 
-def test_update_ingestion_trace_uses_observation_updates() -> None:
-    mock_lf = MagicMock()
-    mock_observation = MagicMock()
-    mock_observation_ctx = MagicMock()
-    mock_observation_ctx.__enter__ = MagicMock(return_value=mock_observation)
-    mock_observation_ctx.__exit__ = MagicMock(return_value=None)
-    mock_lf.start_as_current_observation.return_value = mock_observation_ctx
-    mock_lf.create_trace_id.return_value = "trace-ingestion-preflight"
-    mock_context = MagicMock()
-    mock_context.__enter__ = MagicMock(return_value=None)
-    mock_context.__exit__ = MagicMock(return_value=None)
+def test_update_ingestion_trace_is_noop() -> None:
+    """update_ingestion_trace is a no-op after tracing removal (#2844, #2951, #2969).
 
-    with (
-        patch("src.observability.get_langfuse_client", return_value=mock_lf),
-        patch(
-            "src.observability.propagate_attributes",
-            return_value=mock_context,
-        ) as mock_propagate,
-    ):
-        update_ingestion_trace(command="preflight", status="ok", metadata={"step": "boot"})
+    It must not import or reference src.observability (Langfuse shims removed).
+    """
+    # Verify the function runs without error with typical arguments
+    update_ingestion_trace(command="preflight", status="ok", metadata={"step": "boot"})
+    update_ingestion_trace(command="run", status="error", metadata={"error": "timeout"})
+    update_ingestion_trace(command="bootstrap", status="ok")
+    # verify it returns None
+    assert update_ingestion_trace(command="check", status="ok") is None
 
-    mock_lf.create_trace_id.assert_called_once_with(seed="ingestion-preflight")
-    mock_lf.start_as_current_observation.assert_called_once_with(
-        as_type="span",
-        name="ingestion-preflight",
-        trace_context={"trace_id": "trace-ingestion-preflight"},
-    )
-    mock_propagate.assert_called_once_with(
-        session_id="ingestion-preflight",
-        user_id="ingestion-cli",
-        tags=["ingestion", "unified"],
-    )
-    mock_observation.update.assert_called_once_with(
-        metadata={"command": "preflight", "status": "ok", "step": "boot"}
-    )
+
+def test_flush_ingestion_traces_is_noop() -> None:
+    """flush_ingestion_traces is a no-op after tracing removal."""
+    from src.ingestion.unified.observability import flush_ingestion_traces
+
+    assert flush_ingestion_traces() is None
+
+
+def test_ingestion_session_id_produces_stable_names() -> None:
+    """ingestion_session_id builds stable deterministic session names."""
+    from src.ingestion.unified.observability import ingestion_session_id
+
+    assert ingestion_session_id("preflight") == "ingestion-preflight"
+    assert ingestion_session_id("run") == "ingestion-run"
+    assert ingestion_session_id("backfill-colbert") == "ingestion-backfill-colbert"
+    assert ingestion_session_id("") == "ingestion-unknown"
+    assert ingestion_session_id(None) == "ingestion-unknown"  # type: ignore[arg-type]
+
+
+def test_try_update_ingestion_trace_wraps_noop() -> None:
+    """try_update_ingestion_trace delegates to update_ingestion_trace without error."""
+    from src.ingestion.unified.observability import try_update_ingestion_trace
+
+    try_update_ingestion_trace(command="preflight", status="ok")
+    try_update_ingestion_trace(command="run", status="error", metadata={"err": "msg"})

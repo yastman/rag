@@ -197,15 +197,6 @@ class TestPipelineCache:
         assert result is not None
 
 
-class TestExtractionPipelineObservability:
-    def test_extract_is_observed(self) -> None:
-        """ApartmentExtractionPipeline.extract must be @observe-decorated (span: apartment-extraction-pipeline)."""
-        assert hasattr(ApartmentExtractionPipeline.extract, "__wrapped__"), (
-            "ApartmentExtractionPipeline.extract must be decorated with "
-            "@observe(name='apartment-extraction-pipeline')"
-        )
-
-
 class TestRegexWinsForNumeric:
     """Regression for #1609: numeric fields extracted by regex must win over LLM.
 

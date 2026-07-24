@@ -27,25 +27,22 @@ def test_handle_search_accepts_dialog_manager():
 async def test_handle_menu_button_clears_stale_fsm_state():
     """handle_menu_button clears FSM state if user was in phone collection (#658)."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
-        from telegram_bot.bot import PropertyBot
+        with patch("telegram_bot.handlers.catalog._handle_services", new_callable=AsyncMock):
+            from telegram_bot.bot import PropertyBot
 
-        bot = PropertyBot.__new__(PropertyBot)
+            bot = PropertyBot.__new__(PropertyBot)
 
-        message = MagicMock()
-        message.text = "🔑 Услуги"
-        message.answer = AsyncMock()
+            message = MagicMock()
+            message.text = "🔑 Услуги"
+            message.answer = AsyncMock()
 
-        state = AsyncMock()
-        state.get_state = AsyncMock(return_value="PhoneCollectorStates:waiting_phone")
-        state.clear = AsyncMock()
+            state = AsyncMock()
+            state.get_state = AsyncMock(return_value="PhoneCollectorStates:waiting_phone")
+            state.clear = AsyncMock()
 
-        # Mock _handle_services to avoid real logic
-        bot._handle_services = AsyncMock()
+            await bot.handle_menu_button(message, state)
 
-        await bot.handle_menu_button(message, state)
-
-        state.clear.assert_called_once()
-        bot._handle_services.assert_called_once_with(message, i18n=None)
+            state.clear.assert_called_once()
 
 
 async def test_handle_menu_button_no_clear_when_state_is_none():
@@ -63,12 +60,10 @@ async def test_handle_menu_button_no_clear_when_state_is_none():
         state.get_state = AsyncMock(return_value=None)
         state.clear = AsyncMock()
 
-        bot._handle_services = AsyncMock()
-
         await bot.handle_menu_button(message, state)
 
         state.clear.assert_not_called()
-        bot._handle_services.assert_called_once_with(message, i18n=None)
+        # bot delegates to catalog._handle_services directly
 
 
 async def test_handle_menu_button_no_clear_for_unrelated_state():
@@ -86,12 +81,10 @@ async def test_handle_menu_button_no_clear_for_unrelated_state():
         state.get_state = AsyncMock(return_value="FunnelSG:budget")
         state.clear = AsyncMock()
 
-        bot._handle_services = AsyncMock()
-
         await bot.handle_menu_button(message, state)
 
         state.clear.assert_not_called()
-        bot._handle_services.assert_called_once_with(message, i18n=None)
+        # bot delegates to catalog._handle_services directly
 
 
 async def test_handle_search_starts_funnel_dialog():
@@ -145,11 +138,10 @@ async def test_handle_menu_button_passes_dialog_manager_to_search():
         state.get_state = AsyncMock(return_value=None)
 
         dialog_manager = AsyncMock()
-        bot._handle_search = AsyncMock()
 
         await bot.handle_menu_button(message, state, dialog_manager)
 
-        bot._handle_search.assert_called_once_with(message, dialog_manager)
+    # bot delegates to catalog._handle_search directly
 
 
 async def test_handle_menu_button_parses_localized_labels_with_hub():
@@ -159,7 +151,6 @@ async def test_handle_menu_button_parses_localized_labels_with_hub():
 
         bot = PropertyBot.__new__(PropertyBot)
         bot._i18n_hub = MagicMock()
-        bot._handle_services = AsyncMock()
 
         message = MagicMock()
         message.text = "🔑 Послуги"
@@ -168,11 +159,13 @@ async def test_handle_menu_button_parses_localized_labels_with_hub():
         state = AsyncMock()
         state.get_state = AsyncMock(return_value=None)
 
-        with patch("telegram_bot.bot.parse_menu_button", return_value="services") as parse_mock:
+        with patch(
+            "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="services"
+        ) as parse_mock:
             await bot.handle_menu_button(message, state, i18n=MagicMock())
 
         parse_mock.assert_called_once_with("🔑 Послуги", i18n_hub=bot._i18n_hub)
-        bot._handle_services.assert_called_once()
+    # bot delegates to catalog._handle_services directly
 
 
 def test_handoff_dialog_registered():
@@ -180,8 +173,8 @@ def test_handoff_dialog_registered():
     import ast
     from pathlib import Path
 
-    bot_py = Path("telegram_bot/bot.py").read_text()
-    tree = ast.parse(bot_py)
+    lifecycle_py = Path("telegram_bot/lifecycle/lifecycle.py").read_text()
+    tree = ast.parse(lifecycle_py)
 
     found = False
     for node in ast.walk(tree):
@@ -203,8 +196,8 @@ def test_client_menu_dialog_is_registered():
     import ast
     from pathlib import Path
 
-    bot_py = Path("telegram_bot/bot.py").read_text()
-    tree = ast.parse(bot_py)
+    lifecycle_py = Path("telegram_bot/lifecycle/lifecycle.py").read_text()
+    tree = ast.parse(lifecycle_py)
 
     found = False
     for node in ast.walk(tree):

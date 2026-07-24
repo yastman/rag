@@ -25,27 +25,15 @@ def _cfg(**kwargs: Any) -> RunnableConfig:
     return RunnableConfig(configurable=kwargs)
 
 
-def _passthrough_observe(name: str | None = None, **kw: Any):  # type: ignore[return]
-    """Passthrough decorator replacing telegram_bot.observability.observe."""
-
-    def dec(fn: Any) -> Any:
-        return fn
-
-    return dec
-
-
 def _make_nurturing_tools(
     analytics: Any = None,
     nurturing: Any = None,
 ) -> list[Any]:
-    """Create nurturing tools with observe mocked out."""
-    import unittest.mock as mock
-
-    with mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe):
-        return create_manager_nurturing_tools(
-            analytics_service=analytics,
-            nurturing_service=nurturing,
-        )
+    """Create nurturing tools."""
+    return create_manager_nurturing_tools(
+        analytics_service=analytics,
+        nurturing_service=nurturing,
+    )
 
 
 def _make_score_sync_tool(
@@ -54,16 +42,13 @@ def _make_score_sync_tool(
     score_field_id: int = 1,
     band_field_id: int = 2,
 ) -> Any:
-    """Create crm_score_sync tool with observe mocked out."""
-    import unittest.mock as mock
-
-    with mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe):
-        return create_crm_score_sync_tool(
-            scoring_store=scoring_store,
-            kommo_client=kommo_client,
-            score_field_id=score_field_id,
-            band_field_id=band_field_id,
-        )
+    """Create crm_score_sync tool."""
+    return create_crm_score_sync_tool(
+        scoring_store=scoring_store,
+        kommo_client=kommo_client,
+        score_field_id=score_field_id,
+        band_field_id=band_field_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -160,37 +145,37 @@ class TestCreateManagerNurturingTools:
 
     async def test_analytics_access_denied_for_client(self) -> None:
         tools = _make_nurturing_tools()
-        result = await tools[0].ainvoke({"query": "stats"}, config=_cfg(role="client"))
+        result = await tools[0](query="stats", config=_cfg(role="client"))
         assert result == "Access denied"
 
     async def test_analytics_unavailable_when_service_none(self) -> None:
         tools = _make_nurturing_tools(analytics=None)
-        result = await tools[0].ainvoke({"query": "stats"}, config=_cfg(role="manager"))
+        result = await tools[0](query="stats", config=_cfg(role="manager"))
         assert result == "Analytics service unavailable"
 
     async def test_analytics_calls_get_latest_summary(self) -> None:
         svc = AsyncMock()
         svc.get_latest_summary.return_value = "report data"
         tools = _make_nurturing_tools(analytics=svc)
-        result = await tools[0].ainvoke({"query": "stats"}, config=_cfg(role="manager"))
+        result = await tools[0](query="stats", config=_cfg(role="manager"))
         assert "report data" in result
         svc.get_latest_summary.assert_awaited_once()
 
     async def test_nurturing_access_denied_for_client(self) -> None:
         tools = _make_nurturing_tools()
-        result = await tools[1].ainvoke({"query": "run"}, config=_cfg(role="client"))
+        result = await tools[1](query="run", config=_cfg(role="client"))
         assert result == "Access denied"
 
     async def test_nurturing_unavailable_when_service_none(self) -> None:
         tools = _make_nurturing_tools(nurturing=None)
-        result = await tools[1].ainvoke({"query": "run"}, config=_cfg(role="manager"))
+        result = await tools[1](query="run", config=_cfg(role="manager"))
         assert result == "Nurturing service unavailable"
 
     async def test_nurturing_returns_count(self) -> None:
         svc = AsyncMock()
         svc.run_once.return_value = 7
         tools = _make_nurturing_tools(nurturing=svc)
-        result = await tools[1].ainvoke({"query": "run"}, config=_cfg(role="manager"))
+        result = await tools[1](query="run", config=_cfg(role="manager"))
         assert "7" in result
 
 
@@ -203,27 +188,21 @@ class TestCreateCrmScoreSyncTool:
     async def test_access_denied_for_client(self) -> None:
         import unittest.mock as mock
 
-        with (
-            mock.patch(
-                "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
-                new_callable=AsyncMock,
-            ),
-            mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe),
+        with mock.patch(
+            "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
+            new_callable=AsyncMock,
         ):
             tool = _make_score_sync_tool()
-            result = await tool.ainvoke({"query": "sync"}, config=_cfg(role="client"))
+            result = await tool(query="sync", config=_cfg(role="client"))
         assert result == "Access denied"
 
     async def test_manager_can_sync(self) -> None:
         import unittest.mock as mock
 
         mock_sync = AsyncMock(return_value={"synced": 3, "failed": 0, "skipped": 1})
-        with (
-            mock.patch(
-                "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
-                mock_sync,
-            ),
-            mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe),
+        with mock.patch(
+            "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
+            mock_sync,
         ):
             tool = create_crm_score_sync_tool(
                 scoring_store=None,
@@ -231,8 +210,8 @@ class TestCreateCrmScoreSyncTool:
                 score_field_id=1,
                 band_field_id=2,
             )
-            result = await tool.ainvoke(
-                {"query": "sync"}, config=_cfg(role="manager", user_id=5, session_id="s1")
+            result = await tool(
+                query="sync", config=_cfg(role="manager", user_id=5, session_id="s1")
             )
         assert "synced 3" in result
         assert "failed 0" in result
@@ -241,12 +220,9 @@ class TestCreateCrmScoreSyncTool:
         import unittest.mock as mock
 
         mock_sync = AsyncMock(return_value={"synced": 1, "failed": 0, "skipped": 0})
-        with (
-            mock.patch(
-                "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
-                mock_sync,
-            ),
-            mock.patch("telegram_bot.agents.manager_tools.observe", _passthrough_observe),
+        with mock.patch(
+            "telegram_bot.agents.manager_tools.sync_pending_lead_scores",
+            mock_sync,
         ):
             tool = create_crm_score_sync_tool(
                 scoring_store=None,
@@ -254,8 +230,8 @@ class TestCreateCrmScoreSyncTool:
                 score_field_id=1,
                 band_field_id=2,
             )
-            result = await tool.ainvoke(
-                {"query": "sync"}, config=_cfg(role="admin", user_id=99, session_id="xyz")
+            result = await tool(
+                query="sync", config=_cfg(role="admin", user_id=99, session_id="xyz")
             )
         assert "99" in result
         assert "xyz" in result

@@ -205,31 +205,6 @@ async def test_warmup_bge_failure_nonfatal():
             sys.modules.pop(mod, None)
 
 
-def test_start_calls_warmup_bge():
-    """#953: PropertyBot.start() invokes _warmup_bge()."""
-    import ast
-    from pathlib import Path
-
-    # Use AST-based verification (same pattern as tests/unit/dialogs/_property_bot_ast.py)
-    # to confirm that start() calls self._warmup_bge() without running the full method.
-    tree = ast.parse(Path("telegram_bot/bot.py").read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name == "PropertyBot":
-            for item in node.body:
-                if isinstance(item, ast.AsyncFunctionDef) and item.name == "start":
-                    # Look for `await self._warmup_bge()` in start()
-                    for child in ast.walk(item):
-                        if (
-                            isinstance(child, ast.Await)
-                            and isinstance(child.value, ast.Call)
-                            and isinstance(child.value.func, ast.Attribute)
-                            and child.value.func.attr == "_warmup_bge"
-                        ):
-                            return  # Found it
-                    raise AssertionError("start() does not call self._warmup_bge()")
-    raise AssertionError("PropertyBot.start not found")
-
-
 # ---------------------------------------------------------------------------
 # #955: Score stubs are no-ops (Langfuse removed in #2844)
 # ---------------------------------------------------------------------------

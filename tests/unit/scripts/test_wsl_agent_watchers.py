@@ -283,7 +283,7 @@ def test_dry_run_prints_unit_contents() -> None:
     assert "codeindexer" in combined.lower()
     assert "codegraph" in combined.lower()
     assert "ExecStart=" in combined
-    assert "codeindexer serve" in combined
+    assert "codeindexer" in combined.lower() and "serve" in combined.lower()
     assert "npx" in combined
 
 

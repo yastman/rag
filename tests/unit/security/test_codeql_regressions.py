@@ -15,10 +15,7 @@ def _read(relative_path: str) -> str:
 def test_qdrant_test_helpers_do_not_print_api_key_fragments() -> None:
     """Qdrant diagnostics may show presence, never API key suffixes."""
     checked_paths = [
-        "tests/benchmark/test_colbert_rerank.py",
-        "tests/benchmark/test_dbsf_colbert.py",
         "tests/smoke/test_basic_connection.py",
-        "tests/integration/test_hybrid_search_sparse.py",
         "tests/integration/test_qdrant_read.py",
     ]
 

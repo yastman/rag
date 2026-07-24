@@ -1,53 +1,16 @@
-"""Tests for funnel → CRM integration (lead scoring payload, FSM state persistence)."""
+"""Tests for funnel summary search FSM state persistence and display details."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import telegram_bot.dialogs.funnel as funnel_module
 from telegram_bot.dialogs.states import FunnelSG
 
 
-async def test_summary_search_calls_lead_scoring(monkeypatch):
-    """on_summary_search calls _spawn_persist_funnel_lead_score with correct kwargs."""
-    spawn_calls: list[dict] = []
-
-    def fake_spawn(**kwargs: Any) -> None:
-        spawn_calls.append(kwargs)
-
-    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", fake_spawn)
-
-    callback = MagicMock()
-    callback.from_user = MagicMock(id=42)
-    callback.message = MagicMock(chat=MagicMock(id=100))
-
-    manager = SimpleNamespace(
-        dialog_data={"city": "Элените", "property_type": "2bed", "budget": "high"},
-        middleware_data={
-            "user_service": MagicMock(),
-            "pg_pool": MagicMock(),
-            "lead_scoring_store": MagicMock(),
-            "kommo_client": MagicMock(),
-            "hot_lead_notifier": MagicMock(),
-            "bot_config": MagicMock(),
-        },
-        switch_to=AsyncMock(),
-        done=AsyncMock(),
-    )
-
-    await funnel_module.on_summary_search(callback, MagicMock(), manager)
-
-    assert len(spawn_calls) == 1
-    assert spawn_calls[0]["telegram_user_id"] == 42
-    assert spawn_calls[0]["property_type"] == "2bed"
-    assert spawn_calls[0]["budget"] == "high"
-
-
 async def test_summary_search_stores_filters_in_fsm(monkeypatch):
     """on_summary_search stores catalog_runtime in FSM state."""
-    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
 
     mock_svc = MagicMock()
     mock_svc.scroll_with_filters = AsyncMock(

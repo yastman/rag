@@ -337,36 +337,3 @@ class TestHandoffComposeContract:
         bot_env = vps["services"]["bot"]["environment"]
         assert "HANDOFF_ENABLED" in bot_env
         assert "MANAGERS_GROUP_ID" in bot_env
-
-
-# =============================================================================
-# #1307 — Langfuse web memory contract
-# =============================================================================
-
-
-class TestLangfuseWebMemoryContract:
-    """Langfuse web service must have sufficient memory to avoid Node.js heap OOM (#1307)."""
-
-    def test_dev_langfuse_web_memory_limit_is_sufficient(self, dev: dict) -> None:
-        """Dev langfuse web needs at least 1G memory to avoid heap limit crashes."""
-        langfuse = dev["services"]["langfuse"]
-        memory_limit = (
-            langfuse.get("deploy", {}).get("resources", {}).get("limits", {}).get("memory")
-        )
-        assert memory_limit, "langfuse web must have a deploy.resources.limits.memory setting"
-        mb = _memory_to_mb(memory_limit)
-        assert mb >= 1024, (
-            f"langfuse web memory limit must be >= 1G (1024M) to prevent Node.js heap OOM; "
-            f"got {memory_limit!r} ({mb}M)"
-        )
-
-    def test_base_langfuse_web_memory_limit_is_unchanged(self, vps: dict) -> None:
-        """Base compose intentionally keeps 512M for VPS; dev override raises it locally."""
-        langfuse = vps["services"]["langfuse"]
-        memory_limit = (
-            langfuse.get("deploy", {}).get("resources", {}).get("limits", {}).get("memory")
-        )
-        assert memory_limit == "512M", (
-            f"base compose.yml langfuse memory must remain 512M for VPS; "
-            f"dev-only increase belongs in compose.dev.yml. Got {memory_limit!r}"
-        )

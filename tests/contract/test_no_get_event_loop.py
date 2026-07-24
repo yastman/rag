@@ -93,7 +93,7 @@ def test_no_unallowlisted_get_event_loop_calls() -> None:
 
     for py_file in _iter_python_files(SCAN_DIRS):
         rel = str(py_file.relative_to(REPO_ROOT))
-        offenders = _find_get_event_loop_calls(py_file.read_text(), py_file)
+        offenders = _find_get_event_loop_calls(py_file.read_text(encoding="utf-8"), py_file)
         allowed_lines = ALLOWLIST.get(rel, set())
         for path, lineno in offenders:
             if lineno not in allowed_lines:
@@ -108,7 +108,9 @@ def test_no_unallowlisted_get_event_loop_calls() -> None:
             for lineno in allowed_lines:
                 stale_allowlist.append((rel, lineno))
             continue
-        actual = {ln for _, ln in _find_get_event_loop_calls(py_file.read_text(), py_file)}
+        actual = {
+            ln for _, ln in _find_get_event_loop_calls(py_file.read_text(encoding="utf-8"), py_file)
+        }
         for lineno in allowed_lines:
             if lineno not in actual:
                 stale_allowlist.append((rel, lineno))

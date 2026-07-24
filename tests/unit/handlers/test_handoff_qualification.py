@@ -155,6 +155,7 @@ async def test_contact_getter_prefers_current_middleware_context():
 @pytest.mark.asyncio
 async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion():
     property_bot = MagicMock()
+    property_bot._i18n_hub = None
     property_bot._complete_handoff = AsyncMock()
 
     callback = MagicMock()

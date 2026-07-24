@@ -65,7 +65,7 @@ class TestCrmSyncLeadScoreTool:
             score_field_id=701,
             band_field_id=702,
         )
-        result = await sync_tool.ainvoke({"query": "sync scores"}, config=runnable_config)
+        result = await sync_tool(query="sync scores", config=runnable_config)
 
         assert "synced 1" in result.lower() or "completed" in result.lower()
         mock_kommo_client.update_lead_score.assert_called_once()
@@ -80,7 +80,7 @@ class TestCrmSyncLeadScoreTool:
             score_field_id=701,
             band_field_id=702,
         )
-        result = await sync_tool.ainvoke({"query": "sync scores"}, config=runnable_config)
+        result = await sync_tool(query="sync scores", config=runnable_config)
 
         assert "failed" in result.lower() or "error" in result.lower()
         mock_scoring_store.mark_failed.assert_called_once()
@@ -107,7 +107,7 @@ class TestCrmSyncLeadScoreTool:
             score_field_id=701,
             band_field_id=702,
         )
-        result = await sync_tool.ainvoke({"query": "sync scores"}, config=runnable_config)
+        result = await sync_tool(query="sync scores", config=runnable_config)
 
         mock_kommo_client.update_lead_score.assert_not_called()
         assert "skipped" in result.lower() or "0" in result or "no" in result.lower()
@@ -121,7 +121,7 @@ class TestCrmSyncLeadScoreTool:
             score_field_id=701,
             band_field_id=702,
         )
-        await sync_tool.ainvoke({"query": "sync scores"}, config=runnable_config)
+        await sync_tool(query="sync scores", config=runnable_config)
 
         call_kwargs = mock_kommo_client.update_lead_score.call_args[1]
         key = call_kwargs["idempotency_key"]
@@ -134,8 +134,6 @@ def _make_bot_context_for_sync(role: str = "client") -> BotContext:
         telegram_user_id=99,
         session_id="chat-1",
         language="ru",
-        kommo_client=None,
-        history_service=None,
         embeddings=AsyncMock(),
         sparse_embeddings=AsyncMock(),
         qdrant=AsyncMock(),
@@ -158,7 +156,7 @@ class TestCrmSyncLeadScoreToolBotContextPath:
         )
         ctx = _make_bot_context_for_sync(role="manager")
         config = {"configurable": {"bot_context": ctx}}
-        result = await sync_tool.ainvoke({"query": "sync scores"}, config=config)
+        result = await sync_tool(query="sync scores", config=config)
 
         assert "Access denied" not in result
         mock_kommo_client.update_lead_score.assert_called_once()
@@ -172,7 +170,7 @@ class TestCrmSyncLeadScoreToolBotContextPath:
         )
         ctx = _make_bot_context_for_sync(role="client")
         config = {"configurable": {"bot_context": ctx}}
-        result = await sync_tool.ainvoke({"query": "sync scores"}, config=config)
+        result = await sync_tool(query="sync scores", config=config)
 
         assert "Access denied" in result
         mock_kommo_client.update_lead_score.assert_not_called()

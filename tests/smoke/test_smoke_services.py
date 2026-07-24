@@ -96,21 +96,6 @@ class TestSmokeServices:
             assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_voyage_api_health(self):
-        """Voyage API responds (minimal embed call)."""
-        api_key = os.getenv("VOYAGE_API_KEY", "")
-        if not api_key:
-            pytest.skip("VOYAGE_API_KEY not set")
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                "https://api.voyageai.com/v1/embeddings",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={"input": ["test"], "model": "voyage-3-lite"},
-            )
-            assert response.status_code == 200
-
-    @pytest.mark.asyncio
     async def test_llm_api_health(self):
         """LiteLLM/OpenAI-compatible API responds (minimal completion call)."""
         api_key = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))

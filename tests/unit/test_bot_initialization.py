@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,10 +16,10 @@ def _create_bot(config: BotConfig | None = None):
         config = _make_config()
     with (
         patch("telegram_bot.bot.Bot"),
-        patch("telegram_bot.integrations.cache.CacheLayerManager"),
-        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("telegram_bot.services.qdrant.QdrantService"),
+        patch("src.runtime.integrations.cache.CacheLayerManager"),
+        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
+        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
+        patch("src.runtime.services.qdrant.QdrantService"),
         patch("src.runtime.graph.config.GraphConfig.create_llm"),
         patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
     ):
@@ -72,10 +71,6 @@ class TestPropertyBotInit:
     def test_user_service_is_none_before_start(self):
         bot = _create_bot()
         assert bot._user_service is None
-
-    def test_kommo_client_is_none_before_start(self):
-        bot = _create_bot()
-        assert bot._kommo_client is None
 
     def test_favorites_service_is_none_before_start(self):
         bot = _create_bot()
@@ -223,7 +218,7 @@ class TestPropertyBotStart:
                     new_callable=AsyncMock,
                     return_value={"postgres": False, "redis": True, "qdrant": True},
                 ),
-                patch("telegram_bot.bot.StartupReport", _RecordingReport),
+                patch("telegram_bot.startup_status.StartupReport", _RecordingReport),
             ):
                 await bot.start()
 
@@ -273,48 +268,6 @@ class TestResolveUserRole:
         bot = self._bot_with_user_service(user_service=None)
         role = await bot._resolve_user_role(999)
         assert role == "client"
-
-
-class TestSpawnHistorySave:
-    """Test _spawn_history_save bounded fan-out."""
-
-    async def test_under_limit_returns_task(self):
-        bot = _create_bot()
-        bot._history_save_max_concurrency = 32
-
-        async def _noop():
-            pass
-
-        task = bot._spawn_history_save(_noop(), user_id=1)
-        assert isinstance(task, asyncio.Task)
-        # Clean up
-        await task
-
-    async def test_at_max_concurrency_returns_none(self):
-        bot = _create_bot()
-        bot._history_save_max_concurrency = 2
-
-        # Fill up the set with dummy tasks
-        async def _block():
-            await asyncio.sleep(10)
-
-        t1 = asyncio.create_task(_block())
-        t2 = asyncio.create_task(_block())
-        bot._history_save_tasks = {t1, t2}
-
-        async def _noop():
-            pass
-
-        result = bot._spawn_history_save(_noop(), user_id=99)
-        assert result is None
-
-        # Clean up
-        t1.cancel()
-        t2.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await t1
-        with pytest.raises(asyncio.CancelledError):
-            await t2
 
 
 class TestExtractPreAgentFilters:

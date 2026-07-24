@@ -82,7 +82,7 @@ def _collect_error_span_calls(
             if not exclude.isdisjoint(rel_path.parts):
                 continue
             try:
-                tree = ast.parse(py_file.read_text())
+                tree = ast.parse(py_file.read_text(encoding="utf-8"))
             except SyntaxError:
                 continue
             for node in ast.walk(tree):
@@ -163,7 +163,7 @@ def test_no_bare_level_error_strings(py_file: Path) -> None:
     rel = str(py_file.relative_to(REPO_ROOT))
     allowed_levels = ERROR_SPAN_ALLOWLIST.get(rel, [])
 
-    content = py_file.read_text()
+    content = py_file.read_text(encoding="utf-8")
     matches = re.findall(r'level\s*=\s*["\']ERROR["\']', content)
 
     if matches and "ERROR" not in allowed_levels:

@@ -50,10 +50,18 @@ def test_handoff_disabled_does_not_require_managers_group_id(monkeypatch):
 
 
 def test_handoff_config_defaults(monkeypatch):
-    """Handoff config has sensible defaults when env vars not set."""
+    """Handoff config has sensible defaults when env vars not set.
+
+    Pass handoff_enabled=False and managers_group_id=None via constructor
+    kwargs to isolate from the running environment (where these may be
+    set to real values sourced from .env).
+    """
+    monkeypatch.delenv("HANDOFF_ENABLED", raising=False)
     monkeypatch.delenv("MANAGERS_GROUP_ID", raising=False)
     cfg = BotConfig(
-        telegram_bot_token=FAKE_TELEGRAM_BOT_TOKEN,  # required field
+        telegram_token=FAKE_TELEGRAM_BOT_TOKEN,  # required field
+        handoff_enabled=False,
+        managers_group_id=None,
         _env_file=None,
     )
     assert cfg.managers_group_id is None

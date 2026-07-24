@@ -49,13 +49,6 @@ def test_history_search_is_callable():
     assert callable(history_search)
 
 
-def test_history_tool_imports_observe():
-    """history_tool module imports observe (#413)."""
-    import telegram_bot.agents.history_tool as mod
-
-    assert hasattr(mod, "observe")
-
-
 # --- Regression test: different deal_id → different cache scope (#2945) ---
 
 

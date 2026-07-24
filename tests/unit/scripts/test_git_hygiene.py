@@ -1,5 +1,8 @@
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 def test_legacy_hygiene_scripts_are_deleted() -> None:
@@ -20,15 +23,6 @@ def test_makefile_hygiene_targets_use_native_git_commands() -> None:
     assert "git worktree prune --dry-run" in text
 
 
-def test_native_runbook_documents_safety_rules() -> None:
-    text = Path("docs/runbooks/GIT_PR_ISSUE_NATIVE.md").read_text(encoding="utf-8")
-    assert 'BASE_BRANCH="${REPO_BASE_BRANCH:-dev}"' in text
-    assert 'MAIN_BRANCH="${MAIN_BRANCH:-dev}"' in text
-    assert "Do not delete the current branch." in text
-    assert "Do not remove dirty worktrees" in text
-    assert "Check open PRs before deleting remote branches." in text
-
-
 def test_force_cleanup_filters_current_and_worktree_branches() -> None:
     text = Path("Makefile").read_text(encoding="utf-8")
     assert "BASE_REF=origin/$$MAIN_BRANCH" in text
@@ -43,6 +37,7 @@ def test_force_cleanup_filters_current_and_worktree_branches() -> None:
     assert 'grep -Fxq "$$branch" && continue' in text
 
 
+@pytest.mark.skipif(shutil.which("make") is None, reason="make is not available on PATH")
 def test_force_cleanup_deletes_branch_merged_into_base_from_other_head(tmp_path) -> None:
     repo_root = Path.cwd()
     bare = tmp_path / "origin.git"

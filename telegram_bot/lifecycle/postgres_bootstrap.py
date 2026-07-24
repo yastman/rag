@@ -95,6 +95,56 @@ REALESTATE_SCHEMA_STATEMENTS: tuple[str, ...] = (
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS lead_scores (
+        id BIGSERIAL PRIMARY KEY,
+        lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+        user_id BIGINT NOT NULL,
+        session_id TEXT NOT NULL,
+        score_value INTEGER NOT NULL CHECK (score_value BETWEEN 0 AND 100),
+        score_band TEXT NOT NULL CHECK (score_band IN ('hot', 'warm', 'cold')),
+        reason_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
+        kommo_lead_id BIGINT,
+        sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed')),
+        sync_attempts INTEGER NOT NULL DEFAULT 0,
+        last_synced_at TIMESTAMPTZ,
+        sync_error TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (lead_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS nurturing_jobs (
+        id BIGSERIAL PRIMARY KEY,
+        lead_score_id BIGINT NOT NULL REFERENCES lead_scores(id) ON DELETE CASCADE,
+        user_id BIGINT,
+        scheduled_for TIMESTAMPTZ NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (status IN ('pending', 'running', 'sent', 'failed', 'skipped')),
+        channel TEXT NOT NULL DEFAULT 'telegram',
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        sent_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (lead_score_id, scheduled_for)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funnel_metrics_daily (
+        id BIGSERIAL PRIMARY KEY,
+        metric_date DATE NOT NULL,
+        stage_name TEXT NOT NULL,
+        entered_count INTEGER NOT NULL DEFAULT 0,
+        converted_count INTEGER NOT NULL DEFAULT 0,
+        dropoff_count INTEGER NOT NULL DEFAULT 0,
+        conversion_rate NUMERIC(6,4) NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (metric_date, stage_name)
+    )
+    """,
     "ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT",
     "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
     "CREATE INDEX IF NOT EXISTS idx_leads_user_id ON leads(user_id)",
@@ -105,6 +155,7 @@ REALESTATE_SCHEMA_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_user_favorites_telegram_id ON user_favorites (telegram_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_favorites_created_at ON user_favorites (created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_search_events_user ON search_events (user_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending ON nurturing_jobs (status, scheduled_for ASC)",
 )
 
 

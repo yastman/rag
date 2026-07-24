@@ -15,10 +15,10 @@ def _create_bot(config: BotConfig | None = None):
         config = _make_config()
     with (
         patch("telegram_bot.bot.Bot"),
-        patch("telegram_bot.integrations.cache.CacheLayerManager"),
-        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("telegram_bot.services.qdrant.QdrantService"),
+        patch("src.runtime.integrations.cache.CacheLayerManager"),
+        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
+        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
+        patch("src.runtime.services.qdrant.QdrantService"),
         patch("src.runtime.graph.config.GraphConfig.create_llm"),
         patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
     ):
@@ -78,8 +78,8 @@ class TestHandleFeedback:
         markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
         assert len(markup.inline_keyboard) == 3
 
-    async def test_callback_data_like_writes_score(self):
-        """FeedbackCB action='like' writes positive score to Langfuse."""
+    async def test_callback_data_like_answers_and_confirms(self):
+        """FeedbackCB action='like' answers thanks and shows confirmation keyboard."""
         bot = _create_bot()
         callback = _make_callback()
 
@@ -87,72 +87,27 @@ class TestHandleFeedback:
         callback_data.action = "like"
         callback_data.trace_id = "trace123"
 
-        mock_lf = MagicMock()
-
-        from telegram_bot import bot as bot_module
-
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            await bot.handle_feedback(callback, callback_data=callback_data)
+        await bot.handle_feedback(callback, callback_data=callback_data)
 
         callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
-        mock_lf.create_score.assert_called_once_with(
-            trace_id="trace123",
-            name="user_feedback",
-            value=1.0,
-            data_type="NUMERIC",
-            comment="user_id:42",
-            score_id="trace123-user_feedback",
-        )
+        callback.message.edit_reply_markup.assert_awaited_once()
 
     async def test_legacy_fb_done_answers_and_returns(self):
         """Legacy 'fb:done' data answers and returns without score writing."""
         bot = _create_bot()
         callback = _make_callback(data="fb:done")
 
-        from telegram_bot import bot as bot_module
-
-        mock_lf = MagicMock()
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            await bot.handle_feedback(callback, callback_data=None)
+        await bot.handle_feedback(callback, callback_data=None)
 
         callback.answer.assert_awaited_once_with()
-        mock_lf.create_score.assert_not_called()
-
-    async def test_legacy_fb_like_writes_positive_score(self):
-        """Legacy 'fb:1:traceid' writes positive score."""
-        bot = _create_bot()
-        callback = _make_callback(data="fb:1:trace123abc")
-
-        mock_lf = MagicMock()
-
-        from telegram_bot import bot as bot_module
-
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            await bot.handle_feedback(callback, callback_data=None)
-
-        callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
-        mock_lf.create_score.assert_called_once_with(
-            trace_id="trace123abc",
-            name="user_feedback",
-            value=1.0,
-            data_type="NUMERIC",
-            comment="user_id:42",
-            score_id="trace123abc-user_feedback",
-        )
 
     async def test_legacy_fb_dislike_no_reason_shows_keyboard(self):
         """Legacy 'fb:0:traceid' without reason shows reason keyboard."""
         bot = _create_bot()
         callback = _make_callback(data="fb:0:trace123abc")
 
-        from telegram_bot import bot as bot_module
+        await bot.handle_feedback(callback, callback_data=None)
 
-        mock_lf = MagicMock()
-        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
-            await bot.handle_feedback(callback, callback_data=None)
-
-        # Score should NOT be written (shows reason keyboard instead)
-        mock_lf.create_score.assert_not_called()
         callback.answer.assert_awaited_once_with()
         callback.message.edit_reply_markup.assert_awaited_once()
         markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]

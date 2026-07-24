@@ -264,9 +264,9 @@ class TestColbertBackfillRunner:
 
 
 class TestColbertCliDispatch:
-    @patch("src.ingestion.unified.cli.cmd_backfill_colbert", return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.cmd_backfill_colbert", return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_dispatches_backfill_colbert(
         self, mock_dotenv, mock_logging, mock_cmd, monkeypatch
     ):
@@ -280,9 +280,9 @@ class TestColbertCliDispatch:
         called_args = mock_cmd.call_args.args[0]
         assert called_args.dry_run is True
 
-    @patch("src.ingestion.unified.cli.cmd_schema_check", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.cmd_schema_check", new_callable=AsyncMock, return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_dispatches_schema_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "schema-check", "--require-colbert"])
 
@@ -292,9 +292,9 @@ class TestColbertCliDispatch:
         assert result == 0
         mock_cmd.assert_awaited_once()
 
-    @patch("src.ingestion.unified.cli.cmd_coverage_check", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.cli.setup_logging")
-    @patch("src.ingestion.unified.cli.load_dotenv")
+    @patch("src.ingestion.unified.main.cmd_coverage_check", new_callable=AsyncMock, return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_dispatches_coverage_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "coverage-check"])
 
@@ -316,7 +316,9 @@ class TestColbertCliDispatch:
             failed=0,
         )
 
-        with patch("src.ingestion.unified.cli.ColbertBackfillRunner", return_value=fake_runner):
+        with patch(
+            "src.ingestion.unified.commands.ColbertBackfillRunner", return_value=fake_runner
+        ):
             result = cmd_backfill_colbert(args)
 
         assert result == 0
