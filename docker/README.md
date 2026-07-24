@@ -15,8 +15,6 @@ Qdrant vector-store configuration mounted into the `qdrant` container.
 Database initialization scripts executed on first Postgres startup.
 
 - **`00-init-databases.sql`** — Creates application databases.
-- **`02-cocoindex.sql`** — Legacy CocoIndex schema (CocoIndex removed; script retained for existing volumes).
-- **`03-unified-ingestion-alter.sql`** — Unified ingestion extensions.
 - **`04-voice-schema.sql`** — Voice transcript schema.
 - **`05-realestate-schema.sql`** — Real-estate domain tables.
 - **`08-user-favorites.sql`** — User favorites schema.

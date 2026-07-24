@@ -46,7 +46,7 @@ kernel is now extracted to `src/runtime/`, so `src/api/` imports
 ## Related Runtime Services
 
 - **Qdrant** — vector database (retrieval, ingestion, history)
-- **PostgreSQL** — persistent state (conversation, ingestion tracking)
+- **PostgreSQL** — domain state (users, leads, funnel, favorites)
 - **Redis** — caching and rate limiting
 - **BGE-M3 / Voyage** — embedding providers
 - **Docling** — in-process document parsing (native SDK)

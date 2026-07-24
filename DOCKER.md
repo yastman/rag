@@ -39,9 +39,9 @@ Services are gated by profiles. Run only what you need.
 
 | Service | Image | Profile | Purpose |
 |---|---|---|---|
-| `postgres` | `pgvector/pgvector:pg17` | default | Conversation history, ingestion tracking |
+| `postgres` | `postgres:17` | default | Bot domain DB (users/leads/funnel/favorites) |
 | `redis` | `redis:8.6.3` | default | Five caches: semantic answer, embedding, search, rerank, extraction |
-| `qdrant` | `qdrant/qdrant:v1.18.1` | default | Vector store — dense, sparse, ColBERT retrieval |
+| `qdrant` | `qdrant/qdrant:v1.18.3` | default | Vector store — dense, sparse, ColBERT retrieval; storage config (`on_disk_payload`, `indexing_threshold_kb`) caps growth |
 | `bge-m3` | built locally | default | Self-hosted BGE-M3 ONNX embedding API |
 | `bot` | built locally | `bot` | Telegram bot process |
 | `ingestion` | built locally | `ingest` | Unified ingestion pipeline (Docling runs in-process) |

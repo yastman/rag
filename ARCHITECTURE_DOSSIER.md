@@ -146,12 +146,12 @@ All four are load-bearing; none can be removed without dropping a feature.
 
 | Service | Image | Purpose | Notes |
 |---|---|---|---|
-| **qdrant** | `qdrant/qdrant:v1.18.1` | Vector store (dense + sparse + ColBERT); also the ingestion idempotency store | storage config mounted to cap growth |
+| **qdrant** | `qdrant/qdrant:v1.18.3` | Vector store (dense + sparse + ColBERT); also the ingestion idempotency store | storage config (`on_disk_payload`, `indexing_threshold_kb`) mounted to cap growth |
 | **redis** | `redis:8.6.3` | Five independent caches: semantic-answer, embedding, search, rerank, extraction | version-prefixed keys; graceful degradation on miss |
 | **bge-m3** | built ONNX service | Self-hosted embeddings + optional ColBERT rerank | cold-start model load up to ~7 min |
-| **postgres** | `pgvector/pgvector:pg17` | Bot real-estate **domain DB** only (users/leads/funnel/favorites) | pgvector extension is **not** actually used (P28: downgrade to plain `postgres:17`) |
+| **postgres** | `postgres:17` | Bot real-estate **domain DB** only (users/leads/funnel/favorites) | Plain PostgreSQL 17 (pgvector removed — not required by runtime) |
 | bot | built | The Telegram adapter process | depends on all four healthy |
-| ingestion | built (profile `ingest`/`full`) | Document scan→parse→embed→upsert loop | stateless; **its `depends_on: postgres` is stale** (P28) |
+| ingestion | built (profile `ingest`/`full`) | Document scan→parse→embed→upsert loop | stateless; no PostgreSQL dependency (idempotency via Qdrant payloads) |
 
 Ingestion is stateless: idempotency is SHA-256 content identity written into Qdrant payloads;
 there is no external state DB (the former Postgres orchestrator was removed).
@@ -244,7 +244,7 @@ removal*, not as architecture):
 | P24 | BGE-M3 service test coverage; delete dead in-process FlagEmbedding cluster; remove `ml-local` (torch) extra |
 | P25 | Remove Langfuse residue (SDK gone; `@observe` are no-op shims) |
 | P26 | Remove unused agent/CRM/dead-graph layer + `langgraph`/`langchain`/`ragas` deps (owner-confirmed unused) |
-| P28 | Lean-monolith gaps: delete `voyageai`/`apscheduler` dead clusters + dead `src/api`+`src/contextualization`; declare `fluent_compiler`; decouple stale ingestion→postgres; pgvector→plain postgres |
+| P28 | Lean-monolith gaps: delete `voyageai`/`apscheduler` dead clusters + dead `src/api`+`src/contextualization`; declare `fluent_compiler` |
 
 **Dead subsystems physically in-tree (being removed):** `telegram_bot/agents/`, LangGraph
 builder, Kommo CRM, `src/api/`, `src/contextualization/`, in-process FlagEmbedding
