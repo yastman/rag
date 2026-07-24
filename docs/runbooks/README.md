@@ -21,6 +21,7 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 | Validate prod env vars | `scripts/validate_prod_env.sh` |
 | Self-hosted CI runner check | `scripts/check_self_hosted_runner.sh` (see [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md)) |
 | Compose config validation | `docker compose -f compose.yml -f compose.dev.yml config` |
+| Remove stale Compose source files | [`COMPOSE_SOURCE_CLEANUP.md`](COMPOSE_SOURCE_CLEANUP.md) |
 
 > Production access (VPS, secrets, SSH, real CRM write paths) is out of scope for routine
 > work — prefer local/test environments and redact secrets.
