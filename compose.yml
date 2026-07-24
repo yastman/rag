@@ -22,7 +22,7 @@ services:
 
   postgres:
     <<: *security-defaults
-    image: pgvector/pgvector:pg17@sha256:feb68f4f15446397d8cac7f4fe48fe4586de83160d1fc48b46283312d1a33966
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false
@@ -238,8 +238,6 @@ services:
           create_host_path: true
       - ingestion-manifest:/data/manifest
     depends_on:
-      postgres:
-        condition: service_healthy
       qdrant:
         condition: service_healthy
       bge-m3:
