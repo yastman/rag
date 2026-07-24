@@ -42,4 +42,3 @@ uv run pytest tests/unit/core/ -q
 
 - [`src/config/`](../config/) — Settings and constants
 - [`src/runtime/`](../runtime/) — Pipeline, RAG, retrieval, generation engine
-- [`src/contextualization/`](../contextualization/) — LLM context enrichment
