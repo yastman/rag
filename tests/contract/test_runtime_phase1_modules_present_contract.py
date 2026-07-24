@@ -30,9 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Each entry: legacy path under telegram_bot/, canonical path under src/,
 # and the maximum line count we accept for a "shim" file. The cap is
-# intentionally generous — observability.py keeps a small bot-transport
-# helper (``create_callback_handler``) local because it depends on
-# ``langfuse.langchain`` which is not part of the shared runtime.
+# intentionally generous for compatibility packages.
 PHASE1_MODULES: tuple[tuple[str, str, int], ...] = (
     # observability was converted to a package in ARCH-13; pin the __init__.py.
     # The package __init__ is the shim — same re-export surface as the old flat module.
@@ -60,9 +58,7 @@ def _is_shim(path: Path, max_lines: int) -> tuple[bool, str]:
         if isinstance(node, ast.ClassDef):
             return False, f"contains class definition {node.name!r}"
 
-    # Top-level def is allowed only if it is a trivial wrapper (e.g.
-    # observability.py's create_callback_handler retained for langfuse
-    # transport). Wrappers must not exceed ~30 statements.
+    # Top-level defs are allowed only when they remain trivial wrappers.
     for node in tree.body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             stmt_count = len(node.body)

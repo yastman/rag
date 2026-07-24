@@ -106,7 +106,6 @@ class TestQuerySupervisorContentFilter:
                 new_callable=AsyncMock,
                 return_value=[0.1] * 768,
             ),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             mock_prop.return_value.__enter__ = MagicMock(return_value=None)
             mock_prop.return_value.__exit__ = MagicMock(return_value=False)
@@ -161,7 +160,6 @@ class TestQuerySupervisorContentFilter:
                 new_callable=AsyncMock,
                 return_value=[0.1] * 768,
             ),
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             mock_prop.return_value.__enter__ = MagicMock(return_value=None)
             mock_prop.return_value.__exit__ = MagicMock(return_value=False)
@@ -319,7 +317,6 @@ class TestQuerySupervisorSemanticCache:
                 return_value=[0.1] * 768,
             ),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             mock_prop.return_value.__enter__ = MagicMock(return_value=None)
             mock_prop.return_value.__exit__ = MagicMock(return_value=False)
@@ -411,7 +408,6 @@ class TestQuerySupervisorCoreEntrypoint:
             patch("telegram_bot.bot.write_pipeline_scores"),
             patch("telegram_bot.bot.score"),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
-            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
