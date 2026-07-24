@@ -19,7 +19,6 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 | Task | Command / asset |
 |---|---|
 | Validate prod env vars | `scripts/validate_prod_env.sh` |
-| Self-hosted CI runner check | `scripts/check_self_hosted_runner.sh` (see [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md)) |
 | Compose config validation | `docker compose -f compose.yml -f compose.dev.yml config` |
 
 > Production access (VPS, secrets, SSH, real CRM write paths) is out of scope for routine
