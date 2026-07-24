@@ -2,13 +2,13 @@
 
 ## Goal
 
-Make local verification authoritative for a single-developer workstation while keeping GitHub as a small, independent security and Linux-portability backstop.
+Make local verification authoritative for a powerful single-developer workstation while keeping GitHub as a small, independent security and configuration backstop.
 
 ## Principles
 
 - Local tests are the delivery gate. GitHub does not duplicate the full pytest matrix.
 - Commit hooks stay fast; push and candidate gates carry progressively broader checks.
-- GitHub runs only checks that benefit from a clean hosted environment or GitHub-native security data.
+- GitHub runs no pytest. It keeps only checks that benefit from GitHub-native security data or validate repository configuration and reproducibility.
 - Every declared gate must be runnable, blocking when named as a gate, and scoped to paths that exist.
 - Build inputs and dependency audits must be reproducible across every shipped Python environment.
 
@@ -31,12 +31,11 @@ Keep:
 - Ruff formatting/linting and actionlint;
 - Compose validation;
 - lockfile and vulnerability checks for root, Telegram, and BGE-M3 projects;
-- one short Ubuntu/Python core test workflow for portability.
 
 Remove:
 
 - the broken coverage ratchet;
-- duplicate broad pytest jobs;
+- every hosted pytest job, including the duplicate core and broad test workflows;
 - the misleading manually triggered `Nightly` workflow and offline self-hosted dependency;
 - stale path filters and nonexistent dependency update directories.
 
@@ -55,6 +54,7 @@ Remove:
 - Focused tests prove each configuration change before broad gates run.
 - Final candidate must pass `git diff --check`, pre-commit, local static checks, `test-core`, `test`, `test-contract`, and `test-full` where the environment supports its declared service requirements.
 - Hosted workflow syntax is validated with actionlint.
+- Linux portability is verified locally through WSL/container execution when preparing a release candidate.
 
 ## Non-goals
 
