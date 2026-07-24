@@ -22,6 +22,8 @@ from qdrant_client.models import (
     Distance,
     HnswConfigDiff,
     Modifier,
+    MultiVectorComparator,
+    MultiVectorConfig,
     OptimizersConfigDiff,
     PayloadSchemaType,
     SparseVectorParams,
@@ -138,6 +140,13 @@ def create_binary_collection(client: QdrantClient, collection_name: str) -> None
                 ),
                 on_disk=True,  # Original vectors on disk (for rescoring)
             ),
+            "colbert": VectorParams(
+                size=DENSE_DIMENSION,
+                distance=Distance.COSINE,
+                multivector_config=MultiVectorConfig(comparator=MultiVectorComparator.MAX_SIM),
+                hnsw_config=HnswConfigDiff(m=0),
+                on_disk=True,
+            ),
         },
         # BM42 sparse vectors (better than BM25 for short chunks)
         sparse_vectors_config={
@@ -153,7 +162,7 @@ def create_binary_collection(client: QdrantClient, collection_name: str) -> None
     )
 
     print("  Created collection with Binary Quantization")
-    print("  Vectors: dense (1024-dim, binary quantized)")
+    print("  Vectors: dense (1024-dim, binary quantized), colbert (MAX_SIM)")
     print("  Sparse: bm42 (IDF modifier)")
 
 

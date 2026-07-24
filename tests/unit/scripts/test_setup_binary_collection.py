@@ -6,6 +6,7 @@ from unittest import mock
 from qdrant_client.models import (
     BinaryQuantization,
     Modifier,
+    MultiVectorComparator,
     PayloadSchemaType,
 )
 
@@ -19,7 +20,7 @@ from scripts.setup_binary_collection import (
 
 
 class TestBinaryCollectionSetup:
-    def test_create_collection_uses_binary_quantization_and_bm42(self) -> None:
+    def test_create_collection_uses_binary_quantization_colbert_and_bm42(self) -> None:
         client = mock.MagicMock()
 
         create_binary_collection(client, "binary-test")
@@ -30,6 +31,10 @@ class TestBinaryCollectionSetup:
         dense = call.kwargs["vectors_config"]["dense"]
         assert isinstance(dense.quantization_config, BinaryQuantization)
         assert dense.quantization_config.binary.always_ram is True
+        colbert = call.kwargs["vectors_config"]["colbert"]
+        assert colbert.size == 1024
+        assert colbert.multivector_config.comparator is MultiVectorComparator.MAX_SIM
+        assert colbert.hnsw_config.m == 0
 
         bm42 = call.kwargs["sparse_vectors_config"]["bm42"]
         assert bm42.modifier is Modifier.IDF
