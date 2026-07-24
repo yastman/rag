@@ -9,8 +9,6 @@ docker/postgres/init
 
 ## Contents
 - 00-init-databases.sql
-- 02-cocoindex.sql
-- 03-unified-ingestion-alter.sql
 - 04-voice-schema.sql
 - 05-realestate-schema.sql
 - 08-user-favorites.sql

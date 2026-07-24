@@ -13,7 +13,7 @@ route new work through the assistant-core path.
 |------|------|
 | [`__init__.py`](./__init__.py) | Re-exports `build_graph`, `GraphConfig`, `RAGState`, `make_initial_state` from `src.runtime.graph.*` + `pipelines.graph_compat` |
 | [`state.py`](./state.py) | Thin state shim |
-| [`middleware/`](./middleware/) | SDK-native middleware for the `create_agent` migration (umbrella #1535): `ClassifyMiddleware`, `GuardMiddleware`, `SemanticCacheMiddleware` |
+| [`middleware/`](./middleware/) | Compatibility stubs (`_compat.py`) — remaining after `cache.py`/`classify.py`/`guard.py` removed in middleware cleanup |
 | [`nodes/`](./nodes/) · [`tools/`](./tools/) | Legacy StateGraph nodes/tools (kept in place; not extended) |
 
 ## Boundaries

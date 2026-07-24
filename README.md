@@ -81,7 +81,7 @@ External sidecar services (Docker Compose — **not** part of the Python binary)
 | Qdrant | Vector store — dense, sparse, and ColBERT-style retrieval |
 | BGE-M3 (ONNX) | Self-hosted embeddings served via a local API |
 | Redis | Five independent caches: semantic answer, embedding, search, rerank, extraction. Version-prefixed keys; graceful degradation on miss |
-| PostgreSQL | Persistent state (conversation, ingestion tracking) |
+| PostgreSQL | Domain state (users, leads, funnel, favorites) |
 
 An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/agents/` for CRM-style workflows (lead scoring, manager handoff, HITL confirmation). It is not required for the core Q&A path.
 

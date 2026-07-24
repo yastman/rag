@@ -1,12 +1,13 @@
-"""Local compatibility shims for the agent middleware layer.
+"""Local compatibility shims retained after middleware cleanup.
 
-``langchain.agents.middleware`` was a fictional import in the original
-middleware files.  These minimal stubs provide the same interface so
-``cache.py``, ``classify.py``, and ``guard.py`` can be imported and
-tested without a real langchain install.
+Originally provided mock ``langchain.agents.middleware`` stubs for
+``cache.py``, ``classify.py``, and ``guard.py`` — those files removed
+in R5 middleware deletion. The compat layer remains for any remaining
+code that imports from ``telegram_bot.graph.middleware`` without a
+langchain install.
 
-The classes are intentionally minimal — only what the middleware tests
-and implementations actually use.
+The classes are intentionally minimal — only what surviving callers
+actually use.
 """
 
 from __future__ import annotations

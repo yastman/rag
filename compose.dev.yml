@@ -6,7 +6,7 @@
 
 services:
   postgres:
-    # Local pgvector startup needs these while initializing/fixing ownership on
+    # Local PostgreSQL startup needs these while initializing/fixing ownership on
     # the mounted data and runtime directories. Keep this scoped to dev only.
     cap_add:
       - CHOWN
