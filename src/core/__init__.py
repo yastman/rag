@@ -36,10 +36,7 @@ def __getattr__(name: str) -> object:
         from .app import AssistantApp
 
         return AssistantApp
-    if name == "DependencyBuilder":
-        from .app import DependencyBuilder
 
-        return DependencyBuilder
     if name == "run_assistant_request":
         from .assistant import run_assistant_request
 
@@ -54,7 +51,6 @@ __all__ = [
     "AssistantResult",
     "CacheProvider",
     "CoreDependencies",
-    "DependencyBuilder",
     "EmbeddingProvider",
     "LLMProvider",
     "QdrantClientProtocol",

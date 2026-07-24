@@ -30,8 +30,7 @@ Orchestrator: rag_pipeline() wires steps with rewrite loop.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from src.runtime.graph.config import GraphConfig
@@ -77,16 +76,6 @@ from src.runtime.services.rag_core import (
     compute_query_embedding,  # noqa: F401
 )
 from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
-
-
-_T = TypeVar("_T")
-
-
-def _identity_observe(*args: Any, **kwargs: Any) -> Callable[[_T], _T]:
-    def decorator(func: _T) -> _T:
-        return func
-
-    return decorator
 
 
 def _graph_config_from_env() -> Any:
