@@ -15,7 +15,7 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 | [`rag/query_preprocessor.py`](./rag/query_preprocessor.py) | Rule-based preprocessing: translit normalization, dynamic RRF weights |
 | [`rag/query_analyzer.py`](./rag/query_analyzer.py) | LLM-based filter extraction (price, city, rooms) from natural language |
 | [`generation/generate_response.py`](./generation/generate_response.py) | Canonical response generation with prompt management |
-| [`rag/rag_core.py`](./rag/rag_core.py) | Shared RAG core functions (no spans, no metrics) |
+| [`src/runtime/services/rag_core.py`](../../src/runtime/services/rag_core.py) | Canonical shared RAG core functions |
 | [`apartment/filter_extractor.py`](./apartment/filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |
 | [`apartment/apartment_llm_extractor.py`](./apartment/apartment_llm_extractor.py) | LLM-based apartment data extraction |
 
@@ -23,7 +23,7 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 
 - Services are **stateless** except for Redis-backed caches; they do not own conversation memory (LangGraph checkpointer does).
 - **No Telegram transport imports** in this directory. Services receive plain data and return plain data.
-- `rag_core.py` is the lowest-level shared layer: no observability, no metrics, pure computation.
+- `src/runtime/services/rag_core.py` is the lowest-level shared layer: no observability, no metrics, pure computation.
 
 ## Related Runtime Services
 

@@ -1,8 +1,4 @@
-"""Tests for telegram_bot.services.rag.rag_core — shared RAG core functions.
-
-TDD: tests written BEFORE implementation.  All tests will initially fail with
-ImportError (module doesn't exist yet) — that's the expected RED state.
-"""
+"""Tests for src.runtime.services.rag_core — shared RAG core functions."""
 
 from unittest.mock import AsyncMock, MagicMock
 

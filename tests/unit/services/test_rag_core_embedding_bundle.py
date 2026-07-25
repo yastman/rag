@@ -1,6 +1,6 @@
 """Tests for compute_query_embedding BGE-M3 bundle cache behaviour.
 
-Covers the bundle-first path in telegram_bot.services.rag.rag_core.
+Covers the bundle-first path in src.runtime.services.rag_core.
 """
 
 from unittest.mock import AsyncMock, MagicMock

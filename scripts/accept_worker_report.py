@@ -21,8 +21,8 @@ Output (key=value lines, shell-parseable):
     forbidden_files_touched=0|<n>
     mechanical_checks_passed=1|0
 
-Strict mode (env ``KIRO_STRICT_REPORT=1``) additionally runs Pydantic structural
-validation against ``worker_report_schema`` and prints ``schema_valid=1|0``.
+- Strict mode (env ``KIRO_STRICT_REPORT=1``) also prints ``schema_valid=1|0``
+- from the mechanical required-field presence check.
 
 The required field set is sourced from ``worker_report_schema`` (single source
 of truth), which the contract test pins to the steering contract.
@@ -48,12 +48,6 @@ FORBIDDEN_PATTERNS: tuple[str, ...] = (
     ".kiro/agents/",
 )
 
-# Fields whose presence can be satisfied by an aliased section header.
-# NOTE: verification_evidence is intentionally NOT aliased to evidence_commands.
-# Both fields must be present independently — the evidence narrative and the
-# replay commands serve different purposes and cannot substitute for each other.
-FIELD_ALIASES: dict[str, str] = {}
-
 
 def _load_schema():
     spec = importlib.util.spec_from_file_location(
@@ -72,13 +66,6 @@ def parse_markdown_fields(text: str) -> set[str]:
     fence_pattern = re.compile(r"```(?:yaml|yml)?\s*\n(.*?)```", re.DOTALL)
     extra_text = "\n".join(m.group(1) for m in fence_pattern.finditer(text))
     combined = text + "\n" + extra_text
-
-    if re.search(r"(?i)\bstatus[:\s]+(?:done|failed|blocked|pass)", combined) or re.search(
-        r"(?i)#\s*worker\s+(?:report|finish(?:\s+report)?)\s*[:\s]", combined
-    ):
-        found.add("status")
-    if re.search(r"(?i)(#\s*worker\s+(?:report|finish)|worker\s*:)", combined):
-        found.add("worker")
 
     for line in combined.splitlines():
         stripped = line.strip()
@@ -156,7 +143,7 @@ def diff_vs_report(
 
 def close_window(worker_name: str) -> None:
     closer = Path(__file__).with_name("close_markdown_worker_window.py")
-    subprocess.run([sys.executable, str(closer), "--worker", worker_name], check=False)  # nosec B603
+    subprocess.run([sys.executable, str(closer), worker_name], check=False)  # nosec B603
 
 
 def main() -> int:
@@ -192,9 +179,6 @@ def main() -> int:
 
     text = args.report.read_text(encoding="utf-8")
     found = parse_markdown_fields(text)
-    for alias_key, aliased_field in FIELD_ALIASES.items():
-        if alias_key in found:
-            found.add(aliased_field)
 
     schema = _load_schema()
     required = schema.required_fields_for_role(args.role)

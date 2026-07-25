@@ -133,7 +133,6 @@ async def non_streaming_llm_call(
     llm_messages: list[dict[str, str]],
     effective_temperature: float,
     max_tokens: int,
-    prompt_obj: Any | None,
     sources_enabled: bool,
     sanitize_fn: Callable[[str, bool], str],
 ) -> tuple[str, str, float, float | None, dict[str, int] | None]:
@@ -299,39 +298,6 @@ async def generate_streaming(
     )
 
 
-def _unpack_stream_result(
-    stream_result: Any,
-) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
-    if len(stream_result) == 5:
-        answer, actual_model, ttft_ms, completion_tokens, sent_msg = stream_result
-        stream_only_ttft_ms = None
-        usage_details = None
-    elif len(stream_result) == 6:
-        answer, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg = (
-            stream_result
-        )
-        usage_details = None
-    else:
-        (
-            answer,
-            actual_model,
-            ttft_ms,
-            completion_tokens,
-            stream_only_ttft_ms,
-            usage_details,
-            sent_msg,
-        ) = stream_result
-    return (
-        answer,
-        actual_model,
-        ttft_ms,
-        completion_tokens,
-        stream_only_ttft_ms,
-        usage_details,
-        sent_msg,
-    )
-
-
 @dataclasses.dataclass
 class StreamResult:
     """Result of streaming LLM execution (happy path or recovery)."""
@@ -398,7 +364,7 @@ async def run_stream_with_recovery(
             stream_only_ttft_ms,
             usage_details,
             sent_msg,
-        ) = _unpack_stream_result(stream_result)
+        ) = stream_result
         response_sent = sent_msg is not None
 
     except Exception as stream_exc:
@@ -429,7 +395,6 @@ async def run_stream_with_recovery(
                     llm_messages=ctx.llm_messages,
                     effective_temperature=ctx.effective_temperature,
                     max_tokens=ctx.max_tokens,
-                    prompt_obj=ctx.prompt_obj,
                     sources_enabled=ctx.sources_enabled,
                     sanitize_fn=sanitize_fn,
                 )
@@ -487,7 +452,6 @@ async def run_stream_with_recovery(
                     llm_messages=ctx.llm_messages,
                     effective_temperature=ctx.effective_temperature,
                     max_tokens=ctx.max_tokens,
-                    prompt_obj=ctx.prompt_obj,
                     sources_enabled=ctx.sources_enabled,
                     sanitize_fn=sanitize_fn,
                 )

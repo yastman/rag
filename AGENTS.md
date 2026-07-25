@@ -47,6 +47,8 @@ ownership or mutation permissions.
 
 Before editing one of these areas, read its nearest scoped override:
 
+- When delegating to `reviewer`, omit `effort`; never pass `effort: "hi"`, so its `@slow` selector controls the reasoning level.
+
 - [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
 - [`src/ingestion/unified/AGENTS.override.md`](src/ingestion/unified/AGENTS.override.md)
 - [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)

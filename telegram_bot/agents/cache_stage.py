@@ -11,16 +11,16 @@ import logging
 import time
 from typing import Any
 
+from src.runtime.services.rag_core import (
+    CACHEABLE_QUERY_TYPES,
+    check_semantic_cache,
+    compute_query_embedding,
+)
 from telegram_bot.services.rag.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
     is_contextual_query,
     maybe_store_semantic_response,
-)
-from telegram_bot.services.rag.rag_core import (
-    CACHEABLE_QUERY_TYPES,
-    check_semantic_cache,
-    compute_query_embedding,
 )
 
 
@@ -169,7 +169,7 @@ async def _cache_check(
                     and colbert_query is not None
                 ):
                     try:
-                        from telegram_bot.services.rag.bge_m3_query_bundle import (
+                        from src.services.bge_m3_query_bundle import (
                             BgeM3QueryVectorBundle,
                         )
 

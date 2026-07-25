@@ -9,9 +9,9 @@ import httpx
 import pytest
 from tenacity import wait_none
 
+from src.services.bge_m3_client import BGEM3Client
 from telegram_bot.integrations.cache import CacheLayerManager
 from telegram_bot.services.crm.kommo_client import KommoClient
-from telegram_bot.services.rag.bge_m3_client import BGEM3Client
 
 
 @pytest.mark.asyncio

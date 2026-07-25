@@ -253,6 +253,38 @@ class TestPropertyBotInit:
         # First call is main collection (with timeout), second is apartments
         assert patches["qdrant"].call_args_list[0].kwargs["timeout"] == 7
 
+    def test_init_keeps_colbert_runtime_server_side(self, mock_config):
+        """colbert provider keeps client-side reranker unset (server-side path)."""
+        from telegram_bot.lifecycle.services import build_services
+
+        mock_config.rerank_provider = "colbert"
+        with (
+            patch("src.runtime.integrations.cache.CacheLayerManager"),
+            patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("src.runtime.services.qdrant.QdrantService"),
+            patch("src.runtime.graph.config.GraphConfig.create_llm", return_value=MagicMock()),
+            patch(
+                "telegram_bot.services.apartment.apartments_service.ApartmentsService",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.apartment.apartment_extraction_pipeline.ApartmentExtractionPipeline",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.apartment.apartment_filter_extractor.ApartmentFilterExtractor",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.observability.redis_monitor.RedisHealthMonitor",
+                return_value=MagicMock(),
+            ),
+        ):
+            services = build_services(mock_config)
+
+        assert services.reranker is None
+
 
 class TestCommandHandlers:
     """Test command handlers."""

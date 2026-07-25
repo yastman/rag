@@ -37,64 +37,37 @@ from src.runtime.graph.config import GraphConfig
 from src.runtime.pipeline._cache_stage import (
     _cache_check,
     _hybrid_retrieve,
-    _lookup_search_cache,  # noqa: F401
-    _store_search_results,  # noqa: F401
 )
 from src.runtime.pipeline._grade_rerank import (
     _grade_documents,
     _rerank,
 )
 from src.runtime.pipeline._retrieve import (
-    _HARD_EVIDENCE_CONSTRAINTS,  # noqa: F401
     _assemble_context,
-    _compute_retrieval_filters,  # noqa: F401
-    _document_evidence_text,  # noqa: F401
-    _embed_and_cache_query_vectors,  # noqa: F401
-    _ensure_sparse_vector,  # noqa: F401
-    _execute_qdrant_retrieval,  # noqa: F401
+    _compute_retrieval_filters,  # noqa: F401 — re-export for tests
     _expand_small_to_big,
     _find_missing_evidence_constraints,
-    _load_cached_query_bundle,  # noqa: F401
-    _resolve_query_vectors,  # noqa: F401
-    _RetrievalFilterPlan,  # noqa: F401
-    _RetrievalOutcome,  # noqa: F401
-    _retrieve_with_relaxation,  # noqa: F401
-    _run_initial_retrieval,  # noqa: F401
-    _run_relaxed_retrieval,  # noqa: F401
 )
-from src.runtime.pipeline._rewrite_cache import _cache_store, _rewrite_query  # noqa: F401
+from src.runtime.pipeline._rewrite_cache import (
+    _cache_store,  # noqa: F401 — re-export for tests
+    _rewrite_query,
+)
 from src.runtime.pipeline.context import PipelineContext
 from src.runtime.services.cache_policy import (
     resolve_semantic_cache_signature,
 )
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
-from src.runtime.services.query_preprocessor import QueryPreprocessor
 from src.runtime.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
-    build_retrieved_context,
-    check_semantic_cache,  # noqa: F401
-    compute_query_embedding,  # noqa: F401
 )
-from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
 
 def _graph_config_from_env() -> Any:
     return GraphConfig.from_env()
 
 
-def _bge_m3_query_bundle_cls() -> Any:
-    return BgeM3QueryVectorBundle
-
-
-def _new_query_preprocessor() -> QueryPreprocessor:
-    return QueryPreprocessor()
-
-
-def _build_retrieved_context(*args: Any, **kwargs: Any) -> Any:
-    return build_retrieved_context(*args, **kwargs)
-
-
 def _cacheable_query_types() -> set[str]:
+    """Query types eligible for semantic cache (imported by telegram middleware)."""
     return set(CACHEABLE_QUERY_TYPES)
 
 

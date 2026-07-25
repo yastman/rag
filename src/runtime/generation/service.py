@@ -21,8 +21,6 @@ from .contracts import GenerationCallable, GenerationRequest, GenerationResult
 from .llm_call import _chat_create_with_optional_name
 from .messages import (
     _build_llm_messages,  # noqa: F401 – re-export for tests
-    _ensure_history_instruction,  # noqa: F401 – re-export for tests
-    _select_recent_history,  # noqa: F401 – re-export for tests
 )
 from .policy import (
     _build_fallback_response,
@@ -33,19 +31,13 @@ from .policy import (
 from .prompts import (
     _build_prompt_and_messages,
     _format_generation_context,
-    _PromptAndMessages,  # noqa: F401 – re-export for tests
-    _PromptConfig,  # noqa: F401 – re-export for tests
     _select_prompt_config,  # noqa: F401 – re-export for tests
 )
 from .setup import (
-    _GenerationSetup,  # noqa: F401 – re-export for tests
     _get_dynamic_modules,
     _resolve_generation_setup,
 )
-from .streaming import (
-    _apply_stream_safe_fallback,  # noqa: F401 – re-export
-    generate_answer_stream,
-)
+from .streaming import generate_answer_stream
 
 
 logger = logging.getLogger(__name__)
@@ -171,7 +163,7 @@ async def generate_answer(
 
     try:
         llm = config.create_llm(auto_trace=False)
-        t_llm_start = time.monotonic()
+        t_llm_start_ns = time.perf_counter_ns()
         create_kwargs = {
             "model": config.llm_model,
             "messages": llm_messages,
@@ -185,21 +177,19 @@ async def generate_answer(
             observation_name="generate-answer",
             **create_kwargs,
         )
-        t_llm_end = time.monotonic()
+        llm_elapsed_ns = max(time.perf_counter_ns() - t_llm_start_ns, 1)
         answer = response_obj.choices[0].message.content or ""
         sanitize_response = extra.get("sanitize_response") or (
             lambda t: _sanitize_response_text(t, sources_enabled=sources_enabled)
         )
         answer = sanitize_response(answer)
         actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
-        ttft_ms = (t_llm_end - t_llm_start) * 1000
+        ttft_ms = llm_elapsed_ns / 1_000_000
         usage = getattr(response_obj, "usage", None)
         if usage is not None:
             completion_tokens = _coerce_positive_number(getattr(usage, "completion_tokens", None))
 
     except Exception as e:
-        if _coerce_positive_number(1) is None:  # pragma: no cover
-            pass
         from .policy import _is_connection_error
 
         if _is_connection_error(e):

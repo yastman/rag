@@ -16,15 +16,6 @@ def format_context(
     sources_enabled: bool = True,
 ) -> str:
     """Format top-N retrieved documents into LLM context string."""
-    return _format_context_for_mode(documents, max_docs=max_docs, sources_enabled=sources_enabled)
-
-
-def _format_context_for_mode(
-    documents: list[dict[str, Any]],
-    max_docs: int = _MAX_CONTEXT_DOCS,
-    *,
-    sources_enabled: bool,
-) -> str:
     if not documents:
         return "Релевантной информации не найдено."
 

@@ -11,10 +11,9 @@ Boundary (agreed in ``SWARM_AUDIT_REPORT.md``):
 
 - ``schema-valid != accepted``. This model validates *structure* only. It is a
   mechanical check, never a semantic acceptance verdict.
-- Strict Pydantic validation is reserved for the legacy strict path
-  (``KIRO_STRICT_REPORT=1``). The default Markdown mechanical-facts path is
-  pure-python and does NOT require pydantic (so it runs under bare ``python3``
-  without the project venv).
+- Strict Pydantic models are optional structural mirrors only. The default
+- Markdown mechanical-facts path is pure-python and does NOT require pydantic
+- (so it runs under bare ``python3`` without the project venv).
 """
 
 from __future__ import annotations
@@ -59,16 +58,6 @@ def code_changing_required_fields() -> tuple[str, ...]:
     return _CODE_CHANGING_REQUIRED
 
 
-def read_only_required_fields() -> tuple[str, ...]:
-    """Required field names for a read-only / research worker report."""
-    return _READ_ONLY_REQUIRED
-
-
-def pr_review_required_fields() -> tuple[str, ...]:
-    """Required field names for a read-only PR review report."""
-    return _PR_REVIEW_REQUIRED
-
-
 def required_fields_for_role(role: str) -> tuple[str, ...]:
     """Map a worker role to its required field set."""
     if role in ("implementation", "review-fix"):
@@ -98,12 +87,3 @@ if _HAVE_PYDANTIC:
         tests_run: list[str] = Field(..., description="Test selectors invoked, with pass/fail.")
         verification_evidence: str = Field(..., description="Summary linking change to fresh runs.")
         evidence_commands: list[str] = Field(..., description="Replayable shell commands.")
-
-    class ReadOnlyReport(BaseModel):
-        """Structural contract for a read-only / research worker finish report."""
-
-        model_config = {"extra": "allow"}
-
-        superpowers_used: list[str] = Field(...)
-        skipped_superpowers: list[str] = Field(...)
-        evidence_commands: list[str] = Field(...)

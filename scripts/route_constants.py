@@ -26,14 +26,6 @@ SECRETARY_AGENT_MODELS = {
     "secretary-pro": DEFAULT_WORKER_MODEL,
 }
 
-RECOMMENDED_ROUTE_MODELS = {
-    "secretary-pro": DEFAULT_WORKER_MODEL,
-    "implementation": DEFAULT_WORKER_MODEL,
-    "pr-review": DEFAULT_OPUS_MODEL,
-    "review-fix": DEFAULT_OPUS_MODEL,
-    "local-verification": DEFAULT_WORKER_MODEL,
-}
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)

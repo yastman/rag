@@ -1,6 +1,6 @@
 """Shared LLM response generation service for text/voice pipelines.
 
-Public API: generate_response, GenerationDeps, StreamingPartialDeliveryError.
+Public API: generate_response, GenerationDeps.
 Internal implementation is split across:
   - _response_formatting.py  (context formatting, sanitization, fallback)
   - _streaming_context.py    (Stage 1: prompt/context assembly)
@@ -67,12 +67,6 @@ from ._streaming_context import (
 
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Backward-compat aliases (private names used in tests/patches)
-# ---------------------------------------------------------------------------
-_StreamingContext = StreamingContext
-_StreamResult = StreamResult
 
 
 def _extract_sent_message_ref(sent_msg: Any) -> dict[str, int] | None:
@@ -212,19 +206,16 @@ async def _generate_streaming_response(
     max_context_docs: int,
     format_context: Callable[..., str],
     select_recent_history: Callable[[list[Any], int], list[Any]],
-    build_system_prompt: Callable[[str], str],
     ensure_history_instruction: Callable[[str], str],
     build_fallback_response: Callable[[list[dict[str, Any]]], str],
     generate_streaming: Callable[..., Any],
     style_detector: ResponseStyleDetector | None,
     style_prompt_builder: Callable[..., str],
     style_token_limit: Callable[[Any, str], int],
-    extract_queue_ms: Callable[[Any | None], float | None],
     extract_sent_message_ref: Callable[[Any], dict[str, int] | None],
     citation_instruction: str,
 ) -> dict[str, Any]:
     """Generate and deliver a streaming Telegram response."""
-    _ = build_system_prompt
     ctx = _prepare_streaming_context(
         query=query,
         needs_coverage=needs_coverage,
@@ -372,14 +363,12 @@ async def generate_response(
             max_context_docs=d.max_context_docs,
             format_context=d.format_context,
             select_recent_history=d.select_recent_history,
-            build_system_prompt=d.build_system_prompt,
             ensure_history_instruction=d.ensure_history_instruction,
             build_fallback_response=d.build_fallback_response,
             generate_streaming=d.generate_streaming,
             style_detector=d.style_detector,
             style_prompt_builder=d.style_prompt_builder,
             style_token_limit=d.style_token_limit,
-            extract_queue_ms=d.extract_queue_ms,
             extract_sent_message_ref=d.extract_sent_message_ref,
             citation_instruction=d.citation_instruction,
         )
