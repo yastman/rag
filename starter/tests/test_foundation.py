@@ -5,9 +5,12 @@ import os
 import subprocess
 import sys
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+from rag.cli import main
 from rag.settings import Command, Settings, SettingsConfigurationError
 
 
@@ -71,15 +74,31 @@ class FoundationTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.missing, ("--collection",))
 
+    def test_cli_redacts_malformed_settings_value(self) -> None:
+        secret = "credential-that-must-not-leak"
+        environment = {
+            "RAG_COLLECTION": "documents",
+            "RAG_QDRANT_URL": f"http://user:{secret}@127.0.0.1:not-a-port",
+        }
+        stderr = StringIO()
+
+        with patch.dict(os.environ, environment, clear=True), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                main(["ingest", "documents"])
+
+        self.assertEqual(raised.exception.code, 2)
+        output = stderr.getvalue()
+        self.assertIn("ingest configuration requires: RAG_QDRANT_URL", output)
+        self.assertNotIn(secret, output)
+        self.assertNotIn("Traceback", output)
+
     def test_release_manifest_records_bge_contract(self) -> None:
         manifest = json.loads((ROOT / "release" / "bge-m3-contract.json").read_text())
 
         self.assertEqual(manifest["schema_version"], 1)
         self.assertEqual(manifest["model"]["id"], "BAAI/bge-m3")
         self.assertRegex(manifest["model"]["revision"], r"^[0-9a-f]{40}$")
-        self.assertRegex(
-            manifest["model"]["tokenizer"]["artifact_sha256"], r"^[0-9a-f]{64}$"
-        )
+        self.assertRegex(manifest["model"]["tokenizer"]["artifact_sha256"], r"^[0-9a-f]{64}$")
         self.assertIn("artifacts", manifest["model"])
         artifacts = manifest["model"]["artifacts"]
         self.assertEqual(
@@ -99,6 +118,14 @@ class FoundationTests(unittest.TestCase):
 
         self.assertIn('name = "pydantic-settings"', lockfile)
         self.assertRegex(lockfile, r'hash = "sha256:[0-9a-f]{64}"')
+
+    def test_lockfile_hashes_the_build_backend(self) -> None:
+        lockfile = (ROOT / "uv.lock").read_text()
+
+        self.assertRegex(
+            lockfile,
+            r'(?s)\[\[package\]\]\nname = "uv-build".*?hash = "sha256:[0-9a-f]{64}"',
+        )
 
     def test_lockfile_excludes_product_frameworks(self) -> None:
         lockfile = (ROOT / "uv.lock").read_text()

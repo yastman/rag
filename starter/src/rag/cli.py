@@ -5,6 +5,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from .settings import Command, Settings, SettingsConfigurationError
 
 
@@ -34,6 +36,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         Settings().validate_for(args.command, collection=getattr(args, "collection", None))
+    except ValidationError as error:
+        invalid = [
+            "RAG_" + "_".join(str(part).upper() for part in issue["loc"])
+            for issue in error.errors()
+        ]
+        parser.error(str(SettingsConfigurationError(args.command, [], invalid)))
     except SettingsConfigurationError as error:
         parser.error(str(error))
 
