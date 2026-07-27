@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "runtime": {
+    "cpython": "3.12.12"
+  },
+  "model": {
+    "id": "BAAI/bge-m3",
+    "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "source_url": "https://huggingface.co/BAAI/bge-m3",
+    "license_spdx": "MIT",
+    "tokenizer": {
+      "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+      "artifact": "tokenizer.json",
+      "artifact_sha256": "21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08"
+    },
+    "artifacts": [
+      {
+        "path": "onnx/model.onnx",
+        "sha256": "f84251230831afb359ab26d9fd37d5936d4d9bb5d1d5410e66442f630f24435b"
+      },
+      {
+        "path": "onnx/model.onnx_data",
+        "sha256": "1eebfb28493f67bba03ce0ef64bfdc7fc5a3bd9d7493f818bb1d78cd798416b4"
+      }
+    ]
+  },
+  "embedding": {
+    "contract_version": 1,
+    "dense_dimensions": 1024,
+    "normalize": true,
+    "query_max_tokens": 512,
+    "passage_max_tokens": 512
+  },
+  "sidecar": {
+    "image": "ghcr.io/huggingface/text-embeddings-inference@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07",
+    "image_version": "cpu-1.9.3",
+    "source_url": "https://github.com/huggingface/text-embeddings-inference",
+    "source_commit": "06670157fb6c1523482219bdb2d1660277d38088",
+    "endpoint": "/embed",
+    "max_batch_size": 64,
+    "default_batch_size": 32,
+    "request_timeout_seconds": 120
+  }
+}

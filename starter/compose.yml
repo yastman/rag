@@ -1,0 +1,36 @@
+services:
+  qdrant:
+    image: qdrant/qdrant@sha256:0bd98fa7977f1e75694779359ca4e212822e5a71334e28421182f72f209d5286
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  redis:
+    image: redis@sha256:c25154ff5e2e6d0820a0268abd9dd3bc84f48fddd40396fb1f4de5b3dcc2182a
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+
+  bge-m3:
+    image: ghcr.io/huggingface/text-embeddings-inference@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
+    command:
+      - --model-id
+      - BAAI/bge-m3
+      - --revision
+      - 5617a9f61b028005a4858fdac845db406aefb181
+      - --max-client-batch-size
+      - "64"
+      - --max-batch-tokens
+      - "32768"
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - bge_m3_cache:/data
+
+volumes:
+  bge_m3_cache:
+  qdrant_data:
+  redis_data:

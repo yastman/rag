@@ -1,0 +1,15 @@
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
+
+[project]
+name = "rag"
+version = "0.1.0"
+description = "Small native Python RAG starter"
+requires-python = "==3.12.*"
+dependencies = [
+    "pydantic-settings==2.14.2",
+]
+
+[project.scripts]
+rag = "rag.cli:main"
