@@ -4,31 +4,19 @@ Operational routing only. Product/runtime facts live in `README.md`; read it onl
 
 ## Bootstrap
 
-1. Project identity: `rag-fresh`; canonical checkout:
-   `C:\Dev\projects-wsl-migrated-2026-07-13\rag-fresh`.
-2. Current checkout/worktree: `git rev-parse --show-toplevel`.
-3. Classify the request and take only its route below. Do not preload docs, roadmap, cards, or code.
-
-Main dynamically selects matching live skills for itself and delegated agents when this materially
-reduces risk, context, or execution cost; explicit user choices take precedence. Pass skill names
-with owned target/base, never their contents, and read each once per session. Skills never expand
-ownership or mutation permissions.
+1. Project: `rag-fresh`; resolve the current checkout with `git rev-parse --show-toplevel`.
+2. Classify the request and take only its route below. Do not preload unrelated context.
 
 
 ## Local quality contract
 
-- `make dev-setup` installs both commit and push hooks. Commit hooks run fast file checks; push
-  hooks run static/security checks and the cross-platform core pytest gate.
+- `make dev-setup` installs commit and push hooks; run the narrowest focused test first.
 - Core changes: run `make test-core` first.
 - Adapter or service changes: run `make test-core`, then `make test`.
 - Contract changes: run `make test-contract`.
 - Delivery gate: run `make candidate-check` (`check-frozen`, `test`, and `test-contract`).
 - Use `make test-full` only for a manual pre-merge full-suite check.
-- Run focused tests before the broader gate when the changed path has a narrower command.
-- GitHub runs no pytest. Its advisory guard independently checks Gitleaks, Ruff lint/format, and
-  actionlint only; it does not replace a passing local gate. Linux portability and release checks
-  remain local through WSL or a container. If a second developer or merge bot joins, move pytest,
-  mypy, and Bandit into required CI.
+- GitHub checks are advisory; local gates are authoritative.
 
 ## Routes
 
@@ -36,11 +24,12 @@ ownership or mutation permissions.
 | --- | --- |
 | `выполни фазу <exact-id>` | Use the solo phase flow below. |
 | `выполни карточку <exact-id>` | Fetch `memory_cards(action="get", id=CARD_ID, compact=false)`, take its `phase_id`, then use the solo phase flow. |
+| Standalone mutating issue | Use one branch and worktree; do not duplicate one already represented by a card. |
 | Partial phase ID/name | Resolve once through the bounded CodeIndexer route, then use the solo phase flow. |
 | Code question/change | CodeGraph first; CodeIndexer only when semantic/history/diff context helps. |
 | Bug/test failure | Check CodeIndexer `solutions`, then diagnose before changing code. |
 | External API/library docs | Use Context7; delegate to `librarian` when research can run independently. |
-| Review | Fix the exact target and Git base; exclude unrelated dirty-checkout changes. The owning writer or reviewer inspects the complete target diff. Main verifies target/base, changed-file scope, integration state, refs, checks, and evidence, and may inspect the raw diff whenever risk or uncertainty warrants it. |
+| Review | Review the exact target against its Git base; exclude unrelated WIP. |
 | Actual merge/rebase conflict | Resolve from Git's authoritative conflict state. |
 
 ## Scoped guidance
@@ -58,71 +47,32 @@ Before editing one of these areas, read its nearest scoped override:
 
 ## MCP/tool responsibilities
 
-- **CodeIndexer** (`project="rag-fresh"`): phase/card lifecycle, semantic/symbol/exact search,
-  solutions, reports, cross-session memory, and semantic diff review. Never call `projects(list)`
-  for this known project. If CodeIndexer is unavailable, do not emulate or mutate roadmap/card
-  lifecycle; report the missing capability.
-- **CodeGraph**: use MCP when exposed, otherwise `codegraph explore`; current source,
-  callers/callees, flows, edit targets, affected tests, and blast radius. Set `projectPath` to the
-  current worktree root for MCP. Start capped (`maxFiles=3-4`); make narrower follow-ups only for a
-  concrete gap, new symbol, or reported staleness. On `worktreeMismatch` or staleness, read only
-  affected files; never trust another branch's source.
-- **Context7**: versioned external library/API documentation only; use official primary
-  documentation when unavailable, and never use either for repository state.
+- **CodeIndexer** (`project="rag-fresh"`): phase/card lifecycle and semantic/history context. If it
+  is unavailable, do not emulate lifecycle mutations.
+- **CodeGraph**: current source, flows, edit targets, tests, and blast radius; query once and refine
+  only for a concrete gap. On mismatch or staleness, trust the current worktree files.
+- **Context7**: versioned external API documentation only.
 - **Git**: authoritative files, diff, commits, branches, and worktrees.
 - **GitHub**: PR, CI, merge, and remote delivery evidence; never roadmap state.
 
-Default CodeIndexer code query: `search_code(mode="cascade", compact=true)`, then refine. Before
-review, record the exact target and base. Use `review_diff` when exposed; otherwise diff-aware
-`search_code(..., since=<base>)`. Git is authoritative: target WIP = that worktree's `git diff` plus
-`git diff --cached`; committed target = `git diff <target-base>...<target-head>`. Confirm findings
-against that exact diff and inspect index freshness, truncation, ambiguity, confidence, provenance,
-and truth boundaries; dynamic CodeGraph edges remain confidence-scored evidence.
+Before review, record the target and base. Review WIP with `git diff` plus `git diff --cached`, or
+committed work with `git diff <base>...<head>`.
 
 ## Orchestration
 
-The live task schema and OMP routing are authoritative for roles, models, isolation options, and
-delegation depth. Never duplicate or invent runtime configuration here.
-
-Main owns intent, scope, cross-slice contracts, lifecycle, integration decisions, and final
-acceptance. Treat its context as a scarce integration resource: keep bulk exploration, files, raw
-logs, docs, and working diffs with their owning agents; return decision-grade, retrievable evidence.
-
-Children receive context files and runtime-forwarded rules, but not conversation history or informal
-parent discoveries. Give each task self-contained decisions, constraints, ownership, and acceptance.
-Agents may delegate within live depth policy; reuse an addressable agent when continuity beats fresh context.
-
-When exposed and useful for high-volume or machine-consumed results, prefer compact `outputSchema`
-covering decision/blocker, artifacts, verification, risks, and evidence; use prose when validation
-adds more fragility than value. Use `reviewer` only when risk or uncertainty warrants it. Children
-never push, PR, merge, clean worktrees, or mutate CodeIndexer. A writer may commit only its owned
-files on its assigned card branch when Main authorizes it.
-
-Each mutating card or standalone issue gets its own branch and linked worktree; an issue already
-represented by a card does not get a second one. Commit useful checkpoints, push the accepted card,
-and never start another task in a dirty worktree. Main merges accepted cards into the phase branch,
-delivers the tested phase to `dev`, then removes only clean worktrees and deletes the delivered card
-and phase branches. Never force-push, reset, clean, or stash unknown work.
+Main owns scope, lifecycle, integration, and acceptance. Give each child explicit ownership and
+acceptance. Children never push, merge, clean worktrees, or mutate CodeIndexer; assigned writers may
+commit owned files when Main authorizes it.
 
 ## Solo phase flow
 
-1. Fetch phase and cards in parallel:
-   `roadmap(action="show", phase_id=ID)` and
-   `memory_cards(action="get", phase_id=ID, compact=true)`. Skip project discovery, briefing,
-   roadmap list/next, and full-card preload. Before executing or reviewing a selected card, fetch
-   `memory_cards(action="get", id=CARD_ID, compact=false)`; never expand unrelated cards.
+1. Fetch the phase, compact card list, and the selected card in full.
 2. Main validates dependencies/acceptance, then `git fetch origin`.
-3. Resume or create the persistent `phase/<phase-id>` worktree. Inspect
-   `git worktree list --porcelain` and `git show-ref --verify refs/heads/phase/<phase-id>`: resume a
-   verified linked worktree, attach one for an existing branch, or create both from fresh
-   `origin/dev` only when absent. The canonical checkout may contain user WIP and need not be clean.
-   A new phase-worktree must be clean; preserve and inspect a resumed dirty phase-worktree, and never
-   reset, clean, stash, remove, or recreate it automatically.
+3. Resume the verified `phase/<phase-id>` worktree or create a clean one from `origin/dev`; preserve
+   unknown dirty state.
 4. For each card, resume or create `card/<card-id>-<slug>` and its linked worktree from the current
    phase head. Never mix cards in one worktree or reuse a dirty one.
-5. Make one initial capped CodeGraph query for the card's symbols/files/flow/blast radius. Repeat
-   only for a concrete missing or new symbol, ambiguity, truncation, or reported staleness. Use
-   CodeIndexer search only for missing semantic/history context.
+5. Query CodeGraph once; refine only for a concrete gap.
 6. Implement and test the card, inspect its complete diff, commit all intended changes, push the
    card branch, and merge it into the phase branch with `--no-ff`. Mark it DONE only after the merge.
 7. After all cards, merge fresh `origin/dev` into the clean phase branch, run `make test-full`, and
@@ -130,15 +80,5 @@ and phase branches. Never force-push, reset, clean, or stash unknown work.
 8. Fetch `origin` and prove the candidate is in `origin/dev`; then remove clean worktrees and delete
    the delivered card and phase branches locally and remotely.
 
-Use CodeIndexer `solutions` as diagnostic evidence. Fix candidate or integration regressions before
-delivery; record reproducible unrelated bugs as deduplicated cards. Main decides whether discovered
-issues block the current phase.
-
-Partial ID: `roadmap(action="list", project="rag-fresh", id_substring=fragment)`; paginate only while
-`has_more=true`, then exact flow. Name: compact roadmap list, paginate only while `has_more=true`,
-disambiguate locally. If a phase command has no ID or name, ask for one; use
-`briefing(project="rag-fresh")` only for an explicit “what should I work on next?” request.
-
-Failed/stale local gates, review, push, integration, or ancestry leave work unfinished and
-worktrees recoverable. A missing PR or native pre-PR status is not evidence of failure: full local
-gate evidence and ancestry in `origin/dev` are authoritative.
+Use CodeIndexer `solutions` for diagnosis. Resolve partial IDs with bounded roadmap search; ask when
+no ID or name is supplied. Failed gates or ancestry leave the work unfinished and recoverable.
