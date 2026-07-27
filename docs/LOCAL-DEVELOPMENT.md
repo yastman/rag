@@ -75,8 +75,15 @@ uv run python -m telegram_bot.main
 
 ## Validate before you push
 
-> The `make` commands below are Linux/POSIX only. On Windows run tests via
-> `uv run pytest` directly (see [`tests/README.md`](../tests/README.md)).
+> The `make` commands below remain Linux/POSIX only. On Windows, run the native
+> full-suite equivalent without Make or `uv` on `PATH`:
+>
+> ```powershell
+> pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Full
+> ```
+>
+> It requires `.venv\Scripts\python.exe` with pytest installed; use `uv sync
+> --all-extras --all-groups` when creating or refreshing that venv.
 
 | Command | What it checks |
 |---|---|
@@ -86,7 +93,7 @@ uv run python -m telegram_bot.main
 | `make test` | Unit + critical graph paths — for adapter/service changes |
 | `make test-contract` | Static contract tests (trace/schema/architecture) |
 | Candidate | `make candidate-check` is the authoritative local delivery gate (`check-frozen` + `test` + `test-contract`) |
-| Major candidate | `make test-full` runs all local tiers manually |
+| Major candidate | `make test-full` runs all local tiers manually; on Windows use `scripts/windows_preflight.ps1 -Mode Full` |
 | `make test-cov` | Coverage report (`[tool.coverage]` `fail_under=80`) — currently a manual gate |
 | `make e2e-core-live` | Golden E2E: indexes a fixture corpus and runs the full spine through `run_assistant_request` (needs `make core-up`) |
 | `make qdrant-audit-indexes` | Audit Qdrant payload indexes |

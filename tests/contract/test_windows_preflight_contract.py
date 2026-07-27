@@ -35,3 +35,29 @@ def test_tests_mode_runs_windows_acceptance_files() -> None:
         "tests/unit/test_logging_config.py",
     ):
         assert rel_path.replace("/", '", "') in source
+
+
+def test_full_mode_uses_native_venv_for_make_test_full_equivalent() -> None:
+    source = _source()
+    assert "'Full'" in source
+    assert 'Join-Path $root ".venv\\Scripts\\python.exe"' in source
+    assert 'RUN_BENCHMARK_TESTS = "1"' in source
+    for arg in (
+        "tests/chaos/",
+        "tests/contract/",
+        "tests/unit/",
+        "tests/benchmark/",
+        "-n",
+        "2",
+        "--dist=worksteal",
+        "--timeout=30",
+        "tests/e2e/",
+        "tests/integration/",
+        "tests/load/",
+        "tests/smoke/",
+    ):
+        assert f'"{arg}"' in source
+
+
+def test_preflight_has_non_executing_help_mode() -> None:
+    assert "[switch]$Help" in _source()

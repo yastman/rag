@@ -9,19 +9,28 @@
     Live:    read-only health probes for Docker, core compose services, and bot
              import/startup (no polling, no Telegram/CRM writes, no secret access).
 .PARAMETER Mode
-    Static | Tests | Live  (default: Static)
+    Static | Tests | Live | Full  (default: Static)
+#.PARAMETER Help
+#    Print available modes without running checks.
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Static
 #>
 
 param(
-    [ValidateSet('Static', 'Tests', 'Live')]
+    [ValidateSet('Static', 'Tests', 'Live', 'Full')]
     [string]$Mode = 'Static',
-    [string]$OperatorEnvFile
+    [string]$OperatorEnvFile,
+    [switch]$Help
 )
 
 $ErrorActionPreference = 'Stop'
 $script:failed = $false
+
+if ($Help) {
+    Write-Host "Usage: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode <Static|Tests|Live|Full>"
+    Write-Host "Full runs the native equivalent of make test-full using .venv\Scripts\python.exe."
+    exit 0
+}
 
 function Write-Pass  { Write-Host "  PASS  $args" -ForegroundColor Green }
 function Write-Fail  { Write-Host "  FAIL  $args" -ForegroundColor Red; $script:failed = $true }
@@ -228,6 +237,44 @@ function Invoke-Tests {
     else { Write-Fail "focused tests failed (exit=$ec)" }
 }
 
+# ── Full test gate ───────────────────────────────────────────────────────────
+
+function Invoke-Full {
+    $root = Get-Root
+    $python = Join-Path $root ".venv\Scripts\python.exe"
+    if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+        Write-Fail "native venv Python missing at $python; run 'uv sync --all-extras --all-groups' first"
+        return
+    }
+
+    & $python -m pytest --version
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "pytest is unavailable in $python; run 'uv sync --all-extras --all-groups' first"
+        return
+    }
+
+    Push-Location $root
+    try {
+        $env:PYTHONDONTWRITEBYTECODE = "1"
+        $env:RUN_BENCHMARK_TESTS = "1"
+        Write-Host "`nPhase 1/2: parallel-safe suites..." -ForegroundColor Cyan
+        & $python -m pytest "tests/chaos/" "tests/contract/" "tests/unit/" "tests/benchmark/" "-n" "2" "--dist=worksteal" "--timeout=30"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "Phase 1 failed (exit=$LASTEXITCODE)"
+            return
+        }
+
+        Remove-Item Env:\RUN_BENCHMARK_TESTS -ErrorAction SilentlyContinue
+        Write-Host "`nPhase 2/2: stateful/live suites sequentially..." -ForegroundColor Cyan
+        & $python -m pytest "tests/e2e/" "tests/integration/" "tests/load/" "tests/smoke/" "--timeout=30"
+        if ($LASTEXITCODE -eq 0) { Write-Pass "full test suite complete" }
+        else { Write-Fail "Phase 2 failed (exit=$LASTEXITCODE)" }
+    } finally {
+        Remove-Item Env:\RUN_BENCHMARK_TESTS -ErrorAction SilentlyContinue
+        Pop-Location
+    }
+}
+
 # ── Live ──────────────────────────────────────────────────────────────────────
 
 function Invoke-Live {
@@ -331,6 +378,7 @@ try {
         'Static' { Invoke-Static }
         'Tests'  { Invoke-Tests }
         'Live'   { Invoke-Live }
+        'Full'   { Invoke-Full }
     }
 } catch {
     Write-Host "  UNEXPECTED ERROR: $_" -ForegroundColor Red
