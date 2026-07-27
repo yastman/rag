@@ -16,7 +16,7 @@ Operational routing only. Product/runtime facts live in `README.md`; read it onl
 - Contract changes: run `make test-contract`.
 - Delivery gate: run `make candidate-check` (`check-frozen`, `test`, and `test-contract`).
 - Use `make test-full` only for a manual pre-merge full-suite check.
-- GitHub checks are advisory; local gates are authoritative.
+- GitHub runs no pytest; its checks are advisory. Local gates are authoritative.
 
 ## Routes
 
@@ -71,8 +71,9 @@ HEAD; the writer verifies its Git root, HEAD, and tracked state before work.
 2. Main validates dependencies/acceptance, then `git fetch origin`.
 3. Resume the verified `phase/<phase-id>` worktree or create a clean one from `origin/dev`; preserve
    unknown dirty state.
-4. For each card, resume or create `card/<card-id>-<slug>` and its linked worktree from the current
-   phase head. Never mix cards in one worktree or reuse a dirty one.
+4. Inspect `git worktree list --porcelain` to confirm current state. For each card, resume or
+   create `card/<card-id>-<slug>` and its linked worktree from the current phase head, maintaining
+   one worktree per mutating card. Never mix cards or reuse a dirty one.
 5. Query CodeGraph once; refine only for a concrete gap.
 6. Implement and test the card, inspect its complete diff, commit all intended changes, push the
    card branch, and merge it into the phase branch with `--no-ff`. Use a labelled WIP commit before
