@@ -474,6 +474,33 @@ class CacheLayerManager:
         except Exception as e:
             logger.error("Cache store error (%s): %s: %s", tier, type(e).__name__, e)
 
+    @staticmethod
+    def _api_response_key(namespace: str, session_id: str, query: str) -> str:
+        return _hash(
+            json.dumps(
+                [namespace, session_id, _normalize_query_for_cache(query)],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+
+    async def get_api_response(
+        self, namespace: str, session_id: str, query: str
+    ) -> dict[str, Any] | None:
+        """Get a direct API response scoped to its namespace and session."""
+        cached = await self.get_exact(
+            "api_response", self._api_response_key(namespace, session_id, query)
+        )
+        return cached if isinstance(cached, dict) else None
+
+    async def store_api_response(
+        self, namespace: str, session_id: str, query: str, response: dict[str, Any]
+    ) -> None:
+        """Store a direct API response scoped to its namespace and session."""
+        await self.store_exact(
+            "api_response", self._api_response_key(namespace, session_id, query), response
+        )
+
     # ========== Convenience: Embeddings ==========
 
     async def get_embedding(self, text: str, model: str = "bge-m3") -> list[float] | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -95,6 +96,62 @@ async def test_query_returns_response_for_channel_and_session() -> None:
     assert graph.last_state is not None
     assert graph.last_state["user_id"] == 42
     assert graph.last_state["session_id"] == "sess-1"
+
+
+async def test_query_includes_nonempty_answer_sources_and_trace_id() -> None:
+    graph = _DummyGraph()
+    graph.ainvoke = AsyncMock(
+        return_value={
+            "response": "grounded answer",
+            "query_type": "GENERAL",
+            "cache_hit": False,
+            "search_results_count": 1,
+            "rerank_applied": True,
+            "retrieved_context": [{"metadata": {"source": "meeting_artifact.md"}}],
+        }
+    )
+    app.state.graph = graph
+    app.state.max_rewrite_attempts = 0
+
+    response = await query(QueryRequest(query="what was decided?", trace_id="trace-06"))
+
+    assert response.answer == "grounded answer"
+    assert response.sources == [{"metadata": {"source": "meeting_artifact.md"}}]
+    assert response.trace_id == "trace-06"
+
+
+async def test_direct_lifespan_owns_and_closes_aiohttp_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_BACKEND", "direct")
+    fake_cfg = SimpleNamespace(
+        redis_url="redis://localhost:6379",
+        cache_thresholds={"GENERAL": 0.08},
+        cache_ttl={"GENERAL": 3600},
+        qdrant_url="http://qdrant:6333",
+        qdrant_collection="test_collection",
+        bge_m3_url="http://bge-m3:8000",
+        rerank_provider="none",
+        max_rewrite_attempts=0,
+    )
+    fake_cfg.create_embeddings = MagicMock(return_value=SimpleNamespace())
+    fake_cfg.create_sparse_embeddings = MagicMock(return_value=SimpleNamespace())
+    session = SimpleNamespace(close=AsyncMock())
+    direct_llm = MagicMock(session=session)
+
+    with (
+        patch("src.runtime.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("src.runtime.integrations.cache.CacheLayerManager", return_value=AsyncMock()),
+        patch("src.runtime.services.qdrant.QdrantService", return_value=AsyncMock()),
+        patch("src.runtime.graph.builder.build_pipeline"),
+        patch("src.api.main.aiohttp.ClientSession", return_value=session),
+        patch("src.api.main.DirectLiteLlmProvider", return_value=direct_llm) as direct_provider,
+    ):
+        async with lifespan(app):
+            assert app.state.llm is direct_llm
+
+    direct_provider.assert_called_once_with(api_key=None, session=session)
+    session.close.assert_awaited_once()
 
 
 async def test_lifespan_respects_rerank_provider_none() -> None:
@@ -358,3 +415,18 @@ async def test_health_route_exposes_qdrant_quantization_degradation(
         "requested_quantization_mode": "binary",
         "effective_quantization_mode": "off",
     }
+
+
+def test_run_binds_direct_api_to_distinct_loopback_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LLM_BACKEND", raising=False)
+    with patch("uvicorn.run") as run:
+        from src.api.main import run_local
+
+        run_local()
+
+    assert os.environ["LLM_BACKEND"] == "direct"
+    assert os.environ["RAG_GRAPH_FACTORY"] == "telegram_bot.pipelines.graph_compat:build_graph"
+    from src.runtime.graph.builder import resolve_pipeline_factory
+
+    assert callable(resolve_pipeline_factory())
+    run.assert_called_once_with("src.api.main:app", host="127.0.0.1", port=8001)

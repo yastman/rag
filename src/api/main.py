@@ -12,6 +12,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
+import aiohttp
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -19,6 +20,7 @@ from langgraph.errors import GraphRecursionError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.schemas import QueryRequest, QueryResponse
+from src.runtime.llm.direct import DirectLiteLlmProvider
 
 
 logger = logging.getLogger(__name__)
@@ -56,7 +58,12 @@ async def lifespan(app: FastAPI):
     elif cfg.rerank_provider != "none":
         logger.warning("Unknown RERANK_PROVIDER=%s, reranking disabled", cfg.rerank_provider)
 
-    llm = cfg.create_llm()
+    if os.getenv("LLM_BACKEND", "router").lower() == "direct":
+        session = aiohttp.ClientSession()
+        llm = DirectLiteLlmProvider(api_key=os.getenv("CEREBRAS_API_KEY"), session=session)
+        app.state.llm_session = session
+    else:
+        llm = cfg.create_llm()
 
     graph = build_pipeline(
         cache=cache,
@@ -73,11 +80,17 @@ async def lifespan(app: FastAPI):
     app.state.qdrant = qdrant
     app.state.embeddings = embeddings
     app.state.sparse_embeddings = sparse_embeddings
+    app.state.llm = llm
     app.state.max_rewrite_attempts = cfg.max_rewrite_attempts
+    app.state.api_cache_namespace = "direct-api-v1"
 
     logger.info("RAG API services initialized")
     yield
 
+    session = getattr(app.state, "llm_session", None)
+    if session is not None:
+        await session.close()
+        del app.state.llm_session
     await cache.close()
     await qdrant.close()
     if hasattr(embeddings, "aclose"):
@@ -240,7 +253,37 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
 
     start = time.perf_counter()
 
+    direct_backend = os.getenv("LLM_BACKEND", "router").lower() == "direct"
     session_id = req.session_id or f"api-{req.user_id}"
+    cache = getattr(app.state, "cache", None)
+    namespace = getattr(app.state, "api_cache_namespace", "direct-api-v1")
+    cached_result = (
+        await cache.get_api_response(namespace, session_id, req.query)
+        if direct_backend
+        and cache is not None
+        and callable(getattr(cache, "get_api_response", None))
+        else None
+    )
+    if cached_result is not None:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        cached_result = {**cached_result, "cache_hit": True}
+        cached_result["pipeline_wall_ms"] = elapsed_ms
+        cached_result["e2e_latency_ms"] = elapsed_ms
+        cached_result["user_perceived_wall_ms"] = elapsed_ms
+        write_pipeline_scores(None, cached_result)
+        return QueryResponse(
+            response=cached_result.get("response", ""),
+            query_type=cached_result.get("query_type", ""),
+            answer=cached_result.get("response", ""),
+            sources=cached_result.get("retrieved_context", []),
+            trace_id=req.trace_id or _resolve_trace_id(),
+            cache_hit=True,
+            documents_count=cached_result.get("search_results_count", 0),
+            rerank_applied=cached_result.get("rerank_applied", False),
+            latency_ms=round(elapsed_ms, 1),
+            context=cached_result.get("retrieved_context", []),
+        )
+
     state = make_initial_state(
         user_id=req.user_id,
         session_id=session_id,
@@ -270,6 +313,9 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
         return QueryResponse(
             response=fallback_response,
             query_type="ERROR",
+            answer=fallback_response,
+            sources=[],
+            trace_id=req.trace_id or _resolve_trace_id(),
             cache_hit=False,
             documents_count=0,
             rerank_applied=False,
@@ -284,13 +330,36 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
     result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
 
     write_pipeline_scores(None, result)
+    if (
+        direct_backend
+        and result.get("response")
+        and cache is not None
+        and callable(getattr(cache, "store_api_response", None))
+    ):
+        await cache.store_api_response(namespace, session_id, req.query, result)
 
     return QueryResponse(
         response=result.get("response", ""),
         query_type=result.get("query_type", ""),
+        answer=result.get("response", ""),
+        sources=result.get("retrieved_context", []),
+        trace_id=req.trace_id or _resolve_trace_id(),
         cache_hit=result.get("cache_hit", False),
         documents_count=result.get("search_results_count", 0),
         rerank_applied=result.get("rerank_applied", False),
         latency_ms=round(elapsed_ms, 1),
         context=result.get("retrieved_context", []),
     )
+
+
+def run_local() -> None:
+    """Run the local RAG API without exposing it beyond this machine."""
+    import uvicorn
+
+    os.environ["LLM_BACKEND"] = "direct"
+    os.environ["RAG_GRAPH_FACTORY"] = "telegram_bot.pipelines.graph_compat:build_graph"
+    uvicorn.run("src.api.main:app", host="127.0.0.1", port=8001)
+
+
+if __name__ == "__main__":
+    run_local()

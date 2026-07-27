@@ -23,6 +23,11 @@ class QueryResponse(BaseModel):
     """POST /query response body."""
 
     response: str = Field(..., description="Generated answer")
+    answer: str = Field(default="", description="Generated answer")
+    sources: list[dict[str, Any]] = Field(
+        default_factory=list, description="Source attribution for the answer"
+    )
+    trace_id: str = Field(default="", description="Request trace identifier")
     query_type: str = Field(default="", description="Classified query type")
     cache_hit: bool = Field(default=False, description="Whether semantic cache was hit")
     documents_count: int = Field(default=0, description="Number of retrieved documents")
