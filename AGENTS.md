@@ -62,7 +62,8 @@ committed work with `git diff <base>...<head>`.
 
 Main owns scope, lifecycle, integration, and acceptance. Give each child explicit ownership and
 acceptance. Children never push, merge, clean worktrees, or mutate CodeIndexer; assigned writers may
-commit owned files when Main authorizes it.
+commit owned files when Main authorizes it. Each assignment names the target worktree and expected
+HEAD; the writer verifies its Git root, HEAD, and tracked state before work.
 
 ## Solo phase flow
 
@@ -74,7 +75,8 @@ commit owned files when Main authorizes it.
    phase head. Never mix cards in one worktree or reuse a dirty one.
 5. Query CodeGraph once; refine only for a concrete gap.
 6. Implement and test the card, inspect its complete diff, commit all intended changes, push the
-   card branch, and merge it into the phase branch with `--no-ff`. Mark it DONE only after the merge.
+   card branch, and merge it into the phase branch with `--no-ff`. Use a labelled WIP commit before
+   interruption or handoff. Mark it DONE only after the merge.
 7. After all cards, merge fresh `origin/dev` into the clean phase branch, run `make test-full`, and
    push the exact tested candidate to `dev` without rewriting history.
 8. Fetch `origin` and prove the candidate is in `origin/dev`; then remove clean worktrees and delete
