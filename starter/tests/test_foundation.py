@@ -95,23 +95,23 @@ class FoundationTests(unittest.TestCase):
     def test_release_manifest_records_bge_contract(self) -> None:
         manifest = json.loads((ROOT / "release" / "bge-m3-contract.json").read_text())
 
-        self.assertEqual(manifest["schema_version"], 1)
+        self.assertEqual(manifest["schema_version"], 2)
         self.assertEqual(manifest["model"]["id"], "BAAI/bge-m3")
         self.assertRegex(manifest["model"]["revision"], r"^[0-9a-f]{40}$")
         self.assertRegex(manifest["model"]["tokenizer"]["artifact_sha256"], r"^[0-9a-f]{64}$")
-        self.assertIn("artifacts", manifest["model"])
         artifacts = manifest["model"]["artifacts"]
         self.assertEqual(
             [artifact["path"] for artifact in artifacts],
-            ["onnx/model.onnx", "onnx/model.onnx_data"],
+            ["pytorch_model.bin", "colbert_linear.pt", "sparse_linear.pt"],
         )
         for artifact in artifacts:
             self.assertRegex(artifact["sha256"], r"^[0-9a-f]{64}$")
         self.assertIs(manifest["embedding"]["normalize"], True)
         self.assertEqual(manifest["embedding"]["dense_dimensions"], 1024)
+        self.assertEqual(manifest["embedding"]["sparse"]["format"], "indices-and-values")
         self.assertEqual(manifest["sidecar"]["max_batch_size"], 64)
         self.assertEqual(manifest["sidecar"]["default_batch_size"], 32)
-        self.assertIn("@sha256:", manifest["sidecar"]["image"])
+        self.assertRegex(manifest["sidecar"]["build"]["base_image"], r"@sha256:[0-9a-f]{64}$")
 
     def test_lockfile_keeps_hashed_resolution(self) -> None:
         lockfile = (ROOT / "uv.lock").read_text()
@@ -152,9 +152,36 @@ class FoundationTests(unittest.TestCase):
         services = json.loads(result.stdout)["services"]
 
         self.assertEqual(set(services), {"qdrant", "redis", "bge-m3"})
-        self.assertTrue(all("@sha256:" in service["image"] for service in services.values()))
+        self.assertTrue(all("@sha256:" in services[name]["image"] for name in ("qdrant", "redis")))
+        self.assertEqual(
+            services["bge-m3"]["build"]["context"],
+            str((ROOT / "sidecar" / "bge-m3").resolve()),
+        )
+
+    def test_bge_sidecar_builds_a_hybrid_contract_not_dense_only_tei(self) -> None:
+        compose = (ROOT / "compose.yml").read_text()
         manifest = json.loads((ROOT / "release" / "bge-m3-contract.json").read_text())
-        self.assertEqual(services["bge-m3"]["image"], manifest["sidecar"]["image"])
+        self.assertIn("build", manifest["sidecar"])
+        if "build" not in manifest["sidecar"]:
+            return
+        sidecar = ROOT / manifest["sidecar"]["build"]["context"]
+        app = (sidecar / "app.py").read_text()
+        dockerfile = (sidecar / "Dockerfile").read_text()
+        self.assertIn("build:", compose)
+        self.assertNotIn("text-embeddings-inference", compose)
+        self.assertEqual(manifest["embedding"]["contract_version"], 2)
+        self.assertEqual(manifest["embedding"]["dense_dimensions"], 1024)
+        self.assertEqual(manifest["embedding"]["sparse"]["format"], "indices-and-values")
+        self.assertEqual(manifest["sidecar"]["endpoint"], "/encode/hybrid")
+        self.assertRegex(manifest["sidecar"]["build"]["base_image"], r"@sha256:[0-9a-f]{64}$")
+        self.assertIn("BGEM3FlagModel", app)
+        self.assertIn('@app.post("/encode/hybrid",', app)
+        self.assertIn("dense_vecs", app)
+        self.assertIn("lexical_weights", app)
+        self.assertIn("snapshot_download", app)
+        self.assertIn("MODEL_ARTIFACTS", app)
+        self.assertIn("max_length=64", app)
+        self.assertIn(manifest["sidecar"]["build"]["base_image"], dockerfile)
 
 
 if __name__ == "__main__":

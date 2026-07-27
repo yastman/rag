@@ -15,22 +15,13 @@ services:
       - redis_data:/data
 
   bge-m3:
-    image: ghcr.io/huggingface/text-embeddings-inference@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
-    command:
-      - --model-id
-      - BAAI/bge-m3
-      - --revision
-      - 5617a9f61b028005a4858fdac845db406aefb181
-      - --max-client-batch-size
-      - "64"
-      - --max-batch-tokens
-      - "32768"
+    build:
+      context: ./sidecar/bge-m3
+      args:
+        PYTHON_BASE: python:3.12.12-slim@sha256:f3fa41d74a768c2fce8016b98c191ae8c1bacd8f1152870a3f9f87d350920b7c
     ports:
-      - "127.0.0.1:8080:80"
-    volumes:
-      - bge_m3_cache:/data
+      - "127.0.0.1:8080:8080"
 
 volumes:
-  bge_m3_cache:
   qdrant_data:
   redis_data:
