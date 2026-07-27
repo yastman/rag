@@ -57,6 +57,54 @@ docker compose -f compose.yml -f compose.dev.yml up -d
 
 The retrieval stack uses dense + sparse + ColBERT from the local BGE-M3. Tunables live in `.env.example` (e.g. `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`).
 
+### Local meeting-RAG sidecars (Windows / Docker Desktop)
+
+This isolated stack starts only Qdrant, Redis, and the existing BGE-M3 ONNX
+service. Ingestion and the RAG API run as native Python; it does not start
+Telegram, PostgreSQL, or an application container.
+
+```powershell
+# Set this to the directory containing model.int8.onnx and model.int8.onnx.data.
+$env:BGE_M3_ONNX_MODEL_HOST_DIR = "C:\data\models\bge_m3_onnx_int8"
+
+# Record the reused model identity before the build.
+Get-FileHash "$env:BGE_M3_ONNX_MODEL_HOST_DIR\model.int8.onnx" -Algorithm SHA256
+Get-FileHash "$env:BGE_M3_ONNX_MODEL_HOST_DIR\model.int8.onnx.data" -Algorithm SHA256
+
+# Build/start, then wait until each service reports healthy.
+docker compose -f compose.local-rag.yml up -d --build
+docker compose -f compose.local-rag.yml ps
+```
+
+`bge-m3` builds the repository's existing `services/bge-m3-api` image and
+bakes those two artifacts into it; no model is downloaded, replaced, or
+bind-mounted at runtime. Its model identity is `BAAI/bge-m3` at revision
+`5617a9f61b028005a4858fdac845db406aefb181`; retain the two SHA-256 outputs
+with the local smoke evidence.
+
+The checked-in local artifact evidence is:
+
+| Artifact | SHA-256 |
+|---|---|
+| `model.int8.onnx` | `e4b993d0e996ab07ec5ee576d2f102af6d534381d5861bdfcbc24981efc01c80` |
+| `model.int8.onnx.data` | `2976067612ae0a7c804a32b5abe64f512056655c689455c6a994029529c62c28` |
+
+All ports are loopback-only: Qdrant `127.0.0.1:6333`, Redis
+`127.0.0.1:6379`, and BGE-M3 `127.0.0.1:8000`. Check readiness directly if
+`ps` has not yet reported `healthy`:
+
+```powershell
+curl.exe -fsS http://127.0.0.1:6333/readyz
+docker compose -f compose.local-rag.yml exec redis redis-cli ping
+curl.exe -fsS http://127.0.0.1:8000/health
+```
+
+Stop only these sidecars and retain their local data:
+
+```powershell
+docker compose -f compose.local-rag.yml down
+```
+
 ## Run the bot
 
 ### Linux / POSIX

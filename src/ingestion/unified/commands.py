@@ -18,12 +18,245 @@ from src.ingestion.unified.colbert_backfill import (
     compute_colbert_coverage,
     inspect_collection_schema,
 )
+from src.ingestion.unified.config import UnifiedConfig
+from src.ingestion.unified.flow import _build_writer, _make_docling, ingest_meeting_artifact
 from src.ingestion.unified.observability import (
     try_update_ingestion_trace,
 )
 
 
 logger = logging.getLogger(__name__)
+
+MEETING_COLLECTION = "meeting_artifacts"
+MEETING_PAYLOAD_INDEXES = {
+    "source_id": "keyword",
+    "source_path": "keyword",
+    "heading": "keyword",
+    "chunk_index": "integer",
+}
+
+
+def _meeting_artifact(args: argparse.Namespace) -> Path | None:
+    value = getattr(args, "artifact", None) or os.getenv("MEETING_ARTIFACT_PATH")
+    return Path(value) if value else None
+
+
+async def cmd_meeting_ingest(args: argparse.Namespace) -> int:
+    """Ingest exactly one Markdown meeting artifact into ``meeting_artifacts``."""
+    artifact = _meeting_artifact(args)
+    if artifact is None or not artifact.is_file() or artifact.suffix.lower() != ".md":
+        print("  [FAIL] MEETING_ARTIFACT_PATH must name an existing Markdown file")
+        return 1
+
+    config = UnifiedConfig()
+    result = ingest_meeting_artifact(artifact, config, _build_writer(config), _make_docling(config))
+    if result.errors or result.exact_points == 0:
+        details = result.error_details or ["exact Qdrant point count is zero"]
+        print(f"  [FAIL] meeting_artifacts: {'; '.join(details)}")
+        return 1
+    print(
+        "  [OK] meeting_artifacts: "
+        f"processed={result.processed} errors={result.errors} exact_points={result.exact_points}"
+    )
+    return 0
+
+
+async def cmd_meeting_preflight(args: argparse.Namespace) -> int:
+    """Validate the selected meeting Markdown and required local sidecars."""
+    import httpx
+
+    artifact = _meeting_artifact(args)
+    if artifact is None or not artifact.is_file() or artifact.suffix.lower() != ".md":
+        print("  [FAIL] MEETING_ARTIFACT_PATH must name an existing Markdown file")
+        return 1
+
+    onnx_dir = Path(os.getenv("BGE_M3_ONNX_MODEL_HOST_DIR", ""))
+    required_model_files = ("model.int8.onnx", "model.int8.onnx.data")
+    if not onnx_dir.is_dir() or any(
+        not (onnx_dir / name).is_file() for name in required_model_files
+    ):
+        print("  [FAIL] BGE_M3_ONNX_MODEL_HOST_DIR lacks required ONNX artifacts")
+        return 1
+
+    from src.ingestion.unified.config import UnifiedConfig
+
+    config = UnifiedConfig()
+    if config.qdrant_url.startswith("https://") and not config.qdrant_api_key:
+        print("  [FAIL] QDRANT_API_KEY is required for HTTPS Qdrant")
+        return 1
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            qdrant = await client.get(f"{config.qdrant_url}/readyz")
+            bge = await client.post(f"{config.bge_m3_url}/encode/hybrid", json={"texts": ["ping"]})
+    except Exception as exc:
+        print(f"  [FAIL] Local RAG sidecar unavailable: {exc}")
+        return 1
+
+    if qdrant.status_code != 200 or bge.status_code != 200:
+        print(
+            f"  [FAIL] Local RAG sidecar readiness: Qdrant={qdrant.status_code} BGE-M3={bge.status_code}"
+        )
+        return 1
+    print(f"  [OK] Meeting artifact and sidecars ready: {artifact}")
+    return 0
+
+
+def _meeting_schema_errors(collection_info) -> list[str]:
+    """Return every deviation from the isolated meeting collection contract."""
+    dense_names, sparse_names = _extract_vector_names(collection_info)
+    errors = []
+    if dense_names != {"dense", "colbert"}:
+        errors.append(f"dense vectors={sorted(dense_names)}")
+    if sparse_names != {"bm42"}:
+        errors.append(f"sparse vectors={sorted(sparse_names)}")
+
+    vectors = getattr(getattr(collection_info, "config", None), "params", None)
+    vectors = getattr(vectors, "vectors", {})
+    dense = vectors.get("dense") if isinstance(vectors, Mapping) else None
+    colbert = vectors.get("colbert") if isinstance(vectors, Mapping) else None
+
+    def enum_value(value: object) -> object:
+        return getattr(value, "value", value)
+
+    if (
+        getattr(dense, "size", None) != 1024
+        or str(enum_value(getattr(dense, "distance", ""))).lower() != "cosine"
+    ):
+        errors.append("dense must be 1024-dimensional cosine")
+    if (
+        getattr(colbert, "size", None) != 1024
+        or str(enum_value(getattr(colbert, "distance", ""))).lower() != "cosine"
+    ):
+        errors.append("colbert must be 1024-dimensional cosine")
+    comparator = enum_value(
+        getattr(getattr(colbert, "multivector_config", None), "comparator", None)
+    )
+    if str(comparator).lower() != "max_sim":
+        errors.append("colbert comparator must be MAX_SIM")
+    if getattr(getattr(colbert, "hnsw_config", None), "m", None) != 0:
+        errors.append("colbert HNSW must be rerank-only (m=0)")
+
+    payload_schema = getattr(collection_info, "payload_schema", {}) or {}
+    missing_indexes = set(MEETING_PAYLOAD_INDEXES) - set(payload_schema)
+    wrong_types = [
+        field
+        for field, expected in MEETING_PAYLOAD_INDEXES.items()
+        if field in payload_schema
+        and enum_value(
+            getattr(payload_schema[field], "data_type", None)
+            if not isinstance(payload_schema[field], Mapping)
+            else payload_schema[field].get("data_type")
+        )
+        != expected
+    ]
+    if missing_indexes:
+        errors.append(f"payload indexes missing={sorted(missing_indexes)}")
+    if wrong_types:
+        errors.append(f"payload indexes wrong type={sorted(wrong_types)}")
+    return errors
+
+
+async def cmd_meeting_verify(args: argparse.Namespace) -> int:
+    """Verify the isolated meeting collection schema and exact point count."""
+    from qdrant_client import QdrantClient
+
+    client = QdrantClient(
+        url=os.getenv("QDRANT_URL", "http://localhost:6333"),
+        api_key=os.getenv("QDRANT_API_KEY"),
+        timeout=60,
+    )
+    try:
+        info = client.get_collection(MEETING_COLLECTION)
+        status = getattr(getattr(info, "status", None), "value", getattr(info, "status", None))
+        errors = _meeting_schema_errors(info)
+        if str(status).lower() != "green":
+            errors.append(f"collection status={status}")
+        count = client.count(collection_name=MEETING_COLLECTION, exact=True).count
+    except Exception as exc:
+        print(f"  [FAIL] Cannot verify {MEETING_COLLECTION}: {exc}")
+        return 1
+
+    expected = getattr(args, "expected_points", None)
+    if errors or (expected is not None and count != expected):
+        details = errors + (
+            [f"point count={count}, expected={expected}"]
+            if expected is not None and count != expected
+            else []
+        )
+        print(f"  [FAIL] {MEETING_COLLECTION}: {'; '.join(details)}")
+        return 1
+    print(f"  [OK] {MEETING_COLLECTION}: {count} exact points")
+    return 0
+
+
+async def cmd_meeting_bootstrap(args: argparse.Namespace) -> int:
+    """Create or explicitly rebuild the isolated meeting collection."""
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import (
+        Distance,
+        HnswConfigDiff,
+        MultiVectorComparator,
+        MultiVectorConfig,
+        PayloadSchemaType,
+        SparseVectorParams,
+        VectorParams,
+    )
+
+    if await cmd_meeting_preflight(args):
+        return 1
+    recreate = bool(getattr(args, "recreate", False))
+    confirmed = bool(getattr(args, "yes", False))
+    if recreate != confirmed:
+        print("  [FAIL] Rebuild requires both --recreate and --yes")
+        return 1
+
+    client = QdrantClient(
+        url=os.getenv("QDRANT_URL", "http://localhost:6333"),
+        api_key=os.getenv("QDRANT_API_KEY"),
+        timeout=60,
+    )
+    try:
+        client.get_collections()
+        try:
+            client.get_collection(MEETING_COLLECTION)
+            exists = True
+        except Exception:
+            exists = False
+        if exists and recreate:
+            client.delete_collection(MEETING_COLLECTION)
+            exists = False
+        if not exists:
+            client.create_collection(
+                collection_name=MEETING_COLLECTION,
+                vectors_config={
+                    "dense": VectorParams(size=1024, distance=Distance.COSINE),
+                    "colbert": VectorParams(
+                        size=1024,
+                        distance=Distance.COSINE,
+                        multivector_config=MultiVectorConfig(
+                            comparator=MultiVectorComparator.MAX_SIM
+                        ),
+                        hnsw_config=HnswConfigDiff(m=0),
+                    ),
+                },
+                sparse_vectors_config={"bm42": SparseVectorParams()},
+            )
+            for field, kind in MEETING_PAYLOAD_INDEXES.items():
+                client.create_payload_index(
+                    collection_name=MEETING_COLLECTION,
+                    field_name=field,
+                    field_schema=PayloadSchemaType.KEYWORD
+                    if kind == "keyword"
+                    else PayloadSchemaType.INTEGER,
+                )
+    except Exception as exc:
+        print(f"  [FAIL] Could not bootstrap {MEETING_COLLECTION}: {exc}")
+        return 1
+
+    return await cmd_meeting_verify(
+        argparse.Namespace(expected_points=getattr(args, "expected_points", None))
+    )
 
 
 def _inspect_sync_dir(

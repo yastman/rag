@@ -127,6 +127,14 @@ class IngestionResult:
     error_details: list[str] = field(default_factory=list)
 
 
+@dataclass
+class MeetingIngestionResult(IngestionResult):
+    """Result of indexing one isolated meeting artifact."""
+
+    points_upserted: int = 0
+    exact_points: int = 0
+
+
 def _make_docling(config: UnifiedConfig) -> NativeDoclingAdapter:
     """Construct the configured Docling backend (native only)."""
     from src.ingestion.docling_native import NativeDoclingAdapter
@@ -237,6 +245,56 @@ def _ingest_directory(
         result.skipped,
         result.errors,
     )
+    return result
+
+
+def ingest_meeting_artifact(
+    artifact: Path,
+    config: UnifiedConfig,
+    writer: QdrantHybridWriter,
+    docling: NativeDoclingAdapter,
+) -> MeetingIngestionResult:
+    """Index exactly one Markdown meeting artifact into its isolated collection."""
+    if not artifact.is_file() or artifact.suffix.lower() != ".md":
+        raise ValueError("MEETING_ARTIFACT_PATH must name an existing Markdown file")
+    artifact = artifact.resolve()
+
+    content = artifact.read_bytes()
+    source_path = str(artifact)
+    source_id = hashlib.sha256(source_path.encode()).hexdigest()[:16]
+    result = MeetingIngestionResult()
+    try:
+        docling_chunks = docling.chunk_file_sync(
+            artifact, contextualize=True, preserve_original=True
+        )
+        chunks = docling.to_ingestion_chunks(docling_chunks, source=source_path, source_type="md")
+        if not chunks:
+            raise ValueError("Meeting artifact produced no chunks")
+        stats = writer.upsert_chunks_sync(
+            chunks=chunks,
+            file_id=source_id,
+            source_path=source_path,
+            file_metadata={
+                "file_name": artifact.name,
+                "mime_type": "text/markdown",
+                "content_hash": compute_content_hash_from_bytes(content),
+                "source_id": source_id,
+                "source_path": source_path,
+                "original_text": content.decode("utf-8"),
+                "meeting_artifact": True,
+            },
+            collection_name="meeting_artifacts",
+        )
+        if stats.errors:
+            raise RuntimeError("; ".join(stats.errors))
+        result.processed = 1
+        result.points_upserted = stats.points_upserted
+        result.exact_points = writer.client.count(
+            collection_name="meeting_artifacts", exact=True
+        ).count
+    except Exception as exc:
+        result.errors = 1
+        result.error_details.append(str(exc))
     return result
 
 

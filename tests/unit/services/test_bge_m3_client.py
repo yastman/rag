@@ -34,6 +34,57 @@ def _instant_retry_backoff(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", _no_async_sleep)
 
 
+_ENCODE_METHODS = ("encode_dense", "encode_sparse", "encode_colbert", "encode_hybrid")
+
+
+def _encode_response(endpoint: str, texts: list[str]) -> MagicMock:
+    """Build an endpoint response whose values identify each input."""
+    ids = [int(text) for text in texts]
+    data: dict[str, object] = {
+        "processing_time": 1.0,
+        "partial_failures": [{"index": min(1, len(texts) - 1), "error": "invalid input"}],
+    }
+    if endpoint == "encode_dense":
+        data["dense_vecs"] = [[float(index)] for index in ids]
+    elif endpoint == "encode_sparse":
+        data["lexical_weights"] = [{"indices": [index], "values": [float(index)]} for index in ids]
+    elif endpoint == "encode_colbert":
+        data["colbert_vecs"] = [[[float(index)]] for index in ids]
+    else:
+        data["dense_vecs"] = [[float(index)] for index in ids]
+        data["lexical_weights"] = [{"indices": [index], "values": [float(index)]} for index in ids]
+        data["colbert_vecs"] = [[[float(index)]] for index in ids]
+    response = MagicMock()
+    response.raise_for_status = MagicMock()
+    response.json.return_value = data
+    return response
+
+
+def _assert_batched_result(
+    result, endpoint: str, texts: list[str], request_texts: list[list[str]]
+) -> None:
+    """Assert results and metadata retain original batch coordinates."""
+    ids = [float(text) for text in texts]
+    if endpoint == "encode_dense":
+        assert result.vectors == [[index] for index in ids]
+    elif endpoint == "encode_sparse":
+        assert result.weights == [{"indices": [int(index)], "values": [index]} for index in ids]
+    elif endpoint == "encode_colbert":
+        assert result.colbert_vecs == [[[index]] for index in ids]
+    else:
+        assert result.dense_vecs == [[index] for index in ids]
+        assert result.lexical_weights == [
+            {"indices": [int(index)], "values": [index]} for index in ids
+        ]
+        assert result.colbert_vecs == ([[[index]] for index in ids] if texts else None)
+    assert result.processing_time == (float(len(request_texts)) if texts else None)
+    assert [failure["index"] for failure in result.partial_failures] == [
+        offset + min(1, len(batch) - 1)
+        for offset, batch in zip(range(0, len(texts), 32), request_texts, strict=True)
+        if batch
+    ]
+
+
 @pytest.fixture
 def client():
     from src.services.bge_m3_client import BGEM3Client
@@ -275,29 +326,30 @@ class TestBGEM3Client:
         assert len(result.dense_vecs) == 1
         assert len(result.lexical_weights) == 1
 
-    async def test_encode_dense_batching(self, client):
-        """batch_size is passed as server hint in a single request."""
-        from src.services.bge_m3_client import BGEM3Client
+    @pytest.mark.parametrize("endpoint", _ENCODE_METHODS)
+    @pytest.mark.parametrize("count", (0, 7, 32, 64, 69))
+    async def test_encode_methods_batch_requests_and_preserve_metadata(
+        self, client, endpoint, count
+    ):
+        """Every async encode endpoint sends ordered requests of at most 32 texts."""
+        texts = [str(index) for index in range(count)]
+        request_texts: list[list[str]] = []
 
-        small_client = BGEM3Client(base_url="http://localhost:8000", batch_size=2)
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {"dense_vecs": [[0.1] * 1024] * 5}
+        async def post(_url, *, json):
+            request_texts.append(json["texts"])
+            return _encode_response(endpoint, json["texts"])
 
         mock_http = AsyncMock()
-        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.post = AsyncMock(side_effect=post)
         mock_http.is_closed = False
-        small_client._client = mock_http
+        client._client = mock_http
 
-        result = await small_client.encode_dense(["a", "b", "c", "d", "e"])
+        result = await getattr(client, endpoint)(texts)
 
-        assert len(result.vectors) == 5
-        mock_http.post.assert_called_once()
-        call_json = mock_http.post.call_args[1]["json"]
-        assert call_json["texts"] == ["a", "b", "c", "d", "e"]
-        assert call_json["batch_size"] == 2
+        expected_sizes = [min(32, count - offset) for offset in range(0, count, 32)]
+        assert [len(batch) for batch in request_texts] == expected_sizes
+        assert [text for batch in request_texts for text in batch] == texts
+        _assert_batched_result(result, endpoint, texts, request_texts)
 
 
 class TestBGEM3SyncClient:
@@ -330,6 +382,29 @@ class TestBGEM3SyncClient:
 
         assert len(result.weights) == 1
         assert "/encode/sparse" in sync_client._client.post.call_args[0][0]
+
+    @pytest.mark.parametrize("endpoint", _ENCODE_METHODS)
+    @pytest.mark.parametrize("count", (0, 7, 32, 64, 69))
+    def test_encode_methods_batch_requests_and_preserve_metadata(
+        self, sync_client, endpoint, count
+    ):
+        """Every sync encode endpoint sends ordered requests of at most 32 texts."""
+        texts = [str(index) for index in range(count)]
+        request_texts: list[list[str]] = []
+
+        def post(_url, *, json):
+            request_texts.append(json["texts"])
+            return _encode_response(endpoint, json["texts"])
+
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(side_effect=post)
+
+        result = getattr(sync_client, endpoint)(texts)
+
+        expected_sizes = [min(32, count - offset) for offset in range(0, count, 32)]
+        assert [len(batch) for batch in request_texts] == expected_sizes
+        assert [text for batch in request_texts for text in batch] == texts
+        _assert_batched_result(result, endpoint, texts, request_texts)
 
     def test_encode_dense_empty(self, sync_client):
         result = sync_client.encode_dense([])
@@ -937,6 +1012,25 @@ class TestBGERetryPolicy:
 
         assert len(result.vectors) == 1
         assert sync_client._client.post.call_count == 3  # 2 retries then success
+
+    def test_sync_multibatch_retry_restarts_without_duplicate_results(self, sync_client):
+        """A retry repeats the logical operation, not a partially accumulated result."""
+        texts = [str(index) for index in range(64)]
+        request_texts: list[list[str]] = []
+
+        def post(_url, *, json):
+            request_texts.append(json["texts"])
+            if len(request_texts) == 2:
+                return _failing_resp(503)
+            return _encode_response("encode_dense", json["texts"])
+
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(side_effect=post)
+
+        result = sync_client.encode_dense(texts)
+
+        assert result.vectors == [[float(index)] for index in range(64)]
+        assert request_texts == [texts[:32], texts[32:], texts[:32], texts[32:]]
 
     def test_sync_encode_hybrid_retries_on_429_then_succeeds(self, sync_client):
         ok = MagicMock()

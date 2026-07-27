@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from itertools import batched
 from typing import Any
 
 import httpx
@@ -25,6 +26,31 @@ DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_MAX_LENGTH = 512
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
+
+
+def _request_batches(texts: list[str]) -> list[tuple[int, list[str]]]:
+    """Split one logical encode operation into ordered, sidecar-safe requests."""
+    return [
+        (offset * DEFAULT_BATCH_SIZE, list(batch))
+        for offset, batch in enumerate(batched(texts, DEFAULT_BATCH_SIZE))
+    ]
+
+
+def _batch_metadata(
+    results: list[tuple[int, Any]],
+) -> dict[str, float | list[dict[str, Any]] | None]:
+    """Aggregate timing and restore partial-failure indices to input coordinates."""
+    processing_times = [
+        result.processing_time for _, result in results if result.processing_time is not None
+    ]
+    return {
+        "processing_time": sum(processing_times) if processing_times else None,
+        "partial_failures": [
+            {**failure, "index": failure["index"] + offset}
+            for offset, result in results
+            for failure in result.partial_failures
+        ],
+    }
 
 
 def _build_payload(
@@ -190,44 +216,62 @@ class BGEM3Client:
                 self._client = client
             return client
 
+    async def _encode_batches(
+        self, endpoint: str, texts: list[str], parser: Any
+    ) -> list[tuple[int, Any]]:
+        """Post every request batch for one logical encode operation."""
+        client = await self._get_client()
+        results = []
+        for offset, batch in _request_batches(texts):
+            resp = await client.post(
+                f"{self.base_url}{endpoint}",
+                json=_build_payload(batch, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            results.append((offset, parser(resp.json())))
+        return results
+
+    @staticmethod
+    def _hybrid_colbert(results: list[tuple[int, HybridResult]]) -> list[list[list[float]]] | None:
+        """Combine optional ColBERT vectors without changing the legacy absent value."""
+        if all(result.colbert_vecs is None for _, result in results):
+            return None
+        return [vector for _, result in results for vector in result.colbert_vecs or []]
+
     @bge_retry
     async def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors via /encode/dense."""
         if not texts:
             return DenseResult(vectors=[])
-        client = await self._get_client()
-        resp = await client.post(
-            f"{self.base_url}/encode/dense",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        results = await self._encode_batches("/encode/dense", texts, _parse_dense_response)
+        return DenseResult(
+            vectors=[vector for _, result in results for vector in result.vectors],
+            **_batch_metadata(results),
         )
-        resp.raise_for_status()
-        return _parse_dense_response(resp.json())
 
     @bge_retry
     async def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors via /encode/sparse."""
         if not texts:
             return SparseResult(weights=[])
-        client = await self._get_client()
-        resp = await client.post(
-            f"{self.base_url}/encode/sparse",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        results = await self._encode_batches("/encode/sparse", texts, _parse_sparse_response)
+        return SparseResult(
+            weights=[weight for _, result in results for weight in result.weights],
+            **_batch_metadata(results),
         )
-        resp.raise_for_status()
-        return _parse_sparse_response(resp.json())
 
     @bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
-        """Encode texts to dense + sparse (+ optional ColBERT) via /encode/hybrid (single call)."""
+        """Encode texts to dense + sparse (+ optional ColBERT) via /encode/hybrid."""
         if not texts:
             return HybridResult(dense_vecs=[], lexical_weights=[])
-        client = await self._get_client()
-        resp = await client.post(
-            f"{self.base_url}/encode/hybrid",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        results = await self._encode_batches("/encode/hybrid", texts, _parse_hybrid_response)
+        return HybridResult(
+            dense_vecs=[vector for _, result in results for vector in result.dense_vecs],
+            lexical_weights=[weight for _, result in results for weight in result.lexical_weights],
+            colbert_vecs=self._hybrid_colbert(results),
+            **_batch_metadata(results),
         )
-        resp.raise_for_status()
-        return _parse_hybrid_response(resp.json())
 
     @bge_retry
     async def rerank(self, query: str, documents: list[str], top_k: int = 5) -> RerankResult:
@@ -257,13 +301,11 @@ class BGEM3Client:
         """Encode texts to ColBERT multivectors via /encode/colbert."""
         if not texts:
             return ColbertResult(colbert_vecs=[])
-        client = await self._get_client()
-        resp = await client.post(
-            f"{self.base_url}/encode/colbert",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        results = await self._encode_batches("/encode/colbert", texts, _parse_colbert_response)
+        return ColbertResult(
+            colbert_vecs=[vector for _, result in results for vector in result.colbert_vecs],
+            **_batch_metadata(results),
         )
-        resp.raise_for_status()
-        return _parse_colbert_response(resp.json())
 
     async def aclose(self) -> None:
         """Close the underlying httpx client.
@@ -296,57 +338,72 @@ class BGEM3SyncClient:
         self.batch_size = batch_size
         self._client = httpx.Client(timeout=timeout)
 
+    def _encode_batches(
+        self, endpoint: str, texts: list[str], parser: Any
+    ) -> list[tuple[int, Any]]:
+        """Post every request batch for one logical encode operation."""
+        results = []
+        for offset, batch in _request_batches(texts):
+            resp = self._client.post(
+                f"{self.base_url}{endpoint}",
+                json=_build_payload(batch, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            results.append((offset, parser(resp.json())))
+        return results
+
+    @staticmethod
+    def _hybrid_colbert(results: list[tuple[int, HybridResult]]) -> list[list[list[float]]] | None:
+        """Combine optional ColBERT vectors without changing the legacy absent value."""
+        if all(result.colbert_vecs is None for _, result in results):
+            return None
+        return [vector for _, result in results for vector in result.colbert_vecs or []]
+
     @bge_retry
     def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors (sync)."""
         if not texts:
             return DenseResult(vectors=[])
-        resp = self._client.post(
-            f"{self.base_url}/encode/dense",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        results = self._encode_batches("/encode/dense", texts, _parse_dense_response)
+        return DenseResult(
+            vectors=[vector for _, result in results for vector in result.vectors],
+            **_batch_metadata(results),
         )
-        resp.raise_for_status()
-        return _parse_dense_response(resp.json())
 
     @bge_retry
     def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors (sync)."""
         if not texts:
             return SparseResult(weights=[])
-        resp = self._client.post(
-            f"{self.base_url}/encode/sparse",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        results = self._encode_batches("/encode/sparse", texts, _parse_sparse_response)
+        return SparseResult(
+            weights=[weight for _, result in results for weight in result.weights],
+            **_batch_metadata(results),
         )
-        resp.raise_for_status()
-        return _parse_sparse_response(resp.json())
 
     @bge_retry
     def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors (sync)."""
         if not texts:
             return ColbertResult(colbert_vecs=[])
-        resp = self._client.post(
-            f"{self.base_url}/encode/colbert",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        results = self._encode_batches("/encode/colbert", texts, _parse_colbert_response)
+        return ColbertResult(
+            colbert_vecs=[vector for _, result in results for vector in result.colbert_vecs],
+            **_batch_metadata(results),
         )
-        resp.raise_for_status()
-        return _parse_colbert_response(resp.json())
 
     @bge_retry
     def encode_hybrid(self, texts: list[str]) -> HybridResult:
-        """Encode texts to dense + sparse + colbert in a single /encode/hybrid call.
-
-        This is 3x more efficient than calling encode_dense + encode_sparse +
-        encode_colbert separately, as the BGE-M3 model runs one forward pass.
-        """
+        """Encode texts to dense + sparse + ColBERT via /encode/hybrid."""
         if not texts:
             return HybridResult(dense_vecs=[], lexical_weights=[])
-        resp = self._client.post(
-            f"{self.base_url}/encode/hybrid",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        results = self._encode_batches("/encode/hybrid", texts, _parse_hybrid_response)
+        return HybridResult(
+            dense_vecs=[vector for _, result in results for vector in result.dense_vecs],
+            lexical_weights=[weight for _, result in results for weight in result.lexical_weights],
+            colbert_vecs=self._hybrid_colbert(results),
+            **_batch_metadata(results),
         )
-        resp.raise_for_status()
-        return _parse_hybrid_response(resp.json())
 
     def close(self) -> None:
         """Close the underlying httpx client."""

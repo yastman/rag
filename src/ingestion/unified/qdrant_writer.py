@@ -230,11 +230,19 @@ class QdrantHybridWriter:
         # Clean None values
         metadata = {k: v for k, v in metadata.items() if v is not None}
 
-        return {
+        payload = {
             "page_content": chunk.text,
             "metadata": metadata,
             "file_id": file_id,  # Flat for fast delete
         }
+        if file_metadata.get("meeting_artifact"):
+            payload.update(
+                source_id=file_metadata["source_id"],
+                source_path=source_path,
+                heading=(extra.get("headings") or [""])[-1],
+                chunk_index=order,
+            )
+        return payload
 
     @staticmethod
     def _point_to_jsonable(point: PointStruct) -> dict[str, Any]:
@@ -413,8 +421,14 @@ class QdrantHybridWriter:
             return stats
 
         try:
-            # Step 1: Extract texts
-            texts = [chunk.text for chunk in chunks]
+            # Persist original chunk text but embed contextual text when provided.
+            texts = [
+                embedding_text
+                if isinstance((embedding_text := getattr(chunk, "embedding_text", None)), str)
+                and embedding_text
+                else chunk.text
+                for chunk in chunks
+            ]
             for text in texts:
                 if error := self._text_exceeds_single_point_limit(text, source_path):
                     raise ValueError(error)

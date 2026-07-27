@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -14,6 +15,10 @@ from src.ingestion.unified.commands import (
     cmd_backfill_colbert,
     cmd_bootstrap,
     cmd_coverage_check,
+    cmd_meeting_bootstrap,
+    cmd_meeting_ingest,
+    cmd_meeting_preflight,
+    cmd_meeting_verify,
     cmd_preflight,
     cmd_run,
     cmd_schema_check,
@@ -57,6 +62,26 @@ def main() -> int:
         action="store_true",
         help="Fail if existing/new collection schema misses 'colbert' vector",
     )
+
+    meeting_preflight_p = subparsers.add_parser(
+        "meeting-preflight", help="Validate a selected meeting artifact and local sidecars"
+    )
+    meeting_preflight_p.add_argument("--artifact", type=Path)
+    meeting_ingest_p = subparsers.add_parser(
+        "meeting-ingest", help="Ingest one selected Markdown meeting artifact"
+    )
+    meeting_ingest_p.add_argument("--artifact", type=Path)
+    meeting_bootstrap_p = subparsers.add_parser(
+        "meeting-bootstrap", help="Create or explicitly rebuild meeting_artifacts"
+    )
+    meeting_bootstrap_p.add_argument("--artifact", type=Path)
+    meeting_bootstrap_p.add_argument("--recreate", action="store_true")
+    meeting_bootstrap_p.add_argument("--yes", action="store_true")
+    meeting_bootstrap_p.add_argument("--expected-points", type=int)
+    meeting_verify_p = subparsers.add_parser(
+        "meeting-verify", help="Verify meeting_artifacts schema and exact point count"
+    )
+    meeting_verify_p.add_argument("--expected-points", type=int, required=True)
 
     # schema-check
     schema_check_p = subparsers.add_parser(
@@ -103,6 +128,14 @@ def main() -> int:
             return asyncio.run(cmd_preflight(args))  # type: ignore[no-any-return]
         if args.command == "bootstrap":
             return asyncio.run(cmd_bootstrap(args))  # type: ignore[no-any-return]
+        if args.command == "meeting-preflight":
+            return asyncio.run(cmd_meeting_preflight(args))
+        if args.command == "meeting-ingest":
+            return asyncio.run(cmd_meeting_ingest(args))
+        if args.command == "meeting-bootstrap":
+            return asyncio.run(cmd_meeting_bootstrap(args))
+        if args.command == "meeting-verify":
+            return asyncio.run(cmd_meeting_verify(args))
         if args.command == "schema-check":
             return asyncio.run(cmd_schema_check(args))  # type: ignore[no-any-return]
         if args.command == "coverage-check":

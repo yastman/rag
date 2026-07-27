@@ -1,0 +1,58 @@
+# Standalone local meeting-RAG dependencies. Native Python runs ingestion and the API.
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.3@sha256:0bd98fa7977f1e75694779359ca4e212822e5a71334e28421182f72f209d5286
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - local_rag_qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/6333 && printf 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - local_rag_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  bge-m3:
+    image: "${COMPOSE_PROJECT_NAME:-local-rag}_bge-m3"
+    build:
+      context: ./services/bge-m3-api
+      dockerfile: Dockerfile
+      additional_contexts:
+        bge_m3_onnx_model: "${BGE_M3_ONNX_MODEL_HOST_DIR:?BGE_M3_ONNX_MODEL_HOST_DIR must point to the local ONNX model directory}"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - local_rag_hf_cache:/models/hf
+    environment:
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
+      MKL_NUM_THREADS: ${MKL_NUM_THREADS:-4}
+      HF_HOME: /models/hf
+      TRANSFORMERS_CACHE: /models/hf
+      MODEL_CACHE_DIR: /models/hf
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 420s
+
+volumes:
+  local_rag_qdrant_data:
+  local_rag_redis_data:
+  local_rag_hf_cache:

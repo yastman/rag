@@ -128,6 +128,7 @@ class NativeDoclingAdapter:
         self,
         file_path: Path,
         contextualize: bool = True,
+        preserve_original: bool = False,
     ) -> list[DoclingChunk]:
         """Convert a document natively and chunk it via ``HybridChunker``.
 
@@ -158,12 +159,14 @@ class NativeDoclingAdapter:
 
         chunks: list[DoclingChunk] = []
         for raw_chunk in raw_chunks:
-            if contextualize and callable(contextualize_chunk):
-                text = contextualize_chunk(raw_chunk)
-            else:
-                text = getattr(raw_chunk, "text", "")
-            text = (text or "").strip()
-            if not text:
+            original_text = (getattr(raw_chunk, "text", "") or "").strip()
+            embedding_text = (
+                contextualize_chunk(raw_chunk)
+                if contextualize and callable(contextualize_chunk)
+                else original_text
+            )
+            embedding_text = (embedding_text or "").strip()
+            if not original_text or not embedding_text:
                 continue
             meta = getattr(raw_chunk, "meta", None)
             headings = list(getattr(meta, "headings", None) or []) if meta is not None else []
@@ -182,7 +185,8 @@ class NativeDoclingAdapter:
                     page_range = (min(pages), max(pages))
             chunks.append(
                 DoclingChunk(
-                    text=text,
+                    text=original_text if preserve_original else embedding_text,
+                    embedding_text=embedding_text if preserve_original else None,
                     seq_no=len(chunks),
                     headings=headings,
                     page_range=page_range,

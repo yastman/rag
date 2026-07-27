@@ -32,6 +32,7 @@ class DoclingChunk:
     headings: list[str] = field(default_factory=list)
     page_range: tuple[int, int] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    embedding_text: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +77,7 @@ def to_ingestion_chunks(
             extra_metadata["page_range"] = list(dc.page_range)
 
         if dc.headings:
+            extra_metadata["headings"] = dc.headings
             extra_metadata["section"] = " > ".join(dc.headings)
 
         if dc.metadata:
@@ -83,6 +85,7 @@ def to_ingestion_chunks(
 
         chunk = Chunk(
             text=dc.text,
+            embedding_text=dc.embedding_text,
             chunk_id=i,
             document_name=source,
             article_number=doc_id,

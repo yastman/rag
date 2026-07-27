@@ -17,3 +17,4 @@ class Chunk:
     page_range: tuple[int, int] | None = None  # (start, end) pages
     order: int = 0
     extra_metadata: dict[str, Any] | None = None  # For structured data (CSV, etc.)
+    embedding_text: str | None = None

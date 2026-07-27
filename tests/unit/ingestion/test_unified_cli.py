@@ -825,3 +825,231 @@ class TestMainFlushesIngestionTraces:
             ingestion_main.main()
 
         mock_flush.assert_called_once_with()
+
+
+# ---------------------------------------------------------------------------
+# Meeting-artifact CLI (#04)
+# ---------------------------------------------------------------------------
+
+
+class TestMeetingArtifactCommands:
+    """Contract tests for the isolated meeting collection commands."""
+
+    def test_main_dispatches_meeting_bootstrap(self, monkeypatch):
+        from src.ingestion.unified import main as ingestion_main
+
+        monkeypatch.setattr("sys.argv", ["rag-ingest", "meeting-bootstrap"])
+        with (
+            patch.object(ingestion_main, "load_dotenv"),
+            patch.object(ingestion_main, "setup_logging"),
+            patch.object(
+                ingestion_main, "cmd_meeting_bootstrap", new_callable=AsyncMock, return_value=0
+            ) as command,
+        ):
+            assert ingestion_main.main() == 0
+        command.assert_awaited_once()
+
+    async def test_meeting_preflight_fails_when_selected_markdown_is_missing(self, tmp_path):
+        config = _make_config()
+        artifact = tmp_path / "missing.md"
+        args = argparse.Namespace(artifact=artifact)
+
+        from src.ingestion.unified.commands import cmd_meeting_preflight
+
+        with patch("src.ingestion.unified.config.UnifiedConfig", return_value=config):
+            assert await cmd_meeting_preflight(args) == 1
+
+    async def test_meeting_bootstrap_requires_both_recreate_and_yes_to_delete(self):
+        client = MagicMock()
+        client.get_collections.return_value = MagicMock()
+        client.get_collection.return_value = MagicMock()
+        args = argparse.Namespace(recreate=True, yes=False, expected_points=None)
+
+        from src.ingestion.unified.commands import cmd_meeting_bootstrap
+
+        with (
+            patch("qdrant_client.QdrantClient", return_value=client),
+            patch(
+                "src.ingestion.unified.commands.cmd_meeting_preflight",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+        ):
+            assert await cmd_meeting_bootstrap(args) == 1
+        client.delete_collection.assert_not_called()
+
+    async def test_meeting_bootstrap_creates_exact_isolated_schema(self):
+        client = MagicMock()
+        client.get_collections.return_value = MagicMock()
+        info = _meeting_schema_info()
+        client.get_collection.side_effect = [Exception("missing"), info]
+        client.count.return_value = MagicMock(count=0)
+        args = argparse.Namespace(recreate=False, yes=False, expected_points=0)
+
+        from src.ingestion.unified.commands import cmd_meeting_bootstrap
+
+        with (
+            patch("qdrant_client.QdrantClient", return_value=client),
+            patch(
+                "src.ingestion.unified.commands.cmd_meeting_preflight",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+        ):
+            assert await cmd_meeting_bootstrap(args) == 0
+
+        assert client.create_collection.call_args.kwargs["collection_name"] == "meeting_artifacts"
+        vectors = client.create_collection.call_args.kwargs["vectors_config"]
+        assert set(vectors) == {"dense", "colbert"}
+        assert vectors["dense"].size == 1024
+        assert vectors["colbert"].multivector_config.comparator.value == "max_sim"
+        assert set(client.create_collection.call_args.kwargs["sparse_vectors_config"]) == {"bm42"}
+        assert vectors["dense"].distance.value == "Cosine"
+        assert vectors["colbert"].size == 1024
+        assert vectors["colbert"].distance.value == "Cosine"
+        assert vectors["colbert"].hnsw_config.m == 0
+        assert {
+            call.kwargs["field_name"]: call.kwargs["field_schema"].value
+            for call in client.create_payload_index.call_args_list
+        } == {
+            "source_id": "keyword",
+            "source_path": "keyword",
+            "heading": "keyword",
+            "chunk_index": "integer",
+        }
+
+    async def test_meeting_verify_requires_exact_point_count(self):
+        client = MagicMock()
+        client.get_collection.return_value = MagicMock()
+        client.count.return_value = MagicMock(count=2)
+        args = argparse.Namespace(expected_points=3)
+
+        from src.ingestion.unified.commands import cmd_meeting_verify
+
+        with patch("qdrant_client.QdrantClient", return_value=client):
+            assert await cmd_meeting_verify(args) == 1
+
+    async def test_meeting_verify_rejects_non_ready_collection(self):
+        client = MagicMock()
+        collection = _meeting_schema_info()
+        collection.status = "red"
+        client.get_collection.return_value = collection
+        client.count.return_value = MagicMock(count=0)
+        args = argparse.Namespace(expected_points=0)
+
+        from src.ingestion.unified.commands import cmd_meeting_verify
+
+        with patch("qdrant_client.QdrantClient", return_value=client):
+            assert await cmd_meeting_verify(args) == 1
+
+
+def test_module_entrypoint_delegates_to_main() -> None:
+    with patch("src.ingestion.unified.main.main", return_value=0) as command:
+        import runpy
+
+        with pytest.raises(SystemExit) as result:
+            runpy.run_module("src.ingestion.unified", run_name="__main__")
+
+    assert result.value.code == 0
+    command.assert_called_once_with()
+
+
+def _meeting_schema_info(
+    *,
+    dense_size: int = 1024,
+    dense_distance: str = "Cosine",
+    colbert_size: int = 1024,
+    colbert_distance: str = "Cosine",
+    comparator: str = "max_sim",
+    hnsw_m: int = 0,
+) -> MagicMock:
+    info = MagicMock()
+    info.status = "green"
+    info.config.params.vectors = {
+        "dense": MagicMock(size=dense_size, distance=MagicMock(value=dense_distance)),
+        "colbert": MagicMock(
+            size=colbert_size,
+            distance=MagicMock(value=colbert_distance),
+            multivector_config=MagicMock(comparator=MagicMock(value=comparator)),
+            hnsw_config=MagicMock(m=hnsw_m),
+        ),
+    }
+    info.config.params.sparse_vectors = {"bm42": MagicMock()}
+    info.payload_schema = {
+        "source_id": {"data_type": "keyword"},
+        "source_path": {"data_type": "keyword"},
+        "heading": {"data_type": "keyword"},
+        "chunk_index": {"data_type": "integer"},
+    }
+    return info
+
+
+class TestMeetingArtifactAcceptanceContracts:
+    async def test_preflight_fails_when_model_artifacts_are_missing(self, tmp_path, monkeypatch):
+        artifact = tmp_path / "meeting.md"
+        artifact.write_text("# meeting", encoding="utf-8")
+        monkeypatch.setenv("BGE_M3_ONNX_MODEL_HOST_DIR", str(tmp_path / "missing-model"))
+
+        from src.ingestion.unified.commands import cmd_meeting_preflight
+
+        assert await cmd_meeting_preflight(argparse.Namespace(artifact=artifact)) == 1
+
+    async def test_preflight_fails_when_https_qdrant_credentials_are_missing(
+        self, tmp_path, monkeypatch
+    ):
+        artifact = tmp_path / "meeting.md"
+        artifact.write_text("# meeting", encoding="utf-8")
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        for name in ("model.int8.onnx", "model.int8.onnx.data"):
+            (model_dir / name).write_text("", encoding="utf-8")
+        monkeypatch.setenv("BGE_M3_ONNX_MODEL_HOST_DIR", str(model_dir))
+        config = _make_config(qdrant_url="https://qdrant.example", qdrant_api_key=None)
+
+        from src.ingestion.unified.commands import cmd_meeting_preflight
+
+        with patch("src.ingestion.unified.config.UnifiedConfig", return_value=config):
+            assert await cmd_meeting_preflight(argparse.Namespace(artifact=artifact)) == 1
+
+    async def test_preflight_fails_when_a_sidecar_is_not_ready(self, tmp_path, monkeypatch):
+        artifact = tmp_path / "meeting.md"
+        artifact.write_text("# meeting", encoding="utf-8")
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        for name in ("model.int8.onnx", "model.int8.onnx.data"):
+            (model_dir / name).write_text("", encoding="utf-8")
+        monkeypatch.setenv("BGE_M3_ONNX_MODEL_HOST_DIR", str(model_dir))
+        client = AsyncMock()
+        client.get.return_value = _fail_response(503)
+        client.post.return_value = _ok_response()
+        context = AsyncMock()
+        context.__aenter__.return_value = client
+        context.__aexit__.return_value = False
+
+        from src.ingestion.unified.commands import cmd_meeting_preflight
+
+        with patch("httpx.AsyncClient", return_value=context):
+            assert await cmd_meeting_preflight(argparse.Namespace(artifact=artifact)) == 1
+
+    async def test_verify_rejects_any_schema_dimension_distance_or_rerank_drift(self):
+        client = MagicMock()
+        client.get_collection.return_value = _meeting_schema_info(
+            dense_size=768,
+            dense_distance="Dot",
+            colbert_size=768,
+            colbert_distance="Dot",
+            comparator="avg_sim",
+            hnsw_m=16,
+        )
+        client.count.return_value = MagicMock(count=0)
+
+        from src.ingestion.unified.commands import cmd_meeting_verify
+
+        with patch("qdrant_client.QdrantClient", return_value=client):
+            assert await cmd_meeting_verify(argparse.Namespace(expected_points=0)) == 1
+
+    def test_console_script_metadata_targets_the_shared_main(self):
+        import tomllib
+
+        metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+        assert metadata["project"]["scripts"]["rag-ingest"] == "src.ingestion.unified.main:main"
