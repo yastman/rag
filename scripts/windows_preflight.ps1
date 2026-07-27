@@ -287,8 +287,6 @@ function Invoke-Full {
             return
         }
 
-        Push-Location $root
-        $pushedLocation = $true
         $env:PYTHONDONTWRITEBYTECODE = "1"
         $env:RUN_BENCHMARK_TESTS = "1"
         Write-Host "`nPhase 1/2: parallel-safe suites..." -ForegroundColor Cyan

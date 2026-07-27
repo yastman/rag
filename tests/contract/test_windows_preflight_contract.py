@@ -83,6 +83,14 @@ def test_full_mode_restores_caller_environment_and_checks_required_plugins() -> 
     assert "Set-Item -Path Env:\\RUN_BENCHMARK_TESTS -Value $savedBenchmarkSetting" in source
 
 
+def test_full_mode_restores_caller_directory() -> None:
+    """Full mode must balance Push-Location so caller directory is restored."""
+    source = _source()
+    assert "$pushedLocation = $false" in source
+    assert "Push-Location $root" in source
+    assert "if ($pushedLocation) { Pop-Location }" in source
+
+
 def test_preflight_has_non_executing_help_mode() -> None:
     source = _source()
     assert "[switch]$Help" in source
