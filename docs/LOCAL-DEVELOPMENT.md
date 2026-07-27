@@ -76,14 +76,12 @@ uv run python -m telegram_bot.main
 ## Validate before you push
 
 > The `make` commands below remain Linux/POSIX only. On Windows, run the native
-> full-suite equivalent without Make or `uv` on `PATH`:
+> full-suite equivalent; Full locates `uv` and runs `uv sync --all-extras
+> --all-groups` before checking the native venv and running tests:
 >
 > ```powershell
 > pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Full
 > ```
->
-> It requires `.venv\Scripts\python.exe` with pytest installed; use `uv sync
-> --all-extras --all-groups` when creating or refreshing that venv.
 
 | Command | What it checks |
 |---|---|

@@ -28,7 +28,7 @@ $script:failed = $false
 
 if ($Help) {
     Write-Host "Usage: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode <Static|Tests|Live|Full>"
-    Write-Host "Full runs the native equivalent of make test-full using .venv\Scripts\python.exe."
+    Write-Host "Full runs uv sync --all-extras --all-groups before native venv checks."
     exit 0
 }
 
@@ -249,8 +249,23 @@ function Invoke-Full {
     $pushedLocation = $false
 
     try {
+        $uv = Get-Command uv -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -eq $uv) {
+            Write-Fail "uv is required for Full mode; install it from https://docs.astral.sh/uv/"
+            return
+        }
+
+        Push-Location $root
+        $pushedLocation = $true
+        & $uv.Path sync --all-extras --all-groups
+        $syncExit = $LASTEXITCODE
+        if ($syncExit -ne 0) {
+            Write-Fail "uv sync failed (exit=$syncExit); resolve the error above and retry Full mode"
+            return
+        }
+
         if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-            Write-Fail "native venv Python missing at $python; run 'uv sync --all-extras --all-groups' first"
+            Write-Fail "native venv Python missing at $python after uv sync"
             return
         }
 

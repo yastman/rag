@@ -59,6 +59,16 @@ def test_full_mode_uses_native_venv_for_make_test_full_equivalent() -> None:
         assert f'"{arg}"' in source
 
 
+def test_full_mode_syncs_all_dependencies_before_native_venv_preflight() -> None:
+    source = _source()
+    sync = "& $uv.Path sync --all-extras --all-groups"
+    assert "Get-Command uv -CommandType Application -ErrorAction SilentlyContinue" in source
+    assert sync in source
+    assert "uv is required for Full mode; install it from https://docs.astral.sh/uv/" in source
+    assert "uv sync failed (exit=$syncExit); resolve the error above and retry Full mode" in source
+    assert source.index(sync) < source.index("& $python -m pytest --version")
+
+
 def test_full_mode_restores_caller_environment_and_checks_required_plugins() -> None:
     source = _source()
     assert "$hadPycacheSetting = Test-Path Env:\\PYTHONDONTWRITEBYTECODE" in source
@@ -69,10 +79,11 @@ def test_full_mode_restores_caller_environment_and_checks_required_plugins() -> 
     assert "-m pytest -p pytest_timeout --version" in source
     assert "pytest-xdist is unavailable" in source
     assert "pytest-timeout is unavailable" in source
-    assert source.count("uv sync --all-extras --all-groups") >= 3
     assert "Set-Item -Path Env:\\PYTHONDONTWRITEBYTECODE -Value $savedPycacheSetting" in source
     assert "Set-Item -Path Env:\\RUN_BENCHMARK_TESTS -Value $savedBenchmarkSetting" in source
 
 
 def test_preflight_has_non_executing_help_mode() -> None:
-    assert "[switch]$Help" in _source()
+    source = _source()
+    assert "[switch]$Help" in source
+    assert "uv sync --all-extras --all-groups before native venv checks." in source
