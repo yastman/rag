@@ -9,19 +9,28 @@
     Live:    read-only health probes for Docker, core compose services, and bot
              import/startup (no polling, no Telegram/CRM writes, no secret access).
 .PARAMETER Mode
-    Static | Tests | Live  (default: Static)
+    Static | Tests | Live | Full  (default: Static)
+#.PARAMETER Help
+#    Print available modes without running checks.
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Static
 #>
 
 param(
-    [ValidateSet('Static', 'Tests', 'Live')]
+    [ValidateSet('Static', 'Tests', 'Live', 'Full')]
     [string]$Mode = 'Static',
-    [string]$OperatorEnvFile
+    [string]$OperatorEnvFile,
+    [switch]$Help
 )
 
 $ErrorActionPreference = 'Stop'
 $script:failed = $false
+
+if ($Help) {
+    Write-Host "Usage: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode <Static|Tests|Live|Full>"
+    Write-Host "Full runs uv sync --all-extras --all-groups before native venv checks."
+    exit 0
+}
 
 function Write-Pass  { Write-Host "  PASS  $args" -ForegroundColor Green }
 function Write-Fail  { Write-Host "  FAIL  $args" -ForegroundColor Red; $script:failed = $true }
@@ -228,6 +237,85 @@ function Invoke-Tests {
     else { Write-Fail "focused tests failed (exit=$ec)" }
 }
 
+# ── Full test gate ───────────────────────────────────────────────────────────
+
+function Invoke-Full {
+    $root = Get-Root
+    $python = Join-Path $root ".venv\Scripts\python.exe"
+    $hadPycacheSetting = Test-Path Env:\PYTHONDONTWRITEBYTECODE
+    $savedPycacheSetting = $env:PYTHONDONTWRITEBYTECODE
+    $hadBenchmarkSetting = Test-Path Env:\RUN_BENCHMARK_TESTS
+    $savedBenchmarkSetting = $env:RUN_BENCHMARK_TESTS
+    $pushedLocation = $false
+
+    try {
+        $uv = Get-Command uv -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -eq $uv) {
+            Write-Fail "uv is required for Full mode; install it from https://docs.astral.sh/uv/"
+            return
+        }
+
+        Push-Location $root
+        $pushedLocation = $true
+        & $uv.Path sync --all-extras --all-groups
+        $syncExit = $LASTEXITCODE
+        if ($syncExit -ne 0) {
+            Write-Fail "uv sync failed (exit=$syncExit); resolve the error above and retry Full mode"
+            return
+        }
+
+        if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            Write-Fail "native venv Python missing at $python after uv sync"
+            return
+        }
+
+        & $python -m pytest --version
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "pytest is unavailable in $python; run 'uv sync --all-extras --all-groups' first"
+            return
+        }
+
+        & $python -m pytest -p xdist --version
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "pytest-xdist is unavailable in $python; run 'uv sync --all-extras --all-groups' first"
+            return
+        }
+
+        & $python -m pytest -p pytest_timeout --version
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "pytest-timeout is unavailable in $python; run 'uv sync --all-extras --all-groups' first"
+            return
+        }
+
+        $env:PYTHONDONTWRITEBYTECODE = "1"
+        $env:RUN_BENCHMARK_TESTS = "1"
+        Write-Host "`nPhase 1/2: parallel-safe suites..." -ForegroundColor Cyan
+        & $python -m pytest "tests/chaos/" "tests/contract/" "tests/unit/" "tests/benchmark/" "-n" "2" "--dist=worksteal" "--timeout=30"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "Phase 1 failed (exit=$LASTEXITCODE)"
+            return
+        }
+
+        Remove-Item Env:\RUN_BENCHMARK_TESTS -ErrorAction SilentlyContinue
+        Write-Host "`nPhase 2/2: stateful/live suites sequentially..." -ForegroundColor Cyan
+        & $python -m pytest "tests/e2e/" "tests/integration/" "tests/load/" "tests/smoke/" "--timeout=30"
+        if ($LASTEXITCODE -eq 0) { Write-Pass "full test suite complete" }
+        else { Write-Fail "Phase 2 failed (exit=$LASTEXITCODE)" }
+    } finally {
+        if ($hadPycacheSetting) {
+            Set-Item -Path Env:\PYTHONDONTWRITEBYTECODE -Value $savedPycacheSetting
+        } else {
+            Remove-Item Env:\PYTHONDONTWRITEBYTECODE -ErrorAction SilentlyContinue
+        }
+        if ($hadBenchmarkSetting) {
+            Set-Item -Path Env:\RUN_BENCHMARK_TESTS -Value $savedBenchmarkSetting
+        } else {
+            Remove-Item Env:\RUN_BENCHMARK_TESTS -ErrorAction SilentlyContinue
+        }
+        if ($pushedLocation) { Pop-Location }
+    }
+}
+
 # ── Live ──────────────────────────────────────────────────────────────────────
 
 function Invoke-Live {
@@ -331,6 +419,7 @@ try {
         'Static' { Invoke-Static }
         'Tests'  { Invoke-Tests }
         'Live'   { Invoke-Live }
+        'Full'   { Invoke-Full }
     }
 } catch {
     Write-Host "  UNEXPECTED ERROR: $_" -ForegroundColor Red
