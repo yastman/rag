@@ -242,19 +242,38 @@ function Invoke-Tests {
 function Invoke-Full {
     $root = Get-Root
     $python = Join-Path $root ".venv\Scripts\python.exe"
-    if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-        Write-Fail "native venv Python missing at $python; run 'uv sync --all-extras --all-groups' first"
-        return
-    }
+    $hadPycacheSetting = Test-Path Env:\PYTHONDONTWRITEBYTECODE
+    $savedPycacheSetting = $env:PYTHONDONTWRITEBYTECODE
+    $hadBenchmarkSetting = Test-Path Env:\RUN_BENCHMARK_TESTS
+    $savedBenchmarkSetting = $env:RUN_BENCHMARK_TESTS
+    $pushedLocation = $false
 
-    & $python -m pytest --version
-    if ($LASTEXITCODE -ne 0) {
-        Write-Fail "pytest is unavailable in $python; run 'uv sync --all-extras --all-groups' first"
-        return
-    }
-
-    Push-Location $root
     try {
+        if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            Write-Fail "native venv Python missing at $python; run 'uv sync --all-extras --all-groups' first"
+            return
+        }
+
+        & $python -m pytest --version
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "pytest is unavailable in $python; run 'uv sync --all-extras --all-groups' first"
+            return
+        }
+
+        & $python -m pytest -p xdist --version
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "pytest-xdist is unavailable in $python; run 'uv sync --all-extras --all-groups' first"
+            return
+        }
+
+        & $python -m pytest -p pytest_timeout --version
+        if ($LASTEXITCODE -ne 0) {
+            Write-Fail "pytest-timeout is unavailable in $python; run 'uv sync --all-extras --all-groups' first"
+            return
+        }
+
+        Push-Location $root
+        $pushedLocation = $true
         $env:PYTHONDONTWRITEBYTECODE = "1"
         $env:RUN_BENCHMARK_TESTS = "1"
         Write-Host "`nPhase 1/2: parallel-safe suites..." -ForegroundColor Cyan
@@ -270,8 +289,17 @@ function Invoke-Full {
         if ($LASTEXITCODE -eq 0) { Write-Pass "full test suite complete" }
         else { Write-Fail "Phase 2 failed (exit=$LASTEXITCODE)" }
     } finally {
-        Remove-Item Env:\RUN_BENCHMARK_TESTS -ErrorAction SilentlyContinue
-        Pop-Location
+        if ($hadPycacheSetting) {
+            Set-Item -Path Env:\PYTHONDONTWRITEBYTECODE -Value $savedPycacheSetting
+        } else {
+            Remove-Item Env:\PYTHONDONTWRITEBYTECODE -ErrorAction SilentlyContinue
+        }
+        if ($hadBenchmarkSetting) {
+            Set-Item -Path Env:\RUN_BENCHMARK_TESTS -Value $savedBenchmarkSetting
+        } else {
+            Remove-Item Env:\RUN_BENCHMARK_TESTS -ErrorAction SilentlyContinue
+        }
+        if ($pushedLocation) { Pop-Location }
     }
 }
 
