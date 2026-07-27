@@ -27,6 +27,9 @@ MODEL_FILES = [
 ]
 
 
+BATCH_SIZE: int = 32
+
+
 class EncodeRequest(BaseModel):
     texts: Annotated[list[str], Field(min_length=1, max_length=64)]
 
@@ -94,7 +97,7 @@ def encode_hybrid(request: EncodeRequest) -> HybridResponse:
             raise ValueError("BGE-M3 accepts 1..64 texts per request")
         encoded = model().encode(
             request.texts,
-            batch_size=len(request.texts),
+            batch_size=BATCH_SIZE,
             max_length=8192,
             return_dense=True,
             return_sparse=True,

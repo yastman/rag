@@ -207,13 +207,18 @@ class BgeM3ProviderTests(unittest.TestCase):
         provider = self.load_provider()
 
         class FakeModel:
-            def encode(self, texts: list[str], **_: object) -> dict[str, object]:
+            def __init__(self) -> None:
+                self.last_batch_size: int | None = None
+
+            def encode(self, texts: list[str], **kwargs: object) -> dict[str, object]:
+                self.last_batch_size = kwargs.get("batch_size")
                 return {
                     "dense_vecs": [[float(text)] * 1024 for text in texts],
                     "lexical_weights": [{text: 0.25} for text in texts],
                 }
 
-        with patch.object(provider, "model", return_value=FakeModel()):
+        fake_model = FakeModel()
+        with patch.object(provider, "model", return_value=fake_model):
             for count in (1, 32, 64):
                 response = provider.encode_hybrid(
                     SimpleNamespace(texts=[str(index) for index in range(count)])
@@ -236,6 +241,9 @@ class BgeM3ProviderTests(unittest.TestCase):
                     self.assertTrue(
                         all(math.isfinite(value) and value >= 0 for value in sparse.values)
                     )
+
+            # Last model.encode call (for 64 items) must pass batch_size=32
+            self.assertEqual(fake_model.last_batch_size, 32)
 
             for count in (0, 65):
                 with self.assertRaises(provider.HTTPException) as raised:
