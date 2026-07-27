@@ -95,11 +95,14 @@ Agents may delegate within live depth policy; reuse an addressable agent when co
 When exposed and useful for high-volume or machine-consumed results, prefer compact `outputSchema`
 covering decision/blocker, artifacts, verification, risks, and evidence; use prose when validation
 adds more fragility than value. Use `reviewer` only when risk or uncertainty warrants it. Children
-never push, PR, merge, clean worktrees, mutate CodeIndexer, or commit without Main authorization.
+never push, PR, merge, clean worktrees, or mutate CodeIndexer. A writer may commit only its owned
+files on its assigned card branch when Main authorizes it.
 
-Choose write isolation from the live task schema and persistent-worktree needs; use one worktree per
-concurrent writer, not per card. Agent completion is not integration: verify apply state, target
-refs, errors, checks, and retained artifacts; handle them only when automatic integration failed.
+Each mutating card or standalone issue gets its own branch and linked worktree; an issue already
+represented by a card does not get a second one. Commit useful checkpoints, push the accepted card,
+and never start another task in a dirty worktree. Main merges accepted cards into the phase branch,
+delivers the tested phase to `dev`, then removes only clean worktrees and deletes the delivered card
+and phase branches. Never force-push, reset, clean, or stash unknown work.
 
 ## Solo phase flow
 
@@ -115,19 +118,17 @@ refs, errors, checks, and retained artifacts; handle them only when automatic in
    `origin/dev` only when absent. The canonical checkout may contain user WIP and need not be clean.
    A new phase-worktree must be clean; preserve and inspect a resumed dirty phase-worktree, and never
    reset, clean, stash, remove, or recreate it automatically.
-4. Make one initial capped CodeGraph query for the card's symbols/files/flow/blast radius. Repeat
+4. For each card, resume or create `card/<card-id>-<slug>` and its linked worktree from the current
+   phase head. Never mix cards in one worktree or reuse a dirty one.
+5. Make one initial capped CodeGraph query for the card's symbols/files/flow/blast radius. Repeat
    only for a concrete missing or new symbol, ambiguity, truncation, or reported staleness. Use
    CodeIndexer search only for missing semantic/history context.
-5. Implement the smallest coherent change, run focused tests and `git diff --check`, and have the
-   assigned writer inspect the complete target diff. Fix and repeat until required checks pass.
-6. Main chooses review, PR, and delivery topology from risk, collaboration, and repository policy.
-   After all cards, combine their committed outputs, require a clean tracked state, `git fetch
-   origin`, merge fresh `origin/dev` without rebasing, and record candidate and tested-origin SHAs.
-7. Run `make test-full` once on that candidate. Immediately
-   before integration fetch again; if `origin/dev` moved, repeat merge, commit, SHA recording, and
-   gate. PR is optional; push or merge the exact candidate into `dev` without rewriting history.
-8. After external integration, `git fetch origin` and prove the candidate is an ancestor of
-   `origin/dev`. Only then mark cards and phase DONE and remove clean persistent worktrees.
+6. Implement and test the card, inspect its complete diff, commit all intended changes, push the
+   card branch, and merge it into the phase branch with `--no-ff`. Mark it DONE only after the merge.
+7. After all cards, merge fresh `origin/dev` into the clean phase branch, run `make test-full`, and
+   push the exact tested candidate to `dev` without rewriting history.
+8. Fetch `origin` and prove the candidate is in `origin/dev`; then remove clean worktrees and delete
+   the delivered card and phase branches locally and remotely.
 
 Use CodeIndexer `solutions` as diagnostic evidence. Fix candidate or integration regressions before
 delivery; record reproducible unrelated bugs as deduplicated cards. Main decides whether discovered
