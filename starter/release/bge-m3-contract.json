@@ -59,7 +59,7 @@
       "base_image": "python:3.12.12-slim@sha256:f3fa41d74a768c2fce8016b98c191ae8c1bacd8f1152870a3f9f87d350920b7c",
       "uv_image": "ghcr.io/astral-sh/uv:0.9.26@sha256:9a23023be68b2ed09750ae636228e903a54a05ea56ed03a934d00fe9fbeded4b",
       "dependency_lock": "sidecar/bge-m3/uv.lock",
-      "dependency_lock_sha256": "a25377660fa519290f9033f5e51b22891200c271ce867850261bcc914de4aafe"
+      "dependency_lock_sha256": "374fd0230c37fab93764b36a8789540c3c7ca7f0bea7f31cc72e07b7235b08b5"
     }
   }
 }

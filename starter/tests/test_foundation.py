@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
 import unittest
 from contextlib import redirect_stderr
+from importlib.util import module_from_spec, spec_from_file_location
 from io import StringIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
 from rag.cli import main
 from rag.settings import Command, Settings, SettingsConfigurationError
@@ -158,30 +163,123 @@ class FoundationTests(unittest.TestCase):
             str((ROOT / "sidecar" / "bge-m3").resolve()),
         )
 
-    def test_bge_sidecar_builds_a_hybrid_contract_not_dense_only_tei(self) -> None:
-        compose = (ROOT / "compose.yml").read_text()
-        manifest = json.loads((ROOT / "release" / "bge-m3-contract.json").read_text())
-        self.assertIn("build", manifest["sidecar"])
-        if "build" not in manifest["sidecar"]:
-            return
-        sidecar = ROOT / manifest["sidecar"]["build"]["context"]
-        app = (sidecar / "app.py").read_text()
-        dockerfile = (sidecar / "Dockerfile").read_text()
-        self.assertIn("build:", compose)
-        self.assertNotIn("text-embeddings-inference", compose)
-        self.assertEqual(manifest["embedding"]["contract_version"], 2)
-        self.assertEqual(manifest["embedding"]["dense_dimensions"], 1024)
-        self.assertEqual(manifest["embedding"]["sparse"]["format"], "indices-and-values")
-        self.assertEqual(manifest["sidecar"]["endpoint"], "/encode/hybrid")
-        self.assertRegex(manifest["sidecar"]["build"]["base_image"], r"@sha256:[0-9a-f]{64}$")
-        self.assertIn("BGEM3FlagModel", app)
-        self.assertIn('@app.post("/encode/hybrid",', app)
-        self.assertIn("dense_vecs", app)
-        self.assertIn("lexical_weights", app)
-        self.assertIn("snapshot_download", app)
-        self.assertIn("MODEL_ARTIFACTS", app)
-        self.assertIn("max_length=64", app)
-        self.assertIn(manifest["sidecar"]["build"]["base_image"], dockerfile)
+
+class BgeM3ProviderTests(unittest.TestCase):
+    def load_provider(self) -> ModuleType:
+        fastapi = ModuleType("fastapi")
+
+        class HTTPException(Exception):
+            def __init__(self, status_code: int, detail: str) -> None:
+                super().__init__(detail)
+                self.status_code = status_code
+
+        class FastAPI:
+            def __init__(self, **_: object) -> None:
+                pass
+
+            def get(self, _: str):
+                return lambda function: function
+
+            def post(self, _: str, **__: object):
+                return lambda function: function
+
+        pydantic = ModuleType("pydantic")
+
+        class BaseModel:
+            def __init__(self, **values: object) -> None:
+                self.__dict__.update(values)
+
+        fastapi.FastAPI = FastAPI
+        fastapi.HTTPException = HTTPException
+        pydantic.BaseModel = BaseModel
+        pydantic.Field = lambda **_: None
+        module_name = f"bge_m3_provider_{uuid4().hex}"
+        spec = spec_from_file_location(module_name, ROOT / "sidecar" / "bge-m3" / "app.py")
+        assert spec and spec.loader
+        with patch.dict(sys.modules, {"fastapi": fastapi, "pydantic": pydantic}):
+            module = module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+        self.addCleanup(sys.modules.pop, module_name, None)
+        return module
+
+    def test_provider_enforces_batch_bounds_and_validates_hybrid_output(self) -> None:
+        provider = self.load_provider()
+
+        class FakeModel:
+            def encode(self, texts: list[str], **_: object) -> dict[str, object]:
+                return {
+                    "dense_vecs": [[float(text)] * 1024 for text in texts],
+                    "lexical_weights": [{text: 0.25} for text in texts],
+                }
+
+        with patch.object(provider, "model", return_value=FakeModel()):
+            for count in (1, 32, 64):
+                response = provider.encode_hybrid(
+                    SimpleNamespace(texts=[str(index) for index in range(count)])
+                )
+                self.assertEqual(len(response.dense_vecs), count)
+                self.assertEqual(len(response.sparse_vecs), count)
+                self.assertEqual(
+                    [vector[0] for vector in response.dense_vecs],
+                    [float(index) for index in range(count)],
+                )
+                self.assertEqual(
+                    [sparse.indices for sparse in response.sparse_vecs],
+                    [[index] for index in range(count)],
+                )
+                for vector in response.dense_vecs:
+                    self.assertEqual(len(vector), 1024)
+                    self.assertTrue(all(math.isfinite(value) for value in vector))
+                for sparse in response.sparse_vecs:
+                    self.assertTrue(all(index >= 0 for index in sparse.indices))
+                    self.assertTrue(
+                        all(math.isfinite(value) and value >= 0 for value in sparse.values)
+                    )
+
+            for count in (0, 65):
+                with self.assertRaises(provider.HTTPException) as raised:
+                    provider.encode_hybrid(SimpleNamespace(texts=["x"] * count))
+                self.assertEqual(raised.exception.status_code, 500)
+
+        class NonFiniteModel:
+            def encode(self, texts: list[str], **_: object) -> dict[str, object]:
+                return {
+                    "dense_vecs": [[float("nan")] * 1024 for _ in texts],
+                    "lexical_weights": [{"2": 0.25} for _ in texts],
+                }
+
+        with patch.object(provider, "model", return_value=NonFiniteModel()):
+            with self.assertRaises(provider.HTTPException) as raised:
+                provider.encode_hybrid(SimpleNamespace(texts=["x"]))
+        self.assertEqual(raised.exception.status_code, 500)
+
+        class InvalidSparseModel:
+            def encode(self, texts: list[str], **_: object) -> dict[str, object]:
+                return {
+                    "dense_vecs": [[0.0] * 1024 for _ in texts],
+                    "lexical_weights": [{"-1": 0.25}],
+                }
+
+        with patch.object(provider, "model", return_value=InvalidSparseModel()):
+            with self.assertRaises(provider.HTTPException) as raised:
+                provider.encode_hybrid(SimpleNamespace(texts=["0"]))
+        self.assertEqual(raised.exception.status_code, 500)
+
+    def test_provider_fails_closed_for_missing_or_invalid_artifacts(self) -> None:
+        provider = self.load_provider()
+        hub = ModuleType("huggingface_hub")
+        with TemporaryDirectory() as directory:
+            artifact_root = Path(directory)
+            hub.snapshot_download = lambda *_args, **_kwargs: str(artifact_root)
+            with patch.dict(sys.modules, {"huggingface_hub": hub}):
+                with self.assertRaises(FileNotFoundError):
+                    provider.verified_model_path()
+
+                for name in provider.MODEL_ARTIFACTS:
+                    (artifact_root / name).write_bytes(b"not the verified model")
+                with self.assertRaisesRegex(ValueError, "artifact hash mismatch"):
+                    provider.verified_model_path()
 
 
 if __name__ == "__main__":

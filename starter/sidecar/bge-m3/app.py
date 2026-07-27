@@ -52,7 +52,8 @@ def verified_model_path() -> str:
         )
     )
     for name, expected_hash in MODEL_ARTIFACTS.items():
-        actual_hash = hashlib.file_digest((path / name).open("rb"), "sha256").hexdigest()
+        with (path / name).open("rb") as artifact:
+            actual_hash = hashlib.file_digest(artifact, "sha256").hexdigest()
         if actual_hash != expected_hash:
             raise ValueError(f"BGE-M3 artifact hash mismatch: {name}")
     return str(path)
@@ -89,6 +90,8 @@ def health() -> dict[str, str]:
 @app.post("/encode/hybrid", response_model=HybridResponse)
 def encode_hybrid(request: EncodeRequest) -> HybridResponse:
     try:
+        if not 1 <= len(request.texts) <= 64:
+            raise ValueError("BGE-M3 accepts 1..64 texts per request")
         encoded = model().encode(
             request.texts,
             batch_size=len(request.texts),
@@ -103,6 +106,8 @@ def encode_hybrid(request: EncodeRequest) -> HybridResponse:
             raise ValueError("BGE-M3 output cardinality does not match the request")
         if any(len(vector) != 1024 for vector in dense):
             raise ValueError("BGE-M3 dense vector dimension is not 1024")
+        if any(not all(math.isfinite(float(value)) for value in vector) for vector in dense):
+            raise ValueError("BGE-M3 dense vector contains a non-finite value")
         return HybridResponse(dense_vecs=dense, sparse_vecs=sparse)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
