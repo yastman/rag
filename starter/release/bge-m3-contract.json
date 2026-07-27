@@ -1,0 +1,65 @@
+{
+  "schema_version": 2,
+  "runtime": {
+    "cpython": "3.12.12"
+  },
+  "model": {
+    "id": "BAAI/bge-m3",
+    "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "source_url": "https://huggingface.co/BAAI/bge-m3",
+    "license_spdx": "MIT",
+    "tokenizer": {
+      "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+      "artifact": "tokenizer.json",
+      "artifact_sha256": "21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08"
+    },
+    "artifacts": [
+      {
+        "path": "pytorch_model.bin",
+        "sha256": "b5e0ce3470abf5ef3831aa1bd5553b486803e83251590ab7ff35a117cf6aad38"
+      },
+      {
+        "path": "colbert_linear.pt",
+        "sha256": "19bfbae397c2b7524158c919d0e9b19393c5639d098f0a66932c91ed8f5f9abb"
+      },
+      {
+        "path": "sparse_linear.pt",
+        "sha256": "45c93804d2142b8f6d7ec6914ae23a1eee9c6a1d27d83d908a20d2afb3595ad9"
+      }
+    ]
+  },
+  "embedding": {
+    "contract_version": 2,
+    "endpoint": "/encode/hybrid",
+    "request": {
+      "texts": "ordered array of 1..64 strings"
+    },
+    "response": {
+      "dense_vecs": "one normalized 1024-dimensional vector per input, in request order",
+      "sparse_vecs": "one {indices: nonnegative integers, values: finite nonnegative floats} per input, in request order"
+    },
+    "dense_dimensions": 1024,
+    "normalize": true,
+    "sparse": {
+      "format": "indices-and-values",
+      "head_artifact": "sparse_linear.pt",
+      "head_sha256": "45c93804d2142b8f6d7ec6914ae23a1eee9c6a1d27d83d908a20d2afb3595ad9"
+    },
+    "query_max_tokens": 8192,
+    "passage_max_tokens": 8192
+  },
+  "sidecar": {
+    "implementation": "repository-owned FlagEmbedding BGEM3FlagModel sidecar",
+    "endpoint": "/encode/hybrid",
+    "max_batch_size": 64,
+    "default_batch_size": 32,
+    "request_timeout_seconds": 120,
+    "build": {
+      "context": "sidecar/bge-m3",
+      "base_image": "python:3.12.12-slim@sha256:f3fa41d74a768c2fce8016b98c191ae8c1bacd8f1152870a3f9f87d350920b7c",
+      "uv_image": "ghcr.io/astral-sh/uv:0.9.26@sha256:9a23023be68b2ed09750ae636228e903a54a05ea56ed03a934d00fe9fbeded4b",
+      "dependency_lock": "sidecar/bge-m3/uv.lock",
+      "dependency_lock_sha256": "374fd0230c37fab93764b36a8789540c3c7ca7f0bea7f31cc72e07b7235b08b5"
+    }
+  }
+}
