@@ -81,6 +81,7 @@ git diff -- docs/specs/2026-08-29-atomic-audit-delivery.md docs/superpowers/plan
 - [ ] Commit on the issue branch only.
 - [ ] Push the issue branch and open one PR targeting `dev` with `Closes #3201`.
 - [ ] Attach candidate SHA, branch, worktree, clean-state, rollback, and static-preflight evidence to `#3197` without secrets.
+- [ ] Run `make candidate-check` successfully on the exact candidate before merge. A failure blocks merge and preserves the issue branch/worktree for diagnosis and retry.
 - [ ] Merge after checks, fetch `origin`, and prove the accepted commit is an ancestor of `origin/dev`.
 - [ ] Close `#3201` if necessary and safely remove only `.worktrees/issue-3201` after merge proof.
 
@@ -89,6 +90,7 @@ Verification:
 ```powershell
 git status --short
 git log -1 --oneline
+make candidate-check
 gh pr checks <pr-number>
 git fetch origin --prune
 git merge-base --is-ancestor <accepted-commit> origin/dev
