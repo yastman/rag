@@ -31,9 +31,12 @@ def test_root_conftest_scopes_dotenv_to_current_checkout() -> None:
         if call.args
         else next(keyword.value for keyword in call.keywords if keyword.arg == "dotenv_path")
     )
-    path_dump = ast.dump(path_expression)
-    assert "__file__" in path_dump and ".env" in path_dump, (
-        "dotenv path must be derived from tests/conftest.py and end at .env"
+    evaluated_path = eval(
+        compile(ast.Expression(path_expression), str(ROOT_CONFTEST), "eval"),
+        {"Path": Path, "__file__": str(ROOT_CONFTEST), "__builtins__": {}},
+    )
+    assert evaluated_path == REPO_ROOT / ".env", (
+        "dotenv path must resolve to the current checkout root's .env"
     )
     assert not any(keyword.arg == "override" for keyword in call.keywords), (
         "dotenv must keep its default non-overriding behavior"
@@ -46,4 +49,42 @@ def test_root_conftest_scopes_dotenv_to_current_checkout() -> None:
         and "_env_disabled" in ast.dump(node.test)
         and call in set(ast.walk(ast.Module(body=node.body, type_ignores=[])))
     ]
-    assert guarded_calls, "PYTHON_DOTENV_DISABLED must continue to guard dotenv loading"
+    assert len(guarded_calls) == 1, (
+        "PYTHON_DOTENV_DISABLED must directly guard dotenv loading exactly once"
+    )
+
+    guard = guarded_calls[0]
+    instrumented_guard = ast.If(
+        test=guard.test,
+        body=[
+            ast.Expr(
+                value=ast.Call(
+                    func=ast.Name(id="_record_load", ctx=ast.Load()),
+                    args=[],
+                    keywords=[],
+                )
+            )
+        ],
+        orelse=[],
+    )
+    guard_code = compile(
+        ast.fix_missing_locations(ast.Module(body=[instrumented_guard], type_ignores=[])),
+        str(ROOT_CONFTEST),
+        "exec",
+    )
+    load_decisions = []
+    for disabled in (False, True):
+        loads = []
+        exec(
+            guard_code,
+            {
+                "_env_disabled": disabled,
+                "_record_load": lambda loads=loads: loads.append(True),
+                "__builtins__": {},
+            },
+        )
+        load_decisions.append(bool(loads))
+
+    assert load_decisions == [True, False], (
+        "dotenv loading must run when enabled and be skipped when disabled"
+    )
