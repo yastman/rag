@@ -15,7 +15,7 @@ FORBIDDEN = {"kfp", "kfp-kubernetes", "kfp-pipeline-spec", "kfp-server-api", "ku
 
 
 def _dependency_names() -> set[str]:
-    project = tomllib.loads(PYPROJECT.read_text())
+    project = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     names: set[str] = set()
 
     def add(deps: list[str]) -> None:
@@ -37,7 +37,7 @@ def test_kfp_kubernetes_are_not_declared_dependencies() -> None:
 
 
 def test_kfp_kubernetes_are_not_locked() -> None:
-    text = LOCKFILE.read_text()
+    text = LOCKFILE.read_text(encoding="utf-8")
     for package in FORBIDDEN:
         assert f'name = "{package}"' not in text
 

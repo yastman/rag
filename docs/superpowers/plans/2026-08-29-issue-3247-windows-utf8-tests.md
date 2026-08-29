@@ -41,3 +41,9 @@ uv run --no-sync pytest -q --tb=short tests/unit/security/test_secret_hygiene.py
 - [x] Run the exact RED command again with no encoding override; all former decoding failures must pass.
 - [x] Run `git diff --check` and inspect the full mechanical diff.
 - [x] Commit only the nine owned files; do not push or mutate GitHub.
+
+## Review Follow-up: Complete Scoped Repository Reads
+
+- [x] Add `encoding="utf-8"` to the 17 reviewer-identified repository-source reads.
+- [x] Re-run the focused suite and prove no scoped unqualified `read_text()` remains.
+- [x] Commit the review fix separately.

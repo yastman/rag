@@ -33,7 +33,7 @@ def test_catalog_browsing_state_is_removed() -> None:
 
 
 def test_bot_no_longer_registers_catalog_reply_keyboard_path() -> None:
-    source = Path("telegram_bot/bot.py").read_text()
+    source = Path("telegram_bot/bot.py").read_text(encoding="utf-8")
     assert "CatalogBrowsingSG.browsing" not in source
     assert "include_router(catalog_router)" not in source
 
