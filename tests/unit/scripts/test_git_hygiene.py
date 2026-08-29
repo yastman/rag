@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,7 @@ def test_force_cleanup_filters_current_and_worktree_branches() -> None:
     assert 'grep -Fxq "$$branch" && continue' in text
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="requires a POSIX shell")
 @pytest.mark.skipif(shutil.which("make") is None, reason="make is not available on PATH")
 def test_force_cleanup_deletes_branch_merged_into_base_from_other_head(tmp_path) -> None:
     repo_root = Path.cwd()
