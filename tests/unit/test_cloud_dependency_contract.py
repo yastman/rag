@@ -58,7 +58,7 @@ def test_runtime_code_does_not_import_cloud_storage_sdks() -> None:
         for path in root.rglob("*.py"):
             if any(part in {".venv", "__pycache__"} for part in path.parts):
                 continue
-            tree = ast.parse(path.read_text(), filename=str(path))
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             for node in ast.walk(tree):
                 imported: set[str] = set()
                 if isinstance(node, ast.Import):

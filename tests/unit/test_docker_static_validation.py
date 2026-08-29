@@ -310,7 +310,7 @@ def test_bge_m3_onnx_model_dir_env_in_ci_env() -> None:
 def test_bge_m3_onnx_model_dir_env_in_env_example() -> None:
     """.env.example must document BGE_M3_ONNX_MODEL_HOST_DIR as a local-dev
     path for the ONNX INT8 artifact bind mount (#2229)."""
-    text = ENV_EXAMPLE.read_text()
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
     assert "BGE_M3_ONNX_MODEL_HOST_DIR" in text, (
         "BGE_M3_ONNX_MODEL_HOST_DIR must be documented in .env.example "
         "for local ONNX model provisioning"

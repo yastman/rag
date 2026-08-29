@@ -15,7 +15,7 @@ def test_no_hardcoded_qdrant_secrets_in_integration_tests():
     if not test_file.exists():
         return  # File doesn't exist, skip
 
-    content = test_file.read_text()
+    content = test_file.read_text(encoding="utf-8")
 
     # Check for hardcoded IP addresses
     ip_pattern = r'QDRANT_URL\s*=\s*["\']http://\d+\.\d+\.\d+\.\d+:\d+["\']'

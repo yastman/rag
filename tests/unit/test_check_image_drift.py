@@ -35,7 +35,7 @@ def test_help_uses_current_default_compose_file() -> None:
 
 
 def test_script_examples_use_current_compose_filenames() -> None:
-    content = SCRIPT.read_text()
+    content = SCRIPT.read_text(encoding="utf-8")
     assert "docker-compose.dev.yml" not in content
     assert "docker-compose.vps.yml" not in content
     assert "compose.vps.yml" not in content
