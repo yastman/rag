@@ -67,6 +67,10 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
                 item.add_marker(getattr(pytest.mark, marker))
 
 
+# Prevent later imports from discovering dotenv files outside this bootstrap.
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+
+
 # =============================================================================
 # HTTP MOCKING FIXTURES
 # =============================================================================
