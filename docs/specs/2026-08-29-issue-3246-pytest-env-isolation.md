@@ -6,7 +6,7 @@ Pytest may load an ignored `.env` from the current checkout only. It must never 
 
 ## Evidence
 
-`tests/conftest.py` currently calls `load_dotenv()` without a path. `python-dotenv` searches upward, so `.worktrees/issue-*` can inherit the primary checkout's operator credentials. In the #3201 worktree, the worktree had no `.env`, the parent checkout did, and the E2E missing-key test failed because a provider key became visible. With `PYTHON_DOTENV_DISABLED=1`, that exact test passed.
+Before this change, `tests/conftest.py` called `load_dotenv()` without a path. `python-dotenv` searches upward, so `.worktrees/issue-*` could inherit the primary checkout's operator credentials. In the #3201 worktree, the worktree had no `.env`, the parent checkout did, and the E2E missing-key test failed because a provider key became visible. With `PYTHON_DOTENV_DISABLED=1`, that exact test passed.
 
 No credential value is needed to reproduce or verify this defect.
 
@@ -16,7 +16,7 @@ No credential value is needed to reproduce or verify this defect.
 - Preserve the existing `PYTHON_DOTENV_DISABLED` opt-out.
 - Preserve ordinary primary-checkout behavior: if `<current-checkout>/.env` exists, it may be loaded with dotenv's default non-overriding semantics.
 - If the current checkout has no `.env`, load nothing; never search parent directories.
-- Add a static contract that rejects an unscoped zero-argument `load_dotenv()` in the shared pytest bootstrap.
+- Add a runtime contract that proves the shared pytest bootstrap passes exactly the current-checkout path and preserves the opt-out.
 - Do not print, inspect, copy, or commit `.env` contents.
 
 ## Owned Files
@@ -33,11 +33,11 @@ No credential value is needed to reproduce or verify this defect.
 
 ## Acceptance
 
-1. The new contract fails on the old unbounded call and passes on the explicit worktree-local path.
+1. The runtime contract rejects the old unbounded call and any extra positional or keyword arguments, and passes on the explicit worktree-local path.
 2. `tests/unit/e2e_adapters/test_config.py` passes without setting `PYTHON_DOTENV_DISABLED` externally.
 3. Existing environment variables retain precedence.
 4. No tracked or ignored environment file is modified.
 
 ## Rollback
 
-Revert the two-file commit. There is no runtime or data migration.
+Revert this issue's commits. There is no runtime or data migration.
