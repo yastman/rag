@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
+
+import pytest
+import yaml
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -14,13 +18,37 @@ def _text(path: str) -> str:
 
 
 def _workflow_step_run(workflow: str, step_name: str) -> str:
-    matches = re.findall(
-        rf"^[ \t]+- name: {re.escape(step_name)}[ \t]*\n[ \t]+run:[ \t]+(.+)$",
-        workflow,
-        re.MULTILINE,
-    )
+    parsed = yaml.safe_load(workflow)
+    jobs = parsed.get("jobs", {}) if isinstance(parsed, dict) else {}
+    matches = [
+        step
+        for job in jobs.values()
+        if isinstance(job, dict)
+        for step in job.get("steps", [])
+        if isinstance(step, dict) and step.get("name") == step_name
+    ]
     assert len(matches) == 1, f"workflow must define exactly one {step_name!r} step"
-    return matches[0].strip()
+    run = matches[0].get("run")
+    assert isinstance(run, str), f"workflow step {step_name!r} must define a run command"
+    return run.strip()
+
+
+def test_workflow_step_run_rejects_duplicate_with_intervening_keys() -> None:
+    workflow = """
+jobs:
+  lint:
+    steps:
+      - name: Ruff lint
+        run: pinned-command
+      - name: Ruff lint
+        shell: bash
+        env:
+          EXAMPLE: duplicate
+        run: floating-command
+"""
+
+    with pytest.raises(AssertionError, match="exactly one 'Ruff lint' step"):
+        _workflow_step_run(workflow, "Ruff lint")
 
 
 def test_makefile_local_gate_ladder() -> None:
@@ -43,16 +71,22 @@ def test_makefile_local_gate_ladder() -> None:
 def test_ci_ruff_paths_match_makefile_lint_paths() -> None:
     makefile = _text("Makefile")
     workflow = _text(".github/workflows/ci.yml")
+    lockfile = tomllib.loads(_text("uv.lock"))
 
     lint_paths_match = re.search(r"^LINT_PATHS\s*:=\s*(.+)$", makefile, re.MULTILINE)
     assert lint_paths_match, "Makefile must define LINT_PATHS"
     lint_paths = lint_paths_match.group(1).strip()
+    ruff_versions = [
+        package["version"] for package in lockfile["package"] if package.get("name") == "ruff"
+    ]
+    assert len(ruff_versions) == 1, "uv.lock must contain exactly one Ruff package"
+    ruff_command = f"uvx --from ruff=={ruff_versions[0]} ruff"
 
     assert _workflow_step_run(workflow, "Ruff lint") == (
-        f"uvx ruff check {lint_paths} --output-format=github"
+        f"{ruff_command} check {lint_paths} --output-format=github"
     )
     assert _workflow_step_run(workflow, "Ruff format check") == (
-        f"uvx ruff format --target-version py312 --check {lint_paths}"
+        f"{ruff_command} format --target-version py312 --check {lint_paths}"
     )
 
 
