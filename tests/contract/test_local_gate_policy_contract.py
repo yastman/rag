@@ -30,6 +30,18 @@ def test_makefile_local_gate_ladder() -> None:
     assert re.search(r"^pre-push:\s+lint\s+format-check\s+test-core\b", makefile, re.MULTILINE)
 
 
+def test_ci_ruff_paths_match_makefile_lint_paths() -> None:
+    makefile = _text("Makefile")
+    workflow = _text(".github/workflows/ci.yml")
+
+    lint_paths_match = re.search(r"^LINT_PATHS\s*:=\s*(.+)$", makefile, re.MULTILINE)
+    assert lint_paths_match, "Makefile must define LINT_PATHS"
+    lint_paths = lint_paths_match.group(1).strip()
+
+    assert f"run: uvx ruff check {lint_paths} --output-format=github" in workflow
+    assert f"run: uvx ruff format --target-version py312 --check {lint_paths}" in workflow
+
+
 def test_pre_push_core_hook_is_cross_platform_and_read_only() -> None:
     config = _text(".pre-commit-config.yaml")
     hook = re.search(
