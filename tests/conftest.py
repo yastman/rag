@@ -42,7 +42,7 @@ _env_disabled = os.environ.get("PYTHON_DOTENV_DISABLED", "").strip().lower() in 
     "y",
 )
 if not _env_disabled:
-    load_dotenv()
+    load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
