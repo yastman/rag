@@ -13,6 +13,16 @@ def _text(path: str) -> str:
     return (REPO / path).read_text(encoding="utf-8")
 
 
+def _workflow_step_run(workflow: str, step_name: str) -> str:
+    matches = re.findall(
+        rf"^[ \t]+- name: {re.escape(step_name)}[ \t]*\n[ \t]+run:[ \t]+(.+)$",
+        workflow,
+        re.MULTILINE,
+    )
+    assert len(matches) == 1, f"workflow must define exactly one {step_name!r} step"
+    return matches[0].strip()
+
+
 def test_makefile_local_gate_ladder() -> None:
     makefile = _text("Makefile")
 
@@ -28,6 +38,22 @@ def test_makefile_local_gate_ladder() -> None:
         re.MULTILINE,
     )
     assert re.search(r"^pre-push:\s+lint\s+format-check\s+test-core\b", makefile, re.MULTILINE)
+
+
+def test_ci_ruff_paths_match_makefile_lint_paths() -> None:
+    makefile = _text("Makefile")
+    workflow = _text(".github/workflows/ci.yml")
+
+    lint_paths_match = re.search(r"^LINT_PATHS\s*:=\s*(.+)$", makefile, re.MULTILINE)
+    assert lint_paths_match, "Makefile must define LINT_PATHS"
+    lint_paths = lint_paths_match.group(1).strip()
+
+    assert _workflow_step_run(workflow, "Ruff lint") == (
+        f"uvx ruff check {lint_paths} --output-format=github"
+    )
+    assert _workflow_step_run(workflow, "Ruff format check") == (
+        f"uvx ruff format --target-version py312 --check {lint_paths}"
+    )
 
 
 def test_pre_push_core_hook_is_cross_platform_and_read_only() -> None:
