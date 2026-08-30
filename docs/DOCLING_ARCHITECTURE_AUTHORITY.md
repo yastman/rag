@@ -3,6 +3,11 @@
 > Canonical decisions for Docling in this project. When in doubt, this document is the
 > authority. card_62cd34acf8c3 / phase_bd57610de114.
 
+> **Scope:** this describes the currently shipped ingestion path only. The proposed reusable v2
+> contract is [Markdown-only](architecture/RAG_VPS_V2_PROPOSED.md), while
+> [#3235](https://github.com/yastman/rag/issues/3235) owns Docling removal from this repository.
+> Until that issue merges, the current-state rules below remain in force.
+
 ## Architecture Decision
 
 **Docling is an in-process Python SDK — NOT a service.**
