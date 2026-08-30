@@ -55,4 +55,5 @@ uv run --no-sync pytest tests/contract/test_pytest_dotenv_scope_contract.py test
 - [x] Prove only the four issue-owned documentation/test paths changed.
 - [x] Run `git diff --check` and inspect the complete diff.
 - [x] Confirm no environment file is tracked or changed.
-- [x] Commit with the issue number; do not push or mutate GitHub.
+- [x] Commit with the issue number.
+- [ ] Obtain Sol/max approval, open the dedicated PR, and merge after green static CI.
