@@ -351,6 +351,3 @@ skills/
 
 # Windows GPU driver artifact
 NVIDIA Corporation/
-
-# local openspec workspace
-openspec/

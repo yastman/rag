@@ -66,6 +66,11 @@ Telegram reply
 
 ## Architecture
 
+> This section describes the runtime currently shipped by this repository. The proposed reusable
+> RAG VPS v2 target is documented separately in
+> [`docs/architecture/RAG_VPS_V2_PROPOSED.md`](docs/architecture/RAG_VPS_V2_PROPOSED.md); it is a
+> design target, not a claim about the current implementation.
+
 One Python process. Three layers:
 
 | Layer | Path | Role |
@@ -182,10 +187,18 @@ The active production adapter is Telegram (`telegram_bot/`). Voice input is acti
 | Document | Use it for |
 |---|---|
 | [`DOCKER.md`](DOCKER.md) | Compose services, profiles, ports, env, runtime contracts |
+| [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md) | Current module ownership and dependency direction |
+| [`docs/DOCLING_ARCHITECTURE_AUTHORITY.md`](docs/DOCLING_ARCHITECTURE_AUTHORITY.md) | Current transitional Docling contract; removal is tracked by [#3235](https://github.com/yastman/rag/issues/3235) |
+| [`docs/architecture/RAG_VPS_V2_PROPOSED.md`](docs/architecture/RAG_VPS_V2_PROPOSED.md) | Proposed reusable production RAG v2 architecture; not current runtime state |
+| [`ARCHITECTURE_DOSSIER.md`](ARCHITECTURE_DOSSIER.md) | Dated 2026-07-06 architecture-review snapshot |
 
 ## Direction
 
-The project is being hardened to a senior-grade codebase **without dropping any feature** — tracking epic [#2983](https://github.com/yastman/rag/issues/2983). In short: keep the full feature menu, remove migration cruft (dead LangGraph nodes, stale tests), decompose the `bot.py` god-object into per-feature handlers, document the feature map, and freeze the entry-path contracts — with **no new frameworks and no over-engineering**.
+The shipped real-estate demo is being frozen under [#3197](https://github.com/yastman/rag/issues/3197)
+and simplified under [#3198](https://github.com/yastman/rag/issues/3198). The reusable RAG VPS v2
+architecture is a separate proposed target; its full contract lives in
+[`docs/architecture/RAG_VPS_V2_PROPOSED.md`](docs/architecture/RAG_VPS_V2_PROPOSED.md). Until a
+bounded implementation issue changes the code, current-runtime sections above remain authoritative.
 
 ## License
 

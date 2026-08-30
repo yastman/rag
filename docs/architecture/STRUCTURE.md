@@ -2,6 +2,9 @@
 
 This map records active module ownership. It describes current directories, not planned packages.
 
+> **Status:** current-state authority. The proposed reusable RAG VPS v2 target is documented in
+> [`RAG_VPS_V2_PROPOSED.md`](RAG_VPS_V2_PROPOSED.md) and must not be read as already implemented.
+
 ## Assistant path
 
 | Path | Ownership |

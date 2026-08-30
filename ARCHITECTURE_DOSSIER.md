@@ -1,5 +1,11 @@
 # RAG-Fresh — Architecture Dossier (current-state, for external review)
 
+> **Status:** dated review snapshot, not live architecture authority. Use
+> [`README.md`](README.md) and [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md)
+> for current ownership, and
+> [`docs/architecture/RAG_VPS_V2_PROPOSED.md`](docs/architecture/RAG_VPS_V2_PROPOSED.md) for the
+> proposed reusable v2 target.
+>
 > **What this is:** a self-contained snapshot of the system's structure, data flow,
 > dependencies, external services, and known technical debt — written to be handed to an
 > external reviewer (e.g. ChatGPT Pro) with no prior context. It is **not** a PRD (no
