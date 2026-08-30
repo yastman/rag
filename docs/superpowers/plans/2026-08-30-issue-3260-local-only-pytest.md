@@ -7,8 +7,9 @@
 ladder and fast hosted static/security checks.
 
 **Architecture:** Extend the existing local-gate policy contract. Parse active workflow YAML with
-the already-declared PyYAML dependency, enumerate executable `run` commands structurally, and
-reject direct or wrapped local test entry points. Delete only the obsolete hosted Windows job.
+the already-declared PyYAML dependency and compare every `run` step and action reference to an
+explicit approved static/security allowlist. This avoids reimplementing Bash, PowerShell, Make, or
+runner semantics. Delete only the obsolete hosted Windows job.
 
 **Tech Stack:** GitHub Actions YAML, Python 3.12, PyYAML, pytest.
 

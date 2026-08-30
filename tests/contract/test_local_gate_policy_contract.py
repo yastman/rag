@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import shlex
 import tomllib
 from pathlib import Path
 
@@ -13,48 +12,64 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 
-_FORBIDDEN_PREFLIGHT_MODES = {"tests", "full", "live"}
-_FORBIDDEN_MAKE_TARGETS = {
-    "bot-response-smoke",
-    "candidate-check",
-    "local-pr-ready",
-    "pre-push",
-    "smoke-fast",
-    "smoke-zoo",
+_ALLOWED_HOSTED_ACTIONS = {
+    "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+    "astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b",
+    "docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf",
+    "docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee",
+    "docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9",
+    "docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5",
+    "github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa",
+    "github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa",
+    "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7",
 }
-_MAKE_OPTIONS_WITH_VALUES = {
-    "--assume-new",
-    "--assume-old",
-    "--directory",
-    "--eval",
-    "--file",
-    "--include-dir",
-    "--jobs",
-    "--load-average",
-    "--new-file",
-    "--old-file",
-    "--output-sync",
-    "--what-if",
-    "-C",
-    "-I",
-    "-O",
-    "-W",
-    "-f",
-    "-j",
-    "-l",
-    "-o",
-}
-_UV_OPTIONS_WITH_VALUES = {
-    "--directory",
-    "--env-file",
-    "--extra",
-    "--from",
-    "--group",
-    "--package",
-    "--python",
-    "--with",
-    "-C",
-    "-p",
+_APPROVED_HOSTED_RUNS = {
+    (".github/workflows/ci.yml", "semgrep", "Run project Semgrep guardrails"): (
+        "uvx --from semgrep==1.163.0 semgrep scan "
+        "--config .semgrep/project-guardrails.yml --error --metrics=off "
+        "src telegram_bot scripts services .github/workflows compose.yml compose.dev.yml"
+    ),
+    (".github/workflows/ci.yml", "lint", "Ruff lint"): (
+        "uvx --from ruff==0.15.20 ruff check "
+        "src/ telegram_bot/ services/ scripts/ --output-format=github"
+    ),
+    (".github/workflows/ci.yml", "lint", "Ruff format check"): (
+        "uvx --from ruff==0.15.20 ruff format --target-version py312 --check "
+        "src/ telegram_bot/ services/ scripts/"
+    ),
+    (".github/workflows/ci.yml", "actionlint", "Install development tools"): (
+        "uv sync --frozen --group dev"
+    ),
+    (".github/workflows/ci.yml", "actionlint", "Validate GitHub Actions workflows"): (
+        "uv run --frozen pre-commit run actionlint --all-files --hook-stage pre-push"
+    ),
+    (".github/workflows/ci.yml", "uv-lock", "Verify lockfile integrity"): "uv lock --locked",
+    (".github/workflows/ci.yml", "compose-config", "Validate Compose config"): (
+        "docker compose --env-file tests/fixtures/compose.ci.env "
+        "-f compose.yml -f compose.dev.yml config --quiet"
+    ),
+    (".github/workflows/ci.yml", "cve-scan", "Set up Python"): "uv python install 3.12",
+    (".github/workflows/ci.yml", "cve-scan", "Install dependencies"): "uv sync --frozen",
+    (
+        ".github/workflows/ci.yml",
+        "cve-scan",
+        "Refresh OSV advisory cache (audit-deps-refresh)",
+    ): "uvx pip-audit -s osv --progress-spinner off . > /dev/null 2>&1 || true",
+    (".github/workflows/ci.yml", "cve-scan", "CVE gate (critical/high, severity-filtered)"): (
+        "uv run --frozen python scripts/ci/cve_gate.py"
+    ),
+    (
+        ".github/workflows/publish-internal-images.yml",
+        "publish",
+        "Resolve release tag",
+    ): (
+        'if [ -n "${INPUT_VERSION}" ]; then\n'
+        '  VERSION="${INPUT_VERSION}"\n'
+        "else\n"
+        '  VERSION="${GITHUB_REF_NAME}"\n'
+        "fi\n"
+        'echo "value=${VERSION}" >> "${GITHUB_OUTPUT}"'
+    ),
 }
 
 
@@ -78,189 +93,78 @@ def _workflow_step_run(workflow: str, step_name: str) -> str:
     return run.strip()
 
 
-def _workflow_run_commands(workflow: str) -> tuple[str, ...]:
+def _workflow_executors(
+    path: str, workflow: str
+) -> tuple[dict[tuple[str, str, str], str], tuple[str, ...], tuple[str, ...]]:
     parsed = yaml.safe_load(workflow)
-    jobs = parsed.get("jobs", {}) if isinstance(parsed, dict) else {}
-    return tuple(
-        run.strip()
-        for job in jobs.values()
-        if isinstance(job, dict)
-        for step in job.get("steps", [])
-        if isinstance(step, dict)
-        for run in (step.get("run"),)
-        if isinstance(run, str)
+    assert isinstance(parsed, dict), f"{path} must contain a workflow mapping"
+    jobs = parsed.get("jobs")
+    assert isinstance(jobs, dict), f"{path} must define jobs"
+
+    runs: dict[tuple[str, str, str], str] = {}
+    actions: list[str] = []
+    reusable_jobs: list[str] = []
+    for job_id, job in jobs.items():
+        assert isinstance(job_id, str) and isinstance(job, dict)
+        if isinstance(job.get("uses"), str):
+            reusable_jobs.append(f"{path}:{job_id}:{job['uses']}")
+        steps = job.get("steps", [])
+        assert isinstance(steps, list), f"{path}:{job_id} steps must be a list"
+        for step in steps:
+            assert isinstance(step, dict), f"{path}:{job_id} step must be a mapping"
+            run = step.get("run")
+            uses = step.get("uses")
+            assert not (isinstance(run, str) and isinstance(uses, str))
+            if isinstance(run, str):
+                name = step.get("name")
+                assert isinstance(name, str) and name, f"{path}:{job_id} run step must be named"
+                key = (path, job_id, name)
+                assert key not in runs, f"duplicate hosted run step: {key}"
+                runs[key] = run.strip()
+            if isinstance(uses, str):
+                actions.append(uses)
+    return runs, tuple(actions), tuple(reusable_jobs)
+
+
+def _assert_no_hosted_test_commands(
+    workflows: dict[str, str],
+    *,
+    approved_runs: dict[tuple[str, str, str], str] | None = None,
+    allowed_actions: set[str] | None = None,
+) -> None:
+    expected_runs = _APPROVED_HOSTED_RUNS if approved_runs is None else approved_runs
+    expected_actions = _ALLOWED_HOSTED_ACTIONS if allowed_actions is None else allowed_actions
+    actual_runs: dict[tuple[str, str, str], str] = {}
+    actions: list[str] = []
+    reusable_jobs: list[str] = []
+
+    for path, workflow in workflows.items():
+        runs, workflow_actions, workflow_reusable_jobs = _workflow_executors(path, workflow)
+        duplicate_keys = actual_runs.keys() & runs.keys()
+        assert not duplicate_keys, f"duplicate hosted run steps: {sorted(duplicate_keys)}"
+        actual_runs.update(runs)
+        actions.extend(workflow_actions)
+        reusable_jobs.extend(workflow_reusable_jobs)
+
+    missing = sorted(expected_runs.keys() - actual_runs.keys())
+    extra = sorted(actual_runs.keys() - expected_runs.keys())
+    changed = sorted(
+        key
+        for key in expected_runs.keys() & actual_runs.keys()
+        if expected_runs[key] != actual_runs[key]
     )
-
-
-def _normalize_workflow_command(command: str) -> str:
-    return re.sub(r"(?:\\|`|\^)\r?\n[ \t]*", "", command)
-
-
-def _shell_segments(command: str) -> tuple[tuple[str, ...], ...]:
-    lexer = shlex.shlex(
-        _normalize_workflow_command(command),
-        posix=True,
-        punctuation_chars=";&|",
+    unknown_actions = sorted(set(actions) - expected_actions)
+    assert not (missing or extra or changed), (
+        "hosted workflows must not run local tests: approved run allowlist mismatch; "
+        f"missing={missing}, extra={extra}, changed={changed}"
     )
-    lexer.whitespace_split = True
-    lexer.commenters = "#"
-    segments: list[tuple[str, ...]] = []
-    current: list[str] = []
-    for token in lexer:
-        if token and set(token) <= set(";&|"):
-            if current:
-                segments.append(tuple(current))
-                current = []
-        else:
-            current.append(token)
-    if current:
-        segments.append(tuple(current))
-    return tuple(segments)
-
-
-def _command_name(token: str) -> str:
-    name = token.replace("\\", "/").rsplit("/", 1)[-1].lower()
-    return name.removesuffix(".exe")
-
-
-def _is_assignment(token: str) -> bool:
-    return re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", token) is not None
-
-
-def _skip_runner_options(argv: list[str], options_with_values: set[str]) -> list[str]:
-    remaining = list(argv)
-    while remaining:
-        token = remaining[0]
-        if token == "--":
-            return remaining[1:]
-        if not token.startswith("-"):
-            return remaining
-        remaining.pop(0)
-        option = token.split("=", 1)[0]
-        if "=" not in token and option in options_with_values and remaining:
-            remaining.pop(0)
-    return remaining
-
-
-def _unwrap_command(argv: tuple[str, ...]) -> tuple[str, ...]:
-    current = list(argv)
-    while current and _is_assignment(current[0]):
-        current.pop(0)
-    if current and _command_name(current[0]) == "env":
-        current.pop(0)
-        while current and (current[0].startswith("-") or _is_assignment(current[0])):
-            current.pop(0)
-    if current and _command_name(current[0]) == "command":
-        current.pop(0)
-    if current and _command_name(current[0]) == "uv" and "run" in current[1:]:
-        run_index = current.index("run", 1)
-        current = _skip_runner_options(current[run_index + 1 :], _UV_OPTIONS_WITH_VALUES)
-    elif current and _command_name(current[0]) == "uvx":
-        current = _skip_runner_options(current[1:], _UV_OPTIONS_WITH_VALUES)
-    return tuple(current)
-
-
-def _invokes_pytest(argv: tuple[str, ...]) -> bool:
-    command = _unwrap_command(argv)
-    if not command:
-        return False
-    executable = _command_name(command[0])
-    if executable in {"pytest", "py.test"}:
-        return True
-    if executable == "py" or executable.startswith("python"):
-        return any(
-            token == "-m" and _command_name(command[index + 1]) in {"pytest", "py.test"}
-            for index, token in enumerate(command[:-1])
-        )
-    return False
-
-
-def _invokes_windows_test_preflight(argv: tuple[str, ...]) -> bool:
-    for index, token in enumerate(argv):
-        if _command_name(token) != "windows_preflight.ps1":
-            continue
-        arguments = argv[index + 1 :]
-        if any(argument.lower() in _FORBIDDEN_PREFLIGHT_MODES for argument in arguments):
-            return True
-        for argument in arguments:
-            match = re.fullmatch(
-                r"-(?:m|mo|mod|mode)(?::|=)(tests|full|live)",
-                argument,
-                re.IGNORECASE,
-            )
-            if match:
-                return True
-    return False
-
-
-def _invokes_make_test_target(argv: tuple[str, ...]) -> bool:
-    command = _unwrap_command(argv)
-    if not command or _command_name(command[0]) not in {"make", "gmake"}:
-        return False
-    skip_value = False
-    for token in command[1:]:
-        if skip_value:
-            skip_value = False
-            continue
-        if token == "--":
-            continue
-        option = token.split("=", 1)[0]
-        if token.startswith("-"):
-            skip_value = "=" not in token and option in _MAKE_OPTIONS_WITH_VALUES
-            continue
-        if _is_assignment(token):
-            continue
-        target = token.lower()
-        if target == "test" or target.startswith("test-") or target in _FORBIDDEN_MAKE_TARGETS:
-            return True
-    return False
-
-
-def _nested_shell_command(argv: tuple[str, ...]) -> str | None:
-    if not argv:
-        return None
-    executable = _command_name(argv[0])
-    shell_options = {
-        "bash": {"-c"},
-        "cmd": {"/c"},
-        "powershell": {"-c", "-command"},
-        "pwsh": {"-c", "-command"},
-        "sh": {"-c"},
-    }
-    options = shell_options.get(executable, set())
-    for index, token in enumerate(argv[:-1]):
-        if token.lower() in options:
-            return " ".join(argv[index + 1 :])
-    return None
-
-
-def _hosted_test_violation(command: str, *, nesting: int = 0) -> str | None:
-    for segment in _shell_segments(command):
-        if _invokes_windows_test_preflight(segment):
-            return "Windows test preflight"
-        if _invokes_pytest(segment):
-            return "pytest"
-        if _invokes_make_test_target(segment):
-            return "Make test target"
-        nested = _nested_shell_command(segment)
-        if (
-            nested is not None
-            and nesting < 2
-            and (violation := _hosted_test_violation(nested, nesting=nesting + 1))
-        ):
-            return violation
-    return None
-
-
-def _assert_no_hosted_test_commands(workflows: dict[str, str]) -> None:
-    violations = [
-        f"{path}: {label}: {command}"
-        for path, workflow in workflows.items()
-        for command in _workflow_run_commands(workflow)
-        for label in (_hosted_test_violation(command),)
-        if label is not None
-    ]
-    assert not violations, "hosted workflows must not run local tests:\n" + "\n".join(violations)
+    assert not unknown_actions, (
+        f"hosted workflows must not run local tests: unapproved actions {unknown_actions}"
+    )
+    assert not reusable_jobs, (
+        "hosted workflows must not run local tests: reusable workflow jobs require explicit policy "
+        f"{reusable_jobs}"
+    )
 
 
 def test_workflow_step_run_rejects_duplicate_with_intervening_keys() -> None:
@@ -285,11 +189,18 @@ jobs:
     "command",
     (
         "uv run --no-sync pytest tests/unit/ -q",
+        "uv run --project . pytest tests/unit/ -q",
         "uvx --from pytest pytest tests/unit/ -q",
         "python -m pytest tests/contract/",
+        "python -mpytest tests/contract/",
         "bash -c 'make test-core'",
+        "bash -lc 'pytest tests/unit/'",
         "pwsh -Command 'python -m pytest tests/unit/'",
         "pwsh -Command '& scripts/windows_preflight.ps1 -M Tests'",
+        "command -- pytest tests/unit/",
+        "env -u PYTEST_ADDOPTS pytest tests/unit/",
+        "echo setup\npython -m pytest tests/unit/",
+        "echo setup\nmake test",
         "pwsh -File scripts/windows_preflight.ps1 -Mode Tests",
         'pwsh -File scripts/windows_preflight.ps1 -Mode "Tests"',
         "pwsh -File scripts/windows_preflight.ps1 -Mode `\nTests",
@@ -297,10 +208,14 @@ jobs:
         "pwsh -File scripts/windows_preflight.ps1 -M Tests",
         "pwsh -File scripts/windows_preflight.ps1 -Mode:Tests",
         "pwsh -File scripts/windows_preflight.ps1 -Mode Full",
+        r"pwsh -File .\scripts\windows_preflight.ps1 -Mode Tests",
+        r".\.venv\Scripts\pytest.exe tests/unit/ -q",
         "py.test tests/unit/ -q",
         "make test",
         "gmake test-core",
         "make -j 2 test-core",
+        "make -j test",
+        "make -O test",
         "make \\\ntest-contract",
         "make candidate-check",
         "make local-pr-ready",
@@ -321,7 +236,11 @@ jobs:
 """
 
     with pytest.raises(AssertionError, match="hosted workflows must not run local tests"):
-        _assert_no_hosted_test_commands({".github/workflows/example.yml": workflow})
+        _assert_no_hosted_test_commands(
+            {".github/workflows/example.yml": workflow},
+            approved_runs={},
+            allowed_actions=set(),
+        )
 
 
 def test_hosted_test_command_contract_allows_static_commands() -> None:
@@ -330,25 +249,39 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Ruff lint
-        run: uvx --from ruff==0.15.20 ruff check src/
-      - name: Windows static preflight
-        run: pwsh -File scripts/windows_preflight.ps1 -Mode Static
       - name: Pytest policy comment
         run: echo "# pytest remains local"
       - name: Makefile option value
         run: make --file=test.mk lint
-      - name: Separate Makefile option value
-        run: make --file test.mk lint
       - name: Make variable assignment
         run: make MODE=test lint
-      - name: Benign pytest argument
-        run: uv run echo pytest
-      - name: Benign uvx package source
-        run: uvx --from pytest echo pytest
+      - name: Benign preflight argument text
+        run: echo scripts/windows_preflight.ps1 Tests
+      - name: Benign preflight fixture path
+        run: pwsh -File scripts/windows_preflight.ps1 -Mode Static -OperatorEnvFile Tests
 """
 
-    _assert_no_hosted_test_commands({".github/workflows/example.yml": workflow})
+    _assert_no_hosted_test_commands(
+        {".github/workflows/example.yml": workflow},
+        approved_runs={
+            (".github/workflows/example.yml", "lint", "Pytest policy comment"): (
+                'echo "# pytest remains local"'
+            ),
+            (".github/workflows/example.yml", "lint", "Makefile option value"): (
+                "make --file=test.mk lint"
+            ),
+            (".github/workflows/example.yml", "lint", "Make variable assignment"): (
+                "make MODE=test lint"
+            ),
+            (".github/workflows/example.yml", "lint", "Benign preflight argument text"): (
+                "echo scripts/windows_preflight.ps1 Tests"
+            ),
+            (".github/workflows/example.yml", "lint", "Benign preflight fixture path"): (
+                "pwsh -File scripts/windows_preflight.ps1 -Mode Static -OperatorEnvFile Tests"
+            ),
+        },
+        allowed_actions=set(),
+    )
 
 
 def test_active_github_workflows_do_not_run_local_tests() -> None:
