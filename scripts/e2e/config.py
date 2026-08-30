@@ -18,7 +18,7 @@ class E2EConfig(BaseSettings):
 
     # Telegram Userbot (from my.telegram.org)
     telegram_api_id: int = Field(default=0, alias="TELEGRAM_API_ID")
-    telegram_api_hash: str = Field(default="", alias="TELEGRAM_API_HASH")
+    telegram_api_hash: str = Field(default="", alias="TELEGRAM_API_HASH", repr=False)
     telegram_session: str = "e2e_tester"
 
     # Target bot
@@ -33,12 +33,13 @@ class E2EConfig(BaseSettings):
     judge_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("E2E_JUDGE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY"),
+        repr=False,
     )
     judge_base_url: str = Field(
         default="",
         validation_alias=AliasChoices("E2E_JUDGE_BASE_URL", "LLM_BASE_URL"),
     )
-    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY", repr=False)
     judge_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("E2E_JUDGE_MODEL", "LLM_MODEL"),
