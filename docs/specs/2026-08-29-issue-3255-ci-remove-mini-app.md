@@ -15,8 +15,9 @@ therefore exits with `E902 No such file or directory` before evaluating a candid
 
 - Remove `mini_app/` from both CI Ruff commands.
 - Keep the command flags and the remaining path order unchanged.
-- Add a focused contract that derives the expected path list from `Makefile` and checks both CI
-  Ruff commands against it.
+- Add a focused contract that derives the expected path list from `Makefile`, resolves each named
+  CI Ruff step exactly once, and compares the complete command for exact equality so appended
+  paths cannot pass.
 - Do not add a GitHub pytest job or change any other workflow behavior.
 
 ## Acceptance

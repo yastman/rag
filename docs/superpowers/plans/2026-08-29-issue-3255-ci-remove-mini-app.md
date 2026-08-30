@@ -29,7 +29,8 @@ A focused repository contract requires both CI Ruff invocations to use that exac
 **File:** `tests/contract/test_local_gate_policy_contract.py`
 
 - [x] Derive the ordered lint path string from `Makefile` `LINT_PATHS`.
-- [x] Assert both CI Ruff commands use that exact path string with their existing flags.
+- [x] Resolve both named CI Ruff steps exactly once and compare their complete commands for exact
+  equality with the ordered path string and existing flags.
 - [x] Run the focused contract and capture RED against the stale `mini_app/` path.
 
 ## Task 2: Repair the Ubuntu Ruff Commands
