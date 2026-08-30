@@ -43,8 +43,6 @@ _env_disabled = os.environ.get("PYTHON_DOTENV_DISABLED", "").strip().lower() in 
 )
 if not _env_disabled:
     load_dotenv()
-# Prevent later imports from discovering dotenv files outside this bootstrap.
-os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -67,6 +65,10 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         for directory, marker in path_to_marker.items():
             if directory in item_path.parents:
                 item.add_marker(getattr(pytest.mark, marker))
+
+
+# Prevent later imports from discovering dotenv files outside this bootstrap.
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 
 
 # =============================================================================

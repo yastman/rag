@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from unittest.mock import patch
 
+import pytest
 from dotenv import load_dotenv
 
 from scripts.e2e.config import E2EConfig
@@ -38,7 +39,15 @@ def test_defaults_prefer_litellm_router_and_alias() -> None:
         assert cfg.judge_model == "gpt-4o-mini"
 
 
-def test_validate_requires_openai_compatible_judge_api_key() -> None:
+@pytest.mark.parametrize("outer_provider_key", (None, "issue-3257-fabricated-key"))
+def test_validate_requires_openai_compatible_judge_api_key(
+    monkeypatch: pytest.MonkeyPatch, outer_provider_key: str | None
+) -> None:
+    for key in ("LLM_API_KEY", "OPENAI_API_KEY", "CEREBRAS_API_KEY", "GROQ_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    if outer_provider_key is not None:
+        monkeypatch.setenv("GROQ_API_KEY", outer_provider_key)
+
     with _cfg_from_env(
         overrides={
             "TELEGRAM_API_ID": "1",
