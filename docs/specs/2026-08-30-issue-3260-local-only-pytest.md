@@ -19,7 +19,7 @@ the documented policy disagree.
   route.
 - Structurally enumerate every active `.github/workflows/*.yml` and `*.yaml` `run` step and action
   reference. Require the exact approved static/security command allowlist and pinned action set;
-  reject every unapproved command, action, or reusable workflow job.
+  reject missing or unapproved actions, reusable workflow jobs, and custom shell overrides.
 - Preserve Ruff, actionlint, gitleaks Secret Scan, Semgrep, CodeQL, lockfile, Compose, and CVE
   checks.
 - Do not add dependencies or change `pyproject.toml` or `uv.lock`.
@@ -28,8 +28,8 @@ the documented policy disagree.
 
 The focused policy contract fails against the existing `windows-smoke` job and passes after that
 job is removed. Mutation tests prove that direct pytest, wrapped local test routes, multiline
-commands, and Windows executable paths are rejected without interpreting shell syntax. Local
-Windows test commands remain documented and executable.
+commands, Windows executable paths, custom shells, and a missing gitleaks action are rejected
+without interpreting shell syntax. Local Windows test commands remain documented and executable.
 
 ## Rollback
 

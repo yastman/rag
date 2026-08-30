@@ -95,7 +95,7 @@ def _workflow_step_run(workflow: str, step_name: str) -> str:
 
 def _workflow_executors(
     path: str, workflow: str
-) -> tuple[dict[tuple[str, str, str], str], tuple[str, ...], tuple[str, ...]]:
+) -> tuple[dict[tuple[str, str, str], str], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     parsed = yaml.safe_load(workflow)
     assert isinstance(parsed, dict), f"{path} must contain a workflow mapping"
     jobs = parsed.get("jobs")
@@ -104,17 +104,31 @@ def _workflow_executors(
     runs: dict[tuple[str, str, str], str] = {}
     actions: list[str] = []
     reusable_jobs: list[str] = []
+    custom_shells: list[str] = []
+    defaults = parsed.get("defaults", {})
+    if isinstance(defaults, dict) and isinstance(defaults.get("run"), dict):
+        shell = defaults["run"].get("shell")
+        if isinstance(shell, str):
+            custom_shells.append(f"{path}:defaults:{shell}")
     for job_id, job in jobs.items():
         assert isinstance(job_id, str) and isinstance(job, dict)
         if isinstance(job.get("uses"), str):
             reusable_jobs.append(f"{path}:{job_id}:{job['uses']}")
+        defaults = job.get("defaults", {})
+        if isinstance(defaults, dict) and isinstance(defaults.get("run"), dict):
+            shell = defaults["run"].get("shell")
+            if isinstance(shell, str):
+                custom_shells.append(f"{path}:{job_id}:defaults:{shell}")
         steps = job.get("steps", [])
         assert isinstance(steps, list), f"{path}:{job_id} steps must be a list"
         for step in steps:
             assert isinstance(step, dict), f"{path}:{job_id} step must be a mapping"
             run = step.get("run")
             uses = step.get("uses")
+            shell = step.get("shell")
             assert not (isinstance(run, str) and isinstance(uses, str))
+            if isinstance(shell, str):
+                custom_shells.append(f"{path}:{job_id}:{step.get('name', '<unnamed>')}:{shell}")
             if isinstance(run, str):
                 name = step.get("name")
                 assert isinstance(name, str) and name, f"{path}:{job_id} run step must be named"
@@ -123,7 +137,7 @@ def _workflow_executors(
                 runs[key] = run.strip()
             if isinstance(uses, str):
                 actions.append(uses)
-    return runs, tuple(actions), tuple(reusable_jobs)
+    return runs, tuple(actions), tuple(reusable_jobs), tuple(custom_shells)
 
 
 def _assert_no_hosted_test_commands(
@@ -137,14 +151,18 @@ def _assert_no_hosted_test_commands(
     actual_runs: dict[tuple[str, str, str], str] = {}
     actions: list[str] = []
     reusable_jobs: list[str] = []
+    custom_shells: list[str] = []
 
     for path, workflow in workflows.items():
-        runs, workflow_actions, workflow_reusable_jobs = _workflow_executors(path, workflow)
+        runs, workflow_actions, workflow_reusable_jobs, workflow_custom_shells = (
+            _workflow_executors(path, workflow)
+        )
         duplicate_keys = actual_runs.keys() & runs.keys()
         assert not duplicate_keys, f"duplicate hosted run steps: {sorted(duplicate_keys)}"
         actual_runs.update(runs)
         actions.extend(workflow_actions)
         reusable_jobs.extend(workflow_reusable_jobs)
+        custom_shells.extend(workflow_custom_shells)
 
     missing = sorted(expected_runs.keys() - actual_runs.keys())
     extra = sorted(actual_runs.keys() - expected_runs.keys())
@@ -153,7 +171,9 @@ def _assert_no_hosted_test_commands(
         for key in expected_runs.keys() & actual_runs.keys()
         if expected_runs[key] != actual_runs[key]
     )
-    unknown_actions = sorted(set(actions) - expected_actions)
+    actual_actions = set(actions)
+    unknown_actions = sorted(actual_actions - expected_actions)
+    missing_actions = sorted(expected_actions - actual_actions)
     assert not (missing or extra or changed), (
         "hosted workflows must not run local tests: approved run allowlist mismatch; "
         f"missing={missing}, extra={extra}, changed={changed}"
@@ -161,9 +181,15 @@ def _assert_no_hosted_test_commands(
     assert not unknown_actions, (
         f"hosted workflows must not run local tests: unapproved actions {unknown_actions}"
     )
+    assert not missing_actions, (
+        f"hosted workflows must not run local tests: missing approved actions {missing_actions}"
+    )
     assert not reusable_jobs, (
         "hosted workflows must not run local tests: reusable workflow jobs require explicit policy "
         f"{reusable_jobs}"
+    )
+    assert not custom_shells, (
+        f"hosted workflows must not run local tests: custom shells are prohibited {custom_shells}"
     )
 
 
@@ -282,6 +308,71 @@ jobs:
         },
         allowed_actions=set(),
     )
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    (
+        """
+defaults:
+  run:
+    shell: bash -c 'pytest tests/unit; bash {0}'
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify lockfile
+        run: uv lock --locked
+""",
+        """
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -c 'pytest tests/unit; bash {0}'
+    steps:
+      - name: Verify lockfile
+        run: uv lock --locked
+""",
+        """
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify lockfile
+        shell: bash -c 'pytest tests/unit; bash {0}'
+        run: uv lock --locked
+""",
+    ),
+)
+def test_hosted_test_command_contract_rejects_custom_shells(workflow: str) -> None:
+    approved_runs = {
+        (".github/workflows/example.yml", "lock", "Verify lockfile"): "uv lock --locked"
+    }
+
+    with pytest.raises(AssertionError, match="custom shells"):
+        _assert_no_hosted_test_commands(
+            {".github/workflows/example.yml": workflow},
+            approved_runs=approved_runs,
+            allowed_actions=set(),
+        )
+
+
+def test_hosted_test_command_contract_requires_gitleaks_action() -> None:
+    workflow = """
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps: []
+"""
+
+    with pytest.raises(AssertionError, match="missing approved actions"):
+        _assert_no_hosted_test_commands(
+            {".github/workflows/example.yml": workflow},
+            approved_runs={},
+            allowed_actions={"gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7"},
+        )
 
 
 def test_active_github_workflows_do_not_run_local_tests() -> None:
