@@ -98,6 +98,28 @@ def test_validate_requires_anthropic_key_in_anthropic_direct_mode() -> None:
         assert "ANTHROPIC_API_KEY not set for judge provider 'anthropic-direct'" in cfg.validate()
 
 
+def test_repr_redacts_credentials_but_keeps_diagnostics() -> None:
+    secrets = (
+        "fabricated-telegram-hash",
+        "fabricated-judge-key",
+        "fabricated-anthropic-key",
+    )
+    with _cfg_from_env(
+        overrides={
+            "TELEGRAM_API_ID": "123",
+            "TELEGRAM_API_HASH": secrets[0],
+            "E2E_JUDGE_API_KEY": secrets[1],
+            "ANTHROPIC_API_KEY": secrets[2],
+            "E2E_COLLECTION_NAME": "diagnostic-collection",
+        }
+    ) as cfg:
+        rendered = (repr(cfg), str(AssertionError(cfg)))
+
+    assert all(secret not in output for secret in secrets for output in rendered)
+    assert "telegram_api_id=123" in rendered[0]
+    assert "test_collection='diagnostic-collection'" in rendered[0]
+
+
 def test_pytest_bootstrap_disables_downstream_dotenv_discovery() -> None:
     with patch(
         "dotenv.main.find_dotenv",
