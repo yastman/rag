@@ -29,7 +29,7 @@ runner semantics. Delete only the obsolete hosted Windows job.
 **File:** `tests/contract/test_local_gate_policy_contract.py`
 
 - [x] Enumerate `run` commands from every active `.github/workflows/*.yml` and `*.yaml` file.
-- [x] Reject direct pytest, `Mode Tests`, and Make test targets with command/file evidence.
+- [x] Reject every unknown or changed hosted run step through the exact allowlist.
 - [x] Reject custom shell overrides and require every approved pinned action, including gitleaks.
 - [x] Add mutations covering each prohibited route and a harmless static command.
 - [x] Run the focused node and capture RED against the existing hosted Windows test step.

@@ -27,9 +27,9 @@ the documented policy disagree.
 ## Acceptance
 
 The focused policy contract fails against the existing `windows-smoke` job and passes after that
-job is removed. Mutation tests prove that direct pytest, wrapped local test routes, multiline
-commands, Windows executable paths, custom shells, and a missing gitleaks action are rejected
-without interpreting shell syntax. Local Windows test commands remain documented and executable.
+job is removed. Mutation tests prove that unknown or changed run steps, custom shells, and a
+missing gitleaks action are rejected without interpreting shell syntax. Local Windows test
+commands remain documented and executable.
 
 ## Rollback
 

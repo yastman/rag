@@ -211,54 +211,14 @@ jobs:
         _workflow_step_run(workflow, "Ruff lint")
 
 
-@pytest.mark.parametrize(
-    "command",
-    (
-        "uv run --no-sync pytest tests/unit/ -q",
-        "uv run --project . pytest tests/unit/ -q",
-        "uvx --from pytest pytest tests/unit/ -q",
-        "python -m pytest tests/contract/",
-        "python -mpytest tests/contract/",
-        "bash -c 'make test-core'",
-        "bash -lc 'pytest tests/unit/'",
-        "pwsh -Command 'python -m pytest tests/unit/'",
-        "pwsh -Command '& scripts/windows_preflight.ps1 -M Tests'",
-        "command -- pytest tests/unit/",
-        "env -u PYTEST_ADDOPTS pytest tests/unit/",
-        "echo setup\npython -m pytest tests/unit/",
-        "echo setup\nmake test",
-        "pwsh -File scripts/windows_preflight.ps1 -Mode Tests",
-        'pwsh -File scripts/windows_preflight.ps1 -Mode "Tests"',
-        "pwsh -File scripts/windows_preflight.ps1 -Mode `\nTests",
-        "pwsh -File scripts/windows_preflight.ps1 Tests",
-        "pwsh -File scripts/windows_preflight.ps1 -M Tests",
-        "pwsh -File scripts/windows_preflight.ps1 -Mode:Tests",
-        "pwsh -File scripts/windows_preflight.ps1 -Mode Full",
-        r"pwsh -File .\scripts\windows_preflight.ps1 -Mode Tests",
-        r".\.venv\Scripts\pytest.exe tests/unit/ -q",
-        "py.test tests/unit/ -q",
-        "make test",
-        "gmake test-core",
-        "make -j 2 test-core",
-        "make -j test",
-        "make -O test",
-        "make \\\ntest-contract",
-        "make candidate-check",
-        "make local-pr-ready",
-        "make pre-push",
-        "py\\\ntest tests/unit/ -q",
-    ),
-)
-def test_hosted_test_command_contract_rejects_direct_and_wrapped_routes(command: str) -> None:
-    command_block = command.replace("\n", "\n          ")
-    workflow = f"""
+def test_hosted_test_command_contract_rejects_unknown_run() -> None:
+    workflow = """
 jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
       - name: Prohibited hosted test
-        run: |-
-          {command_block}
+        run: pytest tests/unit/
 """
 
     with pytest.raises(AssertionError, match="hosted workflows must not run local tests"):
@@ -269,42 +229,40 @@ jobs:
         )
 
 
-def test_hosted_test_command_contract_allows_static_commands() -> None:
+def test_hosted_test_command_contract_rejects_changed_approved_run() -> None:
     workflow = """
 jobs:
-  lint:
+  lock:
     runs-on: ubuntu-latest
     steps:
-      - name: Pytest policy comment
-        run: echo "# pytest remains local"
-      - name: Makefile option value
-        run: make --file=test.mk lint
-      - name: Make variable assignment
-        run: make MODE=test lint
-      - name: Benign preflight argument text
-        run: echo scripts/windows_preflight.ps1 Tests
-      - name: Benign preflight fixture path
-        run: pwsh -File scripts/windows_preflight.ps1 -Mode Static -OperatorEnvFile Tests
+      - name: Verify lockfile
+        run: uv lock --locked && pytest tests/unit/
+"""
+
+    with pytest.raises(AssertionError, match="hosted workflows must not run local tests"):
+        _assert_no_hosted_test_commands(
+            {".github/workflows/example.yml": workflow},
+            approved_runs={
+                (".github/workflows/example.yml", "lock", "Verify lockfile"): "uv lock --locked"
+            },
+            allowed_actions=set(),
+        )
+
+
+def test_hosted_test_command_contract_allows_approved_static_run() -> None:
+    workflow = """
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify lockfile
+        run: uv lock --locked
 """
 
     _assert_no_hosted_test_commands(
         {".github/workflows/example.yml": workflow},
         approved_runs={
-            (".github/workflows/example.yml", "lint", "Pytest policy comment"): (
-                'echo "# pytest remains local"'
-            ),
-            (".github/workflows/example.yml", "lint", "Makefile option value"): (
-                "make --file=test.mk lint"
-            ),
-            (".github/workflows/example.yml", "lint", "Make variable assignment"): (
-                "make MODE=test lint"
-            ),
-            (".github/workflows/example.yml", "lint", "Benign preflight argument text"): (
-                "echo scripts/windows_preflight.ps1 Tests"
-            ),
-            (".github/workflows/example.yml", "lint", "Benign preflight fixture path"): (
-                "pwsh -File scripts/windows_preflight.ps1 -Mode Static -OperatorEnvFile Tests"
-            ),
+            (".github/workflows/example.yml", "lock", "Verify lockfile"): "uv lock --locked"
         },
         allowed_actions=set(),
     )
