@@ -226,6 +226,73 @@ class TestQuerySupervisorHandoffMode:
         # AND module-level _handle_query_supervisor was called (continues processing)
         mock_hqs.assert_awaited_once()
 
+    async def test_handoff_human_mode_relay_failure_falls_back_to_bot_routing(self):
+        """Relay failure in 'human' mode logs and falls back to bot routing (#3239)."""
+        from aiogram.exceptions import TelegramBadRequest
+
+        from telegram_bot.services.handoff_state import HandoffData
+
+        bot = _create_bot()
+        message = _make_message("hello")
+
+        handoff_data = HandoffData(client_id=12345, topic_id=999, mode="human")
+        handoff_state = AsyncMock()
+        handoff_state.get_by_client = AsyncMock(return_value=handoff_data)
+        bot._handoff_state = handoff_state
+
+        forum_bridge = AsyncMock()
+        forum_bridge.relay_to_topic = AsyncMock(
+            side_effect=TelegramBadRequest(method=None, message="topic closed")
+        )
+        bot._forum_bridge = forum_bridge
+
+        with patch(
+            "telegram_bot.pipeline.supervisor._handle_query_supervisor",
+            new_callable=AsyncMock,
+        ) as mock_hqs:
+            mock_hqs.return_value = "agent response"
+            bot._cache = MagicMock()
+            bot._cache.redis = None
+
+            await bot.handle_query(message)
+
+        forum_bridge.relay_to_topic.assert_awaited_once()
+        # Message must not be swallowed — normal bot routing takes over.
+        mock_hqs.assert_awaited_once()
+
+    async def test_handoff_human_waiting_relay_failure_still_continues(self):
+        """Relay failure in 'human_waiting' mode logs and continues to RAG (#3239)."""
+        from aiogram.exceptions import TelegramBadRequest
+
+        from telegram_bot.services.handoff_state import HandoffData
+
+        bot = _create_bot()
+        message = _make_message("hello")
+
+        handoff_data = HandoffData(client_id=12345, topic_id=999, mode="human_waiting")
+        handoff_state = AsyncMock()
+        handoff_state.get_by_client = AsyncMock(return_value=handoff_data)
+        bot._handoff_state = handoff_state
+
+        forum_bridge = AsyncMock()
+        forum_bridge.relay_to_topic = AsyncMock(
+            side_effect=TelegramBadRequest(method=None, message="topic closed")
+        )
+        bot._forum_bridge = forum_bridge
+
+        with patch(
+            "telegram_bot.pipeline.supervisor._handle_query_supervisor",
+            new_callable=AsyncMock,
+        ) as mock_hqs:
+            mock_hqs.return_value = "agent response"
+            bot._cache = MagicMock()
+            bot._cache.redis = None
+
+            await bot.handle_query(message)
+
+        forum_bridge.relay_to_topic.assert_awaited_once()
+        mock_hqs.assert_awaited_once()
+
     async def test_no_handoff_proceeds_normally(self):
         """No handoff state proceeds directly to _handle_query_supervisor."""
         bot = _create_bot()

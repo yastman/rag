@@ -21,6 +21,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.chat_action import ChatActionSender
 
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
@@ -68,22 +69,39 @@ async def handle_query(
     aiogram_bot = message.bot
 
     # Handoff mode check (#730): relay to topic or skip bot response.
+    # Relay failures are explicit and degrade to normal bot routing (#3239):
+    # a dead topic never silently swallows the client's message.
     if bot._handoff_state is not None:
         handoff = await bot._handoff_state.get_by_client(message.from_user.id)
         if handoff and handoff.mode == "human":
+            relayed = False
             if bot._forum_bridge is not None:
+                try:
+                    await bot._forum_bridge.relay_to_topic(
+                        from_chat_id=message.chat.id,
+                        message_id=message.message_id,
+                        topic_id=handoff.topic_id,
+                    )
+                    relayed = True
+                except TelegramBadRequest:
+                    logger.warning(
+                        "Relay to handoff topic %s failed — returning client to bot routing",
+                        handoff.topic_id,
+                    )
+            if relayed:
+                return
+            # Relay impossible or failed — fall through to normal bot routing.
+        elif handoff and handoff.mode == "human_waiting" and bot._forum_bridge is not None:
+            try:
                 await bot._forum_bridge.relay_to_topic(
                     from_chat_id=message.chat.id,
                     message_id=message.message_id,
                     topic_id=handoff.topic_id,
                 )
-            return
-        if handoff and handoff.mode == "human_waiting" and bot._forum_bridge is not None:
-            await bot._forum_bridge.relay_to_topic(
-                from_chat_id=message.chat.id,
-                message_id=message.message_id,
-                topic_id=handoff.topic_id,
-            )
+            except TelegramBadRequest:
+                logger.warning(
+                    "Relay to handoff topic %s failed (human_waiting)", handoff.topic_id
+                )
 
     await aiogram_bot.send_chat_action(chat_id=message.chat.id, action="typing")
 

@@ -342,6 +342,23 @@ class PropertyBot:
 
         await handle_menu_button(self, message, state, dialog_manager=dialog_manager, i18n=i18n)
 
+    @property
+    def forum_handoff_available(self) -> bool:
+        """Interactive Forum handoff is explicitly enabled and fully configured (#3239).
+
+        Requires ``HANDOFF_ENABLED`` plus the Forum Topics bridge (managers
+        group) and the Redis handoff state. When False, manager buttons route
+        to the durable phone-request sink instead of the qualification dialog —
+        the bot never starts a forum handoff it cannot finish.
+        """
+        # Defensive getattr: partially constructed instances in tests.
+        config = getattr(self, "config", None)
+        return (
+            bool(getattr(config, "handoff_enabled", False))
+            and getattr(self, "_forum_bridge", None) is not None
+            and getattr(self, "_handoff_state", None) is not None
+        )
+
     async def _handle_demo(self, message: Message) -> None:
         from .handlers.demo_handler import handle_demo_button
 

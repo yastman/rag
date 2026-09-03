@@ -297,7 +297,9 @@ async def handle_cta_callback(
     if action == "get_offer":
         await start_phone_collection(callback, state, service_key=param or "unknown")
     elif action == "manager":
-        if bot._forum_bridge is not None:
+        # Capability-gated Forum handoff (#3239): without HANDOFF_ENABLED +
+        # bridge + Redis state, route to the durable phone-request sink.
+        if bot.forum_handoff_available:
             await start_qualification(
                 callback,
                 state=state,

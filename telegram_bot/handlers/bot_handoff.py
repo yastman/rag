@@ -14,6 +14,7 @@ client's state by storage key because they have no client ``FSMContext``.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -34,6 +35,37 @@ if TYPE_CHECKING:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
+# Truthful failure copy (#3239): never promise manager contact after a failed
+# bridge. The phone fallback it mentions is real — the durable request sink
+# (#3213) is present wherever the forum handoff capability is on.
+_HANDOFF_FAILURE_TEXT = (
+    "⚠️ Не удалось передать ваш запрос менеджеру — обращение не было отправлено.\n\n"
+    "Попробуйте позже или оставьте номер телефона, и мы перезвоним."
+)
+
+# Shown only when capability is off and the FSM context is unavailable, so the
+# phone-request route cannot start either. No promises (#3239).
+_MANAGER_UNAVAILABLE_TEXT = (
+    "⚠️ Связь с менеджером сейчас недоступна. Попробуйте позже."
+)
+
+
+async def _report_handoff_failure(message: Any) -> None:
+    """Replace the qualification stub with explicit failure copy (#3239)."""
+    if message is None:
+        return
+    edit_text = getattr(message, "edit_text", None)
+    if edit_text is not None:
+        try:
+            await edit_text(_HANDOFF_FAILURE_TEXT)
+            return
+        except Exception:
+            logger.warning("Failed to edit qualification message with failure copy")
+    answer = getattr(message, "answer", None)
+    if answer is not None:
+        with contextlib.suppress(Exception):
+            await answer(_HANDOFF_FAILURE_TEXT)
+
 
 async def _handle_manager(
     bot: PropertyBot,
@@ -42,8 +74,15 @@ async def _handle_manager(
     state: FSMContext | None = None,
     dialog_manager: Any = None,
 ) -> None:
-    """Handoff to manager (#628, #730)."""
-    if bot._forum_bridge is not None:
+    """Handoff to manager (#628, #730).
+
+    The qualification dialog (Forum Topics) is capability-gated (#3239):
+    without ``HANDOFF_ENABLED`` + bridge + Redis state the manager button
+    falls back to the durable phone-request sink (#3213), and — when even
+    that is impossible — answers with truthful copy instead of dispatching
+    "connect me to a manager" into the agent pipeline.
+    """
+    if bot.forum_handoff_available:
         await start_qualification(
             message,
             i18n=i18n,
@@ -55,7 +94,8 @@ async def _handle_manager(
 
         await start_phone_collection(message, state, service_key="manager")
     else:
-        await bot.handle_menu_action_text(message, "Соедини с менеджером")
+        logger.warning("Manager handoff unavailable: no capability and no FSM context")
+        await message.answer(_MANAGER_UNAVAILABLE_TEXT)
 
 
 async def _handle_group_message(bot: PropertyBot, message: Message) -> None:
@@ -107,18 +147,32 @@ async def _complete_handoff(
     message: Any,
     state: FSMContext | None = None,
 ) -> None:
-    """Create forum topic and set handoff state (#730)."""
+    """Create forum topic and set handoff state (#730).
+
+    Topic-creation failures are explicit (#3239): the user sees truthful
+    failure copy — never a promise that a manager will make contact.
+    """
     if bot._forum_bridge is None:
+        # Capability gate bypassed — fail explicitly instead of leaving the
+        # "connecting…" stub on screen (#3239).
+        logger.warning("Handoff completion without Forum bridge — capability gate missed")
+        await _report_handoff_failure(message)
         return
 
     # Stale topic cleanup: if Redis has data but topic is deleted — clean up.
     if bot._handoff_state is not None:
         existing = await bot._handoff_state.get_by_client(user_id)
         if existing is not None:
-            topic_alive = await bot._forum_bridge.send_to_topic(
-                topic_id=existing.topic_id,
-                text="⚡ Клиент повторно запросил связь с менеджером.",
-            )
+            try:
+                topic_alive = await bot._forum_bridge.send_to_topic(
+                    topic_id=existing.topic_id,
+                    text="⚡ Клиент повторно запросил связь с менеджером.",
+                )
+            except Exception:
+                # Cannot verify the old topic — report instead of guessing (#3239).
+                logger.exception("Liveness check failed for handoff topic %s", existing.topic_id)
+                await _report_handoff_failure(message)
+                return
             if topic_alive:
                 if state is not None:
                     await state.set_state(HandoffStates.active)
@@ -135,10 +189,9 @@ async def _complete_handoff(
             client_name=display_name,
             goal=goal_text,
         )
-    except TelegramBadRequest:
-        logger.exception("Forum Topics unavailable — bot lacks can_manage_topics")
-        if message and hasattr(message, "answer"):
-            await message.answer("Менеджер скоро свяжется с вами!")
+    except Exception:
+        logger.exception("Forum topic creation failed — handoff not started")
+        await _report_handoff_failure(message)
         return
 
     # 2. AI summary (if sufficient history).
