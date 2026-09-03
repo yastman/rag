@@ -1,15 +1,29 @@
-"""LiteLLM JSON-schema extractor for apartment search filters."""
+"""Missing-field gap-fill extractor for apartment search filters (#3224).
+
+Regex owns deterministic fields; this module only fills gaps through the
+shared native structured-output boundary (``LiteLlmClient.structured``).
+Explicit behavior:
+
+- Schema: ``ApartmentSearchFilters`` is translated into a strict JSON-schema
+  ``response_format`` by the boundary — no per-call schema handling here.
+- Validation: the boundary returns a validated instance or raises
+  ``pydantic.ValidationError`` for invalid/partial output; hard filters are
+  additionally re-validated below (city whitelist, view_tags coercion).
+- Provider failure: boundary errors propagate to the pipeline, which falls
+  back to regex-only operation.
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
+from typing import Any
 
 from src.models.apartment import (
     ApartmentSearchFilters,
     HardFilters,
 )
 from src.runtime.integrations.prompt_manager import get_prompt, get_prompt_with_object
+from src.runtime.llm import LiteLlmClient
 
 
 logger = logging.getLogger(__name__)
@@ -91,9 +105,15 @@ def merge_extraction_results(
 
 
 class ApartmentLlmExtractor:
-    """Structured extraction from natural language queries via LiteLLM router."""
+    """Gap-fill extraction via the native structured-output boundary.
 
-    def __init__(self, llm: Any, model: str = "gpt-4o-mini") -> None:
+    The client is the shared :class:`~src.runtime.llm.LiteLlmClient`; schema
+    translation, response parsing and shim-kwarg rejection live there. Any
+    failure (connection, timeout, invalid structured output) propagates to
+    the pipeline's regex-only fallback.
+    """
+
+    def __init__(self, llm: LiteLlmClient, model: str = "gpt-4o-mini") -> None:
         self._client = llm
         self._model = model
 
@@ -114,15 +134,16 @@ class ApartmentLlmExtractor:
         # Fetch the prompt + raw Prompt object (always None).
         system_prompt, _prompt_obj = _get_system_prompt_with_object()
 
-        messages = [
+        messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt + context},
             {"role": "user", "content": query},
         ]
 
         result: ApartmentSearchFilters = await self._client.structured(
             model=self._model,
-            messages=cast(Any, messages),
+            messages=messages,
             response_model=ApartmentSearchFilters,
+            observation_name="apartment-gap-fill",
         )
 
         # Re-validate hard filters so bypassed test fixtures using model_construct
