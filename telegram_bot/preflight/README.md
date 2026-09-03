@@ -9,12 +9,18 @@ whether it may start.
 | File | Purpose |
 |------|---------|
 | [`checks.py`](./checks.py) | Dependency checks with CRITICAL/OPTIONAL classification; builds a `StartupReport` of `DependencyCheckResult`s (with retry on critical deps) |
-| [`remediation.py`](./remediation.py) | Human-readable remediation hints + deeper Redis/cache verification (`_check_redis_deep`, `_verify_cache_synthetic`) |
+| [`remediation.py`](./remediation.py) | Human-readable remediation hints + deeper Redis/cache verification (`_check_redis_deep`, `_verify_cache_synthetic`) and the Qdrant readiness-contract validation (`_qdrant_validate_collection`, `_qdrant_validate_product_collections`) |
 | [`__init__.py`](./__init__.py) | Backward-compat re-export surface (checks + remediation) |
 
 ## Boundaries
 
 - Preflight only **reads** dependency health; it does not mutate collections or schemas.
+  A missing/empty collection is an actionable failure — create and populate both product
+  collections with `make demo-bootstrap` (#3202; contracts in
+  `src/runtime/qdrant/readiness.py`).
+- Both product collections are enforced before polling (#3202): the configured knowledge
+  collection and the hard-coded `apartments` collection must each satisfy their readiness
+  contract (vector names + dimensions, payload indexes, point count).
 - Severity taxonomy comes from `telegram_bot/startup_status.py`
   (`StartupSeverity`, `StartupReport`, `StartupSignal`).
 

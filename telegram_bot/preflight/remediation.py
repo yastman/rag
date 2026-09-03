@@ -23,9 +23,6 @@ _REDIS_AUTH_TOKENS = (
 )
 _EMPTY_EXCEPTION_MESSAGE = "<empty exception message>"
 
-# BGE-M3 dense vector dimensionality (used when auto-creating missing collections)
-_BGEM3_DENSE_DIM = 1024
-
 # Cache key prefixes used by CacheService (see telegram_bot/services/cache.py)
 # Used for synthetic write/read/ttl/delete verification at startup.
 CACHE_KEY_PREFIXES = [
@@ -36,6 +33,9 @@ CACHE_KEY_PREFIXES = [
 ]
 
 _DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
+
+# Apartments collection role marker for the two-collection readiness gate.
+_APARTMENTS_ROLE = "apartments"
 
 
 def _read_colbert_coverage_warn_threshold() -> float:
@@ -226,57 +226,6 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
         await r.aclose()
 
 
-async def _ensure_qdrant_collection(qdrant: AsyncQdrantClient, collection_name: str) -> None:
-    """Create Qdrant collection with the standard BGE-M3 vector schema.
-
-    Schema mirrors gdrive_documents_bge: dense (1024-dim COSINE), colbert
-    (multi-vector MAX_SIM), and bm42 (sparse IDF).  The collection will be
-    empty — ingestion should populate it afterwards.
-    """
-    await qdrant.create_collection(
-        collection_name=collection_name,
-        vectors_config={
-            "dense": models.VectorParams(
-                size=_BGEM3_DENSE_DIM,
-                distance=models.Distance.COSINE,
-            ),
-            "colbert": models.VectorParams(
-                size=_BGEM3_DENSE_DIM,
-                distance=models.Distance.COSINE,
-                multivector_config=models.MultiVectorConfig(
-                    comparator=models.MultiVectorComparator.MAX_SIM
-                ),
-                hnsw_config=models.HnswConfigDiff(m=0),
-            ),
-        },
-        sparse_vectors_config={
-            "bm42": models.SparseVectorParams(
-                modifier=models.Modifier.IDF,
-            ),
-        },
-    )
-
-
-def _qdrant_describe_vectors(info: Any, collection: str) -> tuple[bool, str | None]:
-    """Return (ok, reason) based on required named vectors in a collection."""
-    dense_vectors = info.config.params.vectors
-    sparse_vectors = info.config.params.sparse_vectors or {}
-    dense_names = set(dense_vectors.keys()) if isinstance(dense_vectors, dict) else set()
-    sparse_names = set(sparse_vectors.keys()) if isinstance(sparse_vectors, dict) else set()
-
-    missing_required: set[str] = set()
-    if "dense" not in dense_names:
-        missing_required.add("dense")
-    if "bm42" not in sparse_names:
-        missing_required.add("bm42")
-    if missing_required:
-        return (
-            False,
-            f"collection {collection} missing required vectors: {sorted(missing_required)}",
-        )
-    return True, None
-
-
 async def _qdrant_check_colbert_coverage(
     qdrant_client: AsyncQdrantClient, info: Any, collection: str
 ) -> None:
@@ -325,35 +274,83 @@ async def _qdrant_check_colbert_coverage(
 
 
 async def _qdrant_validate_collection(
-    qdrant_client: AsyncQdrantClient, collection: str
+    qdrant_client: AsyncQdrantClient, collection: str, role: str = "knowledge"
 ) -> tuple[bool, str | None]:
-    """Check collection existence, required vectors, and ColBERT coverage."""
-    await qdrant_client.info()
-    exists = await qdrant_client.collection_exists(collection)
-    if not exists:
-        logger.warning(
-            "Preflight WARN: Qdrant collection %s not found via SDK existence check; "
-            "creating default schema",
-            collection,
-        )
-        await _ensure_qdrant_collection(qdrant_client, collection)
+    """Validate one collection against its explicit readiness contract (#3202).
+
+    Checks collection existence, required vector names and dimensions, payload
+    indexes, and a non-empty point count. Read-only: a missing collection is an
+    actionable failure, never silently auto-created (empty data would only
+    defer the failure to the first query).
+
+    Returns (ok, reason) where reason aggregates every contract violation.
+    """
+    # Lazy import keeps this module's import graph qdrant_client-only.
+    from src.runtime.qdrant.readiness import (
+        apartments_contract,
+        knowledge_contract,
+        validate_collection,
+    )
+
+    contract = (
+        apartments_contract().with_collection_name(collection)
+        if role == _APARTMENTS_ROLE
+        else knowledge_contract(collection)
+    )
+    readiness = await validate_collection(qdrant_client, contract)
+
+    if readiness.points_count is not None:
         logger.info(
-            "Preflight Qdrant: collection %s created (empty, ready for ingestion)",
+            "Preflight Qdrant: role=%s, collection=%s, points=%s",
+            role,
             collection,
+            readiness.points_count,
+        )
+        # Advisory only — ColBERT absence degrades to the RRF fallback path.
+        info = await qdrant_client.get_collection(collection)
+        await _qdrant_check_colbert_coverage(qdrant_client, info, collection)
+
+    if readiness.ok:
+        return True, None
+
+    reason = "; ".join(f.render() for f in readiness.failures)
+    logger.error(
+        "Preflight FAIL: Qdrant %s collection '%s' is not ready — %s",
+        role,
+        collection,
+        reason,
+    )
+    return False, reason
+
+
+async def _qdrant_validate_product_collections(
+    qdrant_client: AsyncQdrantClient,
+    knowledge_collection: str,
+) -> tuple[bool, str | None]:
+    """Prove BOTH product collections are ready before polling (#3202).
+
+    The configured knowledge collection and the hard-coded ``apartments``
+    collection are validated against their explicit contracts. Failures from
+    both are aggregated so one startup report lists every actionable problem.
+    """
+    # Lazy import keeps this module's import graph qdrant_client-only.
+    from src.runtime.qdrant.readiness import APARTMENTS_COLLECTION
+
+    knowledge_ok, knowledge_reason = await _qdrant_validate_collection(
+        qdrant_client, knowledge_collection, role="knowledge"
+    )
+    apartments_ok, apartments_reason = await _qdrant_validate_collection(
+        qdrant_client, APARTMENTS_COLLECTION, role=_APARTMENTS_ROLE
+    )
+
+    if knowledge_ok and apartments_ok:
+        logger.info(
+            "Preflight Qdrant: both product collections ready (knowledge=%s, apartments=%s)",
+            knowledge_collection,
+            APARTMENTS_COLLECTION,
         )
         return True, None
 
-    info = await qdrant_client.get_collection(collection)
-    logger.info("Preflight Qdrant: collection=%s, points=%s", collection, info.points_count)
-
-    vectors_ok, vectors_reason = _qdrant_describe_vectors(info, collection)
-    if not vectors_ok:
-        logger.error(
-            "Preflight FAIL: Qdrant collection %s missing required vectors: %s",
-            collection,
-            vectors_reason,
-        )
-        return False, vectors_reason
-
-    await _qdrant_check_colbert_coverage(qdrant_client, info, collection)
-    return True, None
+    details = [detail for detail in (knowledge_reason, apartments_reason) if detail]
+    reason = " | ".join(details)
+    return False, reason
