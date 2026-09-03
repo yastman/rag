@@ -70,7 +70,7 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 |---|---|
 | Test pyramid + tier→command map | [`../tests/README.md`](../tests/README.md) |
 | Scripts · local rules · E2E helpers | [`../scripts/README.md`](../scripts/README.md) · [`../scripts/AGENTS.override.md`](../scripts/AGENTS.override.md) · [`../scripts/e2e/README.md`](../scripts/e2e/README.md) |
-| Audits | [`audits/runtime-infra-config-audit-2026-06.md`](audits/runtime-infra-config-audit-2026-06.md) |
+| Audits | [`audits/runtime-infra-config-audit-2026-06.md`](audits/runtime-infra-config-audit-2026-06.md) · Candidate freeze 2026-09-03: [`audits/candidate-freeze-2026-09-03.md`](audits/candidate-freeze-2026-09-03.md) |
 
 ## Guides & runbooks
 
