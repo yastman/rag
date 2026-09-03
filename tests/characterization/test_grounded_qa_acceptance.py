@@ -96,7 +96,7 @@ class _CannedLLM:
     def __init__(self, answer: str) -> None:
         self._answer = answer
         self.create_calls = 0
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+        self.completion = self._create
 
     async def _create(self, **_kwargs: Any) -> Any:
         self.create_calls += 1

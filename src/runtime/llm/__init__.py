@@ -1,6 +1,16 @@
 """Runtime LLM routing helpers."""
 
-from .router import LiteLLMChatClient, create_litellm_chat_client, get_litellm_router
+from .router import (
+    LiteLlmClient,
+    create_llm_client,
+    get_litellm_router,
+    normalize_connection_error,
+)
 
 
-__all__ = ["LiteLLMChatClient", "create_litellm_chat_client", "get_litellm_router"]
+__all__ = [
+    "LiteLlmClient",
+    "create_llm_client",
+    "get_litellm_router",
+    "normalize_connection_error",
+]

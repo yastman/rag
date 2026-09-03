@@ -152,7 +152,7 @@ async def generate_qa_for_document(
     )
 
     try:
-        response = await client.chat.completions.create(
+        response = await client.completion(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
@@ -202,7 +202,7 @@ async def validate_groundedness(
             document_text=doc_text[:10000], query=item["query"], answer=item["answer"]
         )
         try:
-            response = await client.chat.completions.create(
+            response = await client.completion(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
@@ -263,7 +263,7 @@ async def run_pipeline(args: argparse.Namespace) -> None:
     """Main pipeline: scroll → group → generate → validate → export."""
     from qdrant_client import AsyncQdrantClient
 
-    from src.runtime.llm import create_litellm_chat_client
+    from src.runtime.llm import create_llm_client
 
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
     llm_model = os.getenv("JUDGE_MODEL", "gpt-4o-mini")
@@ -278,7 +278,7 @@ async def run_pipeline(args: argparse.Namespace) -> None:
     docs = group_by_document(points)
     logger.info("Found %d documents (%d chunks)", len(docs), len(points))
 
-    llm = create_litellm_chat_client(model=llm_model, timeout=60.0)
+    llm = create_llm_client(model=llm_model, timeout=60.0)
     all_items: list[dict[str, Any]] = []
 
     for doc in docs.values():

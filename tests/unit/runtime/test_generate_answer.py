@@ -79,9 +79,7 @@ def _config(*, show_sources: bool = False) -> MagicMock:
 async def test_generate_answer_happy_path() -> None:
     """LLM call succeeds → answer is returned, grounded=True, llm_call_count incremented."""
     llm_mock = MagicMock()
-    llm_mock.chat.completions.create = AsyncMock(
-        return_value=_fake_response("Квартира стоит 80 000€")
-    )
+    llm_mock.completion = AsyncMock(return_value=_fake_response("Квартира стоит 80 000€"))
 
     cfg = _config(show_sources=False)
     cfg.create_llm.return_value = llm_mock
@@ -114,7 +112,7 @@ async def test_generate_answer_happy_path() -> None:
 async def test_generate_answer_llm_failure_returns_fallback() -> None:
     """When the LLM raises, generate_answer returns a fallback response instead of propagating."""
     llm_mock = MagicMock()
-    llm_mock.chat.completions.create = AsyncMock(side_effect=RuntimeError("connection refused"))
+    llm_mock.completion = AsyncMock(side_effect=RuntimeError("connection refused"))
 
     cfg = _config()
     cfg.create_llm.return_value = llm_mock
@@ -152,7 +150,7 @@ async def test_generate_answer_llm_failure_returns_fallback() -> None:
 async def test_generate_answer_safe_fallback_on_low_grounding() -> None:
     """strict grounding mode + low confidence → safe_fallback_used=True, LLM is never called."""
     llm_mock = MagicMock()
-    llm_mock.chat.completions.create = AsyncMock()  # should NOT be called
+    llm_mock.completion = AsyncMock()  # should NOT be called
 
     cfg = _config(show_sources=True)  # show_sources=True enables sources (required for strict)
     cfg.create_llm.return_value = llm_mock
@@ -174,4 +172,4 @@ async def test_generate_answer_safe_fallback_on_low_grounding() -> None:
     assert result.payload["grounded"] is False
     assert result.payload["llm_provider_model"] == "safe_fallback"
     # LLM was never invoked
-    llm_mock.chat.completions.create.assert_not_called()
+    llm_mock.completion.assert_not_called()

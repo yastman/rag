@@ -32,9 +32,9 @@ async def test_summary_calls_llm_for_sufficient_history():
     mock_choice.message.content = (
         "Клиент ищет квартиру в Варне, бюджет ~70к EUR. Интересуется ипотекой."
     )
-    mock_llm.chat.completions.create = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+    mock_llm.completion = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
     result = await generate_handoff_summary(history, llm=mock_llm, min_messages=3)
     assert result is not None
     assert "Варне" in result
     assert "ипотек" in result.lower()
-    mock_llm.chat.completions.create.assert_called_once()
+    mock_llm.completion.assert_called_once()

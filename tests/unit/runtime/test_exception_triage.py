@@ -107,7 +107,7 @@ class TestQueryPreprocessorLogsErrorType:
 
     @pytest.mark.asyncio
     @patch("src.runtime.services.query_preprocessor.logger")
-    @patch("src.runtime.services.query_preprocessor.create_litellm_chat_client")
+    @patch("src.runtime.services.query_preprocessor.create_llm_client")
     async def test_hyde_unexpected_exception_logs_error_type(self, mock_create_client, mock_logger):
         """Unexpected exception in HyDE generation logs error_type."""
         from src.runtime.services.query_preprocessor import HyDEGenerator
@@ -116,9 +116,7 @@ class TestQueryPreprocessorLogsErrorType:
             pass
 
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
-            side_effect=UnexpectedError("unexpected failure")
-        )
+        mock_client.completion = AsyncMock(side_effect=UnexpectedError("unexpected failure"))
         mock_create_client.return_value = mock_client
 
         gen = HyDEGenerator(model="test-model")

@@ -511,7 +511,7 @@ def _make_llm_mock(answer: str, model: str = "golden-llm-model") -> MagicMock:
     resp.usage = usage
     resp.model = model
     llm = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=resp)
+    llm.completion = AsyncMock(return_value=resp)
     return llm
 
 
@@ -620,7 +620,7 @@ class TestGenerateAnswerGolden:
             "Golden: expected safe_fallback_used=True for strict mode + empty docs"
         )
         assert result.payload["grounded"] is False
-        llm.chat.completions.create.assert_not_called()
+        llm.completion.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_golden_snapshot_answer_shape(self) -> None:

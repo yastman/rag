@@ -1,20 +1,29 @@
-"""LiteLLM Python SDK router for chat completions.
+"""Native LiteLLM SDK boundary for chat text, structured output and streaming.
 
-The repository uses this in-process LiteLLM SDK router. Runtime code calls this
-in-process router instead, preserving the OpenAI chat-completions response shape
-that graph nodes already consume while keeping the previous fallback chain.
+Runtime code calls the in-process LiteLLM SDK Router through this module —
+the one small native interface replacing the former OpenAI-shaped
+``chat.completions.create`` shim (#3223). Provider priority, retries and
+Cerebras/Groq/OpenAI fallback stay in the Router configuration below
+(unchanged); schema translation, connection-error normalization and
+observation naming live here so call sites never reintroduce shim kwargs.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
 from litellm import Router
 from pydantic import BaseModel
+
+from src.adapters.llm.base import LLMConnectionError
+
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_MODEL_ALIAS = "gpt-4o-mini"
@@ -110,8 +119,8 @@ def get_litellm_router() -> Router:
     )
 
 
-def _json_schema_response_format(response_model: type[BaseModel]) -> dict[str, Any]:
-    """Return LiteLLM/OpenAI JSON-schema response_format for a Pydantic model."""
+def json_schema_response_format(response_model: type[BaseModel]) -> dict[str, Any]:
+    """Return the LiteLLM/OpenAI JSON-schema ``response_format`` for a Pydantic model."""
     return {
         "type": "json_schema",
         "json_schema": {
@@ -122,14 +131,7 @@ def _json_schema_response_format(response_model: type[BaseModel]) -> dict[str, A
     }
 
 
-def _completion_message_content(response: Any) -> Any:
-    """Extract first chat-completion message content from object or dict responses."""
-    if isinstance(response, dict):
-        return response.get("choices", [{}])[0].get("message", {}).get("content", "")
-    return response.choices[0].message.content
-
-
-def _parse_structured_response(response: Any, response_model: type[BaseModel]) -> BaseModel:
+def parse_structured_response(response: Any, response_model: type[BaseModel]) -> BaseModel:
     """Parse a LiteLLM chat completion into ``response_model``."""
     if isinstance(response, response_model):
         return response
@@ -146,70 +148,133 @@ def _parse_structured_response(response: Any, response_model: type[BaseModel]) -
         return response_model.model_validate(json.loads(content))
 
 
+def _completion_message_content(response: Any) -> Any:
+    """Extract first chat-completion message content from object or dict responses."""
+    if isinstance(response, dict):
+        return response.get("choices", [{}])[0].get("message", {}).get("content", "")
+    return response.choices[0].message.content
+
+
+def normalize_connection_error(exc: BaseException) -> LLMConnectionError | None:
+    """Normalize a LiteLLM connection failure into the shared app error type.
+
+    Returns ``None`` for any other exception so callers can re-raise unchanged.
+    """
+    from litellm.exceptions import APIConnectionError
+
+    if isinstance(exc, APIConnectionError):
+        return LLMConnectionError(str(exc), raw_error=exc)
+    return None
+
+
+# Shim-era kwargs the OpenAI-shaped client used to accept and silently drop.
+# The native boundary rejects them loudly so they can never reach the SDK.
+_UNSUPPORTED_SHIM_KWARGS: dict[str, str] = {
+    "name": "pass observation_name= instead (observability metadata, never forwarded to the SDK)",
+    "max_retries": "retries are owned by the Router configuration (num_retries), not per-request",
+}
+
+
+def _reject_shim_kwargs(kwargs: dict[str, Any]) -> None:
+    """Raise a clear TypeError when a shim-era kwarg reaches the boundary."""
+    for kwarg, hint in _UNSUPPORTED_SHIM_KWARGS.items():
+        if kwarg in kwargs:
+            raise TypeError(
+                f"LiteLlmClient got unsupported shim-era keyword argument {kwarg!r}: {hint}"
+            )
+
+
 @dataclass(slots=True)
-class _ChatCompletions:
-    router: Router
-    default_model: str
-    timeout: float
+class LiteLlmClient:
+    """Native async LiteLLM SDK boundary over the process-local Router.
 
-    async def create(self, **kwargs: Any) -> Any:
-        """Call ``Router.acompletion`` with OpenAI-compatible kwargs.
+    One interface, three verbs:
 
-        ``response_model`` is an Instructor-compatibility shim used during the
-        LiteLLM consolidation: it is translated to OpenAI JSON-schema
-        ``response_format`` and parsed locally, so callers keep one SDK-router
-        path without importing Instructor.
-        """
-        request = dict(kwargs)
-        response_model = request.pop("response_model", None)
-        request.pop("max_retries", None)
-        request.pop("name", None)  # OpenAI wrapper-only metadata; LiteLLM drops unsupported params.
-        request.setdefault("model", self.default_model)
-        request.setdefault("timeout", self.timeout)
-        if response_model is not None and "response_format" not in request:
-            request["response_format"] = _json_schema_response_format(response_model)
-        response = await self.router.acompletion(**request)
-        if response_model is None:
-            return response
-        return _parse_structured_response(response, response_model)
+    - :meth:`completion` — one ``Router.acompletion`` call returning the
+      native LiteLLM response (text, ``response_format``, ``stream=False``).
+    - :meth:`structured` — Pydantic model in, validated instance out.
+    - :meth:`stream` — ``Router.acompletion(stream=True)`` returning the
+      native async chunk iterator.
 
-
-@dataclass(slots=True)
-class _ChatNamespace:
-    completions: _ChatCompletions
-
-
-@dataclass(slots=True)
-class LiteLLMChatClient:
-    """Small OpenAI-shaped async chat client backed by LiteLLM Router."""
+    ``observation_name`` is call-site observability metadata only; it is
+    logged and never forwarded to the SDK. All other kwargs pass through to
+    ``acompletion`` unchanged. Shim-era kwargs (``name``, ``max_retries``)
+    are rejected with a clear error.
+    """
 
     router: Router
     default_model: str = DEFAULT_MODEL_ALIAS
     timeout: float = DEFAULT_TIMEOUT_SECONDS
-    chat: _ChatNamespace = field(init=False)
 
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "chat",
-            _ChatNamespace(
-                completions=_ChatCompletions(
-                    router=self.router,
-                    default_model=self.default_model,
-                    timeout=self.timeout,
-                )
-            ),
+    async def completion(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
+        observation_name: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Run one native ``Router.acompletion`` call and return its response."""
+        _reject_shim_kwargs(kwargs)
+        target_model = model or self.default_model
+        if observation_name:
+            logger.debug("LLM completion '%s' (model=%s)", observation_name, target_model)
+        request: dict[str, Any] = {"model": target_model, "messages": messages, **kwargs}
+        request.setdefault("timeout", self.timeout)
+        return await self.router.acompletion(**request)
+
+    async def structured(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        response_model: type[BaseModel],
+        model: str | None = None,
+        observation_name: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Structured-output call: Pydantic schema in, validated instance out."""
+        if "response_format" not in kwargs:
+            kwargs["response_format"] = json_schema_response_format(response_model)
+        response = await self.completion(
+            messages=messages,
+            model=model,
+            observation_name=observation_name,
+            **kwargs,
+        )
+        return parse_structured_response(response, response_model)
+
+    async def stream(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
+        observation_name: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Return the native async chunk iterator from a streaming completion.
+
+        This method owns the ``stream`` flag: a caller-supplied ``stream``
+        kwarg is dropped here instead of colliding with the forced value
+        (#3223 review C1).
+        """
+        kwargs.pop("stream", None)
+        return await self.completion(
+            messages=messages,
+            model=model,
+            observation_name=observation_name,
+            stream=True,
+            **kwargs,
         )
 
 
-def create_litellm_chat_client(
+def create_llm_client(
     *,
     model: str | None = None,
     router: Router | None = None,
     timeout: float | None = None,
-) -> LiteLLMChatClient:
-    """Create an OpenAI-shaped chat client backed by the LiteLLM Python SDK."""
-    return LiteLLMChatClient(
+) -> LiteLlmClient:
+    """Create the native LiteLLM SDK client backed by the process-local Router."""
+    return LiteLlmClient(
         router=router or get_litellm_router(),
         default_model=model or DEFAULT_MODEL_ALIAS,
         timeout=timeout or DEFAULT_TIMEOUT_SECONDS,

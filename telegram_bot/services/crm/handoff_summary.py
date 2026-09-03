@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.runtime.llm import create_litellm_chat_client
+from src.runtime.llm import create_llm_client
 
 
 logger = logging.getLogger(__name__)
@@ -41,13 +41,13 @@ async def generate_handoff_summary(
     ]
     try:
         if llm is None:
-            llm = create_litellm_chat_client(model=model)
-        resp = await llm.chat.completions.create(
+            llm = create_llm_client(model=model)
+        resp = await llm.completion(
             model=model,
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             max_tokens=300,
             temperature=0.3,
-            name="handoff-summary",  # type: ignore[call-overload]
+            observation_name="handoff-summary",
         )
         content = resp.choices[0].message.content
         return content.strip() if content else None

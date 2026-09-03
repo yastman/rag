@@ -173,9 +173,9 @@ class LiteLLMJudge(_BaseLLMJudge):
 
     def __init__(self, config: E2EConfig):
         super().__init__(config)
-        from src.runtime.llm import create_litellm_chat_client
+        from src.runtime.llm import create_llm_client
 
-        self._client = create_litellm_chat_client(model=config.judge_model, timeout=60.0)
+        self._client = create_llm_client(model=config.judge_model, timeout=60.0)
 
 
 class OpenAICompatibleJudge(_BaseLLMJudge):

@@ -169,7 +169,7 @@ def test_failing_llm_config_raises_provider_error() -> None:
     llm = FailingLLMConfig(error_message="provider down").create_llm(auto_trace=False)
 
     with pytest.raises(TimeoutError, match="provider down"):
-        asyncio.run(llm.chat.completions.create(model="fake", messages=[]))
+        asyncio.run(llm.completion(model="fake", messages=[]))
 
 
 def test_mock_crm_client_records_writes() -> None:
@@ -203,7 +203,7 @@ def test_fake_llm_config_builds_grounded_answer_from_context() -> None:
         },
     ]
 
-    result = asyncio.run(llm.chat.completions.create(model="fake", messages=messages))
+    result = asyncio.run(llm.completion(model="fake", messages=messages))
 
     assert "Sunny Beach" in result.choices[0].message.content
     assert "110000" in result.choices[0].message.content

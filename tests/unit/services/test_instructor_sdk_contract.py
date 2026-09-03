@@ -71,7 +71,7 @@ def test_active_structured_output_paths_do_not_import_instructor(path: Path) -> 
             offenders.append(f"disallowed SDK import at line {node.lineno}")
     assert not offenders, (
         f"{path.relative_to(REPO_ROOT)} imports Instructor: {offenders}. "
-        "Use src.runtime.llm.create_litellm_chat_client(..., response_model=...) instead."
+        "Use src.runtime.llm.create_llm_client(...).structured(response_model=...) instead."
     )
     assert "instructor." + "from_openai" not in source
     assert "instructor." + "from_provider" not in source

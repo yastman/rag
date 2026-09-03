@@ -103,11 +103,11 @@ telegram_bot*, *Core contracts layer is import-independent*, *src must not impor
 | `src/runtime/integrations/` | `cache.py` (30k, the 5 Redis caches + `CacheLayerManager`), `embeddings.py` (BGE-M3 shims), `prompt_manager.py` |
 | `src/runtime/retrieval/` | Retrieval service facade |
 | `src/runtime/grounding/` | Grounding/citation policy |
-| `src/runtime/llm/router.py` | LiteLLM SDK router (provider-agnostic LLM calls) |
+| `src/runtime/llm/router.py` | Native LiteLLM SDK boundary (provider-agnostic LLM calls) |
 | `src/runtime/graph/` | Vestigial namespace: `nodes/transcribe.py` only (**dead** — no importers); classify/guard/config moved out in #3207 to `src/runtime/routing/`, `src/runtime/safety/`, `src/runtime/config.py` |
 | `src/runtime/services/` | Query preprocessing, small-to-big, cache policy, coverage mode, `colbert_reranker.py` (**dead**) |
 | `src/adapters/embeddings/` | `bge_m3.py` (`BgeM3EmbeddingProvider` — canonical), `openai_embeddings.py`, `local_bge_m3.py` (**dead**), `base.py` |
-| `src/adapters/llm/` | `litellm_provider.py`, `base.py` |
+| `src/adapters/llm/` | `base.py` (LLM error taxonomy) |
 | `src/services/` | `bge_m3_client.py` (HTTP SDK for BGE-M3), `_retry.py`, `content_loader.py`, `vectorizers.py`; `kommo_*` (**dead**, P26), `voyage.py` (**dead**) |
 | `src/ingestion/` | `markdown.py` (live parse+chunk, stdlib, #3235), `chunker.py` (shared `Chunk`); `unified/` (the live pipeline) |
 | `src/ingestion/unified/` | `flow.py` (stateless scan→parse→embed→upsert), `qdrant_writer.py` (27k), `config.py`, `manifest.py`, `commands.py`, `colbert_backfill.py` |

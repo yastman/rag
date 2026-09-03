@@ -2,7 +2,6 @@
 
 Helpers split into focused modules:
   messages.py  — history selection and LLM message assembly
-  llm_call.py  — chat.completions wrapper
   setup.py     — _GenerationSetup, _resolve_generation_setup, _get_dynamic_modules
   prompts.py   — _PromptConfig, _PromptAndMessages, prompt/message building
   streaming.py — generate_answer_stream and safe-fallback helper
@@ -18,7 +17,6 @@ from typing import Any
 from src.runtime.grounding.policy import should_safe_fallback
 
 from .contracts import GenerationCallable, GenerationRequest, GenerationResult
-from .llm_call import _chat_create_with_optional_name
 from .messages import (
     _build_llm_messages,  # noqa: F401 – re-export for tests
 )
@@ -174,8 +172,7 @@ async def generate_answer(
             **config.get_reasoning_kwargs(),
         }
 
-        response_obj = await _chat_create_with_optional_name(
-            llm,
+        response_obj = await llm.completion(
             observation_name="generate-answer",
             **create_kwargs,
         )

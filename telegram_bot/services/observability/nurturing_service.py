@@ -177,7 +177,7 @@ class NurturingService:
                 f"Здравствуйте! У нас есть новые предложения по вашим предпочтениям: {prefs_text}"
             )
         try:
-            response = await self._llm.chat.completions.create(
+            response = await self._llm.completion(
                 model=self._model,
                 messages=[
                     {
@@ -190,7 +190,7 @@ class NurturingService:
                     {"role": "user", "content": f"Client preferences: {prefs_text}"},
                 ],
                 max_tokens=200,
-                name="nurturing-message",
+                observation_name="nurturing-message",
             )
             return response.choices[0].message.content or f"Новые предложения: {prefs_text}"
         except Exception:
