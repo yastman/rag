@@ -63,10 +63,6 @@ telegram = [
     "cachetools>=5.0.0",
     "asyncpg>=0.31.0",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",
-    # LangGraph supervisor + CRM agent layer (telegram_bot/agents/, pipeline/supervisor.py)
-    # DEP003 fix: declare as direct deps (were transitively available via aiogram; now explicit)
-    "langgraph>=1.2.0",
-    "langchain-core>=1.4.0",
 ]
 
 
@@ -543,7 +539,7 @@ exclude_lines = [
 #   should not gate the production lint.
 # - per_rule_ignores DEP001: remaining optional/conditional imports that are
 #   not declared in pyproject.toml because they live in optional extras or
-#   archived CRM paths (langchain_core, langgraph, fluent_compiler, anyio).
+#   archived CRM paths (fluent_compiler, anyio).
 # - per_rule_ignores DEP002: packages declared as optional extras that are not
 #   imported in the scoped src/+telegram_bot/ scan (aiohttp and requests are
 #   intentional safety-pins per #2710; docs / ingest extras are
@@ -563,8 +559,6 @@ extend_exclude = [
 [tool.deptry.per_rule_ignores]
 # Optional/archived imports not in pyproject.toml dependencies
 DEP001 = [
-    "langchain_core",
-    "langgraph",
     "fluent_compiler",
     "anyio",
 ]
