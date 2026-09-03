@@ -146,9 +146,17 @@ class TestHandleMenuButton:
             patch("telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="ask"),
             patch("telegram_bot.handlers.catalog._handle_ask", new_callable=AsyncMock) as mock_ask,
         ):
-            await bot.handle_menu_button(message, state)
+            await bot.handle_menu_button(message, state, dialog_manager=None)
 
-        mock_ask.assert_awaited_once_with(bot, message, i18n=None)
+        # Ask must receive state/dialog_manager so it can exit any active
+        # flow and hand the typed question to the Q&A route (#3204).
+        mock_ask.assert_awaited_once_with(
+            bot,
+            message,
+            i18n=None,
+            state=state,
+            dialog_manager=None,
+        )
 
     async def test_manager_dispatches_to_handle_manager(self):
         bot = _create_bot()

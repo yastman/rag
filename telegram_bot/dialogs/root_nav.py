@@ -39,6 +39,40 @@ async def show_client_main_menu(
     await message.answer(text, reply_markup=build_client_keyboard(i18n=i18n))
 
 
+async def exit_to_client_root(
+    *,
+    state: Any | None = None,
+    dialog_manager: Any | None = None,
+    remove_keyboard: bool = False,
+) -> None:
+    """Exit any active dialog/FSM flow cleanly so the root owns the next input.
+
+    Deterministic routing primitive (#3204): actions that invite the user to
+    type free text (Ask/FAQ prompt) must not leave a stale aiogram-dialog or
+    raw FSM state owning the keyboard — otherwise the typed text is consumed
+    by the stale flow (funnel, catalog, demo, phone collector, ...) instead of
+    the single free-text Q&A route (catch-all ``StateFilter(None)``).
+
+    - Closes the aiogram-dialog stack when one is active. The persistent
+      reply keyboard is kept by default (``remove_keyboard=False``) because
+      Ask is launched from it.
+    - Clears the raw FSM state (phone collector, handoff, dialog residue).
+    """
+    if dialog_manager is not None:
+        try:
+            has_context = getattr(dialog_manager, "has_context", None)
+            active = bool(has_context()) if callable(has_context) else False
+        except Exception:
+            active = False
+        if active:
+            with contextlib.suppress(Exception):
+                await dialog_manager.reset_stack(remove_keyboard=remove_keyboard)
+    if state is not None:
+        maybe_clear = state.clear()
+        if inspect.isawaitable(maybe_clear):
+            await maybe_clear
+
+
 async def on_back_to_main_menu(
     callback: CallbackQuery,
     button: Button,

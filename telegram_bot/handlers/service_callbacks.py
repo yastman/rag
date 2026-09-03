@@ -34,8 +34,17 @@ def create_service_router(bot: PropertyBot) -> Router:
     ) -> None:
         await _bot_catalog.handle_cta_callback(bot, callback, state, dialog_manager)
 
-    async def _handle_ask(callback: CallbackQuery) -> None:
-        await _bot_catalog.handle_ask_callback(bot, callback)
+    async def _handle_ask(
+        callback: CallbackQuery,
+        state: FSMContext | None = None,
+        dialog_manager: Any = None,
+    ) -> None:
+        await _bot_catalog.handle_ask_callback(
+            bot,
+            callback,
+            state=state,
+            dialog_manager=dialog_manager,
+        )
 
     router.callback_query.register(_handle_service, F.data.startswith("svc:"))
     router.callback_query.register(_handle_cta, F.data.startswith("cta:"))

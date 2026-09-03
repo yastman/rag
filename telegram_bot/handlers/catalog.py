@@ -142,8 +142,20 @@ async def _handle_ask(
     bot: PropertyBot,
     message: Message,
     i18n: Any = None,
+    state: FSMContext | None = None,
+    dialog_manager: Any = None,
 ) -> None:
-    """Show FAQ inline menu with popular questions."""
+    """Show FAQ inline menu with popular questions (#628, #3204).
+
+    The Ask prompt invites the user to type a question, so it must not leave
+    a stale dialog or raw FSM state owning the keyboard: any active flow
+    exits cleanly first and the typed question lands on the single
+    free-text Q&A route (catch-all ``StateFilter(None)`` → ``handle_query``).
+    """
+    from telegram_bot.dialogs.root_nav import exit_to_client_root
+
+    await exit_to_client_root(state=state, dialog_manager=dialog_manager)
+
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
     if i18n is not None:
@@ -191,12 +203,26 @@ async def _handle_ask(
     await message.answer(prompt, reply_markup=kb)
 
 
-async def handle_ask_callback(bot: PropertyBot, callback: CallbackQuery) -> None:
-    """Handle ask:* callback — route FAQ question to RAG pipeline."""
+async def handle_ask_callback(
+    bot: PropertyBot,
+    callback: CallbackQuery,
+    state: FSMContext | None = None,
+    dialog_manager: Any = None,
+) -> None:
+    """Handle ask:* callback — route FAQ question to RAG pipeline (#3204).
+
+    Popular FAQ questions stay on the same grounded Q&A contract as free
+    text: any active dialog/FSM flow exits cleanly before dispatch so the
+    question is answered exactly once and the following user message is
+    owned by the stateless catch-all route.
+    """
+    from telegram_bot.dialogs.root_nav import exit_to_client_root
+
     await callback.answer()
     query_text = _ASK_QUERIES.get(callback.data or "")
     if not query_text or callback.message is None:
         return
+    await exit_to_client_root(state=state, dialog_manager=dialog_manager)
     await bot.handle_menu_action_text(callback.message, query_text)  # type: ignore[arg-type]
 
 

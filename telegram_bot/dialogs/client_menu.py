@@ -101,7 +101,14 @@ async def on_menu_action(
             if action_id == "services":
                 await bot_instance._handle_services(actor_message, i18n=i18n)
             elif action_id == "ask":
-                await bot_instance._handle_ask(actor_message, i18n=i18n)
+                # Ask owns its free-text step by exiting any active flow
+                # first (#3204); done() above already closed the root dialog.
+                await bot_instance._handle_ask(
+                    actor_message,
+                    i18n=i18n,
+                    state=state,
+                    dialog_manager=manager,
+                )
             elif action_id == "bookmarks":
                 await bot_instance._handle_bookmarks(actor_message, state)
             elif action_id == "demo":
