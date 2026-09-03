@@ -12,6 +12,7 @@ scripts/e2e
 - auth.py
 - claude_judge.py
 - config.py
+- demo_gate.py
 - qdrant_preflight.py
 - quick_test.py
 - report_generator.py

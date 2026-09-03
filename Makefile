@@ -448,6 +448,21 @@ test-preflight: ## Run preflight checks (Qdrant/Redis config)
 	uv run pytest tests/smoke/test_preflight.py -v -s
 	@echo "$(GREEN)✓ Preflight complete$(NC)"
 
+# =============================================================================
+# DEMO GATE (#3205)
+# =============================================================================
+
+# MODE="" runs the full gate (readiness + real Telegram journey);
+# MODE="--prerequisites-only" runs the readiness snapshot only.
+MODE ?=
+
+demo-gate: ## Run the automated five-minute real-estate Telegram demo gate (#3205)
+	@echo "$(BLUE)Running demo gate (#3205) $(MODE)...$(NC)"
+	$(ENV_LOAD) $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) python -m scripts.e2e.demo_gate $(MODE)
+	@echo "$(GREEN)✓ Demo gate complete$(NC)"
+
+.PHONY: demo-gate
+
 test-smoke: ## Run smoke tests (requires live services)
 	@echo "$(BLUE)Running smoke tests...$(NC)"
 	uv run pytest tests/smoke/ -v --tb=short
