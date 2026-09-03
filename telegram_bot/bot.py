@@ -10,7 +10,6 @@ Extraction map:
   observability/bot_observability (card_2a71ec058138, #1265 PR-2),
   handlers/error_classification (#1265 PR-3),
   pipeline/streaming (#1265 PR-4, card_2a71ec058138 SLICE 3),
-  pipeline/pre_agent (#1265 PR-5, card_2a71ec058138 SLICE 3),
   pipeline/supervisor (#2816 Slice 2, card_2a71ec058138 SLICE 3),
   lifecycle/lifecycle (card_2a71ec058138),
   handlers/{catalog,favorites,bot_handoff,bot_crm_callbacks,feedback_handlers} (card_2a71ec058138 SLICE 2),
@@ -62,7 +61,6 @@ from .observability import (
 from .observability import (
     state_helpers as _bot_state_helpers,  # card_2a71ec058138: homed to observability/
 )
-from .pipeline import pre_agent as _bot_pre_agent  # card_2a71ec058138 SLICE 3: moved to pipeline/
 from .pipeline import streaming as _bot_streaming  # card_2a71ec058138 SLICE 3: moved to pipeline/
 from .pipeline import (
     supervisor as _bot_query_pipeline,  # card_2a71ec058138 SLICE 3: moved to pipeline/
@@ -115,26 +113,6 @@ def detect_injection(*args: Any, **kwargs: Any) -> Any:
     from src.runtime.safety.guard import detect_injection as _detect_injection
 
     return _detect_injection(*args, **kwargs)
-
-
-def _build_pre_agent_state_contract(*args: Any, **kwargs: Any) -> Any:
-    """Thin wrapper — see ``_bot_pre_agent`` (#1265 Slice 1 PR-5)."""
-    return _bot_pre_agent._build_pre_agent_state_contract(*args, **kwargs)
-
-
-def _has_async_method(obj: Any, name: str) -> bool:
-    """Thin wrapper — see ``_bot_pre_agent`` (#1265 Slice 1 PR-5)."""
-    return _bot_pre_agent._has_async_method(obj, name)
-
-
-async def _get_or_compute_pre_agent_dense(*args: Any, **kwargs: Any) -> Any:
-    """Thin wrapper — see ``_bot_pre_agent`` (#1265 Slice 1 PR-5)."""
-    return await _bot_pre_agent._get_or_compute_pre_agent_dense(*args, **kwargs)
-
-
-async def _prepare_pre_agent_retrieval_vectors(*args: Any, **kwargs: Any) -> None:
-    """Thin wrapper — see ``_bot_pre_agent`` (#1265 Slice 1 PR-5)."""
-    await _bot_pre_agent._prepare_pre_agent_retrieval_vectors(*args, **kwargs)
 
 
 def _new_draft_id() -> int:
@@ -648,7 +626,6 @@ class PropertyBot:
     def _trace_guard_blocked(
         *,
         user_text: str,
-        query_type: str,
         pipeline_start: float,
         risk_score: float,
         pattern: str | None,
@@ -656,39 +633,10 @@ class PropertyBot:
     ) -> None:
         return _bot_query_pipeline._trace_guard_blocked(
             user_text=user_text,
-            query_type=query_type,
             pipeline_start=pipeline_start,
             risk_score=risk_score,
             pattern=pattern,
             root_trace_metadata=root_trace_metadata,
-        )
-
-    async def _handle_pre_agent_cache_hit(
-        self,
-        *,
-        message: Any,
-        cached: str,
-        user_text: str,
-        query_type: str,
-        role: str,
-        pipeline_start: float,
-        pre_agent_start: float,
-        rag_result_store: dict[str, Any],
-        root_trace_metadata: dict[str, Any] | None,
-        dense: list[float],
-    ) -> str:
-        return await _bot_query_pipeline._handle_pre_agent_cache_hit(
-            self,
-            message=message,
-            cached=cached,
-            user_text=user_text,
-            query_type=query_type,
-            role=role,
-            pipeline_start=pipeline_start,
-            pre_agent_start=pre_agent_start,
-            rag_result_store=rag_result_store,
-            root_trace_metadata=root_trace_metadata,
-            dense=dense,
         )
 
     async def _send_core_response(
@@ -716,18 +664,12 @@ class PropertyBot:
     @staticmethod
     def _write_final_pipeline_trace(
         *,
-        user_text: str,
         wall_ms: float,
-        pre_agent_ms: float,
-        filter_signature: str | None,
         rag_result_store: dict[str, Any],
         root_trace_metadata: dict[str, Any] | None,
     ) -> None:
         return _bot_query_pipeline._write_final_pipeline_trace(
-            user_text=user_text,
             wall_ms=wall_ms,
-            pre_agent_ms=pre_agent_ms,
-            filter_signature=filter_signature,
             rag_result_store=rag_result_store,
             root_trace_metadata=root_trace_metadata,
         )

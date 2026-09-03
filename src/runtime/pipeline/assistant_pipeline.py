@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -30,6 +31,18 @@ from src.runtime.generation import GenerationRequest, generate_answer
 from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.context import PipelineContext
 from src.runtime.pipeline.rag import rag_pipeline
+from src.runtime.services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    is_contextual_query,
+    maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
+)
+
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_CONFIDENCE_THRESHOLD = 0.005
 
 
 async def run_assistant_pipeline(
@@ -126,6 +139,30 @@ async def run_assistant_pipeline(
             output_tokens=usage.get("output"),
         )
 
+        legal_answer_safe = _as_optional_bool(generation_result.get("legal_answer_safe"))
+        semantic_cache_safe_reuse = _as_optional_bool(
+            generation_result.get("semantic_cache_safe_reuse")
+        )
+
+        # Single semantic-cache store (issue #3208): the core owns the canonical
+        # RAG flow end-to-end, so transports must not repeat the store step.
+        await _store_semantic_cache(
+            request=request,
+            ctx=ctx,
+            dependencies=dependencies,
+            rag_result=rag_result,
+            response_text=generation.response_text,
+            query_type=str(rag_result.get("query_type") or request_type),
+            grounding_mode=grounding_mode,
+            documents=documents,
+            grade_confidence=grade_confidence,
+            llm_model=llm_model,
+            grounded=grounded if isinstance(grounded, bool) else None,
+            legal_answer_safe=legal_answer_safe,
+            semantic_cache_safe_reuse=semantic_cache_safe_reuse,
+            generation_result=generation_result,
+        )
+
         return AssistantResult(
             response_text=generation.response_text,
             route="rag_search",
@@ -147,11 +184,11 @@ async def run_assistant_pipeline(
             grounding_mode=grounding_mode,
             grounded=grounded if isinstance(grounded, bool) else None,
             safe_fallback_used=bool(generation_result.get("safe_fallback_used", False)),
+            legal_answer_safe=legal_answer_safe,
+            semantic_cache_safe_reuse=semantic_cache_safe_reuse,
             usage=_coerce_usage(usage),
         )
     except Exception:
-        import logging
-
         logging.getLogger(__name__).exception(
             "assistant_pipeline: unhandled exception for request_id=%s", rid
         )
@@ -161,6 +198,95 @@ async def run_assistant_pipeline(
 def _latency_ms(started: float) -> float:
     """Calculate elapsed time in milliseconds since a start point."""
     return round((time.perf_counter() - started) * 1000, 3)
+
+
+def _as_optional_bool(value: Any) -> bool | None:
+    """Coerce a generation payload flag to bool, preserving unknown (None)."""
+    return value if isinstance(value, bool) else None
+
+
+def _confidence_threshold(config: Any) -> float:
+    """Resolve the retrieval confidence gate from config with a safe default."""
+    raw = getattr(config, "relevance_threshold_rrf", None)
+    if isinstance(raw, bool) or not isinstance(raw, int | float):
+        return _DEFAULT_CONFIDENCE_THRESHOLD
+    return float(raw)
+
+
+async def _store_semantic_cache(
+    *,
+    request: AssistantRequest,
+    ctx: UserContext,
+    dependencies: CoreDependencies,
+    rag_result: dict[str, Any],
+    response_text: str,
+    query_type: str,
+    grounding_mode: str,
+    documents: list[dict[str, Any]],
+    grade_confidence: Any,
+    llm_model: str | None,
+    grounded: bool | None,
+    legal_answer_safe: bool | None,
+    semantic_cache_safe_reuse: bool | None,
+    generation_result: dict[str, Any],
+) -> None:
+    """Store the generated response in the semantic cache when eligible.
+
+    Uses the same cache policy as the rest of the runtime and never lets a
+    store failure lose the response (#524). Skipped without a cache-key
+    embedding (cache hits, stubbed boundaries).
+    """
+    store_vector = rag_result.get("cache_key_embedding") or rag_result.get("query_embedding")
+    if not isinstance(store_vector, list) or not store_vector:
+        return
+
+    threshold = _confidence_threshold(dependencies.config)
+    filters = ctx.filters if isinstance(ctx.filters, dict) else None
+    try:
+        decision = build_cacheability_decision(
+            result={
+                "response": response_text,
+                "grounded": bool(grounded) if grounded is not None else False,
+                "legal_answer_safe": bool(legal_answer_safe) if legal_answer_safe is not None else False,
+                "semantic_cache_safe_reuse": (
+                    bool(semantic_cache_safe_reuse) if semantic_cache_safe_reuse is not None else False
+                ),
+                "fallback_used": bool(generation_result.get("fallback_used", False)),
+                "safe_fallback_used": bool(generation_result.get("safe_fallback_used", False)),
+                "llm_provider_model": llm_model or "",
+                "llm_timeout": bool(generation_result.get("llm_timeout", False)),
+            },
+            query_type=query_type,
+            grounding_mode=grounding_mode,
+            documents=documents,
+            cache_hit=False,
+            contextual=is_contextual_query(request.query),
+            grade_confidence=float(grade_confidence or 0.0),
+            confidence_threshold=threshold,
+            schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+        )
+        stored = await maybe_store_semantic_response(
+            cache=dependencies.cache,
+            query=request.query,
+            response=response_text,
+            vector=store_vector,
+            query_type=query_type,
+            cache_scope="rag",
+            decision=decision,
+            agent_role=ctx.role or None,
+            filter_signature=resolve_semantic_cache_signature(filters=filters),
+        )
+    except Exception as exc:
+        # Cache errors must never lose the response (#524).
+        logger.warning(
+            "assistant_pipeline: semantic cache store failed, response preserved: %s: %s",
+            type(exc).__name__,
+            exc,
+        )
+        return
+
+    if stored:
+        logger.info("assistant_pipeline: stored=semantic (type=%s)", query_type)
 
 
 def _coerce_user_id(value: str) -> int:

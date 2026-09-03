@@ -80,7 +80,6 @@ class TestQuerySupervisorContentFilter:
         from src.runtime.safety.guard import _BLOCKED_RESPONSE
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
             patch(
                 "telegram_bot.bot.detect_injection",
                 return_value=(True, 0.9, "sql_injection"),
@@ -104,7 +103,6 @@ class TestQuerySupervisorContentFilter:
         from src.runtime.safety.guard import _BLOCKED_RESPONSE
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),
             patch(
                 "telegram_bot.bot.detect_injection",
                 return_value=(True, 0.7, "prompt_injection"),
@@ -139,7 +137,6 @@ class TestQuerySupervisorContentFilter:
         message = _make_message("DROP TABLE users;")
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),
             patch("telegram_bot.bot.detect_injection") as mock_detect,
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
@@ -258,45 +255,28 @@ class TestQuerySupervisorHandoffMode:
 
 
 class TestQuerySupervisorSemanticCache:
-    """Tests for the pre-agent semantic cache hit/miss in _handle_query_supervisor."""
+    """Cache checks live in the core (#3208): Telegram must not look up."""
 
-    async def test_cache_hit_returns_cached_response(self):
-        """Cache HIT for cacheable query type returns cached text without invoking agent."""
+    async def test_cache_lookup_not_performed_by_telegram(self):
+        """Telegram never calls check_semantic; the core owns the cache stage."""
         config = _make_config(content_filter_enabled=False)
         bot = _create_bot(config)
         message = _make_message("What is the deposit amount?")
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
             patch(
-                "telegram_bot.pipeline.supervisor._get_or_compute_pre_agent_dense",
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
-                return_value=[0.1] * 768,
+                return_value=_core_result("core answer"),
+            ),
+            patch(
+                "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
+                side_effect=_noop_typing,
             ),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
-            patch(
-                "telegram_bot.pipeline.supervisor.get_query_topic_hint",
-                return_value=None,
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor.get_grounding_mode",
-                return_value="default",
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor.detect_filter_sensitive_query",
-            ) as mock_filter_signal,
-            patch(
-                "telegram_bot.pipeline.supervisor.is_contextual_query",
-                return_value=False,
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor.resolve_semantic_cache_signature",
-                return_value=None,
-            ),
         ):
-            mock_filter_signal.return_value = MagicMock(is_filter_sensitive=False, reasons=[])
-
             bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._cache = MagicMock()
             bot._cache.check_semantic = AsyncMock(return_value="Cached: deposit is 10%")
             bot._send_markdown_chunks = AsyncMock()
 
@@ -304,9 +284,10 @@ class TestQuerySupervisorSemanticCache:
                 message, time.perf_counter(), locale="ru", root_trace_metadata={}
             )
 
-        assert result == "Cached: deposit is 10%"
+        bot._cache.check_semantic.assert_not_awaited()
         mock_agent_factory.assert_not_called()
-        bot._send_markdown_chunks.assert_awaited_once()
+        assert result == "core answer"
+        message.answer.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +320,6 @@ class TestQuerySupervisorCoreEntrypoint:
         )
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="GENERAL"),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
@@ -347,45 +327,12 @@ class TestQuerySupervisorCoreEntrypoint:
                 return_value=mock_result,
             ) as mock_run_core,
             patch(
-                "telegram_bot.pipeline.supervisor.maybe_store_semantic_response",
-                new_callable=AsyncMock,
-            ),
-            patch(
                 "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
                 side_effect=_noop_typing,
             ),
-            patch(
-                "telegram_bot.pipeline.supervisor._get_or_compute_pre_agent_dense",
-                new_callable=AsyncMock,
-                return_value=[0.1] * 768,
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor.get_query_topic_hint",
-                return_value=None,
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor.get_grounding_mode",
-                return_value="default",
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor.detect_filter_sensitive_query",
-                return_value=MagicMock(is_filter_sensitive=False, reasons=[]),
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor.is_contextual_query",
-                return_value=False,
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor.resolve_semantic_cache_signature",
-                return_value=None,
-            ),
-            patch(
-                "telegram_bot.pipeline.supervisor._prepare_pre_agent_retrieval_vectors",
-                new_callable=AsyncMock,
-            ),
         ):
             bot._resolve_user_role = AsyncMock(return_value="client")
-            bot._cache.check_semantic = AsyncMock(return_value=None)
+            bot._cache = MagicMock()
 
             result = await bot._handle_query_supervisor(
                 message, time.perf_counter(), locale="ru", root_trace_metadata={}
@@ -395,6 +342,146 @@ class TestQuerySupervisorCoreEntrypoint:
         mock_run_core.assert_awaited_once()
         mock_agent_factory.assert_not_called()
         message.answer.assert_awaited_once()
+
+
+class TestQuerySupervisorConvergence:
+    """One core call; classify/embed/cache are not duplicated in Telegram (#3208)."""
+
+    async def test_single_core_call_no_telegram_classify_embed_cache(self):
+        config = _make_config(content_filter_enabled=False)
+        bot = _create_bot(config)
+        message = _make_message("Сколько стоит студия в Sunny Beach?")
+
+        with (
+            patch("telegram_bot.bot.classify_query") as mock_classify,
+            patch("telegram_bot.bot.detect_injection") as mock_detect,
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=_core_result("ответ"),
+            ) as mock_run_core,
+            patch(
+                "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
+                side_effect=_noop_typing,
+            ),
+        ):
+            bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._cache = MagicMock()
+            bot._embeddings = MagicMock()
+            bot._embeddings.aembed_query = AsyncMock()
+
+            result = await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            )
+
+        assert result == "ответ"
+        mock_run_core.assert_awaited_once()
+        mock_classify.assert_not_called()
+        mock_detect.assert_not_called()
+        bot._cache.check_semantic.assert_not_called()
+        bot._embeddings.aembed_query.assert_not_awaited()
+        # Exactly one send.
+        message.answer.assert_awaited_once()
+
+    async def test_filters_propagate_into_core_user_context(self):
+        """Deterministic filter extraction still feeds the core request (#3208)."""
+        config = _make_config(content_filter_enabled=False)
+        bot = _create_bot(config)
+        message = _make_message("Двухкомнатные квартиры в Несебре до 80000 евро")
+
+        with (
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=_core_result("ответ"),
+            ) as mock_run_core,
+            patch(
+                "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
+                side_effect=_noop_typing,
+            ),
+        ):
+            bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._cache = MagicMock()
+            bot._extract_pre_agent_filters = AsyncMock(return_value={"city": "Несебр"})
+
+            await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            )
+
+        ctx = mock_run_core.await_args.kwargs["user_context"]
+        assert ctx.filters == {"city": "Несебр"}
+
+    async def test_cache_hit_result_presented_once(self):
+        """Core cache-hit results flow through the same single presentation path."""
+        config = _make_config(content_filter_enabled=False)
+        bot = _create_bot(config)
+        message = _make_message("What is the deposit amount?")
+
+        cached_result = _core_result("Cached: deposit is 10%")
+        cached_result.cache_hit = True
+        cached_result.route = "cache_hit"
+        cached_result.request_type = "FAQ"
+
+        with (
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=cached_result,
+            ),
+            patch(
+                "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
+                side_effect=_noop_typing,
+            ),
+        ):
+            bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._cache = MagicMock()
+            bot._graph_config = MagicMock(show_sources=True)
+
+            result = await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            )
+
+        assert result == "Cached: deposit is 10%"
+        assert message.answer.await_count == 1
+
+    async def test_trace_metadata_is_truthful_not_hardcoded(self):
+        """Grounding/safety trace fields mirror the core result (#3208)."""
+        config = _make_config(content_filter_enabled=False)
+        bot = _create_bot(config)
+        message = _make_message("Что-то Спросить?")
+
+        core_result = _core_result("ответ")
+        core_result.grounded = False
+        core_result.safe_fallback_used = True
+        core_result.legal_answer_safe = False
+        core_result.semantic_cache_safe_reuse = False
+        core_result.grounding_mode = "strict"
+
+        meta: dict = {}
+        with (
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=core_result,
+            ),
+            patch(
+                "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
+                side_effect=_noop_typing,
+            ),
+        ):
+            bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._cache = MagicMock()
+            bot._graph_config = MagicMock(show_sources=False)
+
+            await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="ru", root_trace_metadata=meta
+            )
+
+        assert meta["grounded"] is False
+        assert meta["safe_fallback_used"] is True
+        assert meta["legal_answer_safe"] is False
+        assert meta["semantic_cache_safe_reuse"] is False
+        assert meta["grounding_mode"] == "strict"
 
 
 # ---------------------------------------------------------------------------
@@ -438,31 +525,34 @@ class TestSupervisorFeedbackKeyboard:
         assert tid and len(tid.encode()) <= 64
         assert message.answer.await_args.kwargs.get("reply_markup") is markup
 
-    async def test_pre_agent_cache_hit_attaches_bounded_identity(self):
-        from telegram_bot.pipeline.supervisor import _handle_pre_agent_cache_hit
+    async def test_cache_hit_attaches_bounded_identity(self):
+        """Cache-hit presentation binds the feedback keyboard to the core request_id."""
+        from telegram_bot.pipeline.supervisor import _send_core_response
 
         bot = MagicMock()
-        bot._send_markdown_chunks = AsyncMock()
+        bot._graph_config = MagicMock(show_sources=False)
+        bot.bot = MagicMock(send_message=AsyncMock())
         message = MagicMock()
-        store: dict = {}
-        markup = object()
+        message.chat = MagicMock(id=1, type="group")
+        message.answer = AsyncMock()
 
+        class _Ctx:
+            response_sent = False
+            history_reply_markup = None
+
+        store = {"request_id": "core-cache-hit-1234"}
+        markup = object()
         with patch("telegram_bot.feedback.build_feedback_keyboard", return_value=markup) as mock_kb:
-            await _handle_pre_agent_cache_hit(
+            await _send_core_response(
                 bot,
                 message=message,
-                cached="cached answer",
+                response_text="cached answer",
                 user_text="question",
                 query_type="FAQ",
-                role="client",
-                pipeline_start=time.perf_counter(),
-                pre_agent_start=time.perf_counter(),
                 rag_result_store=store,
-                root_trace_metadata=None,
-                dense=[0.1, 0.2],
+                ctx=_Ctx(),
+                forum_thread_id=None,
             )
 
-        rid = store.get("request_id")
-        assert isinstance(rid, str) and len(rid) == 16
-        mock_kb.assert_called_once_with(rid)
-        assert bot._send_markdown_chunks.await_args.kwargs.get("reply_markup") is markup
+        mock_kb.assert_called_once_with("core-cache-hit-1234")
+        assert message.answer.await_args.kwargs.get("reply_markup") is markup

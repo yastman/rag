@@ -108,43 +108,51 @@ def _wire_cache(bot: object) -> AsyncMock:
     return cache
 
 
+def _core_result(
+    *,
+    response_text: str = "Answer",
+    request_type: str = "FAQ",
+    request_id: str = "test-request-id",
+    cache_hit: bool = False,
+    sources: list[dict] | None = None,
+    grounded: bool | None = True,
+):
+    from src.core import AssistantResult
+
+    return AssistantResult(
+        response_text=response_text,
+        route="cache_hit" if cache_hit else "rag_search",
+        request_type=request_type,
+        request_id=request_id,
+        retrieved_doc_ids=[],
+        retrieved_sources=sources or [],
+        documents_count=len(sources or []),
+        latency_ms=10.0,
+        cache_hit=cache_hit,
+        rerank_applied=False,
+        grounded=grounded,
+    )
+
+
 async def _run_handle_query(
     bot: object,
     message: object,
     *,
     query_type: str,
-    store_update: dict | None = None,
     response_text: str = "Answer",
+    cache_hit: bool = False,
 ) -> None:
-    """Drive handle_query with current supervisor core path mocked."""
-
-    async def _fake_run_core(
-        _bot: object,
-        _message: object,
-        *,
-        rag_result_store: dict,
-        **_kwargs: object,
-    ) -> str:
-        if store_update:
-            rag_result_store.update(store_update)
-        rag_result_store.setdefault("query_type", query_type)
-        rag_result_store.setdefault("request_id", "test-request-id")
-        return response_text
-
+    """Drive handle_query with the assistant-core adapter mocked (#3208 flow)."""
     with (
-        patch("telegram_bot.bot.classify_query", return_value=query_type),
         patch("telegram_bot.bot.detect_injection", return_value=(False, 0.0, None)),
         patch(
-            "telegram_bot.pipeline.supervisor._get_or_compute_pre_agent_dense",
-            new=AsyncMock(return_value=[0.1, 0.2, 0.3]),
-        ),
-        patch(
-            "telegram_bot.pipeline.supervisor._prepare_pre_agent_retrieval_vectors",
-            new=AsyncMock(return_value=None),
-        ),
-        patch(
-            "telegram_bot.pipeline.supervisor._supervisor_run_core",
-            new=AsyncMock(side_effect=_fake_run_core),
+            "telegram_bot.assistant_core_adapter.run_core_text_request",
+            new_callable=AsyncMock,
+            return_value=_core_result(
+                response_text=response_text,
+                request_type=query_type,
+                cache_hit=cache_hit,
+            ),
         ),
         patch("telegram_bot.pipeline.supervisor.ChatActionSender") as mock_cas,
     ):
@@ -199,17 +207,7 @@ class TestTextPathFeedbackButtons:
         _wire_cache(bot)
         message = _make_message()
 
-        await _run_handle_query(
-            bot,
-            message,
-            query_type="FAQ",
-            store_update={
-                "query_type": "FAQ",
-                "documents": [],
-                "response": "Answer",
-            },
-            response_text="Answer",
-        )
+        await _run_handle_query(bot, message, query_type="FAQ", response_text="Answer")
 
         answer_calls = message.answer.call_args_list
         assert len(answer_calls) > 0
@@ -222,17 +220,7 @@ class TestTextPathFeedbackButtons:
         _wire_cache(bot)
         message = _make_message()
 
-        await _run_handle_query(
-            bot,
-            message,
-            query_type="FAQ",
-            store_update={
-                "query_type": "FAQ",
-                "documents": [],
-                "response": "Answer",
-            },
-            response_text="Answer",
-        )
+        await _run_handle_query(bot, message, query_type="FAQ", response_text="Answer")
 
         answer_calls = message.answer.call_args_list
         assert len(answer_calls) > 0
@@ -245,17 +233,7 @@ class TestTextPathFeedbackButtons:
         _wire_cache(bot)
         message = _make_message()
 
-        await _run_handle_query(
-            bot,
-            message,
-            query_type="CHITCHAT",
-            store_update={
-                "query_type": "CHITCHAT",
-                "documents": [],
-                "response": "Привет!",
-            },
-            response_text="Привет!",
-        )
+        await _run_handle_query(bot, message, query_type="CHITCHAT", response_text="Привет!")
 
         answer_calls = message.answer.call_args_list
         assert len(answer_calls) > 0
@@ -268,16 +246,7 @@ class TestTextPathFeedbackButtons:
         _wire_cache(bot)
         message = _make_message()
 
-        await _run_handle_query(
-            bot,
-            message,
-            query_type="",
-            store_update={
-                "documents": [],
-                "response": "Answer",
-            },
-            response_text="Answer",
-        )
+        await _run_handle_query(bot, message, query_type="", response_text="Answer")
 
         answer_calls = message.answer.call_args_list
         assert len(answer_calls) > 0
@@ -285,10 +254,10 @@ class TestTextPathFeedbackButtons:
         assert last_call.kwargs.get("reply_markup") is None
 
 
-class TestTextPathSemanticCacheStore:
-    """Test semantic cache persistence in SDK text path."""
+class TestTextPathNoSemanticCacheStore:
+    """Semantic-cache storage is core-owned after #3208 — Telegram must not store."""
 
-    async def test_stores_semantic_cache_for_cacheable_query_type(self, mock_config):
+    async def test_telegram_path_never_stores_semantic_cache(self, mock_config):
         bot = _create_bot(mock_config)
         cache = _wire_cache(bot)
         message = _make_message("какие документы нужны для покупки квартиры")
@@ -297,108 +266,11 @@ class TestTextPathSemanticCacheStore:
             bot,
             message,
             query_type="FAQ",
-            store_update={
-                "query_type": "FAQ",
-                "query_embedding": [0.1, 0.2, 0.3],
-                "cache_hit": False,
-                "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
-                "grade_confidence": 0.9,
-                "grounding_mode": "strict",
-                "grounded": True,
-                "legal_answer_safe": True,
-                "semantic_cache_safe_reuse": True,
-                "safe_fallback_used": False,
-            },
-            response_text="Ответ агентом",
-        )
-
-        cache.store_semantic.assert_called_once()
-        kwargs = cache.store_semantic.call_args.kwargs
-        assert kwargs["query"] == message.text
-        assert kwargs["response"] == "Ответ агентом"
-        assert kwargs["query_type"] == "FAQ"
-        assert "user_id" not in kwargs
-
-    async def test_stores_semantic_cache_for_general_type(self, mock_config):
-        bot = _create_bot(mock_config)
-        cache = _wire_cache(bot)
-        message = _make_message("расскажи в целом про рынок")
-
-        await _run_handle_query(
-            bot,
-            message,
-            query_type="GENERAL",
-            store_update={
-                "query_type": "GENERAL",
-                "query_embedding": [0.1, 0.2, 0.3],
-                "cache_hit": False,
-                "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
-                "grade_confidence": 0.9,
-                "grounded": True,
-                "legal_answer_safe": True,
-                "semantic_cache_safe_reuse": True,
-            },
-            response_text="Ответ агентом",
-        )
-
-        cache.store_semantic.assert_called_once()
-        kwargs = cache.store_semantic.call_args.kwargs
-        assert kwargs["query_type"] == "GENERAL"
-
-    async def test_strict_unsafe_result_skips_text_path_semantic_cache_store(self, mock_config):
-        bot = _create_bot(mock_config)
-        cache = _wire_cache(bot)
-        message = _make_message("какие документы нужны для внж")
-
-        await _run_handle_query(
-            bot,
-            message,
-            query_type="FAQ",
-            store_update={
-                "query_type": "FAQ",
-                "query_embedding": [0.1, 0.2, 0.3],
-                "cache_hit": False,
-                "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
-                "grade_confidence": 0.9,
-                "grounding_mode": "strict",
-                "grounded": False,
-                "legal_answer_safe": False,
-                "semantic_cache_safe_reuse": False,
-                "safe_fallback_used": True,
-            },
             response_text="Ответ агентом",
         )
 
         cache.store_semantic.assert_not_called()
-
-    async def test_strict_safe_result_stores_text_path_cache_metadata(self, mock_config):
-        bot = _create_bot(mock_config)
-        cache = _wire_cache(bot)
-        message = _make_message("какие документы нужны для внж")
-
-        await _run_handle_query(
-            bot,
-            message,
-            query_type="FAQ",
-            store_update={
-                "query_type": "FAQ",
-                "query_embedding": [0.1, 0.2, 0.3],
-                "cache_hit": False,
-                "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
-                "grade_confidence": 0.9,
-                "grounding_mode": "strict",
-                "grounded": True,
-                "legal_answer_safe": True,
-                "semantic_cache_safe_reuse": True,
-                "safe_fallback_used": False,
-            },
-            response_text="Ответ агентом",
-        )
-
-        cache.store_semantic.assert_called_once()
-        metadata = cache.store_semantic.call_args.kwargs["metadata"]
-        assert metadata["grounding_mode"] == "strict"
-        assert metadata["semantic_cache_safe_reuse"] is True
+        cache.check_semantic.assert_not_called()
 
 
 class TestExtractCurrentTurn:

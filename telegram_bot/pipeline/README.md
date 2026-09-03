@@ -1,7 +1,9 @@
 # telegram_bot/pipeline/
 
-The bot's query pipeline, pre-agent helpers, and streaming helpers — extracted from
-`telegram_bot/bot.py` (`card_2a71ec058138`, split #2816).
+The bot's query pipeline and streaming helpers — extracted from
+`telegram_bot/bot.py` (`card_2a71ec058138`, split #2816). Since #3208 the
+supervisor path converges on assistant-core: classify/embed/semantic-cache
+work lives in `src.runtime.pipeline.assistant_pipeline`, not here.
 
 > **Not to be confused with [`../pipelines/`](../pipelines/)** (plural): `pipelines/` holds the
 > client-direct entrypoints. This `pipeline/` (singular) is the supervisor-driven query path
@@ -11,8 +13,7 @@ The bot's query pipeline, pre-agent helpers, and streaming helpers — extracted
 
 | File | Purpose |
 |------|---------|
-| [`supervisor.py`](./supervisor.py) | Query pipeline handlers: `handle_query`, apartment fast-path, client-direct path, pre-agent cache hit, supervisor stream/invoke with recovery, final-trace write |
-| [`pre_agent.py`](./pre_agent.py) | Pre-agent helpers (cache/grounding decisions before the agent runs) |
+| [`supervisor.py`](./supervisor.py) | Query pipeline handlers: `handle_query`, guard gating, filter assembly, one assistant-core call, presentation, final-trace write, supervisor stream/invoke with recovery |
 | [`streaming.py`](./streaming.py) | Streaming-response helpers |
 
 ## Boundaries
