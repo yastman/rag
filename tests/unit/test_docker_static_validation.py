@@ -174,7 +174,7 @@ def test_langfuse_dockerfile_does_not_use_python314(dockerfile: str) -> None:
     because `from langfuse import Langfuse` raises
     `pydantic.v1.errors.ConfigError` on Python 3.14.
     """
-    text = Path(dockerfile).read_text()
+    text = Path(dockerfile).read_text(encoding="utf-8")
     assert "python3.14" not in text, (
         f"{dockerfile} uses Python 3.14 runtime which is incompatible with langfuse SDK"
     )
@@ -190,7 +190,7 @@ def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
     Docker runtime is pinned to 3.13 while repo native dev may still use
     a local uv environment with a different Python version.
     """
-    text = Path(dockerfile).read_text()
+    text = Path(dockerfile).read_text(encoding="utf-8")
     assert "python3.13" in text or "python:3.13" in text, (
         f"{dockerfile} must use Python 3.13 runtime for langfuse SDK compatibility"
     )
@@ -223,7 +223,7 @@ def test_bge_m3_build_uses_onnx_model_context() -> None:
     """bge-m3 must bake ONNX INT8 artifacts into the image at build time (#2229)."""
     import yaml
 
-    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
     bge_m3 = compose["services"]["bge-m3"]
     build = bge_m3["build"]
     assert build["additional_contexts"]["bge_m3_onnx_model"].startswith(
@@ -239,7 +239,7 @@ def test_bge_m3_has_hf_subdirectory_mount() -> None:
     so the ONNX path /models/onnx remains usable (#2229)."""
     import yaml
 
-    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
     bge_m3 = compose["services"]["bge-m3"]
     volumes = bge_m3.get("volumes", [])
     targets: set[str] = set()
@@ -260,7 +260,7 @@ def test_bge_m3_model_cache_dir_uses_writable_hf_cache() -> None:
     """The tokenizer cache must use the HF volume, not /models root (#2229)."""
     import yaml
 
-    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
     bge_m3 = compose["services"]["bge-m3"]
     environment = bge_m3["environment"]
     assert environment["MODEL_CACHE_DIR"] == "/models/hf"
@@ -270,14 +270,14 @@ def test_bge_m3_model_cache_dir_uses_writable_hf_cache() -> None:
 
 def test_bge_m3_dockerfile_prepares_model_dirs_for_appuser() -> None:
     """Named volumes inherit target ownership on first use; prepare /models."""
-    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text()
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text(encoding="utf-8")
     assert "mkdir -p /models/hf /models/onnx" in dockerfile
     assert "chown -R appuser:appgroup /models" in dockerfile
 
 
 def test_bge_m3_dockerfile_bakes_int8_model_from_build_context() -> None:
     """The Docker image must contain the ONNX INT8 artifacts, not require a runtime mount."""
-    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text()
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text(encoding="utf-8")
     assert "from=bge_m3_onnx_model" in dockerfile
     assert "model.int8.onnx" in dockerfile
     assert "model.int8.onnx.data" in dockerfile
@@ -310,7 +310,7 @@ def test_bge_m3_onnx_model_dir_env_in_ci_env() -> None:
 def test_bge_m3_onnx_model_dir_env_in_env_example() -> None:
     """.env.example must document BGE_M3_ONNX_MODEL_HOST_DIR as a local-dev
     path for the ONNX INT8 artifact bind mount (#2229)."""
-    text = ENV_EXAMPLE.read_text()
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
     assert "BGE_M3_ONNX_MODEL_HOST_DIR" in text, (
         "BGE_M3_ONNX_MODEL_HOST_DIR must be documented in .env.example "
         "for local ONNX model provisioning"

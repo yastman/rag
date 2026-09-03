@@ -15,7 +15,7 @@ def test_no_hardcoded_qdrant_secrets_in_integration_tests():
     if not test_file.exists():
         return  # File doesn't exist, skip
 
-    content = test_file.read_text()
+    content = test_file.read_text(encoding="utf-8")
 
     # Check for hardcoded IP addresses
     ip_pattern = r'QDRANT_URL\s*=\s*["\']http://\d+\.\d+\.\d+\.\d+:\d+["\']'
@@ -55,7 +55,7 @@ def test_compose_redis_uses_requirepass():
         if not compose_file.exists():
             continue
 
-        content = compose_file.read_text()
+        content = compose_file.read_text(encoding="utf-8")
 
         # Find redis service block
         redis_service_match = re.search(r"^\s+redis:\s*\n((?:\s{2,}.+\n)*)", content, re.MULTILINE)
@@ -83,7 +83,7 @@ def test_compose_dev_yml_has_no_hardcoded_password_fallbacks():
     from pathlib import Path
 
     project_root = Path(__file__).parent.parent.parent.parent
-    content = (project_root / "compose.dev.yml").read_text()
+    content = (project_root / "compose.dev.yml").read_text(encoding="utf-8")
 
     # Explicit retained credentials only — do not derive the set from file contents.
     password_vars = ("POSTGRES_PASSWORD", "REDIS_PASSWORD")
@@ -117,8 +117,8 @@ def test_compose_ci_env_has_all_required_password_vars():
     ci_env = project_root / "tests" / "fixtures" / "compose.ci.env"
     compose_dev = project_root / "compose.dev.yml"
 
-    ci_env_content = ci_env.read_text()
-    compose_dev_content = compose_dev.read_text()
+    ci_env_content = ci_env.read_text(encoding="utf-8")
+    compose_dev_content = compose_dev.read_text(encoding="utf-8")
 
     # Collect all :? required vars from compose.dev.yml
     required_vars = set()

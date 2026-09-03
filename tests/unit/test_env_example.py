@@ -10,7 +10,7 @@ def _parse_env_example() -> set[str]:
     """Parse .env.example and return set of variable names."""
     env_file = Path(".") / ".env.example"
     keys: set[str] = set()
-    for line in env_file.read_text().splitlines():
+    for line in env_file.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line and not line.startswith("#"):
             match = re.match(r"^([A-Z_][A-Z0-9_]*)=", line)

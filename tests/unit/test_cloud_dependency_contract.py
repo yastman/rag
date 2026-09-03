@@ -25,7 +25,7 @@ FORBIDDEN_LOCKED_STORAGE_CLIENTS = FORBIDDEN_DIRECT - {"googleapis-common-protos
 
 
 def _dependency_names() -> set[str]:
-    project = tomllib.loads(PYPROJECT.read_text())
+    project = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     names: set[str] = set()
 
     def add(deps: list[str]) -> None:
@@ -47,7 +47,7 @@ def test_aws_google_cloud_sdks_are_not_declared_dependencies() -> None:
 
 
 def test_aws_google_cloud_storage_clients_are_not_locked() -> None:
-    text = LOCKFILE.read_text()
+    text = LOCKFILE.read_text(encoding="utf-8")
     for package in FORBIDDEN_LOCKED_STORAGE_CLIENTS:
         assert f'name = "{package}"' not in text
 
@@ -58,7 +58,7 @@ def test_runtime_code_does_not_import_cloud_storage_sdks() -> None:
         for path in root.rglob("*.py"):
             if any(part in {".venv", "__pycache__"} for part in path.parts):
                 continue
-            tree = ast.parse(path.read_text(), filename=str(path))
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             for node in ast.walk(tree):
                 imported: set[str] = set()
                 if isinstance(node, ast.Import):
