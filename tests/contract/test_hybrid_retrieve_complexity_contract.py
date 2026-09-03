@@ -1,7 +1,8 @@
 """#2802 keeps _hybrid_retrieve a thin retrieval orchestrator.
 
 Updated for #2900: functions are now split across pipeline submodules.
-Mirrors tests/contract/test_generate_response_complexity_contract.py.
+(The generate_response complexity contract this file originally mirrored
+was deleted with the bot-local generation shims in #3222.)
 """
 
 from __future__ import annotations

@@ -28,3 +28,15 @@ def test_confidence_result_is_no_longer_exported():
     assert "ConfidenceResult" not in services.__all__
     with pytest.raises(AttributeError):
         services.ConfidenceResult  # noqa: B018
+
+
+def test_generate_response_is_no_longer_exported():
+    """generate_response/GenerationDeps were removed in #3222 (runtime owns generation)."""
+    import telegram_bot.services as services
+
+    assert "generate_response" not in services.__all__
+    assert "GenerationDeps" not in services.__all__
+    with pytest.raises(AttributeError):
+        services.generate_response  # noqa: B018
+    with pytest.raises(AttributeError):
+        services.GenerationDeps  # noqa: B018

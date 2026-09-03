@@ -462,7 +462,7 @@ class TestRunAssistantRequestRuntime:
         )
 
     async def test_calls_existing_rag_and_generation_pipeline(self) -> None:
-        """Runtime branch must reuse existing rag_pipeline and generate_response."""
+        """Runtime branch must reuse existing rag_pipeline and generate_answer."""
         from src.core.assistant import UserContext, run_assistant_request
 
         docs = [

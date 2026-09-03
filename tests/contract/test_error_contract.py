@@ -26,7 +26,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
     "src/runtime/integrations/cache.py": ["ERROR", "WARNING"],
-    "telegram_bot/services/generation/generate_response.py": ["ERROR", "WARNING"],
     "telegram_bot/services/qdrant.py": ["ERROR", "WARNING"],
     "src/runtime/services/qdrant.py": ["ERROR", "WARNING"],
     # SDK-native runtime pipeline — curated ERROR spans on the embedding,
@@ -41,7 +40,7 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # API-failure paths (CORE-023 move from telegram_bot.services).
     "src/runtime/services/query_preprocessor.py": ["ERROR"],
     # SDK-native generation service — ERROR span on the LLM-failure fallback
-    # path (CORE-004 split). Mirrors telegram_bot/services/generate_response.py.
+    # path (CORE-004 split). Bot-local generate_response.py removed in #3222.
     "src/runtime/generation/service.py": ["ERROR"],
     "telegram_bot/middlewares/error_handler.py": ["ERROR"],
     # CRM callback handlers — archived in #2625 (CRM archival).
