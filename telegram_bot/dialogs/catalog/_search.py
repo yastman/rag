@@ -129,6 +129,11 @@ async def search_catalog_from_query(
 
     await message.answer("🔍 Ищу подходящие варианты...")
     extraction = await catalog.extract(query)
+    if extraction is None:
+        # No extraction pipeline wired: degrade to the degraded-mode branch,
+        # which reports the (absent) filters instead of searching.
+        await message.answer("Сервис поиска временно недоступен.")
+        return
 
     if not catalog.service_available:
         dialog_manager.dialog_data["results"] = []
