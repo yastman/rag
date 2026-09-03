@@ -119,11 +119,10 @@ class ApartmentLlmExtractor:
             {"role": "user", "content": query},
         ]
 
-        result: ApartmentSearchFilters = await self._client.chat.completions.create(
+        result: ApartmentSearchFilters = await self._client.structured(
             model=self._model,
             messages=cast(Any, messages),
             response_model=ApartmentSearchFilters,
-            max_retries=2,
         )
 
         # Re-validate hard filters so bypassed test fixtures using model_construct

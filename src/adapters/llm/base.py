@@ -1,7 +1,6 @@
-"""Base interface and exception classes for LLM providers."""
+"""Normalized LLM error types shared by runtime consumers."""
 
-from abc import ABC, abstractmethod
-from typing import Any
+from __future__ import annotations
 
 
 class LLMError(Exception):
@@ -45,28 +44,3 @@ class LLMConnectionError(LLMError):
 
     def __init__(self, message: str, raw_error: Exception | None = None) -> None:
         super().__init__(message, error_type="connection_error", raw_error=raw_error)
-
-
-class LLMProvider(ABC):
-    """Abstract base class for LLM text generation providers."""
-
-    @abstractmethod
-    async def generate(
-        self,
-        messages: list[dict[str, Any]],
-        model: str | None = None,
-        **kwargs: Any,
-    ) -> str:
-        """Generate a response for a list of messages.
-
-        Args:
-            messages: A list of message dictionaries (e.g. {"role": "user", "content": "..."}).
-            model: Optional model name override.
-            **kwargs: Extra arguments passed to the completion API.
-
-        Returns:
-            The generated response content as a string.
-
-        Raises:
-            LLMError: If the generation fails.
-        """

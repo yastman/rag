@@ -104,29 +104,27 @@ class TestHyDEGenerator:
         assert hyde.model == "gpt-4o"
 
     def test_init_creates_litellm_router_client_for_hyde(self):
-        from src.runtime.llm.router import LiteLLMChatClient
+        from src.runtime.llm.router import LiteLlmClient
 
         hyde = HyDEGenerator()
-        assert isinstance(hyde.client, LiteLLMChatClient)
+        assert isinstance(hyde.client, LiteLlmClient)
 
     async def test_generate_hypothetical_document_success(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
-        hyde.client.chat.completions.create = AsyncMock(
+        hyde.client.completion = AsyncMock(
             return_value=_mock_completion("Уютная квартира в Несебре, 45м², рядом с пляжем.")
         )
 
         result = await hyde.generate_hypothetical_document("квартира у моря")
 
         assert "Несебре" in result or "квартира" in result.lower()
-        hyde.client.chat.completions.create.assert_called_once()
+        hyde.client.completion.assert_called_once()
 
     async def test_generate_hypothetical_document_fallback_on_error(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
-        hyde.client.chat.completions.create = AsyncMock(
-            side_effect=openai.APITimeoutError(request=MagicMock())
-        )
+        hyde.client.completion = AsyncMock(side_effect=openai.APITimeoutError(request=MagicMock()))
 
         result = await hyde.generate_hypothetical_document("квартира у моря")
 
@@ -135,7 +133,7 @@ class TestHyDEGenerator:
     async def test_generate_hypothetical_document_fallback_on_generic_error(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
-        hyde.client.chat.completions.create = AsyncMock(side_effect=Exception("Connection failed"))
+        hyde.client.completion = AsyncMock(side_effect=Exception("Connection failed"))
 
         result = await hyde.generate_hypothetical_document("квартира у моря")
 
@@ -148,13 +146,11 @@ class TestHyDEGenerator:
             model="test-model",
         )
         hyde.client = AsyncMock()
-        hyde.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion("Test response")
-        )
+        hyde.client.completion = AsyncMock(return_value=_mock_completion("Test response"))
 
         await hyde.generate_hypothetical_document("test query")
 
-        call_kwargs = hyde.client.chat.completions.create.call_args[1]
+        call_kwargs = hyde.client.completion.call_args.kwargs
         assert call_kwargs["model"] == "test-model"
         assert call_kwargs["temperature"] == 0.7
         assert call_kwargs["max_tokens"] == 200
@@ -163,18 +159,10 @@ class TestHyDEGenerator:
         assert call_kwargs["messages"][1]["role"] == "user"
         assert "test query" in call_kwargs["messages"][1]["content"]
 
-    async def test_close(self):
-        hyde = HyDEGenerator()
-        hyde.client = AsyncMock()
-
-        await hyde.close()
-
-        hyde.client.close.assert_called_once()
-
     async def test_generate_handles_none_content(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
-        hyde.client.chat.completions.create = AsyncMock(return_value=_mock_completion(None))
+        hyde.client.completion = AsyncMock(return_value=_mock_completion(None))
 
         result = await hyde.generate_hypothetical_document("квартира")
 

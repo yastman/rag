@@ -537,7 +537,7 @@ def _extract_title(path: Path) -> str:
 
 class _FakeLLM:
     def __init__(self) -> None:
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+        self.completion = self._create
 
     async def _create(self, **kwargs: Any) -> Any:
         messages = kwargs.get("messages", [])
@@ -552,7 +552,7 @@ class _FakeLLM:
 
 class _FailingLLM:
     def __init__(self, error_message: str) -> None:
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+        self.completion = self._create
         self._error_message = error_message
 
     async def _create(self, **kwargs: Any) -> Any:

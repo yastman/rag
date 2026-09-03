@@ -595,17 +595,17 @@ class GraphConfig:
         )
 
     def create_llm(self, model_override: str | None = None, *, auto_trace: bool = True) -> Any:
-        """Create an OpenAI-shaped chat client backed by LiteLLM SDK routing."""
+        """Create the native LiteLLM SDK client."""
         _ = auto_trace
-        from src.runtime.llm import create_litellm_chat_client
+        from src.runtime.llm import create_llm_client
 
-        return create_litellm_chat_client(
+        return create_llm_client(
             model=model_override or self.llm.llm_model,
             timeout=60.0,
         )
 
     def create_supervisor_llm(self, model_override: str | None = None) -> Any:
-        """Create an OpenAI-shaped supervisor client without LangChain wrappers."""
+        """Create a supervisor client without LangChain wrappers."""
         return self.create_llm(model_override=model_override)
 
     def create_embeddings(self) -> Any:

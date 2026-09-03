@@ -1,16 +1,36 @@
+"""Native LiteLLM SDK boundary contract tests (#3223).
+
+Parity/canary coverage for the frozen LLM contract: provider fallback
+aliases, one-call Router delegation, structured-output schema translation,
+streaming passthrough and connection-error normalization — all against a
+stubbed Router transport (no live LLM calls).
+"""
+
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from litellm.exceptions import APIConnectionError
+from pydantic import BaseModel
 
+from src.adapters.llm.base import LLMConnectionError
 from src.runtime.config import GraphConfig
-from src.runtime.llm.router import LiteLLMChatClient, build_model_list, create_litellm_chat_client
+from src.runtime.llm.router import (
+    DEFAULT_TIMEOUT_SECONDS,
+    LiteLlmClient,
+    build_model_list,
+    create_llm_client,
+    normalize_connection_error,
+)
 
 
 class DummyRouter:
-    def __init__(self) -> None:
-        self.acompletion = AsyncMock(return_value={"ok": True})
+    def __init__(self, response: object | None = None) -> None:
+        self.acompletion = AsyncMock(
+            return_value=response if response is not None else {"ok": True}
+        )
 
 
 def test_model_list_preserves_proxy_fallback_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -34,14 +54,13 @@ def test_model_list_preserves_proxy_fallback_aliases(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_chat_client_delegates_to_router_acompletion() -> None:
+async def test_completion_delegates_one_call_to_router_acompletion() -> None:
     router = DummyRouter()
-    client = create_litellm_chat_client(model="gpt-4o-mini", router=router, timeout=12)
+    client = create_llm_client(model="gpt-4o-mini", router=router, timeout=12)
 
-    result = await client.chat.completions.create(
+    result = await client.completion(
         messages=[{"role": "user", "content": "hi"}],
         temperature=0.1,
-        name="legacy-observation-name",
     )
 
     assert result == {"ok": True}
@@ -53,17 +72,29 @@ async def test_chat_client_delegates_to_router_acompletion() -> None:
     )
 
 
-def test_graph_config_create_llm_returns_litellm_sdk_client() -> None:
+@pytest.mark.asyncio
+async def test_completion_defaults_model_and_timeout_and_never_forwards_observation_name() -> None:
+    router = DummyRouter()
+    client = LiteLlmClient(router=router)
+
+    await client.completion(
+        messages=[{"role": "user", "content": "hi"}],
+        observation_name="rewrite-query",
+    )
+
+    kwargs = router.acompletion.await_args.kwargs
+    assert kwargs["model"] == "gpt-4o-mini"
+    assert kwargs["timeout"] == DEFAULT_TIMEOUT_SECONDS
+    assert "observation_name" not in kwargs
+    assert "name" not in kwargs
+
+
+def test_graph_config_create_llm_returns_native_client() -> None:
     cfg = GraphConfig(llm_model="gpt-4o-mini")
     client = cfg.create_llm()
 
-    assert isinstance(client, LiteLLMChatClient)
+    assert isinstance(client, LiteLlmClient)
     assert client.default_model == "gpt-4o-mini"
-
-
-from types import SimpleNamespace
-
-from pydantic import BaseModel
 
 
 class StructuredResult(BaseModel):
@@ -72,24 +103,20 @@ class StructuredResult(BaseModel):
 
 
 class ObjectResponseRouter:
-    def __init__(self, content: str) -> None:
+    def __init__(self, content: object) -> None:
         message = SimpleNamespace(content=content)
         choice = SimpleNamespace(message=message)
         self.acompletion = AsyncMock(return_value=SimpleNamespace(choices=[choice]))
 
 
 @pytest.mark.asyncio
-async def test_chat_client_translates_response_model_to_json_schema_and_drops_wrapper_kwargs() -> (
-    None
-):
+async def test_structured_translates_pydantic_schema_and_validates_response() -> None:
     router = ObjectResponseRouter('{"answer":"ok","score":9}')
-    client = create_litellm_chat_client(model="gpt-4o-mini", router=router, timeout=12)
+    client = create_llm_client(model="gpt-4o-mini", router=router, timeout=12)
 
-    result = await client.chat.completions.create(
+    result = await client.structured(
         messages=[{"role": "user", "content": "hi"}],
         response_model=StructuredResult,
-        max_retries=3,
-        name="query-analysis",
     )
 
     assert result == StructuredResult(answer="ok", score=9)
@@ -97,17 +124,14 @@ async def test_chat_client_translates_response_model_to_json_schema_and_drops_wr
     assert kwargs["response_format"]["type"] == "json_schema"
     assert kwargs["response_format"]["json_schema"]["name"] == "StructuredResult"
     assert kwargs["response_format"]["json_schema"]["strict"] is True
-    assert "response_model" not in kwargs
-    assert "max_retries" not in kwargs
-    assert "name" not in kwargs
 
 
 @pytest.mark.asyncio
-async def test_chat_client_parses_dict_response_content() -> None:
+async def test_structured_parses_dict_response_content() -> None:
     router = ObjectResponseRouter({"answer": "dict-ok", "score": 7})
-    client = create_litellm_chat_client(model="gpt-4o-mini", router=router, timeout=12)
+    client = create_llm_client(model="gpt-4o-mini", router=router, timeout=12)
 
-    result = await client.chat.completions.create(
+    result = await client.structured(
         messages=[{"role": "user", "content": "hi"}],
         response_model=StructuredResult,
     )
@@ -116,12 +140,37 @@ async def test_chat_client_parses_dict_response_content() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_client_propagates_invalid_structured_json() -> None:
+async def test_structured_propagates_invalid_structured_json() -> None:
     router = ObjectResponseRouter("not-json")
-    client = create_litellm_chat_client(model="gpt-4o-mini", router=router, timeout=12)
+    client = create_llm_client(model="gpt-4o-mini", router=router, timeout=12)
 
     with pytest.raises(ValueError):
-        await client.chat.completions.create(
+        await client.structured(
             messages=[{"role": "user", "content": "hi"}],
             response_model=StructuredResult,
         )
+
+
+@pytest.mark.asyncio
+async def test_stream_forces_stream_flag_and_returns_native_iterator() -> None:
+    router = DummyRouter(response="native-async-iterator")
+    client = create_llm_client(model="gpt-4o-mini", router=router, timeout=12)
+
+    stream = await client.stream(
+        messages=[{"role": "user", "content": "hi"}],
+        stream_options={"include_usage": True},
+    )
+
+    assert stream == "native-async-iterator"
+    kwargs = router.acompletion.await_args.kwargs
+    assert kwargs["stream"] is True
+    assert kwargs["stream_options"] == {"include_usage": True}
+    assert kwargs["model"] == "gpt-4o-mini"
+
+
+def test_normalize_connection_error_maps_only_connection_failures() -> None:
+    connection_exc = APIConnectionError("refused", llm_provider="test", model="test")
+    normalized = normalize_connection_error(connection_exc)
+    assert isinstance(normalized, LLMConnectionError)
+    assert normalized.raw_error is connection_exc
+    assert normalize_connection_error(RuntimeError("other")) is None

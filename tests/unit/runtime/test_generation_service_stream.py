@@ -113,7 +113,7 @@ async def test_generate_answer_stream_connection_error_yields_structured_fallbac
         yield  # make it a generator
 
     mock_llm = MagicMock()
-    mock_llm.chat.completions.create = AsyncMock(return_value=_failing_stream())
+    mock_llm.stream = AsyncMock(return_value=_failing_stream())
     config.create_llm = MagicMock(return_value=mock_llm)
 
     lf_client = MagicMock()

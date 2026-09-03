@@ -17,8 +17,10 @@ Protocol-based providers; the low-level SDK clients they wrap stay in
 
 | Symbol | File | Role |
 |--------|------|------|
-| `LLMProvider` | [`llm/base.py`](./llm/base.py) | Provider Protocol + error taxonomy (`LLMError`, `LLMRateLimitError`, `LLMTimeoutError`, `LLMAuthenticationError`) |
-| `LiteLlmProvider` | [`llm/litellm_provider.py`](./llm/litellm_provider.py) | LiteLLM-backed provider |
+| Error taxonomy | [`llm/base.py`](./llm/base.py) | `LLMError`, `LLMRateLimitError`, `LLMTimeoutError`, `LLMAuthenticationError`, `LLMConnectionError` |
+
+LLM chat generation lives in the native LiteLLM SDK boundary
+(`src/runtime/llm/router.py`); this package keeps only the shared error types (#3223).
 
 ## Boundaries
 

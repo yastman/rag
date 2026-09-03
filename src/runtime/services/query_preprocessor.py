@@ -20,7 +20,7 @@ from src.runtime.domain_defaults import (
     TRANSLIT_MAP as _DOMAIN_TRANSLIT_MAP,
 )
 from src.runtime.integrations.prompt_manager import get_prompt
-from src.runtime.llm import create_litellm_chat_client
+from src.runtime.llm import create_llm_client
 
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class HyDEGenerator:
         self.base_url = base_url.rstrip("/")
         self.model = model
         _ = self.api_key, self.base_url  # Compatibility fields; routing reads provider env.
-        self.client = create_litellm_chat_client(model=model, timeout=30.0)
+        self.client = create_llm_client(model=model, timeout=30.0)
 
     async def generate_hypothetical_document(self, query: str) -> str:
         """Generate a hypothetical document that would answer the query.
@@ -78,17 +78,14 @@ class HyDEGenerator:
         """
         try:
             system_prompt = get_prompt("hyde", fallback=self.HYDE_SYSTEM_PROMPT)
-            create_kwargs: dict[str, Any] = {
-                "model": self.model,
-                "messages": [
+            response = await self.client.completion(
+                model=self.model,
+                messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": query},
                 ],
-                "temperature": 0.7,
-                "max_tokens": 200,
-            }
-            response = await self.client.chat.completions.create(  # type: ignore[call-overload]
-                **create_kwargs,
+                temperature=0.7,
+                max_tokens=200,
             )
 
             hypothetical_doc = response.choices[0].message.content or query
@@ -106,10 +103,6 @@ class HyDEGenerator:
         except Exception as e:
             logger.error("HyDE generation failed (%s): %s", type(e).__name__, e)
             return query
-
-    async def close(self):
-        """Close the OpenAI client."""
-        await self.client.close()
 
 
 class QueryPreprocessor:

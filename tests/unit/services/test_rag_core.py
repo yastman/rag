@@ -84,7 +84,7 @@ class TestRewriteQueryViaLlm:
 
     async def test_successful_rewrite_returns_new_query(self, monkeypatch):
         llm = MagicMock()
-        llm.chat.completions.create = AsyncMock(
+        llm.completion = AsyncMock(
             return_value=_make_llm_response("квартира с балконом", model="gpt-4o")
         )
 
@@ -100,9 +100,7 @@ class TestRewriteQueryViaLlm:
     async def test_same_as_original_marks_not_effective(self, monkeypatch):
         original = "двухкомнатная квартира"
         llm = MagicMock()
-        llm.chat.completions.create = AsyncMock(
-            return_value=_make_llm_response(original, model="gpt-4o")
-        )
+        llm.completion = AsyncMock(return_value=_make_llm_response(original, model="gpt-4o"))
 
         monkeypatch.setenv("REWRITE_MODEL", "gpt-4o")
         monkeypatch.setenv("REWRITE_MAX_TOKENS", "200")
@@ -115,7 +113,7 @@ class TestRewriteQueryViaLlm:
     async def test_empty_llm_response_keeps_original(self, monkeypatch):
         original = "студия у моря"
         llm = MagicMock()
-        llm.chat.completions.create = AsyncMock(return_value=_make_llm_response("", model="gpt-4o"))
+        llm.completion = AsyncMock(return_value=_make_llm_response("", model="gpt-4o"))
 
         monkeypatch.setenv("REWRITE_MODEL", "gpt-4o")
         monkeypatch.setenv("REWRITE_MAX_TOKENS", "200")
@@ -127,7 +125,7 @@ class TestRewriteQueryViaLlm:
 
     async def test_llm_error_raises_exception(self, monkeypatch):
         llm = MagicMock()
-        llm.chat.completions.create = AsyncMock(side_effect=ConnectionError("LLM unavailable"))
+        llm.completion = AsyncMock(side_effect=ConnectionError("LLM unavailable"))
 
         monkeypatch.setenv("REWRITE_MODEL", "gpt-4o")
         monkeypatch.setenv("REWRITE_MAX_TOKENS", "200")

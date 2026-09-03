@@ -71,13 +71,9 @@ def test_src_adapters_does_not_import_src_runtime() -> None:
     time. Do not add new entries — fix the import direction instead.
     """
     # Transitional allowlist: adapter files that still import src.runtime.
-    # Each entry must shrink as the migration progresses (#2633).
-    ALLOWLIST: dict[str, list[str]] = {
-        # LiteLlmProvider delegates to src.runtime.llm.create_litellm_chat_client
-        # to avoid duplicating the LiteLLM client factory; migrate by moving
-        # create_litellm_chat_client to src/adapters/llm/ or a shared utility.
-        "src/adapters/llm/litellm_provider.py": ["src.runtime.llm"],
-    }
+    # Each entry must shrink as the migration progresses (#2633). Empty since
+    # #3223 removed the last entry (the LiteLlmProvider adapter was deleted).
+    ALLOWLIST: dict[str, list[str]] = {}
 
     violations: dict[str, list[str]] = {}
     adapters_root = REPO_ROOT / "src" / "adapters"

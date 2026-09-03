@@ -808,7 +808,7 @@ async def test_rewrite_query_success():
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "квартиры в Несебре до 50000 EUR"
     mock_response.model = "gpt-4o-mini"
-    mock_llm.chat.completions.create = AsyncMock(return_value=mock_response)
+    mock_llm.completion = AsyncMock(return_value=mock_response)
 
     result = await _rewrite_query(
         "квартиры",
@@ -826,7 +826,7 @@ async def test_rewrite_query_llm_fails():
     from src.runtime.pipeline.rag import _rewrite_query
 
     mock_llm = MagicMock()
-    mock_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM down"))
+    mock_llm.completion = AsyncMock(side_effect=RuntimeError("LLM down"))
 
     result = await _rewrite_query(
         "квартиры",
@@ -844,7 +844,7 @@ async def test_short_finance_query_expands_before_rewrite_loop():
     from src.runtime.pipeline.rag import _rewrite_query
 
     fake_llm = MagicMock()
-    fake_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM should not be used"))
+    fake_llm.completion = AsyncMock(side_effect=RuntimeError("LLM should not be used"))
 
     result = await _rewrite_query(
         "рассрочки",
@@ -1025,7 +1025,7 @@ async def test_pipeline_rewrite_loop(
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "улучшенный запрос"
     mock_response.model = "gpt-4o-mini"
-    mock_llm.chat.completions.create = AsyncMock(return_value=mock_response)
+    mock_llm.completion = AsyncMock(return_value=mock_response)
 
     with patch.dict("os.environ", {"MAX_REWRITE_ATTEMPTS": "1"}):
         result = await rag_pipeline(

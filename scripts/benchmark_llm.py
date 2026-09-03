@@ -18,7 +18,7 @@ from pathlib import Path
 
 import httpx
 
-from src.runtime.llm import create_litellm_chat_client
+from src.runtime.llm import create_llm_client
 
 
 CEREBRAS_URL = "https://api.cerebras.ai/v1"
@@ -54,10 +54,10 @@ async def _call_sdk_router(
     system: str = SYSTEM_PROMPT,
 ) -> dict:
     """Single SDK-router LLM call with timing."""
-    client = create_litellm_chat_client(model=model, timeout=120.0)
+    client = create_llm_client(model=model, timeout=120.0)
     t0 = time.perf_counter()
     try:
-        resp = await client.chat.completions.create(
+        resp = await client.completion(
             model=model,
             messages=[
                 {"role": "system", "content": system},

@@ -44,7 +44,7 @@ class TestApartmentLlmExtractor:
     ) -> None:
         extractor = ApartmentLlmExtractor.__new__(ApartmentLlmExtractor)
         extractor._client = AsyncMock()
-        extractor._client.chat.completions.create = AsyncMock(return_value=mock_llm_result)
+        extractor._client.structured = AsyncMock(return_value=mock_llm_result)
         extractor._model = "gpt-4o-mini"
 
         result = await extractor.extract(query="просторная у моря")
@@ -55,7 +55,7 @@ class TestApartmentLlmExtractor:
     ) -> None:
         extractor = ApartmentLlmExtractor.__new__(ApartmentLlmExtractor)
         extractor._client = AsyncMock()
-        extractor._client.chat.completions.create = AsyncMock(return_value=mock_llm_result)
+        extractor._client.structured = AsyncMock(return_value=mock_llm_result)
         extractor._model = "gpt-4o-mini"
 
         partial = HardFilters(rooms=2)
@@ -70,7 +70,7 @@ class TestApartmentLlmExtractor:
         )
         extractor = ApartmentLlmExtractor.__new__(ApartmentLlmExtractor)
         extractor._client = AsyncMock()
-        extractor._client.chat.completions.create = AsyncMock(return_value=bad_result)
+        extractor._client.structured = AsyncMock(return_value=bad_result)
         extractor._model = "gpt-4o-mini"
 
         result = await extractor.extract(query="квартира в бургасе")
@@ -79,7 +79,7 @@ class TestApartmentLlmExtractor:
     async def test_valid_city_preserved(self, mock_llm_result: ApartmentSearchFilters) -> None:
         extractor = ApartmentLlmExtractor.__new__(ApartmentLlmExtractor)
         extractor._client = AsyncMock()
-        extractor._client.chat.completions.create = AsyncMock(return_value=mock_llm_result)
+        extractor._client.structured = AsyncMock(return_value=mock_llm_result)
         extractor._model = "gpt-4o-mini"
 
         result = await extractor.extract(query="солнечный берег двушка")
@@ -92,7 +92,7 @@ class TestApartmentLlmExtractor:
         )
         extractor = ApartmentLlmExtractor.__new__(ApartmentLlmExtractor)
         extractor._client = AsyncMock()
-        extractor._client.chat.completions.create = AsyncMock(return_value=bad_result)
+        extractor._client.structured = AsyncMock(return_value=bad_result)
         extractor._model = "gpt-4o-mini"
 
         result = await extractor.extract(query="квартира без уточнения вида")

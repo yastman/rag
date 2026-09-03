@@ -71,7 +71,7 @@ async def rewrite_query_via_llm(
 
     Args:
         query: The original query string.
-        llm: LLM client (OpenAI-compatible: llm.chat.completions.create).
+        llm: Native LiteLLM SDK client (llm.completion).
 
     Returns:
         Tuple of (rewritten_query, effective, model_name).
@@ -86,12 +86,12 @@ async def rewrite_query_via_llm(
 
     config = GraphConfig.from_env()
     prompt = _REWRITE_PROMPT.format(query=query)
-    response = await llm.chat.completions.create(
+    response = await llm.completion(
         model=config.rewrite_model,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=config.rewrite_max_tokens,
-        name="rewrite-query",  # type: ignore[call-overload]
+        observation_name="rewrite-query",
     )
     rewritten = (response.choices[0].message.content or "").strip()
     actual_model = getattr(response, "model", config.rewrite_model) or config.rewrite_model

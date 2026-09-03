@@ -8,11 +8,10 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
-from src.adapters.llm.base import LLMConnectionError
 from src.runtime.grounding.policy import should_safe_fallback
+from src.runtime.llm import normalize_connection_error
 
 from .contracts import GenerationRequest
-from .llm_call import _chat_create_with_optional_name
 from .policy import (
     _build_fallback_response,
     _coerce_positive_number,
@@ -283,8 +282,7 @@ async def generate_answer_stream(
     }
 
     try:
-        stream = await _chat_create_with_optional_name(
-            llm,
+        stream = await llm.stream(
             observation_name="generate-answer",
             **stream_create_kwargs,
         )
@@ -306,11 +304,10 @@ async def generate_answer_stream(
             if hasattr(chunk, "model") and chunk.model:
                 actual_model = chunk.model
     except Exception as exc:
-        from litellm.exceptions import APIConnectionError as _LiteLLMConnErr
-
-        if isinstance(exc, _LiteLLMConnErr):
+        normalized = normalize_connection_error(exc)
+        if normalized is not None:
             logger.exception("LLM connection error during streaming: %s", exc)
-            raise LLMConnectionError(str(exc), raw_error=exc) from exc
+            raise normalized from exc
         raise
 
     if not accumulated:
