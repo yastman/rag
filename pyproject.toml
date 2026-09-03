@@ -57,11 +57,21 @@ core = [
     "phonenumbers>=9.0.30",
 ]
 
-# Telegram production adapter and bot-local runtime dependencies.
+# Telegram production dependency authority (#3210): this extra together with
+# the base dependencies above is the ONLY manifest for the shipped Telegram
+# runtime. The nested telegram_bot/pyproject.toml + telegram_bot/uv.lock
+# authority drifted from root (e.g. LiteLLM 1.88.1 vs 1.98.0, OpenAI 2.37.0
+# vs 2.54.0) and was retired; the bot image resolves with
+# `uv sync --locked --no-dev --extra telegram` from this lock. Keep every
+# bot runtime dependency here.
 telegram = [
     "aiogram>=3.31.0",
     "aiogram-dialog==2.6.0",
     "fluentogram>=1.2.0",
+    # fluent-compiler is imported directly by telegram_bot/middlewares/i18n.py
+    # (declared explicitly instead of relying on the fluentogram transitive,
+    # same pattern as pydantic in #3228).
+    "fluent-compiler>=1.1",
     "cachetools>=5.0.0",
     "asyncpg>=0.31.0",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",
@@ -479,8 +489,6 @@ omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "*/.venv/*",
-    "telegram_bot/.venv/*",
-    "telegram_bot/.venv/**/*",
     # Scripts directory (not production code)
     "scripts/*",
     "scripts/**/*",

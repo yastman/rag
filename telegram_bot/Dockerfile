@@ -1,5 +1,11 @@
 # syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
-# Telegram Bot — uv sync pattern (2026 best practices)
+# Telegram Bot — single uv authority (#3210)
+#
+# Dependency resolution uses the repo-root pyproject.toml + uv.lock
+# (`--extra telegram`) — the ONLY authority for the Telegram runtime.
+# The former telegram_bot/pyproject.toml + telegram_bot/uv.lock nested
+# authority drifted from root (LiteLLM 1.88.1 vs 1.98.0, OpenAI 2.37.0
+# vs 2.54.0, redisvl 0.18.2 vs 0.23.0) and was retired by #3210.
 
 # ====== BUILD STAGE ======
 FROM ghcr.io/astral-sh/uv:0.9-python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d56b733b357cea384185b3022bd09f05e002cd144ca AS builder
@@ -18,16 +24,16 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # Deps layer (cached separately from code)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=telegram_bot/pyproject.toml,target=pyproject.toml \
-    --mount=type=bind,source=telegram_bot/uv.lock,target=uv.lock \
-    uv sync --frozen --no-dev --no-install-project
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv sync --locked --no-dev --extra telegram --no-install-project
 
-# Code layer
-COPY telegram_bot/pyproject.toml telegram_bot/uv.lock ./
-COPY telegram_bot/ ./telegram_bot/
+# Manifest layer (busts cache when the root manifest/lock changes)
+COPY pyproject.toml uv.lock ./
 
+# Reconcile .venv with the exact root lock after a manifest change
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --locked --no-dev --extra telegram
 
 # ====== RUNTIME STAGE ======
 FROM python:3.13-slim-bookworm@sha256:e4fa1f978c539608a10cdf74700ac32a3f719dfc6e8b6b6001da82deb36302a2 AS runtime

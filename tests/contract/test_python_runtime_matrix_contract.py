@@ -5,16 +5,17 @@ Supported Python matrix
 | Component            | requires-python | Docker runtime | Justification                         |
 |----------------------|-----------------|----------------|---------------------------------------|
 | root / core / ingest | >=3.12          | 3.13           | Langfuse/pydantic.v1 compat; uv floor |
-| telegram_bot         | >=3.12          | 3.13           | Langfuse/pydantic.v1 compat           |
+| telegram_bot         | (root >=3.12 — no own manifest, #3210) | 3.13 | Resolves from the root lock (--extra telegram) |
 | services/bge-m3-api  | (no pyproject)  | 3.14           | Independent ML service; no Langfuse   |
 
 This contract fails on:
 - root requires-python below 3.12
-- telegram_bot requires-python below 3.12
 
 The Langfuse-importing Docker runtime constraint (>=3.13) is enforced by
 ``test_dockerfile_runtime_policy_contract.py``. This contract covers the
-pyproject-level floor only.
+pyproject-level floor only. ``telegram_bot`` has no manifest since #3210
+(root lock is the single Telegram authority), so only the root floor and
+the ``.python-version`` dev floor are asserted here.
 
 Note: services/docling was removed in the Docling migration (phase_6508bc74ca4a);
 its pyproject.toml row has been dropped from this matrix.
@@ -30,7 +31,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Documented minimum Python floors per component
 ROOT_REQUIRES_PYTHON_FLOOR = "3.12"
-BOT_REQUIRES_PYTHON_FLOOR = "3.12"
 
 
 def _load_toml(rel: str) -> dict:
@@ -52,17 +52,6 @@ def test_root_requires_python_floor() -> None:
     assert floor >= ROOT_REQUIRES_PYTHON_FLOOR, (
         f"root pyproject.toml requires-python={requires!r}; "
         f"must be >={ROOT_REQUIRES_PYTHON_FLOOR} (#2623)"
-    )
-
-
-def test_bot_requires_python_floor() -> None:
-    """telegram_bot/pyproject.toml requires-python must be >= 3.12 (#2623)."""
-    data = _load_toml("telegram_bot/pyproject.toml")
-    requires = data["project"]["requires-python"]
-    floor = _extract_floor(requires)
-    assert floor >= BOT_REQUIRES_PYTHON_FLOOR, (
-        f"telegram_bot/pyproject.toml requires-python={requires!r}; "
-        f"must be >={BOT_REQUIRES_PYTHON_FLOOR} (#2623)"
     )
 
 

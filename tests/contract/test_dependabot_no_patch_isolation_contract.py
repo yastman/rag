@@ -36,7 +36,8 @@ REPO = Path(__file__).resolve().parents[2]
 
 PYPROJECTS = [
     REPO / "pyproject.toml",
-    REPO / "telegram_bot" / "pyproject.toml",
+    # telegram_bot/pyproject.toml retired by #3210 — bot dependencies live in
+    # the root telegram extra, covered by the root pyproject entry above.
     REPO / "mini_app" / "pyproject.toml",
     REPO / "services" / "bge-m3-api" / "pyproject.toml",
 ]

@@ -38,16 +38,22 @@ def _dependencies(path: Path) -> list[str]:
     return list(data["project"].get("dependencies", []))
 
 
+def _telegram_extra() -> list[str]:
+    """Telegram extra of the root manifest (single Telegram authority, #3210)."""
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    extras = data["project"].get("optional-dependencies", {})
+    return list(extras.get("telegram", []))
+
+
 def test_root_base_dependencies_do_not_include_prometheus_client() -> None:
     assert not any(
         dep.startswith("prometheus-client") for dep in _dependencies(REPO_ROOT / "pyproject.toml")
     )
 
 
-def test_telegram_base_dependencies_do_not_include_prometheus_client() -> None:
+def test_telegram_dependencies_do_not_include_prometheus_client() -> None:
     assert not any(
-        dep.startswith("prometheus-client")
-        for dep in _dependencies(REPO_ROOT / "telegram_bot" / "pyproject.toml")
+        dep.startswith("prometheus-client") for dep in _telegram_extra()
     )
 
 
