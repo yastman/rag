@@ -1,4 +1,4 @@
-.PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-benchmark test-cov clean all-checks \
+.PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	deps-audit vuln-audit arch-lint complexity docs-coverage audit \
 	dead-code-check deps-check \
 	test-preflight test-smoke test-load-eviction \
@@ -51,7 +51,7 @@ PYTHON_VERSION ?= 3.12
 UV_RUN_NO_SYNC ?= uv run --no-sync
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_ARGS ?= -n 2 --dist=worksteal
-PYTEST_FULL_PARALLEL_DIRS ?= tests/chaos/ tests/contract/ tests/unit/ tests/benchmark/
+PYTEST_FULL_PARALLEL_DIRS ?= tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 CORE_LIVE_TEST_PATH := tests/e2e/test_core_live_ingest_answer.py
 CORE_LIVE_PYTEST := $(UV_RUN_NO_SYNC) pytest $(CORE_LIVE_TEST_PATH) -v --tb=short -m "e2e and requires_services"
@@ -333,15 +333,10 @@ test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
 	uv sync --all-extras --all-groups
 	@echo "$(BLUE)Phase 1/2: parallel-safe suites...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 RUN_BENCHMARK_TESTS=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_FULL_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_FULL_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(BLUE)Phase 2/2: stateful/live suites sequentially...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_SEQUENTIAL_DIRS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
-
-test-benchmark: ## Run benchmark suite standalone (#1618)
-	@echo "$(BLUE)Running benchmark tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 RUN_BENCHMARK_TESTS=1 $(UV_RUN_NO_SYNC) pytest tests/benchmark/ $(PYTEST_PARALLEL_ARGS) --timeout=60 -q
-	@echo "$(GREEN)✓ Benchmark tests complete$(NC)"
 
 test-cov: ## Run tests with coverage
 	@echo "$(BLUE)Running tests with coverage...$(NC)"

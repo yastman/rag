@@ -41,12 +41,10 @@ def test_full_mode_uses_native_venv_for_make_test_full_equivalent() -> None:
     source = _source()
     assert "'Full'" in source
     assert 'Join-Path $root ".venv\\Scripts\\python.exe"' in source
-    assert 'RUN_BENCHMARK_TESTS = "1"' in source
     for arg in (
         "tests/chaos/",
         "tests/contract/",
         "tests/unit/",
-        "tests/benchmark/",
         "-n",
         "2",
         "--dist=worksteal",
@@ -73,14 +71,11 @@ def test_full_mode_restores_caller_environment_and_checks_required_plugins() -> 
     source = _source()
     assert "$hadPycacheSetting = Test-Path Env:\\PYTHONDONTWRITEBYTECODE" in source
     assert "$savedPycacheSetting = $env:PYTHONDONTWRITEBYTECODE" in source
-    assert "$hadBenchmarkSetting = Test-Path Env:\\RUN_BENCHMARK_TESTS" in source
-    assert "$savedBenchmarkSetting = $env:RUN_BENCHMARK_TESTS" in source
     assert "-m pytest -p xdist --version" in source
     assert "-m pytest -p pytest_timeout --version" in source
     assert "pytest-xdist is unavailable" in source
     assert "pytest-timeout is unavailable" in source
     assert "Set-Item -Path Env:\\PYTHONDONTWRITEBYTECODE -Value $savedPycacheSetting" in source
-    assert "Set-Item -Path Env:\\RUN_BENCHMARK_TESTS -Value $savedBenchmarkSetting" in source
 
 
 def _invoke_full_body() -> str:

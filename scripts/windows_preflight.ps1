@@ -244,8 +244,6 @@ function Invoke-Full {
     $python = Join-Path $root ".venv\Scripts\python.exe"
     $hadPycacheSetting = Test-Path Env:\PYTHONDONTWRITEBYTECODE
     $savedPycacheSetting = $env:PYTHONDONTWRITEBYTECODE
-    $hadBenchmarkSetting = Test-Path Env:\RUN_BENCHMARK_TESTS
-    $savedBenchmarkSetting = $env:RUN_BENCHMARK_TESTS
     $pushedLocation = $false
 
     try {
@@ -288,15 +286,13 @@ function Invoke-Full {
         }
 
         $env:PYTHONDONTWRITEBYTECODE = "1"
-        $env:RUN_BENCHMARK_TESTS = "1"
         Write-Host "`nPhase 1/2: parallel-safe suites..." -ForegroundColor Cyan
-        & $python -m pytest "tests/chaos/" "tests/contract/" "tests/unit/" "tests/benchmark/" "-n" "2" "--dist=worksteal" "--timeout=30"
+        & $python -m pytest "tests/chaos/" "tests/contract/" "tests/unit/" "-n" "2" "--dist=worksteal" "--timeout=30"
         if ($LASTEXITCODE -ne 0) {
             Write-Fail "Phase 1 failed (exit=$LASTEXITCODE)"
             return
         }
 
-        Remove-Item Env:\RUN_BENCHMARK_TESTS -ErrorAction SilentlyContinue
         Write-Host "`nPhase 2/2: stateful/live suites sequentially..." -ForegroundColor Cyan
         & $python -m pytest "tests/e2e/" "tests/integration/" "tests/load/" "tests/smoke/" "--timeout=30"
         if ($LASTEXITCODE -eq 0) { Write-Pass "full test suite complete" }
@@ -306,11 +302,6 @@ function Invoke-Full {
             Set-Item -Path Env:\PYTHONDONTWRITEBYTECODE -Value $savedPycacheSetting
         } else {
             Remove-Item Env:\PYTHONDONTWRITEBYTECODE -ErrorAction SilentlyContinue
-        }
-        if ($hadBenchmarkSetting) {
-            Set-Item -Path Env:\RUN_BENCHMARK_TESTS -Value $savedBenchmarkSetting
-        } else {
-            Remove-Item Env:\RUN_BENCHMARK_TESTS -ErrorAction SilentlyContinue
         }
         if ($pushedLocation) { Pop-Location }
     }

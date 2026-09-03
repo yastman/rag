@@ -35,7 +35,6 @@ _IGNORED_MODULE_MARKERS = frozenset(
         "chaos",
         "load",
         "e2e",
-        "benchmark",
         "contract",
         "baseline",
         "performance",

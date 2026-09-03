@@ -103,7 +103,6 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "PYTEST_XDIST_WORKER_COUNT": "Set by pytest-xdist at runtime",
     "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "pytest internal",
     "PYTEST_ADDOPTS": "Make/CI knob, not bot config",
-    "RUN_BENCHMARK_TESTS": "make test-benchmark gate (#1618); test-only flag",
     "RUN_CHAOS_TESTS": "Chaos suite gate; test-only flag",
     "RUN_E2E_TESTS": "E2E suite gate; test-only flag",
     "RUN_LOAD_TESTS": "Load suite gate; test-only flag",

@@ -2,7 +2,7 @@
 
 The audit in #1515 (D2) found that the directory-based auto-marker hook —
 which lives in ``tests/conftest.py`` and walks ``path_to_marker`` to attach
-``unit``/``integration``/``smoke``/``e2e``/``chaos``/``load``/``benchmark``/
+``unit``/``integration``/``smoke``/``e2e``/``chaos``/``load``/
 ``contract``/``baseline`` markers based on the test's filesystem location —
 had been copy-pasted into six sub-conftest files (smoke, integration, e2e,
 benchmark, chaos, load).
