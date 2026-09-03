@@ -85,7 +85,7 @@ docling-native = [
 # Only needed to run tests/unit/test_bge_m3_endpoints.py + test_bge_m3_rerank.py
 # Install: uv sync --extra bge-extras
 bge-extras = [
-    "fastapi>=0.100.0",
+    "fastapi>=0.141.1",
     "httpx>=0.27.0",
 ]
 
