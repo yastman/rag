@@ -10,7 +10,9 @@
 - Keep service boundaries intact:
   - `telegram_bot/services/` for business logic.
   - `telegram_bot/integrations/` for wrappers/adapters.
-  - `src/runtime/graph/nodes/` for classify/guard/transcribe steps.
+  - classify/guard/config live transport-neutrally in `src/runtime/`:
+    `src/runtime/routing/classify.py`, `src/runtime/safety/guard.py`, and
+    `src/runtime/config.py` (`GraphConfig`) — not under a graph namespace.
 - Avoid mixing transport-layer Telegram handling with retrieval/domain logic.
 - There is no `telegram_bot/graph/` tree: it was removed in #3220 along with
   the graph-compat facade; route new work through assistant-core

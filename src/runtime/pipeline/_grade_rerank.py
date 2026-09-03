@@ -21,7 +21,7 @@ _DEFAULT_RERANK_TOP_K = 7
 
 
 def _graph_config_from_env() -> Any:
-    from src.runtime.graph.config import GraphConfig
+    from src.runtime.config import GraphConfig
 
     return GraphConfig.from_env()
 

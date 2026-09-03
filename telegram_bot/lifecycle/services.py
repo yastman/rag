@@ -53,7 +53,7 @@ def build_services(config: BotConfig) -> Services:
     Importing heavy runtime modules is deferred to this function body so
     ``_bot_services`` itself has no heavy module-scope side-effects.
     """
-    from src.runtime.graph.config import GraphConfig
+    from src.runtime.config import GraphConfig
     from src.runtime.integrations.cache import CacheLayerManager
     from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
     from src.runtime.services.qdrant import QdrantService

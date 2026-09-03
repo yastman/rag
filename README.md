@@ -43,7 +43,7 @@ run_assistant_request()          src/core/assistant.py
         ▼
 run_assistant_pipeline()         src/runtime/pipeline/assistant_pipeline.py
         │
-        ├─ classify_query()      src/runtime/graph/nodes/classify.py
+        ├─ classify_query()      src/runtime/routing/classify.py
         │
         ▼
 rag_pipeline()                   src/runtime/pipeline/rag.py

@@ -3,8 +3,10 @@
 Classifies user queries into 6 types: CHITCHAT, OFF_TOPIC, STRUCTURED,
 FAQ, ENTITY, GENERAL. Returns canned responses for CHITCHAT/OFF_TOPIC.
 
-Canonical home moved from ``telegram_bot/graph/nodes/classify.py``
-as part of the reverse-layering Slice B (#1948 / #2049).
+Canonical home (issue #3207): moved from ``src/runtime/graph/nodes/classify.py``
+so live routing helpers no longer live under the graph namespace. Earlier
+history: moved from ``telegram_bot/graph/nodes/classify.py`` as part of the
+reverse-layering Slice B (#1948 / #2049).
 """
 
 from __future__ import annotations

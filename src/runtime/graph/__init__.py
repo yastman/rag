@@ -1,6 +1,8 @@
-"""Shared runtime kernel — config, nodes, and pipeline factories.
+"""Runtime kernel — configuration for the imperative RAG runtime.
 
-First slice of the runtime migration tracked under #1948 / #2045 / #2049.
-The graph-shaped state schema and compatibility factory were removed in
-#3220; kept transports call assistant-core directly.
+Config, classify, and guard moved out of the graph namespace by #3207
+(``src.runtime.config``, ``src.runtime.routing``, ``src.runtime.safety``);
+the graph-shaped state schema and compatibility factory were removed in
+#3220. The remaining ``nodes`` subtree holds only the unused transcribe
+node pending its own cleanup issue.
 """

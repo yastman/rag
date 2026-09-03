@@ -85,7 +85,7 @@ def test_query_filter_signal_still_works_after_refactor() -> None:
 
 def test_classify_node_chitchat_responses_still_importable() -> None:
     """CHITCHAT_RESPONSES must remain importable from classify for compat."""
-    from src.runtime.graph.nodes.classify import CHITCHAT_RESPONSES
+    from src.runtime.routing.classify import CHITCHAT_RESPONSES
 
     assert "greeting" in CHITCHAT_RESPONSES
 

@@ -44,7 +44,7 @@ async def run_assistant_pipeline(
     ctx = request.user_context or UserContext()
 
     try:
-        from src.runtime.graph.nodes.classify import classify_query
+        from src.runtime.routing.classify import classify_query
 
         request_type = classify_query(request.query)
         state_contract: PipelineContext | None = (

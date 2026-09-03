@@ -499,7 +499,7 @@ class TestRunAssistantRequestRuntime:
         deps = self._deps()
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -561,7 +561,7 @@ class TestRunAssistantRequestRuntime:
         gen = AsyncMock()
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="FAQ"),
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -586,7 +586,7 @@ class TestRunAssistantRequestRuntime:
         rag = AsyncMock(side_effect=TimeoutError("qdrant timed out"))
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
         ):
             result = await run_assistant_request(
@@ -621,7 +621,7 @@ class TestRunAssistantRequestRuntime:
         )
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
             caplog.at_level(logging.INFO, logger="src.utils.product_events"),

@@ -57,7 +57,7 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
     ):
         monkeypatch.delenv(var, raising=False)
 
-    from src.runtime.graph.config import GraphConfig
+    from src.runtime.config import GraphConfig
 
     cfg = GraphConfig.from_env()
 
@@ -129,7 +129,7 @@ def test_graph_config_from_env_roundtrip_overrides(monkeypatch: pytest.MonkeyPat
     # Force module reload so _GraphEnvSettings picks up monkeypatched env
     import importlib
 
-    import src.runtime.graph.config as _mod
+    import src.runtime.config as _mod
 
     importlib.reload(_mod)
     cfg = _mod.GraphConfig.from_env()
@@ -154,7 +154,7 @@ def test_graph_config_from_env_rewrite_model_fallback(monkeypatch: pytest.Monkey
 
     import importlib
 
-    import src.runtime.graph.config as _mod
+    import src.runtime.config as _mod
 
     importlib.reload(_mod)
     cfg = _mod.GraphConfig.from_env()
@@ -169,7 +169,7 @@ def test_graph_config_from_env_llm_api_key_alias(monkeypatch: pytest.MonkeyPatch
 
     import importlib
 
-    import src.runtime.graph.config as _mod
+    import src.runtime.config as _mod
 
     importlib.reload(_mod)
     cfg = _mod.GraphConfig.from_env()

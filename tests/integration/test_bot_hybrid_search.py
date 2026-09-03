@@ -51,7 +51,7 @@ class TestBotHybridSearch:
             patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("src.runtime.services.qdrant.QdrantService") as mock_qdrant,
-            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.config.GraphConfig.create_llm"),
         ):
             bot = PropertyBot(_make_config())
 
@@ -75,7 +75,7 @@ class TestBotHybridSearch:
             patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
             patch("src.runtime.services.qdrant.QdrantService"),
-            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.config.GraphConfig.create_llm"),
         ):
             PropertyBot(_make_config())
 
@@ -93,7 +93,7 @@ class TestBotHybridSearch:
             patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings") as mock_hybrid,
             patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("src.runtime.services.qdrant.QdrantService"),
-            patch("src.runtime.graph.config.GraphConfig.create_llm"),
+            patch("src.runtime.config.GraphConfig.create_llm"),
         ):
             bot = PropertyBot(_make_config())
 

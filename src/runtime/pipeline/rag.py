@@ -33,7 +33,7 @@ import logging
 from typing import Any
 
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
-from src.runtime.graph.config import GraphConfig
+from src.runtime.config import GraphConfig
 from src.runtime.pipeline._cache_stage import (
     _cache_check,
     _hybrid_retrieve,

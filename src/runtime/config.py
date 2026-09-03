@@ -1,8 +1,10 @@
 """GraphConfig — configuration for the imperative RAG runtime.
 
-Moved from ``telegram_bot/graph/config.py`` as the second slice of the
-reverse-layering fix tracked under #1948 / #2045 / #2049. The legacy
-``telegram_bot.graph.config`` re-export shim was removed in #3220.
+Canonical home (issue #3207): moved from ``src/runtime/graph/config.py``
+so configuration ownership lives outside the graph namespace. Earlier
+history: moved from ``telegram_bot/graph/config.py`` as the second slice
+of the reverse-layering fix tracked under #1948 / #2045 / #2049; the
+legacy ``telegram_bot.graph.config`` re-export shim was removed in #3220.
 
 Provides service factories for LLM, embeddings, and cache thresholds.
 

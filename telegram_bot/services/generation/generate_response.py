@@ -80,7 +80,7 @@ def _extract_sent_message_ref(sent_msg: Any) -> dict[str, int] | None:
 
 
 def _get_graph_config() -> Any:
-    from src.runtime.graph.config import GraphConfig
+    from src.runtime.config import GraphConfig
 
     return GraphConfig.from_env()
 

@@ -154,7 +154,7 @@ class TestRunAssistantRequestGolden:
         gen = _gen_mock(expected_answer)
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -177,7 +177,7 @@ class TestRunAssistantRequestGolden:
         gen = _gen_mock("Golden answer text.")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -200,7 +200,7 @@ class TestRunAssistantRequestGolden:
         gen = _gen_mock("Three documents retrieved.")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -225,7 +225,7 @@ class TestRunAssistantRequestGolden:
         gen = _gen_mock("Count check.")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -248,7 +248,7 @@ class TestRunAssistantRequestGolden:
         gen = _gen_mock("No errors.")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -277,7 +277,7 @@ class TestRunAssistantRequestGolden:
         gen = _gen_mock(answer)
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.runtime.graph.config import GraphConfig
+from src.runtime.config import GraphConfig
 from src.runtime.llm.router import LiteLLMChatClient, build_model_list, create_litellm_chat_client
 
 

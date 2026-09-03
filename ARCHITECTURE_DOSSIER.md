@@ -54,7 +54,7 @@ everything else is domain/adapter dressing.
 Telegram message
   → run_assistant_request            src/core/assistant.py      (single public entrypoint)
     → run_assistant_pipeline         src/runtime/pipeline/assistant_pipeline.py
-      → classify_query               src/runtime/graph/nodes/classify.py
+      → classify_query               src/runtime/routing/classify.py
       → rag_pipeline                 src/runtime/pipeline/rag.py
           1. cache check             src/runtime/integrations/cache.py (semantic answer cache)
           2. embed query             _bge_m3_query_bundle_cls → BGE-M3 /encode/hybrid
@@ -104,7 +104,7 @@ telegram_bot*, *Core contracts layer is import-independent*, *src must not impor
 | `src/runtime/retrieval/` | Retrieval service facade |
 | `src/runtime/grounding/` | Grounding/citation policy |
 | `src/runtime/llm/router.py` | LiteLLM SDK router (provider-agnostic LLM calls) |
-| `src/runtime/graph/` | `nodes/classify.py` (LIVE — called as a plain function), `state.py`, `builder.py`/`config.py` (LangGraph builder — **dead**, P26) |
+| `src/runtime/graph/` | Vestigial namespace: `nodes/transcribe.py` only (**dead** — no importers); classify/guard/config moved out in #3207 to `src/runtime/routing/`, `src/runtime/safety/`, `src/runtime/config.py` |
 | `src/runtime/services/` | Query preprocessing, small-to-big, cache policy, coverage mode, `colbert_reranker.py` (**dead**) |
 | `src/adapters/embeddings/` | `bge_m3.py` (`BgeM3EmbeddingProvider` — canonical), `openai_embeddings.py`, `local_bge_m3.py` (**dead**), `base.py` |
 | `src/adapters/llm/` | `litellm_provider.py`, `base.py` |

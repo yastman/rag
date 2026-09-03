@@ -2,7 +2,8 @@
 
 Verifies that public service-layer functions are importable from the new
 module, and that adapters (telegram_bot/agents) no longer need to import
-from src.runtime.graph.nodes.* directly.
+from ``src.runtime.routing`` / ``src.runtime.safety`` internals directly
+(#3207 moved them there from ``src.runtime.graph.nodes``).
 """
 
 from __future__ import annotations
@@ -53,17 +54,22 @@ def test_detect_injection_behaves_correctly():
     assert clean_risk == 0.0
 
 
-def test_rag_tool_does_not_import_from_graph_nodes():
-    """telegram_bot/agents/rag_tool.py must not import from src.runtime.graph.nodes.*"""
+def test_rag_tool_does_not_import_from_runtime_internals():
+    """telegram_bot/agents/rag_tool.py must not import runtime routing/safety internals."""
     import ast
     from pathlib import Path
 
+    forbidden_prefixes = (
+        "src.runtime.routing",
+        "src.runtime.safety",
+        "src.runtime.graph.nodes",
+    )
     rag_tool_path = Path(__file__).parents[4] / "telegram_bot" / "agents" / "rag_tool.py"
     tree = ast.parse(rag_tool_path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             mod = node.module or ""
-            assert not mod.startswith("src.runtime.graph.nodes"), (
-                f"rag_tool.py imports from graph node internals: {mod} — "
+            assert not mod.startswith(forbidden_prefixes), (
+                f"rag_tool.py imports from runtime internals: {mod} — "
                 "route through src.runtime.services instead"
             )

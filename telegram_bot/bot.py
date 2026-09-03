@@ -105,14 +105,14 @@ def create_bot_agent(*args: Any, **kwargs: Any) -> Any:
 
 def classify_query(*args: Any, **kwargs: Any) -> Any:
     """Lazy wrapper that keeps module-level patchability for tests."""
-    from src.runtime.graph.nodes.classify import classify_query as _classify_query
+    from src.runtime.routing.classify import classify_query as _classify_query
 
     return _classify_query(*args, **kwargs)
 
 
 def detect_injection(*args: Any, **kwargs: Any) -> Any:
     """Lazy wrapper that keeps module-level patchability for tests."""
-    from src.runtime.graph.nodes.guard import detect_injection as _detect_injection
+    from src.runtime.safety.guard import detect_injection as _detect_injection
 
     return _detect_injection(*args, **kwargs)
 
