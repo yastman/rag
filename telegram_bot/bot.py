@@ -454,11 +454,22 @@ class PropertyBot:
         "ask:installment": "Какие условия рассрочки?",
     }
 
-    async def _handle_ask(self, message: Message, i18n: Any = None) -> None:
-        return await _bot_catalog._handle_ask(self, message, i18n)
+    async def _handle_ask(
+        self,
+        message: Message,
+        i18n: Any = None,
+        state: FSMContext | None = None,
+        dialog_manager: Any = None,
+    ) -> None:
+        return await _bot_catalog._handle_ask(self, message, i18n, state, dialog_manager)
 
-    async def handle_ask_callback(self, callback: CallbackQuery) -> None:
-        return await _bot_catalog.handle_ask_callback(self, callback)
+    async def handle_ask_callback(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext | None = None,
+        dialog_manager: Any = None,
+    ) -> None:
+        return await _bot_catalog.handle_ask_callback(self, callback, state, dialog_manager)
 
     async def _handle_manager(
         self,

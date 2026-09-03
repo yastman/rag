@@ -365,7 +365,14 @@ async def handle_menu_button(
     elif action_id == "bookmarks":
         await _bot_favorites._handle_bookmarks(bot, message, state)
     elif action_id == "ask":
-        await _bot_catalog._handle_ask(bot, message, i18n=i18n)
+        # Ask owns its free-text step by exiting any active flow first (#3204).
+        await _bot_catalog._handle_ask(
+            bot,
+            message,
+            i18n=i18n,
+            state=state,
+            dialog_manager=dialog_manager,
+        )
     elif action_id == "manager":
         await _bot_handoff._handle_manager(
             bot, message, i18n=i18n, state=state, dialog_manager=dialog_manager
