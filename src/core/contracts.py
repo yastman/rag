@@ -118,7 +118,13 @@ class CoreDependencies:
 
 @dataclass
 class AssistantResult:
-    """Structured response object returned by the assistant core entrypoint."""
+    """Structured response object returned by the assistant core entrypoint.
+
+    Grounding metadata (issue #3200): ``grounding_mode``, ``grounded``, and
+    ``safe_fallback_used`` record the grounding decision behind
+    ``response_text``; ``usage`` records provider token usage. All of them are
+    ``None``/empty when the boundary cannot know them (cache hits, errors).
+    """
 
     response_text: str
     route: str = ""
@@ -134,6 +140,10 @@ class AssistantResult:
     llm_model: str | None = None
     llm_call_count: int = 0
     rerank_applied: bool = False
+    grounding_mode: str | None = None
+    grounded: bool | None = None
+    safe_fallback_used: bool = False
+    usage: dict[str, int] = field(default_factory=dict)
 
 
 class AssistantError(RuntimeError):
