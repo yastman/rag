@@ -25,7 +25,7 @@ REMOVED_SYMBOLS = {
     },
     "archive/evaluation/langfuse_integration.py": {"trace_search_with_spans"},
     "src/ingestion/docling_client.py": {"convert_file"},
-    "src/runtime/graph/config.py": {"create_hybrid_embeddings"},
+    "src/runtime/config.py": {"create_hybrid_embeddings"},
     "src/runtime/pipeline/rag.py": {
         "_detect_filter_sensitive_query",
         "_expand_short_query",

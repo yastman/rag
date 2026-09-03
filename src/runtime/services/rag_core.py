@@ -1,7 +1,8 @@
-"""Shared RAG core functions used by the runtime pipeline and graph nodes.
+"""Shared RAG core functions used by the runtime pipeline and query helpers.
 
 Extracted to avoid ~300 LOC duplication between the pipeline adapters and
-  src/runtime/graph/nodes/*.py
+  the query helpers (now in src/runtime/routing and src/runtime/safety,
+  formerly src/runtime/graph/nodes).
 
 Core functions are pure computation (no spans, no PipelineMetrics).
 Adapters (pipeline / nodes) handle metrics and state wrapping.
