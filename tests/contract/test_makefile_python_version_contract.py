@@ -30,7 +30,8 @@ PYTHON_VERSION_FILE = REPO_ROOT / ".python-version"
 FAST_TARGETS = [
     "test-unit",
     "test-unit-loadscope",
-    "test",
+    # "test" is a pure orchestrator (test-core + test-no-service-lane) since
+    # #3220 retired the legacy graph-path lane; it no longer runs pytest itself.
     "test-fast",
     "test-all-fast",
     "test-profile",

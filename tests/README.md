@@ -36,7 +36,7 @@ These are the default gate for PRs and local development.
 
 | What | Scope | Coverage threshold |
 |------|-------|--------------------|
-| `make test` | core gate: `test-core` + `tests/integration/test_graph_paths.py` + no-service lane | none |
+| `make test` | core gate: `test-core` + no-service integration/smoke lane | none |
 | `make test-contract` | contract only (`tests/contract/`) | none |
 | Local delivery gate | `make candidate-check` (`check-frozen` + `test` + `test-contract`) | coverage remains a separate `make test-cov` check |
 
@@ -199,7 +199,6 @@ See `pyproject.toml` for the full marker list (including exclusions for old API 
 | `unit/test_local_compose_contract.py` | Compose config validation |
 | `contract/test_layering_contract.py` | Architecture layering contract |
 | `contract/test_no_langfuse_sdk_import_contract.py` | No Langfuse SDK imports remain |
-| `integration/test_graph_paths.py` | LangGraph path validation (no Docker) |
 | `integration/test_qdrant_service.py` | Real Qdrant service integration |
 | `smoke/test_preflight.py` | Qdrant/Redis preflight checks |
 | `eval/ground_truth.json` | Q&A pairs for RAG evaluation |

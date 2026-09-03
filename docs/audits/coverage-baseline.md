@@ -45,6 +45,10 @@ and produces no coverage summary at all — exit 2.
 
 > `telegram_bot/` answer-spine files are 0% because the core gate does not exercise
 > the Telegram adapter layer (no `aiogram` installed in the baseline env).
+>
+> Historical note (2026-09-03): this snapshot is point-in-time. Rows for files deleted
+> after the snapshot — e.g. `telegram_bot/agents/rag_pipeline.py`, removed with the
+> duplicate agent RAG pipeline in #3217 — are kept as recorded and no longer exist.
 
 ---
 

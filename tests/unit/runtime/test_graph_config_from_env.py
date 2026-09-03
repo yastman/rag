@@ -46,7 +46,6 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
         "SHOW_SOURCES",
         "STREAMING_ENABLED",
         "TTFT_DRIFT_WARN_MS",
-        "CLASSIFIER_MODE",
         "SHOW_TRANSCRIPTION",
         "VOICE_LANGUAGE",
         "STT_MODEL",
@@ -102,7 +101,6 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
     assert cfg.show_sources is False
     assert cfg.streaming_enabled is True
     assert cfg.ttft_drift_warn_ms == 500
-    assert cfg.classifier_mode == "regex"
 
     # Voice defaults
     assert cfg.show_transcription is True
@@ -127,7 +125,6 @@ def test_graph_config_from_env_roundtrip_overrides(monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("BOT_LANGUAGE", "en")
     monkeypatch.setenv("GUARD_MODE", "soft")
     monkeypatch.setenv("CONTENT_FILTER_ENABLED", "false")
-    monkeypatch.setenv("CLASSIFIER_MODE", "semantic")
 
     # Force module reload so _GraphEnvSettings picks up monkeypatched env
     import importlib
@@ -148,7 +145,6 @@ def test_graph_config_from_env_roundtrip_overrides(monkeypatch: pytest.MonkeyPat
     assert cfg.domain_language == "en"
     assert cfg.guard_mode == "soft"
     assert cfg.content_filter_enabled is False
-    assert cfg.classifier_mode == "semantic"
 
 
 def test_graph_config_from_env_rewrite_model_fallback(monkeypatch: pytest.MonkeyPatch) -> None:

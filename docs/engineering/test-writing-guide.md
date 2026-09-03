@@ -32,7 +32,7 @@ live-service scenarios into it.
   `requires_extras`, …) so the fast gate can exclude them.
 - **Keep fixture scopes narrow**; put shared setup in the nearest `conftest.py`, not the root.
 - **Add a test with every bug fix and feature** (TDD when touching hotspots like
-  `telegram_bot/agents/rag_pipeline.py` or `src/runtime/generation/service.py`).
+  `src/runtime/pipeline/rag.py` or `src/runtime/generation/service.py`).
 
 ## Naming
 

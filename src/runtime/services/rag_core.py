@@ -1,8 +1,7 @@
-"""Shared RAG core functions used by both agent SDK pipeline and LangGraph nodes.
+"""Shared RAG core functions used by the runtime pipeline and graph nodes.
 
-Extracted to avoid ~300 LOC duplication between:
-  telegram_bot/agents/rag_pipeline.py
-  telegram_bot/graph/nodes/*.py
+Extracted to avoid ~300 LOC duplication between the pipeline adapters and
+  src/runtime/graph/nodes/*.py
 
 Core functions are pure computation (no spans, no PipelineMetrics).
 Adapters (pipeline / nodes) handle metrics and state wrapping.

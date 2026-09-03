@@ -42,7 +42,8 @@ MAKEFILE = REPO_ROOT / "Makefile"
 # `test-profile` and `test-store-durations` measure that same lane, so they
 # must select identically.
 FAST_LANE_TARGETS = (
-    "test",
+    # "test" is a pure orchestrator (test-core + test-no-service-lane) since
+    # #3220 retired the legacy graph-path lane; it no longer runs pytest itself.
     "test-unit",
     "test-unit-loadscope",
     "test-fast",

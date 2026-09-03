@@ -4,8 +4,8 @@ The bot's query pipeline, pre-agent helpers, and streaming helpers — extracted
 `telegram_bot/bot.py` (`card_2a71ec058138`, split #2816).
 
 > **Not to be confused with [`../pipelines/`](../pipelines/)** (plural): `pipelines/` holds the
-> `graph_compat` façade and client-direct entrypoints. This `pipeline/` (singular) is the
-> supervisor-driven query path lifted out of the `bot.py` god-object.
+> client-direct entrypoints. This `pipeline/` (singular) is the supervisor-driven query path
+> lifted out of the `bot.py` god-object.
 
 ## Files
 
@@ -24,5 +24,5 @@ The bot's query pipeline, pre-agent helpers, and streaming helpers — extracted
 ## See Also
 
 - [`../README.md`](../README.md) — Telegram transport overview
-- [`../pipelines/README.md`](../pipelines/README.md) — graph-compat façade + client-direct paths
-- [`../agents/README.md`](../agents/README.md) — agent SDK tools + RAG pipeline functions
+- [`../pipelines/README.md`](../pipelines/README.md) — client-direct paths
+- [`../agents/README.md`](../agents/README.md) — agent SDK tools

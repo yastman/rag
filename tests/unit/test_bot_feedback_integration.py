@@ -1,10 +1,8 @@
-"""Tests for handle_feedback (CallbackData + legacy paths) and handle_hitl_callback."""
+"""Tests for handle_feedback (CallbackData + legacy paths)."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from telegram_bot.config import BotConfig
 from tests.unit._bot_config_factory import make_bot_config as _make_config
@@ -115,15 +113,4 @@ class TestHandleFeedback:
         assert len(markup.inline_keyboard) == 3
 
 
-# ---------------------------------------------------------------------------
-# TestHandleHitlCallback
-class TestHandleHitlCallback:
-    """handle_hitl_callback is now a no-op stub that answers Устарело (#2843)."""
 
-    @pytest.mark.asyncio
-    async def test_handle_hitl_callback_answers_ustarelo(self) -> None:
-        callback = AsyncMock()
-        state = AsyncMock()
-        bot = _create_bot()
-        await bot.handle_hitl_callback(callback, state)
-        callback.answer.assert_awaited_once_with("Устарело")

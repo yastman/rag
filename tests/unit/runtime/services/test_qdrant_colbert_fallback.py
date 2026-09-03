@@ -24,9 +24,8 @@ The 4 call sites become a single line each. The test below pins:
   ``colbert_empty`` post-hook needs that to disable ColBERT).
 
 We avoid touching the integration tests around ``hybrid_search_rrf_colbert``
-itself (those are covered by ``tests/integration/test_colbert_backfill.py``
-and ``tests/unit/agents/test_rag_pipeline.py``) — this file targets the
-extracted seam only.
+itself (covered by ``tests/integration/test_colbert_backfill.py``) —
+this file targets the extracted seam only.
 """
 
 from __future__ import annotations

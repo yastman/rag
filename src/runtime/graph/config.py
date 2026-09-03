@@ -2,9 +2,7 @@
 
 Moved from ``telegram_bot/graph/config.py`` as the second slice of the
 reverse-layering fix tracked under #1948 / #2045 / #2049. The legacy
-``telegram_bot.graph.config`` module is kept as a thin re-export so
-existing imports across the test suite, ``telegram_bot/`` internals, and
-external consumers continue to work without churn.
+``telegram_bot.graph.config`` re-export shim was removed in #3220.
 
 Provides service factories for LLM, embeddings, and cache thresholds.
 
@@ -125,7 +123,7 @@ class DomainConfig(BaseModel):
 
 
 class ResponseConfig(BaseModel):
-    """Response style, sources, streaming, and classifier settings."""
+    """Response style, sources, and streaming settings."""
 
     # Response length control rollout (#129)
     response_style_enabled: bool = False
@@ -135,8 +133,6 @@ class ResponseConfig(BaseModel):
     streaming_enabled: bool = True
     # TTFT drift warning threshold in ms (#675); raise for reasoning models behind proxy
     ttft_drift_warn_ms: int = 500
-    # Query classifier mode (#805): "regex" (default) or "semantic" (RedisVL SemanticRouter)
-    classifier_mode: str = "regex"
 
 
 class VoiceConfig(BaseModel):
@@ -318,10 +314,6 @@ class _GraphEnvSettings(BaseSettings):
         default=500,
         validation_alias=AliasChoices("ttft_drift_warn_ms", "TTFT_DRIFT_WARN_MS"),
     )
-    classifier_mode: str = Field(
-        default="regex",
-        validation_alias=AliasChoices("classifier_mode", "CLASSIFIER_MODE"),
-    )
 
     # Voice
     show_transcription: bool = Field(
@@ -396,7 +388,6 @@ _FLAT_KWARGS: dict[str, tuple[str, str]] = {
     "show_sources": ("response", "show_sources"),
     "streaming_enabled": ("response", "streaming_enabled"),
     "ttft_drift_warn_ms": ("response", "ttft_drift_warn_ms"),
-    "classifier_mode": ("response", "classifier_mode"),
     # Voice
     "show_transcription": ("voice", "show_transcription"),
     "voice_language": ("voice", "voice_language"),
@@ -491,7 +482,6 @@ class GraphConfig:
         show_sources: bool
         streaming_enabled: bool
         ttft_drift_warn_ms: int
-        classifier_mode: str
         # Voice
         show_transcription: bool
         voice_language: str
@@ -590,7 +580,6 @@ class GraphConfig:
                 show_sources=e.show_sources,
                 streaming_enabled=e.streaming_enabled,
                 ttft_drift_warn_ms=e.ttft_drift_warn_ms,
-                classifier_mode=e.classifier_mode,
             ),
             voice=VoiceConfig(
                 show_transcription=e.show_transcription,

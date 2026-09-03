@@ -103,13 +103,6 @@ def create_bot_agent(*args: Any, **kwargs: Any) -> Any:
     return _create_bot_agent(*args, **kwargs)
 
 
-def build_graph(*args: Any, **kwargs: Any) -> Any:
-    """Lazy wrapper that keeps module-level patchability for tests."""
-    from .pipelines.graph_compat import build_graph as _build_graph
-
-    return _build_graph(*args, **kwargs)
-
-
 def classify_query(*args: Any, **kwargs: Any) -> Any:
     """Lazy wrapper that keeps module-level patchability for tests."""
     from src.runtime.graph.nodes.classify import classify_query as _classify_query
@@ -806,11 +799,6 @@ class PropertyBot:
             forum_thread_id=forum_thread_id,
             message=message,
         )
-
-    # _send_hitl_confirmation removed — dead code, no live callers (#2943)
-
-    async def handle_hitl_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
-        await callback.answer("Устарело")
 
     async def handle_feedback(
         self, callback: CallbackQuery, callback_data: FeedbackCB | None = None

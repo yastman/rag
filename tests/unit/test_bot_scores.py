@@ -172,7 +172,6 @@ class TestCreateScoreNoBarId:
         targets = [
             Path("telegram_bot/scoring.py"),
             Path("telegram_bot/bot.py"),
-            Path("telegram_bot/agents/history_graph/nodes.py"),
         ]
         violations = []
         for path in targets:

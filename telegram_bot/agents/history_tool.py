@@ -1,7 +1,8 @@
 """History search tool — semantic-cached history lookup (#413, #2945).
 
-history_graph was removed in #2843. This module retains the cache layer and
-tool contract so the agent can still call history_search without errors.
+The LangGraph history sub-graph was removed in #2843 / #3211. This module
+retains the cache layer and tool contract so the agent can still call
+history_search without errors.
 
 Cache key fix (#2945): deal_id is now included in filter_signature so that
 different deals/contexts never collide on the same cached entry.
@@ -66,6 +67,6 @@ async def history_search(
             if cached:
                 return str(cached)
 
-    # ponytail: history_graph removed in #2843; restore sub-graph when history
-    # retrieval is re-implemented (track under a new issue).
+    # ponytail: history sub-graph removed in #2843 / #3211; restore it when
+    # history retrieval is re-implemented (track under a new issue).
     return f"По запросу «{query}» ничего не найдено в истории диалогов."
