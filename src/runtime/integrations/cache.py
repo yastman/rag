@@ -3,7 +3,7 @@
 Moved from ``telegram_bot/integrations/cache.py`` as the fourth slice of the
 reverse-layering fix tracked under #1948 / #2047 / #2049. The legacy module
 ``telegram_bot.integrations.cache`` is kept as a thin re-export so existing
-imports across the test suite, ``telegram_bot/`` internals, ``src/api``,
+imports across the test suite, ``telegram_bot/`` internals,
 ``scripts/``, and external consumers continue to work without churn.
 
 Replaces CacheService (1000+ LOC) with a focused ~300 LOC implementation.

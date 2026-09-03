@@ -38,7 +38,6 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 | Overview | [`../src/README.md`](../src/README.md) |
 | Public boundary (DI contracts + entrypoint) | [`../src/core/README.md`](../src/core/README.md) |
 | Pipeline / RAG / retrieval / generation engine | [`../src/runtime/README.md`](../src/runtime/README.md) |
-| HTTP API | [`../src/api/README.md`](../src/api/README.md) |
 | Config / settings | [`../src/config/README.md`](../src/config/README.md) |
 | Retrieval | [`../src/retrieval/README.md`](../src/retrieval/README.md) |
 | Ingestion (overview · unified · apartments) | [`../src/ingestion/README.md`](../src/ingestion/README.md) · [`../src/ingestion/unified/AGENTS.override.md`](../src/ingestion/unified/AGENTS.override.md) · [`../src/ingestion/apartments/README.md`](../src/ingestion/apartments/README.md) |

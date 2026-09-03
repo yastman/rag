@@ -5,7 +5,7 @@ preserves the historical import surface so existing bot internals
 and tests that ``patch("telegram_bot.scoring.write_scores", ...)`` keep
 working unchanged.
 
-New code under ``mini_app/``, ``src/api/``, and ``src/`` should import
+New code under ``mini_app/`` and ``src/`` should import
 directly from ``src.scoring``.
 """
 

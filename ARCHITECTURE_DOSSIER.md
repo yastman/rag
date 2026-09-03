@@ -115,7 +115,6 @@ telegram_bot*, *Core contracts layer is import-independent*, *src must not impor
 | `src/security/pii_redaction.py` | `PIIRedactor` — query PII redaction (on the hot path) |
 | `src/config/` | `settings.py`, `constants.py`, `services.yaml` |
 | `src/observability/` | **no-op** `@observe` shims (Langfuse removed, #2844) + structured-log helpers |
-| `src/api/` | FastAPI HTTP surface — **dead/unwired reference** (P28 removal candidate) |
 | `src/contextualization/` | anthropic/groq/openai contextualizers — **dead** (providers extra emptied #2893) |
 
 ### `telegram_bot/` — the adapter + domain layer
@@ -253,10 +252,10 @@ removal*, not as architecture):
 | P28 | Lean-monolith gaps: delete `voyageai`/`apscheduler` dead clusters + dead `src/api`+`src/contextualization`; declare `fluent_compiler` |
 
 **Dead subsystems physically in-tree (being removed):** `telegram_bot/agents/`, LangGraph
-builder, Kommo CRM, `src/api/`, `src/contextualization/`, in-process FlagEmbedding
+builder, Kommo CRM, `src/contextualization/`, in-process FlagEmbedding
 (`local_bge_m3.py`, `embedding_model.py`), `document_parser.py`, `indexer.py`,
 `hybrid_chunker.py`, `contextual_loader/schema.py`, `voyage.py`, `reranker.py`,
-`colbert_reranker.py`, `services/user-base` (archived).
+`colbert_reranker.py`, `services/user-base` (archived). (`src/api/` removed, #3212.)
 
 **Hotspots (churn × complexity):** `src/runtime/pipeline/rag.py`, `telegram_bot/agents/rag_tool.py`
 (dead), `telegram_bot/bot.py` (god-object), `telegram_bot/pipeline/supervisor.py`.

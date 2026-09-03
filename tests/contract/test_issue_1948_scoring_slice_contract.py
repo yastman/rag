@@ -8,9 +8,8 @@ arrows go the right way. Slices 1..4 landed in PR #2018, #2020, #2024,
 This contract pins **slice 5**: the scoring helpers
 (``write_pipeline_scores``, ``score``, ``write_crm_scores``,
 ``write_history_scores``, ``compute_checkpointer_overhead_proxy_ms``)
-become first-class citizens under ``src/`` and ``src/api/main.py``
-imports them directly from there. ``telegram_bot/scoring.py`` becomes
-a thin re-export shim so existing bot internals
+become first-class citizens under ``src/``. ``telegram_bot/scoring.py``
+becomes a thin re-export shim so existing bot internals
 (``telegram_bot/agents/rag_tool.py``, ``telegram_bot/handlers/command_handlers.py``,
 ``telegram_bot/pipelines/client.py``, ``telegram_bot/bot.py``) keep working
 unchanged.
@@ -26,8 +25,6 @@ Asserted invariants:
      ``write_pipeline_scores``).
   4. The ``telegram_bot/scoring.py`` shim re-exports every public
      callable with object-identity (``is``-equal).
-  5. ``src/api/main.py`` imports ``write_pipeline_scores`` from
-     ``src.scoring`` (not from ``telegram_bot.scoring``).
 """
 
 from __future__ import annotations
@@ -42,7 +39,6 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CANONICAL = REPO_ROOT / "src" / "scoring.py"
 SHIM = REPO_ROOT / "telegram_bot" / "scoring.py"
-RAG_API_MAIN = REPO_ROOT / "src" / "api" / "main.py"
 
 PUBLIC_API: tuple[str, ...] = (
     "compute_checkpointer_overhead_proxy_ms",
@@ -122,27 +118,7 @@ def test_telegram_bot_scoring_shim_re_exports_canonical(name: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5. src/api/main.py imports from src/, not telegram_bot/
-# ---------------------------------------------------------------------------
-
-
-def test_rag_api_main_imports_scoring_from_src() -> None:
-    """src/api/main.py must not contain any ``telegram_bot.scoring`` references —
-    including the lazy ``from telegram_bot.scoring import write_pipeline_scores``
-    inside ``_run_rag_pipeline``.
-    """
-    src = RAG_API_MAIN.read_text()
-    assert "from src.scoring import" in src, (
-        f"#1948 slice 5: {RAG_API_MAIN.relative_to(REPO_ROOT)} must import from src.scoring."
-    )
-    assert "from telegram_bot.scoring import" not in src, (
-        f"#1948 slice 5 regression: {RAG_API_MAIN.relative_to(REPO_ROOT)} "
-        "must not import from telegram_bot.scoring anymore."
-    )
-
-
-# ---------------------------------------------------------------------------
-# 6. Behavioral contract — no-op writers and real compute helper
+# 5. Behavioral contract — no-op writers and real compute helper
 # ---------------------------------------------------------------------------
 
 

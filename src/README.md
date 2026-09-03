@@ -1,14 +1,13 @@
 # src/
 
-Shared domain, retrieval, ingestion, runtime engine, and API code for the RAG system.
+Shared domain, retrieval, ingestion, and runtime engine code for the RAG system.
 
 ## Purpose
 
 Contains all non-transport logic: the public boundary (`core/`), the shared runtime engine
 (`runtime/`), document ingestion, retrieval, model contextualization, and embedding/LLM
 adapters. `telegram_bot/` imports from here; `src/` stays Telegram-agnostic. The runtime
-kernel is now extracted to `src/runtime/`, so `src/api/` imports
-`src.runtime.graph.builder.build_pipeline()` (no longer `telegram_bot.*`).
+kernel lives in `src/runtime/` and does not import `telegram_bot.*`.
 
 ## Entrypoints
 
@@ -17,14 +16,12 @@ kernel is now extracted to `src/runtime/`, so `src/api/` imports
 | Public boundary | `src.core.assistant.run_assistant_request` | Single entrypoint used by all adapters + the golden E2E |
 | RAG engine | `src.runtime.pipeline.rag.rag_pipeline` | cache → hybrid search → grade → rerank → optional rewrite |
 | Ingestion | `src.ingestion.unified.cli` | Unified ingestion pipeline CLI |
-| API (unwired / reference) | `src.api.main:app` | FastAPI HTTP RAG wrapper — not wired in compose/CI |
 
 ## Directory Guide
 
 | Directory | Concern |
 |-----------|---------|
 | `adapters/` | Embedding + LLM provider adapters (BGE-M3, OpenAI, LiteLLM) |
-| `api/` | FastAPI RAG API — unwired/reference wrapper around the runtime pipeline |
 | `config/` | Shared settings, constants, and Qdrant collection policy |
 | `contextualization/` | LLM-based contextualized embedding generation (Claude / OpenAI / Groq) |
 | `core/` | Public boundary: Protocol DI contracts (`contracts.py`) + `assistant.py` entrypoint |
@@ -39,7 +36,7 @@ kernel is now extracted to `src/runtime/`, so `src/api/` imports
 
 ## Boundaries
 
-- **`src/` stays Telegram-agnostic.** The runtime kernel is extracted to `src/runtime/`; `src/api/` imports `src.runtime.graph.*`, not `telegram_bot.*`.
+- **`src/` stays Telegram-agnostic.** The runtime kernel lives in `src/runtime/` and imports nothing from `telegram_bot.*` (ratchet: `tests/contract/test_layering_no_telegram_bot_imports_contract.py`).
 - **Ingestion determinism and resumability** are owned by `src/ingestion/` and `src/ingestion/unified/`. Do not change manifest identity, hashing, or collection semantics without careful review.
 - **Graph state contracts** live in `src/runtime/graph/state.py`; adapters reuse the same pipeline and do not redefine state shapes.
 
@@ -56,7 +53,7 @@ kernel is now extracted to `src/runtime/`, so `src/api/` imports
 
 ```bash
 make check
-pytest src/ingestion/unified/ src/api/
+pytest src/ingestion/unified/
 ```
 
 ## See Also
