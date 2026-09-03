@@ -15,10 +15,6 @@
     "tests/unit/dialogs/test_filter_constants.py",
     "tests/unit/dialogs/test_funnel_results.py"
   ],
-  "test_creates_collection_when_missing": [
-    "tests/unit/ingestion/test_unified_cli.py",
-    "tests/unit/services/test_history_service.py"
-  ],
   "test_default_search_engine": [
     "tests/unit/config/test_constants.py",
     "tests/unit/test_settings.py"
@@ -82,10 +78,6 @@
   "test_redis_maxmemory_set": [
     "tests/load/test_load_redis_eviction.py",
     "tests/smoke/test_preflight.py"
-  ],
-  "test_respects_limit": [
-    "tests/unit/services/test_history_service.py",
-    "tests/unit/services/test_rag_core.py"
   ],
   "test_response_sent_defaults_to_false": [
     "tests/unit/pipelines/test_client_pipeline.py",

@@ -174,8 +174,6 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "FRESHNESS_FIELD": "Score boosting payload field; doc TBD",
     "FRESHNESS_SCALE_DAYS": "Score boosting decay scale; doc TBD",
     "GOOGLE_SERVICE_ACCOUNT_KEY": "GDrive ingestion credentials; doc TBD",
-    "HISTORY_SAVE_DRAIN_TIMEOUT_S": "History flush tuning; doc TBD",
-    "HISTORY_SAVE_MAX_CONCURRENCY": "History flush tuning; doc TBD",
     "MMR_ENABLED": "MMR diversity reranking toggle; doc TBD",
     "MMR_LAMBDA": "MMR diversity-vs-relevance balance; doc TBD",
     "RUNTIME_EVENTS_DIR": "Runtime events JSONL dir; doc TBD",

@@ -100,16 +100,6 @@ class TestBotConfigQuantization:
             config = _config_from_env(overrides={"QDRANT_USE_QUANTIZATION": val})
             assert config.qdrant_use_quantization is False, f"Expected False for '{val}'"
 
-    def test_history_collection_default(self):
-        """Test default value for qdrant_history_collection."""
-        config = _config_from_env(drop_keys={"QDRANT_HISTORY_COLLECTION"})
-        assert config.qdrant_history_collection == "conversation_history"
-
-    def test_history_collection_from_env(self):
-        """Test reading QDRANT_HISTORY_COLLECTION from env."""
-        config = _config_from_env(overrides={"QDRANT_HISTORY_COLLECTION": "my_history"})
-        assert config.qdrant_history_collection == "my_history"
-
     def test_quantization_mixed_settings(self):
         """Test mixed enabled/disabled quantization settings."""
         config = _config_from_env(
@@ -125,17 +115,3 @@ class TestBotConfigQuantization:
         assert config.qdrant_quantization_rescore is False
         assert config.qdrant_quantization_oversampling == 1.5
         assert config.qdrant_quantization_always_ram is True
-
-
-class TestBotConfigHistory:
-    """Tests for BotConfig history search settings (#433)."""
-
-    def test_history_relevance_threshold_default(self):
-        """Default history_relevance_threshold is 0.7."""
-        config = _config_from_env(drop_keys={"HISTORY_RELEVANCE_THRESHOLD"})
-        assert config.history_relevance_threshold == 0.7
-
-    def test_history_relevance_threshold_from_env(self):
-        """HISTORY_RELEVANCE_THRESHOLD env var is parsed as float."""
-        config = _config_from_env(overrides={"HISTORY_RELEVANCE_THRESHOLD": "0.5"})
-        assert config.history_relevance_threshold == 0.5

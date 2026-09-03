@@ -97,10 +97,6 @@ class BotConfig(BaseSettings):
         default="gdrive_documents_bge",
         validation_alias=AliasChoices("qdrant_collection", "QDRANT_COLLECTION"),
     )
-    qdrant_history_collection: str = Field(
-        default="conversation_history",
-        validation_alias=AliasChoices("qdrant_history_collection", "QDRANT_HISTORY_COLLECTION"),
-    )
 
     # LLM (OpenAI compatible API)
     llm_api_key: str = Field(
@@ -371,14 +367,6 @@ class BotConfig(BaseSettings):
     realestate_database_url: str = Field(
         default="",
         validation_alias=AliasChoices("realestate_database_url", "REALESTATE_DATABASE_URL"),
-    )
-
-    # History search (#433)
-    history_relevance_threshold: float = Field(
-        default=0.7,
-        ge=0.0,
-        le=1.0,
-        validation_alias=AliasChoices("history_relevance_threshold", "HISTORY_RELEVANCE_THRESHOLD"),
     )
 
     # i18n

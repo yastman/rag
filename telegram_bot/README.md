@@ -22,7 +22,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 
 ## Related Runtime Services
 
-- **Qdrant** — vector search (collections: documents, domain catalogs, history)
+- **Qdrant** — vector search (collections: documents, domain catalogs)
 - **Redis** — caching, throttling, user context
 - **BGE-M3** — dense + sparse embeddings (local REST API)
 - Structured logging — observability (optional)
