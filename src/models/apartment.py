@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from src.runtime.domain_defaults import DEMO_COMPLEX_CITIES
+
 
 # --- View normalization ---
 
@@ -330,6 +332,9 @@ def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQuer
 class HardFilters(BaseModel):
     """Hard filters that map directly to Qdrant payload conditions."""
 
+    # Static copy of DEMO_CITIES (src/runtime/domain_defaults.py) — Python
+    # typing cannot build a Literal from a tuple; the seed-truthfulness test
+    # locks the two lists together (#3203).
     city: Literal["Солнечный берег", "Свети Влас", "Элените"] | None = Field(
         default=None,
         description="Город. None если не указан.",
@@ -368,10 +373,11 @@ class HardFilters(BaseModel):
     complex_name: str | None = Field(
         default=None,
         description=(
-            "Название комплекса (EN): Premier Fort Beach, Prestige Fort Beach, "
-            "Panorama Fort Beach, Marina View Fort Beach, Messambria Fort Beach, "
-            "Imperial Fort Club, Crown Fort Club, Green Fort Suites, "
-            "Premier Fort Suites, Nessebar Fort Residence."
+            # Built from the canonical demo complexes (#3203) so the schema
+            # cannot drift from the seed data.
+            "Название комплекса (EN): "
+            + ", ".join(DEMO_COMPLEX_CITIES)
+            + "."
         ),
     )
     view_tags: list[str] = Field(

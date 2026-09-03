@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
+from src.runtime.domain_defaults import DEMO_CITIES
 
-APARTMENT_CITY_OPTIONS: list[tuple[str, str]] = [
-    ("Солнечный берег", "Солнечный берег"),
-    ("Свети Влас", "Свети Влас"),
-    ("Элените", "Элените"),
-    ("Несебр", "Несебр"),
-    ("Поморие", "Поморие"),
-    ("Бургас", "Бургас"),
-    ("Варна", "Варна"),
-    ("Созополь", "Созополь"),
-]
+
+# Filter-dialog city options: exactly the cities that exist in the demo seed
+# (#3203). Offering a city with no listings would advertise an empty filter.
+APARTMENT_CITY_OPTIONS: list[tuple[str, str]] = [(city, city) for city in DEMO_CITIES]
 
 APARTMENT_CITY_NAMES: list[str] = [
     "Солнечный берег",

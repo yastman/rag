@@ -5,6 +5,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from src.runtime.domain_defaults import GOLDEN_DEMO_QUERIES
 from telegram_bot.callback_data import DemoCB
 
 
@@ -25,9 +26,7 @@ def build_demo_examples(examples: list[str]) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-DEFAULT_EXAMPLES = [
-    "Студия в Солнечном берегу до 100 000€",
-    "Двушка в Premier Fort Beach",
-    "Трёшка в Элените до 200 000€",
-    "Апартамент в Свети Влас от 150 000€",
-]
+# Visible fallback examples = the golden demo queries (#3203). Each one is
+# guaranteed to return listings from the shipped seed (data/apartments.csv)
+# through the production extraction path; locked by the seed-truthfulness test.
+DEFAULT_EXAMPLES: list[str] = list(GOLDEN_DEMO_QUERIES)
