@@ -110,6 +110,8 @@ async def run_assistant_pipeline(
         generation_result = generation.payload
         usage = _as_usage_dict(generation_result.get("usage_details"))
         llm_model = _extract_llm_model(generation_result)
+        grounded = generation_result.get("grounded")
+        llm_calls = generation_result.get("llm_call_count")
 
         emit_product_event(
             dependencies.telemetry,
@@ -136,8 +138,16 @@ async def run_assistant_pipeline(
             request_id=rid,
             cache_hit=False,
             llm_model=llm_model,
-            llm_call_count=1,
+            llm_call_count=(
+                llm_calls
+                if isinstance(llm_calls, int) and not isinstance(llm_calls, bool) and llm_calls >= 0
+                else 1
+            ),
             rerank_applied=bool(rag_result.get("rerank_applied", False)),
+            grounding_mode=grounding_mode,
+            grounded=grounded if isinstance(grounded, bool) else None,
+            safe_fallback_used=bool(generation_result.get("safe_fallback_used", False)),
+            usage=_coerce_usage(usage),
         )
     except Exception:
         import logging
@@ -208,6 +218,18 @@ def _extract_sources(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
 def _as_usage_dict(value: Any) -> dict[str, Any]:
     """Safely extract usage details as a dictionary."""
     return value if isinstance(value, dict) else {}
+
+
+def _coerce_usage(value: Any) -> dict[str, int]:
+    """Coerce provider usage details into an int-valued dict for the core boundary."""
+    if not isinstance(value, dict):
+        return {}
+    usage: dict[str, int] = {}
+    for key, raw in value.items():
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            continue
+        usage[str(key)] = int(raw)
+    return usage
 
 
 def _extract_llm_model(generation_result: dict[str, Any]) -> str | None:

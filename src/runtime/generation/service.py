@@ -26,6 +26,7 @@ from .policy import (
     _build_fallback_response,
     _coerce_positive_number,
     _ensure_generation_signal_defaults,
+    _extract_usage_details,
     _sanitize_response_text,
 )
 from .prompts import (
@@ -159,6 +160,7 @@ async def generate_answer(
     ttft_ms = 0.0
     response_obj: Any | None = None
     completion_tokens: float | None = None
+    usage: Any | None = None
     hard_timeout = False
 
     try:
@@ -256,6 +258,7 @@ async def generate_answer(
                 "legal_answer_safe": legal_answer_safe,
                 "semantic_cache_safe_reuse": legal_answer_safe,
                 "needs_coverage": needs_coverage,
+                "usage_details": _extract_usage_details(usage),
             }
         )
     )
