@@ -39,9 +39,10 @@ REPO = Path(__file__).resolve().parents[2]
 
 # First-party pyprojects that resolve against an environment containing
 # qdrant-client (and therefore should NOT pin grpcio directly).
+# telegram_bot/pyproject.toml was retired by #3210 (root lock is the single
+# Telegram authority); new bot dependencies go into the root telegram extra.
 PYPROJECTS = [
     REPO / "pyproject.toml",
-    REPO / "telegram_bot" / "pyproject.toml",
 ]
 
 

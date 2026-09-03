@@ -42,15 +42,23 @@ def _project_dependencies(path: Path) -> list[str]:
     return list(data["project"].get("dependencies", []))
 
 
+def _telegram_extra() -> list[str]:
+    """Telegram extra of the root manifest (single Telegram authority, #3210)."""
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    extras = data["project"].get("optional-dependencies", {})
+    return list(extras.get("telegram", []))
+
+
 def test_root_base_dependencies_do_not_include_otel_auto_instrumentation() -> None:
     deps = _project_dependencies(ROOT / "pyproject.toml")
     forbidden = [dep for dep in deps if dep.startswith(_AUTO_INSTRUMENTATION_PREFIX)]
     assert forbidden == []
 
 
-def test_telegram_bot_base_dependencies_do_not_include_otel_auto_instrumentation() -> None:
-    deps = _project_dependencies(ROOT / "telegram_bot" / "pyproject.toml")
-    forbidden = [dep for dep in deps if dep.startswith(_AUTO_INSTRUMENTATION_PREFIX)]
+def test_telegram_dependencies_do_not_include_otel_auto_instrumentation() -> None:
+    forbidden = [
+        dep for dep in _telegram_extra() if dep.startswith(_AUTO_INSTRUMENTATION_PREFIX)
+    ]
     assert forbidden == []
 
 

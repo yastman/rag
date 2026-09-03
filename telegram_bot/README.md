@@ -27,6 +27,15 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 - Structured logging — observability (optional)
 - Voice input — optional and configuration-driven (`VOICE_ENABLED` + STT key in `BotConfig`, #3240); handled in-process via `dialogs/` (catalog + demo dialogs). Unconfigured or failing voice degrades to typed input; no LiveKit sidecar
 
+## Dependencies
+
+There is no bot-local manifest/lock (#3210). The repo-root `pyproject.toml`
++ `uv.lock` are the single dependency authority for the Telegram runtime:
+local installs use `uv sync --extra telegram`, and `telegram_bot/Dockerfile`
+resolves the production image with `uv sync --locked --no-dev --extra telegram`
+from the same frozen lock. Add bot runtime dependencies to the root
+`telegram` extra — never reintroduce a nested `telegram_bot/pyproject.toml`.
+
 ## Focused Checks
 
 ```bash

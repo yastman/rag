@@ -8,7 +8,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ROOT_PYPROJECT = ROOT / "pyproject.toml"
-TELEGRAM_PYPROJECT = ROOT / "telegram_bot" / "pyproject.toml"
+# telegram_bot/pyproject.toml was retired by #3210: the root lock
+# (--extra telegram) is the single Telegram dependency authority, and
+# test_root_extras_do_not_contain_archived_packages below covers the
+# telegram extra together with all other optional lanes.
 # Archived UI/observability packages: absent from base, dev, and optional lanes (#2640).
 ARCHIVED_PACKAGES = {
     "gradio",
@@ -35,11 +38,6 @@ def _package_name(requirement: str) -> str:
 
 def test_root_base_dependencies_exclude_archived_packages() -> None:
     deps = {_package_name(dep) for dep in _load(ROOT_PYPROJECT)["project"]["dependencies"]}
-    assert deps.isdisjoint(ARCHIVED_PACKAGES)
-
-
-def test_telegram_base_dependencies_exclude_archived_packages() -> None:
-    deps = {_package_name(dep) for dep in _load(TELEGRAM_PYPROJECT)["project"]["dependencies"]}
     assert deps.isdisjoint(ARCHIVED_PACKAGES)
 
 

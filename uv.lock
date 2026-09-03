@@ -562,6 +562,7 @@ all = [
     { name = "aiohttp" },
     { name = "asyncpg" },
     { name = "cachetools" },
+    { name = "fluent-compiler" },
     { name = "fluentogram" },
     { name = "httpx" },
     { name = "litellm" },
@@ -607,6 +608,7 @@ telegram = [
     { name = "aiogram-dialog" },
     { name = "asyncpg" },
     { name = "cachetools" },
+    { name = "fluent-compiler" },
     { name = "fluentogram" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
 ]
@@ -646,6 +648,7 @@ requires-dist = [
     { name = "cachetools", marker = "extra == 'telegram'", specifier = ">=5.0.0" },
     { name = "contextual-rag", extras = ["core", "telegram"], marker = "extra == 'all'" },
     { name = "fastapi", marker = "extra == 'bge-extras'", specifier = ">=0.141.1" },
+    { name = "fluent-compiler", marker = "extra == 'telegram'", specifier = ">=1.1" },
     { name = "fluentogram", marker = "extra == 'telegram'", specifier = ">=1.2.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'bge-extras'", specifier = ">=0.27.0" },

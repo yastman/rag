@@ -17,7 +17,7 @@ and [`README.md`](README.md) for the documentation map.
 ```bash
 cp .env.example .env     # fill in credentials (Telegram token, API keys)
 uv sync                  # core + dev tools (PEP 735 dev group)
-uv sync --extra telegram # bot dependencies (aiogram, LangGraph)
+uv sync --extra telegram # bot dependencies (aiogram stack; root lock is the single Telegram authority, #3210)
 make setup-hooks         # install commit and push hooks
 ```
 
