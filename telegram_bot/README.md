@@ -13,7 +13,6 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 | [`main.py`](./main.py) `main()` | CLI entry point: configures logging, initializes observability, starts the bot runtime class with retry |
 | [`bot.py`](./bot.py) `PropertyBot` | Bot lifecycle, handlers, and dispatcher wiring. The class name is legacy; the runtime is domain-adaptable. |
 | [`pipelines/graph_compat.py`](./pipelines/graph_compat.py) `build_graph()` | Imperative graph-compat facade (delegates to `src/runtime/pipeline/`) |
-| [`agents/rag_pipeline.py`](./agents/rag_pipeline.py) | Agent SDK RAG functions (alternative to full LangGraph) |
 | [`pipelines/client.py`](./pipelines/client.py) | Client-direct non-RAG and RAG paths for simple queries |
 | [`preflight/`](./preflight/) | Startup health checks (Redis, Qdrant, external deps) |
 

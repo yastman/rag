@@ -25,7 +25,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "src/runtime/graph/nodes/transcribe.py": ["ERROR"],
     # Agent tools — pipeline wrapper error paths
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
-    "telegram_bot/agents/rag_pipeline.py": ["ERROR"],
     # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
     "src/runtime/integrations/cache.py": ["ERROR", "WARNING"],
