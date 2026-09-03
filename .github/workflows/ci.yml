@@ -67,10 +67,10 @@ jobs:
           enable-cache: true
 
       - name: Ruff lint
-        run: uvx --from ruff==0.15.20 ruff check src/ telegram_bot/ services/ scripts/ --output-format=github
+        run: uvx --from ruff==0.16.6 ruff check src/ telegram_bot/ services/ scripts/ --output-format=github
 
       - name: Ruff format check
-        run: uvx --from ruff==0.15.20 ruff format --target-version py312 --check src/ telegram_bot/ services/ scripts/
+        run: uvx --from ruff==0.16.6 ruff format --target-version py312 --check src/ telegram_bot/ services/ scripts/
 
   actionlint:
     name: GitHub Actions Lint
