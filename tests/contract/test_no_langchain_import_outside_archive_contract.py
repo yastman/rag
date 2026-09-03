@@ -67,8 +67,7 @@ def test_no_langchain_import_in_tests_outside_archive() -> None:
     assert not violations, (
         "langchain / langchain_core imports found outside archive/ in tests/:\n"
         + "\n".join(f"  {f}: {imps}" for f, imps in violations.items())
-        + "\nReplace with local tooling equivalents (telegram_bot.agents.tooling, "
-        "dataclasses, etc.) or move to archive/."
+        + "\nReplace with local stubs (dataclasses, unittest.mock, etc.) or move to archive/."
     )
 
 

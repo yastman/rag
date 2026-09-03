@@ -10,7 +10,10 @@ Tests can import the raw handler functions and pass a mock bot directly.
 Also owns menu-routing helpers:
   - :func:`resolve_user_role` — DB + config role resolution.
   - :func:`handle_menu_button` — ReplyKeyboard button routing.
-  - :func:`handle_menu_action` — inline menu action dispatch to agent pipeline.
+
+#3216: the inline ``handle_menu_action`` agent bridge was removed; menu
+actions route through :func:`handle_menu_button` and the deterministic
+query pipeline (``PropertyBot.handle_menu_action_text``).
 
 Design exception (#1232): ``handle_menu_button`` uses ``state.update_data``
 to reset the ``bookmarks_context`` flag when the user navigates away from
@@ -379,100 +382,3 @@ async def handle_menu_button(
         )
     elif action_id == "demo":
         await _handle_demo(message)
-
-
-async def handle_menu_action(
-    bot: PropertyBot,
-    callback: Any,
-    query_text: str,
-    locale: str = "ru",
-) -> None:
-    """Handle menu button click — dispatch query_text to agent pipeline.
-
-    Called by on_click handlers in dialog files after manager.done().
-    """
-    from aiogram.utils.chat_action import ChatActionSender
-
-    from telegram_bot.agents.agent import LOCALE_TO_LANGUAGE, create_bot_agent
-    from telegram_bot.agents.context import BotContext
-    from telegram_bot.agents.tool_assembly import build_agent_tools
-    from telegram_bot.constants import split_telegram_response as _split
-    from telegram_bot.tracing_context import make_session_id
-
-    if callback.from_user is None or callback.message is None:
-        return
-
-    user_id = callback.from_user.id
-    chat_id = callback.message.chat.id
-    aiogram_bot = callback.message.bot
-
-    role = await resolve_user_role(bot, user_id)
-    language = LOCALE_TO_LANGUAGE.get(locale, bot.config.domain_language)
-    session_id = make_session_id("chat", chat_id)
-
-    tools = build_agent_tools(role=role, config=bot.config)
-    agent = create_bot_agent(
-        model=bot.config.supervisor_model,
-        tools=tools,
-        checkpointer=bot._agent_checkpointer,
-        language=language,
-        base_url=bot.config.llm_base_url,
-        api_key=bot.config.llm_api_key,
-        role=role,
-        max_history_messages=bot.config.agent_max_history_messages,
-        max_tokens=bot.config.supervisor_max_tokens,
-    )
-
-    ctx = BotContext(
-        telegram_user_id=user_id,
-        session_id=session_id,
-        language=language,
-        embeddings=bot._embeddings,
-        sparse_embeddings=bot._sparse,
-        qdrant=bot._qdrant,
-        cache=bot._cache,
-        reranker=bot._reranker,
-        llm=bot._llm,
-        content_filter_enabled=bot.config.content_filter_enabled,
-        guard_mode=bot.config.guard_mode,
-        role=role,
-        original_query=query_text,
-        original_user_query=query_text,
-        bot=aiogram_bot,
-        manager_ids=list(bot.config.manager_ids),
-        apartments_service=bot._apartments_service,
-        search_event_store=bot._search_event_store,
-        config=bot.config,
-    )
-
-    rag_result_store: dict[str, Any] = {}
-
-    callbacks: list[Any] = []
-    async with ChatActionSender.typing(bot=aiogram_bot, chat_id=chat_id):  # type: ignore[arg-type]
-        result = await bot._ainvoke_supervisor_with_recovery(
-            agent=agent,
-            tools=tools,
-            role=role,
-            user_text=query_text,
-            chat_id=chat_id,
-            callbacks=callbacks,
-            bot_context=ctx,
-            rag_result_store=rag_result_store,
-        )
-
-    messages = result.get("messages", [])
-    response_text = ""
-    if messages:
-        last_msg = messages[-1]
-        response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-
-    if response_text and not ctx.response_sent:
-        for chunk in _split(response_text):
-            try:
-                await callback.message.answer(chunk, parse_mode="Markdown")
-            except Exception:
-                logger.warning("Markdown parse failed in menu action, falling back")
-                try:
-                    await callback.message.answer(chunk)
-                except Exception:
-                    logger.exception("Failed to send menu action response chunk")

@@ -2,8 +2,7 @@
 
 Split #2816: extracted ``handle_query``, ``_handle_apartment_fast_path``,
 ``_trace_guard_blocked``,
-``_send_core_response``, ``_write_final_pipeline_trace``, ``_handle_query_supervisor``,
-``_astream_supervisor_with_recovery``, ``_ainvoke_supervisor_with_recovery``
+``_send_core_response``, ``_write_final_pipeline_trace``, ``_handle_query_supervisor``
 as module-level functions.
 
 #3208 convergence: the Telegram free-text path is reduced to gating
@@ -11,11 +10,13 @@ as module-level functions.
 assistant-core call, and presentation. Classify/embed/semantic-cache work
 lives in the core (``src.core.assistant`` → ``run_assistant_pipeline``);
 this module no longer duplicates it.
+
+#3216: the imperative agent facade and its recovery wrappers were removed;
+queries route deterministically to assistant-core or product services.
 """
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -23,10 +24,7 @@ from typing import TYPE_CHECKING, Any
 from aiogram.utils.chat_action import ChatActionSender
 
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
-from telegram_bot.handlers.error_classification import _is_checkpointer_runtime_error
 from telegram_bot.pipeline.streaming import (
-    _AGENT_DRAFT_INTERVAL,
-    _extract_stream_chunk_text,
     _new_draft_id,
 )
 from telegram_bot.tracing_context import make_session_id
@@ -40,6 +38,14 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 logger = logging.getLogger(__name__)
+
+# Maps Fluent locale code -> language label used in system prompt {{language}} variable.
+# Moved here from the removed ``telegram_bot.agents`` facade (#3216).
+LOCALE_TO_LANGUAGE: dict[str, str] = {
+    "ru": "русском языке",
+    "en": "English",
+    "uk": "українською мовою",
+}
 
 
 def _get_detect_injection() -> Any:
@@ -399,7 +405,6 @@ async def _handle_query_supervisor(
     call, and presentation. Classify/embed/semantic-cache work happens inside
     ``run_assistant_pipeline`` exactly once.
     """
-    from telegram_bot.agents.agent import LOCALE_TO_LANGUAGE
 
     assert message.bot is not None
     assert message.from_user is not None
@@ -470,218 +475,3 @@ async def _handle_query_supervisor(
     )
 
     return response_text
-
-
-async def _astream_supervisor_with_recovery(
-    bot: PropertyBot,
-    *,
-    agent: Any,
-    tools: list[Any],
-    role: str,
-    user_text: str,
-    chat_id: int,
-    callbacks: list[Any],
-    bot_context: Any,
-    rag_result_store: dict[str, Any],
-    forum_thread_id: int | None = None,
-    use_streaming: bool = True,
-) -> tuple[str, dict[str, Any]]:
-    """Stream supervisor agent output and retry once on checkpointer runtime errors."""
-    from telegram_bot.services.util.checkpointer_utils import _supervisor_thread_id
-
-    payload = {"messages": [{"role": "user", "content": user_text}]}
-    config = {
-        "callbacks": callbacks,
-        "configurable": {
-            "thread_id": _supervisor_thread_id(chat_id, forum_thread_id),
-            "bot_context": bot_context,
-            "rag_result_store": rag_result_store,
-            "role": role,
-            "user_id": bot_context.telegram_user_id,
-            "session_id": bot_context.session_id,
-        },
-    }
-
-    async def _run_once(current_agent: Any) -> tuple[str, dict[str, Any]]:
-        can_stream = use_streaming and callable(getattr(current_agent, "astream", None))
-        if not can_stream:
-            result: dict[str, Any] = await current_agent.ainvoke(payload, config=config)
-            messages = result.get("messages", [])
-            response_text = ""
-            if messages:
-                last_msg = messages[-1]
-                response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-            return response_text, result
-
-        draft_state: dict[str, Any] = {
-            "chat_id": chat_id,
-            "thread_id": forum_thread_id,
-            "draft_id": _new_draft_id(),
-        }
-
-        accumulated = ""
-        stream_messages: list[Any] = []
-        latest_state: dict[str, Any] | None = None
-        last_draft_at = 0.0
-        stream = current_agent.astream(
-            payload,
-            config=config,
-            stream_mode=["messages", "values"],
-            version="v2",
-        )
-        async for part in stream:
-            if isinstance(part, dict) and "type" in part:
-                part_type = part.get("type")
-                part_data = part.get("data")
-                if part_type == "values":
-                    if isinstance(part_data, dict):
-                        latest_state = part_data
-                    continue
-                if part_type != "messages" or not isinstance(part_data, tuple):
-                    continue
-                message_chunk, metadata = part_data
-            else:
-                message_chunk, metadata = part
-            if isinstance(metadata, dict):
-                langgraph_node = metadata.get("langgraph_node")
-                if isinstance(langgraph_node, str) and langgraph_node != "model":
-                    continue
-
-            text = _extract_stream_chunk_text(message_chunk)
-            if not text:
-                continue
-            accumulated += text
-            stream_messages.append(message_chunk)
-            now = time.monotonic()
-            if now - last_draft_at < _AGENT_DRAFT_INTERVAL:
-                continue
-            with contextlib.suppress(Exception):
-                draft_kwargs: dict[str, Any] = {
-                    "chat_id": draft_state["chat_id"],
-                    "draft_id": draft_state["draft_id"],
-                    "text": accumulated,
-                }
-                if draft_state["thread_id"] is not None:
-                    draft_kwargs["message_thread_id"] = draft_state["thread_id"]
-                await bot.bot.send_message_draft(**draft_kwargs)
-            last_draft_at = now
-
-        if accumulated:
-            rag_result_store["_draft_state"] = draft_state
-
-        return accumulated, latest_state or {"messages": stream_messages}
-
-    from telegram_bot.bot import create_bot_agent
-
-    try:
-        return await _run_once(agent)
-    except Exception as exc:
-        if not _is_checkpointer_runtime_error(exc):
-            raise
-        if role in {"manager", "admin"}:
-            logger.exception(
-                "Supervisor stream failed with checkpointer runtime error; "
-                "skip retry for role=%s to avoid duplicate side effects",
-                role,
-            )
-            raise
-        logger.exception(
-            "Supervisor stream failed due to checkpointer runtime error; "
-            "retrying once with MemorySaver"
-        )
-
-    from telegram_bot.integrations.memory import create_fallback_checkpointer
-
-    bot._agent_checkpointer = create_fallback_checkpointer()
-    fallback_agent = create_bot_agent(
-        model=bot.config.supervisor_model,
-        tools=tools,
-        checkpointer=bot._agent_checkpointer,
-        language=bot.config.domain_language,
-        base_url=bot.config.llm_base_url,
-        api_key=bot.config.llm_api_key,
-        max_tokens=bot.config.supervisor_max_tokens,
-    )
-    return await _run_once(fallback_agent)
-
-
-async def _ainvoke_supervisor_with_recovery(
-    bot: PropertyBot,
-    *,
-    agent: Any,
-    tools: list[Any],
-    role: str,
-    user_text: str,
-    chat_id: int,
-    callbacks: list[Any],
-    bot_context: Any,
-    rag_result_store: dict[str, Any],
-    forum_thread_id: int | None = None,
-    message: Any | None = None,
-) -> dict[str, Any]:
-    """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures."""
-    from telegram_bot.bot import create_bot_agent
-    from telegram_bot.pipeline.streaming import _stream_agent_to_draft
-    from telegram_bot.services.util.checkpointer_utils import _supervisor_thread_id
-
-    payload = {"messages": [{"role": "user", "content": user_text}]}
-    config = {
-        "callbacks": callbacks,
-        "configurable": {
-            "thread_id": _supervisor_thread_id(chat_id, forum_thread_id),
-            "bot_context": bot_context,
-            "rag_result_store": rag_result_store,
-            "role": role,
-            "user_id": bot_context.telegram_user_id,
-            "session_id": bot_context.session_id,
-        },
-    }
-
-    streaming_enabled = bool(getattr(bot._graph_config, "streaming_enabled", False))
-    if message is not None and streaming_enabled:
-        aiogram_bot = getattr(message, "bot", None)
-        if aiogram_bot is not None:
-            try:
-                return await _stream_agent_to_draft(
-                    agent=agent,
-                    payload=payload,
-                    config=config,
-                    bot=aiogram_bot,
-                    chat_id=chat_id,
-                    thread_id=forum_thread_id,
-                )
-            except Exception:
-                logger.warning("Agent streaming failed; falling back to ainvoke", exc_info=True)
-
-    try:
-        result: dict[str, Any] = await agent.ainvoke(payload, config=config)
-        return result
-    except Exception as exc:
-        if not _is_checkpointer_runtime_error(exc):
-            raise
-        if role in {"manager", "admin"}:
-            logger.exception(
-                "Supervisor ainvoke failed with checkpointer runtime error; "
-                "skip retry for role=%s to avoid duplicate side effects",
-                role,
-            )
-            raise
-        logger.exception(
-            "Supervisor ainvoke failed due to checkpointer runtime error; "
-            "retrying once with MemorySaver"
-        )
-
-    from telegram_bot.integrations.memory import create_fallback_checkpointer
-
-    bot._agent_checkpointer = create_fallback_checkpointer()
-    fallback_agent = create_bot_agent(
-        model=bot.config.supervisor_model,
-        tools=tools,
-        checkpointer=bot._agent_checkpointer,
-        language=bot.config.domain_language,
-        base_url=bot.config.llm_base_url,
-        api_key=bot.config.llm_api_key,
-        max_tokens=bot.config.supervisor_max_tokens,
-    )
-    fallback_result: dict[str, Any] = await fallback_agent.ainvoke(payload, config=config)
-    return fallback_result

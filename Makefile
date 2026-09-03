@@ -64,7 +64,6 @@ PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 # Explicit owner lanes for tests excluded from the lean broad unit lane.
 # Keep these variables in sync with the matching opt-in targets below.
 PYTEST_TELEGRAM_ADAPTER_PATHS := \
-	tests/unit/agents \
 	tests/unit/dialogs \
 	tests/unit/handlers \
 	tests/unit/keyboards \

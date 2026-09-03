@@ -238,20 +238,3 @@ async def test_thread_id_forwarded_to_draft():
 
     call_kwargs = bot.send_message_draft.await_args.kwargs
     assert call_kwargs.get("message_thread_id") == 42
-
-
-# ---------------------------------------------------------------------------
-# Integration: _ainvoke_supervisor_with_recovery uses streaming when message given
-# ---------------------------------------------------------------------------
-
-
-async def test_ainvoke_uses_ainvoke_when_no_message():
-    """Without message param, _ainvoke_supervisor_with_recovery calls agent.ainvoke()."""
-    agent = MagicMock()
-    agent.ainvoke = AsyncMock(return_value={"messages": []})
-
-    # _ainvoke_supervisor_with_recovery is a method on PropertyBot.
-    # Here we verify the underlying ainvoke is used via the production agent mock.
-    result = await agent.ainvoke({"messages": []}, config={})
-    assert result == {"messages": []}
-    agent.ainvoke.assert_awaited_once()

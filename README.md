@@ -88,7 +88,7 @@ External sidecar services (Docker Compose — **not** part of the Python binary)
 | Redis | Five independent caches: semantic answer, embedding, search, rerank, extraction. Version-prefixed keys; graceful degradation on miss |
 | PostgreSQL | Domain state (users, leads, funnel, favorites) |
 
-An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/agents/` for CRM-style workflows (lead scoring, manager handoff, HITL confirmation). It is not required for the core Q&A path.
+Q&A and product actions route through the assistant core (`src/core/`) and deterministic product services; the legacy agent facade layer was removed (#3216).
 
 ## Ingestion
 
@@ -178,7 +178,7 @@ The active production adapter is Telegram (`telegram_bot/`). Voice input is acti
 | Core entrypoint | [`src/core/assistant.py`](src/core/assistant.py) |
 | Pipeline + RAG engine | [`src/runtime/pipeline/`](src/runtime/pipeline/) |
 | Telegram adapter | [`telegram_bot/`](telegram_bot/) |
-| Domain tools + agents | [`telegram_bot/agents/`](telegram_bot/agents/), [`telegram_bot/services/`](telegram_bot/services/) |
+| Domain services | [`telegram_bot/services/`](telegram_bot/services/) |
 | Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
 | Compose runtime | [`compose.yml`](compose.yml), [`DOCKER.md`](DOCKER.md) |
 

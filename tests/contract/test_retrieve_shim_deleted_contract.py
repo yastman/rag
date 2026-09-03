@@ -7,10 +7,10 @@ handler, entrypoint, deployment, factory, or dynamic-registration caller,
 and its unannotated ``documents`` list broke the authoritative MyPy gate.
 
 This assertion pins the deletion so the shim cannot quietly return to
-``dev``. The live retrieval paths are ``telegram_bot/agents/history_graph``
-(telegram history search) and the assistant-core pipeline; the broader
-``telegram_bot/graph/`` compatibility façade remains owned by #2697/#3220,
-not by this leaf.
+``dev``. The live retrieval path is the assistant-core pipeline (the
+``telegram_bot/agents`` history-graph island was removed in #3216); the
+broader ``telegram_bot/graph/`` compatibility façade remains owned by
+#2697/#3220, not by this leaf.
 
 Re-introducing a graph retrieve node requires an explicit decision and
 removing this assertion.
@@ -29,9 +29,8 @@ def test_graph_nodes_retrieve_shim_is_gone() -> None:
     path = REPO_ROOT / "telegram_bot" / "graph" / "nodes" / "retrieve.py"
     assert not path.exists(), (
         f"#3250 regression: {path.relative_to(REPO_ROOT)} reappeared after "
-        f"the test-only shim deletion. Live retrieval lives in "
-        f"telegram_bot/agents/history_graph and the assistant-core pipeline; "
-        f"do not recreate the compatibility shim."
+        f"the test-only shim deletion. Live retrieval lives in the "
+        f"assistant-core pipeline; do not recreate the compatibility shim."
     )
 
 

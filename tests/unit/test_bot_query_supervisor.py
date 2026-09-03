@@ -116,7 +116,6 @@ class TestQuerySupervisorContentFilter:
                 "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
                 side_effect=_noop_typing,
             ),
-            patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
         ):
             bot._resolve_user_role = AsyncMock(return_value="client")
 
@@ -128,7 +127,6 @@ class TestQuerySupervisorContentFilter:
             assert call.args[0] != _BLOCKED_RESPONSE
         assert result != _BLOCKED_RESPONSE
         assert result == "soft path response"
-        mock_agent_factory.assert_not_called()
 
     async def test_content_filter_disabled_skips_guard(self):
         """When content_filter_enabled=False, detect_injection is never called."""
@@ -147,7 +145,6 @@ class TestQuerySupervisorContentFilter:
                 "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
                 side_effect=_noop_typing,
             ),
-            patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
         ):
             bot._resolve_user_role = AsyncMock(return_value="client")
 
@@ -156,7 +153,6 @@ class TestQuerySupervisorContentFilter:
             )
 
         mock_detect.assert_not_called()
-        mock_agent_factory.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +269,6 @@ class TestQuerySupervisorSemanticCache:
                 "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
                 side_effect=_noop_typing,
             ),
-            patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
         ):
             bot._resolve_user_role = AsyncMock(return_value="client")
             bot._cache = MagicMock()
@@ -285,7 +280,6 @@ class TestQuerySupervisorSemanticCache:
             )
 
         bot._cache.check_semantic.assert_not_awaited()
-        mock_agent_factory.assert_not_called()
         assert result == "core answer"
         message.answer.assert_awaited_once()
 
@@ -320,7 +314,7 @@ class TestQuerySupervisorCoreEntrypoint:
         )
 
         with (
-            patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
+            patch("telegram_bot.bot.classify_query", return_value="GENERAL"),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -340,7 +334,6 @@ class TestQuerySupervisorCoreEntrypoint:
 
         assert result == "Sunny Beach studio is 110k EUR."
         mock_run_core.assert_awaited_once()
-        mock_agent_factory.assert_not_called()
         message.answer.assert_awaited_once()
 
 
