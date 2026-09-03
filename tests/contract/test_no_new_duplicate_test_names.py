@@ -1,11 +1,14 @@
 """Sentinel test: forbid NEW duplicate test function names across the suite (#1539).
 
 pytest-xdist may silently merge or skip identically-named tests living in
-different files. We track the current 177 duplicate names in
-``tests/data/known_duplicate_test_names.json`` (a ratchet allowlist) and
-fail this contract when a developer adds a new duplicate or grows an
-existing one. The allowlist must shrink over time; do not regenerate it
-to "fix" a CI failure.
+different files. The ratchet enumerates the authoritative suite from Git
+(``git ls-files``) and tracks the current duplicate names in
+``tests/data/known_duplicate_test_names.json`` (a ratchet allowlist). It
+fails when a developer adds a new duplicate, grows an existing one, or when
+an allowlist entry has gone stale (#3243): the entry points at an
+untracked/deleted path, the file no longer defines the symbol, or the name
+is no longer a tracked duplicate. The allowlist must shrink over time; do
+not regenerate it to "fix" a CI failure.
 """
 
 from __future__ import annotations
@@ -25,10 +28,12 @@ def test_no_new_duplicate_test_function_names():
     """Run ``scripts/check_unique_test_names.py`` and assert exit code 0.
 
     The script:
-      - walks ``tests/`` and collects every ``test_*`` function name across files;
+      - enumerates git-tracked ``tests/**/test_*.py`` modules (#3243);
+      - collects every ``test_*`` function name they define;
       - diffs against ``tests/data/known_duplicate_test_names.json`` (the ratchet);
-      - exits 0 only when no new duplicate name was introduced AND no allowlisted
-        name appeared in MORE files than before.
+      - exits 0 only when no new duplicate name was introduced, no allowlisted
+        name appeared in MORE files than before, and no allowlist entry went
+        stale (untracked path, missing symbol, or no longer a duplicate).
     """
     assert SCRIPT.exists(), f"missing helper script: {SCRIPT}"
     assert ALLOWLIST.exists(), f"missing ratchet allowlist: {ALLOWLIST}"

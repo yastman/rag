@@ -7,25 +7,9 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_backfill_enables_server_side_colbert_search": [
-    "tests/integration/test_colbert_backfill.py",
-    "tests/unit/test_colbert_backfill.py"
-  ],
-  "test_cache_check_computes_colbert_when_embedding_cached": [
-    "tests/unit/agents/test_rag_pipeline.py",
-    "tests/unit/graph/test_cache_nodes.py"
-  ],
   "test_cache_hit_defaults_to_false": [
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
-  ],
-  "test_close": [
-    "tests/unit/test_hyde.py",
-    "tests/unit/test_ingestion_service.py"
-  ],
-  "test_collection_name": [
-    "tests/integration/test_ingestion_e2e.py",
-    "tests/integration/test_unified_ingestion_e2e.py"
   ],
   "test_combined_filters": [
     "tests/unit/dialogs/test_filter_constants.py",
@@ -35,84 +19,21 @@
     "tests/unit/ingestion/test_unified_cli.py",
     "tests/unit/services/test_history_service.py"
   ],
-  "test_custom_values": [
-    "tests/unit/ingestion/test_qdrant_hybrid_target.py",
-    "tests/unit/test_cocoindex_flow.py",
-    "tests/unit/test_ingestion_service.py"
-  ],
   "test_default_search_engine": [
     "tests/unit/config/test_constants.py",
     "tests/unit/test_settings.py"
   ],
-  "test_default_values": [
-    "tests/unit/graph/test_config.py",
-    "tests/unit/test_cocoindex_flow.py",
-    "tests/unit/test_ingestion_service.py"
-  ],
   "test_defaults": [
-    "tests/unit/ingestion/test_unified_metrics.py",
     "tests/unit/services/test_apartment_models.py",
     "tests/unit/services/test_apartment_search_filters.py"
   ],
   "test_deterministic": [
-    "tests/unit/ingestion/test_qdrant_hybrid_target.py",
-    "tests/unit/ingestion/test_unified_flow.py",
     "tests/unit/ingestion/test_unified_manifest.py",
     "tests/unit/test_bot_handlers.py"
   ],
-  "test_different_content_different_hash": [
-    "tests/unit/ingestion/test_qdrant_hybrid_target.py",
-    "tests/unit/ingestion/test_unified_manifest.py"
-  ],
-  "test_docling_health": [
-    "tests/integration/test_docker_services.py",
-    "tests/smoke/test_smoke_services.py"
-  ],
-  "test_empty_query": [
-    "tests/unit/services/test_filter_extractor.py",
-    "tests/unit/services/test_voyage_integration.py"
-  ],
-  "test_empty_results": [
-    "tests/unit/dialogs/test_funnel.py",
-    "tests/unit/retrieval/test_search_engines.py",
-    "tests/unit/test_run_experiment.py"
-  ],
   "test_empty_string": [
-    "tests/unit/graph/test_guard_node.py",
     "tests/unit/integrations/test_cache_layers.py",
     "tests/unit/utils/test_pii_redaction.py"
-  ],
-  "test_empty_trace_id_writes_nothing": [
-    "tests/unit/observability/test_trace_contracts.py",
-    "tests/unit/observability/test_trace_resilience.py"
-  ],
-  "test_extract_is_observed": [
-    "tests/unit/services/test_apartment_extraction_pipeline.py",
-    "tests/unit/services/test_apartment_llm_extractor.py"
-  ],
-  "test_format": [
-    "tests/unit/observability/test_tracing_context.py",
-    "tests/unit/test_bot_handlers.py"
-  ],
-  "test_get_collection_stats": [
-    "tests/integration/test_ingestion_e2e.py",
-    "tests/unit/test_ingestion_service.py"
-  ],
-  "test_get_ingestion_status": [
-    "tests/integration/test_ingestion_e2e.py",
-    "tests/unit/test_ingestion_service.py"
-  ],
-  "test_init_creates_client": [
-    "tests/baseline/test_collector.py",
-    "tests/unit/test_indexer.py"
-  ],
-  "test_init_custom_params": [
-    "tests/unit/test_hyde.py",
-    "tests/unit/test_ingestion_service.py"
-  ],
-  "test_init_defaults": [
-    "tests/unit/test_hyde.py",
-    "tests/unit/test_ingestion_service.py"
   ],
   "test_invalid_prefix_returns_none": [
     "tests/unit/test_feedback.py",
@@ -130,11 +51,6 @@
     "tests/unit/keyboards/test_client_keyboard.py",
     "tests/unit/keyboards/test_demo_button.py"
   ],
-  "test_latency_stages_set": [
-    "tests/unit/graph/nodes/test_rerank.py",
-    "tests/unit/graph/nodes/test_rewrite.py",
-    "tests/unit/graph/test_guard_node.py"
-  ],
   "test_main_dispatches_schema_check": [
     "tests/unit/ingestion/test_colbert_backfill.py",
     "tests/unit/ingestion/test_unified_cli.py"
@@ -147,29 +63,13 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_payload_has_required_fields": [
-    "tests/integration/test_unified_ingestion_e2e.py",
-    "tests/unit/ingestion/test_payload_contract.py"
-  ],
   "test_pipeline_mode_defaults_to_client_direct": [
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_preserves_existing_latency_stages": [
-    "tests/unit/graph/test_classify_node.py",
-    "tests/unit/graph/test_respond_node.py"
-  ],
   "test_qdrant_health": [
     "tests/integration/test_docker_services.py",
     "tests/smoke/test_smoke_services.py"
-  ],
-  "test_query_from_dict_message": [
-    "tests/unit/graph/nodes/test_rerank.py",
-    "tests/unit/graph/nodes/test_rewrite.py"
-  ],
-  "test_query_from_human_message_object": [
-    "tests/unit/graph/nodes/test_rerank.py",
-    "tests/unit/graph/nodes/test_rewrite.py"
   ],
   "test_query_type_defaults_to_general": [
     "tests/unit/pipelines/test_client_pipeline.py",
@@ -183,19 +83,6 @@
     "tests/load/test_load_redis_eviction.py",
     "tests/smoke/test_preflight.py"
   ],
-  "test_rerank_empty_documents": [
-    "tests/unit/graph/test_agentic_nodes.py",
-    "tests/unit/services/test_bge_m3_client.py",
-    "tests/unit/test_voyage_service.py"
-  ],
-  "test_rerank_uses_cache_hit": [
-    "tests/unit/agents/test_rag_pipeline.py",
-    "tests/unit/graph/test_agentic_nodes.py"
-  ],
-  "test_rerank_with_colbert": [
-    "tests/unit/agents/test_rag_pipeline.py",
-    "tests/unit/graph/test_agentic_nodes.py"
-  ],
   "test_respects_limit": [
     "tests/unit/services/test_history_service.py",
     "tests/unit/services/test_rag_core.py"
@@ -203,14 +90,6 @@
   "test_response_sent_defaults_to_false": [
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
-  ],
-  "test_returns_16_char_hex": [
-    "tests/unit/ingestion/test_qdrant_hybrid_target.py",
-    "tests/unit/ingestion/test_unified_manifest.py"
-  ],
-  "test_returns_count": [
-    "tests/unit/dialogs/test_filter_dialog.py",
-    "tests/unit/ingestion/test_state_manager_async.py"
   ],
   "test_scores_defaults_to_empty_dict": [
     "tests/unit/pipelines/test_client_pipeline.py",
@@ -231,13 +110,5 @@
   "test_starts_catalog_dialog_results": [
     "tests/unit/dialogs/test_filter_dialog.py",
     "tests/unit/dialogs/test_funnel.py"
-  ],
-  "test_streaming_mixed_content_and_reasoning": [
-    "tests/unit/graph/test_generate_node.py",
-    "tests/unit/services/test_generate_response.py"
-  ],
-  "test_streaming_uses_send_message_draft": [
-    "tests/unit/graph/nodes/test_generate.py",
-    "tests/unit/services/test_generate_response.py"
   ]
 }
