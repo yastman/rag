@@ -587,44 +587,6 @@ class PropertyBot:
 
         await send_html_messages(message, text, reply_markup=reply_markup)
 
-    async def _handle_apartment_fast_path(
-        self,
-        *,
-        user_text: str,
-        message: Message,
-        state: FSMContext | None = None,
-        dialog_manager: Any = None,
-    ) -> str | None:
-        return await _bot_query_pipeline._handle_apartment_fast_path(
-            self, user_text=user_text, message=message, state=state, dialog_manager=dialog_manager
-        )
-
-    async def _handle_client_direct_pipeline(
-        self,
-        *,
-        message: Message,
-        user_text: str,
-        user_id: int,
-        session_id: str,
-        role: str,
-        query_type: str,
-        rag_result_store: dict[str, Any],
-        state: FSMContext | None = None,
-        dialog_manager: Any = None,
-    ) -> str | None:
-        return await _bot_query_pipeline._handle_client_direct_pipeline(
-            self,
-            message=message,
-            user_text=user_text,
-            user_id=user_id,
-            session_id=session_id,
-            role=role,
-            query_type=query_type,
-            rag_result_store=rag_result_store,
-            state=state,
-            dialog_manager=dialog_manager,
-        )
-
     @staticmethod
     def _trace_guard_blocked(
         *,

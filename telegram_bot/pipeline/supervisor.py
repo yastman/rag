@@ -1,7 +1,7 @@
 """Query pipeline handlers extracted from ``telegram_bot/bot.py``.
 
 Split #2816: extracted ``handle_query``, ``_handle_apartment_fast_path``,
-``_handle_client_direct_pipeline``, ``_trace_guard_blocked``,
+``_trace_guard_blocked``,
 ``_send_core_response``, ``_write_final_pipeline_trace``, ``_handle_query_supervisor``,
 ``_astream_supervisor_with_recovery``, ``_ainvoke_supervisor_with_recovery``
 as module-level functions.
@@ -16,8 +16,6 @@ this module no longer duplicates it.
 from __future__ import annotations
 
 import contextlib
-import inspect
-import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -26,9 +24,6 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.handlers.error_classification import _is_checkpointer_runtime_error
-from telegram_bot.observability.state_helpers import (
-    _state_control_message_id,  # card_2a71ec058138: homed to observability/
-)
 from telegram_bot.pipeline.streaming import (
     _AGENT_DRAFT_INTERVAL,
     _extract_stream_chunk_text,
@@ -102,191 +97,6 @@ async def handle_query(
         expert_id=expert_id,
         dialog_manager=dialog_manager,
     )
-
-
-async def _handle_apartment_fast_path(
-    bot: PropertyBot,
-    *,
-    user_text: str,
-    message: Message,
-    state: FSMContext | None = None,
-    dialog_manager: Any = None,
-) -> str | None:
-    """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
-    from telegram_bot.services.apartment.apartments_service import check_escalation
-
-    result = await bot._apartment_pipeline.extract(user_text)
-
-    if result.meta.confidence == "LOW":
-        return None
-
-    semantic_query = result.meta.semantic_remainder or user_text
-    dense, sparse, colbert = await bot._embeddings.aembed_hybrid_with_colbert(semantic_query)
-    await bot._cache.store_embedding(semantic_query, dense)
-    await bot._cache.store_sparse_embedding(semantic_query, sparse)
-
-    if bot._cache.redis is not None and message.from_user is not None:
-        try:
-            from telegram_bot.implicit_feedback import is_reformulation
-
-            _uid = message.from_user.id
-            _ikey = f"implicit_retry:{_uid}"
-            _prev_raw = await bot._cache.redis.get(_ikey)
-            if _prev_raw:
-                _prev = json.loads(_prev_raw)
-                _time_delta = time.time() - float(_prev["ts"])
-                if is_reformulation(list(dense), _prev["vec"], _time_delta):
-                    pass  # implicit retry detected (scoring removed in #2844)
-            await bot._cache.redis.set(
-                _ikey,
-                json.dumps({"vec": list(dense), "ts": time.time()}),
-                ex=60,
-            )
-        except Exception:
-            logger.debug("Implicit retry check failed", exc_info=True)
-
-    filters = result.hard.to_filters_dict()
-    results, returned_count = await bot._apartments_service.search_with_filters(
-        dense_vector=dense,
-        colbert_query=colbert or None,
-        sparse_vector=sparse,
-        filters=filters or None,
-        top_k=10,
-    )
-
-    score_spread = (results[0]["score"] - results[-1]["score"]) if len(results) > 1 else 0
-    escalation = check_escalation(
-        returned_count=returned_count,
-        top_k=10,
-        score_spread=score_spread,
-        confidence=result.meta.confidence,
-    )
-    if escalation:
-        return None
-
-    from telegram_bot.services.apartment.apartment_formatter import format_apartment_text
-    from telegram_bot.services.generation.generate_response import generate_response
-
-    context = format_apartment_text(results)
-
-    generated = await generate_response(
-        query=user_text,
-        documents=[],
-        retrieved_context=[{"content": context, "source": "apartments_catalog"}],
-        raw_messages=[{"role": "user", "content": user_text}],
-        config=bot._graph_config,
-        message=message,
-    )
-
-    response_text = str(generated.get("response", "") or context)
-    if not generated.get("response_sent"):
-        await bot._send_markdown_chunks(message, response_text)
-
-    if state is not None and results:
-        from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
-        from telegram_bot.dialogs.states import CatalogSG
-        from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
-        from telegram_bot.services.apartment.catalog_session import (
-            build_catalog_runtime,
-            clear_legacy_catalog_state,
-        )
-
-        runtime = build_catalog_runtime(
-            query=user_text,
-            source="free_text",
-            filters=filters or {},
-            view_mode="cards",
-            results=results,
-            total=len(results),
-            next_offset=None,
-        )
-        state_data = await state.get_data()
-        control_message_id = _state_control_message_id(state_data)
-        if control_message_id is not None and message.bot is not None:
-            with contextlib.suppress(Exception):
-                await message.bot.delete_message(message.chat.id, control_message_id)
-        cleaned_state = clear_legacy_catalog_state(state_data)
-        cleaned_state["catalog_runtime"] = runtime
-
-        maybe_set_data = getattr(state, "set_data", None)
-        if inspect.iscoroutinefunction(maybe_set_data):
-            await maybe_set_data(cleaned_state)
-        await state.update_data(**cleaned_state)
-
-        telegram_id = message.from_user.id if message.from_user else 0
-        await send_catalog_results(
-            message=message,
-            property_bot=bot,
-            results=results,
-            total_count=len(results),
-            view_mode=runtime.get("view_mode", "cards"),
-            shown_start=1,
-            telegram_id=telegram_id,
-        )
-        if dialog_manager is not None:
-            dialog_manager.middleware_data.setdefault("state", state)
-            await show_catalog_controls(
-                message=message,
-                dialog_manager=dialog_manager,
-                runtime=runtime,
-            )
-            await activate_catalog_state(
-                dialog_manager=dialog_manager,
-                state=CatalogSG.results,
-            )
-
-    return response_text
-
-
-async def _handle_client_direct_pipeline(
-    bot: PropertyBot,
-    *,
-    message: Message,
-    user_text: str,
-    user_id: int,
-    session_id: str,
-    role: str,
-    query_type: str,
-    rag_result_store: dict[str, Any],
-    state: FSMContext | None = None,
-    dialog_manager: Any = None,
-) -> str | None:
-    """Delegate to run_client_pipeline. Returns None if needs_agent."""
-    from telegram_bot.pipelines.client import infer_agent_intent, run_client_pipeline
-
-    agent_intent = infer_agent_intent(user_text)
-    if agent_intent == "apartment":
-        apt_answer = await _handle_apartment_fast_path(
-            bot,
-            user_text=user_text,
-            message=message,
-            state=state,
-            dialog_manager=dialog_manager,
-        )
-        if apt_answer is not None:
-            return apt_answer
-        return None
-
-    result = await run_client_pipeline(
-        user_text=user_text,
-        user_id=user_id,
-        session_id=session_id,
-        message=message,
-        cache=bot._cache,
-        embeddings=bot._embeddings,
-        sparse_embeddings=bot._sparse,
-        qdrant=bot._qdrant,
-        reranker=bot._reranker,
-        llm=bot._llm,
-        config=bot._graph_config,
-        rag_result_store=rag_result_store,
-        role=role,
-        query_type=query_type,
-        agent_intent=agent_intent,
-    )
-    if result.needs_agent:
-        return None
-    return result.answer  # type: ignore[no-any-return]
 
 
 def _trace_guard_blocked(
@@ -499,37 +309,11 @@ async def _supervisor_run_core(
     language: str,
     extracted_filters: dict[str, Any],
     rag_result_store: dict[str, Any],
-    state: FSMContext | None,
-    dialog_manager: Any,
     forum_thread_id: int | None,
 ) -> str:
-    """Run client-direct pipeline (if enabled) or assistant core. Returns response_text."""
+    """Run the assistant core for the text query. Returns response_text."""
     assert message.bot is not None
     aiogram_bot = message.bot
-
-    if role == "client" and bot.config.client_direct_pipeline_enabled:
-        # Opt-in legacy branch (kept per #3208 non-goals): classify locally.
-        from telegram_bot.bot import classify_query
-
-        query_type = str(classify_query(user_text) or "")
-        try:
-            async with ChatActionSender.typing(bot=aiogram_bot, chat_id=message.chat.id):
-                pipeline_answer = await _handle_client_direct_pipeline(
-                    bot,
-                    message=message,
-                    user_text=user_text,
-                    user_id=user_id,
-                    session_id=session_id,
-                    role=role,
-                    query_type=query_type,
-                    rag_result_store=rag_result_store,
-                    state=state,
-                    dialog_manager=dialog_manager,
-                )
-                if pipeline_answer is not None:
-                    return pipeline_answer
-        except Exception:
-            logger.exception("Client direct pipeline failed; falling back to sdk_agent")
 
     from src.core import CoreDependencies
     from telegram_bot.assistant_core_adapter import build_user_context, run_core_text_request
@@ -655,8 +439,6 @@ async def _handle_query_supervisor(
         language=language,
         extracted_filters=extracted_filters,
         rag_result_store=rag_result_store,
-        state=state,
-        dialog_manager=dialog_manager,
         forum_thread_id=forum_thread_id,
     )
 

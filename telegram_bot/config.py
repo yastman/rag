@@ -309,13 +309,6 @@ class BotConfig(BaseSettings):
         default="gpt-4o-mini",
         validation_alias=AliasChoices("apartment_extraction_model", "APARTMENT_EXTRACTION_MODEL"),
     )
-    client_direct_pipeline_enabled: EmptyStrBool = Field(
-        default=False,
-        validation_alias=AliasChoices(
-            "client_direct_pipeline_enabled",
-            "CLIENT_DIRECT_PIPELINE_ENABLED",
-        ),
-    )
     supervisor_max_tokens: int = Field(
         default=1024,
         validation_alias=AliasChoices(
