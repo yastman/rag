@@ -14,8 +14,6 @@ dependencies = [
     # pin only triggers extra resolver/build work in PR checks.
     "redis>=5.0.0",
     "redisvl>=0.3.0",
-    # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
-    # Install via `uv sync --extra voyage` only for legacy ingestion paths.
     "tenacity>=8.2.0",
     "cachetools>=5.3.0",
     "python-dotenv>=1.0.0",

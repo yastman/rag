@@ -24,20 +24,6 @@ def load_config():
 
 
 @pytest.fixture
-def mock_voyage_service():
-    """Mock VoyageService for CI."""
-    service = AsyncMock()
-    service.embed_query = AsyncMock(return_value=[0.1] * 1024)
-    service.rerank = AsyncMock(
-        return_value=[
-            {"index": 0, "score": 0.95},
-            {"index": 1, "score": 0.85},
-        ]
-    )
-    return service
-
-
-@pytest.fixture
 def mock_qdrant_service():
     """Mock QdrantService for CI."""
     service = AsyncMock()

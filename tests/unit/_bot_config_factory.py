@@ -5,7 +5,7 @@ Centralises the duplicated _make_config() pattern that appeared in
 
 Two variants:
 - ``make_bot_config(**overrides)``  – minimal fields, accepts keyword overrides.
-- ``make_full_bot_config(**overrides)`` – full fields (voyage, qdrant_api_key,
+- ``make_full_bot_config(**overrides)`` – full fields (qdrant_api_key,
   qdrant_collection, realestate_database_url), accepts keyword overrides.
 """
 
@@ -26,7 +26,6 @@ _MINIMAL_DEFAULTS: dict[str, object] = {
 
 _FULL_DEFAULTS: dict[str, object] = {
     **_MINIMAL_DEFAULTS,
-    "voyage_api_key": "voyage-key",
     "qdrant_api_key": "qdrant-key",
     "qdrant_collection": "test_collection",
     "realestate_database_url": "postgresql://postgres:postgres@127.0.0.1:1/realestate",
@@ -39,5 +38,5 @@ def make_bot_config(**overrides: object) -> BotConfig:
 
 
 def make_full_bot_config(**overrides: object) -> BotConfig:
-    """Return a full BotConfig (voyage, qdrant_api_key, db) with test defaults."""
+    """Return a full BotConfig (qdrant_api_key, db) with test defaults."""
     return BotConfig(_env_file=None, **{**_FULL_DEFAULTS, **overrides})

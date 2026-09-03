@@ -27,7 +27,7 @@ Synthetic, PII-free apartment catalog for the demo Telegram bot.
 Ingest into a local Qdrant with
 `python -m src.ingestion.apartments.runner` (see [`docs/INGESTION.md`](../docs/INGESTION.md)).
 
-## `test/`, `test_properties.json`, `demo/`
+## `test/`, `demo/`
 
 Synthetic/local-only fixtures for pipeline verification. See
 [`data/demo/README.md`](demo/README.md) for the safety rules that apply to
