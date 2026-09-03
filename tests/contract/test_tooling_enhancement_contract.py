@@ -5,7 +5,8 @@ Pins the additions from the tooling-enhancement plan:
 1. Five new dev-group deps are present in pyproject.toml:
    deptry, pip-audit, import-linter, radon, interrogate.
 2. [tool.vulture] section exists with the required keys.
-3. [tool.importlinter] section exists with the four architecture contracts.
+3. [tool.importlinter] section exists with the four architecture contracts, and is
+   the single import-linter authority (#3245): no shadowing config file exists.
 4. Python version is aligned to 3.12 across ruff/mypy/pylint.
 5. New Makefile targets are defined:
    deps-audit, vuln-audit, arch-lint, complexity, docs-coverage, audit.
@@ -115,6 +116,20 @@ def test_importlinter_contracts_present() -> None:
     names = {c.get("name") for c in contracts}
     missing = REQUIRED_CONTRACT_NAMES - names
     assert missing == set(), f"[tool.importlinter] missing contracts: {missing}"
+
+
+def test_no_shadowing_importlinter_config_file() -> None:
+    """pyproject.toml must be the only import-linter authority (#3245).
+
+    Without an explicit --config, import-linter consults INI config files
+    (setup.cfg, .importlinter) before pyproject.toml, so either file would
+    silently override the [tool.importlinter] contracts.
+    """
+    for shadowing in (".importlinter", "setup.cfg"):
+        assert not (REPO_ROOT / shadowing).exists(), (
+            f"{shadowing} must not exist: pyproject.toml [tool.importlinter] "
+            "is the single import-linter authority"
+        )
 
 
 # ---------------------------------------------------------------------------
