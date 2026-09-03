@@ -78,6 +78,7 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 | Local setup + the validation ladder | [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) |
 | Ingestion pipeline (unified, Markdown-only, idempotency) | [`INGESTION.md`](INGESTION.md) |
 | Operational runbooks (services, preflight, self-hosted runner) | [`runbooks/README.md`](runbooks/README.md) |
+| Five-minute demo operator runbook + rehearsal log | [`runbooks/FIVE-MINUTE-DEMO.md`](runbooks/FIVE-MINUTE-DEMO.md) · [`runbooks/DEMO-REHEARSAL-LOG.md`](runbooks/DEMO-REHEARSAL-LOG.md) |
 | Writing tests (tiers, markers, fixtures) | [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md) |
 
 ## Planned docs (not yet written)

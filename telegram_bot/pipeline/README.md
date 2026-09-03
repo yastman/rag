@@ -6,7 +6,7 @@ supervisor path converges on assistant-core: classify/embed/semantic-cache
 work lives in `src.runtime.pipeline.assistant_pipeline`, not here.
 
 > **Not to be confused with [`../pipelines/`](../pipelines/)** (plural): `pipelines/` holds the
-> client-direct entrypoints. This `pipeline/` (singular) is the supervisor-driven query path
+> dialog state contract. This `pipeline/` (singular) is the supervisor-driven query path
 > lifted out of the `bot.py` god-object.
 
 ## Files
@@ -18,12 +18,11 @@ work lives in `src.runtime.pipeline.assistant_pipeline`, not here.
 
 ## Boundaries
 
-- Delegates retrieval/generation to `src/runtime/` and the agent layer; it wires Telegram
+- Delegates retrieval/generation to `src/runtime/` (assistant-core); it wires Telegram
   handling to the engine, it does not query Qdrant or run prompts directly.
 - Behaviour is byte-for-byte with the pre-extract `bot.py` functions (regression-guarded).
 
 ## See Also
 
 - [`../README.md`](../README.md) — Telegram transport overview
-- [`../pipelines/README.md`](../pipelines/README.md) — client-direct paths
-- [`../agents/README.md`](../agents/README.md) — agent SDK tools
+- [`../pipelines/README.md`](../pipelines/README.md) — dialog state contract
