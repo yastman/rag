@@ -42,7 +42,7 @@ kernel lives in `src/runtime/` and does not import `telegram_bot.*`.
 
 ## Related Runtime Services
 
-- **Qdrant** — vector database (retrieval, ingestion, history)
+- **Qdrant** — vector database (retrieval, ingestion)
 - **PostgreSQL** — domain state (users, leads, funnel, favorites)
 - **Redis** — caching and rate limiting
 - **BGE-M3 / Voyage** — embedding providers
