@@ -31,7 +31,7 @@ kernel lives in `src/runtime/` and does not import `telegram_bot.*`.
 | `retrieval/` | Reranking + topic classification (benchmark/eval strategies) |
 | `runtime/` | Shared runtime engine: graph, pipeline, generation, qdrant, retrieval, grounding, llm |
 | `security/` | PII redaction and security utilities |
-| `services/` | Shared service clients (BGE-M3, Voyage, Kommo, handoff state) |
+| `services/` | Shared service clients (BGE-M3, Kommo, handoff state) |
 | `utils/` | Shared helpers |
 
 ## Boundaries
@@ -45,7 +45,7 @@ kernel lives in `src/runtime/` and does not import `telegram_bot.*`.
 - **Qdrant** — vector database (retrieval, ingestion)
 - **PostgreSQL** — domain state (users, leads, funnel, favorites)
 - **Redis** — caching and rate limiting
-- **BGE-M3 / Voyage** — embedding providers
+- **BGE-M3** — embedding provider
 - **Markdown-only ingestion** — stdlib document parsing (#3235)
 - Structured logging — observability
 

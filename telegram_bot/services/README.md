@@ -10,7 +10,7 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 
 | File | Purpose |
 |------|---------|
-| [`__init__.py`](./__init__.py) | Public API exports (VoyageService, CacheService, QdrantService, etc.) |
+| [`__init__.py`](./__init__.py) | Public API exports (QdrantService, BGEM3Client, GenerationDeps, etc.) |
 | [`qdrant.py`](./qdrant.py) | Re-export shim → `src.runtime.qdrant.QdrantService` (the real hybrid dense+sparse+ColBERT gateway) |
 | [`generation/telegram_formatting.py`](./generation/telegram_formatting.py) | Telegram-only HTML formatting/delivery for generated answers (generation itself lives in `src/runtime/generation`) |
 | [`src/runtime/services/rag_core.py`](../../src/runtime/services/rag_core.py) | Canonical shared RAG core functions |
@@ -27,7 +27,7 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 
 - **Qdrant** — vector database queries
 - **Redis** — cache tiers and user context storage
-- **BGE-M3 / Voyage** — embedding providers (Voyage is optional: `uv sync --extra voyage`)
+- **BGE-M3** — embedding provider
 - Prompt management and observability (optional)
 
 ## Focused Checks
