@@ -14,11 +14,15 @@ Usage:
 
 import argparse
 import sys
+from typing import TYPE_CHECKING
 
 from qdrant_client import QdrantClient
 
 
-try:
+# Dual-mode imports (#3249): package import for `import scripts.<module>`, direct-script
+# fallback for `python scripts/<file>.py`. The TYPE_CHECKING branch keeps a single
+# binding so MyPy sees one definition while both invocation modes stay supported.
+if TYPE_CHECKING:
     from scripts._qdrant_collection_setup import (
         GDRIVE_PAYLOAD_INDEX_FIELDS,
         create_payload_indexes,
@@ -26,14 +30,23 @@ try:
     from scripts._qdrant_collection_setup import (
         get_qdrant_client as _get_qdrant_client,
     )
-except ModuleNotFoundError:
-    from _qdrant_collection_setup import (
-        GDRIVE_PAYLOAD_INDEX_FIELDS,
-        create_payload_indexes,
-    )
-    from _qdrant_collection_setup import (
-        get_qdrant_client as _get_qdrant_client,
-    )
+else:
+    try:
+        from scripts._qdrant_collection_setup import (
+            GDRIVE_PAYLOAD_INDEX_FIELDS,
+            create_payload_indexes,
+        )
+        from scripts._qdrant_collection_setup import (
+            get_qdrant_client as _get_qdrant_client,
+        )
+    except ModuleNotFoundError:
+        from _qdrant_collection_setup import (
+            GDRIVE_PAYLOAD_INDEX_FIELDS,
+            create_payload_indexes,
+        )
+        from _qdrant_collection_setup import (
+            get_qdrant_client as _get_qdrant_client,
+        )
 
 
 PAYLOAD_INDEX_FIELDS = GDRIVE_PAYLOAD_INDEX_FIELDS

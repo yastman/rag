@@ -6,22 +6,34 @@ Exit 0 = PASS, Exit 1 = FAIL (missing indexes).
 
 import os
 import sys
+from typing import TYPE_CHECKING
 
 
-try:
+# Dual-mode imports (#3249): package import for `import scripts.<module>`, direct-script
+# fallback for `python scripts/<file>.py`. The TYPE_CHECKING branch keeps a single
+# binding so MyPy sees one definition while both invocation modes stay supported.
+if TYPE_CHECKING:
     from scripts._qdrant_collection_setup import (
         PAYLOAD_INDEX_FIELDS_BY_COLLECTION,
         get_qdrant_client,
         payload_index_types,
     )
     from scripts.setup_binary_collection import PAYLOAD_INDEX_FIELDS
-except ModuleNotFoundError:
-    from _qdrant_collection_setup import (
-        PAYLOAD_INDEX_FIELDS_BY_COLLECTION,
-        get_qdrant_client,
-        payload_index_types,
-    )
-    from setup_binary_collection import PAYLOAD_INDEX_FIELDS
+else:
+    try:
+        from scripts._qdrant_collection_setup import (
+            PAYLOAD_INDEX_FIELDS_BY_COLLECTION,
+            get_qdrant_client,
+            payload_index_types,
+        )
+        from scripts.setup_binary_collection import PAYLOAD_INDEX_FIELDS
+    except ModuleNotFoundError:
+        from _qdrant_collection_setup import (
+            PAYLOAD_INDEX_FIELDS_BY_COLLECTION,
+            get_qdrant_client,
+            payload_index_types,
+        )
+        from setup_binary_collection import PAYLOAD_INDEX_FIELDS
 
 
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")

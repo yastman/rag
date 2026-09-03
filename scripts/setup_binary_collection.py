@@ -14,6 +14,7 @@ Usage:
 import argparse
 import os
 import sys
+from typing import TYPE_CHECKING
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -31,7 +32,10 @@ from qdrant_client.models import (
 )
 
 
-try:
+# Dual-mode imports (#3249): package import for `import scripts.<module>`, direct-script
+# fallback for `python scripts/<file>.py`. The TYPE_CHECKING branch keeps a single
+# binding so MyPy sees one definition while both invocation modes stay supported.
+if TYPE_CHECKING:
     from scripts._qdrant_collection_setup import (
         collection_exists,
         delete_collection,
@@ -41,16 +45,27 @@ try:
     from scripts._qdrant_collection_setup import (
         create_payload_indexes as _create_payload_indexes,
     )
-except ModuleNotFoundError:
-    from _qdrant_collection_setup import (
-        collection_exists,
-        delete_collection,
-        get_qdrant_client,
-        payload_index_types,
-    )
-    from _qdrant_collection_setup import (
-        create_payload_indexes as _create_payload_indexes,
-    )
+else:
+    try:
+        from scripts._qdrant_collection_setup import (
+            collection_exists,
+            delete_collection,
+            get_qdrant_client,
+            payload_index_types,
+        )
+        from scripts._qdrant_collection_setup import (
+            create_payload_indexes as _create_payload_indexes,
+        )
+    except ModuleNotFoundError:
+        from _qdrant_collection_setup import (
+            collection_exists,
+            delete_collection,
+            get_qdrant_client,
+            payload_index_types,
+        )
+        from _qdrant_collection_setup import (
+            create_payload_indexes as _create_payload_indexes,
+        )
 
 
 # Vector dimensions (Voyage voyage-4-large)
