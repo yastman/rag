@@ -17,19 +17,17 @@ import sys
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 
 
-# Import collection setup from sibling script.
-try:
+# Dual-mode imports (#3249): package import for `import scripts.<module>`, direct-script
+# fallback for `python scripts/<file>.py`. The TYPE_CHECKING branch keeps a single
+# binding so MyPy sees one definition while both invocation modes stay supported.
+if TYPE_CHECKING:
     from scripts._qdrant_collection_setup import get_qdrant_client as _get_qdrant_client
-except ModuleNotFoundError:
-    from _qdrant_collection_setup import get_qdrant_client as _get_qdrant_client
-
-try:
     from scripts.setup_binary_collection import (
         collection_exists,
         create_binary_collection,
@@ -37,14 +35,29 @@ try:
         get_binary_collection_name,
         print_collection_info,
     )
-except ModuleNotFoundError:
-    from setup_binary_collection import (
-        collection_exists,
-        create_binary_collection,
-        create_payload_indexes,
-        get_binary_collection_name,
-        print_collection_info,
-    )
+else:
+    # Import collection setup from sibling script.
+    try:
+        from scripts._qdrant_collection_setup import get_qdrant_client as _get_qdrant_client
+    except ModuleNotFoundError:
+        from _qdrant_collection_setup import get_qdrant_client as _get_qdrant_client
+
+    try:
+        from scripts.setup_binary_collection import (
+            collection_exists,
+            create_binary_collection,
+            create_payload_indexes,
+            get_binary_collection_name,
+            print_collection_info,
+        )
+    except ModuleNotFoundError:
+        from setup_binary_collection import (
+            collection_exists,
+            create_binary_collection,
+            create_payload_indexes,
+            get_binary_collection_name,
+            print_collection_info,
+        )
 
 
 @dataclass
