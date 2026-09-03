@@ -59,7 +59,7 @@ core = [
 
 # Telegram production adapter and bot-local runtime dependencies.
 telegram = [
-    "aiogram>=3.29.0",
+    "aiogram>=3.31.0",
     "aiogram-dialog==2.6.0",
     "fluentogram>=1.2.0",
     "cachetools>=5.0.0",

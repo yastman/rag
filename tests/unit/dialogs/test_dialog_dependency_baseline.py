@@ -4,5 +4,5 @@ from importlib.metadata import version
 
 
 def test_dialog_dependency_baseline() -> None:
-    assert version("aiogram") == "3.29.1"
+    assert version("aiogram") == "3.31.0"
     assert version("aiogram-dialog") == "2.6.0"
