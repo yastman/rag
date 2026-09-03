@@ -60,13 +60,11 @@ class TestPropertyBotInit:
         bot = _create_bot()
         assert bot._redis_monitor is not None
 
-    def test_checkpointer_is_none_before_start(self):
+    def test_checkpointer_attributes_are_gone(self):
+        """#3218: the no-op checkpointer fields must not come back."""
         bot = _create_bot()
-        assert bot._checkpointer is None
-
-    def test_agent_checkpointer_is_none_before_start(self):
-        bot = _create_bot()
-        assert bot._agent_checkpointer is None
+        assert not hasattr(bot, "_checkpointer")
+        assert not hasattr(bot, "_agent_checkpointer")
 
     def test_user_service_is_none_before_start(self):
         bot = _create_bot()
@@ -95,9 +93,6 @@ class TestPropertyBotInit:
 
 def _start_patches(bot):
     """Context manager stack that mocks all externals needed by start()."""
-    mock_checkpointer = AsyncMock()
-    mock_checkpointer.asetup = AsyncMock()
-
     mock_me = MagicMock()
     mock_me.id = 12345
     mock_me.has_topics_enabled = False
@@ -110,18 +105,6 @@ def _start_patches(bot):
             "telegram_bot.preflight.check_dependencies",
             new_callable=AsyncMock,
             return_value={"postgres": True, "redis": True, "qdrant": True},
-        )
-    )
-    stack.enter_context(
-        patch(
-            "telegram_bot.integrations.memory.create_redis_checkpointer",
-            return_value=mock_checkpointer,
-        )
-    )
-    stack.enter_context(
-        patch(
-            "telegram_bot.integrations.memory.create_fallback_checkpointer",
-            return_value=MagicMock(),
         )
     )
     stack.enter_context(patch("redis.asyncio.from_url", return_value=MagicMock()))
@@ -155,38 +138,6 @@ class TestPropertyBotStart:
         with _start_patches(bot):
             await bot.start()
         assert bot._cache_initialized is True
-
-    async def test_successful_start_checkpointer_set(self):
-        bot = _create_bot()
-        with _start_patches(bot):
-            await bot.start()
-        assert bot._checkpointer is not None
-
-    async def test_successful_start_agent_checkpointer_set(self):
-        bot = _create_bot()
-        with _start_patches(bot):
-            await bot.start()
-        assert bot._agent_checkpointer is not None
-
-    async def test_redis_checkpointer_failure_falls_back(self):
-        """When create_redis_checkpointer raises, start() falls back to in-memory."""
-        bot = _create_bot()
-        mock_fallback = MagicMock()
-
-        with _start_patches(bot):
-            with (
-                patch(
-                    "telegram_bot.integrations.memory.create_redis_checkpointer",
-                    side_effect=Exception("Redis connection refused"),
-                ),
-                patch(
-                    "telegram_bot.integrations.memory.create_fallback_checkpointer",
-                    return_value=mock_fallback,
-                ),
-            ):
-                await bot.start()
-
-        assert bot._checkpointer is mock_fallback
 
     async def test_preflight_failure_propagates(self):
         """When check_dependencies raises PreflightError, start() re-raises."""

@@ -5,8 +5,7 @@ Observability integration removed (#2844, #2969). Structured product logs
 
 The only helpers kept here are genuine, non-tracing utilities
 still used by the runtime: ``mask_pii`` (PII masking for safe payloads) and
-the scores helpers (score/write_scores/write_history_scores/
-compute_checkpointer_overhead_proxy_ms).
+the no-op scores stubs (score/write_scores/write_history_scores).
 
 No-op shims removed (card_9967cd60fe32):
   observe, traced_pipeline, get_client, propagate_attributes — confirmed 0
@@ -18,7 +17,6 @@ from __future__ import annotations
 from typing import Any
 
 from src.observability.scores import (
-    compute_checkpointer_overhead_proxy_ms,
     score,
     write_history_scores,
     write_scores,
@@ -36,7 +34,6 @@ def mask_pii(data: Any) -> Any:
 
 
 __all__ = [
-    "compute_checkpointer_overhead_proxy_ms",
     "mask_pii",
     "score",
     "write_history_scores",

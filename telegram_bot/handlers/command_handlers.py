@@ -103,13 +103,11 @@ async def cmd_clear(
 
     Closes any active aiogram-dialog stack (e.g. DemoSG apartment-search) and
     resets the FSM state so subsequent free-text questions are routed back to
-    the supervisor / RAG path. See #1454.
-    """
-    from telegram_bot.services.util.checkpointer_utils import (
-        _delete_checkpointer_thread,
-        _supervisor_thread_id,
-    )
+    the RAG path. See #1454.
 
+    No persistent conversation memory exists (#3218): the only cleared store
+    is the Redis per-user conversation cache.
+    """
     assert message.from_user is not None
     user_id = message.from_user.id
     # #1454: drop any active aiogram-dialog stack BEFORE clearing FSM
@@ -135,44 +133,15 @@ async def cmd_clear(
                 exc_info=True,
             )
             dialog_reset_failed = True
-    checkpointer_cleared = True
-    text_thread_id = _supervisor_thread_id(message.chat.id)
-    seen_checkpointers: set[int] = set()
-    for cp_name, checkpointer in (
-        ("conversation", bot._checkpointer),
-        ("agent", bot._agent_checkpointer),
-    ):
-        if checkpointer is None:
-            continue
-        cp_id = id(checkpointer)
-        if cp_id in seen_checkpointers:
-            continue
-        seen_checkpointers.add(cp_id)
-        for thread_id in (text_thread_id,):
-            try:
-                await _delete_checkpointer_thread(checkpointer, thread_id)
-            except Exception:
-                logger.warning(
-                    "Failed to clear %s checkpointer thread %s",
-                    cp_name,
-                    thread_id,
-                    exc_info=True,
-                )
-                checkpointer_cleared = False
 
     await bot._cache.clear_conversation(user_id)
 
-    if checkpointer_cleared and not dialog_reset_failed:
+    if not dialog_reset_failed:
         await message.answer("\u2705 История диалога очищена.")
-    elif dialog_reset_failed and checkpointer_cleared:
+    else:
         await message.answer(
             "\u26a0\ufe0f История очищена, но не удалось сбросить состояние активного диалога. "
             "Используйте /start, если бот продолжает отвечать в режиме поиска."
-        )
-    else:
-        await message.answer(
-            "\u26a0\ufe0f История очищена частично: локальный контекст сброшен, "
-            "но долговременная память временно недоступна."
         )
 
 

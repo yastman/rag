@@ -5,12 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 
-def compute_checkpointer_overhead_proxy_ms(result: dict[str, Any], ainvoke_wall_ms: float) -> float:
-    """Compute proxy for checkpointer overhead."""
-    stages_ms = sum(float(v) * 1000 for v in result.get("latency_stages", {}).values())
-    return max(0.0, ainvoke_wall_ms - stages_ms)
-
-
 def score(lf: Any, trace_id: str, *, name: str, value: Any, **kwargs: Any) -> None:
     """No-op stub — tracing removed (#2844)."""
 

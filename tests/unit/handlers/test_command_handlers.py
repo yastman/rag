@@ -26,8 +26,6 @@ def mock_bot():
     bot._cache = MagicMock()
     bot._cache.clear_conversation = AsyncMock()
     bot._cache.get_metrics = MagicMock(return_value={})
-    bot._checkpointer = None
-    bot._agent_checkpointer = None
     bot._resolve_user_role = AsyncMock(return_value="client")
     bot._is_admin = MagicMock(return_value=False)
     bot._i18n_hub = None
@@ -228,8 +226,7 @@ class TestClearcacheCallbackRequiresAdmin:
         bot._cache.clear_all_caches = AsyncMock(return_value={})
         bot._cache.clear_semantic_cache = AsyncMock(return_value=0)
         bot._cache.clear_by_tier = AsyncMock(return_value=0)
-        bot._checkpointer = None
-        bot._agent_checkpointer = None
+        bot._cache.clear_conversation = AsyncMock()
         return bot
 
     @pytest.mark.asyncio

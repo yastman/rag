@@ -7,12 +7,10 @@ arrows go the right way. Slices 1..4 landed in PR #2018, #2020, #2024,
 
 This contract pins **slice 5**: the scoring helpers
 (``write_pipeline_scores``, ``score``, ``write_crm_scores``,
-``write_history_scores``, ``compute_checkpointer_overhead_proxy_ms``)
-become first-class citizens under ``src/``. ``telegram_bot/scoring.py``
-becomes a thin re-export shim so existing bot internals
-(``telegram_bot/agents/rag_tool.py``, ``telegram_bot/handlers/command_handlers.py``,
-``telegram_bot/pipelines/client.py``, ``telegram_bot/bot.py``) keep working
-unchanged.
+``write_history_scores``) become first-class citizens under ``src/``.
+``telegram_bot/scoring.py`` becomes a thin re-export shim so existing bot
+internals keep working unchanged. (``compute_checkpointer_overhead_proxy_ms``
+was removed with the no-op checkpointer in #3218.)
 
 Asserted invariants:
 
@@ -20,8 +18,7 @@ Asserted invariants:
   2. The canonical module imports do NOT reach into ``telegram_bot.*``
      at module scope — that is the whole point of the layering rule.
   3. The canonical module exposes the full public API
-     (``compute_checkpointer_overhead_proxy_ms``, ``score``,
-     ``write_crm_scores``, ``write_history_scores``,
+     (``score``, ``write_crm_scores``, ``write_history_scores``,
      ``write_pipeline_scores``).
   4. The ``telegram_bot/scoring.py`` shim re-exports every public
      callable with object-identity (``is``-equal).
@@ -41,7 +38,6 @@ CANONICAL = REPO_ROOT / "src" / "scoring.py"
 SHIM = REPO_ROOT / "telegram_bot" / "scoring.py"
 
 PUBLIC_API: tuple[str, ...] = (
-    "compute_checkpointer_overhead_proxy_ms",
     "score",
     "write_crm_scores",
     "write_history_scores",
@@ -159,21 +155,3 @@ def test_scoring_noop_returns_none(name: str) -> None:
         result = fn(broken, {}, trace_id="test-trace")
 
     assert result is None, f"{name} must return None, got {result!r}"
-
-
-def test_compute_checkpointer_overhead_proxy_ms_real_behavior() -> None:
-    """The compute helper must still compute real values (not a no-op)."""
-    mod = importlib.import_module("src.scoring")
-    fn = mod.compute_checkpointer_overhead_proxy_ms
-
-    # No stages → full wall time returned
-    assert fn({}, 100.0) == 100.0, "No latency_stages → full wall time."
-
-    # Stages subtracted
-    result = {"latency_stages": {"retrieval": 0.05, "generation": 0.03}}
-    # overhead = 100.0 - (0.05+0.03)*1000 = 100.0 - 80.0 = 20.0
-    assert fn(result, 100.0) == 20.0, "Wall time minus stage latencies."
-
-    # Clipped to zero when stages exceed wall time
-    result2 = {"latency_stages": {"slow": 0.2}}
-    assert fn(result2, 0.1) == 0.0, "Negative overhead clipped to zero."

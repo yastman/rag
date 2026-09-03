@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import Any
 
 from src.observability.scores import (
-    compute_checkpointer_overhead_proxy_ms,
     score,
     write_history_scores,
     write_scores,
@@ -26,7 +25,6 @@ def write_crm_scores(lf: Any, messages: list, *, trace_id: str = "") -> None:
 
 
 __all__ = [
-    "compute_checkpointer_overhead_proxy_ms",
     "score",
     "write_crm_scores",
     "write_history_scores",

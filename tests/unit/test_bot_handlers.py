@@ -422,28 +422,6 @@ class TestCommandHandlers:
         message.answer.assert_awaited_once()
         assert "очищена" in message.answer.await_args.args[0].lower()
 
-    async def test_cmd_clear_uses_checkpointer_delete_thread(self, mock_config):
-        """Test /clear calls checkpointer.adelete_thread for text and voice threads."""
-        bot, _ = _create_bot(mock_config)
-        bot._cache = MagicMock()
-        bot._cache.clear_conversation = AsyncMock()
-        bot._checkpointer = AsyncMock()
-        bot._agent_checkpointer = AsyncMock()
-        message = _make_text_message()
-
-        await cmd_clear(bot, message)
-
-        # Text thread only (voice namespace removed from /clear)
-        cp_calls = bot._checkpointer.adelete_thread.call_args_list
-        assert len(cp_calls) == 1
-        assert cp_calls[0].args[0] == "tg_12345"
-
-        agent_calls = bot._agent_checkpointer.adelete_thread.call_args_list
-        assert len(agent_calls) == 1
-        assert agent_calls[0].args[0] == "tg_12345"
-
-        bot._cache.clear_conversation.assert_awaited_once_with(12345)
-
     async def test_cmd_clear_resets_active_dialog_stack(self, mock_config):
         """#1454: /clear must reset any active aiogram-dialog stack so the next
         free-text message is routed back to the supervisor / RAG path
@@ -512,102 +490,6 @@ class TestCommandHandlers:
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
         message.answer.assert_awaited_once()
-
-    async def test_cmd_clear_falls_back_to_sync_delete_thread(self, mock_config):
-        """Test /clear supports sync checkpointers exposing delete_thread only."""
-
-        class SyncCheckpointer:
-            def __init__(self):
-                self.calls = []
-
-            def delete_thread(self, thread_id):
-                self.calls.append(thread_id)
-
-        bot, _ = _create_bot(mock_config)
-        bot._cache = MagicMock()
-        bot._cache.clear_conversation = AsyncMock()
-        bot._checkpointer = SyncCheckpointer()
-        bot._agent_checkpointer = SyncCheckpointer()
-        message = _make_text_message()
-
-        await cmd_clear(bot, message)
-
-        assert set(bot._checkpointer.calls) == {"tg_12345"}
-        assert set(bot._agent_checkpointer.calls) == {"tg_12345"}
-        bot._cache.clear_conversation.assert_awaited_once_with(12345)
-        message.answer.assert_awaited_once()
-        assert "очищена" in message.answer.await_args.args[0].lower()
-
-    async def test_cmd_clear_uses_chat_id_for_thread_namespace(self, mock_config):
-        """Thread cleanup targets chat-scoped text thread and user-scoped voice thread."""
-        bot, _ = _create_bot(mock_config)
-        bot._cache = MagicMock()
-        bot._cache.clear_conversation = AsyncMock()
-        bot._checkpointer = AsyncMock()
-        bot._agent_checkpointer = AsyncMock()
-        message = _make_text_message(user_id=777, chat_id=42)
-
-        await cmd_clear(bot, message)
-
-        cp_calls = bot._checkpointer.adelete_thread.call_args_list
-        called_ids = {c.args[0] for c in cp_calls}
-        assert called_ids == {"tg_42"}  # text thread uses chat_id only
-
-        agent_calls = bot._agent_checkpointer.adelete_thread.call_args_list
-        called_ids = {c.args[0] for c in agent_calls}
-        assert called_ids == {"tg_42"}
-
-        bot._cache.clear_conversation.assert_awaited_once_with(777)
-
-    async def test_cmd_clear_handles_no_checkpointer(self, mock_config):
-        """Test /clear works when checkpointer is None (fallback)."""
-        bot, _ = _create_bot(mock_config)
-        bot._cache = MagicMock()
-        bot._cache.clear_conversation = AsyncMock()
-        bot._checkpointer = None
-        bot._agent_checkpointer = None
-        message = _make_text_message()
-
-        await cmd_clear(bot, message)
-
-        bot._cache.clear_conversation.assert_awaited_once_with(12345)
-        message.answer.assert_called_once()
-
-    async def test_cmd_clear_reports_partial_failure_on_checkpointer_error(self, mock_config):
-        """Test /clear reports partial failure when checkpointer deletion fails."""
-        bot, _ = _create_bot(mock_config)
-        bot._cache = MagicMock()
-        bot._cache.clear_conversation = AsyncMock()
-        bot._checkpointer = AsyncMock()
-        bot._checkpointer.adelete_thread = AsyncMock(side_effect=RuntimeError("redis down"))
-        bot._agent_checkpointer = AsyncMock()
-        message = _make_text_message()
-
-        await cmd_clear(bot, message)
-
-        bot._cache.clear_conversation.assert_awaited_once_with(12345)
-        assert bot._checkpointer.adelete_thread.await_count == 1
-        assert bot._checkpointer.adelete_thread.call_args.args[0] == "tg_12345"
-        message.answer.assert_awaited_once()
-        answer_text = message.answer.await_args.args[0]
-        assert "частично" in answer_text.lower()
-
-    async def test_cmd_clear_deduplicates_same_checkpointer_instance(self, mock_config):
-        """Same checkpointer instance only processes once, deleting both text and voice threads."""
-        bot, _ = _create_bot(mock_config)
-        bot._cache = MagicMock()
-        bot._cache.clear_conversation = AsyncMock()
-        shared_cp = AsyncMock()
-        bot._checkpointer = shared_cp
-        bot._agent_checkpointer = shared_cp
-        message = _make_text_message()
-
-        await cmd_clear(bot, message)
-
-        # Deduplicated to 1 instance; only text thread remains
-        assert shared_cp.adelete_thread.await_count == 1
-        assert shared_cp.adelete_thread.call_args.args[0] == "tg_12345"
-        bot._cache.clear_conversation.assert_awaited_once_with(12345)
 
     async def test_cmd_stats(self, mock_config):
         """Test /stats command handler."""
@@ -872,8 +754,6 @@ class TestPreAgentGuard:
         mock_core.assert_awaited_once()
 
 
-
-
 class TestBotLifecycle:
     """Test bot start/stop lifecycle."""
 
@@ -916,7 +796,7 @@ class TestBotLifecycle:
         bot._cache.initialize.assert_not_called()
 
     async def test_start_aborts_before_redis_init_when_critical_preflight_fails(self, mock_config):
-        """Critical preflight must run before cache/checkpointer startup work."""
+        """Critical preflight must run before cache startup work."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
@@ -936,15 +816,11 @@ class TestBotLifecycle:
                 new_callable=AsyncMock,
                 side_effect=preflight_error,
             ),
-            patch(
-                "telegram_bot.integrations.memory.create_redis_checkpointer"
-            ) as mock_checkpointer,
             pytest.raises(PreflightError),
         ):
             await bot.start()
 
         bot._cache.initialize.assert_not_called()
-        mock_checkpointer.assert_not_called()
         bot.dp.start_polling.assert_not_called()
 
     async def test_start_logs_one_final_startup_summary(self, mock_config, caplog):
@@ -1077,8 +953,8 @@ class TestBotLifecycle:
         bot._embeddings.aclose.assert_awaited_once()
         bot._sparse.aclose.assert_awaited_once()
 
-    async def test_stop_closes_checkpointer_context(self, mock_config):
-        """stop() should close async checkpointer context when available."""
+    async def test_stop_has_no_checkpointer_teardown(self, mock_config):
+        """#3218: stop() completes without checkpointer teardown — the fields are gone."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.close = AsyncMock()
@@ -1094,61 +970,11 @@ class TestBotLifecycle:
         bot.bot.session.close = AsyncMock()
         bot._redis_monitor = MagicMock()
         bot._redis_monitor.stop = AsyncMock()
-        bot._checkpointer = MagicMock()
-        bot._checkpointer.__aexit__ = AsyncMock()
-        checkpointer = bot._checkpointer
 
         await bot.stop()
 
-        checkpointer.__aexit__.assert_awaited_once_with(None, None, None)
-
-    async def test_stop_closes_agent_checkpointer_context(self, mock_config):
-        """stop() should close async agent checkpointer context when available (#424)."""
-        bot, _ = _create_bot(mock_config)
-        bot._cache = MagicMock()
-        bot._cache.close = AsyncMock()
-        bot._qdrant = MagicMock()
-        bot._qdrant.close = AsyncMock()
-        bot._embeddings = MagicMock()
-        bot._embeddings.aclose = AsyncMock()
-        bot._sparse = MagicMock()
-        bot._sparse.aclose = AsyncMock()
-        bot._reranker = None
-        bot.bot = MagicMock()
-        bot.bot.session = MagicMock()
-        bot.bot.session.close = AsyncMock()
-        bot._redis_monitor = MagicMock()
-        bot._redis_monitor.stop = AsyncMock()
-        bot._agent_checkpointer = MagicMock()
-        bot._agent_checkpointer.__aexit__ = AsyncMock()
-        agent_cp = bot._agent_checkpointer
-
-        await bot.stop()
-
-        agent_cp.__aexit__.assert_awaited_once_with(None, None, None)
-        assert bot._agent_checkpointer is None
-
-    async def test_stop_agent_checkpointer_none_safe(self, mock_config):
-        """stop() works fine when agent checkpointer is None (#424)."""
-        bot, _ = _create_bot(mock_config)
-        bot._cache = MagicMock()
-        bot._cache.close = AsyncMock()
-        bot._qdrant = MagicMock()
-        bot._qdrant.close = AsyncMock()
-        bot._embeddings = MagicMock()
-        bot._embeddings.aclose = AsyncMock()
-        bot._sparse = MagicMock()
-        bot._sparse.aclose = AsyncMock()
-        bot._reranker = None
-        bot.bot = MagicMock()
-        bot.bot.session = MagicMock()
-        bot.bot.session.close = AsyncMock()
-        bot._redis_monitor = MagicMock()
-        bot._redis_monitor.stop = AsyncMock()
-        bot._agent_checkpointer = None
-
-        # Should not raise
-        await bot.stop()
+        assert not hasattr(bot, "_checkpointer")
+        assert not hasattr(bot, "_agent_checkpointer")
 
     async def test_stop_releases_polling_lock(self, mock_config):
         """stop() releases the polling lock when the current instance owns it."""

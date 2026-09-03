@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from telegram_bot.config import BotConfig
-from telegram_bot.scoring import compute_checkpointer_overhead_proxy_ms
 
 
 @pytest.fixture
@@ -157,15 +156,6 @@ async def _run_handle_query(
     ):
         mock_cas.typing.return_value = _make_typing_cm()
         await bot.handle_query(message)  # type: ignore[attr-defined]
-
-
-def test_compute_checkpointer_overhead_proxy_ms():
-    """Unit test for compute_checkpointer_overhead_proxy_ms helper."""
-    result = {"latency_stages": {"classify": 0.001, "generate": 0.100}}
-    # stages = 101ms, ainvoke wall = 140ms -> proxy overhead = 39ms
-    assert compute_checkpointer_overhead_proxy_ms(result, 140.0) == pytest.approx(39.0, abs=0.1)
-    # clamp at zero
-    assert compute_checkpointer_overhead_proxy_ms(result, 50.0) == 0.0
 
 
 class TestCreateScoreNoBarId:
