@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from telegram_bot.dialogs.root_nav import get_main_menu_label
 
@@ -17,6 +17,9 @@ from ._constants import (
     _compute_active_pref_categories,
 )
 
+
+if TYPE_CHECKING:
+    from telegram_bot.services.apartment.apartments_service import ApartmentsService
 
 logger = logging.getLogger(__name__)
 
@@ -340,7 +343,10 @@ def _build_summary_lines(data: dict[str, Any]) -> list[str]:
     return lines
 
 
-async def _count_apartments_for_summary(svc: Any, data: dict[str, Any]) -> int:
+async def _count_apartments_for_summary(
+    svc: ApartmentsService,
+    data: dict[str, Any],
+) -> int:
     """Count apartments matching funnel filters; returns 0 on any error."""
     try:
         from ._constants import _build_funnel_filters
