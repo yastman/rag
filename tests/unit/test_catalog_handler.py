@@ -33,7 +33,7 @@ def test_catalog_browsing_state_is_removed() -> None:
 
 
 def test_bot_no_longer_registers_catalog_reply_keyboard_path() -> None:
-    source = Path("telegram_bot/bot.py").read_text()
+    source = Path("telegram_bot/bot.py").read_text(encoding="utf-8")
     assert "CatalogBrowsingSG.browsing" not in source
     assert "include_router(catalog_router)" not in source
 
@@ -42,10 +42,10 @@ def test_results_callback_route_is_compat_only_not_primary_catalog_owner() -> No
     # Pattern may live in bot.py, _bot_*.py, or dialogs/catalog/ (#2816)
     bot_pkg = Path("telegram_bot")
     source = (
-        "\n".join(p.read_text() for p in bot_pkg.glob("bot.py"))
-        + "\n".join(p.read_text() for p in bot_pkg.glob("_bot_*.py"))
-        + "\n".join(p.read_text() for p in (bot_pkg / "dialogs" / "catalog").glob("*.py"))
-        + "\n".join(p.read_text() for p in (bot_pkg / "dialogs").glob("demo.py"))
+        "\n".join(p.read_text(encoding="utf-8") for p in bot_pkg.glob("bot.py"))
+        + "\n".join(p.read_text(encoding="utf-8") for p in bot_pkg.glob("_bot_*.py"))
+        + "\n".join(p.read_text(encoding="utf-8") for p in (bot_pkg / "dialogs" / "catalog").glob("*.py"))
+        + "\n".join(p.read_text(encoding="utf-8") for p in (bot_pkg / "dialogs").glob("demo.py"))
     )
     assert "handle_results_callback" in source
     assert "CatalogSG.results" in source

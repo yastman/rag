@@ -35,7 +35,7 @@ def test_help_uses_current_default_compose_file() -> None:
 
 
 def test_script_examples_use_current_compose_filenames() -> None:
-    content = SCRIPT.read_text()
+    content = SCRIPT.read_text(encoding="utf-8")
     assert "docker-compose.dev.yml" not in content
     assert "docker-compose.vps.yml" not in content
     assert "compose.vps.yml" not in content
@@ -190,7 +190,7 @@ def test_compose_ci_env_fixture_has_project_name() -> None:
     """Blocker 2: verify the CI env fixture sets COMPOSE_PROJECT_NAME=dev so that
     docker compose ps targets the canonical dev project from any worktree."""
     env_path = ROOT / "tests" / "fixtures" / "compose.ci.env"
-    content = env_path.read_text()
+    content = env_path.read_text(encoding="utf-8")
     lines = [line.strip() for line in content.splitlines()]
     assert any(line == "COMPOSE_PROJECT_NAME=dev" for line in lines), (
         f"{env_path} must contain COMPOSE_PROJECT_NAME=dev"
