@@ -2,10 +2,15 @@
 
 Split #2816: extracted ``handle_query``, ``_handle_apartment_fast_path``,
 ``_handle_client_direct_pipeline``, ``_trace_guard_blocked``,
-``_handle_pre_agent_cache_hit``, ``_send_core_response``,
-``_write_final_pipeline_trace``, ``_handle_query_supervisor``,
+``_send_core_response``, ``_write_final_pipeline_trace``, ``_handle_query_supervisor``,
 ``_astream_supervisor_with_recovery``, ``_ainvoke_supervisor_with_recovery``
 as module-level functions.
+
+#3208 convergence: the Telegram free-text path is reduced to gating
+(handoff + guard), deterministic context assembly (role, filters), ONE
+assistant-core call, and presentation. Classify/embed/semantic-cache work
+lives in the core (``src.core.assistant`` → ``run_assistant_pipeline``);
+this module no longer duplicates it.
 """
 
 from __future__ import annotations
@@ -16,28 +21,13 @@ import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
 from aiogram.utils.chat_action import ChatActionSender
 
-from src.retrieval.topic_classifier import get_query_topic_hint
-from src.runtime.grounding.policy import get_grounding_mode
-from src.runtime.services.cache_policy import (
-    SEMANTIC_CACHE_SCHEMA_VERSION,
-    build_cacheability_decision,
-    is_contextual_query,
-    maybe_store_semantic_response,
-    resolve_semantic_cache_signature,
-)
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.handlers.error_classification import _is_checkpointer_runtime_error
 from telegram_bot.observability.state_helpers import (
     _state_control_message_id,  # card_2a71ec058138: homed to observability/
-)
-from telegram_bot.pipeline.pre_agent import (
-    _build_pre_agent_state_contract,
-    _get_or_compute_pre_agent_dense,
-    _prepare_pre_agent_retrieval_vectors,
 )
 from telegram_bot.pipeline.streaming import (
     _AGENT_DRAFT_INTERVAL,
@@ -55,14 +45,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 logger = logging.getLogger(__name__)
-
-_NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
-
-
-def _get_classify_query() -> Any:
-    from telegram_bot import bot as _m
-
-    return _m.classify_query
 
 
 def _get_detect_injection() -> Any:
@@ -310,13 +292,12 @@ async def _handle_client_direct_pipeline(
 def _trace_guard_blocked(
     *,
     user_text: str,
-    query_type: str,
     pipeline_start: float,
     risk_score: float,
     pattern: str | None,
     root_trace_metadata: dict[str, Any] | None,
 ) -> None:
-    """Write scores for a hard-blocked injection (#1368) — tracing removed (#2844)."""
+    """Write trace metadata for a hard-blocked injection (#1368)."""
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
     if root_trace_metadata is not None:
         root_trace_metadata.update(
@@ -329,58 +310,6 @@ def _trace_guard_blocked(
                 "injection_risk_score": risk_score,
             }
         )
-
-
-async def _handle_pre_agent_cache_hit(
-    bot: PropertyBot,
-    *,
-    message: Any,
-    cached: str,
-    user_text: str,
-    query_type: str,
-    role: str,
-    pipeline_start: float,
-    pre_agent_start: float,
-    rag_result_store: dict[str, Any],
-    root_trace_metadata: dict[str, Any] | None,
-    dense: list[float],
-) -> str:
-    """Send cached response and write trace for cache-hit path."""
-    logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
-    rag_result_store["cache_hit"] = True
-    rag_result_store["query_type"] = query_type
-    rag_result_store["cache_key_embedding"] = dense
-    pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
-    rag_result_store["pre_agent_ms"] = pre_agent_ms
-    tid = uuid4().hex[:16]
-    rag_result_store["request_id"] = tid
-    reply_markup = None
-    if tid and query_type not in _NO_RAG_QUERY_TYPES:
-        from telegram_bot.feedback import build_feedback_keyboard
-
-        reply_markup = build_feedback_keyboard(tid)
-    await bot._send_markdown_chunks(message, str(cached), reply_markup=reply_markup)
-    wall_ms = (time.perf_counter() - pipeline_start) * 1000
-    cache_trace_metadata: dict[str, Any] = {
-        "pipeline_mode": "pre_agent_cache",
-        "pipeline_wall_ms": wall_ms,
-        "pre_agent_ms": pre_agent_ms,
-        "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-        "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
-        "e2e_latency_ms": wall_ms,
-        "topic_hint": rag_result_store.get("topic_hint", ""),
-        "grounding_mode": rag_result_store.get("grounding_mode", ""),
-        "filter_signature": rag_result_store.get("semantic_cache_filter_signature", ""),
-        "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
-        "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-        "grounded": bool(rag_result_store.get("grounded", True)),
-        "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
-        "semantic_cache_safe_reuse": bool(rag_result_store.get("semantic_cache_safe_reuse", True)),
-        "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
-    }
-    if root_trace_metadata is not None:
-        root_trace_metadata.update(cache_trace_metadata)
-    return cached
 
 
 async def _send_core_response(
@@ -470,34 +399,26 @@ async def _send_core_response(
 
 def _write_final_pipeline_trace(
     *,
-    user_text: str,
     wall_ms: float,
-    pre_agent_ms: float,
-    filter_signature: str | None,
     rag_result_store: dict[str, Any],
     root_trace_metadata: dict[str, Any] | None,
 ) -> None:
-    """Write end-of-pipeline span metadata and root trace metadata."""
+    """Write end-of-pipeline trace metadata from the core result (truthful)."""
     if root_trace_metadata is not None:
         root_trace_metadata.update(
             {
-                "pipeline_mode": "sdk_agent",
+                "pipeline_mode": "assistant_core",
                 "query_type": rag_result_store.get("query_type", ""),
-                "topic_hint": rag_result_store.get("topic_hint", ""),
-                "grounding_mode": rag_result_store.get("grounding_mode", ""),
-                "filter_signature": filter_signature or "",
-                "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
+                "grounding_mode": rag_result_store.get("grounding_mode") or "",
+                "cache_hit": bool(rag_result_store.get("cache_hit", False)),
+                "rerank_applied": bool(rag_result_store.get("rerank_applied", False)),
                 "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
-                "grounded": bool(rag_result_store.get("grounded", True)),
-                "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
-                "semantic_cache_safe_reuse": bool(
-                    rag_result_store.get("semantic_cache_safe_reuse", True)
-                ),
+                "grounded": rag_result_store.get("grounded"),
+                "legal_answer_safe": rag_result_store.get("legal_answer_safe"),
+                "semantic_cache_safe_reuse": rag_result_store.get("semantic_cache_safe_reuse"),
                 "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
+                "core_latency_ms": rag_result_store.get("core_latency_ms"),
                 "pipeline_wall_ms": wall_ms,
-                "pre_agent_ms": pre_agent_ms,
-                "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-                "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
                 "e2e_latency_ms": wall_ms,
             }
         )
@@ -508,7 +429,6 @@ async def _supervisor_check_guard(
     message: Message,
     *,
     user_text: str,
-    query_type: str,
     pipeline_start: float,
     root_trace_metadata: dict[str, Any] | None,
 ) -> str | None:
@@ -529,7 +449,6 @@ async def _supervisor_check_guard(
         await message.answer(BLOCKED_RESPONSE)
         _trace_guard_blocked(
             user_text=user_text,
-            query_type=query_type,
             pipeline_start=pipeline_start,
             risk_score=risk_score,
             pattern=pattern,
@@ -546,124 +465,27 @@ async def _supervisor_check_guard(
     return None
 
 
-async def _supervisor_pre_agent_cache(
+async def _extract_request_filters(
     bot: PropertyBot,
-    message: Message,
     *,
     user_text: str,
-    query_type: str,
-    role: str,
-    pipeline_start: float,
-    pre_agent_start: float,
     rag_result_store: dict[str, Any],
-    root_trace_metadata: dict[str, Any] | None,
-) -> tuple[str | None, dict[str, Any], str | None]:
-    """Run pre-agent embedding + cache check + vector prep.
+) -> dict[str, Any]:
+    """Deterministically extract retrieval filters for the core request (#3208).
 
-    Returns (cached_response_or_None, extracted_filters, filter_signature).
-    If cached_response_or_None is set, caller should return it immediately.
-    Mutates rag_result_store in-place.
+    Filter extraction stays a transport-side context-assembly duty (the
+    extractor is a Telegram service); propagation into retrieval, cache
+    signature, and store signature is owned by the core.
     """
-    from src.runtime.services.rag_core import CACHEABLE_QUERY_TYPES
-
-    extracted_filters: dict[str, Any] = {}
-    filter_signature: str | None = None
-
-    if query_type not in CACHEABLE_QUERY_TYPES:
-        return None, extracted_filters, filter_signature
-
-    try:
-        dense = await _get_or_compute_pre_agent_dense(
-            bot._cache, bot._embeddings, user_text, rag_result_store
-        )
-        if dense is None:
-            raise RuntimeError("Pre-agent dense embedding unavailable")
-
-        topic_hint_label = get_query_topic_hint(user_text)
-        topic_hint = topic_hint_label.value if topic_hint_label is not None else None
-        grounding_mode = get_grounding_mode(query_type=query_type, topic_hint=topic_hint)
-        filter_signal = detect_filter_sensitive_query(user_text)
-        contextual_query = is_contextual_query(user_text)
-        rag_result_store["filter_sensitive"] = filter_signal.is_filter_sensitive
-        rag_result_store["filter_signal_reasons"] = list(filter_signal.reasons)
-        rag_result_store["contextual_query"] = contextual_query
-        rag_result_store["topic_hint"] = topic_hint or ""
-        rag_result_store["grounding_mode"] = grounding_mode
-        if grounding_mode == "strict":
-            rag_result_store.setdefault("grounded", True)
-            rag_result_store.setdefault("legal_answer_safe", True)
-            rag_result_store.setdefault("semantic_cache_safe_reuse", True)
-            rag_result_store.setdefault("safe_fallback_used", False)
-
-        if filter_signal.is_filter_sensitive:
-            extracted_filters = await bot._extract_pre_agent_filters(user_text)
-            if extracted_filters:
-                rag_result_store["filters"] = extracted_filters
-                filter_signature = resolve_semantic_cache_signature(filters=extracted_filters)
-                rag_result_store["semantic_cache_filter_signature"] = filter_signature
-
-        skip_cache = contextual_query or (
-            filter_signal.is_filter_sensitive and filter_signature is None
-        )
-        cached = None
-        if skip_cache:
-            rag_result_store["semantic_cache_already_checked"] = True
-        else:
-            check_start = time.perf_counter()
-            cached = await bot._cache.check_semantic(
-                query=user_text,
-                vector=dense,
-                query_type=query_type,
-                cache_scope="rag",
-                agent_role=role,
-                grounding_mode=grounding_mode if grounding_mode == "strict" else None,
-                require_safe_reuse=grounding_mode == "strict",
-                filter_signature=filter_signature,
-            )
-            rag_result_store["pre_agent_cache_check_ms"] = (
-                time.perf_counter() - check_start
-            ) * 1000
-            rag_result_store["semantic_cache_already_checked"] = True
-
-        if cached:
-            hit_response = await _handle_pre_agent_cache_hit(
-                bot,
-                message=message,
-                cached=cached,
-                user_text=user_text,
-                query_type=query_type,
-                role=role,
-                pipeline_start=pipeline_start,
-                pre_agent_start=pre_agent_start,
-                rag_result_store=rag_result_store,
-                root_trace_metadata=root_trace_metadata,
-                dense=dense,
-            )
-            return hit_response, extracted_filters, filter_signature
-
-        logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
-        rag_result_store["query_type"] = query_type
-        await _prepare_pre_agent_retrieval_vectors(
-            bot._cache, bot._embeddings, user_text, dense, rag_result_store
-        )
-        grounding_mode_value = rag_result_store.get("grounding_mode", "normal")
-        topic_hint_obj = get_query_topic_hint(user_text)
-        rag_result_store["state_contract"] = _build_pre_agent_state_contract(
-            rag_result_store=rag_result_store,
-            query_type=query_type,
-            topic_hint=topic_hint_obj.value if topic_hint_obj is not None else None,
-            dense_vector=dense,
-            sparse_vector=rag_result_store.get("cache_key_sparse")
-            if isinstance(rag_result_store.get("cache_key_sparse"), dict)
-            else None,
-            colbert_query=rag_result_store.get("cache_key_colbert"),
-            grounding_mode=grounding_mode_value,
-            filters=extracted_filters or None,
-        )
-    except Exception:
-        logger.warning("Pre-agent cache check failed, proceeding to agent", exc_info=True)
-
-    return None, extracted_filters, filter_signature
+    filter_signal = detect_filter_sensitive_query(user_text)
+    rag_result_store["filter_sensitive"] = filter_signal.is_filter_sensitive
+    rag_result_store["filter_signal_reasons"] = list(filter_signal.reasons)
+    if not filter_signal.is_filter_sensitive:
+        return {}
+    extracted_filters = await bot._extract_pre_agent_filters(user_text)
+    if extracted_filters:
+        rag_result_store["filters"] = extracted_filters
+    return extracted_filters
 
 
 async def _supervisor_run_core(
@@ -674,7 +496,6 @@ async def _supervisor_run_core(
     user_id: int,
     session_id: str,
     role: str,
-    query_type: str,
     language: str,
     extracted_filters: dict[str, Any],
     rag_result_store: dict[str, Any],
@@ -687,9 +508,12 @@ async def _supervisor_run_core(
     aiogram_bot = message.bot
 
     if role == "client" and bot.config.client_direct_pipeline_enabled:
+        # Opt-in legacy branch (kept per #3208 non-goals): classify locally.
+        from telegram_bot.bot import classify_query
+
+        query_type = str(classify_query(user_text) or "")
         try:
             async with ChatActionSender.typing(bot=aiogram_bot, chat_id=message.chat.id):
-                rag_result_store["pre_agent_ms"] = rag_result_store.get("pre_agent_ms", 0.0)
                 pipeline_answer = await _handle_client_direct_pipeline(
                     bot,
                     message=message,
@@ -735,15 +559,18 @@ async def _supervisor_run_core(
         )
 
     response_text = core_result.response_text
-    rag_result_store["query_type"] = core_result.request_type or query_type
+    # Truthful core metadata (#3208): no hardcoded grounded/safety flags.
+    rag_result_store["query_type"] = core_result.request_type or ""
     rag_result_store["request_id"] = core_result.request_id
     rag_result_store["cache_hit"] = core_result.cache_hit
     rag_result_store["rerank_applied"] = core_result.rerank_applied
     rag_result_store["sources_count"] = core_result.documents_count
-    rag_result_store["grade_confidence"] = 1.0 if core_result.documents_count > 0 else 0.0
-    rag_result_store["grounded"] = True
-    rag_result_store["legal_answer_safe"] = True
-    rag_result_store["semantic_cache_safe_reuse"] = True
+    rag_result_store["core_latency_ms"] = core_result.latency_ms
+    rag_result_store["grounding_mode"] = core_result.grounding_mode
+    rag_result_store["grounded"] = core_result.grounded
+    rag_result_store["legal_answer_safe"] = core_result.legal_answer_safe
+    rag_result_store["semantic_cache_safe_reuse"] = core_result.semantic_cache_safe_reuse
+    rag_result_store["safe_fallback_used"] = core_result.safe_fallback_used
     rag_result_store["documents"] = [
         {"metadata": {"title": src.get("title", ""), "url": src.get("url", "")}, "score": 1.0}
         for src in core_result.retrieved_sources
@@ -751,82 +578,20 @@ async def _supervisor_run_core(
     return response_text
 
 
-async def _supervisor_store_cache_and_trace(
-    bot: PropertyBot,
-    message: Message,
+def _supervisor_write_final_trace(
     *,
-    user_text: str,
-    response_text: str,
-    query_type: str,
-    role: str,
     pipeline_start: float,
-    pre_agent_ms: float,
     rag_result_store: dict[str, Any],
     root_trace_metadata: dict[str, Any] | None,
-    user_id: int,
-    session_id: str,
-    messages: list[Any],
 ) -> None:
-    """Cache store, final trace write, scores, and background history save."""
-    from src.runtime.services.rag_core import CACHEABLE_QUERY_TYPES
+    """Write the final trace from the core result metadata (no cache store).
 
-    # Resolve filter_signature from stored state
-    result_filters = rag_result_store.get("filters")
-    if not isinstance(result_filters, dict) or not result_filters:
-        state_contract = rag_result_store.get("state_contract")
-        if isinstance(state_contract, dict):
-            contract_filters = state_contract.get("filters")
-            if isinstance(contract_filters, dict) and contract_filters:
-                result_filters = contract_filters
-    filter_signature = resolve_semantic_cache_signature(filters=result_filters)
-
-    if bot._cache and response_text:
-        _q = str(rag_result_store.get("query_type", "") or "")
-        _gm = str(rag_result_store.get("grounding_mode", "normal") or "normal")
-        raw_threshold = getattr(bot.config, "relevance_threshold_rrf", 0.005)
-        confidence_threshold = (
-            float(raw_threshold) if isinstance(raw_threshold, int | float) else 0.005
-        )
-        decision = build_cacheability_decision(
-            result={**rag_result_store, "response": response_text},
-            query_type=_q,
-            grounding_mode=_gm,
-            documents=rag_result_store.get("documents", []),
-            cache_hit=bool(rag_result_store.get("cache_hit", False)),
-            contextual=is_contextual_query(user_text),
-            grade_confidence=float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
-            confidence_threshold=confidence_threshold,
-            schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
-        )
-        rag_result_store["response_state"] = decision.response_state
-        rag_result_store["degraded_reason"] = decision.degraded_reason
-        rag_result_store["cache_eligible"] = decision.cache_eligible
-        rag_result_store["store_reason"] = decision.store_reason
-        store_vector = rag_result_store.get("cache_key_embedding") or rag_result_store.get(
-            "query_embedding"
-        )
-        if _q in CACHEABLE_QUERY_TYPES and isinstance(store_vector, list) and bool(store_vector):
-            try:
-                await maybe_store_semantic_response(
-                    cache=bot._cache,
-                    query=message.text or "",
-                    response=response_text,
-                    vector=store_vector,
-                    query_type=_q,
-                    cache_scope="rag",
-                    decision=decision,
-                    agent_role=role,
-                    filter_signature=filter_signature,
-                )
-            except Exception:
-                logger.warning("Failed to store semantic cache in text path", exc_info=True)
-
+    Semantic-cache storage moved into the core (#3208); this is observability
+    only.
+    """
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
     _write_final_pipeline_trace(
-        user_text=user_text,
         wall_ms=wall_ms,
-        pre_agent_ms=pre_agent_ms,
-        filter_signature=filter_signature,
         rag_result_store=rag_result_store,
         root_trace_metadata=root_trace_metadata,
     )
@@ -843,15 +608,14 @@ async def _handle_query_supervisor(
     expert_id: str | None = None,
     dialog_manager: Any = None,
 ) -> str:
-    """Handle query via imperative adapter SDK (#413 — replaces build_supervisor_graph).
+    """Handle free-text Q&A by converging on the assistant core (#3208).
 
-    Decomposed into helpers (#2927): _supervisor_check_guard,
-    _supervisor_pre_agent_cache, _supervisor_run_core,
-    _supervisor_store_cache_and_trace.
+    Telegram keeps only: handoff gating (``handle_query``), the content-filter
+    guard, deterministic context assembly (role, language, filters), ONE core
+    call, and presentation. Classify/embed/semantic-cache work happens inside
+    ``run_assistant_pipeline`` exactly once.
     """
     from telegram_bot.agents.agent import LOCALE_TO_LANGUAGE
-
-    classify_query = _get_classify_query()
 
     assert message.bot is not None
     assert message.from_user is not None
@@ -861,42 +625,26 @@ async def _handle_query_supervisor(
     language = LOCALE_TO_LANGUAGE.get(locale, bot.config.domain_language)
 
     rag_result_store: dict[str, Any] = {}
-    pre_agent_start = time.perf_counter()
-
     user_text = message.text or ""
-    query_type = classify_query(user_text)
 
-    # Step 1: Content-filter guard
+    # Step 1: Content-filter guard (transport-side safety gate).
     if bot.config.content_filter_enabled:
         blocked = await _supervisor_check_guard(
             bot,
             message,
             user_text=user_text,
-            query_type=query_type,
             pipeline_start=pipeline_start,
             root_trace_metadata=root_trace_metadata,
         )
         if blocked is not None:
             return blocked
 
-    # Step 2: Pre-agent cache check + vector prep
-    cached_response, extracted_filters, _filter_sig = await _supervisor_pre_agent_cache(
-        bot,
-        message,
-        user_text=user_text,
-        query_type=query_type,
-        role=role,
-        pipeline_start=pipeline_start,
-        pre_agent_start=pre_agent_start,
-        rag_result_store=rag_result_store,
-        root_trace_metadata=root_trace_metadata,
+    # Step 2: Deterministic context assembly (filter propagation into the core).
+    extracted_filters = await _extract_request_filters(
+        bot, user_text=user_text, rag_result_store=rag_result_store
     )
-    if cached_response is not None:
-        return cached_response
 
-    rag_result_store.setdefault("pre_agent_ms", (time.perf_counter() - pre_agent_start) * 1000)
-
-    # Step 3: Execute core request (client-direct or assistant core)
+    # Step 3: ONE core call (classify → cache check → retrieve → generate → cache store).
     response_text = await _supervisor_run_core(
         bot,
         message,
@@ -904,7 +652,6 @@ async def _handle_query_supervisor(
         user_id=user_id,
         session_id=session_id,
         role=role,
-        query_type=query_type,
         language=language,
         extracted_filters=extracted_filters,
         rag_result_store=rag_result_store,
@@ -913,11 +660,8 @@ async def _handle_query_supervisor(
         forum_thread_id=forum_thread_id,
     )
 
-    # Step 4: Token usage from last AI message (legacy messages list is empty in core path)
-    messages: list[Any] = []
-
-    # Step 5: Send response
-    query_type = rag_result_store.get("query_type", query_type)  # type: ignore[assignment]
+    # Step 4: Send exactly once.
+    query_type = str(rag_result_store.get("query_type", "") or "")
 
     class _DummyCtx:
         response_sent = False
@@ -936,22 +680,11 @@ async def _handle_query_supervisor(
             forum_thread_id=forum_thread_id,
         )
 
-    # Step 6: Cache store + trace + scores + history
-    pre_agent_ms = float(rag_result_store.get("pre_agent_ms", 0.0) or 0.0)
-    await _supervisor_store_cache_and_trace(
-        bot,
-        message,
-        user_text=user_text,
-        response_text=response_text,
-        query_type=query_type,
-        role=role,
+    # Step 5: Final trace from truthful core metadata.
+    _supervisor_write_final_trace(
         pipeline_start=pipeline_start,
-        pre_agent_ms=pre_agent_ms,
         rag_result_store=rag_result_store,
         root_trace_metadata=root_trace_metadata,
-        user_id=user_id,
-        session_id=session_id,
-        messages=messages,
     )
 
     return response_text

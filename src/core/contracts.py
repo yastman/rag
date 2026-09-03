@@ -122,8 +122,11 @@ class AssistantResult:
 
     Grounding metadata (issue #3200): ``grounding_mode``, ``grounded``, and
     ``safe_fallback_used`` record the grounding decision behind
-    ``response_text``; ``usage`` records provider token usage. All of them are
-    ``None``/empty when the boundary cannot know them (cache hits, errors).
+    ``response_text``; ``usage`` records provider token usage. Cache-safety
+    metadata (issue #3208): ``legal_answer_safe`` and
+    ``semantic_cache_safe_reuse`` record the generation-time safety verdicts
+    that gate semantic-cache reuse. All of them are ``None``/empty when the
+    boundary cannot know them (cache hits, errors).
     """
 
     response_text: str
@@ -143,6 +146,8 @@ class AssistantResult:
     grounding_mode: str | None = None
     grounded: bool | None = None
     safe_fallback_used: bool = False
+    legal_answer_safe: bool | None = None
+    semantic_cache_safe_reuse: bool | None = None
     usage: dict[str, int] = field(default_factory=dict)
 
 
