@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,6 +13,7 @@ from litellm.exceptions import APIConnectionError
 from src.adapters.llm.base import LLMConnectionError
 from src.runtime.generation.contracts import GenerationRequest
 from src.runtime.generation.service import generate_answer_stream
+from src.runtime.llm.router import LiteLlmClient
 from src.runtime.services.coverage_mode import CoverageDecision
 from src.runtime.services.response_style_detector import StyleInfo
 
@@ -142,3 +145,95 @@ async def test_generate_answer_stream_connection_error_yields_structured_fallbac
     with pytest.raises(LLMConnectionError):
         async for _chunk in generate_answer_stream(request, metadata_out):
             pass
+
+
+# ---------------------------------------------------------------------------
+# Real-client streaming canary (review C1, #3223)
+# ---------------------------------------------------------------------------
+
+
+class _StubStreamRouter:
+    """Router stand-in returning a native chunk async-generator per call."""
+
+    def __init__(self, chunks: list[SimpleNamespace]) -> None:
+        self.chunks = chunks
+        self.calls: list[dict[str, Any]] = []
+
+    async def acompletion(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+
+        async def _stream() -> AsyncIterator[SimpleNamespace]:
+            for chunk in self.chunks:
+                yield chunk
+
+        return _stream()
+
+
+def _stream_chunk(text: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(delta=SimpleNamespace(content=text))],
+        model="stub-model",
+        usage=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_answer_stream_drives_real_lite_llm_client_without_stream_collision() -> (
+    None
+):
+    """Canary: stream a full answer through a REAL LiteLlmClient (stubbed Router only).
+
+    The reviewed C1 regression — the call site passed ``"stream": True`` in
+    ``stream_create_kwargs`` while ``LiteLlmClient.stream()`` also forces
+    ``stream=True`` — raised ``TypeError: got multiple values for keyword
+    argument 'stream'`` on every real streaming request. Mocked
+    ``client.stream`` stubs hid it, so this test exercises the genuine
+    boundary and asserts chunks arrive with no TypeError.
+    """
+    router = _StubStreamRouter([_stream_chunk("Часть "), _stream_chunk("2")])
+    llm = LiteLlmClient(router=router, default_model="gpt-4o-mini", timeout=5)
+
+    config = MagicMock()
+    config.show_sources = True
+    config.response_style_enabled = False
+    config.response_style_shadow_mode = False
+    config.generate_max_tokens = 128
+    config.domain = "test"
+    config.llm_model = "gpt-4o-mini"
+    config.llm_temperature = 0.0
+    config.get_reasoning_kwargs = MagicMock(return_value={})
+    config.create_llm = MagicMock(return_value=llm)
+
+    lf_client = MagicMock()
+    metadata_out: dict[str, object] = {}
+    _PipelineMetrics.metric = _Metrics()
+
+    request = GenerationRequest(
+        query="Test query",
+        documents=[{"content": "some context", "score": 0.9, "metadata": {}}],
+        raw_messages=[{"role": "user", "content": "Test query"}],
+        latency_stages={},
+        llm_call_count=0,
+        grounding_mode="default",
+        grade_confidence=0.9,
+        config=config,
+        extra_kwargs={
+            "lf_client": lf_client,
+            "style_detector": _StyleDetector(),
+            "detect_coverage_mode": lambda _query: CoverageDecision(False, None),
+            "PipelineMetrics": _PipelineMetrics,
+        },
+    )
+
+    chunks = [chunk async for chunk in generate_answer_stream(request, metadata_out)]
+
+    assert chunks == ["Часть ", "2"]
+    assert metadata_out["response"] == "Часть 2"
+    assert metadata_out["streaming_enabled"] is True
+    assert metadata_out["safe_fallback_used"] is False
+    assert metadata_out["llm_provider_model"] == "stub-model"
+    assert metadata_out["llm_call_count"] == 1
+    # The client owns the stream flag: exactly one forced `stream=True` reaches the Router.
+    assert len(router.calls) == 1
+    assert router.calls[0]["stream"] is True
+    assert router.calls[0]["stream_options"] == {"include_usage": True}

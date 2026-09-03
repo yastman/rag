@@ -167,6 +167,23 @@ def normalize_connection_error(exc: BaseException) -> LLMConnectionError | None:
     return None
 
 
+# Shim-era kwargs the OpenAI-shaped client used to accept and silently drop.
+# The native boundary rejects them loudly so they can never reach the SDK.
+_UNSUPPORTED_SHIM_KWARGS: dict[str, str] = {
+    "name": "pass observation_name= instead (observability metadata, never forwarded to the SDK)",
+    "max_retries": "retries are owned by the Router configuration (num_retries), not per-request",
+}
+
+
+def _reject_shim_kwargs(kwargs: dict[str, Any]) -> None:
+    """Raise a clear TypeError when a shim-era kwarg reaches the boundary."""
+    for kwarg, hint in _UNSUPPORTED_SHIM_KWARGS.items():
+        if kwarg in kwargs:
+            raise TypeError(
+                f"LiteLlmClient got unsupported shim-era keyword argument {kwarg!r}: {hint}"
+            )
+
+
 @dataclass(slots=True)
 class LiteLlmClient:
     """Native async LiteLLM SDK boundary over the process-local Router.
@@ -181,7 +198,8 @@ class LiteLlmClient:
 
     ``observation_name`` is call-site observability metadata only; it is
     logged and never forwarded to the SDK. All other kwargs pass through to
-    ``acompletion`` unchanged.
+    ``acompletion`` unchanged. Shim-era kwargs (``name``, ``max_retries``)
+    are rejected with a clear error.
     """
 
     router: Router
@@ -197,6 +215,7 @@ class LiteLlmClient:
         **kwargs: Any,
     ) -> Any:
         """Run one native ``Router.acompletion`` call and return its response."""
+        _reject_shim_kwargs(kwargs)
         target_model = model or self.default_model
         if observation_name:
             logger.debug("LLM completion '%s' (model=%s)", observation_name, target_model)
@@ -232,7 +251,13 @@ class LiteLlmClient:
         observation_name: str | None = None,
         **kwargs: Any,
     ) -> Any:
-        """Return the native async chunk iterator from a streaming completion."""
+        """Return the native async chunk iterator from a streaming completion.
+
+        This method owns the ``stream`` flag: a caller-supplied ``stream``
+        kwarg is dropped here instead of colliding with the forced value
+        (#3223 review C1).
+        """
+        kwargs.pop("stream", None)
         return await self.completion(
             messages=messages,
             model=model,

@@ -174,3 +174,37 @@ def test_normalize_connection_error_maps_only_connection_failures() -> None:
     assert isinstance(normalized, LLMConnectionError)
     assert normalized.raw_error is connection_exc
     assert normalize_connection_error(RuntimeError("other")) is None
+
+
+@pytest.mark.asyncio
+async def test_stream_owns_stream_flag_and_drops_caller_supplied_value() -> None:
+    """C1 regression: a caller-supplied `stream` kwarg must not collide with the forced flag."""
+    router = DummyRouter(response="native-async-iterator")
+    client = create_llm_client(model="gpt-4o-mini", router=router, timeout=12)
+
+    stream = await client.stream(
+        messages=[{"role": "user", "content": "hi"}],
+        stream=True,  # shim-era habit; the client owns this flag
+        stream_options={"include_usage": True},
+    )
+
+    assert stream == "native-async-iterator"
+    kwargs = router.acompletion.await_args.kwargs
+    assert kwargs["stream"] is True  # forced exactly once — no TypeError
+    assert kwargs["stream_options"] == {"include_usage": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shim_kwarg", ["name", "max_retries"])
+async def test_completion_rejects_shim_era_kwargs(shim_kwarg: str) -> None:
+    """Shim-era kwargs are rejected loudly instead of silently reaching the SDK."""
+    router = DummyRouter()
+    client = create_llm_client(model="gpt-4o-mini", router=router, timeout=12)
+
+    with pytest.raises(TypeError, match="shim-era keyword argument"):
+        await client.completion(
+            messages=[{"role": "user", "content": "hi"}],
+            **{shim_kwarg: "generate-answer"},
+        )
+
+    router.acompletion.assert_not_awaited()

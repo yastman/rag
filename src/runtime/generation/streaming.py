@@ -271,12 +271,12 @@ async def generate_answer_stream(
     llm = config.create_llm(auto_trace=False)
     t_request_start = time.monotonic()
 
+    # `stream` is owned by LiteLlmClient.stream() — never passed as a kwarg.
     stream_create_kwargs: dict[str, Any] = {
         "model": config.llm_model,
         "messages": llm_messages,
         "temperature": effective_temperature,
         "max_tokens": max_tokens,
-        "stream": True,
         "stream_options": {"include_usage": True},
         **config.get_reasoning_kwargs(),
     }
