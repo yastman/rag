@@ -1064,7 +1064,12 @@ ingest-unified-logs: ## Show ingestion service logs
 # QDRANT BACKUP
 # =============================================================================
 
-.PHONY: qdrant-audit-indexes qdrant-backup qdrant-cleanup demo-bootstrap demo-verify
+.PHONY: qdrant-audit-indexes qdrant-ensure-indexes qdrant-backup qdrant-cleanup demo-bootstrap demo-verify
+
+qdrant-ensure-indexes: ## Ensure contract payload indexes for BOTH product collections (non-destructive, #3202)
+	@echo "$(BLUE)Ensuring Qdrant payload indexes (knowledge + apartments)...$(NC)"
+	@$(ENV_LOAD) uv run python -m scripts.qdrant_ensure_indexes
+	@echo "$(GREEN)✓ Qdrant payload indexes ensured$(NC)"
 
 demo-bootstrap: ## Idempotent demo setup/ingest/verify for both Qdrant collections (#3202)
 	@echo "$(BLUE)Bootstrapping demo data for both Qdrant collections...$(NC)"

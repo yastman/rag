@@ -206,7 +206,7 @@ class TestVerifyReady:
 
         assert [item.ok for item in readiness] == [True, True]
         knowledge_probes = readiness[0].probe_results
-        assert "known-corpus:article_115" in knowledge_probes
+        assert "demo-corpus:article_115" in knowledge_probes
         apartments_probes = readiness[1].probe_results
         assert any(name.startswith("shipped-listing:") for name in apartments_probes)
         assert (
@@ -236,7 +236,7 @@ class TestVerifyReady:
             enforced = [
                 name
                 for name in item.probe_results
-                if name.startswith(("known-corpus", "shipped-listing"))
+                if name.startswith(("demo-corpus", "shipped-listing"))
             ]
             assert enforced == []
 

@@ -429,10 +429,16 @@ class TestShippedDemoFixtures:
             "Sample Sea Residence", "A", "101"
         )
 
-    def test_knowledge_probes_start_with_known_corpus_question_source(self):
+    def test_knowledge_probes_anchor_on_shipped_corpus_document(self):
+        from src.runtime.qdrant.readiness import DEMO_CORPUS_ANCHOR_DOC_ID
+
         probes = knowledge_demo_probes()
-        assert probes[0].name == "known-corpus:article_115"
-        assert probes[0].filters == {"metadata.id": "article_115"}
+        # Honest attribution: the anchor is the shipped demo corpus document,
+        # NOT the #3200 known-corpus fixture (sunny_beach_studio), which is a
+        # retrieval stub and not part of the shipped Qdrant data.
+        assert DEMO_CORPUS_ANCHOR_DOC_ID == "article_115"
+        assert probes[0].name == f"demo-corpus:{DEMO_CORPUS_ANCHOR_DOC_ID}"
+        assert probes[0].filters == {"metadata.id": DEMO_CORPUS_ANCHOR_DOC_ID}
         assert all(p.expect_results for p in probes)
 
     def test_apartment_probes_cover_every_shipped_row(self):

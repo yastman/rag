@@ -260,13 +260,19 @@ def apartments_contract() -> CollectionContract:
 #: Point-id namespace so demo corpus points are deterministic and detectable.
 DEMO_NAMESPACE = uuid.UUID("7ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
-#: Shipped demo knowledge corpus document ids.
+#: Shipped demo knowledge corpus document ids (Ukrainian legal-code samples).
 KNOWLEDGE_DEMO_DOC_IDS = ("article_115", "article_185", "article_190")
 
-#: The known-corpus question (#3200 contract): "Яке покарання за умисне
-#: вбивство?" — grounded in the shipped article_115 source document.
-KNOWN_CORPUS_QUESTION = "Яке покарання за умисне вбивство?"
-KNOWN_CORPUS_SOURCE_DOC_ID = "article_115"
+#: Anchor document of the shipped demo corpus (first probe below).
+#:
+#: Attribution note: this is NOT the #3200 known-corpus contract fixture. The
+#: live question locked by #3200 — "Сколько стоит студия у моря в Sunny
+#: Beach?" with doc id ``sunny_beach_studio`` — exists only as a retrieval
+#: stub in tests/characterization/test_grounded_qa_acceptance.py and in the
+#: live BGE/Qdrant probe; the shipped Qdrant demo corpus
+#: (data/test/sample_articles.json) does not contain it. These probes prove
+#: the corpus this repo actually ships.
+DEMO_CORPUS_ANCHOR_DOC_ID = "article_115"
 
 
 def knowledge_demo_point_id(doc_id: str) -> str:
@@ -277,15 +283,21 @@ def knowledge_demo_point_id(doc_id: str) -> str:
 def knowledge_demo_probes() -> tuple[DemoProbe, ...]:
     """Probes proving the shipped demo corpus is present and addressable.
 
-    The first probe is the known-corpus question's source document: it proves
-    the exact data that must ground the frozen #3200 answer contract.
+    The first probe anchors on :data:`DEMO_CORPUS_ANCHOR_DOC_ID` — the
+    document a corpus-grounded question must be able to find in the prepared
+    data. A semantic (embedding-backed) proof of the live #3200 known-corpus
+    question is a separate live-probe concern, not part of this gate.
     """
+    ordered = (
+        DEMO_CORPUS_ANCHOR_DOC_ID,
+        *(d for d in KNOWLEDGE_DEMO_DOC_IDS if d != DEMO_CORPUS_ANCHOR_DOC_ID),
+    )
     return tuple(
         DemoProbe(
-            name=f"known-corpus:{doc_id}",
+            name=f"demo-corpus:{doc_id}",
             filters={"metadata.id": doc_id},
         )
-        for doc_id in (KNOWN_CORPUS_SOURCE_DOC_ID, *KNOWLEDGE_DEMO_DOC_IDS)
+        for doc_id in ordered
     )
 
 

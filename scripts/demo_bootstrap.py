@@ -15,7 +15,8 @@ and the bot preflight) can pass:
    collections are preserved untouched.
 3. **Verify** — run the readiness contracts plus deterministic demo probes:
    every shipped apartment row must be reachable through the production filter
-   path, the known-corpus question's source document must be present, and the
+   path, the shipped demo corpus documents (anchor ``article_115``) must be
+   present, and the
    intentional no-result probe must stay empty — proving advertised queries
    against the exact prepared data without needing the embedding service.
 
