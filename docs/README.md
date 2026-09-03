@@ -61,7 +61,6 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 |---|---|
 | Services overview · local rules | [`../services/README.md`](../services/README.md) · [`../services/AGENTS.override.md`](../services/AGENTS.override.md) |
 | BGE-M3 embeddings API | [`../services/bge-m3-api/README.md`](../services/bge-m3-api/README.md) · [`../services/bge-m3-api/AGENTS.override.md`](../services/bge-m3-api/AGENTS.override.md) |
-| Docling (native SDK, in-process) | [`../src/ingestion/docling_native.py`](../src/ingestion/docling_native.py) — docling-serve removed (phase_6508bc74ca4a) |
 | Docker / Compose assets | [`../docker/README.md`](../docker/README.md) · [`../docker/ingestion/README.md`](../docker/ingestion/README.md) · [`../docker/postgres/README.md`](../docker/postgres/README.md) |
 
 ## Tests, scripts, audits
@@ -77,8 +76,7 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 | You want… | Read |
 |---|---|
 | Local setup + the validation ladder | [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) |
-| Ingestion pipeline (unified, docling, idempotency) | [`INGESTION.md`](INGESTION.md) |
-| Docling architecture authority (in-process SDK, prohibited patterns) | [`DOCLING_ARCHITECTURE_AUTHORITY.md`](DOCLING_ARCHITECTURE_AUTHORITY.md) |
+| Ingestion pipeline (unified, Markdown-only, idempotency) | [`INGESTION.md`](INGESTION.md) |
 | Operational runbooks (services, preflight, self-hosted runner) | [`runbooks/README.md`](runbooks/README.md) |
 | Writing tests (tiers, markers, fixtures) | [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md) |
 

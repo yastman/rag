@@ -46,7 +46,7 @@ kernel lives in `src/runtime/` and does not import `telegram_bot.*`.
 - **PostgreSQL** — domain state (users, leads, funnel, favorites)
 - **Redis** — caching and rate limiting
 - **BGE-M3 / Voyage** — embedding providers
-- **Docling** — in-process document parsing (native SDK)
+- **Markdown-only ingestion** — stdlib document parsing (#3235)
 - Structured logging — observability
 
 ## Focused Checks

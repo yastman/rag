@@ -109,7 +109,7 @@ telegram_bot*, *Core contracts layer is import-independent*, *src must not impor
 | `src/adapters/embeddings/` | `bge_m3.py` (`BgeM3EmbeddingProvider` — canonical), `openai_embeddings.py`, `local_bge_m3.py` (**dead**), `base.py` |
 | `src/adapters/llm/` | `litellm_provider.py`, `base.py` |
 | `src/services/` | `bge_m3_client.py` (HTTP SDK for BGE-M3), `_retry.py`, `content_loader.py`, `vectorizers.py`; `kommo_*` (**dead**, P26), `voyage.py` (**dead**) |
-| `src/ingestion/` | `docling_native.py` (live parse+chunk), `docling_common.py`, `chunker.py`; `unified/` (the live pipeline); `document_parser.py`/`indexer.py`/`hybrid_chunker.py`/`contextual_*` (**dead**) |
+| `src/ingestion/` | `markdown.py` (live parse+chunk, stdlib, #3235), `chunker.py` (shared `Chunk`); `unified/` (the live pipeline) |
 | `src/ingestion/unified/` | `flow.py` (stateless scan→parse→embed→upsert), `qdrant_writer.py` (27k), `config.py`, `manifest.py`, `commands.py`, `colbert_backfill.py` |
 | `src/models/apartment.py` | Domain model (HardFilters etc.); `embedding_model.py` (**dead** in-process singletons) |
 | `src/security/pii_redaction.py` | `PIIRedactor` — query PII redaction (on the hot path) |
@@ -172,7 +172,7 @@ there is no external state DB (the former Postgres orchestrator was removed).
 
 **Extras:**
 - `telegram` — aiogram, aiogram-dialog, fluentogram, cachetools, asyncpg, uvloop **+ langgraph, langchain-core (dead, being removed P26)**.
-- `docling-native` — pymupdf (dead-only use), docling, docling-core[chunking], transformers, fastembed.
+- `bge-extras` — fastapi test dependencies for the BGE-M3 service (`docling-native` removed by #3235).
 - `ml-local` — FlagEmbedding, torch, torchvision, sentence-transformers, scipy **(entirely dead — no live import; removable, saves multi-GB torch)**.
 - `eval` — ragas **(dead, CVE-isolated, being removed)**.
 - `bge-extras` — fastapi, httpx (service tests only).
@@ -190,8 +190,8 @@ deptry, pip-audit, import-linter, radon, interrogate.
 
 Deterministic, idempotent, in-process:
 
-- **Docling native SDK** parses documents in-process (`DocumentConverter` + `HybridChunker`,
-  tokenizer `BAAI/bge-m3`, `max_tokens=512`) — no HTTP sidecar (`docling-serve` removed).
+- **Markdown-only stdlib parser** (`markdown.py`, #3235) parses documents in-process —
+  no converter SDK, no HTTP sidecar (`docling-serve` and the Docling SDK removed by #3235).
 - SHA-256 file identity: re-ingesting an unchanged file is a no-op; a changed file's chunks
   are atomically replaced by source path.
 - Chunks are embedded via the BGE-M3 HTTP service (`/encode/hybrid`, one forward pass →

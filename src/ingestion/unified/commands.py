@@ -80,7 +80,6 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     """Check that all ingestion dependencies are reachable."""
     import httpx
 
-    from src.ingestion.docling_native import NativeDoclingAdapter
     from src.ingestion.unified.config import UnifiedConfig
 
     config = UnifiedConfig()
@@ -135,16 +134,6 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
         except Exception as e:
             results["bge_m3_sparse"] = False
             print(f"  [FAIL] BGE-M3 sparse ({config.bge_m3_url}) — {e}")
-
-        # Docling backend
-        if config.docling_backend == "docling_native":
-            try:
-                NativeDoclingAdapter(max_tokens=config.max_tokens_per_chunk)._get_converter()
-                results["docling"] = True
-                print("  [OK] Docling native backend available")
-            except Exception as e:
-                results["docling"] = False
-                print(f"  [FAIL] Docling native backend — {e}")
 
     # Required env vars
     required_vars = ["QDRANT_URL", "BGE_M3_URL"]

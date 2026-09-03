@@ -19,7 +19,6 @@ cp .env.example .env     # fill in credentials (Telegram token, API keys)
 uv sync                  # core + dev tools (PEP 735 dev group)
 uv sync --extra telegram # bot dependencies (aiogram, LangGraph)
 make setup-hooks         # install commit and push hooks
-# optional: uv sync --extra docling-native   # Docling + PyMuPDF ingestion pipeline
 ```
 
 ### Windows (PowerShell)
@@ -31,7 +30,6 @@ uv sync                            # core + dev tools (Python 3.12)
 uv sync --extra telegram           # bot dependencies
 uv run pre-commit install
 uv run pre-commit install --hook-type pre-push
-# optional: uv sync --extra docling-native   # Docling + PyMuPDF ingestion
 # Preflight validation:
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Static
 ```

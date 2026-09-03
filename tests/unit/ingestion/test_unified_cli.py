@@ -10,9 +10,6 @@ import httpx
 import pytest
 
 
-pytestmark = pytest.mark.requires_extras
-
-
 # ---------------------------------------------------------------------------
 # Arg parsing
 # ---------------------------------------------------------------------------
@@ -176,12 +173,7 @@ def _make_config(**overrides):
     config.bge_m3_url = overrides.get("bge_m3_url", "http://bge:8000")
     config.database_url = overrides.get("database_url", "postgresql://test@localhost/db")
     config.sync_dir = overrides.get("sync_dir", Path("/tmp/sync"))
-    config.supported_extensions = overrides.get(
-        "supported_extensions",
-        frozenset(
-            {".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".md", ".txt", ".html", ".htm", ".csv"}
-        ),
-    )
+    config.supported_extensions = overrides.get("supported_extensions", frozenset({".md"}))
     return config
 
 
@@ -243,10 +235,7 @@ class TestCmdPreflight:
     )
     async def test_qdrant_fail_returns_1(self, args, capsys):
         mock_client = AsyncMock()
-        mock_client.get.side_effect = [
-            _fail_response(404),  # qdrant collection
-            _ok_response(),  # docling health
-        ]
+        mock_client.get.side_effect = [_fail_response(404)]  # qdrant collection
         mock_client.post.return_value = _ok_response()
 
         config = _make_config()
@@ -310,7 +299,16 @@ class TestCmdPreflight:
         },
         clear=True,
     )
-    async def test_native_docling_backend_skips_http_healthcheck(self, args, capsys, tmp_path):
+    @patch.dict(
+        "os.environ",
+        {
+            "QDRANT_URL": "http://qdrant:6333",
+            "BGE_M3_URL": "http://bge:8000",
+        },
+        clear=True,
+    )
+    async def test_preflight_has_no_converter_check(self, args, capsys, tmp_path):
+        """Markdown-only ingestion (#3235): preflight never probes a converter."""
         mock_client = AsyncMock()
         mock_client.get.return_value = _ok_response({"result": {"points_count": 42}})
         mock_client.post.return_value = _ok_response()
@@ -320,14 +318,11 @@ class TestCmdPreflight:
         (sync_dir / "knowledge.md").write_text("# test", encoding="utf-8")
 
         config = _make_config(sync_dir=sync_dir)
-        config.docling_backend = "docling_native"
 
         with (
             patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
-            patch("src.ingestion.docling_native.NativeDoclingAdapter") as MockAdapter,
             patch("httpx.AsyncClient") as MockClient,
         ):
-            MockAdapter.return_value._get_converter.return_value = object()
             mock_ctx = AsyncMock()
             mock_ctx.__aenter__.return_value = mock_client
             mock_ctx.__aexit__.return_value = False
@@ -339,8 +334,8 @@ class TestCmdPreflight:
 
         assert result == 0
         output = capsys.readouterr().out
-        assert "Docling native backend available" in output
-        mock_client.get.assert_called_once()
+        assert "Docling" not in output
+        assert "docling" not in output
 
     async def test_missing_env_vars_warned(self, args, capsys):
         mock_client = AsyncMock()

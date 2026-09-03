@@ -2,7 +2,10 @@
 # Copyright (c) 2025 RAG-Fresh contributors.
 """Stateless unified ingestion flow.
 
-Scan ``sync_dir`` → parse via Docling → embed via BGE-M3 → upsert into Qdrant.
+Scan ``sync_dir`` → parse Markdown → embed via BGE-M3 → upsert into Qdrant.
+
+Production ingestion is Markdown-only (#3235): exactly ``.md`` files are
+accepted, parsed by the stdlib :class:`~src.ingestion.markdown.MarkdownParser`.
 
 Idempotency lives entirely in Qdrant: every point carries
 ``metadata.content_hash`` (written by :class:`QdrantHybridWriter`). Before
@@ -35,7 +38,7 @@ from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
 
 if TYPE_CHECKING:
-    from src.ingestion.docling_native import NativeDoclingAdapter
+    from src.ingestion.markdown import MarkdownParser
     from src.ingestion.unified.config import UnifiedConfig
 
 
@@ -43,16 +46,7 @@ logger = logging.getLogger(__name__)
 
 
 MIME_TYPES = {
-    ".pdf": "application/pdf",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".doc": "application/msword",
-    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".md": "text/markdown",
-    ".txt": "text/plain",
-    ".html": "text/html",
-    ".htm": "text/html",
-    ".csv": "text/csv",
 }
 
 
@@ -127,11 +121,11 @@ class IngestionResult:
     error_details: list[str] = field(default_factory=list)
 
 
-def _make_docling(config: UnifiedConfig) -> NativeDoclingAdapter:
-    """Construct the configured Docling backend (native only)."""
-    from src.ingestion.docling_native import NativeDoclingAdapter
+def _make_parser(config: UnifiedConfig) -> MarkdownParser:
+    """Construct the Markdown parser with the configured chunk budget."""
+    from src.ingestion.markdown import MarkdownParser
 
-    return NativeDoclingAdapter(max_tokens=config.max_tokens_per_chunk)
+    return MarkdownParser(max_tokens=config.max_tokens_per_chunk)
 
 
 def _already_indexed(client: object, collection_name: str, file_id: str, content_hash: str) -> bool:
@@ -166,7 +160,7 @@ def _already_indexed(client: object, collection_name: str, file_id: str, content
 def _ingest_directory(
     config: UnifiedConfig,
     writer: QdrantHybridWriter,
-    docling: NativeDoclingAdapter,
+    parser: MarkdownParser,
 ) -> IngestionResult:
     """Scan sync_dir once and upsert every new/changed supported file."""
     result = IngestionResult()
@@ -187,14 +181,14 @@ def _ingest_directory(
                 result.skipped += 1
                 continue
 
-            docling_chunks = docling.chunk_file_sync(path)
-            if not docling_chunks:
+            parsed_chunks = parser.chunk_file_sync(path)
+            if not parsed_chunks:
                 logger.warning("No chunks from: %s", rel)
                 result.skipped += 1
                 continue
 
-            chunks = docling.to_ingestion_chunks(
-                docling_chunks,
+            chunks = parser.to_ingestion_chunks(
+                parsed_chunks,
                 source=rel,
                 source_type=path.suffix.lstrip("."),
             )
@@ -263,8 +257,8 @@ def run_once(config: UnifiedConfig | None = None) -> IngestionResult:
     try_update_ingestion_trace(command="flow-run-once", status="started")
     try:
         writer = _build_writer(config)
-        docling = _make_docling(config)
-        result = _ingest_directory(config, writer, docling)
+        parser = _make_parser(config)
+        result = _ingest_directory(config, writer, parser)
     except Exception as exc:
         try_update_ingestion_trace(
             command="flow-run-once",

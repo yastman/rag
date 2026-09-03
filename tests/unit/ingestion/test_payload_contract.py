@@ -5,13 +5,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 from src.services.bge_m3_client import HybridResult
-
-
-pytestmark = pytest.mark.requires_extras
 
 
 class TestPayloadContract:

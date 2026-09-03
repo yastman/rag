@@ -44,7 +44,7 @@ Services are gated by profiles. Run only what you need.
 | `qdrant` | `qdrant/qdrant:v1.18.3` | default | Vector store — dense, sparse, ColBERT retrieval; storage config (`on_disk_payload`, `indexing_threshold_kb`) caps growth |
 | `bge-m3` | built locally | default | Self-hosted BGE-M3 ONNX embedding API |
 | `bot` | built locally | `bot` | Telegram bot process |
-| `ingestion` | built locally | `ingest` | Unified ingestion pipeline (Docling runs in-process) |
+| `ingestion` | built locally | `ingest` | Unified ingestion pipeline (Markdown-only, stdlib parsing) |
 
 ## Ports (dev only — `compose.dev.yml`)
 
@@ -70,7 +70,7 @@ make core-up
 # Core + bot (Compose-managed bot)
 make docker-bot-up
 
-# Core + ingestion (docling + ingestion pipeline)
+# Core + ingestion (lean Markdown-only ingestion pipeline)
 make docker-ingest-up
 
 # Full stack (all profiles)

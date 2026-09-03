@@ -11,11 +11,6 @@ from pathlib import Path
 from threading import Event, Thread
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-
-pytestmark = pytest.mark.requires_extras
-
 from src.ingestion.unified.config import UnifiedConfig
 
 
@@ -28,11 +23,11 @@ def _make_writer() -> MagicMock:
     return writer
 
 
-def _make_docling() -> MagicMock:
-    docling = MagicMock()
-    docling.chunk_file_sync.return_value = [object()]
-    docling.to_ingestion_chunks.return_value = [MagicMock()]
-    return docling
+def _make_parser() -> MagicMock:
+    parser = MagicMock()
+    parser.chunk_file_sync.return_value = [object()]
+    parser.to_ingestion_chunks.return_value = [MagicMock()]
+    return parser
 
 
 def test_run_once_ingests_new_file(tmp_path: Path) -> None:
@@ -40,17 +35,17 @@ def test_run_once_ingests_new_file(tmp_path: Path) -> None:
     config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
     writer = _make_writer()
     writer.client.scroll.return_value = ([], None)  # nothing indexed yet
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
-        patch("src.ingestion.unified.flow._make_docling", return_value=docling),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
     ):
         from src.ingestion.unified.flow import run_once
 
         result = run_once(config)
 
-    docling.chunk_file_sync.assert_called_once()
+    parser.chunk_file_sync.assert_called_once()
     writer.upsert_chunks_sync.assert_called_once()
     assert result.processed == 1
     assert result.skipped == 0
@@ -61,17 +56,17 @@ def test_run_once_skips_already_indexed_file(tmp_path: Path) -> None:
     config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
     writer = _make_writer()
     writer.client.scroll.return_value = ([MagicMock()], None)  # already indexed
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
-        patch("src.ingestion.unified.flow._make_docling", return_value=docling),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
     ):
         from src.ingestion.unified.flow import run_once
 
         result = run_once(config)
 
-    docling.chunk_file_sync.assert_not_called()
+    parser.chunk_file_sync.assert_not_called()
     writer.upsert_chunks_sync.assert_not_called()
     assert result.processed == 0
     assert result.skipped == 1
@@ -82,17 +77,17 @@ def test_run_once_ignores_unsupported_extensions(tmp_path: Path) -> None:
     config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
     writer = _make_writer()
     writer.client.scroll.return_value = ([], None)
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
-        patch("src.ingestion.unified.flow._make_docling", return_value=docling),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
     ):
         from src.ingestion.unified.flow import run_once
 
         result = run_once(config)
 
-    docling.chunk_file_sync.assert_not_called()
+    parser.chunk_file_sync.assert_not_called()
     assert result.processed == 0
     assert result.skipped == 0
 
@@ -113,11 +108,11 @@ def test_modified_file_replaces_before_removing_old_chunks(tmp_path: Path) -> No
     writer.delete_file_sync.side_effect = lambda **kwargs: order.append(
         f"delete:{kwargs['file_id']}"
     )
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
-        patch("src.ingestion.unified.flow._make_docling", return_value=docling),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
     ):
         from src.ingestion.unified.flow import run_once
 
@@ -144,11 +139,11 @@ def test_modified_file_keeps_old_chunks_when_replacement_fails(tmp_path: Path) -
     writer.upsert_chunks_sync.return_value = MagicMock(
         points_upserted=0, points_deleted=0, errors=["BGE-M3 unavailable"]
     )
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
-        patch("src.ingestion.unified.flow._make_docling", return_value=docling),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
     ):
         from src.ingestion.unified.flow import run_once
 
@@ -196,7 +191,7 @@ def test_concurrent_replacements_serialize_same_source(tmp_path: Path) -> None:
     writer.delete_file_sync.side_effect = lambda **kwargs: events.append(
         ("delete", str(kwargs["file_id"]))
     )
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow._already_indexed", return_value=False),
@@ -205,10 +200,10 @@ def test_concurrent_replacements_serialize_same_source(tmp_path: Path) -> None:
             side_effect=lambda _name, content: f"new-{content.decode()}",
         ),
     ):
-        first = Thread(target=_ingest_directory, args=(first_config, writer, docling))
+        first = Thread(target=_ingest_directory, args=(first_config, writer, parser))
         first.start()
         assert first_upsert_started.wait(timeout=5)
-        second = Thread(target=_ingest_directory, args=(second_config, writer, docling))
+        second = Thread(target=_ingest_directory, args=(second_config, writer, parser))
         second.start()
         release_first_upsert.set()
         first.join(timeout=5)
@@ -226,11 +221,11 @@ def test_run_once_passes_content_hash_to_payload(tmp_path: Path) -> None:
     config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
     writer = _make_writer()
     writer.client.scroll.return_value = ([], None)
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
-        patch("src.ingestion.unified.flow._make_docling", return_value=docling),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
     ):
         from src.ingestion.unified.flow import run_once
 

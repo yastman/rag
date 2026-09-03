@@ -72,8 +72,9 @@ def test_optional_extras_cover_platform_surfaces() -> None:
     extras = _project()["project"]["optional-dependencies"]
 
     assert {"aiogram", "aiogram-dialog", "fluentogram"}.issubset(_dep_names(extras["telegram"]))
-    assert {"docling", "fastembed"}.issubset(_dep_names(extras["docling-native"]))
-    assert "pymupdf" not in _dep_names(extras["docling-native"])  # removed with document_parser.py
+    # docling-native was removed by #3235: ingestion is Markdown-only stdlib.
+    assert "docling-native" not in extras
+    assert "pymupdf" not in _dep_names(extras.get("bge-extras", []))
 
 
 def test_archived_extras_removed_from_pyproject() -> None:
@@ -87,11 +88,14 @@ def test_archived_extras_removed_from_pyproject() -> None:
 
 
 def test_all_extra_includes_every_kept_runtime_surface() -> None:
-    """`uv sync --all-extras` should cover all kept surfaces after archival (#2640)."""
+    """`uv sync --all-extras` should cover all kept surfaces after archival (#2640, #3235)."""
     all_extra = " ".join(_project()["project"]["optional-dependencies"]["all"])
 
-    for name in ["core", "telegram", "docling-native"]:
+    for name in ["core", "telegram"]:
         assert name in all_extra, f"'all' extra must include '{name}'"
+    assert "docling-native" not in all_extra, (
+        "'all' extra must not include the removed docling-native surface (#3235)"
+    )
 
     for name in ARCHIVED_EXTRAS:
         assert name not in all_extra, (
