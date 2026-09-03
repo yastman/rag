@@ -113,4 +113,4 @@ is absent) exercises the live paths with `i3199-`-prefixed artifacts only:
 | --- | --- |
 | `pytest tests/characterization/test_redis_demo_behavior.py tests/unit/runtime/test_polling_lock.py tests/unit/integrations/test_polling_lock.py tests/unit/integrations/test_cache_layers.py` | focused lock/cache tests pass |
 | Live probes `tests/integration/test_redis_demo_probes.py` | healthy + degraded probes pass against local dev Redis (`i3199-` keys cleaned up) |
-| `make test-core` | 227 passed (baseline preserved) |
+| `make test-core` | 243 passed (227 baseline + 16 new characterization tests) |
