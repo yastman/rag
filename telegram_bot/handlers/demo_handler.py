@@ -11,9 +11,10 @@ keeps only:
 * ``handle_demo_apartments`` — the inline-button callback that opens the
   aiogram-dialog demo flow via ``dialog_manager.start(...)``.
 
-``transcribe_voice`` moved to
-:mod:`telegram_bot.services.voice_transcription` (#3238) so the catalog and
-demo dialogs share one import; it is re-exported here for compatibility.
+``transcribe_voice`` and ``voice_ready`` live in
+:mod:`telegram_bot.services.voice_transcription` (#3238, #3240) so the
+catalog and demo dialogs share one import; they are re-exported here for
+compatibility.
 
 The old ``handle_demo_example`` / ``handle_demo_search_text`` /
 ``handle_demo_search_voice`` / ``_run_demo_search`` / ``DemoStates``
@@ -33,7 +34,7 @@ from aiogram_dialog import DialogManager, ShowMode, StartMode
 from telegram_bot.callback_data import DemoCB
 from telegram_bot.dialogs.states import DemoSG
 from telegram_bot.keyboards.demo_keyboard import build_demo_menu
-from telegram_bot.services.voice_transcription import transcribe_voice
+from telegram_bot.services.voice_transcription import transcribe_voice, voice_ready
 
 
 logger = logging.getLogger(__name__)
@@ -67,9 +68,16 @@ async def handle_demo_apartments(
     )
 
 
-# Backward-compatible re-export (#3238): the implementation lives in
+# Backward-compatible re-exports (#3238, #3240): the implementations live in
 # telegram_bot.services.voice_transcription.
-__all__ = ["handle_demo_apartments", "handle_demo_button", "transcribe_voice"]
+
+
+__all__ = [
+    "handle_demo_apartments",
+    "handle_demo_button",
+    "transcribe_voice",
+    "voice_ready",
+]
 
 
 def create_demo_router() -> Router:

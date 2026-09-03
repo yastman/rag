@@ -241,7 +241,14 @@ class BotConfig(BaseSettings):
         default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
     )
 
-    # Voice transcription (optional-profile: voice; kept because bot.py reads these)
+    # Voice transcription — optional and configuration-driven (#3240). Voice
+    # input is exposed only when ``voice_enabled`` is set AND a transcription
+    # key (``llm_api_key``) is configured; otherwise dialogs fall back to the
+    # proven typed-input path.
+    voice_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("voice_enabled", "VOICE_ENABLED"),
+    )
     show_transcription: bool = Field(
         default=True,
         validation_alias=AliasChoices("show_transcription", "SHOW_TRANSCRIPTION"),
@@ -253,6 +260,11 @@ class BotConfig(BaseSettings):
     stt_model: str = Field(
         default="whisper",
         validation_alias=AliasChoices("stt_model", "STT_MODEL"),
+    )
+    # Whole voice-operation budget (Telegram download + provider STT call).
+    voice_timeout: int = Field(
+        default=30,
+        validation_alias=AliasChoices("voice_timeout", "VOICE_TIMEOUT"),
     )
 
     # Content filtering (#227)

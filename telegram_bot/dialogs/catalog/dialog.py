@@ -43,18 +43,34 @@ async def on_catalog_voice_input(
     _widget: MessageInput,
     manager: DialogManager,
 ) -> None:
+    """Voice in catalog windows — optional adapter with typed fallback (#3240).
+
+    Unconfigured/unready voice never blocks: the user is directed to typed
+    input, and transcription failures degrade to the same hint. Successful
+    transcriptions reuse the demo search path, so voice reaches the exact
+    catalog contract as text.
+    """
     manager.show_mode = ShowMode.NO_UPDATE
+    from telegram_bot.services.voice_transcription import voice_ready
+
     state = await _get_state(manager)
     if state is None:
         return
     manager.middleware_data.setdefault("state", state)
 
-    await message.answer("🎤 Распознаю голос...")
-    text = await transcribe_voice(message, llm=manager.middleware_data.get("llm"))
-    if not text:
-        await message.answer("Не удалось распознать речь. Попробуйте ещё раз.")
+    config = manager.middleware_data.get("bot_config")
+    if not voice_ready(config):
+        await message.answer("🎙 Голосовой ввод сейчас недоступен — напишите запрос текстом.")
         return
-    await message.answer(f"📝 Распознано: {text}")
+    await message.answer("🎤 Распознаю голос...")
+    text = await transcribe_voice(message, config=config)
+    if not text:
+        await message.answer(
+            "Не удалось распознать речь. Попробуйте ещё раз или напишите запрос текстом."
+        )
+        return
+    if getattr(config, "show_transcription", True):
+        await message.answer(f"📝 Распознано: {text}")
     await search_catalog_from_query(message=message, dialog_manager=manager, query=text)
 
 

@@ -24,7 +24,7 @@ from aiogram_dialog.widgets.text import Format
 from telegram_bot.dialogs.catalog import search_catalog_from_query
 from telegram_bot.dialogs.states import DemoSG
 from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
-from telegram_bot.services.voice_transcription import transcribe_voice
+from telegram_bot.services.voice_transcription import transcribe_voice, voice_ready
 
 
 logger = logging.getLogger(__name__)
@@ -51,11 +51,18 @@ async def intro_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
                 "Failed to get dynamic examples in demo dialog, using defaults", exc_info=True
             )
 
+    # Voice is optional (#3240): only advertise it when transcription is
+    # configured and ready; otherwise point users at typed input.
+    if voice_ready(dialog_manager.middleware_data.get("bot_config")):
+        input_hint = "Напишите текстом или отправьте голосовое сообщение.\n"
+    else:
+        input_hint = "Напишите запрос текстом.\n"
+
     return {
         "prompt": (
             "🏖 Подбор апартаментов\n\n"
-            "Напишите текстом или отправьте голосовое сообщение.\n"
-            "Или выберите пример:"
+            + input_hint
+            + "Или выберите пример:"
         ),
         "examples": examples,
     }
@@ -117,13 +124,26 @@ async def on_text_input(message: Message, _widget: MessageInput, manager: Dialog
 
 
 async def on_voice_input(message: Message, _widget: MessageInput, manager: DialogManager) -> None:
-    """Handle voice message in intro window — STT then apartment search."""
-    await message.answer("🎤 Распознаю голос...")
-    text = await transcribe_voice(message, llm=manager.middleware_data.get("llm"))
-    if not text:
-        await message.answer("Не удалось распознать речь. Попробуйте ещё раз.")
+    """Handle voice message in intro window — STT then apartment search.
+
+    Voice is optional (#3240): when not configured/ready the user is pointed
+    to typed input; transcription failures degrade to the same hint instead of
+    blocking. Successful transcriptions flow through the same catalog contract
+    as text input.
+    """
+    config = manager.middleware_data.get("bot_config")
+    if not voice_ready(config):
+        await message.answer("🎙 Голосовой ввод сейчас недоступен — напишите запрос текстом.")
         return
-    await message.answer(f"📝 Распознано: {text}")
+    await message.answer("🎤 Распознаю голос...")
+    text = await transcribe_voice(message, config=config)
+    if not text:
+        await message.answer(
+            "Не удалось распознать речь. Попробуйте ещё раз или напишите запрос текстом."
+        )
+        return
+    if getattr(config, "show_transcription", True):
+        await message.answer(f"📝 Распознано: {text}")
     await search_catalog_from_query(message=message, dialog_manager=manager, query=text)
 
 

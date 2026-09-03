@@ -20,9 +20,6 @@ EXCLUDE_DIRS = ("tests", ".venv")
 
 # Only these files are permitted to call update_current_span(level="ERROR"/"WARNING")
 ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
-    # Voice transcription error path (Whisper / LiteLLM failure) — span is
-    # re-raised so the outer voice-session trace records the failure (#1810).
-    "src/runtime/graph/nodes/transcribe.py": ["ERROR"],
     # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
     "src/runtime/integrations/cache.py": ["ERROR", "WARNING"],
