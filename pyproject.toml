@@ -7,7 +7,7 @@ dependencies = [
     # Core assistant/runtime path. `uv sync --no-dev` intentionally installs
     # only these lean dependencies; optional product surfaces live in extras.
     "openai",
-    "qdrant-client>=1.18.0",  # Vector database client (weighted RRF, relevance feedback)
+    "qdrant-client>=1.19.0",  # Vector database client (weighted RRF, relevance feedback)
     "redis>=7.1.0",
     "redisvl>=0.18.2",
     "pydantic>=2.13.5",        # DEP003: used directly in src/ and telegram_bot/ (#2822); #3228 unified floor
@@ -40,7 +40,7 @@ dependencies = [
 # are not already in [project.dependencies].
 core = [
     "openai",
-    "qdrant-client>=1.18.0",
+    "qdrant-client>=1.19.0",
     "redis>=7.1.0",
     "redisvl>=0.18.2",
     "pydantic>=2.13.5",
