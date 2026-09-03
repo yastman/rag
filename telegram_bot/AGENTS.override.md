@@ -5,19 +5,23 @@
 - Extends root `AGENTS.md` with bot-specific constraints.
 
 ## Local Rules
-- Preserve LangGraph node contract shapes (`state` fields, routing assumptions).
+- Preserve pipeline contract shapes (`PreAgentStateContract` fields in
+  `telegram_bot/pipelines/state_contract.py`, routing assumptions).
 - Keep service boundaries intact:
   - `telegram_bot/services/` for business logic.
   - `telegram_bot/integrations/` for wrappers/adapters.
-  - `telegram_bot/graph/nodes/` for pipeline steps.
+  - `src/runtime/graph/nodes/` for classify/guard/transcribe steps.
 - Avoid mixing transport-layer Telegram handling with retrieval/domain logic.
+- There is no `telegram_bot/graph/` tree: it was removed in #3220 along with
+  the graph-compat facade; route new work through assistant-core
+  (`src.core.assistant`) and `src/runtime/pipeline/`.
 
 ## Required Validation
 - Always run fast checks:
   - `make check`
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
-- For graph flow edits, run:
-  - `uv run pytest tests/integration/test_graph_paths.py -n auto --dist=worksteal -q`
+- For pipeline/supervisor flow edits, run `make test-core` plus the
+  no-service integration/smoke lane (`make test-no-service-lane`).
 - For cache/search/rerank behavior edits, run targeted suites from `tests/unit/` and affected integration tests.
 
 ## Observability

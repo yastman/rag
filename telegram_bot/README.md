@@ -34,7 +34,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 # Lint and type-check
 make check
 
-# Core gate (fast) + broader unit/graph gate
+# Core gate (fast) + no-service integration/smoke lane
 make test-core
 make test
 ```
@@ -44,12 +44,11 @@ make test
 | Directory | Concern |
 |-----------|---------|
 | `handlers/` | Per-feature handlers extracted from `bot.py` (#2983): commands, catalog, favorites, handoff, CRM callbacks, feedback |
-| `agents/` | Agent SDK tools and RAG pipeline functions |
+| `agents/` | Agent SDK tools (RAG retrieval delegated to `src/runtime/pipeline/`) |
 | `dialogs/` | aiogram-dialog packages: catalog, filter, funnel + demo/viewing/settings |
 | `pipeline/` | Supervisor + pre-agent + streaming (agent orchestration) |
 | `pipelines/` | Client-direct pipeline entrypoints |
 | `lifecycle/` | Bot startup/teardown, postgres bootstrap, service wiring |
-| `graph/` | Thin graph state + middleware (nodes moved to `src/runtime/graph/`) |
 | `integrations/` | Embeddings, cache, prompt manager, memory (several are shims to `src.runtime.integrations`) |
 | `observability/` | Trace/context helpers + no-op `@observe` shim (Langfuse removed) |
 | `middlewares/` | Aiogram middlewares (throttling, errors, i18n) |

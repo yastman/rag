@@ -26,7 +26,7 @@ Agent SDK tools for agent-driven flows. Agent tools return **context** (document
 
 ```bash
 uv run pytest tests/unit/ -k "agent" -q
-uv run pytest tests/integration/test_graph_paths.py -n auto --dist=worksteal -q
+make test-no-service-lane
 ```
 
 ## See Also
