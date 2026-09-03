@@ -119,9 +119,6 @@ class QueryPreprocessor:
     - Transliteration normalization (Latin -> Cyrillic place names)
     - Dynamic RRF weight calculation based on query type
     - Adaptive cache threshold selection
-
-    Note: This is separate from QueryAnalyzer which uses LLM for filter extraction.
-    QueryPreprocessor is rule-based and runs before QueryAnalyzer.
     """
 
     # Transliteration map: Latin -> Cyrillic (Bulgarian cities and resorts).

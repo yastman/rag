@@ -54,10 +54,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # Background scheduler jobs — hot_lead_notifier archived in #2625.
     # NOTE: lead_score_sync, nurturing_scheduler, session_summary_worker archived in #2602.
     # "telegram_bot/services/hot_lead_notifier.py": ["ERROR"],
-    # Query analyzer LLM wrapper — records ERROR on OpenAI / connection /
-    # rate-limit / timeout exceptions before falling back to the user's raw
-    # query (#1659, #1810).
-    "telegram_bot/services/rag/query_analyzer.py": ["ERROR"],
     # HyDE query preprocessor — records ERROR on hyde-generate-document
     # span when the helper LLM call fails before falling back to the
     # original query (#1810).
