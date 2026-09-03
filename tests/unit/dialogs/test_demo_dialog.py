@@ -256,7 +256,7 @@ async def test_on_voice_input_transcribes_then_searches() -> None:
         "telegram_bot.dialogs.demo.transcribe_voice", return_value="двушка до 100к"
     ) as mock_stt:
         await on_voice_input(message, widget, manager)
-        mock_stt.assert_awaited_once_with(message)
+        mock_stt.assert_awaited_once_with(message, llm=None)
 
     pipeline.extract.assert_awaited_once_with("двушка до 100к")
     apartments_service.scroll_with_filters.assert_awaited_once()

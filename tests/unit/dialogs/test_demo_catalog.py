@@ -71,15 +71,19 @@ def _make_svc(results: list | None = None, total: int = 42) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# Task 1: _dialog_search → CatalogSG
+# Task 1: query search → CatalogSG via the shared ApartmentCatalog entrypoint
 # ---------------------------------------------------------------------------
+
+
+async def _shared_query_search(msg: MagicMock, manager: MagicMock, query: str) -> None:
+    from telegram_bot.dialogs.catalog import search_catalog_from_query
+
+    await search_catalog_from_query(message=msg, dialog_manager=manager, query=query)
 
 
 @pytest.mark.asyncio
 async def test_dialog_search_starts_catalog_results() -> None:
     """After search, dialog should hand off to CatalogSG.results."""
-    from telegram_bot.dialogs.demo import _dialog_search
-
     msg = _make_message()
     state = _make_state()
 
@@ -91,7 +95,7 @@ async def test_dialog_search_starts_catalog_results() -> None:
     }
     manager.dialog_data = {}
 
-    await _dialog_search("двушка", msg, manager)
+    await _shared_query_search(msg, manager, "двушка")
 
     from aiogram_dialog import ShowMode, StartMode
 
@@ -105,8 +109,6 @@ async def test_dialog_search_starts_catalog_results() -> None:
 @pytest.mark.asyncio
 async def test_dialog_search_saves_pagination_data() -> None:
     """catalog_runtime should be stored in FSM state."""
-    from telegram_bot.dialogs.demo import _dialog_search
-
     msg = _make_message()
     state = _make_state()
 
@@ -118,7 +120,7 @@ async def test_dialog_search_saves_pagination_data() -> None:
     }
     manager.dialog_data = {}
 
-    await _dialog_search("двушка", msg, manager)
+    await _shared_query_search(msg, manager, "двушка")
 
     update_call = state.update_data.call_args
     assert update_call is not None
@@ -130,8 +132,6 @@ async def test_dialog_search_saves_pagination_data() -> None:
 @pytest.mark.asyncio
 async def test_dialog_search_uses_scroll_not_vector() -> None:
     """Should use scroll_with_filters, not search_with_filters."""
-    from telegram_bot.dialogs.demo import _dialog_search
-
     msg = _make_message()
     state = _make_state()
     svc = _make_svc()
@@ -144,7 +144,7 @@ async def test_dialog_search_uses_scroll_not_vector() -> None:
     }
     manager.dialog_data = {}
 
-    await _dialog_search("квартира", msg, manager)
+    await _shared_query_search(msg, manager, "квартира")
 
     svc.scroll_with_filters.assert_awaited_once()
 
@@ -152,8 +152,6 @@ async def test_dialog_search_uses_scroll_not_vector() -> None:
 @pytest.mark.asyncio
 async def test_dialog_search_sends_results_as_regular_messages() -> None:
     """Results should still be sent as normal chat messages."""
-    from telegram_bot.dialogs.demo import _dialog_search
-
     msg = _make_message()
     state = _make_state()
 
@@ -165,7 +163,7 @@ async def test_dialog_search_sends_results_as_regular_messages() -> None:
     }
     manager.dialog_data = {}
 
-    await _dialog_search("апартаменты", msg, manager)
+    await _shared_query_search(msg, manager, "апартаменты")
 
     answer_calls = [c for c in msg.answer.call_args_list if c.args]
     assert any("Premier Fort Beach" in str(c.args[0]) for c in answer_calls)
@@ -174,8 +172,6 @@ async def test_dialog_search_sends_results_as_regular_messages() -> None:
 @pytest.mark.asyncio
 async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
     """After transition, demo dialog should be replaced by CatalogSG."""
-    from telegram_bot.dialogs.demo import _dialog_search
-
     msg = _make_message()
     state = _make_state()
 
@@ -187,7 +183,7 @@ async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
     }
     manager.dialog_data = {}
 
-    await _dialog_search("двушка", msg, manager)
+    await _shared_query_search(msg, manager, "двушка")
 
     from aiogram_dialog import ShowMode, StartMode
 
@@ -199,8 +195,9 @@ async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Task 2 was the legacy ``_run_demo_search`` FSM handler. After #2054 the
-# whole apartment search flow lives in ``demo_dialog._dialog_search`` and
+# Task 2 was the legacy ``_run_demo_search`` FSM handler. Since #3238 the
+# whole apartment search flow lives in the shared catalog entrypoint
+# ``search_catalog_from_query`` behind the ApartmentCatalog interface and
 # is covered by the dialog-side tests above; the legacy handler is gone.
 # ---------------------------------------------------------------------------
 
@@ -392,10 +389,8 @@ def test_demo_dialog_has_voice_input() -> None:
 async def test_full_demo_flow_text_to_pagination() -> None:
     """Full flow: text → extraction → scroll → catalog → show more."""
     from telegram_bot.dialogs.catalog import on_catalog_more
-    from telegram_bot.dialogs.demo import _dialog_search
 
-    # Step 1: Initial search via the dialog path (replaces legacy
-    # _run_demo_search; #2054).
+    # Step 1: Initial search via the shared catalog entrypoint (#3238).
     msg = _make_message()
     state = _make_state()
 
@@ -409,7 +404,7 @@ async def test_full_demo_flow_text_to_pagination() -> None:
     }
     manager.dialog_data = {}
 
-    await _dialog_search("двушка", msg, manager)
+    await _shared_query_search(msg, manager, "двушка")
 
     assert "catalog_runtime" in state.update_data.await_args.kwargs
     assert svc.scroll_with_filters.await_count == 1
@@ -442,3 +437,59 @@ async def test_full_demo_flow_text_to_pagination() -> None:
 
     update_kwargs = state2.update_data.call_args[1]
     assert update_kwargs["catalog_runtime"]["shown_count"] == 20
+
+
+# ---------------------------------------------------------------------------
+# #3238: one ApartmentCatalog interface behind both entrypoints
+# ---------------------------------------------------------------------------
+
+
+async def _run_query_through(entrypoint: str) -> tuple[dict, object]:
+    """Run the same query through demo intro or catalog text input."""
+    msg = _make_message()
+    msg.text = "двушка до 100к"
+    state = _make_state()
+    manager = AsyncMock()
+    manager.middleware_data = {
+        "pipeline": _make_pipeline(),
+        "apartments_service": _make_svc(results=[_APT] * 10, total=25),
+        "state": state,
+    }
+    manager.dialog_data = {}
+
+    if entrypoint == "demo":
+        from telegram_bot.dialogs.demo import on_text_input
+
+        await on_text_input(msg, MagicMock(), manager)
+    else:
+        from telegram_bot.dialogs.catalog import on_catalog_text_input
+
+        await on_catalog_text_input(msg, MagicMock(), manager)
+
+    runtime = state.update_data.await_args.kwargs["catalog_runtime"]
+    return runtime, manager.start.await_args
+
+
+@pytest.mark.asyncio
+async def test_demo_and_catalog_entrypoints_produce_identical_results_and_navigation() -> None:
+    """Acceptance #3238: same query through both entrypoints — identical outcome."""
+    demo_runtime, demo_start = await _run_query_through("demo")
+    catalog_runtime, catalog_start = await _run_query_through("catalog")
+
+    assert demo_runtime == catalog_runtime
+    assert demo_start == catalog_start
+    assert demo_runtime["total"] == 25
+    assert demo_runtime["shown_count"] == 10
+    assert demo_runtime["filters"] == {"rooms": 2}
+
+
+def test_catalog_package_has_no_demo_imports() -> None:
+    """#3238: production catalog must not import the demo implementation."""
+    from pathlib import Path
+
+    catalog_dir = Path("telegram_bot/dialogs/catalog")
+    assert catalog_dir.exists()
+    for path in catalog_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        assert "dialogs.demo" not in source, f"{path} still imports the demo dialog"
+        assert "demo_handler" not in source, f"{path} still imports the demo handler"

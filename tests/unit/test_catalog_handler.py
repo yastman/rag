@@ -44,7 +44,9 @@ def test_results_callback_route_is_compat_only_not_primary_catalog_owner() -> No
     source = (
         "\n".join(p.read_text(encoding="utf-8") for p in bot_pkg.glob("bot.py"))
         + "\n".join(p.read_text(encoding="utf-8") for p in bot_pkg.glob("_bot_*.py"))
-        + "\n".join(p.read_text(encoding="utf-8") for p in (bot_pkg / "dialogs" / "catalog").glob("*.py"))
+        + "\n".join(
+            p.read_text(encoding="utf-8") for p in (bot_pkg / "dialogs" / "catalog").glob("*.py")
+        )
         + "\n".join(p.read_text(encoding="utf-8") for p in (bot_pkg / "dialogs").glob("demo.py"))
     )
     assert "handle_results_callback" in source
@@ -198,7 +200,6 @@ async def test_catalog_manager_delegates_to_existing_handler() -> None:
 @pytest.mark.asyncio
 async def test_catalog_text_input_routes_actions_before_search() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_text_input
-    from telegram_bot.dialogs.demo import _dialog_search
 
     message = MagicMock()
     message.text = "🔍 Фильтры"
@@ -208,17 +209,18 @@ async def test_catalog_text_input_routes_actions_before_search() -> None:
     manager = AsyncMock()
     manager.middleware_data = {"state": _make_state({"catalog_runtime": {"filters": {}}})}
 
-    with patch("telegram_bot.dialogs.demo._dialog_search", wraps=_dialog_search) as search_mock:
+    with patch(
+        "telegram_bot.dialogs.catalog.dialog.search_catalog_from_query", new_callable=AsyncMock
+    ) as search_mock:
         await on_catalog_text_input(message, MagicMock(), manager)
 
-    search_mock.assert_not_called()
+    search_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_catalog_text_input_routes_home_before_search() -> None:
     """Regression #1298: '🏠 Главное меню' must not fall through to dialog search."""
     from telegram_bot.dialogs.catalog import on_catalog_text_input
-    from telegram_bot.dialogs.demo import _dialog_search
 
     message = MagicMock()
     message.text = "🏠 Главное меню"
@@ -233,9 +235,11 @@ async def test_catalog_text_input_routes_home_before_search() -> None:
         "i18n": None,
     }
 
-    with patch("telegram_bot.dialogs.demo._dialog_search", wraps=_dialog_search) as search_mock:
+    with patch(
+        "telegram_bot.dialogs.catalog.dialog.search_catalog_from_query", new_callable=AsyncMock
+    ) as search_mock:
         await on_catalog_text_input(message, MagicMock(), manager)
 
-    search_mock.assert_not_called()
+    search_mock.assert_not_awaited()
     state.clear.assert_awaited_once()
     manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)

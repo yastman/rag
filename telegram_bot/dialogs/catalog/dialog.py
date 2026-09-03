@@ -10,7 +10,9 @@ from aiogram_dialog.widgets.text import Const
 
 from telegram_bot.dialogs.catalog._handlers import dispatch_catalog_text_action
 from telegram_bot.dialogs.catalog._runtime import _get_state
+from telegram_bot.dialogs.catalog._search import search_catalog_from_query
 from telegram_bot.dialogs.states import CatalogSG
+from telegram_bot.services.voice_transcription import transcribe_voice
 
 
 async def on_catalog_text_input(
@@ -29,13 +31,11 @@ async def on_catalog_text_input(
         return
 
     manager.show_mode = ShowMode.NO_UPDATE
-    from telegram_bot.dialogs.demo import _dialog_search
-
     state = await _get_state(manager)
     if state is None:
         return
     manager.middleware_data.setdefault("state", state)
-    await _dialog_search(message.text, message, manager)
+    await search_catalog_from_query(message=message, dialog_manager=manager, query=message.text)
 
 
 async def on_catalog_voice_input(
@@ -44,9 +44,6 @@ async def on_catalog_voice_input(
     manager: DialogManager,
 ) -> None:
     manager.show_mode = ShowMode.NO_UPDATE
-    from telegram_bot.dialogs.demo import _dialog_search
-    from telegram_bot.handlers.demo_handler import transcribe_voice
-
     state = await _get_state(manager)
     if state is None:
         return
@@ -58,7 +55,7 @@ async def on_catalog_voice_input(
         await message.answer("Не удалось распознать речь. Попробуйте ещё раз.")
         return
     await message.answer(f"📝 Распознано: {text}")
-    await _dialog_search(text, message, manager)
+    await search_catalog_from_query(message=message, dialog_manager=manager, query=text)
 
 
 _results_and_empty_widgets = [

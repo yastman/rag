@@ -1,4 +1,12 @@
-"""Demo apartment search dialog — aiogram-dialog scaffold (#907)."""
+"""Demo apartment dialog — intro examples and degraded-results window (#907, #3238).
+
+The demo intro collects a free-text query, a voice message or an example
+click and hands the search to the shared catalog entrypoint
+:func:`telegram_bot.dialogs.catalog.search_catalog_from_query`, backed by the
+single :class:`~telegram_bot.services.apartment.apartment_catalog.ApartmentCatalog`
+application interface. No extraction, filtering or rendering logic lives
+here any more.
+"""
 
 from __future__ import annotations
 
@@ -13,16 +21,10 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button, Column, Select
 from aiogram_dialog.widgets.text import Format
 
-from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
-from telegram_bot.dialogs.states import CatalogSG, DemoSG
-from telegram_bot.handlers.demo_handler import transcribe_voice
-from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
+from telegram_bot.dialogs.catalog import search_catalog_from_query
+from telegram_bot.dialogs.states import DemoSG
 from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
-from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
-from telegram_bot.services.apartment.catalog_session import (
-    CATALOG_RUNTIME_DATA_KEY,
-    build_catalog_runtime,
-)
+from telegram_bot.services.voice_transcription import transcribe_voice
 
 
 logger = logging.getLogger(__name__)
@@ -103,108 +105,7 @@ async def results_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[s
 
 
 # ---------------------------------------------------------------------------
-# Core search (stores results in dialog_data, then switches state)
-# ---------------------------------------------------------------------------
-
-
-async def _dialog_search(query: str, message: Message, manager: DialogManager) -> None:
-    """LLM extraction → scroll_with_filters → catalog dialog."""
-    from aiogram.fsm.context import FSMContext
-
-    pipeline = manager.middleware_data.get("pipeline")
-    apartments_service = manager.middleware_data.get("apartments_service")
-    state: FSMContext | None = manager.middleware_data.get("state")
-
-    if not pipeline:
-        await message.answer("Сервис поиска временно недоступен.")
-        return
-
-    await message.answer("🔍 Ищу подходящие варианты...")
-
-    extraction = await pipeline.extract(query)
-
-    if not apartments_service:
-        manager.dialog_data["results"] = []
-        manager.dialog_data["count"] = 0
-        manager.dialog_data["query"] = query
-        manager.dialog_data["degraded_text"] = (
-            f"📋 Распознано: {extraction.hard.model_dump(exclude_none=True)}\n"
-            "(поиск недоступен в тестовом режиме)"
-        )
-        await manager.switch_to(DemoSG.results)
-        return
-
-    # Build filters from extraction
-    filters = extraction.hard.to_filters_dict() or None
-
-    # Scroll (payload-only, sorted by price)
-    _PAGE_SIZE = 10
-    results, total_count, next_start, page_ids = await apartments_service.scroll_with_filters(
-        filters=filters,
-        limit=_PAGE_SIZE,
-    )
-
-    if not results:
-        if state is not None:
-            empty_runtime = build_catalog_runtime(
-                query=query,
-                source="demo",
-                filters=filters if isinstance(filters, dict) else {},
-                view_mode="list",
-                results=[],
-                total=0,
-                next_offset=next_start,
-                shown_item_ids=page_ids,
-            )
-            await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: empty_runtime})
-        else:
-            empty_runtime = build_catalog_runtime(
-                query=query,
-                source="demo",
-                filters=filters if isinstance(filters, dict) else {},
-                view_mode="list",
-                results=[],
-                total=0,
-                next_offset=next_start,
-                shown_item_ids=page_ids,
-            )
-        await show_catalog_controls(message=message, dialog_manager=manager, runtime=empty_runtime)
-        await activate_catalog_state(dialog_manager=manager, state=CatalogSG.empty)
-        return
-
-    runtime = build_catalog_runtime(
-        query=query,
-        source="demo",
-        filters=filters if isinstance(filters, dict) else {},
-        view_mode="list",
-        results=results,
-        total=total_count,
-        next_offset=next_start,
-        shown_item_ids=page_ids,
-    )
-    if state is not None:
-        await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
-
-    await send_catalog_results(
-        message=message,
-        property_bot=manager.middleware_data.get("property_bot"),
-        results=results,
-        total_count=total_count,
-        view_mode="list",
-        shown_start=1,
-        telegram_id=message.from_user.id if message.from_user else 0,
-        reply_markup=build_catalog_keyboard(
-            shown=len(results),
-            total=total_count,
-            i18n=manager.middleware_data.get("i18n"),
-        ),
-    )
-    await show_catalog_controls(message=message, dialog_manager=manager, runtime=runtime)
-    await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
-
-
-# ---------------------------------------------------------------------------
-# Input handlers
+# Input handlers — all searches go through the shared catalog entrypoint
 # ---------------------------------------------------------------------------
 
 
@@ -212,18 +113,18 @@ async def on_text_input(message: Message, _widget: MessageInput, manager: Dialog
     """Handle text message in intro window — run apartment search."""
     if not message.text:
         return
-    await _dialog_search(message.text, message, manager)
+    await search_catalog_from_query(message=message, dialog_manager=manager, query=message.text)
 
 
 async def on_voice_input(message: Message, _widget: MessageInput, manager: DialogManager) -> None:
     """Handle voice message in intro window — STT then apartment search."""
     await message.answer("🎤 Распознаю голос...")
-    text = await transcribe_voice(message)
+    text = await transcribe_voice(message, llm=manager.middleware_data.get("llm"))
     if not text:
         await message.answer("Не удалось распознать речь. Попробуйте ещё раз.")
         return
     await message.answer(f"📝 Распознано: {text}")
-    await _dialog_search(text, message, manager)
+    await search_catalog_from_query(message=message, dialog_manager=manager, query=text)
 
 
 async def on_example_selected(
@@ -235,7 +136,11 @@ async def on_example_selected(
     """Handle example button click — run search with selected example text."""
     if callback.message is None:
         return
-    await _dialog_search(item_id, callback.message, manager)  # type: ignore[arg-type]
+    await search_catalog_from_query(
+        message=callback.message,  # type: ignore[arg-type]
+        dialog_manager=manager,
+        query=item_id,
+    )
 
 
 async def on_new_search(

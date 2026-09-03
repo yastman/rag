@@ -10,7 +10,7 @@ from aiogram_dialog.widgets.kbd import Button, ManagedMultiselect, Select
 
 from telegram_bot.dialogs.states import FunnelSG
 
-from ._constants import _SCROLL_PAGE_SIZE, _build_funnel_filters
+from ._constants import _build_funnel_filters
 
 
 logger = logging.getLogger(__name__)
@@ -172,6 +172,7 @@ async def on_summary_search(
 ) -> None:
     """Search, send results as ordinary messages, then hand off to CatalogSG."""
     from telegram_bot.dialogs.catalog import run_catalog_search_and_render
+    from telegram_bot.services.apartment.apartment_catalog import ApartmentCatalog
     from telegram_bot.services.apartment.catalog_session import (
         CATALOG_RUNTIME_DATA_KEY,
         build_catalog_runtime,
@@ -184,22 +185,15 @@ async def on_summary_search(
 
     msg = callback.message
 
-    svc = manager.middleware_data.get("apartments_service")
-    property_bot = manager.middleware_data.get("property_bot")
-    if svc is None and property_bot is not None:
-        svc = getattr(property_bot, "_apartments_service", None)
+    catalog = ApartmentCatalog.from_dialog_manager(manager)
 
-    if svc is None or msg is None or isinstance(msg, InaccessibleMessage):
+    if not catalog.service_available or msg is None or isinstance(msg, InaccessibleMessage):
         await manager.done()
         return
 
     try:
         filters = _build_funnel_filters(data)
-        results, total_count, _next_start, _page_ids = await svc.scroll_with_filters(
-            filters=filters,
-            limit=_SCROLL_PAGE_SIZE,
-            start_from=None,
-        )
+        page = await catalog.search(query=f"funnel:{data.get('city', 'any')}", filters=filters)
     except Exception:
         logger.exception("Failed to fetch funnel results")
         await manager.done()
@@ -209,14 +203,14 @@ async def on_summary_search(
 
     state = manager.middleware_data.get("state")
     runtime = build_catalog_runtime(
-        query=f"funnel:{data.get('city', 'any')}",
+        query=page.query,
         source="funnel",
-        filters=filters,
+        filters=page.filters,
         view_mode=view_mode,
-        results=results,
-        total=total_count,
-        next_offset=_next_start,
-        shown_item_ids=_page_ids,
+        results=page.results,
+        total=page.total,
+        next_offset=page.next_offset,
+        shown_item_ids=page.shown_item_ids,
         bookmarks_context=False,
         origin_context={"funnel_data": dict(data)},
     )
@@ -228,8 +222,8 @@ async def on_summary_search(
         msg=msg,
         manager=manager,
         runtime=runtime,
-        results=results,
-        property_bot=property_bot,
+        results=page.results,
+        property_bot=manager.middleware_data.get("property_bot"),
         view_mode=view_mode,
         telegram_id=telegram_id,
     )
