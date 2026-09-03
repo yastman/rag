@@ -7,8 +7,10 @@ therefore limited to the core gate plus the no-service integration/smoke check
 
 After #2638: archived surface targets (test-api-adapter, test-legacy-graph-extra,
 test-voice-extra, test-eval-extra, test-observability-extra, test-optional-surfaces)
-are removed from the Makefile. The remaining explicit opt-in targets are
-test-telegram-adapter and test-ingest-extra. Exclusion variables remain defined
+are removed from the Makefile. After #3235 (Markdown-only ingestion) the
+tests/unit/ingestion suite no longer needs optional extras and left the
+requires-extras surface; the remaining explicit opt-in targets are
+test-telegram-adapter and test-ingestion. Exclusion variables remain defined
 for the broad test-unit lane to avoid collecting extras-dependent tests.
 """
 
@@ -22,7 +24,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
 OPTIONAL_REQUIRES_EXTRAS_DIRS = (
     Path("tests/unit/voice"),
-    Path("tests/unit/ingestion"),
     Path("tests/unit/evaluation"),
     Path("tests/unit/observability"),
 )
@@ -38,12 +39,12 @@ OPTIONAL_SURFACE_TOKENS = (
     "test-telegram-adapter",
     "test-api-adapter",
     "test-legacy-graph-extra",
-    "test-ingest-extra",
+    "test-ingestion",
 )
-# Remaining explicit opt-in targets after #2638 cleanup.
+# Remaining explicit opt-in targets after #2638/#3235 cleanup.
 OPTIONAL_TARGETS = (
     "test-telegram-adapter",
-    "test-ingest-extra",
+    "test-ingestion",
 )
 OPTIONAL_OBSERVABILITY_DIAGNOSTIC_TARGETS: tuple[str, ...] = ()
 REQUIRED_GATE_TARGETS = (

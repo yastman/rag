@@ -14,7 +14,7 @@
 ## Required Validation
 - Base checks:
   - `make check`
-  - `make test-ingest-extra`
+  - `make test-ingestion`
 - Ingestion functional checks when behavior changes:
   - `python -m src.ingestion.unified.cli preflight`
 - If flow semantics changed, run one controlled ingestion pass in dev:

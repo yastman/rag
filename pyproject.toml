@@ -23,8 +23,8 @@ dependencies = [
     "numpy>=2.4.6",
     # aiohttp and requests: version-control safety pins (#2710 audit).
     # Neither is imported directly by src/ runtime code; both are pulled
-    # transitively (aiohttp by litellm/openai; requests by docling, fastembed,
-    # and mkdocs-material). Declaring them explicitly prevents resolver surprises
+    # transitively (aiohttp by litellm/openai; requests by mkdocs-material).
+    # Declaring them explicitly prevents resolver surprises
     # when optional extras are co-installed.
     "aiohttp>=3.14.1",
     "requests>=2.34.2",
@@ -68,17 +68,6 @@ telegram = [
 ]
 
 
-# Native Docling SDK — ingestion pipeline (DocumentConverter + HybridChunker)
-docling-native = [
-    "docling>=2.109.0",
-    "docling-core[chunking]>=2.74.1",
-    "transformers>=4.34.0,<6.0.0",
-    "fastembed>=0.7.4",
-    # Explicit so uv can bind Docling's transitive ML runtime to the CPU index.
-    "torch>=2.2.0",
-    "torchvision>=0.17.0",
-]
-
 # bge-m3-api service test dependencies (FastAPI endpoint tests)
 # Only needed to run tests/unit/test_bge_m3_endpoints.py + test_bge_m3_rerank.py
 # Install: uv sync --extra bge-extras
@@ -87,11 +76,10 @@ bge-extras = [
     "httpx>=0.27.0",
 ]
 
-# bge-m3-api service test dependencies (FastAPI endpoint tests)
-
-# All optional dependencies (kept surfaces only; archived extras removed by #2640)
+# All optional dependencies (kept surfaces only; archived extras removed by #2640,
+# docling-native removed by #3235 — ingestion is Markdown-only stdlib).
 all = [
-    "contextual-rag[core,telegram,docling-native]",
+    "contextual-rag[core,telegram]",
 ]
 
 # =============================================================================
@@ -127,15 +115,15 @@ dev = [
 # =============================================================================
 # UV: Dependency Overrides
 # =============================================================================
-# Optional docling extras still need the FastAPI instrumentation
-# pre-release constraint override, but DEPS-OBS1 removes all instrumentation
-# packages from the base monolith dependencies.
+# DEPS-OBS1 removes all instrumentation packages from the base monolith
+# dependencies, so no override-dependencies are needed.
 [tool.uv]
 override-dependencies = []
 # Version unification (#2902): pin transitive packages shared with services to
 # consistent minimum versions, eliminating 73-package drift across lock files.
-# Note: typer omitted — docling-core<3.0.0 (used in ingestion extra) constrains
-# typer<0.25.0, creating an unsatisfiable conflict if we pin typer>=0.25.1.
+# Note: typer is deliberately unpinned — pinning typer>=0.25.1 conflicted with
+# the (now removed, #3235) docling-core<3.0.0 constraint; keep it unpinned
+# unless a new conflict surface appears.
 constraint-dependencies = [
     "aiohappyeyeballs>=2.6.2",
     "anyio>=4.13.0",
@@ -166,17 +154,6 @@ constraint-dependencies = [
     "zipp>=4.1.0",
     "openai>=2.54.0",  # #3227: latest 2.x; litellm 1.98.0 caps openai<3, so this resolves exactly to 2.54.0.
 ]
-
-[tool.uv.sources]
-# Docling pulls torch/torchvision transitively. Keep ingestion CPU-only on every
-# platform instead of resolving PyPI's CUDA-enabled Linux wheels.
-torch = { index = "pytorch-cpu" }
-torchvision = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
 
 # =============================================================================
 # RUFF CONFIGURATION (Modern Python Linter + Formatter, 2025)
@@ -541,13 +518,11 @@ exclude_lines = [
 #   should not gate the production lint.
 # - per_rule_ignores DEP001: remaining optional/conditional imports that are
 #   not declared in pyproject.toml because they live in optional extras or
-#   archived CRM paths (fluent_compiler, anyio).
+#   archived CRM paths (fluent_compiler).
 # - per_rule_ignores DEP002: packages declared as optional extras that are not
 #   imported in the scoped src/+telegram_bot/ scan (aiohttp and requests are
-#   intentional safety-pins per #2710; docs / ingest extras are
-#   not used in the production path being scanned).
-# - per_rule_ignores DEP003: anyio is a transitive dep used directly in
-#   src/ingestion/docling_client.py — not worth adding as a direct dep now.
+#   intentional safety-pins per #2710; docs extras are not used in the
+#   production path being scanned).
 
 [tool.deptry]
 experimental_namespace_package = true
@@ -562,23 +537,13 @@ extend_exclude = [
 # Optional/archived imports not in pyproject.toml dependencies
 DEP001 = [
     "fluent_compiler",
-    "anyio",
 ]
 # Optional extras not imported in the production src/+telegram_bot/ scan
 DEP002 = [
     "aiohttp",
     "requests",
-    "transformers",
     "mkdocs",
     "mkdocs-material",
     "mkdocstrings",
-    "docling",
-    "docling-core",
-    "fastembed",
     "contextual-rag",
-    "pymupdf",
-]
-# Transitive deps used directly — acceptable, not worth adding as direct dep
-DEP003 = [
-    "anyio",
 ]

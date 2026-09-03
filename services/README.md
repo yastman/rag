@@ -11,9 +11,9 @@ They are referenced from the main [`compose.yml`](../compose.yml) and started as
 |---|---|---|---|---|---|
 | `bge-m3-api/` | Multi-vector embeddings (dense, sparse, ColBERT) | [`app.py`](bge-m3-api/app.py) | `bge-m3` | — (default) | http://localhost:8000 |
 
-> **Docling** runs in-process via the native Python SDK (`src/ingestion/`). There is no
-> HTTP sidecar for document parsing — the former `services/docling/` HTTP sidecar has been
-> removed.
+> **Document parsing** needs no service at all: ingestion is Markdown-only with a
+> stdlib parser (#3235) — the former `services/docling/` HTTP sidecar and the later
+> in-process Docling SDK were both removed.
 
 ## Quick Validation
 

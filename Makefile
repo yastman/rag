@@ -2,7 +2,7 @@
 	deps-audit vuln-audit arch-lint complexity docs-coverage audit \
 	dead-code-check deps-check \
 	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-ingest-extra test-bge-extras \
+	test-telegram-adapter test-ingestion test-bge-extras \
 	smoke-fast smoke-zoo \
 	ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-logs \
@@ -303,11 +303,11 @@ test-telegram-adapter: ## Run Telegram adapter unit tests explicitly
 
 
 
-test-ingest-extra: ## Run optional ingestion-extra tests explicitly (in-process docling)
-	@echo "$(BLUE)Running ingestion-extra tests...$(NC)"
-	uv sync --extra docling-native --all-groups
+test-ingestion: ## Run ingestion tests (Markdown-only pipeline, #3235 — no extras needed)
+	@echo "$(BLUE)Running ingestion tests...$(NC)"
+	uv sync --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ingestion/ -q --timeout=30
-	@echo "$(GREEN)✓ Ingestion-extra tests complete$(NC)"
+	@echo "$(GREEN)✓ Ingestion tests complete$(NC)"
 
 # bge-m3-api FastAPI endpoint tests — require fastapi (bge-extras).
 # These are silently skipped by importorskip in the core/unit gates (fastapi absent).
@@ -987,8 +987,8 @@ e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
 
-test-e2e-infra: ## Run live infrastructure E2E: ingestion + Redis + Qdrant (#2771)
-	$(UV_RUN_NO_SYNC) pytest tests/e2e/test_infra_docling_redis_qdrant.py -v --tb=short -m "e2e and requires_services"
+test-e2e-infra: ## Run live infrastructure E2E: ingestion + Redis + Qdrant (#2771, #3235)
+	$(UV_RUN_NO_SYNC) pytest tests/e2e/test_infra_ingestion_redis_qdrant.py -v --tb=short -m "e2e and requires_services"
 	@echo "$(GREEN)✓ Infra E2E complete$(NC)"
 
 # =============================================================================
@@ -1025,7 +1025,7 @@ ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
 
 ingest-test: ## Run ingestion unit tests
 	@echo "$(BLUE)Running ingestion tests...$(NC)"
-	uv run pytest tests/unit/test_ingestion*.py tests/unit/test_docling*.py tests/unit/test_chunker.py -v
+	uv run pytest tests/unit/ingestion/ -v
 	@echo "$(GREEN)✓ Ingestion tests complete$(NC)"
 
 

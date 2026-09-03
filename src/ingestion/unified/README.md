@@ -13,8 +13,8 @@ external state database** — idempotency lives in Qdrant via a per-point
 
 `run_once` scans `sync_dir` → for each supported file: compute `content_hash`
 and a stable `file_id` (manifest) → if Qdrant already holds a point for that
-`(file_id, content_hash)` the file is **skipped** → otherwise parse via Docling,
-embed via BGE-M3, and upsert into Qdrant. Upsert uses deterministic point ids
+`(file_id, content_hash)` the file is **skipped** → otherwise parse the
+Markdown file (`.md` only, #3235), embed via BGE-M3, and upsert into Qdrant. Upsert uses deterministic point ids
 (atomic replace) so a *changed* file is re-ingested correctly and stale chunks
 are swept.
 
@@ -31,7 +31,8 @@ are swept.
 
 | File | Purpose |
 |------|---------|
-| [`config.py`](./config.py) | `UnifiedConfig` — paths, Qdrant, Docling, BGE-M3 settings |
+| [`config.py`](./config.py) | `UnifiedConfig` — paths, Qdrant, Markdown chunk budget, BGE-M3 settings |
+| [`../markdown.py`](../markdown.py) | Markdown-only parser (stdlib, deterministic splitting) |
 | [`flow.py`](./flow.py) | Stateless scan → parse → embed → Qdrant upsert with content-hash dedup |
 | [`manifest.py`](./manifest.py) | `FileManifest` — content-hash → stable UUID mapping (rename/move safe) |
 | [`qdrant_writer.py`](./qdrant_writer.py) | Batch hybrid upserts and per-file delete/replace |
@@ -50,7 +51,7 @@ are swept.
 
 - **Qdrant** — vector database target (also the source of truth for idempotency)
 - **BGE-M3** — local dense + sparse + ColBERT embeddings
-- **Docling** — document parsing (in-process via `docling_native` backend; `DOCLING_BACKEND` only accepts `docling_native`)
+- **Markdown-only parsing** (#3235) — stdlib parser; exactly `.md` is accepted; no converter imports
 
 ## Focused Checks
 
@@ -68,7 +69,7 @@ python -m src.ingestion.unified.cli run
 python -m src.ingestion.unified.cli run --watch
 
 # Tests
-make test-ingest-extra
+make test-ingestion
 make check
 ```
 

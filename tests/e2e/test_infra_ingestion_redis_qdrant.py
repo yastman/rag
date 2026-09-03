@@ -1,7 +1,7 @@
-"""Live infra E2E: Docling (native) → Redis → Qdrant round-trip (#2771).
+"""Live infra E2E: Markdown parse → Redis → Qdrant round-trip (#2771, #3235).
 
 Proves the three-service infrastructure path:
-  1. Docling parses a small fixture Markdown doc into chunks via NativeDoclingAdapter.
+  1. The Markdown-only parser (#3235) chunks a small fixture document.
   2. Redis caches the raw chunk text (exact key/value, no embedding needed).
   3. Qdrant receives a BGE-M3 upsert and a point can be retrieved back.
 
@@ -9,8 +9,7 @@ Skip guards: each service is probed with a 2-second TCP/HTTP check before
 any test runs.  Missing services cause a skip, not a failure, so CI can
 collect this file without live infrastructure.
 
-NOTE: As of phase_6508bc74ca4a, docling-serve HTTP sidecar is removed.
-Docling runs in-process via NativeDoclingAdapter (docling-native extra).
+NOTE: #3235 removed Docling; the parse step uses the stdlib MarkdownParser.
 """
 
 from __future__ import annotations
@@ -99,18 +98,16 @@ async def _require_redis_or_skip() -> str:
     not (_redis_reachable() and _qdrant_reachable()),
     reason="Redis (6379) or Qdrant (6333) not reachable",
 )
-async def test_infra_docling_chunks_cached_in_redis_and_upserted_to_qdrant() -> None:
-    """Docling (native) → Redis cache → Qdrant upsert → point retrieval round-trip."""
+async def test_infra_markdown_chunks_cached_in_redis_and_upserted_to_qdrant() -> None:
+    """Markdown parse → Redis cache → Qdrant upsert → point retrieval round-trip."""
 
-    # 1. Parse fixture document via NativeDoclingAdapter (in-process, no HTTP sidecar)
-    docling = pytest.importorskip(
-        "src.ingestion.docling_native",
-        reason="docling-native extra not installed",
-    )
-    NativeDoclingAdapter = docling.NativeDoclingAdapter
-    adapter = NativeDoclingAdapter()
-    docling_chunks = adapter.chunk_file_sync(_FIXTURE_DOC)
-    assert len(docling_chunks) >= 1, "NativeDoclingAdapter returned no chunks for fixture doc"
+    # 1. Parse fixture document via the Markdown-only parser (#3235)
+    from src.ingestion.markdown import MarkdownParser
+
+    parser = MarkdownParser()
+    parsed_chunks = parser.chunk_file_sync(_FIXTURE_DOC)
+    assert len(parsed_chunks) >= 1, "MarkdownParser returned no chunks for fixture doc"
+    assert all(c.text.strip() for c in parsed_chunks)
 
     # 2. Probe Redis
     redis_url = await _require_redis_or_skip()
@@ -121,7 +118,7 @@ async def test_infra_docling_chunks_cached_in_redis_and_upserted_to_qdrant() -> 
 
     # 4. Cache the first chunk text in Redis (exact key/value)
     cache_key = "e2e:infra:2771:" + hashlib.sha256(_FIXTURE_DOC.read_bytes()).hexdigest()[:16]
-    chunk_payload = json.dumps([c.text for c in docling_chunks], ensure_ascii=False)
+    chunk_payload = json.dumps([c.text for c in parsed_chunks], ensure_ascii=False)
 
     redis_client = aioredis.from_url(redis_url, decode_responses=True)
     try:
@@ -131,7 +128,7 @@ async def test_infra_docling_chunks_cached_in_redis_and_upserted_to_qdrant() -> 
         await redis_client.aclose()
 
     assert cached is not None, "Redis did not return the stored value"
-    assert json.loads(cached) == [c.text for c in docling_chunks]
+    assert json.loads(cached) == [c.text for c in parsed_chunks]
 
     # 5. Upsert fixture doc into Qdrant via existing harness and query back
     context = make_qdrant_context(env)

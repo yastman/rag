@@ -4,11 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
-
-pytestmark = pytest.mark.requires_extras
-
 
 def test_file_id_from_content_passes_content_hash_to_manifest() -> None:
     import src.ingestion.unified.flow as flow_module

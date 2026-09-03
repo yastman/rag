@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 # Unified Ingestion Pipeline — uv SDK pattern (Context7 best practices 2026)
-# CPU-only PyTorch via [tool.uv.sources] in pyproject.toml
-# Target: 28GB → <5GB (remove nvidia/cuda/triton)
+# Markdown-only ingestion (#3235): stdlib parser, no Docling/PyTorch/HF stack.
+# Target: <1GB (lean base dependencies only; ML pre-warm layers removed).
 
 # =============================================================================
 # Build stage
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-dev --extra docling-native --no-install-project
+    uv sync --locked --no-dev --no-install-project
 
 # Copy dependency files for final sync
 COPY pyproject.toml uv.lock ./
@@ -39,26 +39,7 @@ COPY src/ ./src/
 
 # Final sync with project installation
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --extra docling-native
-
-# =============================================================================
-# Ф4: Build-time model pre-warming (card_988bc8421954)
-# Bake Docling layout/table/vision artifacts and BGE-M3 HF cache into the image
-# so cold-start ingestion is fully offline (no network on first run).
-# Tradeoff: thicker image (~2–4 GB extra). See ADR in card_988bc8421954.
-# =============================================================================
-
-# Docling artifacts: layout, tableformer, code_formula, picture_classifier, rapidocr
-RUN .venv/bin/python -m pip install --quiet docling-tools 2>/dev/null || true && \
-    .venv/bin/python -c "from docling.cli.main import download_models; download_models()" 2>/dev/null || \
-    .venv/bin/docling tools models download layout tableformer code_formula picture_classifier rapidocr \
-        --output-dir /opt/docling/models 2>/dev/null || \
-    echo "Docling model pre-warm step — will retry at runtime if CLI not available"
-
-# BGE-M3: HuggingFace model cache (not a Docling artifact — warm separately)
-# hadolint ignore=DL3059
-RUN .venv/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='BAAI/bge-m3', cache_dir='/opt/huggingface/hub', ignore_patterns=['*.ot', 'flax*', 'tf_*'])" \
-    2>/dev/null || echo "BGE-M3 pre-warm — will download at runtime if offline cache missing"
+    uv sync --locked --no-dev
 
 # =============================================================================
 # Runtime stage
@@ -81,7 +62,7 @@ RUN useradd -m -u 1000 ingestion
 # Copy uv binary from builder (same version as build stage)
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
-# Copy venv with --chown (avoids 9GB duplicate layer from chown -R)
+# Copy venv with --chown (avoids duplicate layers from chown -R)
 COPY --from=builder --chown=ingestion:ingestion /app/.venv /app/.venv
 
 # Copy project files with --chown
@@ -89,22 +70,12 @@ COPY --chown=ingestion:ingestion pyproject.toml uv.lock ./
 COPY --chown=ingestion:ingestion src/ ./src/
 COPY docker/ingestion/entrypoint.sh /usr/local/bin/ingestion-entrypoint.sh
 
-# Ф4: Copy baked model artifacts from builder (Docling + BGE-M3)
-COPY --from=builder --chown=ingestion:ingestion /opt/docling /opt/docling
-COPY --from=builder --chown=ingestion:ingestion /opt/huggingface /opt/huggingface
-
 RUN chmod +x /usr/local/bin/ingestion-entrypoint.sh
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    DOCLING_ARTIFACTS_PATH=/opt/docling/models \
-    HF_HOME=/opt/huggingface \
-    HF_HUB_CACHE=/opt/huggingface/hub
-# HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE are set conditionally in entrypoint.sh:
-# enforced only when the baked HF model cache is non-empty (pre-warm succeeded);
-# omitted otherwise so the container can download at runtime.
+    PYTHONDONTWRITEBYTECODE=1
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD pgrep -f "src.ingestion.unified.cli" || exit 1

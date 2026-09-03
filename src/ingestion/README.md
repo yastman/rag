@@ -4,10 +4,11 @@ Document ingestion: parsing, chunking, embedding, and indexing into Qdrant.
 
 ## Purpose
 
-Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two paths exist:
+Turn raw documents into searchable vector chunks. Production ingestion is
+**Markdown-only** (#3235): exactly `.md` files, parsed by a stdlib parser.
 
-1. **Current path** (`unified/`) — incremental pipeline with deterministic file identity (content-hash manifest) and replace semantics. CocoIndex was removed (#2834); the pipeline now drives Docling → BGE-M3 → Qdrant directly.
-2. **Legacy local wrappers** (`chunker.py`, `indexer.py`) — standalone helpers retained for compatibility; deprecated GDrive-specific modules were retired in favor of `unified/`.
+1. **Current path** (`unified/`) — incremental pipeline with deterministic file identity (content-hash manifest) and replace semantics. CocoIndex was removed (#2834); Docling was removed (#3235); the pipeline now drives Markdown → BGE-M3 → Qdrant directly.
+2. **Local helpers** (`chunker.py`) — the shared `Chunk` dataclass used by the writer and scripts.
 
 ## Entrypoints
 
@@ -21,9 +22,8 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 
 | File | Purpose |
 |------|---------|
-| [`chunker.py`](./chunker.py) | Document chunking strategies (fixed, semantic, sliding window) |
-| [`docling_common.py`](./docling_common.py) | Shared Docling contract (DoclingChunk, SUPPORTED_FORMATS, to_ingestion_chunks) |
-| [`docling_native.py`](./docling_native.py) | In-process Docling backend (NativeDoclingAdapter, HybridChunker) |
+| [`chunker.py`](./chunker.py) | Shared `Chunk` dataclass (generic ingestion contract) |
+| [`markdown.py`](./markdown.py) | Markdown-only parser: UTF-8 read, heading/size splitting, Chunk conversion (#3235) |
 | [`unified/config.py`](./unified/config.py) | Unified pipeline configuration |
 | [`unified/flow.py`](./unified/flow.py) | Pipeline definition (`run_once` / `run_watch`) |
 | [`unified/manifest.py`](./unified/manifest.py) | Content-hash-based stable file identity |
@@ -40,12 +40,12 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 
 - **Qdrant** — target vector database (also the source of truth for idempotency via the content-hash manifest)
 - **BGE-M3** — dense + sparse + ColBERT embeddings
-- **Docling** — document parsing (in-process `docling_native` backend via `docling-native` extra)
+- **Markdown-only parsing** (#3235) — stdlib `MarkdownParser`; no converter service or SDK; exactly `.md` is accepted
 
 ## Focused Checks
 
 ```bash
-# Check dependencies are reachable (Qdrant, BGE-M3, Docling, sync dir)
+# Check dependencies are reachable (Qdrant, BGE-M3, sync dir)
 python -m src.ingestion.unified.cli preflight
 
 # Create the Qdrant collection if missing

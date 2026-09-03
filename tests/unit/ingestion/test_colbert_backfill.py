@@ -10,9 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-pytestmark = pytest.mark.requires_extras
-
-
 def _record(
     point_id: int | str,
     *,

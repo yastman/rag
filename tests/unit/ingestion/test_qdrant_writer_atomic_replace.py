@@ -25,9 +25,6 @@ from qdrant_client.models import HasIdCondition
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
 
-pytestmark = pytest.mark.requires_extras
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -114,18 +114,18 @@ class QdrantHybridWriter:
 
     @staticmethod
     def get_chunk_location(chunk: Any, index: int) -> str:
-        """Get stable chunk location from docling metadata or fallback.
+        """Get stable chunk location from chunk metadata or fallback.
 
         Priority:
-        1. Docling meta with page/offset
-        2. seq_no from docling
+        1. Legacy docling meta with page/offset (pre-#3235 points)
+        2. chunk_order written by the Markdown parser
         3. Fallback: chunk_{index}
         """
-        # Check for docling metadata
+        # Check for legacy docling metadata (pre-#3235 points)
         extra = getattr(chunk, "extra_metadata", {}) or {}
         docling_meta = extra.get("docling_meta", {})
 
-        # Priority 1: Page + offset from docling
+        # Priority 1: Page + offset from legacy docling meta
         if "page" in docling_meta or "page_start" in docling_meta:
             page = docling_meta.get("page") or docling_meta.get("page_start", 0)
             offset = docling_meta.get("offset", index)

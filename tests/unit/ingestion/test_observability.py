@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.ingestion.unified.observability import update_ingestion_trace
-
-
-pytestmark = pytest.mark.requires_extras
 
 
 def test_update_ingestion_trace_is_noop() -> None:

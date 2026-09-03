@@ -9,9 +9,6 @@ import pytest
 from src.ingestion.unified.manifest import GDriveManifest, compute_content_hash_from_bytes
 
 
-pytestmark = pytest.mark.requires_extras
-
-
 class TestComputeContentHash:
     """Test compute_content_hash_from_bytes()."""
 

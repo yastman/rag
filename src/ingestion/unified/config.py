@@ -54,11 +54,8 @@ class UnifiedConfig:
         )
     )
 
-    # Docling
-    docling_backend: str = field(
-        default_factory=lambda: os.getenv("DOCLING_BACKEND", "docling_native")
-    )
-    docling_timeout: float = 300.0
+    # Markdown chunking (#3235): char budget derives from the historical
+    # BGE-M3 token budget (≈4 chars/token) — see src/ingestion/markdown.py.
     max_tokens_per_chunk: int = 512
 
     # BGE-M3 API (dense + sparse embeddings)
@@ -75,17 +72,8 @@ class UnifiedConfig:
     poll_interval_seconds: int = 60
     pipeline_version: str = "v3.2.1"
 
-    # Supported extensions
-    supported_extensions: frozenset[str] = frozenset(
-        {".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".md", ".txt", ".html", ".htm", ".csv"}
-    )
-
-    def __post_init__(self) -> None:
-        """Validate config values that must stay within known rollout paths."""
-        if self.docling_backend != "docling_native":
-            raise ValueError(
-                f"DOCLING_BACKEND must be 'docling_native', got {self.docling_backend!r}"
-            )
+    # Supported extensions (#3235): production ingestion is Markdown-only.
+    supported_extensions: frozenset[str] = frozenset({".md"})
 
     def effective_manifest_dir(self) -> Path:
         """Return writable directory for manifest storage.

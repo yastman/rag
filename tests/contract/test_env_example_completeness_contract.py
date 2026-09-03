@@ -169,8 +169,6 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "MANIFEST_DIR": "GDrive ingestion manifest dir; doc TBD",
     "DEFAULT_LOCALE": "i18n default locale; doc TBD",
     "SUPPORTED_LOCALES": "i18n supported locales list; doc TBD",
-    "DOCLING_BACKEND": "Docling backend selector; doc TBD",
-    "DOCLING_PROFILE": "Docling profile selector; doc TBD",
     "EXPERT_TOPICS_ENABLED": "Expert topics feature flag; doc TBD",
     "FRESHNESS_BOOST": "Score boosting toggle (#590); doc TBD",
     "FRESHNESS_FIELD": "Score boosting payload field; doc TBD",

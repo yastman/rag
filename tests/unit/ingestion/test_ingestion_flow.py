@@ -1,4 +1,4 @@
-"""D3 — Flow idempotency tests.
+"""D3 — Flow idempotency tests (Markdown-only pipeline, #3235).
 
 Gate test: test_flow_skip_unchanged_gate (required by close-gate).
 
@@ -21,9 +21,6 @@ import pytest
 from src.ingestion.unified.config import UnifiedConfig
 
 
-pytestmark = pytest.mark.requires_extras
-
-
 # ---------------------------------------------------------------------------
 # Helpers — mirrors the pattern from test_unified_flow_stateless.py
 # ---------------------------------------------------------------------------
@@ -38,11 +35,11 @@ def _make_writer() -> MagicMock:
     return writer
 
 
-def _make_docling() -> MagicMock:
-    docling = MagicMock()
-    docling.chunk_file_sync.return_value = [object()]
-    docling.to_ingestion_chunks.return_value = [MagicMock()]
-    return docling
+def _make_parser() -> MagicMock:
+    parser = MagicMock()
+    parser.chunk_file_sync.return_value = [object()]
+    parser.to_ingestion_chunks.return_value = [MagicMock()]
+    return parser
 
 
 def _content_hash(content: bytes) -> str:
@@ -68,18 +65,18 @@ def test_flow_skip_unchanged_gate(tmp_path: Path) -> None:
     writer = _make_writer()
     # Qdrant returns one record → file already indexed with same hash
     writer.client.scroll.return_value = ([MagicMock()], None)
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
-        patch("src.ingestion.unified.flow._make_docling", return_value=docling),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
     ):
         from src.ingestion.unified import flow
 
         result = flow.run_once(config)
 
     # chunk_file_sync must NOT be called for an unchanged file
-    docling.chunk_file_sync.assert_not_called()
+    parser.chunk_file_sync.assert_not_called()
     assert result.skipped == 1, f"Expected skipped=1, got skipped={result.skipped}"
     assert result.processed == 0
 
@@ -97,18 +94,18 @@ def test_flow_reingest_changed(tmp_path: Path) -> None:
     writer = _make_writer()
     # Qdrant returns no record → content_hash mismatch / not indexed
     writer.client.scroll.return_value = ([], None)
-    docling = _make_docling()
+    parser = _make_parser()
 
     with (
         patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
-        patch("src.ingestion.unified.flow._make_docling", return_value=docling),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
     ):
         from src.ingestion.unified import flow
 
         result = flow.run_once(config)
 
     # chunk_file_sync must be called exactly once for the changed file
-    docling.chunk_file_sync.assert_called_once()
+    parser.chunk_file_sync.assert_called_once()
     assert result.processed == 1, f"Expected processed=1 (updated_count), got {result.processed}"
     assert result.skipped == 0
 
@@ -123,12 +120,12 @@ def test_flow_reingest_changed(tmp_path: Path) -> None:
     reason="Integration tests require RUN_INTEGRATION_TESTS=1 and live services",
 )
 def test_flow_integration_live_ingest(tmp_path: Path) -> None:
-    """Integration smoke: ingest a real markdown file against live Qdrant + Docling.
+    """Integration smoke: ingest a real markdown file against live Qdrant + BGE-M3.
 
     Requires:
       - RUN_INTEGRATION_TESTS=1
       - Qdrant running (QDRANT_URL or default localhost:6333)
-      - Docling running or DOCLING_BACKEND=docling_native
+      - BGE-M3 running (BGE_M3_URL or default localhost:8000)
     """
     doc = tmp_path / "live_test.md"
     doc.write_text("# Integration test\n\nThis is a live integration test.", encoding="utf-8")

@@ -97,7 +97,7 @@ An optional LangGraph supervisor + tool-routing layer exists in `telegram_bot/ag
 - SHA256-based file identity: re-ingesting the same file is a no-op.
 - Idempotent upsert: changed files replace prior chunks by source path. Deleted source files are a known limitation — their chunks remain in Qdrant until manual cleanup.
 - Error handling: failed documents are logged and skipped; `run_watch` retries on the next polling cycle (60 s). No DLQ or exponential backoff — orphaned chunks from deleted source files remain in Qdrant until manual cleanup (known limitation).
-- Docling handles parsing in-process (native SDK, no HTTP sidecar); the unified pipeline handles chunking and embedding writes.
+- Ingestion is Markdown-only (#3235): a stdlib parser handles `.md` files deterministically; no converter SDK, sidecar, or ML stack.
 
 ## Adapt to Your Domain
 
@@ -188,7 +188,7 @@ The active production adapter is Telegram (`telegram_bot/`). Voice input is acti
 |---|---|
 | [`DOCKER.md`](DOCKER.md) | Compose services, profiles, ports, env, runtime contracts |
 | [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md) | Current module ownership and dependency direction |
-| [`docs/DOCLING_ARCHITECTURE_AUTHORITY.md`](docs/DOCLING_ARCHITECTURE_AUTHORITY.md) | Current transitional Docling contract; removal is tracked by [#3235](https://github.com/yastman/rag/issues/3235) |
+| [`docs/INGESTION.md`](docs/INGESTION.md) | Markdown-only ingestion authority (supported formats, prohibited converter stack, [#3235](https://github.com/yastman/rag/issues/3235)) |
 | [`docs/architecture/RAG_VPS_V2_PROPOSED.md`](docs/architecture/RAG_VPS_V2_PROPOSED.md) | Proposed reusable production RAG v2 architecture; not current runtime state |
 | [`ARCHITECTURE_DOSSIER.md`](ARCHITECTURE_DOSSIER.md) | Dated 2026-07-06 architecture-review snapshot |
 
