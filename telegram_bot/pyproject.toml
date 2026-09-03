@@ -14,8 +14,8 @@ dependencies = [
     # pins grpcio>=1.41.0 as a hard dependency, so the Qdrant gRPC transport
     # (prefer_grpc=True) keeps it available transitively. A redundant direct
     # pin only triggers extra resolver/build work in PR checks.
-    "redis>=5.0.0",
-    "redisvl>=0.3.0",
+    "redis>=5.0.0,<8",  # #3226: redis-py stays below 8 across the cohort (RedisVL 0.26.x requires <8)
+    "redisvl>=0.26.0,<0.27",  # v0.26+ unified pin (telegram_bot pyproject); 0.27.0 changes the redis support matrix
     "tenacity>=8.2.0",
     "cachetools>=5.3.0",
     "python-dotenv>=1.0.0",
@@ -75,5 +75,5 @@ constraint-dependencies = [
     "yarl>=1.24.2",
     "zipp>=4.1.0",
     "openai>=2.37.0",
-    "redisvl>=0.18.2",
+    "redisvl>=0.26.0,<0.27",
 ]
