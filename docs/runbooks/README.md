@@ -14,6 +14,13 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 | Prove the bot actually answers | `make bot-response-smoke` |
 | Audit Qdrant payload indexes | `make qdrant-audit-indexes` (`scripts/qdrant_audit_indexes.py`) |
 
+## Demo
+
+| Task | Command / asset |
+|---|---|
+| Rehearse / present the five-minute demo | [`FIVE-MINUTE-DEMO.md`](FIVE-MINUTE-DEMO.md) (gate: `make demo-gate`) |
+| Record rehearsal evidence | [`DEMO-REHEARSAL-LOG.md`](DEMO-REHEARSAL-LOG.md) |
+
 ## Production / VPS
 
 | Task | Command / asset |
