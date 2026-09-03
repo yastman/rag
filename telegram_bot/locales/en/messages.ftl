@@ -223,6 +223,7 @@ results-no-results =
 phone-prompt = Enter your phone number:
 phone-invalid = Please enter a valid phone number. Example: +359 88 123 4567
 phone-success = Thank you! A manager will contact you shortly.
+phone-failure = ⚠️ We could not save your request — it was not sent to a manager. Please try again in a minute.
 
 # Promotions (#660)
 promotions-title = 🎁 Current promotions

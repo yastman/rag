@@ -248,6 +248,9 @@ class PropertyBot:
         self._forum_bridge: ForumBridge | None = None
         self._bot_user_id: int | None = None
 
+        # Durable sink behind phone-collected lead requests (#3213)
+        self._lead_sink: Any | None = None
+
         self._polling_lock: RedisPollingLock | None = None
         self._polling_lock_task: asyncio.Task[None] | None = None
         self._polling_lock_consecutive_failures: int = 0

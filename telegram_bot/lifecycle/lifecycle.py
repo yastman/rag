@@ -363,6 +363,7 @@ def setup_handoff_services(bot: Any) -> None:
     """Initialize handoff state machine and forum bridge (#730)."""
     from src.services.handoff_state import HandoffState
     from telegram_bot.services.forum_bridge import ForumBridge
+    from telegram_bot.services.lead_sink import LeadRequestSink
 
     log = logging.getLogger(__name__)
     if bot._cache.redis is None:
@@ -380,6 +381,16 @@ def setup_handoff_services(bot: Any) -> None:
             "Forum Topics bridge enabled (managers_group_id=%s)",
             bot.config.managers_group_id,
         )
+    # Durable sink behind phone-collected lead requests (#3213). Without it
+    # the collector must not confirm that a request was created.
+    bot._lead_sink = LeadRequestSink(
+        redis=bot._cache.redis,
+        forum_bridge=bot._forum_bridge,
+    )
+    log.info(
+        "Lead request sink enabled (manager_notification=%s)",
+        bot._forum_bridge is not None,
+    )
 
 
 def setup_workflow_data(bot: Any) -> None:
@@ -394,6 +405,7 @@ def setup_workflow_data(bot: Any) -> None:
     bot.dp["apartments_service"] = bot._apartments_service
     bot.dp["favorites_service"] = bot._favorites_service
     bot.dp["search_event_store"] = bot._search_event_store
+    bot.dp["lead_sink"] = bot._lead_sink
     bot.dp["pipeline"] = bot._apartment_pipeline
     bot.dp["embeddings"] = bot._hybrid
     bot.dp["llm"] = bot._llm

@@ -123,7 +123,7 @@ async def test_on_phone_received_non_phone_text_exits_fsm():
 
 
 async def test_on_phone_contact_valid_processes_phone():
-    """on_phone_contact with valid contact should call _process_valid_phone."""
+    """on_phone_contact with valid contact records via the sink and confirms."""
     from unittest.mock import MagicMock
 
     message = MagicMock()
@@ -139,12 +139,129 @@ async def test_on_phone_contact_valid_processes_phone():
     state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
     state.clear = AsyncMock()
 
+    sink = MagicMock()
+    sink.record_request = AsyncMock(return_value=True)
+
     with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
-        await on_phone_contact(message, state)
+        await on_phone_contact(message, state, lead_sink=sink)
 
     state.clear.assert_awaited_once()
     message.answer.assert_awaited_once()
     assert "Заявка оформлена" in message.answer.call_args[0][0]
+    sink.record_request.assert_awaited_once()
+    kwargs = sink.record_request.call_args.kwargs
+    assert kwargs["client_id"] == 123
+    assert kwargs["service_key"] == "test"
+
+
+async def test_on_phone_contact_without_sink_is_truthful():
+    """Without a sink the bot must NOT claim the request was created (#3213)."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.contact = MagicMock()
+    message.contact.phone_number = "+359896759292"
+    message.from_user = MagicMock()
+    message.from_user.id = 123
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.clear = AsyncMock()
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await on_phone_contact(message, state, lead_sink=None)
+
+    state.clear.assert_not_awaited()
+    message.answer.assert_awaited_once()
+    text = message.answer.call_args[0][0]
+    assert "Заявка оформлена" not in text
+    assert "не удалось сохранить" in text.lower()
+
+
+async def test_on_phone_contact_sink_failure_is_truthful():
+    """A sink that does not acknowledge must produce failure copy, not success."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.contact = MagicMock()
+    message.contact.phone_number = "+359896759292"
+    message.from_user = MagicMock()
+    message.from_user.id = 123
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.clear = AsyncMock()
+
+    sink = MagicMock()
+    sink.record_request = AsyncMock(return_value=False)
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await on_phone_contact(message, state, lead_sink=sink)
+
+    state.clear.assert_not_awaited()
+    message.answer.assert_awaited_once()
+    text = message.answer.call_args[0][0]
+    assert "Заявка оформлена" not in text
+
+
+async def test_on_phone_received_records_via_sink():
+    """Text-input path forwards context (objects, date_range) to the sink."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.text = "+380501234567"
+    message.from_user = MagicMock()
+    message.from_user.id = 77
+    message.from_user.first_name = "Test"
+    message.from_user.last_name = None
+    message.from_user.username = None
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(
+        return_value={
+            "service_key": "viewing",
+            "viewing_objects": [{"id": "obj-1"}],
+            "date_range": "nearest",
+        }
+    )
+    state.clear = AsyncMock()
+
+    sink = MagicMock()
+    sink.record_request = AsyncMock(return_value=True)
+
+    await mod.on_phone_received(message, state, lead_sink=sink)
+
+    state.clear.assert_awaited_once()
+    assert "Заявка оформлена" in message.answer.call_args[0][0]
+    kwargs = sink.record_request.call_args.kwargs
+    assert kwargs["viewing_objects"] == [{"id": "obj-1"}]
+    assert kwargs["date_range"] == "nearest"
+
+
+async def test_process_valid_phone_never_logs_raw_phone(caplog):
+    """Sink outcomes must be logged without raw phone values (#3213)."""
+    import logging as logging_module
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.from_user = MagicMock()
+    message.from_user.id = 55
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"service_key": "viewing"})
+    state.clear = AsyncMock()
+
+    sink = MagicMock()
+    sink.record_request = AsyncMock(return_value=True)
+
+    with (
+        patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None),
+        caplog.at_level(logging_module.INFO, logger="telegram_bot.handlers.phone_collector"),
+    ):
+        await mod._process_valid_phone("+380501234567", message, state, lead_sink=sink)
+
+    assert all("+380501234567" not in rec.getMessage() for rec in caplog.records)
+    assert all("provided" in rec.getMessage() for rec in caplog.records)
 
 
 async def test_on_phone_contact_no_contact_asks_manual_input():

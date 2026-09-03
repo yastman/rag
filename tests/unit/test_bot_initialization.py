@@ -84,6 +84,10 @@ class TestPropertyBotInit:
         bot = _create_bot()
         assert bot._forum_bridge is None
 
+    def test_lead_sink_is_none_before_start(self):
+        bot = _create_bot()
+        assert bot._lead_sink is None
+
     def test_cache_initialized_is_false(self):
         bot = _create_bot()
         assert bot._cache_initialized is False

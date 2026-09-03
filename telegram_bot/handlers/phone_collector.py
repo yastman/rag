@@ -101,20 +101,61 @@ async def start_phone_collection(
         await message_or_callback.answer(text, reply_markup=kb)  # type: ignore[union-attr]
 
 
+_PHONE_FAILURE_TEXT = (
+    "⚠️ Не удалось сохранить заявку — она не была отправлена менеджеру.\n\n"
+    "Попробуйте ещё раз через минуту: нажмите «Поделиться контактом» "
+    "или введите номер вручную.\n"
+    "Или нажмите «❌ Отмена»."
+)
+
+
 async def _process_valid_phone(
     phone: str,
     message: Message,
     state: FSMContext,
     bot_config: Any | None = None,
     search_event_store: Any | None = None,
+    lead_sink: Any | None = None,
+    i18n: Any | None = None,
 ) -> None:
-    """Process validated phone: log and send success message."""
+    """Process validated phone: record via the durable sink, then confirm.
+
+    Success copy is emitted only after the sink acknowledges persistence (and,
+    when configured, the manager notification) — #3213. Without that
+    acknowledgement the user gets truthful failure copy and stays in the FSM
+    so the submission can be retried (cancellation still works).
+    """
     from telegram_bot.keyboards.client_keyboard import build_client_keyboard
 
     data = await state.get_data()
     service_key = data.get("service_key", "unknown")
     user = message.from_user
     user_id: int | str = user.id if user else "unknown"
+
+    recorded = False
+    if lead_sink is not None and user is not None:
+        recorded = await lead_sink.record_request(
+            client_id=user.id,
+            phone=phone,
+            service_key=service_key,
+            username=getattr(user, "username", None),
+            display_name=build_display_name(user, phone),
+            viewing_objects=data.get("viewing_objects") or [],
+            date_range=data.get("date_range"),
+        )
+
+    if not recorded:
+        # No acknowledged sink write — never claim the request was created.
+        logger.warning(
+            "Lead request NOT recorded: phone_state=%s service_key=%s user=%s",
+            _phone_log_state(phone),
+            service_key,
+            user_id,
+        )
+        failure_text = (i18n.get("phone-failure") if i18n else None) or _PHONE_FAILURE_TEXT
+        # Keep the FSM and the phone reply keyboard so the user can retry.
+        await message.answer(failure_text)
+        return
 
     await state.clear()
 
@@ -128,7 +169,7 @@ async def _process_valid_phone(
     )
 
     logger.info(
-        "Phone collected: phone_state=%s service_key=%s user=%s",
+        "Lead request recorded: phone_state=%s service_key=%s user=%s",
         _phone_log_state(phone),
         service_key,
         user_id,
@@ -143,6 +184,7 @@ async def on_phone_received(
     i18n: Any | None = None,
     bot_config: Any | None = None,
     search_event_store: Any | None = None,
+    lead_sink: Any | None = None,
 ) -> None:
     """Handle phone number text input."""
     from telegram_bot.keyboards.client_keyboard import build_client_keyboard
@@ -185,7 +227,9 @@ async def on_phone_received(
         await message.answer(phone_invalid)
         return
 
-    await _process_valid_phone(phone, message, state, bot_config, search_event_store)
+    await _process_valid_phone(
+        phone, message, state, bot_config, search_event_store, lead_sink, i18n
+    )
 
 
 async def on_phone_contact(
@@ -193,11 +237,15 @@ async def on_phone_contact(
     state: FSMContext,
     bot_config: Any | None = None,
     search_event_store: Any | None = None,
+    lead_sink: Any | None = None,
+    i18n: Any | None = None,
 ) -> None:
     """Handle shared contact via request_contact button."""
     if message.contact and message.contact.phone_number:
         phone = normalize_phone(message.contact.phone_number) or message.contact.phone_number
-        await _process_valid_phone(phone, message, state, bot_config, search_event_store)
+        await _process_valid_phone(
+            phone, message, state, bot_config, search_event_store, lead_sink, i18n
+        )
     else:
         await message.answer("Не удалось получить номер. Введите вручную:")
 
