@@ -72,7 +72,7 @@ class E2EConfig(BaseSettings):
     # Voice note fixture path for voice delivery scenarios
     voice_note_path: str = Field(default="", alias="E2E_VOICE_NOTE_PATH")
 
-    def validate(self, *, judge_required: bool = True) -> list[str]:
+    def validation_errors(self, *, judge_required: bool = True) -> list[str]:
         """Validate configuration, return list of errors."""
         errors = []
         if not self.telegram_api_id:

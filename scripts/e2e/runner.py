@@ -245,7 +245,7 @@ def main():
     config = E2EConfig()
     if args.judge_provider:
         config.judge_provider = args.judge_provider
-    errors = config.validate(judge_required=not args.no_judge)
+    errors = config.validation_errors(judge_required=not args.no_judge)
     if errors:
         console.print("[red]Configuration errors:[/]")
         for e in errors:

@@ -64,7 +64,7 @@ def test_validate_requires_openai_compatible_judge_api_key(
     ) as cfg:
         assert (
             "At least one LLM provider key is required for judge provider 'litellm'"
-            in cfg.validate()
+            in cfg.validation_errors()
         )
 
 
@@ -82,7 +82,7 @@ def test_validate_allows_no_judge_mode_without_judge_credentials() -> None:
             "GROQ_API_KEY",
         },
     ) as cfg:
-        errors = cfg.validate(judge_required=False)
+        errors = cfg.validation_errors(judge_required=False)
         assert all("E2E_JUDGE" not in err and "ANTHROPIC_API_KEY" not in err for err in errors)
 
 
@@ -95,7 +95,10 @@ def test_validate_requires_anthropic_key_in_anthropic_direct_mode() -> None:
         },
         drop={"ANTHROPIC_API_KEY"},
     ) as cfg:
-        assert "ANTHROPIC_API_KEY not set for judge provider 'anthropic-direct'" in cfg.validate()
+        assert (
+            "ANTHROPIC_API_KEY not set for judge provider 'anthropic-direct'"
+            in cfg.validation_errors()
+        )
 
 
 def test_repr_redacts_credentials_but_keeps_diagnostics() -> None:

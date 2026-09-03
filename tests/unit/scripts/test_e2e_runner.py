@@ -444,19 +444,19 @@ class TestExitCode:
 
 
 class TestConfigValidation:
-    """E2EConfig.validate() returns errors for missing credentials."""
+    """E2EConfig.validation_errors() returns errors for missing credentials."""
 
     def test_missing_api_id_reports_error(self):
         cfg = E2EConfig(telegram_api_id=0, telegram_api_hash="hash", bot_username="@bot")
-        errors = cfg.validate(judge_required=False)
+        errors = cfg.validation_errors(judge_required=False)
         assert any("TELEGRAM_API_ID" in e for e in errors)
 
     def test_missing_api_hash_reports_error(self):
         cfg = E2EConfig(telegram_api_id=1, telegram_api_hash="", bot_username="@bot")
-        errors = cfg.validate(judge_required=False)
+        errors = cfg.validation_errors(judge_required=False)
         assert any("TELEGRAM_API_HASH" in e for e in errors)
 
     def test_valid_config_no_errors_no_judge(self):
         cfg = E2EConfig(telegram_api_id=1, telegram_api_hash="abc", bot_username="@bot")
-        errors = cfg.validate(judge_required=False)
+        errors = cfg.validation_errors(judge_required=False)
         assert errors == []
