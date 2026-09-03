@@ -338,8 +338,11 @@ class TestHandleCtaCallback:
         assert call_kwargs.kwargs.get("service_key") == "insurance"
 
     async def test_manager_with_forum_bridge_starts_qualification(self):
-        bot = _create_bot()
+        # Capability on (#3239): HANDOFF_ENABLED + bridge + Redis state.
+        config = _make_config(handoff_enabled=True, managers_group_id=-100123)
+        bot = _create_bot(config)
         bot._forum_bridge = MagicMock()
+        bot._handoff_state = MagicMock()
         callback = _make_callback("cta:manager")
         state = _make_state()
 
@@ -356,6 +359,33 @@ class TestHandleCtaCallback:
             await bot.handle_cta_callback(callback, state)
 
         mock_qual.assert_awaited_once()
+
+    async def test_manager_with_bridge_but_capability_off_starts_phone_collection(self):
+        """Bridge present but HANDOFF_ENABLED unset — no forum handoff (#3239)."""
+        bot = _create_bot()
+        bot._forum_bridge = MagicMock()
+        bot._handoff_state = MagicMock()
+        callback = _make_callback("cta:manager")
+        state = _make_state()
+
+        with (
+            patch(
+                "telegram_bot.keyboards.services_keyboard.parse_service_callback",
+                return_value=("manager", None),
+            ),
+            patch(
+                "telegram_bot.handlers.catalog.start_qualification",
+                new_callable=AsyncMock,
+            ) as mock_qual,
+            patch(
+                "telegram_bot.handlers.phone_collector.start_phone_collection",
+                new_callable=AsyncMock,
+            ) as mock_phone,
+        ):
+            await bot.handle_cta_callback(callback, state)
+
+        mock_qual.assert_not_awaited()
+        mock_phone.assert_awaited_once_with(callback, state, service_key="manager")
 
     async def test_manager_without_forum_bridge_starts_phone_collection(self):
         bot = _create_bot()

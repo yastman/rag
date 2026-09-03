@@ -326,6 +326,23 @@ def setup_handoff_services(bot: Any) -> None:
             "Forum Topics bridge enabled (managers_group_id=%s)",
             bot.config.managers_group_id,
         )
+    # Interactive manager handoff is capability-gated (#3239): it starts only
+    # when HANDOFF_ENABLED is set AND the bridge AND the Redis state exist.
+    # The bridge itself stays available to the #3213 lead-request sink.
+    if (
+        bot.config.handoff_enabled
+        and bot._forum_bridge is not None
+        and bot._handoff_state is not None
+    ):
+        log.info("Manager handoff capability: enabled (forum + Redis state ready)")
+    else:
+        log.warning(
+            "Manager handoff capability: disabled (handoff_enabled=%s, bridge=%s, "
+            "redis_state=%s) — manager buttons fall back to the phone-request sink",
+            bot.config.handoff_enabled,
+            bot._forum_bridge is not None,
+            bot._handoff_state is not None,
+        )
     # Durable sink behind phone-collected lead requests (#3213). Without it
     # the collector must not confirm that a request was created.
     bot._lead_sink = LeadRequestSink(
