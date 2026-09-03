@@ -30,11 +30,11 @@ _APPROVED_HOSTED_RUNS = {
         "src telegram_bot scripts services .github/workflows compose.yml compose.dev.yml"
     ),
     (".github/workflows/ci.yml", "lint", "Ruff lint"): (
-        "uvx --from ruff==0.15.20 ruff check "
+        "uvx --from ruff==0.16.6 ruff check "
         "src/ telegram_bot/ services/ scripts/ --output-format=github"
     ),
     (".github/workflows/ci.yml", "lint", "Ruff format check"): (
-        "uvx --from ruff==0.15.20 ruff format --target-version py312 --check "
+        "uvx --from ruff==0.16.6 ruff format --target-version py312 --check "
         "src/ telegram_bot/ services/ scripts/"
     ),
     (".github/workflows/ci.yml", "actionlint", "Install development tools"): (
