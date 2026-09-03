@@ -8,6 +8,7 @@ from uuid import UUID
 
 from qdrant_client import models
 
+from src.runtime.domain_defaults import DEMO_CITY_PROMPT_FORMS
 from src.runtime.services.qdrant import QdrantService
 
 
@@ -267,80 +268,219 @@ class ApartmentsService:
         return sorted(values)
 
     async def get_collection_stats(self) -> dict:
-        """Get unique cities, complexes, rooms, price range for example generation."""
-        records, _ = await self._qdrant.client.scroll(
-            collection_name=self._qdrant.collection_name,
-            limit=100,
-            with_payload=True,
-            with_vectors=False,
-        )
+        """Get cities, complexes, rooms, prices, and *provable combinations*.
+
+        Scans the whole collection (not a 100-point page) and, besides flat
+        unique values, returns per-city and per-complex (rooms, count, price)
+        combinations so example generation can advertise only dimensions that
+        actually co-occur in stored listings (#3203).
+        """
         cities: set[str] = set()
         complexes: set[str] = set()
         rooms_set: set[int] = set()
         prices: list[float] = []
-        for p in records:
-            d = p.payload or {}
-            if d.get("city"):
-                cities.add(d["city"])
-            if d.get("complex_name"):
-                complexes.add(d["complex_name"])
-            if d.get("rooms"):
-                rooms_set.add(int(d["rooms"]))
-            if d.get("price_eur"):
-                prices.append(float(d["price_eur"]))
+        city_room_stats: dict[str, dict[int, dict]] = {}
+        complex_room_counts: dict[str, dict[int, int]] = {}
+        city_prices: dict[str, list[float]] = {}
+
+        offset = None
+        while True:
+            records, offset = await self._qdrant.client.scroll(
+                collection_name=self._qdrant.collection_name,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for p in records:
+                d = p.payload or {}
+                city = d.get("city")
+                complex_name = d.get("complex_name")
+                price = d.get("price_eur")
+                if city:
+                    cities.add(city)
+                if complex_name:
+                    complexes.add(complex_name)
+                if d.get("rooms"):
+                    rooms = int(d["rooms"])
+                    rooms_set.add(rooms)
+                    if city:
+                        stats_entry = city_room_stats.setdefault(city, {}).setdefault(
+                            rooms, {"count": 0, "max_price": 0.0}
+                        )
+                        stats_entry["count"] += 1
+                        if price:
+                            stats_entry["max_price"] = max(
+                                stats_entry["max_price"], float(price)
+                            )
+                    if complex_name:
+                        room_counts = complex_room_counts.setdefault(complex_name, {})
+                        room_counts[rooms] = room_counts.get(rooms, 0) + 1
+                if price and city:
+                    prices.append(float(price))
+                    city_prices.setdefault(city, []).append(float(price))
+            if offset is None:
+                break
+
         return {
             "cities": sorted(cities),
             "complexes": sorted(complexes),
             "rooms": sorted(rooms_set),
             "min_price": min(prices) if prices else 0,
             "max_price": max(prices) if prices else 0,
+            "city_combos": {
+                city: [
+                    {"rooms": rooms, **combo}
+                    for rooms, combo in sorted(city_room_stats.get(city, {}).items())
+                ]
+                for city in sorted(cities)
+            },
+            "complex_combos": {
+                complex_name: [
+                    {"rooms": rooms, "count": count}
+                    for rooms, count in sorted(complex_room_counts.get(complex_name, {}).items())
+                ]
+                for complex_name in sorted(complexes)
+            },
+            "city_prices": {city: sorted(vals) for city, vals in city_prices.items()},
         }
 
 
+def _room_label(rooms: int) -> str:
+    """Visible room label whose wording extracts back to the same rooms value.
+
+    The production regex extractor (apartment_filter_extractor) maps
+    "студия"→1, "двушка"→3, "трёшка"→4 (total rooms = bedrooms + living room)
+    and "N спальн..."→N+1. Labels here always round-trip through it (#3203).
+    """
+    if rooms == 1:
+        return "Студия"
+    if rooms == 3:
+        return "Двушка"
+    if rooms == 4:
+        return "Трёшка"
+    if rooms == 2:
+        return "Апартамент с 1 спальней"
+    return f"Апартамент с {rooms - 1} спальнями"
+
+
+def _ceil_to(value: float, step: int) -> int:
+    return int(-(-value // step) * step)
+
+
+def _floor_to(value: float, step: int) -> int:
+    return int(value // step * step)
+
+
+def _city_phrase(city: str) -> str:
+    """Grammatical 'в …' form for visible examples (falls back to 'в {city}')."""
+    return DEMO_CITY_PROMPT_FORMS.get(city, f"в {city}")
+
+
+# Prefer advertising combinations that return at least this many listings.
+_EXAMPLE_MIN_COHERENT = 3
+
+# Claim-free fallback examples: they advertise no city/complex/price dimension
+# and therefore cannot promise a combination that is absent from the data.
+_EXAMPLE_PADS = [
+    "Показать все апартаменты",
+    "Апартаменты у моря",
+    "Апартаменты с бассейном",
+    "Апартаменты с мебелью",
+]
+
+
 def generate_search_examples(stats: dict) -> list[str]:
-    """Generate 4 diverse search example strings from DB stats."""
-    cities = stats.get("cities", [])
-    complexes = stats.get("complexes", [])
-    rooms_list = stats.get("rooms", [1, 2, 3])
-    max_price = stats.get("max_price", 200000)
+    """Generate up to 4 diverse search examples advertising only existing data.
 
-    room_names = {1: "Студия", 2: "Двушка", 3: "Трёшка"}
+    Every example is built from a stored (city | complex) × rooms × price
+    combination, so clicking it cannot yield zero results by construction
+    (#3203). Falls back to flat stats and then to claim-free pads.
+    """
+    cities: list[str] = stats.get("cities", [])
+    complexes: list[str] = stats.get("complexes", [])
+    city_combos: dict = stats.get("city_combos", {})
+    complex_combos: dict = stats.get("complex_combos", {})
+    city_prices: dict = stats.get("city_prices", {})
+
     examples: list[str] = []
+    used_cities: set[str] = set()
 
-    # Example 1: room type + city + price
-    if cities:
-        r = rooms_list[0] if rooms_list else 1
-        price = round(max_price * 0.4 / 5000) * 5000
-        examples.append(
-            f"{room_names.get(r, 'Апартамент')} в {cities[0]} до {price:,.0f}€".replace(",", " ")
+    def combo_price(combo: dict) -> str:
+        return f"{_ceil_to(float(combo['max_price']), 5000):,}".replace(",", " ")
+
+    # Example: rooms + city + "до" price (ceiling = combo max → combo count hits).
+    for city in cities:
+        combo = next(
+            (c for c in city_combos.get(city, []) if c["count"] >= _EXAMPLE_MIN_COHERENT),
+            None,
         )
-
-    # Example 2: room type + complex
-    if complexes:
-        r = rooms_list[1] if len(rooms_list) > 1 else 2
-        examples.append(f"{room_names.get(r, 'Двушка')} в {complexes[0]}")
-
-    # Example 3: room type + city + price
-    if len(cities) > 1:
-        r = rooms_list[-1] if rooms_list else 3
-        price = round(max_price * 0.65 / 5000) * 5000
+        if combo is None:
+            continue
         examples.append(
-            f"{room_names.get(r, 'Трёшка')} в {cities[-1]} до {price:,.0f}€".replace(",", " ")
+            f"{_room_label(int(combo['rooms']))} {_city_phrase(city)} до {combo_price(combo)}€"
         )
+        used_cities.add(city)
+        break
 
-    # Example 4: generic + city + price range
-    if len(cities) > 1:
-        price = round(max_price * 0.5 / 5000) * 5000
-        examples.append(f"Апартамент в {cities[1]} от {price:,.0f}€".replace(",", " "))
+    # Example: rooms + complex (only combos that really exist in the complex).
+    for complex_name in complexes:
+        combo = next(
+            (c for c in complex_combos.get(complex_name, []) if c["count"] >= _EXAMPLE_MIN_COHERENT),
+            None,
+        )
+        if combo is None:
+            continue
+        examples.append(f"{_room_label(int(combo['rooms']))} в {complex_name}")
+        break
 
-    # Pad with defaults if needed
-    defaults = [
-        "Студия у моря до 100 000€",
-        "Двушка с видом на море",
-        "Трёшка с бассейном",
-        "Апартамент с мебелью",
-    ]
-    while len(examples) < 4:
-        examples.append(defaults[len(examples)])
+    # Example: rooms + city + "до" price from another city.
+    for city in cities:
+        if city in used_cities:
+            continue
+        combo = next(
+            (c for c in city_combos.get(city, []) if c["count"] >= _EXAMPLE_MIN_COHERENT),
+            None,
+        )
+        if combo is None:
+            continue
+        examples.append(
+            f"{_room_label(int(combo['rooms']))} {_city_phrase(city)} до {combo_price(combo)}€"
+        )
+        used_cities.add(city)
+        break
 
-    return examples[:4]
+    # Example: generic + city + "от" price (third-lowest price → ≥3 matches).
+    for city in cities:
+        if city in used_cities:
+            continue
+        prices = city_prices.get(city, [])
+        if len(prices) < _EXAMPLE_MIN_COHERENT:
+            continue
+        price = _floor_to(prices[_EXAMPLE_MIN_COHERENT - 1], 5000)
+        formatted = f"{price:,}".replace(",", " ")
+        examples.append(f"Апартамент {_city_phrase(city)} от {formatted}€")
+        used_cities.add(city)
+        break
+
+    # Flat-stats fallback (legacy shape): single-dimension claims only.
+    for city in cities:
+        if len(examples) >= 4:
+            break
+        if city not in used_cities:
+            examples.append(f"Апартамент {_city_phrase(city)}")
+            used_cities.add(city)
+    for complex_name in complexes:
+        if len(examples) >= 4:
+            break
+        examples.append(f"Апартамент в {complex_name}")
+
+    # Pad with claim-free examples if the collection has little or no data.
+    unique: list[str] = list(dict.fromkeys(examples))
+    pad_idx = 0
+    while len(unique) < 4 and pad_idx < 2 * len(_EXAMPLE_PADS):
+        pad = _EXAMPLE_PADS[pad_idx % len(_EXAMPLE_PADS)]
+        if pad not in unique:
+            unique.append(pad)
+        pad_idx += 1
+    return unique[:4]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.runtime.domain_defaults import DEMO_CITIES, DEMO_COMPLEX_CITIES
 from telegram_bot.dialogs.filter_constants import (
     AREA_MAP as _AREA_MAP,
 )
@@ -25,24 +26,15 @@ from telegram_bot.dialogs.filter_constants import (
 
 
 # City / complex / section selection options
-_CITY_OPTIONS: list[tuple[str, str]] = [
-    ("Солнечный берег", "Солнечный берег"),
-    ("Свети Влас", "Свети Влас"),
-    ("Элените", "Элените"),
+# Fallback options are derived from the canonical demo domain (#3203) so the
+# funnel never offers a city or complex that the demo seed does not contain.
+_CITY_OPTIONS: list[tuple[str, str]] = [(city, city) for city in DEMO_CITIES] + [
     ("Любой город", "any"),
 ]
 
 _COMPLEX_OPTIONS: list[tuple[str, str]] = [
-    ("Crown Fort Club", "Crown Fort Club"),
-    ("Green Fort Suites", "Green Fort Suites"),
-    ("Imperial Fort Club", "Imperial Fort Club"),
-    ("Marina View Fort Beach", "Marina View Fort Beach"),
-    ("Messambria Fort Beach", "Messambria Fort Beach"),
-    ("Nessebar Fort Residence", "Nessebar Fort Residence"),
-    ("Panorama Fort Beach", "Panorama Fort Beach"),
-    ("Premier Fort Beach", "Premier Fort Beach"),
-    ("Premier Fort Suites", "Premier Fort Suites"),
-    ("Prestige Fort Beach", "Prestige Fort Beach"),
+    (name, name) for name in sorted(DEMO_COMPLEX_CITIES)
+] + [
     ("Любой комплекс", "any"),
 ]
 
@@ -83,11 +75,7 @@ _PROPERTY_TYPE_DISPLAY: dict[str, str] = {
     "3bed": "3-спальни",
 }
 
-_CITY_DISPLAY: dict[str, str] = {
-    "Солнечный берег": "Солнечный берег",
-    "Свети Влас": "Свети Влас",
-    "Элените": "Элените",
-}
+_CITY_DISPLAY: dict[str, str] = {city: city for city in DEMO_CITIES}
 
 # Preference category items for Multiselect widget
 _PREF_ITEMS: list[tuple[str, str]] = [
