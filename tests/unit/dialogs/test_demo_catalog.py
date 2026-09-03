@@ -210,6 +210,8 @@ async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
 @pytest.mark.asyncio
 async def test_voice_input_triggers_search_and_catalog() -> None:
     """Voice → STT → extraction → scroll → catalog dialog flow."""
+    from types import SimpleNamespace
+
     from telegram_bot.dialogs.demo import on_voice_input
 
     msg = _make_message()
@@ -222,6 +224,14 @@ async def test_voice_input_triggers_search_and_catalog() -> None:
         "pipeline": _make_pipeline(),
         "apartments_service": svc,
         "state": state,
+        "bot_config": SimpleNamespace(
+            voice_enabled=True,
+            llm_api_key="sk-test",
+            stt_model="whisper",
+            voice_language="ru",
+            voice_timeout=30,
+            show_transcription=True,
+        ),
     }
     manager.dialog_data = {}
 

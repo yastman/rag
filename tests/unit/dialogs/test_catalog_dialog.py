@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -108,3 +108,112 @@ async def test_show_catalog_controls_skips_status_message_for_list_mode() -> Non
 
     assert updated["view_mode"] == "list"
     message.answer.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Catalog voice input — optional adapter with typed fallback (#3240)
+# ---------------------------------------------------------------------------
+
+
+def _voice_ready_config():
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        voice_enabled=True,
+        llm_api_key="sk-test",
+        stt_model="whisper",
+        voice_language="ru",
+        voice_timeout=30,
+        show_transcription=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_catalog_voice_input_ready_transcribes_and_searches() -> None:
+    """Ready voice reuses the demo search path (same catalog contract as text)."""
+    from telegram_bot.dialogs.catalog.dialog import on_catalog_voice_input
+
+    message = AsyncMock()
+    message.voice = MagicMock(file_id="f1")
+    state = AsyncMock()
+    manager = MagicMock()
+    manager.middleware_data = {
+        "state": state,
+        "bot_config": _voice_ready_config(),
+    }
+    manager.dialog_data = {}
+
+    with (
+        patch(
+            "telegram_bot.dialogs.catalog.dialog.transcribe_voice",
+            new_callable=AsyncMock,
+            return_value="двушка у моря",
+        ),
+        patch("telegram_bot.dialogs.catalog.dialog.search_catalog_from_query", new_callable=AsyncMock) as search,
+    ):
+        await on_catalog_voice_input(message, MagicMock(), manager)
+
+    search.assert_awaited_once_with(
+        message=message, dialog_manager=manager, query="двушка у моря"
+    )
+
+
+@pytest.mark.asyncio
+async def test_catalog_voice_input_not_ready_directs_to_typed_input() -> None:
+    """Unconfigured voice must never attempt STT nor search (#3240)."""
+    from types import SimpleNamespace
+
+    from telegram_bot.dialogs.catalog.dialog import on_catalog_voice_input
+
+    message = AsyncMock()
+    message.voice = MagicMock(file_id="f1")
+    state = AsyncMock()
+    manager = MagicMock()
+    manager.middleware_data = {
+        "state": state,
+        "bot_config": SimpleNamespace(voice_enabled=False, llm_api_key="sk-test"),
+    }
+
+    with (
+        patch(
+            "telegram_bot.dialogs.catalog.dialog.transcribe_voice",
+            new_callable=AsyncMock,
+            return_value="не должно вызываться",
+        ) as mock_stt,
+        patch("telegram_bot.dialogs.catalog.dialog.search_catalog_from_query", new_callable=AsyncMock) as search,
+    ):
+        await on_catalog_voice_input(message, MagicMock(), manager)
+
+    mock_stt.assert_not_awaited()
+    search.assert_not_awaited()
+    message.answer.assert_awaited_once()
+    assert "текстом" in message.answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_catalog_voice_input_stt_failure_offers_typed_input() -> None:
+    """Transcription failure must degrade to a typed-input hint, not block."""
+    from telegram_bot.dialogs.catalog.dialog import on_catalog_voice_input
+
+    message = AsyncMock()
+    message.voice = MagicMock(file_id="f1")
+    state = AsyncMock()
+    manager = MagicMock()
+    manager.middleware_data = {
+        "state": state,
+        "bot_config": _voice_ready_config(),
+    }
+
+    with (
+        patch(
+            "telegram_bot.dialogs.catalog.dialog.transcribe_voice",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch("telegram_bot.dialogs.catalog.dialog.search_catalog_from_query", new_callable=AsyncMock) as search,
+    ):
+        await on_catalog_voice_input(message, MagicMock(), manager)
+
+    search.assert_not_awaited()
+    last_hint = message.answer.await_args_list[-1].args[0]
+    assert "текстом" in last_hint

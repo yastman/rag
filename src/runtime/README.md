@@ -14,7 +14,6 @@ migration that created this package is complete — the runtime kernel does not 
 |------|------|
 | `pipeline/` | RAG orchestration — `assistant_pipeline.py`, `rag.py` (`rag_pipeline`), retrieve / grade+rerank / cache stages |
 | `generation/` | Answer generation — `service.py` (`generate_answer`), prompts, streaming, policy |
-| `graph/` | Graph factory resolver + config — `builder.resolve_pipeline_factory`, `GraphConfig`, `state.py`, `nodes/`, `edges.py` |
 | `qdrant/` | `QdrantService` — hybrid dense + sparse + ColBERT search gateway |
 | `retrieval/` | `RetrievalService` — composes embeddings with the Qdrant gateway |
 | `grounding/` | Grounding / citation policy |

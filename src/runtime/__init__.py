@@ -13,7 +13,6 @@ ratchet allowlist) is empty.
 The intent of ``src.runtime`` is to host the truly shared kernel
 modules that today live under ``telegram_bot/``::
 
-    src/runtime/graph/             ← from telegram_bot/graph/
     src/runtime/integrations/cache  ← from telegram_bot/integrations/cache.py
     src/runtime/services/qdrant     ← from telegram_bot/services/qdrant.py
     src/runtime/observability/      ← from telegram_bot/observability.py

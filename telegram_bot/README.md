@@ -25,7 +25,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 - **Redis** — caching, throttling, user context
 - **BGE-M3** — dense + sparse embeddings (local REST API)
 - Structured logging — observability (optional)
-- Voice input — handled in-process via `dialogs/` (catalog + demo dialogs); no LiveKit sidecar
+- Voice input — optional and configuration-driven (`VOICE_ENABLED` + STT key in `BotConfig`, #3240); handled in-process via `dialogs/` (catalog + demo dialogs). Unconfigured or failing voice degrades to typed input; no LiveKit sidecar
 
 ## Focused Checks
 
