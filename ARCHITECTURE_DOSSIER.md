@@ -223,7 +223,7 @@ MyPy, Semgrep, lockfile, compose-config); pytest suites are local/manual.
 | Integration | `tests/integration/` | `make test-integration[-full]` | real Qdrant/Redis/APIs |
 | Smoke | `tests/smoke/` | `make test-smoke` | live-service health |
 | E2E | `tests/e2e/` + `tests/e2e_core/` (harness) | `make e2e-core-live` | full spine through `run_assistant_request` |
-| Chaos / Load / Benchmark / Regression / Characterization | resp. dirs | selective | resilience, throughput, golden snapshots |
+| Chaos / Load / Regression / Characterization | resp. dirs | selective | resilience, throughput, golden snapshots |
 | Baseline | `tests/baseline/` | — | **empty** (Langfuse metrics removed) — removable |
 
 Test-hygiene is itself guarded by contract tests (`test_no_new_duplicate_test_names`,

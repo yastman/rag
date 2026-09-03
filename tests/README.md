@@ -15,7 +15,6 @@ tests/
 ├── smoke/               # Quick health checks against live services
 ├── eval/                # RAG evaluation (RAGAS, ground_truth.json)
 ├── baseline/            # (empty; Langfuse baseline metrics removed, #2844)
-├── benchmark/           # Performance comparisons (RRF vs DBSF, parser vs Docling, etc.)
 ├── chaos/               # Resilience tests (service failures, LLM fallbacks)
 ├── load/                # Load/throughput and Redis eviction tests
 ├── e2e/                 # End-to-end pipeline and Telegram E2E tests
@@ -53,7 +52,6 @@ Run these selectively, not on every save.
 | Integration | `tests/integration/` | Real service interaction (Qdrant, Redis, APIs) | Minutes |
 | Smoke | `tests/smoke/` | Live service health and routing sanity | Minutes |
 | Eval | `tests/eval/` | RAG quality (faithfulness, relevance) | Minutes |
-| Benchmark | `tests/benchmark/` | Parser/reranker throughput comparisons | Varies |
 | Chaos | `tests/chaos/` | Degraded-service behavior and fallbacks | Minutes |
 | Load | `tests/load/` | Concurrent throughput and cache eviction | Minutes |
 | E2E | `tests/e2e/` | Full-stack pipeline and Telegram flows | Slow |
@@ -183,7 +181,6 @@ Markers are defined in `pyproject.toml`. Common ones:
 - `integration` — integration tests
 - `slow` — tests taking > 5 seconds
 - `smoke` — smoke tests
-- `benchmark` — benchmark comparisons
 - `chaos` — resilience/failure injection
 - `load` — load/performance tests
 - `e2e` — end-to-end tests
@@ -233,6 +230,6 @@ def test_store_embedding_creates_hash():
 
 ## Notes
 
-- The full heavy suite (chaos, load, E2E, benchmark) is not required for every commit; run the fast gate (`make test` or `make test-unit`) locally.
+- The full heavy suite (chaos, load, E2E) is not required for every commit; run the fast gate (`make test` or `make test-unit`) locally.
 - The old deprecated directory is no longer collected (`norecursedirs` in `pyproject.toml`).
 - `docker-up` is an alias for `docker-core-up`; prefer `make local-up` for local development.

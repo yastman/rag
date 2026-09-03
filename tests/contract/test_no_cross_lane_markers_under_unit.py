@@ -3,7 +3,7 @@
 ``tests/conftest.py::pytest_collection_modifyitems`` injects directory-based
 markers, so a test file under ``tests/unit/`` is tagged ``unit`` automatically.
 If that same test also carries an explicit ``@pytest.mark.integration`` (or
-``smoke``/``e2e``/``chaos``/``load``/``benchmark``/``baseline``) decorator, it
+``smoke``/``e2e``/``chaos``/``load``/``baseline``) decorator, it
 is collected by BOTH lanes. Fast-gate marker expressions like ``-m unit`` would
 then run an integration-only scenario in the unit lane, increasing runtime and
 producing xdist/shared-state surprises.
@@ -33,7 +33,6 @@ FOREIGN_LANE_MARKERS = frozenset(
         "e2e",
         "chaos",
         "load",
-        "benchmark",
         "baseline",
     }
 )
