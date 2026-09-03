@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "RAG Telegram Bot with hybrid search"
 requires-python = ">=3.12"
 dependencies = [
-    "aiogram>=3.29.0",
-    "aiogram-dialog>=2.4.0",
+    "aiogram>=3.31.0",
+    # #3225: exact alignment with the root telegram extra; aiogram-dialog 2.6.0
+    # is the stable release whose constraint keeps cachetools<6 (no cachetools 7).
+    "aiogram-dialog==2.6.0",
     "httpx>=0.28.0",
     "qdrant-client>=1.18.0",  # v1.18+ unified pin (telegram_bot pyproject)
     # grpcio is intentionally NOT declared directly (#2241). qdrant-client
