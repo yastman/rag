@@ -10,8 +10,10 @@ keeps only:
   inline demo menu (still called directly from ``PropertyBot``).
 * ``handle_demo_apartments`` — the inline-button callback that opens the
   aiogram-dialog demo flow via ``dialog_manager.start(...)``.
-* ``transcribe_voice`` — Whisper helper still used by the dialog's
-  ``on_voice_input`` handler.
+
+``transcribe_voice`` moved to
+:mod:`telegram_bot.services.voice_transcription` (#3238) so the catalog and
+demo dialogs share one import; it is re-exported here for compatibility.
 
 The old ``handle_demo_example`` / ``handle_demo_search_text`` /
 ``handle_demo_search_voice`` / ``_run_demo_search`` / ``DemoStates``
@@ -22,10 +24,7 @@ dialog's ``MessageInput`` widgets.
 
 from __future__ import annotations
 
-import io
 import logging
-import os
-from typing import Any
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
@@ -34,6 +33,7 @@ from aiogram_dialog import DialogManager, ShowMode, StartMode
 from telegram_bot.callback_data import DemoCB
 from telegram_bot.dialogs.states import DemoSG
 from telegram_bot.keyboards.demo_keyboard import build_demo_menu
+from telegram_bot.services.voice_transcription import transcribe_voice
 
 
 logger = logging.getLogger(__name__)
@@ -67,44 +67,9 @@ async def handle_demo_apartments(
     )
 
 
-async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
-    """Download a Telegram voice message and transcribe via Whisper.
-
-    Used by ``telegram_bot.dialogs.demo.on_voice_input``. The optional
-    ``llm`` parameter accepts an audio transcription client so tests can inject
-    a mock. Whisper STT remains a direct OpenAI SDK call because the LiteLLM
-    Docker proxy has been removed.
-    """
-    from openai import AsyncOpenAI
-
-    async def _run() -> str | None:
-        bot = message.bot
-        if bot is None or message.voice is None:
-            return None
-        file = await bot.get_file(message.voice.file_id)
-        data = io.BytesIO()
-        await bot.download_file(file.file_path, data)  # type: ignore[arg-type]
-        data.seek(0)
-        data.name = "voice.ogg"  # type: ignore[attr-defined]
-
-        # Whisper STT is intentionally direct OpenAI SDK usage. LiteLLM chat
-        # routing now happens in-process via src.runtime.llm.router, and the
-        # removed Docker proxy no longer hosts a Whisper alias.
-        client = (
-            llm
-            if llm is not None
-            else AsyncOpenAI(
-                api_key=os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY") or "sk-dev",
-            )
-        )
-        transcript = await client.audio.transcriptions.create(
-            model="whisper",
-            file=data,
-            language="ru",
-        )
-        return transcript.text or None  # type: ignore[no-any-return]
-
-    return await _run()  # type: ignore[no-any-return]
+# Backward-compatible re-export (#3238): the implementation lives in
+# telegram_bot.services.voice_transcription.
+__all__ = ["handle_demo_apartments", "handle_demo_button", "transcribe_voice"]
 
 
 def create_demo_router() -> Router:

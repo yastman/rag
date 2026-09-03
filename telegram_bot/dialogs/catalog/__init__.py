@@ -20,6 +20,7 @@ from telegram_bot.dialogs.catalog._search import (
     activate_catalog_state,
     load_next_catalog_page,
     run_catalog_search_and_render,
+    search_catalog_from_query,
 )
 from telegram_bot.dialogs.catalog.dialog import (
     catalog_dialog,
@@ -44,5 +45,6 @@ __all__ = [
     "on_catalog_viewing",
     "on_catalog_voice_input",
     "run_catalog_search_and_render",
+    "search_catalog_from_query",
     "show_catalog_controls",
 ]

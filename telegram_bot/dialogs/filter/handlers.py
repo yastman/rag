@@ -21,6 +21,7 @@ from telegram_bot.dialogs.filter._state import (
 )
 from telegram_bot.dialogs.filter_constants import FIELD_TO_FILTER_KEY, build_filters_dict
 from telegram_bot.dialogs.states import CatalogSG, FilterSG
+from telegram_bot.services.apartment.apartment_catalog import ApartmentCatalog
 from telegram_bot.services.apartment.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
     build_catalog_runtime,
@@ -129,18 +130,12 @@ async def on_apply(
             fsm_data.get(CATALOG_RUNTIME_DATA_KEY) if isinstance(fsm_data, dict) else {}
         ) or {}
 
-        # Fetch first page with new filters
-        svc = manager.middleware_data.get("apartments_service")
-        results: list = []
-        total_count = 0
-        next_start: float | None = None
-        page_ids: list[str] | None = None
-        if svc is not None:
+        # Fetch first page with new filters through the shared catalog contract
+        catalog = ApartmentCatalog.from_dialog_manager(manager)
+        page = None
+        if catalog.service_available:
             try:
-                results, total_count, next_start, page_ids = await svc.scroll_with_filters(
-                    filters=filters,
-                    limit=10,
-                )
+                page = await catalog.search(query=current_runtime.get("query", ""), filters=filters)
             except Exception:
                 logger.exception("on_apply: search failed for filters=%r", filters)
                 msg = callback.message
@@ -153,10 +148,10 @@ async def on_apply(
             source=current_runtime.get("source", "catalog"),
             filters=filters,
             view_mode=current_runtime.get("view_mode", "cards"),
-            results=results,
-            total=total_count,
-            next_offset=next_start,
-            shown_item_ids=page_ids,
+            results=page.results if page else [],
+            total=page.total if page else 0,
+            next_offset=page.next_offset if page else None,
+            shown_item_ids=page.shown_item_ids if page else None,
             bookmarks_context=bool(current_runtime.get("bookmarks_context", False)),
             origin_context=current_runtime.get("origin_context", {}),
         )
@@ -178,7 +173,7 @@ async def on_apply(
             msg=msg,
             manager=manager,
             runtime=runtime,
-            results=results,
+            results=runtime.get("results", []),
             property_bot=manager.middleware_data.get("property_bot"),
             view_mode=view_mode,
             telegram_id=telegram_id,
@@ -187,8 +182,10 @@ async def on_apply(
             observation,
             manager=manager,
             action="apply",
-            result_state=CatalogSG.empty.state if not results else CatalogSG.results.state,
-            result_count=total_count,
+            result_state=CatalogSG.empty.state
+            if not runtime.get("results")
+            else CatalogSG.results.state,
+            result_count=int(runtime.get("total", 0) or 0),
         )
 
 

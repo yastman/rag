@@ -14,16 +14,16 @@ from telegram_bot.dialogs.catalog._runtime import (
     _get_catalog_runtime,
     _update_catalog_runtime,
 )
-from telegram_bot.dialogs.states import CatalogSG
+from telegram_bot.dialogs.states import CatalogSG, DemoSG
 from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
+from telegram_bot.services.apartment.apartment_catalog import ApartmentCatalog
 from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
 from telegram_bot.services.apartment.catalog_session import (
+    CATALOG_RUNTIME_DATA_KEY,
     CatalogRuntime,
+    build_catalog_runtime,
     update_catalog_runtime_page,
 )
-
-
-_PAGE_SIZE = 10
 
 
 async def activate_catalog_state(
@@ -54,60 +54,137 @@ async def load_next_catalog_page(
     if shown_count >= total or next_offset is None:
         return runtime
 
-    property_bot = dialog_manager.middleware_data.get("property_bot")
-    apartments_service = dialog_manager.middleware_data.get("apartments_service")
-    if apartments_service is None and property_bot is not None:
-        apartments_service = getattr(property_bot, "_apartments_service", None)
-    if apartments_service is None:
+    catalog = ApartmentCatalog.from_dialog_manager(dialog_manager)
+    if not catalog.service_available:
         return runtime
 
-    (
-        results,
-        total_count,
-        new_next_offset,
-        shown_item_ids,
-    ) = await apartments_service.scroll_with_filters(
+    page = await catalog.continue_page(
+        query=str(runtime.get("query") or ""),
         filters=runtime.get("filters"),
-        limit=_PAGE_SIZE,
-        start_from=next_offset,
-        exclude_ids=runtime.get("shown_item_ids") or None,
+        next_offset=next_offset,
+        shown_item_ids=runtime.get("shown_item_ids") or [],
     )
 
     effective_telegram_id = telegram_id if telegram_id is not None else 0
     if not effective_telegram_id and message.from_user:
         effective_telegram_id = message.from_user.id
     i18n = dialog_manager.middleware_data.get("i18n")
+    view_mode = runtime.get("view_mode", "cards")
     await send_catalog_results(
         message=message,
-        property_bot=property_bot,
-        results=results,
-        total_count=total_count,
-        view_mode=runtime.get("view_mode", "cards"),
+        property_bot=dialog_manager.middleware_data.get("property_bot"),
+        results=page.results,
+        total_count=page.total,
+        view_mode=view_mode,
         shown_start=shown_count + 1,
         telegram_id=effective_telegram_id,
         reply_markup=(
             _catalog_reply_markup(
                 {
                     **runtime,
-                    "shown_count": shown_count + len(results),
-                    "total": total_count,
+                    "shown_count": shown_count + len(page.results),
+                    "total": page.total,
                 },
                 i18n=i18n,
             )
-            if runtime.get("view_mode", "cards") == "list"
+            if view_mode == "list"
             else None
         ),
     )
 
     updated = update_catalog_runtime_page(
         runtime,
-        results=results,
-        total=total_count,
-        next_offset=new_next_offset,
-        shown_item_ids=shown_item_ids,
+        results=page.results,
+        total=page.total,
+        next_offset=page.next_offset,
+        shown_item_ids=page.shown_item_ids,
     )
     await _update_catalog_runtime(dialog_manager, updated)
     return updated
+
+
+async def search_catalog_from_query(
+    *,
+    message: Message,
+    dialog_manager: DialogManager,
+    query: str,
+    source: str = "demo",
+    view_mode: str = "list",
+) -> None:
+    """Shared demo/catalog free-text search entrypoint (#3238).
+
+    Runs one :class:`ApartmentCatalog` search for ``query`` — regex-first
+    extraction with optional structured gap-fill, Qdrant payload filtering
+    with price order, cursor-ready first page — then persists the catalog
+    runtime and renders results/navigation identically for both entrypoints.
+
+    The degraded no-service branch keeps the legacy demo-window behavior
+    (extraction echo + "search unavailable" note) so bot-only deployments
+    still work.
+    """
+    catalog = ApartmentCatalog.from_dialog_manager(dialog_manager)
+    if not catalog.extraction_available:
+        await message.answer("Сервис поиска временно недоступен.")
+        return
+
+    await message.answer("🔍 Ищу подходящие варианты...")
+    extraction = await catalog.extract(query)
+
+    if not catalog.service_available:
+        dialog_manager.dialog_data["results"] = []
+        dialog_manager.dialog_data["count"] = 0
+        dialog_manager.dialog_data["query"] = query
+        dialog_manager.dialog_data["degraded_text"] = (
+            f"📋 Распознано: {extraction.hard.model_dump(exclude_none=True)}\n"
+            "(поиск недоступен в тестовом режиме)"
+        )
+        await dialog_manager.switch_to(DemoSG.results)
+        return
+
+    page = await catalog.search(query, filters=extraction.hard.to_filters_dict() or None)
+    runtime = build_catalog_runtime(
+        query=query,
+        source=source,
+        filters=page.filters,
+        view_mode=view_mode,
+        results=page.results,
+        total=page.total,
+        next_offset=page.next_offset,
+        shown_item_ids=page.shown_item_ids,
+    )
+    state = dialog_manager.middleware_data.get("state")
+    if state is not None:
+        await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
+
+    if page.is_empty:
+        await show_catalog_controls(message=message, dialog_manager=dialog_manager, runtime=runtime)
+        await activate_catalog_state(dialog_manager=dialog_manager, state=CatalogSG.empty)
+        return
+
+    await send_catalog_results(
+        message=message,
+        property_bot=dialog_manager.middleware_data.get("property_bot"),
+        results=page.results,
+        total_count=page.total,
+        view_mode=view_mode,
+        shown_start=1,
+        telegram_id=message.from_user.id if message.from_user else 0,
+        reply_markup=build_catalog_keyboard(
+            shown=len(page.results),
+            total=page.total,
+            i18n=dialog_manager.middleware_data.get("i18n"),
+        ),
+    )
+    await show_catalog_controls(message=message, dialog_manager=dialog_manager, runtime=runtime)
+    await activate_catalog_state(dialog_manager=dialog_manager, state=CatalogSG.results)
+
+
+__all__ = [
+    "activate_catalog_state",
+    "load_next_catalog_page",
+    "run_catalog_search_and_render",
+    "search_catalog_from_query",
+]
 
 
 async def run_catalog_search_and_render(
