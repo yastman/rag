@@ -114,12 +114,9 @@ def run_benchmark(
         query_vector = generate_random_vector()
 
         start = time.perf_counter()
-        # NOTE: QdrantClient.search is deprecated in qdrant-client 1.10+ in
-        # favor of query_points; the bench keeps the legacy call for parity
-        # with historical numbers. See issue #1472.
-        results = client.search(  # type: ignore[attr-defined]
+        results = client.query_points(
             collection_name=collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=query_filter,
             limit=top_k,
             search_params=search_params,
@@ -127,7 +124,7 @@ def run_benchmark(
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         latencies_ms.append(elapsed_ms)
-        result_counts.append(len(results))
+        result_counts.append(len(results.points))
 
         if (i + 1) % 10 == 0:
             print(f"  {mode}: {i + 1}/{iterations} queries completed...")

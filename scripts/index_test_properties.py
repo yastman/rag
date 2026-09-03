@@ -113,13 +113,14 @@ async def main():
     # Test search
     test_query = "студия в Солнечный берег до 50000"
     test_embedding = await voyage.embed_query(test_query)
-    results = client.search(
+    results = client.query_points(
         collection_name=COLLECTION_NAME,
-        query_vector=("dense", test_embedding),
+        query=test_embedding,
+        using="dense",
         limit=3,
     )
     print(f"\nTest search for '{test_query}':")
-    for r in results:
+    for r in results.points:
         meta = r.payload.get("metadata", {})
         print(f"  - {meta.get('title')}: {meta.get('price'):,} EUR (score: {r.score:.3f})")
 
