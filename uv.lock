@@ -668,10 +668,10 @@ requires-dist = [
     { name = "pyyaml", marker = "extra == 'core'", specifier = ">=6.0.0" },
     { name = "qdrant-client", specifier = ">=1.19.0" },
     { name = "qdrant-client", marker = "extra == 'core'", specifier = ">=1.19.0" },
-    { name = "redis", specifier = ">=7.1.0" },
-    { name = "redis", marker = "extra == 'core'", specifier = ">=7.1.0" },
-    { name = "redisvl", specifier = ">=0.18.2" },
-    { name = "redisvl", marker = "extra == 'core'", specifier = ">=0.18.2" },
+    { name = "redis", specifier = ">=7.1.0,<8" },
+    { name = "redis", marker = "extra == 'core'", specifier = ">=7.1.0,<8" },
+    { name = "redisvl", specifier = ">=0.26.0,<0.27" },
+    { name = "redisvl", marker = "extra == 'core'", specifier = ">=0.26.0,<0.27" },
     { name = "requests", specifier = ">=2.34.2" },
     { name = "requests", marker = "extra == 'core'", specifier = ">=2.34.2" },
     { name = "tenacity", specifier = ">=8.2.0" },
@@ -2771,7 +2771,7 @@ wheels = [
 
 [[package]]
 name = "redisvl"
-version = "0.23.0"
+version = "0.26.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpath-ng" },
@@ -2783,9 +2783,9 @@ dependencies = [
     { name = "redis" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9e/85/ced77a6796c76190b66ee4ee06d596a92cfec9f610878f8fb72deb5b7819/redisvl-0.23.0.tar.gz", hash = "sha256:ba55049845321e9ac7dbf348c10ad967fc8849f4ec2a73f327419a4983d97a2c", size = 1192525, upload-time = "2026-07-03T13:24:46.368Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/77/23/7ffb5e1575e414fb324d3f64ac2ed6de70f2eea9d9381909547dd2305719/redisvl-0.26.0.tar.gz", hash = "sha256:db87fba908f33ab43b6d0dae5c9b3df59eb6b65166ee9e69b646a355a7bd86ed", size = 1273455, upload-time = "2026-08-19T15:54:07.895Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/ec/8a06734bcdb0eb359e3951098f586aec267f2fd625bc5009499bc55dd456/redisvl-0.23.0-py3-none-any.whl", hash = "sha256:7f5ddce5f0e59f67a25ba6dd3522c7bf570458eaa01f3da1df1e35cf4c3c5a51", size = 370727, upload-time = "2026-07-03T13:24:44.62Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/e2/91392718021582b5599b96787203cfb77a3db1244bcf08c855e1d748cdf5/redisvl-0.26.0-py3-none-any.whl", hash = "sha256:c3738695c4af0c46ff1ae96503f490c4e921936cbe66c5bbd61b689011a4332b", size = 396624, upload-time = "2026-08-19T15:54:06.062Z" },
 ]
 
 [[package]]
