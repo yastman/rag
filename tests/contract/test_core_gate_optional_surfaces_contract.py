@@ -2,7 +2,8 @@
 
 Optional surface tests remain first-class, but they depend on extras or adapter
 SDKs that are intentionally absent from the lean core install. ``make test`` is
-therefore limited to the core gate plus the no-service graph-path check.
+therefore limited to the core gate plus the no-service integration/smoke check
+(#3220 retired the legacy graph-path lane with the graph-compat runtime).
 
 After #2638: archived surface targets (test-api-adapter, test-legacy-graph-extra,
 test-voice-extra, test-eval-extra, test-observability-extra, test-optional-surfaces)
@@ -73,8 +74,9 @@ def test_make_test_is_deterministic_core_gate_not_broad_unit_collection() -> Non
     body = _target_body(_makefile_text(), "test")
 
     assert "$(MAKE) test-core" in body
-    assert "tests/integration/test_graph_paths.py" in body
+    assert "$(MAKE) test-no-service-lane" in body
     assert "pytest tests/unit/" not in body
+    assert "pytest tests/integration" not in body
 
 
 def test_make_test_does_not_run_optional_surface_paths_or_targets() -> None:
@@ -135,7 +137,6 @@ def test_broad_unit_exclusions_are_defined_and_applied() -> None:
     required_vars = (
         "PYTEST_TELEGRAM_ADAPTER_PATHS",
         "PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS",
-        "PYTEST_LEGACY_GRAPH_PATHS",
     )
     for var_name in required_vars:
         assert f"$({var_name})" in text or f"{var_name} " in text, (
@@ -150,5 +151,5 @@ def test_broad_unit_exclusions_are_defined_and_applied() -> None:
 
     assert "$(PYTEST_OPTIONAL_ADAPTER_IGNORE)" in broad_body
     assert "$(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB)" in broad_body
-    assert "$(PYTEST_OPTIONAL_PROVIDER_IGNORE)" in broad_body
+    # PYTEST_OPTIONAL_PROVIDER_IGNORE was retired with the legacy graph lane (#3220).
     assert "$(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)" in text

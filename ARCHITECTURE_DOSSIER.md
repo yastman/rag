@@ -132,7 +132,7 @@ telegram_bot*, *Core contracts layer is import-independent*, *src must not impor
 | `services/generation/` | Response formatting, streaming, session summary |
 | `services/observability/` | Redis monitor, funnel analytics; `nurturing_scheduler.py` (**dead**, apscheduler) |
 | `agents/` | **Entire dir dead** — LangGraph supervisor + CRM/manager/apartment tools (P26 removal) |
-| `graph/`, `pipelines/` | `graph_compat.py` = live imperative facade; `graph/` middleware (classify/cache/guard) |
+| `pipelines/` | Client-direct pipeline entrypoints (`client.py`) + pre-agent state contract |
 | `middlewares/` | i18n (fluentogram), throttling (cachetools TTLCache), error handler, fsm_cancel |
 | `preflight/` | Startup checks + remediation (Qdrant/Redis/BGE-M3 URL validation) |
 | `locales/{ru,en,uk}/` | fluent `.ftl` translations |

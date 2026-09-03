@@ -64,9 +64,9 @@ class TestUnifiedReadme:
 
 
 class TestTelegramBotReadme:
-    def test_graph_compat_not_old_graph_path(self):
+    def test_graph_compat_surface_removed(self):
         text = _read("telegram_bot/README.md")
-        assert "pipelines/graph_compat.py" in text
+        assert "pipelines/graph_compat.py" not in text
         assert "telegram_bot/graph/state.py" not in text
         assert "telegram_bot/graph/state_contract.py" not in text
 

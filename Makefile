@@ -97,10 +97,8 @@ PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_thread_routing.py \
 	tests/unit/test_topic_service_init.py
 PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB := $(addprefix --ignore-glob=,$(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS))
-PYTEST_LEGACY_GRAPH_PATHS :=
 PYTEST_OPTIONAL_ADAPTER_IGNORE := $(addprefix --ignore=,$(PYTEST_TELEGRAM_ADAPTER_PATHS))
 PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB := $(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)
-PYTEST_OPTIONAL_PROVIDER_IGNORE := $(addprefix --ignore=,$(PYTEST_LEGACY_GRAPH_PATHS))
 
 
 
@@ -273,10 +271,9 @@ audit: lint type-check security deps-audit vuln-audit arch-lint complexity ## Fu
 # TESTING
 # =============================================================================
 
-test: ## Run deterministic core PR/local gate (core + graph paths + no-service lane)
-	@echo "$(BLUE)Running deterministic core gate (test-core + graph_paths + no-service lane)...$(NC)"
+test: ## Run deterministic core PR/local gate (core + no-service integration/smoke lane)
+	@echo "$(BLUE)Running deterministic core gate (test-core + no-service integration/smoke lane)...$(NC)"
 	$(MAKE) test-core
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	$(MAKE) test-no-service-lane
 	@echo "$(GREEN)✓ Deterministic core gate complete$(NC)"
 
@@ -345,12 +342,12 @@ test-cov: ## Run tests with coverage
 
 test-unit: ## Run broad unit test lane locally in parallel
 	@echo "$(BLUE)Running broad unit tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Broad unit tests complete$(NC)"
 
 test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse locally)
 	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Unit tests (loadscope) complete$(NC)"
 
 test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main)
@@ -378,12 +375,12 @@ test-tooling: ## Run swarm/Kiro tooling tests (scripts/tests/ — guards ~/.kiro
 
 test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
-test-all-fast: ## Run unit tests + critical graph-path integration tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
-	@echo "$(BLUE)Running unit + critical graph-path integration tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+test-all-fast: ## Run unit tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
+	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ All fast tests complete$(NC)"
 
 test-lf: ## Run only last failed tests (parallel)
@@ -398,12 +395,12 @@ test-ff: ## Run failed first, then rest
 
 test-profile: ## Profile slowest tests (find bottlenecks) — measures the same lane as test-unit
 	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_OPTIONAL_PROVIDER_IGNORE) $(PYTEST_PARALLEL_ARGS) --durations=20 --durations-min=0.5 -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_PARALLEL_ARGS) --durations=20 --durations-min=0.5 -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Profile complete$(NC)"
 
-test-integration: ## Run graph path integration tests (no Docker, ~5s)
-	@echo "$(BLUE)Running integration tests...$(NC)"
-	uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
+test-integration: ## Run no-service integration tests (no Docker)
+	@echo "$(BLUE)Running no-service integration tests...$(NC)"
+	$(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/integration -m "no_services and not requires_extras and not slow" -v --timeout=30
 	@echo "$(GREEN)✓ Integration tests complete$(NC)"
 
 test-integration-full: ## Run ALL integration tests (requires Docker)

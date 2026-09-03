@@ -44,7 +44,8 @@ PARALLEL_VAR = "$(PYTEST_PARALLEL_ARGS)"
 # Targets that must consume $(PYTEST_PARALLEL_ARGS) so a local override
 # (`-n 2 --dist=worksteal`) flows through.
 OVERRIDABLE_TARGETS = (
-    "test",
+    # "test" is a pure orchestrator (test-core + test-no-service-lane) since
+    # #3220 retired the legacy graph-path lane; it no longer runs pytest itself.
     "test-contract",
     "test-unit",
     "test-fast",

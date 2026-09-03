@@ -2,9 +2,7 @@
 
 Moved from ``telegram_bot/graph/config.py`` as the second slice of the
 reverse-layering fix tracked under #1948 / #2045 / #2049. The legacy
-``telegram_bot.graph.config`` module is kept as a thin re-export so
-existing imports across the test suite, ``telegram_bot/`` internals, and
-external consumers continue to work without churn.
+``telegram_bot.graph.config`` re-export shim was removed in #3220.
 
 Provides service factories for LLM, embeddings, and cache thresholds.
 

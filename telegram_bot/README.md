@@ -12,7 +12,6 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 |------------|------|
 | [`main.py`](./main.py) `main()` | CLI entry point: configures logging, initializes observability, starts the bot runtime class with retry |
 | [`bot.py`](./bot.py) `PropertyBot` | Bot lifecycle, handlers, and dispatcher wiring. The class name is legacy; the runtime is domain-adaptable. |
-| [`pipelines/graph_compat.py`](./pipelines/graph_compat.py) `build_graph()` | Imperative graph-compat facade (delegates to `src/runtime/pipeline/`) |
 | [`pipelines/client.py`](./pipelines/client.py) | Client-direct non-RAG and RAG paths for simple queries |
 | [`preflight/`](./preflight/) | Startup health checks (Redis, Qdrant, external deps) |
 
@@ -48,7 +47,7 @@ make test
 | `agents/` | Agent SDK tools and RAG pipeline functions |
 | `dialogs/` | aiogram-dialog packages: catalog, filter, funnel + demo/viewing/settings |
 | `pipeline/` | Supervisor + pre-agent + streaming (agent orchestration) |
-| `pipelines/` | Client-direct pipeline entrypoints and the `graph_compat` facade |
+| `pipelines/` | Client-direct pipeline entrypoints |
 | `lifecycle/` | Bot startup/teardown, postgres bootstrap, service wiring |
 | `graph/` | Thin graph state + middleware (nodes moved to `src/runtime/graph/`) |
 | `integrations/` | Embeddings, cache, prompt manager, memory (several are shims to `src.runtime.integrations`) |

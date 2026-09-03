@@ -53,7 +53,7 @@ Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.to
 | Integrations · pipelines · keyboards · middlewares | [`../telegram_bot/integrations/README.md`](../telegram_bot/integrations/README.md) · [`../telegram_bot/pipelines/README.md`](../telegram_bot/pipelines/README.md) · [`../telegram_bot/keyboards/README.md`](../telegram_bot/keyboards/README.md) · [`../telegram_bot/middlewares/README.md`](../telegram_bot/middlewares/README.md) |
 | Constants · config · models · locales | [`../telegram_bot/constants/README.md`](../telegram_bot/constants/README.md) · [`../telegram_bot/config/README.md`](../telegram_bot/config/README.md) · [`../telegram_bot/models/README.md`](../telegram_bot/models/README.md) · [`../telegram_bot/locales/README.md`](../telegram_bot/locales/README.md) |
 | Query pipeline · lifecycle · preflight | [`../telegram_bot/pipeline/README.md`](../telegram_bot/pipeline/README.md) · [`../telegram_bot/lifecycle/README.md`](../telegram_bot/lifecycle/README.md) · [`../telegram_bot/preflight/README.md`](../telegram_bot/preflight/README.md) |
-| Observability · graph (legacy façade) | [`../telegram_bot/observability/README.md`](../telegram_bot/observability/README.md) · [`../telegram_bot/graph/README.md`](../telegram_bot/graph/README.md) |
+| Observability | [`../telegram_bot/observability/README.md`](../telegram_bot/observability/README.md) |
 
 ## Sidecar services & infra
 
