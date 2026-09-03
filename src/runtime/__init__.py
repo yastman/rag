@@ -6,11 +6,9 @@ This package is the migration target for #1948 (and the related slice in
     src/*           — reusable RAG library, no application coupling
     telegram_bot/*  — bot application, consumer of src/*
 
-Reality on `dev` still has ``src/api/main.py`` importing
-``telegram_bot.graph.*``, ``telegram_bot.integrations.cache``,
-``telegram_bot.services.qdrant``, and ``telegram_bot.scoring`` — see
-``tests/data/known_layering_violations.json`` for the explicit ratchet
-allowlist.
+Reality: the migrated kernel modules import nothing from
+``telegram_bot.*`` — ``tests/data/known_layering_violations.json`` (the
+ratchet allowlist) is empty.
 
 The intent of ``src.runtime`` is to host the truly shared kernel
 modules that today live under ``telegram_bot/``::

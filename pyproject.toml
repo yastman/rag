@@ -552,7 +552,6 @@ exclude_lines = [
 [tool.deptry]
 experimental_namespace_package = true
 extend_exclude = [
-    "src/api",
     "scripts",
     "services",
     "archive",

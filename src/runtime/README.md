@@ -1,13 +1,12 @@
 # `src/runtime` — shared runtime engine
 
 The engine layer of the monolith. `src/core/` (public boundary) and `telegram_bot/`
-(adapter) both call into here, and the `src.api` HTTP wrapper builds its pipeline from
-`src.runtime.graph.builder.build_pipeline()`.
+(adapter) both call into here.
 
 Layering: `src/core` → `src/runtime` → `telegram_bot` (enforced by `import-linter`; see
 [`../../pyproject.toml`](../../pyproject.toml) `[tool.importlinter]`). The reverse-layering
-migration that created this package is complete — `src/api` and the runtime kernel no longer
-import from `telegram_bot`.
+migration that created this package is complete — the runtime kernel does not import from
+`telegram_bot`.
 
 ## Subpackages
 
@@ -15,7 +14,7 @@ import from `telegram_bot`.
 |------|------|
 | `pipeline/` | RAG orchestration — `assistant_pipeline.py`, `rag.py` (`rag_pipeline`), retrieve / grade+rerank / cache stages |
 | `generation/` | Answer generation — `service.py` (`generate_answer`), prompts, streaming, policy |
-| `graph/` | Graph builder + config — `builder.build_pipeline`, `GraphConfig`, `state.py`, `nodes/`, `edges.py` |
+| `graph/` | Graph factory resolver + config — `builder.resolve_pipeline_factory`, `GraphConfig`, `state.py`, `nodes/`, `edges.py` |
 | `qdrant/` | `QdrantService` — hybrid dense + sparse + ColBERT search gateway |
 | `retrieval/` | `RetrievalService` — composes embeddings with the Qdrant gateway |
 | `grounding/` | Grounding / citation policy |

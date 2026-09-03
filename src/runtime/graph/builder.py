@@ -23,8 +23,7 @@ This module replaces that static import with a string-based resolution:
 
 The default still points at the bot's existing ``build_graph`` so
 production behaviour is unchanged. Tests and alternative deployments
-override the env var to inject their own factory without touching
-``src/api/``.
+override the env var to inject their own factory.
 """
 
 from __future__ import annotations
@@ -42,9 +41,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_FACTORY_SPEC = "telegram_bot.graph.graph:build_graph"
 """Default ``module:attribute`` factory spec.
 
-The bot's ``build_graph`` is the canonical pipeline factory; ``src/api``
-and ``mini_app`` consume it via this seam so they remain free of any
-static ``from telegram_bot ...`` import.
+The bot's ``build_graph`` is the canonical pipeline factory. Consuming it
+through this seam keeps callers free of any static
+``from telegram_bot ...`` import.
 """
 
 ENV_VAR = "RAG_GRAPH_FACTORY"
@@ -112,21 +111,10 @@ def resolve_pipeline_factory() -> Callable[..., Any]:
     return factory
 
 
-def build_pipeline(**kwargs: Any) -> Any:
-    """Resolve the configured factory and call it with ``**kwargs``.
-
-    Convenience wrapper used by ``src/api/main.py``'s ``lifespan`` so the
-    call site stays a single line.
-    """
-    factory = resolve_pipeline_factory()
-    return factory(**kwargs)
-
-
 __all__ = [
     "DEFAULT_FACTORY_SPEC",
     "ENV_VAR",
     "PipelineFactoryError",
-    "build_pipeline",
     "reset_pipeline_factory_cache",
     "resolve_pipeline_factory",
 ]

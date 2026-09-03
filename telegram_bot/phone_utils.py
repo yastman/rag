@@ -1,7 +1,7 @@
 """Re-export shim for ``src.phone_utils`` (#1948 layering fix).
 
 The canonical home of the shared phone-normalization helpers is now
-``src/phone_utils.py`` so ``mini_app/`` and ``src/api/`` can import them
+``src/phone_utils.py`` so transport adapters can import them
 without taking a dependency on ``telegram_bot.*`` (see #1948 layering
 contract).
 
