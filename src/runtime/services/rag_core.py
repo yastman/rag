@@ -39,8 +39,7 @@ def build_retrieved_context(
 ) -> list[dict[str, str | float]]:
     """Build curated context snippets for LLM-as-a-Judge evaluation.
 
-    Shared between rag_pipeline._build_retrieved_context and
-    telegram_bot.agents.retrieval_stage (identical logic).
+    Shared with rag_pipeline._build_retrieved_context (identical logic).
     """
     ctx: list[dict[str, str | float]] = []
     for doc in results[:limit]:

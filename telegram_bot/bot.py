@@ -73,15 +73,12 @@ class GraphRecursionError(RuntimeError):
 
 
 if TYPE_CHECKING:
-    from .agents.context import BotContext as BotContextType
     from .lifecycle.services import Services  # card_2a71ec058138: homed to lifecycle/
 else:
-    BotContextType = Any
     Services = Any
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
 AsyncQdrantClient: Any = None
-BotContext: Any = Any
 
 
 logger = logging.getLogger(__name__)
@@ -92,13 +89,6 @@ _APARTMENT_PAGE_SIZE = 5
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 # Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
 _POLLING_LOCK_MAX_REFRESH_FAILURES = 2
-
-
-def create_bot_agent(*args: Any, **kwargs: Any) -> Any:
-    """Lazy wrapper that keeps module-level patchability for tests."""
-    from .agents.agent import create_bot_agent as _create_bot_agent
-
-    return _create_bot_agent(*args, **kwargs)
 
 
 def classify_query(*args: Any, **kwargs: Any) -> Any:
@@ -662,62 +652,6 @@ class PropertyBot:
             dialog_manager,
         )
 
-    async def _astream_supervisor_with_recovery(
-        self,
-        *,
-        agent: Any,
-        tools: list[Any],
-        role: str,
-        user_text: str,
-        chat_id: int,
-        callbacks: list[Any],
-        bot_context: BotContextType,
-        rag_result_store: dict[str, Any],
-        forum_thread_id: int | None = None,
-        use_streaming: bool = True,
-    ) -> tuple[str, dict[str, Any]]:
-        return await _bot_query_pipeline._astream_supervisor_with_recovery(
-            self,
-            agent=agent,
-            tools=tools,
-            role=role,
-            user_text=user_text,
-            chat_id=chat_id,
-            callbacks=callbacks,
-            bot_context=bot_context,
-            rag_result_store=rag_result_store,
-            forum_thread_id=forum_thread_id,
-            use_streaming=use_streaming,
-        )
-
-    async def _ainvoke_supervisor_with_recovery(
-        self,
-        *,
-        agent: Any,
-        tools: list[Any],
-        role: str,
-        user_text: str,
-        chat_id: int,
-        callbacks: list[Any],
-        bot_context: BotContextType,
-        rag_result_store: dict[str, Any],
-        forum_thread_id: int | None = None,
-        message: Any | None = None,
-    ) -> dict[str, Any]:
-        return await _bot_query_pipeline._ainvoke_supervisor_with_recovery(
-            self,
-            agent=agent,
-            tools=tools,
-            role=role,
-            user_text=user_text,
-            chat_id=chat_id,
-            callbacks=callbacks,
-            bot_context=bot_context,
-            rag_result_store=rag_result_store,
-            forum_thread_id=forum_thread_id,
-            message=message,
-        )
-
     async def handle_feedback(
         self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
     ) -> None:
@@ -739,17 +673,6 @@ class PropertyBot:
     async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
         """Thin wrapper — see ``_bot_crm_callbacks`` (#2980)."""
         await _bot_crm_callbacks.handle_clearcache_callback(self, callback_query)
-
-    async def handle_menu_action(
-        self, callback: CallbackQuery, query_text: str, locale: str = "ru"
-    ) -> None:
-        """Handle menu button click — dispatch query_text to agent pipeline.
-
-        Thin delegate — see ``telegram_bot.handlers.command_handlers.handle_menu_action``.
-        """
-        from .handlers.command_handlers import handle_menu_action
-
-        await handle_menu_action(self, callback, query_text, locale=locale)
 
     # ------------------------------------------------------------------ #
     # Lifecycle helpers — called in order by start()                      #

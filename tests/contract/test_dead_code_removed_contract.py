@@ -346,50 +346,21 @@ def test_span_coverage_contract_drops_score_boosting() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7. utility_tools.handoff — Kommo task creation branch (#1541 item #6).
+# 7. utility_tools (agent facade) — Kommo task creation branch (#1541 item #6).
 # ---------------------------------------------------------------------------
 
 
-def test_handoff_drops_kommo_task_creation_branch() -> None:
-    """``utility_tools.handoff`` must not call ``kommo.create_task`` any more.
+def test_agents_utility_tools_module_is_gone() -> None:
+    """``telegram_bot/agents/utility_tools.py`` is deleted outright (#3216).
 
-    The previous branch was guarded by ``lead_id`` which was always ``None``,
-    so the call was unreachable. Removing it lets the function shed its
-    ``TaskCreate`` import and the orphaned ``elif kommo`` log branch.
+    Earlier #1541 pins guarded the handoff tool inside that module; the
+    imperative agent facade it belonged to was removed wholesale in #3216,
+    so the file itself must stay gone.
     """
-    tree = _parse("telegram_bot/agents/utility_tools.py")
-    handoff_func: ast.AsyncFunctionDef | None = None
-    for node in ast.walk(tree):
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "handoff":
-            handoff_func = node
-            break
-    assert handoff_func is not None, "handoff async function must exist in utility_tools.py"
-
-    # Walk every Call inside handoff and forbid kommo.create_task / TaskCreate.
-    for sub in ast.walk(handoff_func):
-        if not isinstance(sub, ast.Call):
-            continue
-        target = sub.func
-        if isinstance(target, ast.Attribute) and target.attr == "create_task":
-            value = target.value
-            if isinstance(value, ast.Name) and value.id == "kommo":
-                pytest.fail(
-                    "handoff must not call kommo.create_task; the lead_id resolution"
-                    " path was never implemented and the branch was unreachable."
-                )
-        if isinstance(target, ast.Name) and target.id == "TaskCreate":
-            pytest.fail(
-                "handoff must not construct TaskCreate; the Kommo handoff task"
-                " creation branch was removed in #1541 (residual slice)."
-            )
-
-
-def test_handoff_drops_lead_id_resolution_placeholder() -> None:
-    """The placeholder ``lead_id: int | None = None`` must be gone with the branch."""
-    src_text = (REPO_ROOT / "telegram_bot" / "agents" / "utility_tools.py").read_text(
-        encoding="utf-8"
+    legacy_path = REPO_ROOT / "telegram_bot" / "agents" / "utility_tools.py"
+    assert not legacy_path.exists(), (
+        "#3216: telegram_bot/agents/utility_tools.py was deleted with the "
+        "imperative agent facade; do not resurrect it."
     )
-    assert "lead_id: int | None = None" not in src_text, (
-        "The lead_id placeholder annotation must be removed alongside the dead Kommo"
-        " task-creation branch in handoff (#1541 item #6)."
-    )
+
+

@@ -1,10 +1,12 @@
-"""Tests for menu button on_click -> handle_menu_action flow (#444)."""
+"""Tests for menu button on_click -> bot handler dispatch flow (#444).
+
+#3216 removed the inline ``PropertyBot.handle_menu_action`` agent bridge;
+these tests pin the surviving dialog dispatcher (``client_menu.on_menu_action``).
+"""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-from ._property_bot_ast import get_default_map, get_parameter_names, get_property_bot_method
+from unittest.mock import AsyncMock, MagicMock
 
 
 async def test_on_menu_action_services_closes_dialog_and_calls_handler():
@@ -132,48 +134,3 @@ async def test_on_menu_action_manager_rebinds_from_user_to_callback_actor():
     passed_message = mock_bot._handle_manager.await_args.args[0]
     assert passed_message.from_user is callback.from_user
 
-
-def test_handle_menu_action_exists_on_property_bot():
-    """PropertyBot has a handle_menu_action method."""
-    method = get_property_bot_method("handle_menu_action")
-    assert method.name == "handle_menu_action"
-
-
-def test_handle_menu_action_signature():
-    """handle_menu_action accepts (self, callback, query_text, locale)."""
-    method = get_property_bot_method("handle_menu_action")
-    params = get_parameter_names(method)
-    assert "callback" in params
-    assert "query_text" in params
-    assert "locale" in params
-    assert get_default_map(method)["locale"] == "ru"
-
-
-async def test_handle_menu_action_returns_early_if_no_from_user():
-    """handle_menu_action returns without error if callback.from_user is None."""
-    with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
-        from telegram_bot.bot import PropertyBot
-
-        bot = PropertyBot.__new__(PropertyBot)
-
-        callback = MagicMock()
-        callback.from_user = None
-        callback.message = MagicMock()
-
-        # Should not raise
-        await bot.handle_menu_action(callback, "some query")
-
-
-async def test_handle_menu_action_returns_early_if_no_message():
-    """handle_menu_action returns without error if callback.message is None."""
-    with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
-        from telegram_bot.bot import PropertyBot
-
-        bot = PropertyBot.__new__(PropertyBot)
-
-        callback = MagicMock()
-        callback.from_user = MagicMock()
-        callback.message = None
-
-        # Should not raise
-        await bot.handle_menu_action(callback, "some query")

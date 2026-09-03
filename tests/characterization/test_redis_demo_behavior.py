@@ -44,6 +44,7 @@ from telegram_bot.services.apartment.apartment_filter_extractor import (
     ApartmentFilterExtractor,
 )
 
+
 pytestmark = pytest.mark.characterization
 
 _DEAD_REDIS_URL = "redis://localhost:1/0"  # port 1: connection refused, fast

@@ -30,6 +30,7 @@ import redis.asyncio as aioredis
 from src.runtime.integrations.cache import CacheLayerManager
 from src.runtime.integrations.polling_lock import PollingLockBusy, RedisPollingLock
 
+
 pytestmark = pytest.mark.requires_services
 
 _PROBE_LOCK_KEY = "i3199-polling"
@@ -57,7 +58,7 @@ async def _cleanup_probe_keys(client: aioredis.Redis) -> None:
             keys = [key async for key in client.scan_iter(match=pattern)]
             if keys:
                 await client.delete(*keys)
-    except Exception:  # noqa: S110 - cleanup is best effort
+    except Exception:
         pass
 
 
