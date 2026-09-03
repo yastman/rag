@@ -14,7 +14,7 @@ from telegram_bot.scoring import compute_checkpointer_overhead_proxy_ms
 @pytest.fixture
 def mock_config(monkeypatch):
     """Create mock bot config."""
-    monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
+    monkeypatch.delenv("KOMMO_ACCESS_TOKEN", raising=False)
     return BotConfig(
         _env_file=None,
         telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",

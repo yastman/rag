@@ -34,7 +34,6 @@ from telegram_bot.startup_status import DependencyCheckResult, StartupReport
 @pytest.fixture
 def mock_config(monkeypatch):
     """Create mock bot config."""
-    monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
     monkeypatch.delenv("KOMMO_ACCESS_TOKEN", raising=False)
     return BotConfig(
         _env_file=None,
@@ -875,93 +874,6 @@ class TestPreAgentGuard:
         mock_core.assert_awaited_once()
 
 
-class TestClientDirectPipeline:
-    """Client-direct path still reachable when flag enabled."""
-
-    async def test_client_direct_returns_early(self, mock_config):
-        mock_config.client_direct_pipeline_enabled = True
-        bot, _ = _create_bot(mock_config)
-        bot._cache.check_semantic = AsyncMock(return_value=None)
-        bot._cache.get_embedding = AsyncMock(return_value=None)
-        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 8)
-
-        with (
-            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch(
-                "telegram_bot.pipelines.client.run_client_pipeline",
-                new_callable=AsyncMock,
-            ) as mock_run,
-            patch(
-                "telegram_bot.assistant_core_adapter.run_core_text_request",
-                new_callable=AsyncMock,
-            ) as mock_core,
-        ):
-            mock_run.return_value = SimpleNamespace(needs_agent=False, answer="direct answer")
-            message = _make_text_message("цены?")
-            with patch("telegram_bot.pipeline.supervisor.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        mock_run.assert_awaited_once()
-        mock_core.assert_not_awaited()
-        assert "direct answer" in message.answer.await_args.args[0]
-
-    async def test_client_direct_failure_falls_back_to_core(self, mock_config):
-        mock_config.client_direct_pipeline_enabled = True
-        bot, _ = _create_bot(mock_config)
-        bot._cache.check_semantic = AsyncMock(return_value=None)
-        bot._cache.get_embedding = AsyncMock(return_value=None)
-        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 8)
-
-        with (
-            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch(
-                "telegram_bot.pipelines.client.run_client_pipeline",
-                new_callable=AsyncMock,
-                side_effect=RuntimeError("boom"),
-            ),
-            patch(
-                "telegram_bot.assistant_core_adapter.run_core_text_request",
-                new_callable=AsyncMock,
-                return_value=_core_result(response_text="fallback core"),
-            ) as mock_core,
-        ):
-            message = _make_text_message("найди квартиру")
-            with patch("telegram_bot.pipeline.supervisor.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        mock_core.assert_awaited_once()
-        assert "fallback core" in message.answer.await_args.args[0]
-
-    async def test_manager_path_skips_client_direct(self, mock_config):
-        mock_config.client_direct_pipeline_enabled = True
-        bot, _ = _create_bot(mock_config)
-        bot._cache.check_semantic = AsyncMock(return_value=None)
-        bot._cache.get_embedding = AsyncMock(return_value=None)
-        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 8)
-
-        with (
-            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch("telegram_bot.pipelines.client.run_client_pipeline") as mock_run,
-            patch(
-                "telegram_bot.assistant_core_adapter.run_core_text_request",
-                new_callable=AsyncMock,
-                return_value=_core_result(),
-            ) as mock_core,
-        ):
-            message = _make_text_message("статус сделки")
-            with patch("telegram_bot.pipeline.supervisor.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        mock_run.assert_not_called()
-        mock_core.assert_awaited_once()
-
-
 class TestStreamingCoordination:
     """Streaming helpers still live on PropertyBot thin wrappers."""
 
@@ -1778,7 +1690,7 @@ class TestLegacyCallbackRoutes:
 
 
 class TestPropertyBotApartmentPipeline:
-    """PropertyBot.__init__ wires _apartment_pipeline; fast path uses it."""
+    """PropertyBot.__init__ wires _apartment_pipeline for dialogs and agent tools."""
 
     def test_init_creates_apartment_pipeline(self, mock_config):
         """PropertyBot.__init__ creates _apartment_pipeline (not None)."""
@@ -1790,52 +1702,3 @@ class TestPropertyBotApartmentPipeline:
         """Missing optional apartment LLM deps should not crash bot initialization."""
         bot, _ = _create_bot(mock_config)
         assert bot._apartment_pipeline is not None
-
-    async def test_apartment_fast_path_uses_pipeline(self, mock_config):
-        """_handle_apartment_fast_path calls pipeline.extract and passes filters to search."""
-        from unittest.mock import patch as _patch
-
-        bot, _ = _create_bot(mock_config)
-
-        # Pipeline mock
-        pipeline = AsyncMock()
-        extraction = MagicMock()
-        extraction.meta.confidence = "HIGH"
-        extraction.meta.semantic_remainder = ""
-        extraction.hard.to_filters_dict.return_value = {"rooms": 2}
-        pipeline.extract.return_value = extraction
-        bot._apartment_pipeline = pipeline
-
-        # Service mocks
-        bot._embeddings = AsyncMock()
-        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
-            return_value=([0.1] * 1024, {"indices": [], "values": []}, None)
-        )
-        bot._cache = AsyncMock()
-        bot._cache.redis = None  # skip implicit retry block
-        bot._apartments_service = AsyncMock()
-        bot._apartments_service.search_with_filters.return_value = ([], 0)
-
-        message = _make_text_message(text="двушка у моря")
-
-        with (
-            _patch(
-                "telegram_bot.services.apartment.apartments_service.check_escalation",
-                return_value=False,
-            ),
-            _patch(
-                "telegram_bot.services.generation.generate_response.generate_response",
-                new_callable=AsyncMock,
-                return_value={"response": "ok", "response_sent": True},
-            ),
-        ):
-            result = await bot._handle_apartment_fast_path(
-                user_text="двушка у моря",
-                message=message,
-            )
-
-        pipeline.extract.assert_awaited_once_with("двушка у моря")
-        bot._apartments_service.search_with_filters.assert_awaited_once()
-        call_kwargs = bot._apartments_service.search_with_filters.await_args
-        assert call_kwargs.kwargs["filters"] == {"rooms": 2}
-        assert result == "ok"

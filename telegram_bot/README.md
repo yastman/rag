@@ -12,12 +12,11 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 |------------|------|
 | [`main.py`](./main.py) `main()` | CLI entry point: configures logging, initializes observability, starts the bot runtime class with retry |
 | [`bot.py`](./bot.py) `PropertyBot` | Bot lifecycle, handlers, and dispatcher wiring. The class name is legacy; the runtime is domain-adaptable. |
-| [`pipelines/client.py`](./pipelines/client.py) | Client-direct non-RAG and RAG paths for simple queries |
 | [`preflight/`](./preflight/) | Startup health checks (Redis, Qdrant, external deps) |
 
 ## Boundaries
 
-- **Transport does not absorb retrieval/domain logic.** `bot.py` handlers call into `agents` or `pipelines`; they do not query Qdrant or run LLM prompts directly.
+- **Transport does not absorb retrieval/domain logic.** `bot.py` handlers call into `pipeline/` (supervisor) or `agents`; they do not query Qdrant or run LLM prompts directly.
 - **Ingestion determinism** is owned by `src/ingestion/`; bot code must not modify collection schemas or manifest identity.
 
 ## Related Runtime Services
@@ -47,7 +46,7 @@ make test
 | `agents/` | Agent SDK tools (RAG retrieval delegated to `src/runtime/pipeline/`) |
 | `dialogs/` | aiogram-dialog packages: catalog, filter, funnel + demo/viewing/settings |
 | `pipeline/` | Supervisor + pre-agent + streaming (agent orchestration) |
-| `pipelines/` | Client-direct pipeline entrypoints |
+| `pipelines/` | Shared pre-agent state contract (`state_contract.py`) |
 | `lifecycle/` | Bot startup/teardown, postgres bootstrap, service wiring |
 | `integrations/` | Embeddings, cache, prompt manager, memory (several are shims to `src.runtime.integrations`) |
 | `observability/` | Trace/context helpers + no-op `@observe` shim (Langfuse removed) |

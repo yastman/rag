@@ -1,16 +1,4 @@
 {
-  "test_agent_intent_defaults_to_empty_string": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
-  ],
-  "test_answer_defaults_to_empty_string": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
-  ],
-  "test_cache_hit_defaults_to_false": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
-  ],
   "test_combined_filters": [
     "tests/unit/dialogs/test_filter_constants.py",
     "tests/unit/dialogs/test_funnel_results.py"
@@ -39,10 +27,6 @@
     "tests/unit/test_feedback.py",
     "tests/unit/test_feedback_handler.py"
   ],
-  "test_is_dataclass": [
-    "tests/unit/config/test_constants.py",
-    "tests/unit/services/test_types.py"
-  ],
   "test_keyboard_has_7_buttons": [
     "tests/unit/keyboards/test_client_keyboard.py",
     "tests/unit/keyboards/test_demo_button.py"
@@ -55,21 +39,9 @@
     "tests/unit/test_feedback.py",
     "tests/unit/test_feedback_handler.py"
   ],
-  "test_needs_agent_defaults_to_false": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
-  ],
-  "test_pipeline_mode_defaults_to_client_direct": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
-  ],
   "test_qdrant_health": [
     "tests/integration/test_docker_services.py",
     "tests/smoke/test_smoke_services.py"
-  ],
-  "test_query_type_defaults_to_general": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
   ],
   "test_redis_connection": [
     "tests/integration/test_docker_services.py",
@@ -79,25 +51,9 @@
     "tests/load/test_load_redis_eviction.py",
     "tests/smoke/test_preflight.py"
   ],
-  "test_response_sent_defaults_to_false": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
-  ],
-  "test_scores_defaults_to_empty_dict": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
-  ],
-  "test_sent_message_defaults_to_none": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
-  ],
   "test_settings_defaults": [
     "tests/unit/test_bge_m3_endpoints.py",
     "tests/unit/test_small_to_big.py"
-  ],
-  "test_sources_defaults_to_empty_list": [
-    "tests/unit/pipelines/test_client_pipeline.py",
-    "tests/unit/services/test_types.py"
   ],
   "test_starts_catalog_dialog_results": [
     "tests/unit/dialogs/test_filter_dialog.py",

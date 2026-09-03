@@ -1,11 +1,15 @@
-"""E2E safety net for the 3 kept surfaces (Epic #2843 / Issue #2850).
+"""E2E safety net for the kept surfaces (Epic #2843 / Issue #2850, #3215).
 
 Surfaces tested:
-  1. Text RAG Chat  — entry: infer_agent_intent + run_client_pipeline
-  2. Apartment Filter Dialog — entry: handle_demo_button + handle_demo_apartments
-  3. Manager Reply (Forum Topics) — entry: ForumBridge.relay_to_topic + relay_to_client
+  1. Apartment Filter Dialog — entry: handle_demo_button + handle_demo_apartments
+  2. Manager Reply (Forum Topics) — entry: ForumBridge.relay_to_topic + relay_to_client
 
-Surfaces 2 and 3 require aiogram and are skipped in the lean venv;
+The Text RAG Chat surface (#3215) goes through the assistant core via the
+supervisor (`telegram_bot/pipeline/supervisor.py`); the client-direct
+pipeline surface was removed, and its one-answer-per-question contract is
+covered by the supervisor unit tests.
+
+Surfaces 1 and 2 require aiogram and are skipped in the lean venv;
 they run under ``make test-unit-extras`` with ``--all-extras``.
 """
 
@@ -20,268 +24,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.no_services]
 
 
 # ---------------------------------------------------------------------------
-# Surface 1: Text RAG Chat
-# ---------------------------------------------------------------------------
-
-from telegram_bot.pipelines.client import infer_agent_intent, run_client_pipeline
-
-
-class TestTextRagChatSurface:
-    """Happy-path coverage for the Text RAG Chat surface."""
-
-    def test_infer_agent_intent_empty_for_rag_query(self) -> None:
-        """Plain real-estate query routes to RAG (empty intent)."""
-        assert infer_agent_intent("Какие квартиры есть в Варне?") == ""
-
-    def test_infer_agent_intent_detects_handoff(self) -> None:
-        assert infer_agent_intent("Хочу поговорить с менеджером") == "handoff"
-
-    def test_infer_agent_intent_detects_mortgage(self) -> None:
-        assert infer_agent_intent("Расскажите про ипотеку") == "mortgage"
-
-    def test_infer_agent_intent_detects_apartment(self) -> None:
-        assert infer_agent_intent("Хочу подобрать апартаменты у моря") == "apartment"
-
-    @pytest.mark.asyncio
-    async def test_run_client_pipeline_rag_path_returns_answer(self) -> None:
-        """run_client_pipeline produces a non-empty answer on the RAG happy path."""
-        msg = MagicMock()
-        msg.bot = MagicMock()
-        msg.chat = MagicMock(id=100)
-        msg.answer = AsyncMock()
-
-        rag_result = {
-            "response": "",
-            "query_type": "FAQ",
-            "documents": [{"content": "Квартиры от 50 000 EUR.", "id": "doc1"}],
-            "reranked_documents": [],
-            "cache_hit": False,
-            "query_rewritten": False,
-            "rewritten_query": None,
-            "embedding_latency": 0.1,
-            "search_latency": 0.2,
-            "rerank_latency": 0.0,
-            "confidence_score": 0.9,
-            "grade_confidence": 0.9,
-            "grounded": True,
-            "latency_stages": {},
-            "llm_call_count": 0,
-        }
-        gen_result = {
-            "response": "Квартиры от 50 000 EUR.",
-            "sources": [],
-            "latency": 0.5,
-            "model": "gpt-4o-mini",
-            "grounded": True,
-            "ground_truth_used": False,
-            "response_sent": False,
-            "llm_call_count": 1,
-        }
-
-        with (
-            patch(
-                "telegram_bot.pipelines.client.rag_pipeline",
-                new=AsyncMock(return_value=rag_result),
-            ),
-            patch(
-                "telegram_bot.pipelines.client.generate_response",
-                new=AsyncMock(return_value=gen_result),
-            ),
-            patch("telegram_bot.pipelines.client.send_html_messages", new=AsyncMock()),
-        ):
-            result = await run_client_pipeline(
-                user_text="Сколько стоят квартиры?",
-                user_id=42,
-                session_id="sess-1",
-                message=msg,
-                cache=AsyncMock(),
-                embeddings=MagicMock(),
-                sparse_embeddings=MagicMock(),
-                qdrant=MagicMock(),
-                reranker=None,
-                llm=None,
-                config=MagicMock(
-                    show_sources=False,
-                    streaming_enabled=False,
-                    relevance_threshold_rrf=0.005,
-                    get_collection_name=MagicMock(return_value="test_col"),
-                ),
-                query_type="FAQ",
-            )
-
-        assert result is not None
-        assert result.answer == "Квартиры от 50 000 EUR."
-
-
-class TestOneAnswerPerQuestion:
-    """Issue #3200: exactly one Telegram answer is delivered per question.
-
-    Covers the three demo delivery paths — grounded RAG answer, semantic-cache
-    hit, and safe no-answer fallback — and locks one outgoing message each.
-    Skipped when aiogram is not installed (lean venv); runs under extras lane.
-    """
-
-    @pytest.fixture(autouse=True)
-    def _require_aiogram(self) -> None:
-        pytest.importorskip("aiogram", reason="aiogram not installed (use extras lane)")
-
-    @staticmethod
-    def _message() -> MagicMock:
-        msg = MagicMock()
-        msg.bot = MagicMock()
-        msg.chat = MagicMock(id=100)
-        msg.answer = AsyncMock()
-        return msg
-
-    @staticmethod
-    def _config() -> MagicMock:
-        return MagicMock(
-            show_sources=False,
-            streaming_enabled=False,
-            relevance_threshold_rrf=0.005,
-            get_collection_name=MagicMock(return_value="i3200_col"),
-        )
-
-    async def _run_pipeline(
-        self,
-        *,
-        rag_result: dict,
-        gen_result: dict,
-        user_text: str,
-        query_type: str = "FAQ",
-    ):
-        msg = self._message()
-        gen = AsyncMock(return_value=gen_result)
-        with (
-            patch(
-                "telegram_bot.pipelines.client.rag_pipeline",
-                new=AsyncMock(return_value=rag_result),
-            ),
-            patch("telegram_bot.pipelines.client.generate_response", new=gen),
-            patch(
-                "telegram_bot.pipelines.client.send_html_messages",
-                new=AsyncMock(),
-            ) as send,
-        ):
-            result = await run_client_pipeline(
-                user_text=user_text,
-                user_id=42,
-                session_id="sess-i3200",
-                message=msg,
-                cache=AsyncMock(),
-                embeddings=MagicMock(),
-                sparse_embeddings=MagicMock(),
-                qdrant=MagicMock(),
-                reranker=None,
-                llm=None,
-                config=self._config(),
-                query_type=query_type,
-            )
-        return result, gen, send
-
-    @pytest.mark.asyncio
-    async def test_grounded_answer_is_sent_exactly_once(self) -> None:
-        answer = "Стоимость студии в Sunny Beach — 115 000 EUR, бассейн включён."
-        rag_result = {
-            "response": "",
-            "query_type": "FAQ",
-            "documents": [
-                {
-                    "content": "Sunny Beach studio, 115 000 EUR, pool.",
-                    "metadata": {
-                        "source_id": "sunny_beach_studio",
-                        "title": "Sunny Beach Studio",
-                        "url": "fixture://sunny_beach_studio",
-                    },
-                }
-            ],
-            "cache_hit": False,
-            "grade_confidence": 0.9,
-            "grounded": True,
-            "latency_stages": {},
-            "llm_call_count": 0,
-        }
-        gen_result = {
-            "response": answer,
-            "grounded": True,
-            "safe_fallback_used": False,
-            "response_sent": False,
-            "llm_call_count": 1,
-        }
-
-        result, gen, send = await self._run_pipeline(
-            rag_result=rag_result,
-            gen_result=gen_result,
-            # No apartment-intent keywords ("студи", "апартамент", …): those
-            # route to the apartment agent before RAG at this surface.
-            user_text="Сколько стоит квартира у моря в Sunny Beach?",
-        )
-
-        gen.assert_awaited_once()
-        send.assert_awaited_once()
-        assert send.await_args.args[1] == answer
-        assert result.answer == answer
-
-    @pytest.mark.asyncio
-    async def test_safe_no_answer_is_sent_exactly_once(self) -> None:
-        safe_text = "⚠️ Извините, сервис временно недоступен.\n\nПопробуйте повторить запрос позже."
-        rag_result = {
-            "response": "",
-            "query_type": "FAQ",
-            "documents": [],
-            "cache_hit": False,
-            "grade_confidence": 0.1,
-            "grounded": False,
-            "latency_stages": {},
-            "llm_call_count": 0,
-        }
-        gen_result = {
-            "response": safe_text,
-            "grounded": False,
-            "safe_fallback_used": True,
-            "response_sent": False,
-            "llm_call_count": 0,
-        }
-
-        result, gen, send = await self._run_pipeline(
-            rag_result=rag_result,
-            gen_result=gen_result,
-            user_text="Какие документы нужны для ВНЖ на несуществующем острове в базе?",
-        )
-
-        gen.assert_awaited_once()
-        send.assert_awaited_once()
-        assert send.await_args.args[1] == safe_text
-        assert result.answer == safe_text
-
-    @pytest.mark.asyncio
-    async def test_cache_hit_answer_is_sent_exactly_once_without_generation(self) -> None:
-        cached = "Студия в Sunny Beach — 115 000 EUR (из кэша)."
-        rag_result = {
-            "response": cached,
-            "query_type": "FAQ",
-            "documents": [],
-            "cache_hit": True,
-            "latency_stages": {},
-            "llm_call_count": 0,
-        }
-        gen_result = {"response": "не должен вызываться", "response_sent": False}
-
-        result, gen, send = await self._run_pipeline(
-            rag_result=rag_result,
-            gen_result=gen_result,
-            # No apartment-intent keywords at this surface (see grounded test).
-            user_text="Сколько стоит квартира у моря в Sunny Beach?",
-        )
-
-        gen.assert_not_awaited()
-        send.assert_awaited_once()
-        assert send.await_args.args[1] == cached
-        assert result.answer == cached
-
-
-# ---------------------------------------------------------------------------
-# Surface 2: Apartment Filter Dialog
+# Surface 1: Apartment Filter Dialog
 # ---------------------------------------------------------------------------
 
 
@@ -339,7 +82,7 @@ class TestApartmentFilterDialogSurface:
 
 
 # ---------------------------------------------------------------------------
-# Surface 3: Manager Reply (Forum Topics)
+# Surface 2: Manager Reply (Forum Topics)
 # ---------------------------------------------------------------------------
 
 
