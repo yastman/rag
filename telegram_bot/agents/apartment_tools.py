@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from telegram_bot.agents.context import get_bot_context
+from telegram_bot.agents.context import BotContext, get_bot_context
 from telegram_bot.agents.tooling import RunnableConfig, tool
 from telegram_bot.services.apartment.apartment_formatter import format_apartment_text
+
+
+if TYPE_CHECKING:
+    from telegram_bot.services.apartment.apartment_extraction_pipeline import (
+        ApartmentExtractionPipeline,
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -43,7 +50,7 @@ def _has_any_filter(
 
 
 async def _apply_pipeline_extraction(
-    pipeline: object,
+    pipeline: ApartmentExtractionPipeline,
     query: str,
     rooms: int | None,
     min_price_eur: float | None,
@@ -75,7 +82,7 @@ async def _apply_pipeline_extraction(
     On failure, returns original values unchanged.
     """
     try:
-        extraction = await pipeline.extract(query)  # type: ignore[union-attr]
+        extraction = await pipeline.extract(query)
         h = extraction.hard
         rooms = rooms if rooms is not None else h.rooms
         min_price_eur = min_price_eur if min_price_eur is not None else h.min_price_eur
@@ -149,17 +156,23 @@ def _build_apartment_filters(
 
 
 async def _run_search_and_log(
-    ctx: object,
+    ctx: BotContext,
     query: str,
     filters: dict,
 ) -> str:
     """Embed query, search apartments, log the event, and return formatted text."""
-    ctx_ = ctx  # type: ignore[assignment]
-    dense, sparse, colbert = await ctx_.embeddings.aembed_hybrid_with_colbert(query)
-    await ctx_.cache.store_embedding(query, dense)
-    await ctx_.cache.store_sparse_embedding(query, sparse)
+    dense, sparse, colbert = await ctx.embeddings.aembed_hybrid_with_colbert(query)
+    await ctx.cache.store_embedding(query, dense)
+    await ctx.cache.store_sparse_embedding(query, sparse)
 
-    results, total = await ctx_.apartments_service.search_with_filters(
+    service = ctx.apartments_service
+    if service is None:
+        # Unreachable via apartment_search, which guards before calling; the
+        # raised error lands in the caller's except and preserves the
+        # observable error message.
+        raise RuntimeError("ApartmentsService is not configured")
+
+    results, total = await service.search_with_filters(
         dense_vector=dense,
         colbert_query=colbert or None,
         sparse_vector=sparse,
@@ -169,12 +182,12 @@ async def _run_search_and_log(
 
     response = format_apartment_text(results)
 
-    store = getattr(ctx_, "search_event_store", None)
+    store = ctx.search_event_store
     if store:
         try:
             await store.append(
-                user_id=ctx_.telegram_user_id,
-                session_id=ctx_.session_id,
+                user_id=ctx.telegram_user_id,
+                session_id=ctx.session_id,
                 query=query,
                 filters=filters or None,
                 results_count=total,
