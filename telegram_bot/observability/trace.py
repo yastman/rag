@@ -48,9 +48,8 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         # Embedding resilience (#210)
         "embedding_error": result.get("embedding_error", False),
         "embedding_error_type": result.get("embedding_error_type"),
-        # Conversation memory (#159)
+        # Conversation memory (#159) — no checkpointer since #3218
         "memory_messages_count": len(result.get("messages", [])),
-        "checkpointer_overhead_proxy_ms": result.get("checkpointer_overhead_proxy_ms"),
         # Voice post-pipeline cleanup diagnostics (#205)
         "pipeline_cleanup_error": result.get("pipeline_cleanup_error", False),
         "pipeline_cleanup_error_type": result.get("pipeline_cleanup_error_type"),

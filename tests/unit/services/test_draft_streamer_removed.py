@@ -3,20 +3,22 @@
 
 `telegram_bot/services/draft_streamer.py` was a thin custom wrapper around
 `bot.send_message_draft` + `bot.send_message`. The streaming consumer
-(`_stream_agent_to_draft` in `bot.py`) already uses LangGraph's SDK-native
+(`_stream_agent_to_draft`) used LangGraph's SDK-native
 `agent.astream(..., stream_mode=["messages", "values"])`, so the class was
-duplicate code with no SDK gap to fill.
+duplicate code with no SDK gap to fill (#1671). The whole streaming consumer
+went away in #3218 — its only runtime caller was the supervisor recovery
+wrapper deleted with the imperative agent facade (#3216).
 
 These tests pin the post-deletion state:
 
 1. The module file is gone.
 2. Importing it (or its symbols) raises `ImportError`.
 3. The `_new_draft_id` helper that was inside it now lives next to the
-   sole runtime consumer in `telegram_bot.bot`, with the same shape:
+   runtime consumer in `telegram_bot.bot`, with the same shape:
    positive 31-bit integer, never reused trivially.
 4. No production code references the deleted module.
-5. The streaming consumer still calls `bot.send_message_draft(...)` directly
-   (we did not regress to a different custom abstraction).
+5. No production code references `bot.send_message_draft` at all — the
+   draft-streaming path itself was removed in #3218.
 """
 
 from __future__ import annotations
@@ -159,15 +161,18 @@ def test_production_reference_scanner_excludes_noise_dirs(
     assert refs == [], f"scanner descended into noise dirs: {refs}"
 
 
-def test_streaming_path_still_uses_send_message_draft_directly() -> None:
-    """The consumer must keep calling `bot.send_message_draft(...)` directly (#1671).
+def test_no_production_references_to_send_message_draft() -> None:
+    """No production module calls `send_message_draft(...)` in the bot/pipeline surface (#3218).
 
-    Guards against accidentally re-introducing a custom streamer class. The
-    SDK path is `agent.astream(..., stream_mode=["messages", "values"])`
-    plus `bot.send_message_draft(...)` — nothing in between.
+    The draft-streaming consumer (`_stream_agent_to_draft`) was removed in
+    #3218 — responses are sent once via plain `send_message`. Any new
+    `send_message_draft` call must come with a real streaming consumer
+    and an updated ADR-0015, not silently.
 
-    Implementation may live in ``bot.py``, a legacy ``_bot_*.py`` split, or
-    the extracted ``pipeline/streaming.py`` module (#1265 / #2816).
+    Bounded scan over ``bot.py``, legacy ``_bot_*.py`` splits, and
+    ``pipeline/**`` — the same surface the #1671 consumer lived in.
+    (``services/generation/_stream_execution.py`` also calls the API but is
+    a separate generation facade tracked separately.)
     """
     bot_pkg = REPO_ROOT / "telegram_bot"
     source_paths = [
@@ -176,10 +181,16 @@ def test_streaming_path_still_uses_send_message_draft_directly() -> None:
         *bot_pkg.glob("pipeline/*.py"),
         *bot_pkg.glob("pipeline/**/*.py"),
     ]
-    bot_sources = "\n".join(p.read_text(encoding="utf-8") for p in source_paths if p.is_file())
-    assert "bot.send_message_draft" in bot_sources, (
-        "Streaming path must call `bot.send_message_draft(...)` directly (#1671)."
+    offenders = [
+        p.relative_to(REPO_ROOT).as_posix()
+        for p in source_paths
+        if p.is_file() and "send_message_draft(" in p.read_text(encoding="utf-8")
+    ]
+    assert not offenders, (
+        "Production code references `send_message_draft` but the streaming "
+        f"consumer was removed in #3218: {offenders}"
     )
-    assert "DraftStreamer" not in bot_sources, (
+    joined = "\n".join(p.read_text(encoding="utf-8") for p in source_paths if p.is_file())
+    assert "DraftStreamer" not in joined, (
         "`DraftStreamer` class is gone; do not reintroduce it (#1671)."
     )

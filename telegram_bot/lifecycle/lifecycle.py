@@ -24,7 +24,6 @@ Owned helpers (verbatim, byte-for-byte semantics with the pre-extract
 
   - :func:`setup_preflight` — preflight dependency gate.
   - :func:`setup_cache` — Redis cache layer init.
-  - :func:`setup_checkpointers` — conversation + agent checkpointers.
   - :func:`setup_postgres` — PostgreSQL pool + schema + services.
   - :func:`setup_bot_identity` — cache bot user id, detect topics.
   - :func:`setup_handoff_services` — handoff state machine + forum bridge.
@@ -57,7 +56,6 @@ __all__ = (
     "setup_bot_commands",
     "setup_bot_identity",
     "setup_cache",
-    "setup_checkpointers",
     "setup_dialogs",
     "setup_handoff_services",
     "setup_polling_lock",
@@ -202,59 +200,6 @@ async def setup_cache(bot: Any) -> None:
         await bot._cache.initialize()
         bot._cache_initialized = True
         log.info("Cache service ready")
-
-
-async def setup_checkpointers(bot: Any, startup_report: Any) -> None:
-    """Initialize conversation and agent Redis checkpointers."""
-    from telegram_bot.integrations.memory import (
-        create_fallback_checkpointer,
-        create_redis_checkpointer,
-    )
-    from telegram_bot.startup_status import StartupSeverity, StartupSignal
-
-    log = logging.getLogger(__name__)
-    try:
-        bot._checkpointer = create_redis_checkpointer(
-            bot.config.redis_url,
-            ttl_minutes=7 * 24 * 60,  # 7 days; SDK uses minutes
-            refresh_on_read=True,  # idle-based retention
-        )
-        await bot._checkpointer.asetup()
-        log.info("Conversation memory checkpointer ready (Redis)")
-    except Exception:
-        log.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
-        bot._checkpointer = create_fallback_checkpointer()
-        startup_report.add(
-            StartupSignal(
-                source="conversation_memory",
-                severity=StartupSeverity.DEGRADED,
-                summary="Redis checkpointer unavailable, using in-memory fallback",
-                remediation="restore Redis connectivity for persistent conversation memory",
-            )
-        )
-
-    try:
-        bot._agent_checkpointer = create_redis_checkpointer(
-            bot.config.redis_url,
-            ttl_minutes=bot.config.agent_checkpointer_ttl_minutes,
-            refresh_on_read=True,
-        )
-        await bot._agent_checkpointer.asetup()
-        log.info(
-            "Agent checkpointer ready (Redis, ttl=%s min)",
-            bot.config.agent_checkpointer_ttl_minutes,
-        )
-    except Exception:
-        log.warning("Agent Redis checkpointer init failed, using in-memory", exc_info=True)
-        bot._agent_checkpointer = create_fallback_checkpointer()
-        startup_report.add(
-            StartupSignal(
-                source="agent_memory",
-                severity=StartupSeverity.DEGRADED,
-                summary="Agent Redis checkpointer unavailable, using in-memory fallback",
-                remediation="restore Redis connectivity for persistent agent state",
-            )
-        )
 
 
 async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -> None:
@@ -525,7 +470,6 @@ async def start_bot(bot: Any) -> None:
 
     preflight_result, startup_report = await setup_preflight(bot)
     await setup_cache(bot)
-    await setup_checkpointers(bot, startup_report)
     await setup_postgres(bot, preflight_result, startup_report)
     await setup_bot_identity(bot)
     setup_handoff_services(bot)
@@ -589,22 +533,6 @@ async def stop_bot(bot: Any) -> None:
     if bot._reranker and hasattr(bot._reranker, "close"):
         await bot._reranker.close()
     bot._pre_agent_filter_extractor = None
-    if bot._checkpointer is not None:
-        try:
-            if hasattr(bot._checkpointer, "__aexit__"):
-                await bot._checkpointer.__aexit__(None, None, None)
-        except Exception:
-            log.warning("Failed to close checkpointer cleanly", exc_info=True)
-        finally:
-            bot._checkpointer = None
-    if bot._agent_checkpointer is not None:
-        try:
-            if hasattr(bot._agent_checkpointer, "__aexit__"):
-                await bot._agent_checkpointer.__aexit__(None, None, None)
-        except Exception:
-            log.warning("Failed to close agent checkpointer cleanly", exc_info=True)
-        finally:
-            bot._agent_checkpointer = None
     if bot._pg_pool is not None:
         await bot._pg_pool.close()
         log.info("PostgreSQL pool closed")

@@ -49,27 +49,11 @@ async def handle_clearcache_callback(
     text: str
     try:
         if data in ("history", "all_and_history"):
-            from telegram_bot.services.util.checkpointer_utils import (
-                _delete_checkpointer_thread,
-                _supervisor_thread_id,
-            )
-
+            # No persistent conversation memory exists (#3218); "История
+            # диалога" is the Redis per-user conversation cache only.
             assert callback_query.from_user is not None
             user_id = callback_query.from_user.id
-            chat_id = callback_query.message.chat.id if callback_query.message else user_id
-            text_thread_id = _supervisor_thread_id(chat_id)
-            seen: set[int] = set()
-            for checkpointer in (bot._checkpointer, bot._agent_checkpointer):
-                if checkpointer is None or id(checkpointer) in seen:
-                    continue
-                seen.add(id(checkpointer))
-                for thread_id in (text_thread_id,):
-                    try:
-                        await _delete_checkpointer_thread(checkpointer, thread_id)
-                    except Exception:
-                        logger.warning(
-                            "Failed to clear checkpointer thread %s", thread_id, exc_info=True
-                        )
+            await bot._cache.clear_conversation(user_id)
             if data == "history":
                 text = "Очищено: История диалога"
             else:

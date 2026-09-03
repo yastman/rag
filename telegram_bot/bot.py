@@ -8,7 +8,6 @@ import surface for tests that ``patch("telegram_bot.bot.X", ...)``.
 Extraction map:
   observability/state_helpers (card_2a71ec058138, #1265 PR-1),
   observability/bot_observability (card_2a71ec058138, #1265 PR-2),
-  handlers/error_classification (#1265 PR-3),
   pipeline/streaming (#1265 PR-4, card_2a71ec058138 SLICE 3),
   pipeline/supervisor (#2816 Slice 2, card_2a71ec058138 SLICE 3),
   lifecycle/lifecycle (card_2a71ec058138),
@@ -42,9 +41,6 @@ from .handlers import (
 )
 from .handlers import (
     catalog as _bot_catalog,  # #2816 Slice 2: extracted catalog/card handlers
-)
-from .handlers import (
-    error_classification as _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
 )
 from .handlers import (
     favorites as _bot_favorites,  # #2816 Slice 2: extracted favorites handlers
@@ -110,16 +106,6 @@ def _new_draft_id() -> int:
     return _bot_streaming._new_draft_id()
 
 
-_AGENT_DRAFT_INTERVAL = _bot_streaming._AGENT_DRAFT_INTERVAL
-
-
-async def _stream_agent_to_draft(*args: Any, **kwargs: Any) -> dict[str, Any]:
-    """Thin wrapper — see ``_bot_streaming`` (#1265 Slice 1 PR-4)."""
-    return await _bot_streaming._stream_agent_to_draft(
-        *args, draft_interval=_AGENT_DRAFT_INTERVAL, **kwargs
-    )
-
-
 def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
     """Read cached apartment payloads from legacy or dialog-owned state.
 
@@ -139,13 +125,6 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
 
 
 # Re-export from shared module (avoid circular imports with middlewares)
-# Re-export checkpointer helpers from shared utility module for backward compat
-from .services.util.checkpointer_utils import (  # noqa: E402
-    _delete_checkpointer_thread as _delete_checkpointer_thread,
-)
-from .services.util.checkpointer_utils import (  # noqa: E402
-    _supervisor_thread_id as _supervisor_thread_id,
-)
 from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
 
@@ -163,21 +142,6 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     Re-exported from :mod:`telegram_bot.observability.bot_observability` (card_2a71ec058138).
     """
     return _bot_observability._build_trace_metadata(result)
-
-
-def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
-    """Thin wrapper — see ``_bot_error_classification`` (#1265 Slice 1 PR-3)."""
-    return _bot_error_classification._is_post_pipeline_cleanup_error(exc)
-
-
-def _is_checkpointer_runtime_error(exc: Exception) -> bool:
-    """Thin wrapper — see ``_bot_error_classification`` (#1265 Slice 1 PR-3)."""
-    return _bot_error_classification._is_checkpointer_runtime_error(exc)
-
-
-def _extract_stream_chunk_text(message_chunk: Any) -> str:
-    """Thin wrapper — see ``_bot_streaming`` (#1265 Slice 1 PR-4)."""
-    return _bot_streaming._extract_stream_chunk_text(message_chunk)
 
 
 class PropertyBot:
@@ -213,13 +177,6 @@ class PropertyBot:
         self._apartment_pipeline = svc.apartment_pipeline
         self._redis_monitor = svc.redis_monitor
         self._i18n_hub: Any = svc.i18n_hub
-
-        # Conversation memory checkpointer (initialized in start())
-        self._checkpointer: Any = None
-
-        # Agent checkpointer — Redis with TTL (#424).
-        # HumanMessage serialization fixed in langgraph-checkpoint-redis>=0.3.6 (#420).
-        self._agent_checkpointer: Any = None
 
         # User service (asyncpg) — initialized in start()
         self._user_service: Any = None
@@ -686,10 +643,6 @@ class PropertyBot:
     async def _setup_cache(self) -> None:
         """Initialize Redis cache layer if not already done."""
         await _bot_lifecycle.setup_cache(self)
-
-    async def _setup_checkpointers(self, startup_report: Any) -> None:
-        """Initialize conversation and agent Redis checkpointers."""
-        await _bot_lifecycle.setup_checkpointers(self, startup_report)
 
     async def _setup_postgres(self, preflight_result: Any, startup_report: Any) -> None:
         """Initialize PostgreSQL pool, schema, and dependent services."""

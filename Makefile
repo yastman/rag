@@ -84,7 +84,6 @@ PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_*menu*.py \
 	tests/unit/test_*preflight*.py \
 	tests/unit/test_*middlewares*.py \
-	tests/unit/test_agent_streaming.py \
 	tests/unit/test_card_context.py \
 	tests/unit/test_docker_static_validation*.py \
 	tests/unit/test_error_handler.py \
@@ -93,7 +92,6 @@ PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_perf_fixes.py \
 	tests/unit/test_results_pagination_bugs.py \
 	tests/unit/test_send_property_card.py \
-	tests/unit/test_thread_routing.py \
 	tests/unit/test_topic_service_init.py
 PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB := $(addprefix --ignore-glob=,$(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS))
 PYTEST_OPTIONAL_ADAPTER_IGNORE := $(addprefix --ignore=,$(PYTEST_TELEGRAM_ADAPTER_PATHS))
