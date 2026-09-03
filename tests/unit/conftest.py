@@ -52,8 +52,6 @@ def pytest_configure(config):
         "aiogram",
         "aiogram_dialog",
         "cachetools",
-        "langchain_core",
-        "langgraph",
         "fluent_compiler",
         "fluentogram",
     ):
@@ -194,52 +192,6 @@ def pytest_configure(config):
         _dialog_submodules.append("aiogram_dialog.api.exceptions")
         _mocked_module_names.extend(_dialog_submodules)
 
-    # -- langgraph (removed dep — tests use Runtime as a context container) --
-    _langgraph_real = "langgraph" in sys.modules and not isinstance(
-        sys.modules["langgraph"], MagicMock
-    )
-    if not _langgraph_real:
-        _langgraph_submodules = [
-            "langgraph.graph",
-            "langgraph.runtime",
-            "langgraph.types",
-            "langgraph.checkpoint",
-            "langgraph.checkpoint.base",
-            "langgraph.checkpoint.memory",
-            "langgraph.checkpoint.redis",
-            "langgraph.checkpoint.redis.aio",
-            "langgraph.checkpoint.serde",
-            "langgraph.checkpoint.serde.jsonplus",
-        ]
-        for mod_name in _langgraph_submodules:
-            _saved_modules[mod_name] = sys.modules.get(mod_name)
-            sys.modules[mod_name] = MagicMock()
-
-        # Make compiled graph.ainvoke awaitable for unit tests
-        async def _fake_ainvoke(state):
-            return {
-                "results_relevant": True,
-                "summary": "test summary",
-                "guard_blocked": False,
-                "rewrite_count": 0,
-            }
-
-        _langgraph_graph = sys.modules["langgraph.graph"]
-        _langgraph_graph.StateGraph = MagicMock()
-        _langgraph_graph.StateGraph.return_value.compile.return_value.ainvoke = _fake_ainvoke
-        _langgraph_graph.END = "__end__"
-        _langgraph_graph.START = "__start__"
-
-        class _GraphRecursionError(Exception):
-            """Minimal langgraph.errors.GraphRecursionError stub for except/raise."""
-
-        _langgraph_errors_mod = MagicMock()
-        _langgraph_errors_mod.GraphRecursionError = _GraphRecursionError
-        _saved_modules["langgraph.errors"] = sys.modules.get("langgraph.errors")
-        sys.modules["langgraph.errors"] = _langgraph_errors_mod
-        _langgraph_submodules.append("langgraph.errors")
-        _mocked_module_names.extend(_langgraph_submodules)
-
     # -- asyncpg (optional postgres dep) ------------------------------------
     _asyncpg_real = "asyncpg" in sys.modules and not isinstance(sys.modules["asyncpg"], MagicMock)
     if not _asyncpg_real:
@@ -277,23 +229,6 @@ def pytest_configure(config):
             sys.modules[mod_name] = MagicMock()
         _mocked_module_names.extend(_fluent_mods)
 
-    # -- langchain_core (optional archived CRM dep) -------------------------
-    _langchain_core_real = "langchain_core" in sys.modules and not isinstance(
-        sys.modules["langchain_core"], MagicMock
-    )
-    if not _langchain_core_real:
-        _lc_mods = [
-            "langchain_core",
-            "langchain_core.runnables",
-            "langchain_core.tools",
-            "langchain_core.messages",
-            "langchain_core.callbacks",
-        ]
-        for mod_name in _lc_mods:
-            _saved_modules[mod_name] = sys.modules.get(mod_name)
-            sys.modules[mod_name] = MagicMock()
-        _mocked_module_names.extend(_lc_mods)
-
 
 def pytest_unconfigure(config):
     """Restore original modules after test session."""
@@ -319,7 +254,7 @@ def mock_get_client(isolate_otel_langfuse):
     patching when ``telegram_bot.bot`` is NOT already in ``sys.modules``.
 
     Why: Eagerly resolving ``"telegram_bot.bot.get_client"`` triggers the
-    full ``telegram_bot.bot`` import chain (langgraph, qdrant_client,
+    full ``telegram_bot.bot`` import chain (qdrant_client,
     numpy, …). Under ``pytest --cov`` the numpy C-extension
     (``numpy._core._multiarray_umath``) raises
     ``ImportError: cannot load module more than once per process`` because
