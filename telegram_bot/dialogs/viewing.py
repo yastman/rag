@@ -102,7 +102,10 @@ async def on_date_selected(
         logger.warning("FSMContext not in middleware_data for viewing phone handoff")
         return
 
-    # Store date_range in FSM state so phone_collector includes it in CRM note.
+    # Store date_range in FSM state so phone_collector includes it in the
+    # durable lead record; keep the selected objects too (#3213).
+    start_data = manager.start_data if isinstance(manager.start_data, dict) else {}
+    selected_objects = start_data.get("selected_objects") or []
     await state.update_data(date_range=item_id)
 
     from telegram_bot.handlers.phone_collector import start_phone_collection
@@ -111,6 +114,7 @@ async def on_date_selected(
         callback,
         state,
         service_key="viewing",
+        viewing_objects=selected_objects or None,
         prompt_text=(
             "Отлично! Оставьте номер телефона — менеджер свяжется с вами"
             " и подтвердит время осмотра\n\n"

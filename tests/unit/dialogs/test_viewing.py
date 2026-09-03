@@ -119,6 +119,33 @@ async def test_on_date_selected_closes_dialog_and_starts_phone_collector():
 
 
 @pytest.mark.asyncio
+async def test_on_date_selected_threads_selected_objects_to_collector():
+    """Selected objects must reach the collector so the sink record has them (#3213)."""
+    from telegram_bot.dialogs.viewing import on_date_selected
+
+    state = AsyncMock()
+    callback = MagicMock()
+    callback.message = AsyncMock()
+    callback.message.delete = AsyncMock()
+    callback.answer = AsyncMock()
+    callback.from_user = SimpleNamespace(id=123)
+
+    manager = MagicMock()
+    manager.middleware_data = {"state": state}
+    manager.done = AsyncMock()
+    manager.start_data = {"selected_objects": [{"id": "obj-9", "complex_name": "Fort"}]}
+
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_start:
+        await on_date_selected(callback, SimpleNamespace(), manager, "nearest")
+
+    state.update_data.assert_awaited_once_with(date_range="nearest")
+    call_kwargs = mock_start.await_args
+    assert call_kwargs.kwargs["viewing_objects"] == [{"id": "obj-9", "complex_name": "Fort"}]
+
+
+@pytest.mark.asyncio
 async def test_on_date_selected_deletes_inline_message():
     """Inline keyboard message should be deleted before phone_collector prompt."""
     from telegram_bot.dialogs.viewing import on_date_selected
