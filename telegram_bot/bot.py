@@ -807,11 +807,6 @@ class PropertyBot:
             message=message,
         )
 
-    # _send_hitl_confirmation removed — dead code, no live callers (#2943)
-
-    async def handle_hitl_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
-        await callback.answer("Устарело")
-
     async def handle_feedback(
         self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
     ) -> None:

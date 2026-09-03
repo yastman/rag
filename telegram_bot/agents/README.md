@@ -15,8 +15,6 @@ Agent SDK tools for agent-driven flows. Agent tools return **context** (document
 | [`manager_tools.py`](./manager_tools.py) | Manager escalation and notification tools |
 | [`utility_tools.py`](./utility_tools.py) | General utility tools |
 | [`history_tool.py`](./history_tool.py) · [`context.py`](./context.py) | Conversation history + agent context |
-| [`hitl.py`](./hitl.py) | Human-in-the-loop hooks |
-| [`history_graph/graph.py`](./history_graph/graph.py) | Small history-specific LangGraph |
 
 ## Boundaries
 
