@@ -11,7 +11,7 @@ from __future__ import annotations
 
 def test_streaming_config_flag():
     """Streaming is controlled by GraphConfig.streaming_enabled."""
-    from src.runtime.graph.config import GraphConfig
+    from src.runtime.config import GraphConfig
 
     gc = GraphConfig(streaming_enabled=True)
     assert gc.streaming_enabled is True
@@ -22,7 +22,7 @@ def test_streaming_config_flag():
 
 def test_streaming_default_is_true():
     """streaming_enabled defaults to True."""
-    from src.runtime.graph.config import GraphConfig
+    from src.runtime.config import GraphConfig
 
     gc = GraphConfig()
     assert gc.streaming_enabled is True

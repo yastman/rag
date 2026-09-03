@@ -19,8 +19,8 @@ def _create_bot() -> PropertyBot:
         patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
         patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
         patch("src.runtime.services.qdrant.QdrantService"),
-        patch("src.runtime.graph.config.GraphConfig.create_llm"),
-        patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
+        patch("src.runtime.config.GraphConfig.create_llm"),
+        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
     ):
         return PropertyBot(config)
 

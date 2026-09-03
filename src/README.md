@@ -38,7 +38,7 @@ kernel lives in `src/runtime/` and does not import `telegram_bot.*`.
 
 - **`src/` stays Telegram-agnostic.** The runtime kernel lives in `src/runtime/` and imports nothing from `telegram_bot.*` (ratchet: `tests/contract/test_layering_no_telegram_bot_imports_contract.py`).
 - **Ingestion determinism and resumability** are owned by `src/ingestion/` and `src/ingestion/unified/`. Do not change manifest identity, hashing, or collection semantics without careful review.
-- **Graph state contracts** live in `src/runtime/graph/state.py`; adapters reuse the same pipeline and do not redefine state shapes.
+- **Runtime config and live helpers** live transport-neutrally in `src/runtime/config.py` (GraphConfig), `src/runtime/routing/` (classify), and `src/runtime/safety/` (guard) — not under a graph namespace (#3207).
 
 ## Related Runtime Services
 

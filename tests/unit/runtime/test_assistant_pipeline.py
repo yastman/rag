@@ -40,10 +40,10 @@ async def test_run_assistant_pipeline_returns_assistant_result(monkeypatch) -> N
             }
         )
 
-    classify_mod = types.ModuleType("src.runtime.graph.nodes.classify")
+    classify_mod = types.ModuleType("src.runtime.routing.classify")
     classify_mod.classify_query = lambda _: "GENERAL"
 
-    monkeypatch.setitem(sys.modules, "src.runtime.graph.nodes.classify", classify_mod)
+    monkeypatch.setitem(sys.modules, "src.runtime.routing.classify", classify_mod)
     monkeypatch.setattr(
         "src.runtime.pipeline.assistant_pipeline.rag_pipeline",
         fake_rag_pipeline,
@@ -82,9 +82,9 @@ async def test_run_assistant_pipeline_propagates_exception(monkeypatch) -> None:
     from src.core import AssistantRequest, CoreDependencies, UserContext
     from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
 
-    classify_mod = types.ModuleType("src.runtime.graph.nodes.classify")
+    classify_mod = types.ModuleType("src.runtime.routing.classify")
     classify_mod.classify_query = lambda _: "GENERAL"
-    monkeypatch.setitem(sys.modules, "src.runtime.graph.nodes.classify", classify_mod)
+    monkeypatch.setitem(sys.modules, "src.runtime.routing.classify", classify_mod)
 
     async def exploding_rag_pipeline(**kwargs):
         raise RuntimeError("deliberate-test-explosion")

@@ -7,8 +7,10 @@ Guard modes:
 - "soft": flag injection, log, continue to classify
 - "log": log only, continue to classify
 
-Canonical home moved from ``telegram_bot/graph/nodes/guard.py``
-as part of the reverse-layering Slice B (#1948 / #2049).
+Canonical home (issue #3207): moved from ``src/runtime/graph/nodes/guard.py``
+so live safety helpers no longer live under the graph namespace. Earlier
+history: moved from ``telegram_bot/graph/nodes/guard.py`` as part of the
+reverse-layering Slice B (#1948 / #2049).
 """
 
 from __future__ import annotations

@@ -26,8 +26,8 @@ def _create_bot(config: BotConfig | None = None):
         patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
         patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
         patch("src.runtime.services.qdrant.QdrantService"),
-        patch("src.runtime.graph.config.GraphConfig.create_llm"),
-        patch("src.runtime.graph.config.GraphConfig.create_supervisor_llm"),
+        patch("src.runtime.config.GraphConfig.create_llm"),
+        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
     ):
         from telegram_bot.bot import PropertyBot
 
@@ -77,7 +77,7 @@ class TestQuerySupervisorContentFilter:
         bot = _create_bot(config)
         message = _make_message("DROP TABLE users;")
 
-        from src.runtime.graph.nodes.guard import _BLOCKED_RESPONSE
+        from src.runtime.safety.guard import _BLOCKED_RESPONSE
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -101,7 +101,7 @@ class TestQuerySupervisorContentFilter:
         bot = _create_bot(config)
         message = _make_message("harmless text")
 
-        from src.runtime.graph.nodes.guard import _BLOCKED_RESPONSE
+        from src.runtime.safety.guard import _BLOCKED_RESPONSE
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),

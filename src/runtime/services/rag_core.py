@@ -82,7 +82,7 @@ async def rewrite_query_via_llm(
     Raises:
         Exception: propagates LLM errors to caller (adapter handles fallback).
     """
-    from src.runtime.graph.config import GraphConfig
+    from src.runtime.config import GraphConfig
 
     config = GraphConfig.from_env()
     prompt = _REWRITE_PROMPT.format(query=query)

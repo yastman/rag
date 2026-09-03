@@ -104,7 +104,7 @@ class TestGroundedAnswer:
         gen = _gen_mock("Sunny Beach Studio is 110 000 EUR.")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -130,7 +130,7 @@ class TestGroundedAnswer:
         gen = _gen_mock(expected)
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -155,7 +155,7 @@ class TestNoDataNoFabrication:
         gen = _gen_mock("Данных не найдено.")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -179,7 +179,7 @@ class TestNoDataNoFabrication:
         gen = _gen_mock(no_data_reply)
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -205,7 +205,7 @@ class TestCacheHitPath:
         gen = _gen_mock("should not be called")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -228,7 +228,7 @@ class TestCacheHitPath:
         gen = AsyncMock(return_value=GenerationResult(payload={}))
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -252,7 +252,7 @@ class TestErrorFallback:
         rag = AsyncMock(side_effect=RuntimeError("qdrant unavailable"))
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
         ):
             result = await run_assistant_request(
@@ -273,7 +273,7 @@ class TestErrorFallback:
         rag = AsyncMock(side_effect=RuntimeError("secret-internal-detail-XYZ"))
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
         ):
             result = await run_assistant_request(
@@ -298,7 +298,7 @@ class TestLatencyBudget:
         gen = _gen_mock("answer")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -318,7 +318,7 @@ class TestLatencyBudget:
         rag = AsyncMock(side_effect=RuntimeError("fail"))
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
         ):
             result = await run_assistant_request(
@@ -338,7 +338,7 @@ class TestLatencyBudget:
         gen = _gen_mock("answer")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):
@@ -365,7 +365,7 @@ class TestMultipleDocRetrieval:
         gen = _gen_mock("Два результата найдено.")
 
         with (
-            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
             patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
         ):

@@ -16,7 +16,7 @@ import httpx
 import pytest
 import yaml
 
-from src.runtime.graph.config import GraphConfig
+from src.runtime.config import GraphConfig
 from src.runtime.services.qdrant import QdrantService
 from tests.e2e_core.qdrant_helpers import (
     QdrantTestContext,
