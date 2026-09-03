@@ -7,8 +7,6 @@ Import specific services directly for best performance:
 
 from typing import TYPE_CHECKING
 
-from .generation.generate_response import GenerationDeps, generate_response
-
 
 if TYPE_CHECKING:
     from src.runtime.services.metrics import PipelineMetrics
@@ -22,13 +20,11 @@ __all__ = [
     "BGEM3Client",
     "BGEM3SyncClient",
     "ExpandedChunk",
-    "GenerationDeps",
     "HyDEGenerator",
     "PipelineMetrics",
     "QdrantService",
     "QueryPreprocessor",
     "SmallToBigService",
-    "generate_response",
 ]
 
 _IMPORT_MAP = {

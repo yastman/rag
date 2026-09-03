@@ -26,3 +26,4 @@ work lives in `src.runtime.pipeline.assistant_pipeline`, not here.
 
 - [`../README.md`](../README.md) — Telegram transport overview
 - [`../pipelines/README.md`](../pipelines/README.md) — dialog state contract
+- [`../../src/core/README.md`](../../src/core/README.md) — assistant-core entrypoint

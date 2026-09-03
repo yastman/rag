@@ -24,7 +24,7 @@ Items removed in this PR (residual #1541 slice):
   ``tests/unit/test_guardrails.py``, ``tests/integration/test_llm_generate.py``,
   ``tests/chaos/test_llm_fallback.py``) and the lazy-export map in
   ``telegram_bot/services/__init__.py``. Production code uses
-  ``generate_response.py`` instead.
+  ``src.runtime.generation`` (the sole generation owner since #3222) instead.
 * Item #3 ``QdrantService.search_with_score_boosting`` (~150 lines) — large
   block; no production callers, only own tests.
 * Item #6 Kommo task creation in ``utility_tools.handoff`` — branch is
@@ -243,7 +243,8 @@ def test_dead_code_test_classes_are_gone(rel_path: str, class_name: str) -> None
 def test_services_llm_module_is_gone() -> None:
     """``telegram_bot/services/llm.py`` must be deleted (#1541 item #1).
 
-    Production code uses ``telegram_bot.services.generation.generate_response`` instead.
+    Production code uses ``src.runtime.generation`` (the sole generation owner
+    since #3222) instead.
     The previous file was deprecated in #1671's wake and only its own tests
     plus the lazy-export map kept it alive.
     """
