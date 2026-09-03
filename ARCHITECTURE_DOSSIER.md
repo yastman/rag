@@ -152,7 +152,7 @@ All four are load-bearing; none can be removed without dropping a feature.
 | Service | Image | Purpose | Notes |
 |---|---|---|---|
 | **qdrant** | `qdrant/qdrant:v1.18.3` | Vector store (dense + sparse + ColBERT); also the ingestion idempotency store | storage config (`on_disk_payload`, `indexing_threshold_kb`) mounted to cap growth |
-| **redis** | `redis:8.6.3` | Five independent caches: semantic-answer, embedding, search, rerank, extraction | version-prefixed keys; graceful degradation on miss |
+| **redis** | `redis:8.10.1` | Five independent caches: semantic-answer, embedding, search, rerank, extraction | version-prefixed keys; graceful degradation on miss |
 | **bge-m3** | built ONNX service | Self-hosted embeddings + optional ColBERT rerank | cold-start model load up to ~7 min |
 | **postgres** | `postgres:17` | Bot real-estate **domain DB** only (users/leads/funnel/favorites) | Plain PostgreSQL 17 (pgvector removed — not required by runtime) |
 | bot | built | The Telegram adapter process | depends on all four healthy |

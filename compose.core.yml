@@ -19,7 +19,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:8.6.3-alpine@sha256:c25154ff5e2e6d0820a0268abd9dd3bc84f48fddd40396fb1f4de5b3dcc2182a
+    image: redis:8.10.1-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576
     restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
