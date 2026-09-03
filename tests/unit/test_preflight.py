@@ -1,5 +1,6 @@
 """Unit tests for telegram_bot/preflight.py — dependency preflight checks."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
@@ -23,6 +24,68 @@ from telegram_bot.startup_status import StartupReport
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _schema_obj(type_name: str) -> SimpleNamespace:
+    """Minimal Qdrant payload-schema entry with a typed data_type."""
+    return SimpleNamespace(data_type=SimpleNamespace(value=type_name))
+
+
+def _contract_payload_schema(role: str) -> dict:
+    """Payload-schema dict satisfying the role's readiness contract (#3202)."""
+    from src.runtime.qdrant.readiness import apartments_contract, knowledge_contract
+
+    contract = apartments_contract() if role == "apartments" else knowledge_contract("k")
+    return {index.field_name: _schema_obj(index.schema_type) for index in contract.payload_indexes}
+
+
+def _collection_info(
+    points: int = 100,
+    dense: tuple[str, ...] = ("dense", "colbert"),
+    sparse: tuple[str, ...] = ("bm42",),
+    payload_schema: dict | None = None,
+    dense_size: int = 1024,
+) -> MagicMock:
+    """Collection info matching the knowledge readiness contract by default."""
+    info = MagicMock()
+    info.points_count = points
+    info.config.params.vectors = {
+        name: SimpleNamespace(size=dense_size, multivector_config=None) for name in dense
+    }
+    info.config.params.sparse_vectors = {name: MagicMock() for name in sparse}
+    info.payload_schema = (
+        payload_schema if payload_schema is not None else _contract_payload_schema("knowledge")
+    )
+    return info
+
+
+def _ready_qdrant_client(
+    knowledge_info: MagicMock | None = None,
+    apartments_info: MagicMock | None = None,
+    knowledge_name: str = "test_col",
+    exists: bool = True,
+) -> AsyncMock:
+    """Async Qdrant client mock serving per-collection info for both roles.
+
+    Routes ``get_collection`` by collection name so the two-collection readiness
+    gate (#3202) sees a contract-valid knowledge collection and a contract-valid
+    apartments collection.
+    """
+    client = AsyncMock()
+    client.collection_exists = AsyncMock(return_value=exists)
+    infos = {
+        knowledge_name: knowledge_info or _collection_info(),
+        "apartments": apartments_info
+        or _collection_info(payload_schema=_contract_payload_schema("apartments")),
+    }
+
+    async def _get_collection(collection: str) -> MagicMock:
+        return infos[collection]
+
+    client.get_collection = AsyncMock(side_effect=_get_collection)
+    client.count = AsyncMock(return_value=MagicMock(count=100))
+    client.close = AsyncMock()
+    return client
 
 
 def _make_config(**overrides) -> MagicMock:
@@ -393,22 +456,20 @@ class TestCheckSingleDep:
         config = _make_config(qdrant_collection="test_col", effective_collection="test_col_scalar")
         client = AsyncMock(spec=httpx.AsyncClient)
 
-        mock_info = MagicMock()
-        mock_info.points_count = 100
-        mock_info.config.params.vectors = {"dense": MagicMock(), "colbert": MagicMock()}
-        mock_info.config.params.sparse_vectors = {"bm42": MagicMock()}
-        mock_qdrant_client = AsyncMock()
-        mock_qdrant_client.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant_client.get_collection = AsyncMock(return_value=mock_info)
-        mock_qdrant_client.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client(knowledge_name="test_col_scalar")
 
         with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
             result = await _check_single_dep("qdrant", config, client)
 
         assert result is True
         config.get_collection_name.assert_called_once_with()
-        mock_qdrant_client.collection_exists.assert_awaited_once_with("test_col_scalar")
-        mock_qdrant_client.get_collection.assert_awaited_once_with("test_col_scalar")
+        checked = [call.args[0] for call in mock_qdrant_client.collection_exists.await_args_list]
+        assert checked == ["test_col_scalar", "apartments"]
+        checked_collections = [
+            call.args[0] for call in mock_qdrant_client.get_collection.await_args_list
+        ]
+        assert "test_col_scalar" in checked_collections
+        assert "apartments" in checked_collections
         mock_qdrant_client.close.assert_awaited_once()
 
     async def test_qdrant_connection_error_fails(self):
@@ -619,24 +680,19 @@ class TestCheckDependencies:
 
 
 class TestQdrantVectorValidation:
-    """Preflight validates required named vectors in collection."""
+    """Preflight validates required named vectors, dims, and indexes (#3202)."""
 
     async def test_qdrant_warns_when_colbert_vector_missing(self, caplog):
         """Missing colbert vector logged as warning, but check still passes."""
         import logging
 
         config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_collection_info = MagicMock()
-        mock_collection_info.points_count = 278
-        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
-        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
-        mock_qdrant.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
-        mock_qdrant.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(points=278, dense=("dense",)),
+        )
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
             caplog.at_level(logging.WARNING),
         ):
             client = AsyncMock()
@@ -649,47 +705,29 @@ class TestQdrantVectorValidation:
         import logging
 
         config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_collection_info = MagicMock()
-        mock_collection_info.points_count = 278
-        mock_collection_info.config.params.vectors = {
-            "dense": MagicMock(),
-            "colbert": MagicMock(),
-        }
-        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
-        mock_qdrant.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
-        mock_qdrant.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client()
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
             caplog.at_level(logging.WARNING),
         ):
             client = AsyncMock()
             result = await _check_single_dep("qdrant", config, client)
             assert result is True
-            assert "missing" not in caplog.text.lower()
+            assert "missing advisory" not in caplog.text.lower()
 
     async def test_qdrant_warns_when_colbert_coverage_below_threshold(self, caplog):
         """Low ColBERT point coverage logs warning but does not fail preflight."""
         import logging
 
         config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_collection_info = MagicMock()
-        mock_collection_info.points_count = 200
-        mock_collection_info.config.params.vectors = {
-            "dense": MagicMock(),
-            "colbert": MagicMock(),
-        }
-        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
-        mock_qdrant.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
-        mock_qdrant.count = AsyncMock(return_value=MagicMock(count=180))
-        mock_qdrant.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(points=200),
+        )
+        mock_qdrant_client.count = AsyncMock(return_value=MagicMock(count=180))
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
             caplog.at_level(logging.WARNING),
         ):
             client = AsyncMock()
@@ -704,21 +742,11 @@ class TestQdrantVectorValidation:
         import logging
 
         config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_collection_info = MagicMock()
-        mock_collection_info.points_count = 100
-        mock_collection_info.config.params.vectors = {
-            "dense": MagicMock(),
-            "colbert": MagicMock(),
-        }
-        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
-        mock_qdrant.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
-        mock_qdrant.count = AsyncMock(return_value=MagicMock(count=100))
-        mock_qdrant.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client()
+        mock_qdrant_client.count = AsyncMock(return_value=MagicMock(count=100))
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
             caplog.at_level(logging.INFO),
         ):
             client = AsyncMock()
@@ -733,21 +761,11 @@ class TestQdrantVectorValidation:
         import logging
 
         config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_collection_info = MagicMock()
-        mock_collection_info.points_count = 100
-        mock_collection_info.config.params.vectors = {
-            "dense": MagicMock(),
-            "colbert": MagicMock(),
-        }
-        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
-        mock_qdrant.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
-        mock_qdrant.count = AsyncMock(side_effect=RuntimeError("count unavailable"))
-        mock_qdrant.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client()
+        mock_qdrant_client.count = AsyncMock(side_effect=RuntimeError("count unavailable"))
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
             caplog.at_level(logging.WARNING),
         ):
             client = AsyncMock()
@@ -759,16 +777,14 @@ class TestQdrantVectorValidation:
     async def test_qdrant_fails_when_dense_missing(self):
         """Missing dense vector causes check to fail."""
         config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_collection_info = MagicMock()
-        mock_collection_info.points_count = 278
-        mock_collection_info.config.params.vectors = {}
-        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
-        mock_qdrant.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
-        mock_qdrant.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(
+                points=278,
+                dense=(),
+            ),
+        )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
             client = AsyncMock()
             result = await _check_single_dep("qdrant", config, client)
             assert result is False
@@ -776,19 +792,111 @@ class TestQdrantVectorValidation:
     async def test_qdrant_fails_when_bm42_missing(self):
         """Missing bm42 sparse vector causes check to fail."""
         config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_collection_info = MagicMock()
-        mock_collection_info.points_count = 278
-        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
-        mock_collection_info.config.params.sparse_vectors = {}
-        mock_qdrant.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
-        mock_qdrant.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(
+                points=278,
+                sparse=(),
+            ),
+        )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
             client = AsyncMock()
             result = await _check_single_dep("qdrant", config, client)
             assert result is False
+
+    async def test_qdrant_fails_when_dense_dimension_wrong(self):
+        """A 768-dim dense vector violates the 1024-dim BGE-M3 contract (#3202)."""
+        config = _make_config()
+        failure_reasons: dict[str, str] = {}
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(points=278, dense_size=768),
+        )
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            client = AsyncMock()
+            result = await _check_single_dep(
+                "qdrant", config, client, failure_reasons=failure_reasons
+            )
+
+        assert result is False
+        assert "dimensional" in failure_reasons["qdrant"]
+        assert "1024" in failure_reasons["qdrant"]
+
+    async def test_qdrant_fails_when_payload_index_missing(self):
+        """A missing contract payload index is a schema-incompatible failure."""
+        config = _make_config()
+        failure_reasons: dict[str, str] = {}
+        schema = _contract_payload_schema("knowledge")
+        schema.pop("metadata.doc_id")
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(points=278, payload_schema=schema),
+        )
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            client = AsyncMock()
+            result = await _check_single_dep(
+                "qdrant", config, client, failure_reasons=failure_reasons
+            )
+
+        assert result is False
+        assert "payload index" in failure_reasons["qdrant"]
+        assert "metadata.doc_id" in failure_reasons["qdrant"]
+
+    async def test_qdrant_fails_when_payload_index_type_wrong(self):
+        """A payload index with the wrong type is a schema-incompatible failure."""
+        config = _make_config()
+        failure_reasons: dict[str, str] = {}
+        schema = _contract_payload_schema("knowledge")
+        schema["metadata.order"] = _schema_obj("keyword")
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(points=278, payload_schema=schema),
+        )
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            client = AsyncMock()
+            result = await _check_single_dep(
+                "qdrant", config, client, failure_reasons=failure_reasons
+            )
+
+        assert result is False
+        assert "metadata.order" in failure_reasons["qdrant"]
+
+    async def test_qdrant_fails_when_knowledge_collection_empty(self):
+        """An existing but empty collection stops startup (#3202)."""
+        config = _make_config()
+        failure_reasons: dict[str, str] = {}
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(points=0),
+        )
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            client = AsyncMock()
+            result = await _check_single_dep(
+                "qdrant", config, client, failure_reasons=failure_reasons
+            )
+
+        assert result is False
+        assert "empty" in failure_reasons["qdrant"]
+
+    async def test_qdrant_fails_when_apartments_schema_incompatible(self):
+        """Apartments collection with missing payload indexes fails startup."""
+        config = _make_config()
+        failure_reasons: dict[str, str] = {}
+        schema = _contract_payload_schema("apartments")
+        schema.pop("price_eur")
+        mock_qdrant_client = _ready_qdrant_client(
+            apartments_info=_collection_info(points=5, payload_schema=schema),
+        )
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            client = AsyncMock()
+            result = await _check_single_dep(
+                "qdrant", config, client, failure_reasons=failure_reasons
+            )
+
+        assert result is False
+        assert "apartments" in failure_reasons["qdrant"]
+        assert "price_eur" in failure_reasons["qdrant"]
 
 
 # ===========================================================================
@@ -802,17 +910,10 @@ class TestQdrantPreflightClient:
     async def test_qdrant_preflight_uses_timeout_and_grpc(self):
         """Preflight uses BotConfig timeout and prefer_grpc=True."""
         config = _make_config(qdrant_timeout=42)
-        mock_qdrant = AsyncMock()
-        mock_collection_info = MagicMock()
-        mock_collection_info.points_count = 100
-        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
-        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
-        mock_qdrant.collection_exists = AsyncMock(return_value=True)
-        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
-        mock_qdrant.close = AsyncMock()
+        mock_qdrant_client = _ready_qdrant_client()
 
         with patch(
-            "telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant
+            "telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client
         ) as MockClient:
             client = AsyncMock()
             await _check_single_dep("qdrant", config, client)
@@ -913,27 +1014,29 @@ class TestPostgresOptionalBehavior:
 
 
 # ===========================================================================
-# Qdrant preflight: auto-create missing collection
+# Qdrant preflight: both product collections ready before polling (#3202)
 # ===========================================================================
 
 
 class TestQdrantRemediationHint:
-    """Qdrant remediation tells users about make local-up."""
+    """Qdrant remediation points at the idempotent demo bootstrap."""
 
-    def test_qdrant_remediation_mentions_make_local_up(self):
+    def test_qdrant_remediation_mentions_demo_bootstrap(self):
         from telegram_bot.preflight import _DEP_REMEDIATION
 
-        assert "make local-up" in _DEP_REMEDIATION["qdrant"].lower(), (
-            f"Qdrant remediation should mention 'make local-up', got: {_DEP_REMEDIATION['qdrant']}"
+        assert "make demo-bootstrap" in _DEP_REMEDIATION["qdrant"].lower(), (
+            "Qdrant remediation should mention 'make demo-bootstrap', "
+            f"got: {_DEP_REMEDIATION['qdrant']}"
         )
 
 
-class TestQdrantPreflightEnsureCollection:
-    """Preflight auto-creates Qdrant collection when it is missing."""
+class TestQdrantPreflightBothCollections:
+    """Missing collections fail with actionable errors — no auto-create."""
 
-    async def test_qdrant_creates_missing_collection_when_collection_exists_is_false(self):
-        """Missing collection should trigger create via collection_exists(), not exception parsing."""
+    async def test_missing_knowledge_collection_fails_without_create(self):
+        """A missing knowledge collection stops startup with remediation (#3202)."""
         config = _make_config()
+        failure_reasons: dict[str, str] = {}
         mock_qdrant = AsyncMock()
         mock_qdrant.collection_exists = AsyncMock(return_value=False)
         mock_qdrant.get_collection = AsyncMock()
@@ -942,30 +1045,74 @@ class TestQdrantPreflightEnsureCollection:
 
         with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
             client = AsyncMock()
-            result = await _check_single_dep("qdrant", config, client)
+            result = await _check_single_dep(
+                "qdrant", config, client, failure_reasons=failure_reasons
+            )
 
-        assert result is True
-        mock_qdrant.collection_exists.assert_awaited_once_with("test_col")
-        mock_qdrant.get_collection.assert_not_awaited()
-        mock_qdrant.create_collection.assert_awaited_once()
+        assert result is False
+        mock_qdrant.create_collection.assert_not_awaited()
+        assert "does not exist" in failure_reasons["qdrant"]
+        assert "make demo-bootstrap" in failure_reasons["qdrant"]
 
-    async def test_fails_when_create_also_raises(self):
-        """Returns False when collection missing AND create_collection also fails."""
+    async def test_missing_apartments_collection_fails_when_knowledge_ready(self):
+        """Both product collections are enforced — apartments cannot be skipped."""
         config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_qdrant.collection_exists = AsyncMock(return_value=False)
-        mock_qdrant.get_collection = AsyncMock()
-        mock_qdrant.create_collection = AsyncMock(side_effect=Exception("Permission denied"))
-        mock_qdrant.close = AsyncMock()
+        failure_reasons: dict[str, str] = {}
+        mock_qdrant = _ready_qdrant_client(exists=False)
+        # Knowledge exists; apartments does not.
+        exists_by_name = {"test_col": True, "apartments": False}
+
+        async def _exists(collection: str) -> bool:
+            return exists_by_name[collection]
+
+        mock_qdrant.collection_exists = AsyncMock(side_effect=_exists)
 
         with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
             client = AsyncMock()
-            result = await _check_single_dep("qdrant", config, client)
+            result = await _check_single_dep(
+                "qdrant", config, client, failure_reasons=failure_reasons
+            )
 
         assert result is False
+        assert "apartments" in failure_reasons["qdrant"]
+        assert "does not exist" in failure_reasons["qdrant"]
+
+    async def test_both_collections_ready_passes(self):
+        """Startup passes only when both contracts hold."""
+        config = _make_config()
+        mock_qdrant_client = _ready_qdrant_client()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+
+        assert result is True
+
+    async def test_both_collections_failing_aggregates_reasons(self):
+        """One failure report lists every actionable problem across collections."""
+        config = _make_config()
+        failure_reasons: dict[str, str] = {}
+        mock_qdrant_client = _ready_qdrant_client(
+            knowledge_info=_collection_info(points=0),
+            apartments_info=_collection_info(
+                points=0, payload_schema=_contract_payload_schema("apartments")
+            ),
+        )
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            client = AsyncMock()
+            result = await _check_single_dep(
+                "qdrant", config, client, failure_reasons=failure_reasons
+            )
+
+        assert result is False
+        reason = failure_reasons["qdrant"]
+        assert "test_col" in reason
+        assert "apartments" in reason
+        assert reason.count("empty") >= 2
 
     async def test_non_404_exception_still_fails_without_create(self):
-        """Connection-refused and other non-404 errors fail without attempting create."""
+        """Connection-refused and other transport errors fail without any writes."""
         config = _make_config()
         mock_qdrant = AsyncMock()
         mock_qdrant.collection_exists = AsyncMock(return_value=True)
@@ -979,27 +1126,6 @@ class TestQdrantPreflightEnsureCollection:
 
         assert result is False
         mock_qdrant.create_collection.assert_not_awaited()
-
-    async def test_created_collection_has_required_vector_schema(self):
-        """Auto-created collection has dense, colbert (multivector), and bm42 vectors."""
-        config = _make_config(qdrant_collection="gdrive_documents_bge")
-        mock_qdrant = AsyncMock()
-        mock_qdrant.collection_exists = AsyncMock(return_value=False)
-        mock_qdrant.get_collection = AsyncMock()
-        mock_qdrant.create_collection = AsyncMock()
-        mock_qdrant.close = AsyncMock()
-
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
-            client = AsyncMock()
-            await _check_single_dep("qdrant", config, client)
-
-        call_kwargs = mock_qdrant.create_collection.call_args[1]
-        assert call_kwargs["collection_name"] == "gdrive_documents_bge"
-        vectors_config = call_kwargs["vectors_config"]
-        assert "dense" in vectors_config
-        assert "colbert" in vectors_config
-        sparse_config = call_kwargs["sparse_vectors_config"]
-        assert "bm42" in sparse_config
 
 
 # ===========================================================================

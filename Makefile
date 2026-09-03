@@ -1064,7 +1064,17 @@ ingest-unified-logs: ## Show ingestion service logs
 # QDRANT BACKUP
 # =============================================================================
 
-.PHONY: qdrant-audit-indexes qdrant-backup qdrant-cleanup
+.PHONY: qdrant-audit-indexes qdrant-backup qdrant-cleanup demo-bootstrap demo-verify
+
+demo-bootstrap: ## Idempotent demo setup/ingest/verify for both Qdrant collections (#3202)
+	@echo "$(BLUE)Bootstrapping demo data for both Qdrant collections...$(NC)"
+	@$(ENV_LOAD) uv run python -m scripts.demo_bootstrap
+	@echo "$(GREEN)✓ Demo bootstrap complete$(NC)"
+
+demo-verify: ## Read-only readiness gate for both Qdrant collections (#3202)
+	@echo "$(BLUE)Verifying Qdrant demo readiness (read-only)...$(NC)"
+	@$(ENV_LOAD) uv run python -m scripts.demo_bootstrap --verify-only
+	@echo "$(GREEN)✓ Demo readiness verified$(NC)"
 
 qdrant-audit-indexes: ## Audit Qdrant payload indexes — PASS/FAIL with missing fields (#3074)
 	@echo "$(BLUE)Auditing Qdrant payload indexes for $${QDRANT_COLLECTION:-gdrive_documents_bge}...$(NC)"

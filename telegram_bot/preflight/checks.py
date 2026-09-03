@@ -15,7 +15,7 @@ from telegram_bot.preflight.remediation import (
     _exception_message_with_type,
     _is_redis_auth_failure,
     _postgres_local_remediation,
-    _qdrant_validate_collection,
+    _qdrant_validate_product_collections,
 )
 
 from ..config import BotConfig
@@ -57,7 +57,10 @@ DEP_CLASSIFICATION: dict[str, DepLevel] = {
 _DEP_REMEDIATION: dict[str, str] = {
     "redis": "start Redis and verify REDIS_PASSWORD / redis_url",
     "redis_cache": "restore Redis cache write/read path",
-    "qdrant": "Run `make local-up` to start Qdrant, then verify collection configuration",
+    "qdrant": (
+        "Run `make demo-bootstrap` to create both product collections and ingest "
+        "the shipped demo data (idempotent, never drops populated collections)"
+    ),
     "bge_m3": "start the repo-local BGE-M3 service and verify /health and /encode/dense",
     "postgres": "start PostgreSQL or accept degraded user-feature mode",
 }
@@ -205,7 +208,12 @@ async def _check_dep_redis_cache(config: BotConfig) -> bool:
 async def _check_dep_qdrant(
     config: BotConfig, failure_reasons: dict[str, str] | None = None
 ) -> bool:
-    """Qdrant connectivity check with gRPC-primary, REST-fallback transport."""
+    """Qdrant readiness for BOTH product collections (#3202).
+
+    Uses gRPC-primary, REST-fallback transport and validates the configured
+    knowledge collection plus the hard-coded ``apartments`` collection against
+    their explicit readiness contracts.
+    """
     # Lazy import so tests can patch telegram_bot.preflight.AsyncQdrantClient
     import telegram_bot.preflight as _pf
 
@@ -214,6 +222,9 @@ async def _check_dep_qdrant(
     collection = getter() if callable(getter) else config.qdrant_collection
     scheme = urlparse(config.qdrant_url).scheme.lower()
     effective_key = config.qdrant_api_key if scheme == "https" else None
+
+    async def _validate(client: Any) -> tuple[bool, str | None]:
+        return await _qdrant_validate_product_collections(client, collection)
 
     primary_client = None
     primary_exception_detail: str | None = None
@@ -224,9 +235,7 @@ async def _check_dep_qdrant(
             timeout=config.qdrant_timeout,
             prefer_grpc=True,
         )
-        primary_passed, primary_reason = await _qdrant_validate_collection(
-            primary_client, collection
-        )
+        primary_passed, primary_reason = await _validate(primary_client)
         if primary_passed:
             return True
         _collect_qdrant_failure(
@@ -256,9 +265,7 @@ async def _check_dep_qdrant(
             timeout=config.qdrant_timeout,
             prefer_grpc=False,
         )
-        fallback_passed, fallback_reason = await _qdrant_validate_collection(
-            fallback_client, collection
-        )
+        fallback_passed, fallback_reason = await _validate(fallback_client)
         if fallback_passed:
             logger.warning(
                 "Preflight WARN: Qdrant primary gRPC preflight failed: %s; "
