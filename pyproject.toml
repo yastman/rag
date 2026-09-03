@@ -85,7 +85,7 @@ docling-native = [
 # Only needed to run tests/unit/test_bge_m3_endpoints.py + test_bge_m3_rerank.py
 # Install: uv sync --extra bge-extras
 bge-extras = [
-    "fastapi>=0.100.0",
+    "fastapi>=0.141.1",
     "httpx>=0.27.0",
 ]
 
@@ -102,9 +102,9 @@ all = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.6.0",
-    "mypy>=1.11.0",
-    "pylint>=3.2.0",
+    "ruff>=0.16.6",
+    "mypy>=2.3.1",
+    "pylint>=4.0.8",
     "bandit>=1.7.9",
     "vulture>=2.11",
     "pytest>=8.3.0",
@@ -121,7 +121,7 @@ dev = [
     # Code-quality audit layer (added per tooling-enhancement plan)
     "deptry>=0.23.0",
     "pip-audit>=2.9.0",
-    "import-linter>=2.3.0",
+    "import-linter>=2.14",
     "radon>=6.0.1",
     "interrogate>=1.7.0",
 ]
@@ -219,6 +219,9 @@ exclude = [
     "venv",
     "archive",
     "vulture_whitelist.py",
+    # ruff 0.16 formats Python code blocks inside Markdown by default; keep the
+    # dev-tool refresh (dev group + lock only) from rewriting docs content.
+    "*.md",
 ]
 
 # Line length: 100 (slightly longer than Black's 88 for readability)
