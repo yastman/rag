@@ -119,13 +119,75 @@ def get_litellm_router() -> Router:
     )
 
 
+def _is_nullable(node: Any) -> bool:
+    """Return True when a JSON-schema node already admits null."""
+    if isinstance(node, dict):
+        if node.get("type") == "null":
+            return True
+        for key in ("anyOf", "oneOf"):
+            variants = node.get(key)
+            if isinstance(variants, list) and any(_is_nullable(v) for v in variants):
+                return True
+    return False
+
+
+def _normalize_strict_node(node: Any) -> None:
+    """Recursively apply OpenAI strict-mode object invariants in place (#3325).
+
+    OpenAI Structured Outputs requires every object to enumerate all of its
+    properties in ``required`` and to set ``additionalProperties: false`` —
+    raw ``model_json_schema()`` output violates both for optional fields and
+    nested ``$defs``. Semantic optionality is represented by wrapping the
+    property in a nullable union instead of dropping it from ``required``.
+    """
+    if isinstance(node, list):
+        for item in node:
+            _normalize_strict_node(item)
+        return
+    if not isinstance(node, dict) or "$ref" in node:
+        return
+
+    properties = node.get("properties")
+    if isinstance(properties, dict):
+        original_required = set(node.get("required") or [])
+        for name, sub_schema in list(properties.items()):
+            _normalize_strict_node(sub_schema)
+            if name not in original_required and not _is_nullable(sub_schema):
+                properties[name] = {"anyOf": [sub_schema, {"type": "null"}]}
+        node["required"] = list(properties)
+        node["additionalProperties"] = False
+
+    for key, value in node.items():
+        if key == "properties":
+            continue  # already normalized in place above
+        if key in ("items", "prefixItems", "anyOf", "oneOf", "allOf"):
+            _normalize_strict_node(value)
+        elif key == "$defs" and isinstance(value, dict):
+            for def_node in value.values():
+                _normalize_strict_node(def_node)
+
+
+def _openai_strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return a deep copy of ``schema`` normalized for OpenAI strict mode (#3325)."""
+    normalized: dict[str, Any] = json.loads(json.dumps(schema))
+    _normalize_strict_node(normalized)
+    return normalized
+
+
 def json_schema_response_format(response_model: type[BaseModel]) -> dict[str, Any]:
-    """Return the LiteLLM/OpenAI JSON-schema ``response_format`` for a Pydantic model."""
+    """Return the LiteLLM/OpenAI JSON-schema ``response_format`` for a Pydantic model.
+
+    The schema is normalized for OpenAI Structured Outputs strict mode
+    (#3325): every object (root, ``$defs``, nested and array items) carries a
+    complete ``required`` list and ``additionalProperties: false``. A custom
+    normalizer keeps the boundary provider-neutral — LiteLLM routes the
+    result to whichever provider wins the fallback chain.
+    """
     return {
         "type": "json_schema",
         "json_schema": {
             "name": response_model.__name__,
-            "schema": response_model.model_json_schema(),
+            "schema": _openai_strict_schema(response_model.model_json_schema()),
             "strict": True,
         },
     }
