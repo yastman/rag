@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "artifact": {
+    "service": "bge-m3-api",
+    "kind": "bge-m3-onnx-fp32-all-three-outputs",
+    "opset": 17,
+    "ir_version": 8,
+    "inputs": ["input_ids", "attention_mask"],
+    "input_dtype": "int64",
+    "outputs": ["dense_vecs", "sparse_vecs", "colbert_vecs"],
+    "output_shapes": {
+      "dense_vecs": "[batch, 1024]",
+      "sparse_vecs": "[batch, seq_len, 1]",
+      "colbert_vecs": "[batch, seq_len - 1, 1024]"
+    },
+    "notes": "Graph inputs/outputs and opset verified by direct onnx inspection at the pinned revision; dense_vecs is L2-normalized CLS pooling, sparse_vecs is relu(sparse_linear(last_hidden_state)), colbert_vecs is normalize(colbert_linear(last_hidden_state[:, 1:])) * attention_mask[:, 1:]."
+  },
+  "source": {
+    "kind": "huggingface",
+    "repo_id": "philipchung/bge-m3-onnx",
+    "revision": "92465a6ca57117003d558c98578592456005d5ca",
+    "license": "MIT",
+    "license_evidence": "MIT license tag on https://huggingface.co/philipchung/bge-m3-onnx; derivative of MIT BAAI/bge-m3",
+    "export_recipe": "export_onnx.py at the pinned revision (optimum onnx_export_from_model, BGEM3OnnxConfig, opset 17, producer pytorch 2.1.2)"
+  },
+  "upstream_model": {
+    "repo_id": "BAAI/bge-m3",
+    "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "license": "MIT",
+    "tokenizer_pairing_evidence": "tokenizer.json sha256 6710678b12670bc442b99edc952c4d996ae309a7020c1fa0096dd245c2faf790 is byte-identical to BAAI/bge-m3 onnx/tokenizer.json at the pinned upstream revision; sentencepiece.bpe.model LFS sha256 cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865 is identical to the BAAI/bge-m3 root copy"
+  },
+  "files": [
+    {
+      "name": "model.onnx",
+      "role": "model",
+      "bytes": 521736,
+      "sha256": "c49463691ebb4ea4d850b648c7431c19c1ab85bb43726131b883bacc903cfbb9"
+    },
+    {
+      "name": "model.onnx_data",
+      "role": "external_data",
+      "bytes": 6813265968,
+      "sha256": "7b346668b4b0388a2da2105bbeee5cefca963849a5fcd1fcd7138bc70d97dea1"
+    },
+    {
+      "name": "tokenizer/tokenizer.json",
+      "role": "tokenizer",
+      "bytes": 17082821,
+      "sha256": "6710678b12670bc442b99edc952c4d996ae309a7020c1fa0096dd245c2faf790"
+    },
+    {
+      "name": "tokenizer/tokenizer_config.json",
+      "role": "tokenizer",
+      "bytes": 1173,
+      "sha256": "7e4c1cc848840aeccdd763458c18dd525eb0f795c992e00ebe9c28554e7db2d4"
+    },
+    {
+      "name": "tokenizer/special_tokens_map.json",
+      "role": "tokenizer",
+      "bytes": 964,
+      "sha256": "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835"
+    },
+    {
+      "name": "tokenizer/sentencepiece.bpe.model",
+      "role": "tokenizer",
+      "bytes": 5069051,
+      "sha256": "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865"
+    },
+    {
+      "name": "tokenizer/config.json",
+      "role": "config",
+      "bytes": 794,
+      "sha256": "3a0e686123075e03f4d3e13cc4ea062e71bb118fb422b02ab3c0177d08fe7222"
+    }
+  ]
+}
