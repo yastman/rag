@@ -17,7 +17,7 @@ dependencies = [
     "pyyaml>=6.0.0",
     # #3227: frozen on the stable 1.98.0 line (requires openai>=2.20,<3).
     # OpenAI 3.x / openai-agents are intentionally out of scope for this pair.
-    "litellm==1.98.0",
+    "litellm==1.99.0",
     "python-dotenv",
     "typing-extensions>=4.0.0",
     "numpy>=2.4.6",
@@ -48,7 +48,7 @@ core = [
     "httpx>=0.27.0",
     "tenacity>=8.2.0",
     "pyyaml>=6.0.0",
-    "litellm==1.98.0",  # #3227: frozen pair with openai 2.54.0 (see base dependencies).
+    "litellm==1.99.0",  # #3227: frozen pair with openai 2.54.0 (see base dependencies).
     "python-dotenv",
     "typing-extensions>=4.0.0",
     "numpy>=2.4.6",
