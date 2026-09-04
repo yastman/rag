@@ -2,8 +2,10 @@
 
 Bookmarks are an explicit optional capability (#3241): the service is
 constructed only after validated PostgreSQL readiness (see
-``lifecycle.setup_postgres``), and :func:`bookmarks_ready` is the single
-predicate UI surfaces use to decide whether bookmarks may be advertised.
+``lifecycle.setup_postgres``). The capability predicate lives in the
+dependency-light :mod:`telegram_bot.capabilities` (UI surfaces import it
+from there; this module intentionally keeps the asyncpg dependency inside
+the optional construction path).
 """
 
 from __future__ import annotations
@@ -22,18 +24,6 @@ class Favorite:
     property_id: str
     property_data: dict[str, Any]
     created_at: dt.datetime | None
-
-
-def bookmarks_ready(bot: Any) -> bool:
-    """Return True when bookmarks may be advertised to users (#3241).
-
-    Bookmarks require PostgreSQL, so the capability exists only when
-    ``lifecycle.setup_postgres`` validated the database and constructed the
-    :class:`FavoritesService` on the bot. Duck-typed: ``None`` or any object
-    without a favourites service reads as not ready (fail closed), so UI
-    builders can safely pass bots or stubs they happened to receive.
-    """
-    return getattr(bot, "_favorites_service", None) is not None
 
 
 def _parse_jsonb(val: Any) -> dict[str, Any]:

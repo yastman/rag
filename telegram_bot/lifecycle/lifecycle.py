@@ -210,6 +210,7 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
     is validated here; when PostgreSQL is unavailable the bot starts without
     them and UI surfaces hide the bookmarks entry points.
     """
+    from telegram_bot.capabilities import set_bookmarks_ready
     from telegram_bot.startup_status import StartupSeverity, StartupSignal
 
     log = logging.getLogger(__name__)
@@ -217,6 +218,7 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
         preflight_result.get("postgres", True) if isinstance(preflight_result, dict) else True
     )
     if not postgres_available:
+        set_bookmarks_ready(bot, service=None)
         startup_report.add(
             StartupSignal(
                 source="postgres_runtime",
@@ -267,13 +269,15 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
         from telegram_bot.services.user_service import UserService
 
         bot._user_service = UserService(pool=bot._pg_pool)
-        bot._favorites_service = FavoritesService(pool=bot._pg_pool)
+        favorites_service = FavoritesService(pool=bot._pg_pool)
+        set_bookmarks_ready(bot, service=favorites_service)
         log.info("Favorites service ready")
         bot._search_event_store = SearchEventStore(pool=bot._pg_pool)
         log.info("Search event store ready")
         log.info("Bookmarks capability: enabled (PostgreSQL connection validated)")
 
     except Exception:
+        set_bookmarks_ready(bot, service=None)
         log.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
         startup_report.add(
             StartupSignal(
@@ -561,6 +565,9 @@ async def stop_bot(bot: Any) -> None:
         await bot._reranker.close()
     bot._pre_agent_filter_extractor = None
     if bot._pg_pool is not None:
+        from telegram_bot.capabilities import set_bookmarks_ready
+
+        set_bookmarks_ready(bot, service=None)
         await bot._pg_pool.close()
         log.info("PostgreSQL pool closed")
     await bot.bot.session.close()

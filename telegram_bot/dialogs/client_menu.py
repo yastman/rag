@@ -55,7 +55,7 @@ async def get_menu_data(
     gates the menu button so the root menu never advertises bookmarks when the
     favourites service was not constructed (no validated PostgreSQL).
     """
-    from telegram_bot.services.favorites_service import bookmarks_ready
+    from telegram_bot.capabilities import bookmarks_ready
 
     name = ""
     if event_from_user is not None:
