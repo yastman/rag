@@ -441,3 +441,96 @@ async def test_strict_grounding_policy_reaches_cache_read(monkeypatch) -> None:
 
     assert recorded["grounding_mode"] == "strict"
     assert recorded["require_safe_reuse"] is True
+
+
+# Regression #3323: CHITCHAT and OFF_TOPIC never reach the RAG pipeline —
+# they return canonical canned responses before any cache/embedding/retrieval/
+# LLM side effect.
+async def test_chitchat_bypasses_rag_with_canonical_response(monkeypatch) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.core import AssistantRequest, CoreDependencies, UserContext
+    from src.runtime.domain_defaults import CHITCHAT_RESPONSES
+    from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
+
+    classify_mod = types.ModuleType("src.runtime.routing.classify")
+    classify_mod.classify_query = lambda _: "CHITCHAT"
+    monkeypatch.setitem(sys.modules, "src.runtime.routing.classify", classify_mod)
+
+    def _fail_rag(**_kwargs):
+        raise AssertionError("RAG pipeline must not run for CHITCHAT")
+
+    monkeypatch.setattr("src.runtime.pipeline.assistant_pipeline.rag_pipeline", _fail_rag)
+
+    cache = AsyncMock()
+    telemetry = MagicMock()
+    result = await run_assistant_pipeline(
+        AssistantRequest(
+            query="привет",
+            collection="c",
+            user_context=UserContext(user_id="42"),
+            request_id="req-chitchat",
+        ),
+        dependencies=CoreDependencies(
+            cache=cache,
+            embeddings=object(),
+            sparse_embeddings=object(),
+            qdrant=object(),
+            config=object(),
+            telemetry=telemetry,
+        ),
+    )
+
+    canned = [text for texts in CHITCHAT_RESPONSES.values() for text in texts]
+    assert result.response_text in canned
+    assert result.route == "non_rag"
+    assert result.request_type == "CHITCHAT"
+    assert result.request_id == "req-chitchat"
+    assert result.cache_hit is False
+    cache.assert_not_awaited()
+
+    routed = [
+        call
+        for call in telemetry.log_event.call_args_list
+        if call.args and call.args[0] == "search_completed"
+    ]
+    assert routed, telemetry.log_event.call_args_list
+    assert routed[0].args[1] if len(routed[0].args) > 1 else True
+
+
+async def test_off_topic_bypasses_rag_with_refusal(monkeypatch) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.core import AssistantRequest, CoreDependencies, UserContext
+    from src.runtime.domain_defaults import OFF_TOPIC_RESPONSES
+    from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
+
+    classify_mod = types.ModuleType("src.runtime.routing.classify")
+    classify_mod.classify_query = lambda _: "OFF_TOPIC"
+    monkeypatch.setitem(sys.modules, "src.runtime.routing.classify", classify_mod)
+
+    def _fail_rag(**_kwargs):
+        raise AssertionError("RAG pipeline must not run for OFF_TOPIC")
+
+    monkeypatch.setattr("src.runtime.pipeline.assistant_pipeline.rag_pipeline", _fail_rag)
+
+    result = await run_assistant_pipeline(
+        AssistantRequest(
+            query="как приготовить борщ",
+            collection="c",
+            user_context=UserContext(user_id="42"),
+            request_id="req-offtopic",
+        ),
+        dependencies=CoreDependencies(
+            cache=AsyncMock(),
+            embeddings=object(),
+            sparse_embeddings=object(),
+            qdrant=object(),
+            config=object(),
+            telemetry=MagicMock(),
+        ),
+    )
+
+    assert result.response_text in OFF_TOPIC_RESPONSES
+    assert result.route == "non_rag"
+    assert result.request_type == "OFF_TOPIC"

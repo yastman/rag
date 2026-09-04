@@ -93,8 +93,10 @@ async def test_run_assistant_request_fail_opens_when_telemetry_listener_raises(
     )
 
     with caplog.at_level(logging.INFO):
+        # Not a CHITCHAT/OFF_TOPIC query (#3323): greetings take the non-RAG
+        # route and never reach the telemetry-fail-open path under test.
         result = await run_assistant_request(
-            "hello",
+            "тестовый вопрос по документам поиска",
             collection="test",
             request_id="telemetry-fail-open",
             dependencies=deps,

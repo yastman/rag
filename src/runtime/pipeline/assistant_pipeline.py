@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import time
+from random import choice
 from typing import Any
 
 from src.core.contracts import (
@@ -27,10 +28,12 @@ from src.core.contracts import (
 )
 from src.core.telemetry import emit_product_event
 from src.retrieval.topic_classifier import get_query_topic_hint
+from src.runtime.domain_defaults import OFF_TOPIC_RESPONSES
 from src.runtime.generation import GenerationRequest, generate_answer
 from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.context import PipelineContext
 from src.runtime.pipeline.rag import rag_pipeline
+from src.runtime.routing.classify import CHITCHAT, OFF_TOPIC, _get_chitchat_response
 from src.runtime.safety.guard import detect_injection
 from src.runtime.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
@@ -62,6 +65,35 @@ async def run_assistant_pipeline(
         from src.runtime.routing.classify import classify_query
 
         request_type = classify_query(request.query)
+
+        # Non-RAG route (#3323): greetings and clearly off-topic prompts get
+        # the canonical canned responses before any cache, embedding,
+        # retrieval, rerank, or generation work.
+        if request_type in (CHITCHAT, OFF_TOPIC):
+            response_text = (
+                _get_chitchat_response(request.query)
+                if request_type == CHITCHAT
+                else choice(OFF_TOPIC_RESPONSES)
+            )
+            emit_product_event(
+                dependencies.telemetry,
+                "search_completed",
+                request_id=rid,
+                route="non_rag",
+                request_type=request_type,
+                retrieved_doc_ids=[],
+                latency_ms=_latency_ms(started),
+                error_type=None,
+            )
+            return AssistantResult(
+                response_text=response_text,
+                route="non_rag",
+                request_type=request_type,
+                latency_ms=_latency_ms(started),
+                error_type=None,
+                request_id=rid,
+                cache_hit=False,
+            )
 
         # Prompt-injection guard (#3357): pure decision, zero side effects.
         # Reuses the single detector from src/runtime/safety/guard.py and runs
