@@ -566,7 +566,7 @@ class TestPrerequisites:
         _snapshot, failures = await run_prerequisites(probes=probes)
         assert any("[qdrant] qdrant probe crashed: boom" in failure for failure in failures)
 
-    async def test_llm_probe_requires_a_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_llm_probe_requires_a_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         outcome = demo_gate._llm_probe()
@@ -576,7 +576,7 @@ class TestPrerequisites:
         monkeypatch.setenv("LLM_API_KEY", "sk-test")
         assert demo_gate._llm_probe().ok is True
 
-    async def test_git_probe_reports_clean_tree_and_sha(
+    def test_git_probe_reports_clean_tree_and_sha(
         self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import subprocess
@@ -604,7 +604,7 @@ class TestPrerequisites:
         assert outcome_dirty.ok is False
         assert any("dirty" in failure for failure in outcome_dirty.failures)
 
-    async def test_telegram_probe_requires_credentials_and_session(
+    def test_telegram_probe_requires_credentials_and_session(
         self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
