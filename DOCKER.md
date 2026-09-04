@@ -40,7 +40,7 @@ Services are gated by profiles. Run only what you need.
 | Service | Image | Profile | Purpose |
 |---|---|---|---|
 | `postgres` | `postgres:17` | default | Bot domain DB (users/leads/funnel/favorites) |
-| `redis` | `redis:8.6.3` | default | Five caches: semantic answer, embedding, search, rerank, extraction |
+| `redis` | `redis:8.10.1` | default | Five caches: semantic answer, embedding, search, rerank, extraction |
 | `qdrant` | `qdrant/qdrant:v1.18.3` | default | Vector store — dense, sparse, ColBERT retrieval; storage config (`on_disk_payload`, `indexing_threshold_kb`) caps growth |
 | `bge-m3` | built locally | default | Self-hosted BGE-M3 ONNX embedding API |
 | `bot` | built locally | `bot` | Telegram bot process |
