@@ -48,3 +48,12 @@ Direct pushes to `dev` bypass required status checks by GitHub design; the
 AGENTS.md delivery flow (branch → focused tests → `--no-ff` merge of a
 tested candidate) remains the only sanctioned way to move `dev`, and CI runs
 on every push to `dev` as the post-hoc gate.
+
+## Changelog
+
+- 2026-09-04 — #3327: required status checks enabled for the nine contexts
+  above (`strict: false`, `enforce_admins: true`). Proof of enforcement:
+  PR #3463 with failing `Lint`/`Candidate Gate` was refused
+  (`mergeStateStatus: BLOCKED`, "base branch policy prohibits the merge").
+  This PR is the companion green-path proof: all required checks pass and
+  the merge is accepted under the same policy.
