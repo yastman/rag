@@ -232,7 +232,9 @@ def get_model():
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
         logger.info("Loading tokenizer from %s (local-only)", settings.TOKENIZER_DIR)
-        _tokenizer = AutoTokenizer.from_pretrained(settings.TOKENIZER_DIR, local_files_only=True)
+        _tokenizer = AutoTokenizer.from_pretrained(  # nosec B615 — local baked dir, hash-verified manifest, no hub access
+            settings.TOKENIZER_DIR, local_files_only=True
+        )
         logger.info("Tokenizer loaded")
         model_loaded.set(1)
 
