@@ -31,6 +31,7 @@ from src.runtime.generation import GenerationRequest, generate_answer
 from src.runtime.grounding.policy import get_grounding_mode
 from src.runtime.pipeline.context import PipelineContext
 from src.runtime.pipeline.rag import rag_pipeline
+from src.runtime.safety.guard import detect_injection
 from src.runtime.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
@@ -38,6 +39,7 @@ from src.runtime.services.cache_policy import (
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
+from src.runtime.services.rag_core import BLOCKED_RESPONSE
 
 
 logger = logging.getLogger(__name__)
@@ -60,6 +62,43 @@ async def run_assistant_pipeline(
         from src.runtime.routing.classify import classify_query
 
         request_type = classify_query(request.query)
+
+        # Prompt-injection guard (#3357): pure decision, zero side effects.
+        # Reuses the single detector from src/runtime/safety/guard.py and runs
+        # before semantic cache, embedding, retrieval, rerank, or generation,
+        # so hard-blocked input costs nothing and is never cached. Logging is
+        # metadata-only (#3356).
+        if getattr(dependencies.config, "content_filter_enabled", True):
+            guard_mode = getattr(dependencies.config, "guard_mode", "hard")
+            detected, risk_score, pattern = detect_injection(request.query)
+            if detected:
+                if guard_mode == "hard":
+                    logger.warning(
+                        "assistant_pipeline: hard guard blocked request_id=%s "
+                        "(score=%.2f, pattern=%s)",
+                        rid,
+                        risk_score,
+                        pattern,
+                    )
+                    return AssistantResult(
+                        response_text=BLOCKED_RESPONSE,
+                        route="guard_blocked",
+                        request_type=request_type,
+                        latency_ms=_latency_ms(started),
+                        error_type=None,
+                        request_id=rid,
+                        cache_hit=False,
+                    )
+                # soft/log: flag and continue (semantics unchanged).
+                logger.warning(
+                    "assistant_pipeline: guard detected (mode=%s, score=%.2f, "
+                    "pattern=%s) request_id=%s",
+                    guard_mode,
+                    risk_score,
+                    pattern,
+                    rid,
+                )
+
         state_contract: PipelineContext | None = (
             PipelineContext(filters=ctx.filters) if ctx.filters else None
         )

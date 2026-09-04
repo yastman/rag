@@ -1,15 +1,18 @@
 """Query pipeline handlers extracted from ``telegram_bot/bot.py``.
 
 Split #2816: extracted ``handle_query``, ``_handle_apartment_fast_path``,
-``_trace_guard_blocked``,
 ``_send_core_response``, ``_write_final_pipeline_trace``, ``_handle_query_supervisor``
 as module-level functions.
 
 #3208 convergence: the Telegram free-text path is reduced to gating
-(handoff + guard), deterministic context assembly (role, filters), ONE
+(handoff), deterministic context assembly (role, filters), ONE
 assistant-core call, and presentation. Classify/embed/semantic-cache work
 lives in the core (``src.core.assistant`` → ``run_assistant_pipeline``);
 this module no longer duplicates it.
+
+#3357: the transport-side prompt-injection gate was removed — the core
+pipeline owns the guard decision for every caller, so the adapter no longer
+pre-checks or pre-blocks.
 
 #3216: the imperative agent facade and its recovery wrappers were removed;
 queries route deterministically to assistant-core or product services.
@@ -47,12 +50,6 @@ LOCALE_TO_LANGUAGE: dict[str, str] = {
     "en": "English",
     "uk": "українською мовою",
 }
-
-
-def _get_detect_injection() -> Any:
-    from telegram_bot import bot as _m
-
-    return _m.detect_injection
 
 
 async def handle_query(
@@ -119,29 +116,6 @@ async def handle_query(
         expert_id=expert_id,
         dialog_manager=dialog_manager,
     )
-
-
-def _trace_guard_blocked(
-    *,
-    user_text: str,
-    pipeline_start: float,
-    risk_score: float,
-    pattern: str | None,
-    root_trace_metadata: dict[str, Any] | None,
-) -> None:
-    """Write trace metadata for a hard-blocked injection (#1368)."""
-    wall_ms = (time.perf_counter() - pipeline_start) * 1000
-    if root_trace_metadata is not None:
-        root_trace_metadata.update(
-            {
-                "pipeline_mode": "sdk_agent",
-                "pipeline_wall_ms": wall_ms,
-                "e2e_latency_ms": wall_ms,
-                "guard_blocked": True,
-                "injection_pattern": pattern,
-                "injection_risk_score": risk_score,
-            }
-        )
 
 
 async def _send_core_response(
@@ -254,47 +228,6 @@ def _write_final_pipeline_trace(
                 "e2e_latency_ms": wall_ms,
             }
         )
-
-
-async def _supervisor_check_guard(
-    bot: PropertyBot,
-    message: Message,
-    *,
-    user_text: str,
-    pipeline_start: float,
-    root_trace_metadata: dict[str, Any] | None,
-) -> str | None:
-    """Run content-filter guard. Returns BLOCKED_RESPONSE string if hard-blocked, else None."""
-    from src.runtime.services.rag_core import BLOCKED_RESPONSE
-
-    detect_injection = _get_detect_injection()
-    detected, risk_score, pattern = detect_injection(user_text)
-    if not detected:
-        return None
-    if bot.config.guard_mode == "hard":
-        logger.warning(
-            "Pre-agent guard blocked (score=%.2f, pattern=%s): %.80s",
-            risk_score,
-            pattern,
-            user_text,
-        )
-        await message.answer(BLOCKED_RESPONSE)
-        _trace_guard_blocked(
-            user_text=user_text,
-            pipeline_start=pipeline_start,
-            risk_score=risk_score,
-            pattern=pattern,
-            root_trace_metadata=root_trace_metadata,
-        )
-        return BLOCKED_RESPONSE
-    logger.warning(
-        "Pre-agent guard detected (mode=%s, score=%.2f, pattern=%s): %.80s",
-        bot.config.guard_mode,
-        risk_score,
-        pattern,
-        user_text,
-    )
-    return None
 
 
 async def _extract_request_filters(
@@ -416,10 +349,11 @@ async def _handle_query_supervisor(
 ) -> str:
     """Handle free-text Q&A by converging on the assistant core (#3208).
 
-    Telegram keeps only: handoff gating (``handle_query``), the content-filter
-    guard, deterministic context assembly (role, language, filters), ONE core
-    call, and presentation. Classify/embed/semantic-cache work happens inside
-    ``run_assistant_pipeline`` exactly once.
+    Telegram keeps only: handoff gating (``handle_query``), deterministic
+    context assembly (role, language, filters), ONE core call, and
+    presentation. The prompt-injection guard is owned by the core
+    (``run_assistant_pipeline``, #3357); classify/embed/semantic-cache work
+    happens inside ``run_assistant_pipeline`` exactly once.
     """
 
     assert message.bot is not None
@@ -432,24 +366,12 @@ async def _handle_query_supervisor(
     rag_result_store: dict[str, Any] = {}
     user_text = message.text or ""
 
-    # Step 1: Content-filter guard (transport-side safety gate).
-    if bot.config.content_filter_enabled:
-        blocked = await _supervisor_check_guard(
-            bot,
-            message,
-            user_text=user_text,
-            pipeline_start=pipeline_start,
-            root_trace_metadata=root_trace_metadata,
-        )
-        if blocked is not None:
-            return blocked
-
-    # Step 2: Deterministic context assembly (filter propagation into the core).
+    # Step 1: Deterministic context assembly (filter propagation into the core).
     extracted_filters = await _extract_request_filters(
         bot, user_text=user_text, rag_result_store=rag_result_store
     )
 
-    # Step 3: ONE core call (classify → cache check → retrieve → generate → cache store).
+    # Step 2: ONE core call (classify → guard → cache check → retrieve → generate → store).
     response_text = await _supervisor_run_core(
         bot,
         message,
@@ -463,7 +385,7 @@ async def _handle_query_supervisor(
         forum_thread_id=forum_thread_id,
     )
 
-    # Step 4: Send exactly once.
+    # Step 3: Send exactly once.
     query_type = str(rag_result_store.get("query_type", "") or "")
 
     class _DummyCtx:
@@ -483,7 +405,7 @@ async def _handle_query_supervisor(
             forum_thread_id=forum_thread_id,
         )
 
-    # Step 5: Final trace from truthful core metadata.
+    # Step 4: Final trace from truthful core metadata.
     _supervisor_write_final_trace(
         pipeline_start=pipeline_start,
         rag_result_store=rag_result_store,
