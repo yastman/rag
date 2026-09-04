@@ -360,7 +360,9 @@ def test_makefile_local_gate_ladder() -> None:
         r"^dev-setup:\s+install-dev\s+setup-hooks\s+docker-up\b", makefile, re.MULTILINE
     )
     assert re.search(
-        r"^candidate-check:\s+check-frozen\s+test\s+test-contract\b",
+        # #3326: the candidate gate enforces CI's formatting contract before
+        # the long test lanes.
+        r"^candidate-check:\s+check-frozen\s+format-check\s+test\s+test-contract\b",
         makefile,
         re.MULTILINE,
     )

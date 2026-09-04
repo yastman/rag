@@ -310,9 +310,7 @@ class ApartmentsService:
                         )
                         stats_entry["count"] += 1
                         if price:
-                            stats_entry["max_price"] = max(
-                                stats_entry["max_price"], float(price)
-                            )
+                            stats_entry["max_price"] = max(stats_entry["max_price"], float(price))
                     if complex_name:
                         room_counts = complex_room_counts.setdefault(complex_name, {})
                         room_counts[rooms] = room_counts.get(rooms, 0) + 1
@@ -426,7 +424,11 @@ def generate_search_examples(stats: dict) -> list[str]:
     # Example: rooms + complex (only combos that really exist in the complex).
     for complex_name in complexes:
         combo = next(
-            (c for c in complex_combos.get(complex_name, []) if c["count"] >= _EXAMPLE_MIN_COHERENT),
+            (
+                c
+                for c in complex_combos.get(complex_name, [])
+                if c["count"] >= _EXAMPLE_MIN_COHERENT
+            ),
             None,
         )
         if combo is None:

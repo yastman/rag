@@ -247,9 +247,13 @@ async def _store_semantic_cache(
             result={
                 "response": response_text,
                 "grounded": bool(grounded) if grounded is not None else False,
-                "legal_answer_safe": bool(legal_answer_safe) if legal_answer_safe is not None else False,
+                "legal_answer_safe": bool(legal_answer_safe)
+                if legal_answer_safe is not None
+                else False,
                 "semantic_cache_safe_reuse": (
-                    bool(semantic_cache_safe_reuse) if semantic_cache_safe_reuse is not None else False
+                    bool(semantic_cache_safe_reuse)
+                    if semantic_cache_safe_reuse is not None
+                    else False
                 ),
                 "fallback_used": bool(generation_result.get("fallback_used", False)),
                 "safe_fallback_used": bool(generation_result.get("safe_fallback_used", False)),

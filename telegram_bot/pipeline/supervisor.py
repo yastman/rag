@@ -99,9 +99,7 @@ async def handle_query(
                     topic_id=handoff.topic_id,
                 )
             except TelegramBadRequest:
-                logger.warning(
-                    "Relay to handoff topic %s failed (human_waiting)", handoff.topic_id
-                )
+                logger.warning("Relay to handoff topic %s failed (human_waiting)", handoff.topic_id)
 
     await aiogram_bot.send_chat_action(chat_id=message.chat.id, action="typing")
 

@@ -45,9 +45,7 @@ _HANDOFF_FAILURE_TEXT = (
 
 # Shown only when capability is off and the FSM context is unavailable, so the
 # phone-request route cannot start either. No promises (#3239).
-_MANAGER_UNAVAILABLE_TEXT = (
-    "⚠️ Связь с менеджером сейчас недоступна. Попробуйте позже."
-)
+_MANAGER_UNAVAILABLE_TEXT = "⚠️ Связь с менеджером сейчас недоступна. Попробуйте позже."
 
 
 async def _report_handoff_failure(message: Any) -> None:

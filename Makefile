@@ -91,8 +91,7 @@ PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_main.py \
 	tests/unit/test_perf_fixes.py \
 	tests/unit/test_results_pagination_bugs.py \
-	tests/unit/test_send_property_card.py \
-	tests/unit/test_topic_service_init.py
+	tests/unit/test_send_property_card.py
 PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB := $(addprefix --ignore-glob=,$(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS))
 PYTEST_OPTIONAL_ADAPTER_IGNORE := $(addprefix --ignore=,$(PYTEST_TELEGRAM_ADAPTER_PATHS))
 PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB := $(PYTEST_TELEGRAM_ADAPTER_IGNORE_GLOB)
@@ -181,9 +180,9 @@ format: ## Format code with Ruff
 	uv run ruff format $(LINT_PATHS)
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
-format-check: ## Check if code is formatted
+format-check: ## Check if code is formatted (read-only: no auto-sync, safe inside candidate-check)
 	@echo "$(BLUE)Checking code format...$(NC)"
-	uv run ruff format $(LINT_PATHS) --check
+	@$(UV_RUN_NO_SYNC) ruff format $(LINT_PATHS) --check
 	@echo "$(GREEN)✓ Format check complete$(NC)"
 
 type-check: ## Run MyPy type checking
@@ -783,7 +782,7 @@ check-frozen: ## Read-only check: fail if .venv is stale, then lint + type-check
 	@$(UV_RUN_NO_SYNC) mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
 	@echo "$(GREEN)✓ Frozen check complete$(NC)"
 
-candidate-check: check-frozen test test-contract ## Authoritative local delivery gate
+candidate-check: check-frozen format-check test test-contract ## Authoritative local delivery gate (format parity with CI before long lanes, #3326)
 
 pre-push: lint format-check test-core ## Pre-push gate (lint + format-check + core tests)
 	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"

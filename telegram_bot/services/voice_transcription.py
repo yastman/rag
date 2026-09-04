@@ -41,7 +41,6 @@ def voice_ready(config: Any) -> bool:
     return bool(str(getattr(config, "llm_api_key", "") or "").strip())
 
 
-
 async def transcribe_voice(message: Message, *, config: Any = None) -> str | None:
     """Download a Telegram voice message and transcribe it via direct OpenAI STT.
 
@@ -99,10 +98,7 @@ async def transcribe_voice(message: Message, *, config: Any = None) -> str | Non
         raise
     except Exception:
         logger.warning(
-            "Voice transcription failed (download/provider/timeout); "
-            "falling back to typed input",
+            "Voice transcription failed (download/provider/timeout); falling back to typed input",
             exc_info=True,
         )
         return None
-
-
