@@ -10,7 +10,7 @@ from src.runtime.services.query_filter_signal import build_filter_signature
 
 
 _SEMANTIC_CACHEABLE_QUERY_TYPES = {"ENTITY", "FAQ", "GENERAL", "STRUCTURED"}
-SEMANTIC_CACHE_SCHEMA_VERSION = "v8"
+SEMANTIC_CACHE_SCHEMA_VERSION = "v9"
 _CONTEXTUAL_RE = re.compile(
     r"\b(?:"
     r"расскажи\s+подробнее(?:\s+(?:об|про)\s+(?:этом|этой|этих|этот|эту|них)\s+\w+)?"

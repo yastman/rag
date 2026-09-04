@@ -29,6 +29,20 @@ def get_grounding_mode(*, query_type: str, topic_hint: str | None) -> str:
     )
 
 
+def _finite_confidence(value: Any) -> float | None:
+    """Return a finite float confidence, or None when absent/malformed (#3358).
+
+    Strict grounding treats absent, NaN, infinite, non-numeric, or boolean
+    values as missing evidence and fails closed.
+    """
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    confidence = float(value)
+    if confidence != confidence or confidence == float("inf") or confidence == float("-inf"):
+        return None
+    return confidence
+
+
 def is_strict_grounding_safe(
     *,
     documents: list[dict[str, Any]],
@@ -37,9 +51,11 @@ def is_strict_grounding_safe(
 ) -> bool:
     if not documents or not sources_enabled:
         return False
-    if grade_confidence is None:
-        return True
-    return grade_confidence >= STRICT_GROUNDING_CONFIDENCE_THRESHOLD
+    confidence = _finite_confidence(grade_confidence)
+    if confidence is None:
+        # #3358: fail closed — absent or invalid confidence is missing evidence.
+        return False
+    return confidence >= STRICT_GROUNDING_CONFIDENCE_THRESHOLD
 
 
 def semantic_cache_safe_reuse_allowed(
