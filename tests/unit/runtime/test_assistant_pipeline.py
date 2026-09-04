@@ -384,3 +384,60 @@ async def test_embedding_error_is_terminal_dependency_failure(monkeypatch) -> No
     assert result.cache_hit is False
     assert generate_calls == []
     cache.assert_not_awaited()
+
+
+# Regression #3320: grounding policy must be computed BEFORE the semantic
+# cache read so strict requests require safe-reuse evidence.
+async def test_strict_grounding_policy_reaches_cache_read(monkeypatch) -> None:
+    from src.core import AssistantRequest, CoreDependencies, UserContext
+    from src.runtime.pipeline import assistant_pipeline
+
+    recorded: dict[str, Any] = {}
+
+    async def fake_rag_pipeline(**kwargs):
+        recorded.update(kwargs)
+        return {
+            "response": "answer",
+            "documents": [],
+            "cache_hit": False,
+            "query_type": "FAQ",
+            "rerank_applied": False,
+            "grade_confidence": 0.9,
+        }
+
+    class _StubGeneration:
+        response_text = "answer"
+        payload: dict[str, Any] = {
+            "grounded": True,
+            "usage_details": {},
+            "llm_call_count": 1,
+        }
+
+    async def fake_generate(_request):
+        return _StubGeneration()
+
+    classify_mod = types.ModuleType("src.runtime.routing.classify")
+    classify_mod.classify_query = lambda _: "FAQ"
+
+    monkeypatch.setitem(sys.modules, "src.runtime.routing.classify", classify_mod)
+    monkeypatch.setattr(assistant_pipeline, "rag_pipeline", fake_rag_pipeline)
+    monkeypatch.setattr(assistant_pipeline, "generate_answer", fake_generate)
+    monkeypatch.setattr(assistant_pipeline, "get_grounding_mode", lambda **_: "strict")
+    await assistant_pipeline.run_assistant_pipeline(
+        AssistantRequest(
+            query="legal question",
+            collection="c",
+            user_context=UserContext(user_id="42"),
+            request_id="req-strict-cache",
+        ),
+        dependencies=CoreDependencies(
+            cache=object(),
+            embeddings=object(),
+            sparse_embeddings=object(),
+            qdrant=object(),
+            config=object(),
+        ),
+    )
+
+    assert recorded["grounding_mode"] == "strict"
+    assert recorded["require_safe_reuse"] is True
