@@ -2,11 +2,11 @@
 name = "bge-m3-api"
 version = "1.0.0"
 description = "BGE-M3 Embeddings API - FastAPI service"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # Core ML/Embeddings — ONNX INT8 runtime (no PyTorch/FlagEmbedding)
-    "onnxruntime>=1.22.0",
-    "transformers==5.12.1",
+    "onnxruntime>=1.29.0",
+    "transformers==5.16.1",
     # FastAPI & Web Server
     "fastapi==0.141.1",
     "starlette>=1.6.0",  # CVE-2026-48817/48818 SSRF fix
@@ -17,8 +17,8 @@ dependencies = [
     # Monitoring & Metrics
     "prometheus-client==0.26.0",
     # Utilities
-    "numpy==2.4.6",
-    "scipy==1.17.1",
+    "numpy==2.5.2",
+    "scipy==1.18.1",
     "lxml>=6.1.0",
 ]
 
@@ -49,7 +49,7 @@ constraint-dependencies = [
     "idna>=3.16",
     "importlib-metadata>=8.9.0",
     "markdown-it-py>=4.2.0",
-    "onnxruntime>=1.27.0",
+    "onnxruntime>=1.29.0",
     "packaging>=26.2",
     "pytest-asyncio>=1.4.0",
     "regex>=2026.5.9",
