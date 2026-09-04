@@ -97,7 +97,6 @@ async def test_run_assistant_request_fail_opens_when_telemetry_listener_raises(
         # route and never reach the telemetry-fail-open path under test.
         result = await run_assistant_request(
             "тестовый вопрос по документам поиска",
-            collection="test",
             request_id="telemetry-fail-open",
             dependencies=deps,
         )

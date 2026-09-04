@@ -38,7 +38,6 @@ def build_user_context(
 async def run_core_text_request(
     *,
     query: str,
-    collection: str,
     user_context: UserContext,
     dependencies: CoreDependencies,
     request_id: str | None = None,
@@ -48,7 +47,6 @@ async def run_core_text_request(
     app = AssistantApp.from_dependencies(dependencies)
     return await app.run_text(
         query,
-        collection=collection,
         user_context=user_context,
         request_id=request_id,
     )

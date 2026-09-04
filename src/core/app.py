@@ -50,7 +50,6 @@ class AssistantApp:
         self,
         query: str,
         *,
-        collection: str,
         user_context: UserContext | None = None,
         request_id: str | None = None,
         dependencies: CoreDependencies | None = None,
@@ -60,7 +59,6 @@ class AssistantApp:
 
         return await run_assistant_request(
             query,
-            collection=collection,
             user_context=user_context,
             request_id=request_id,
             dependencies=dependencies or self.dependencies,

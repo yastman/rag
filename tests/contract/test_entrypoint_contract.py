@@ -12,6 +12,8 @@ import ast
 import inspect
 from pathlib import Path
 
+import pytest
+
 
 def test_run_assistant_request_is_importable() -> None:
     """Assert run_assistant_request is importable and is an async function."""
@@ -25,9 +27,33 @@ def test_run_assistant_request_is_importable() -> None:
     sig = inspect.signature(run_assistant_request)
     params = list(sig.parameters.keys())
     assert "query" in params, "run_assistant_request must have 'query' parameter"
-    assert "collection" in params, "run_assistant_request must have 'collection' parameter"
     assert "user_context" in params, "run_assistant_request must have 'user_context' parameter"
     assert "dependencies" in params, "run_assistant_request must have 'dependencies' parameter"
+
+
+def test_public_request_cannot_override_dependency_bound_collection() -> None:
+    """No public request signature accepts a per-request collection (#3359).
+
+    The injected Qdrant dependency is the sole collection authority: the
+    runtime pipeline never read ``AssistantRequest.collection``, so a caller
+    could claim one corpus while cache/search used another. Public signatures
+    must not accept the field at all.
+    """
+    import inspect
+    from dataclasses import fields as dataclass_fields
+
+    from src.core.app import AssistantApp
+    from src.core.assistant import run_assistant_request
+    from src.core.contracts import AssistantRequest
+
+    assert "collection" not in [f.name for f in dataclass_fields(AssistantRequest)], (
+        "AssistantRequest must not accept a per-request collection (#3359)"
+    )
+    assert "collection" not in inspect.signature(run_assistant_request).parameters
+    assert "collection" not in inspect.signature(AssistantApp.run_text).parameters
+
+    with pytest.raises(TypeError):
+        AssistantRequest(query="q", collection="tenant-b")  # type: ignore[call-arg]
 
 
 def test_run_assistant_request_exported_from_core() -> None:

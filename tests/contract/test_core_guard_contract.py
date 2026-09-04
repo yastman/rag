@@ -43,7 +43,7 @@ def _deps(guard_mode: str = "hard", enabled: bool = True) -> CoreDependencies:
 
 
 def _request(query: str) -> AssistantRequest:
-    return AssistantRequest(query=query, collection="demo", request_id="rid-guard-1")
+    return AssistantRequest(query=query, request_id="rid-guard-1")
 
 
 def _assert_no_dependency_used(deps: CoreDependencies) -> None:

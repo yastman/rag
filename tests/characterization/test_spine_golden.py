@@ -160,7 +160,6 @@ class TestRunAssistantRequestGolden:
         ):
             result = await run_assistant_request(
                 _GOLDEN_QUERY,
-                collection="golden_collection",
                 dependencies=_fake_deps(),
                 request_id="golden-001",
             )
@@ -183,7 +182,6 @@ class TestRunAssistantRequestGolden:
         ):
             result = await run_assistant_request(
                 _GOLDEN_QUERY,
-                collection="golden_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -206,7 +204,6 @@ class TestRunAssistantRequestGolden:
         ):
             result = await run_assistant_request(
                 _GOLDEN_QUERY,
-                collection="golden_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -231,7 +228,6 @@ class TestRunAssistantRequestGolden:
         ):
             result = await run_assistant_request(
                 _GOLDEN_QUERY,
-                collection="golden_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -254,7 +250,6 @@ class TestRunAssistantRequestGolden:
         ):
             result = await run_assistant_request(
                 _GOLDEN_QUERY,
-                collection="golden_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -283,7 +278,6 @@ class TestRunAssistantRequestGolden:
         ):
             result = await run_assistant_request(
                 _GOLDEN_QUERY,
-                collection="golden_collection",
                 dependencies=_fake_deps(),
                 request_id="golden-snapshot-001",
             )

@@ -41,7 +41,6 @@ class AssistantRequest:
     """Structured request object for future adapter and E2E callers."""
 
     query: str
-    collection: str
     user_context: UserContext = field(default_factory=UserContext)
     request_id: str = ""
 

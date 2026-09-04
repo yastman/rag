@@ -110,7 +110,6 @@ class TestGroundedAnswer:
         ):
             result = await run_assistant_request(
                 "Найди студию у моря до 120000",
-                collection="test_collection",
                 dependencies=_fake_deps(),
                 request_id="reg-grounded-001",
             )
@@ -136,7 +135,6 @@ class TestGroundedAnswer:
         ):
             result = await run_assistant_request(
                 "Сколько стоит студия?",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -161,7 +159,6 @@ class TestNoDataNoFabrication:
         ):
             result = await run_assistant_request(
                 "Найди замок с вертолётной площадкой",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -185,7 +182,6 @@ class TestNoDataNoFabrication:
         ):
             result = await run_assistant_request(
                 "Найди что-то чего нет",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -211,7 +207,6 @@ class TestCacheHitPath:
         ):
             result = await run_assistant_request(
                 "Найди студию у моря",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -234,7 +229,6 @@ class TestCacheHitPath:
         ):
             await run_assistant_request(
                 "Найди студию",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -257,7 +251,6 @@ class TestErrorFallback:
         ):
             result = await run_assistant_request(
                 "Найди студию",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -278,7 +271,6 @@ class TestErrorFallback:
         ):
             result = await run_assistant_request(
                 "Запрос",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -304,7 +296,6 @@ class TestLatencyBudget:
         ):
             result = await run_assistant_request(
                 "Сколько стоит студия?",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -323,7 +314,6 @@ class TestLatencyBudget:
         ):
             result = await run_assistant_request(
                 "Запрос",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -344,7 +334,6 @@ class TestLatencyBudget:
         ):
             result = await run_assistant_request(
                 "Тест",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 
@@ -371,7 +360,6 @@ class TestMultipleDocRetrieval:
         ):
             result = await run_assistant_request(
                 "Покажи всё",
-                collection="test_collection",
                 dependencies=_fake_deps(),
             )
 

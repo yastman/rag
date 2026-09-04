@@ -109,13 +109,12 @@ class TestAssistantRequest:
     """Tests for the AssistantRequest dataclass."""
 
     def test_assistant_request_creation_with_required_fields(self) -> None:
-        """AssistantRequest should accept query and collection with safe defaults."""
+        """AssistantRequest should accept query with safe defaults."""
         from src.core import AssistantRequest, UserContext
 
-        request = AssistantRequest(query="hello", collection="kb")
+        request = AssistantRequest(query="hello")
 
         assert request.query == "hello"
-        assert request.collection == "kb"
         assert isinstance(request.user_context, UserContext)
         assert request.request_id == ""
 
@@ -126,7 +125,6 @@ class TestAssistantRequest:
         ctx = UserContext(user_id="u-1", session_id="s-1", filters={"city": "Sofia"})
         request = AssistantRequest(
             query="q",
-            collection="c",
             user_context=ctx,
             request_id="req-1",
         )
@@ -322,7 +320,7 @@ class TestRunAssistantRequest:
         """When request_id is not provided, a fresh UUID4 must be generated."""
         from src.core.assistant import run_assistant_request
 
-        result = await run_assistant_request("hello", collection="test")
+        result = await run_assistant_request("hello")
 
         assert result.request_id != ""
         assert len(result.request_id) == 36  # standard UUID4 string length
@@ -332,7 +330,7 @@ class TestRunAssistantRequest:
         """When request_id is provided by the caller, it must be preserved."""
         from src.core.assistant import run_assistant_request
 
-        result = await run_assistant_request("hello", collection="test", request_id="e2e-beach-001")
+        result = await run_assistant_request("hello", request_id="e2e-beach-001")
 
         assert result.request_id == "e2e-beach-001"
 
@@ -340,8 +338,8 @@ class TestRunAssistantRequest:
         """Two calls without explicit request_id must produce different UUIDs."""
         from src.core.assistant import run_assistant_request
 
-        r1 = await run_assistant_request("q1", collection="test")
-        r2 = await run_assistant_request("q2", collection="test")
+        r1 = await run_assistant_request("q1")
+        r2 = await run_assistant_request("q2")
 
         assert r1.request_id != r2.request_id
 
@@ -349,7 +347,7 @@ class TestRunAssistantRequest:
         """The skeleton must return a valid AssistantResult, not raise."""
         from src.core.assistant import AssistantResult, run_assistant_request
 
-        result = await run_assistant_request("test query", collection="my_collection")
+        result = await run_assistant_request("test query")
 
         assert isinstance(result, AssistantResult)
 
@@ -357,9 +355,7 @@ class TestRunAssistantRequest:
         """Skeleton execution must return AssistantResult with error fields set."""
         from src.core.assistant import run_assistant_request
 
-        result = await run_assistant_request(
-            "any query", collection="any_collection", user_context=None
-        )
+        result = await run_assistant_request("any query", user_context=None)
 
         # Skeleton: no live services, so the result is a recoverable error.
         assert result.route == "error"
@@ -373,7 +369,7 @@ class TestRunAssistantRequest:
         from src.core.assistant import UserContext, run_assistant_request
 
         ctx = UserContext(user_id="u-1", session_id="s-1")
-        result = await run_assistant_request("q", collection="c", user_context=ctx)
+        result = await run_assistant_request("q", user_context=ctx)
 
         assert isinstance(result.response_text, str)
 
@@ -391,7 +387,7 @@ class TestLogEventIntegration:
         from src.core.assistant import run_assistant_request
 
         with caplog.at_level(logging.INFO, logger="src.utils.product_events"):
-            await run_assistant_request("hello", collection="test")
+            await run_assistant_request("hello")
 
         events = [
             r
@@ -405,7 +401,7 @@ class TestLogEventIntegration:
         from src.core.assistant import run_assistant_request
 
         with caplog.at_level(logging.INFO, logger="src.utils.product_events"):
-            await run_assistant_request("q", collection="c")
+            await run_assistant_request("q")
 
         events = [
             r
@@ -419,7 +415,7 @@ class TestLogEventIntegration:
         from src.core.assistant import run_assistant_request
 
         with caplog.at_level(logging.INFO, logger="src.utils.product_events"):
-            result = await run_assistant_request("q", collection="c", request_id="e2e-001")
+            result = await run_assistant_request("q", request_id="e2e-001")
 
         for r in caplog.records:
             if hasattr(r, "event"):
@@ -430,7 +426,7 @@ class TestLogEventIntegration:
         from src.core.assistant import run_assistant_request
 
         with caplog.at_level(logging.INFO, logger="src.utils.product_events"):
-            await run_assistant_request("q", collection="c", request_id="e2e-route")
+            await run_assistant_request("q", request_id="e2e-route")
 
         started = next(
             r
@@ -505,7 +501,6 @@ class TestRunAssistantRequestRuntime:
         ):
             result = await run_assistant_request(
                 "Найди студию у моря до 120000",
-                collection="e2e_core_abc",
                 user_context=UserContext(
                     user_id="42", session_id="s-1", filters={"city": "Sunny Beach"}
                 ),
@@ -567,7 +562,6 @@ class TestRunAssistantRequestRuntime:
         ):
             result = await run_assistant_request(
                 "Какие условия рассрочки?",
-                collection="e2e_core_abc",
                 request_id="e2e-cache",
                 dependencies=self._deps(),
             )
@@ -591,7 +585,6 @@ class TestRunAssistantRequestRuntime:
         ):
             result = await run_assistant_request(
                 "Найди квартиру",
-                collection="e2e_core_abc",
                 request_id="e2e-failure",
                 dependencies=self._deps(),
             )
@@ -628,7 +621,6 @@ class TestRunAssistantRequestRuntime:
         ):
             await run_assistant_request(
                 "q",
-                collection="c",
                 request_id="e2e-events",
                 dependencies=self._deps(),
             )
