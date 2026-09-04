@@ -444,3 +444,76 @@ class TestStrictGroundingTopicPolicy:
         assert get_query_topic_hint(LEGAL_UNANSWERABLE_QUESTION) == TopicLabel.LEGAL
         assert get_query_topic_hint(UNSUPPORTED_QUESTION) is None
         assert get_query_topic_hint(KNOWN_CORPUS_QUESTION) is None
+
+
+# ---------------------------------------------------------------------------
+# #3360: empty provider output is never a grounded, cache-safe success.
+# ---------------------------------------------------------------------------
+
+
+class TestEmptyProviderOutput:
+    """None/whitespace/sanitizer-emptied content takes the nonempty fallback."""
+
+    async def _run(self, canned_content: str | None, request_id: str) -> Any:
+        config = _CannedLLMConfig(canned_content)
+        rag = _rag_stub([_known_doc()])
+
+        with patch(
+            "src.runtime.generation.service._sanitize_response_text",
+            lambda _t, **_kw: "",
+        ):
+            return await _run_boundary(
+                KNOWN_CORPUS_QUESTION, config=config, rag=rag, request_id=request_id
+            )
+
+    async def test_none_content_returns_nonempty_fallback(self) -> None:
+        result = await self._run(None, "i3360-none")
+
+        assert result.response_text.strip()
+        assert result.grounded is False
+        assert result.safe_fallback_used is False
+        assert result.semantic_cache_safe_reuse is False
+        assert result.cache_hit is False
+
+    async def test_whitespace_content_returns_nonempty_fallback(self) -> None:
+        result = await self._run("   ", "i3360-whitespace")
+
+        assert result.response_text.strip()
+        assert result.grounded is False
+        assert result.semantic_cache_safe_reuse is False
+
+    async def test_sanitizer_emptied_content_returns_nonempty_fallback(self) -> None:
+        """Provider returned text, but the sanitizer emptied it — same contract."""
+        config = _CannedLLMConfig("<script>steal secrets</script>")
+        rag = _rag_stub([_known_doc()])
+
+        with patch(
+            "src.runtime.generation.service._sanitize_response_text",
+            lambda _t, **_kw: "",
+        ):
+            result = await _run_boundary(
+                KNOWN_CORPUS_QUESTION,
+                config=config,
+                rag=rag,
+                request_id="i3360-sanitized",
+            )
+
+        assert result.response_text.strip()
+        assert result.grounded is False
+        assert result.semantic_cache_safe_reuse is False
+
+    async def test_fallback_flags_match_streaming_semantics(self) -> None:
+        """Sync and streaming share the same terminal fallback flags (#3360)."""
+        config = _CannedLLMConfig(None)
+        rag = _rag_stub([_known_doc()])
+
+        result = await _run_boundary(
+            KNOWN_CORPUS_QUESTION, config=config, rag=rag, request_id="i3360-parity"
+        )
+
+        # Terminal flags identical to the streaming path's empty-output
+        # rejection: not grounded, not safe for reuse, fallback text sent.
+        assert result.grounded is False
+        assert result.safe_fallback_used is False
+        assert result.semantic_cache_safe_reuse is False
+        assert result.response_text.strip()
