@@ -15,6 +15,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -234,3 +235,106 @@ class TestFetchCommand:
         assert "fetch_artifact" not in app_source
         assert "urllib.request" not in app_source
         assert "huggingface.co" not in app_source
+
+
+# ── Offline runtime loading (get_model) ────────────────────────────────────────
+
+
+def _import_app_with_contract_session():
+    """Import the service app with heavy deps mocked and an ORT session mock
+    whose I/O names match the artifact contract. Returns (app_module, mocks)."""
+    import importlib.util
+    from unittest.mock import MagicMock
+
+    if importlib.util.find_spec("fastapi") is None:
+        pytest.skip("fastapi not installed — run via the bge-extras lane")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mock_ort = MagicMock()
+        mock_ort.SessionOptions = MagicMock()
+        mock_ort.GraphOptimizationLevel.ORT_ENABLE_ALL = 1
+        mock_session = MagicMock()
+
+        def _named(name: str) -> MagicMock:
+            mock = MagicMock()
+            mock.name = name
+            return mock
+
+        output_names = ("dense_vecs", "sparse_vecs", "colbert_vecs")
+        mock_session.get_outputs.return_value = [_named(n) for n in output_names]
+        mock_session.get_inputs.return_value = [_named(n) for n in ("input_ids", "attention_mask")]
+        mock_ort.InferenceSession = MagicMock(return_value=mock_session)
+
+        mock_transformers = MagicMock()
+        mock_prom = MagicMock()
+        for attr in ("Counter", "Gauge", "Histogram"):
+            setattr(mock_prom, attr, MagicMock(return_value=MagicMock()))
+        mock_prom.make_asgi_app = MagicMock(return_value=MagicMock())
+
+        mp.setitem(sys.modules, "onnxruntime", mock_ort)
+        mp.setitem(sys.modules, "transformers", mock_transformers)
+        mp.setitem(sys.modules, "prometheus_client", mock_prom)
+        mp.syspath_prepend(str(_SERVICE_DIR))
+        sys.modules.pop("app", None)
+        sys.modules.pop("config", None)
+        import app as app_module
+
+    return app_module, {"onnxruntime": mock_ort, "transformers": mock_transformers}
+
+
+@pytest.fixture()
+def offline_app_env(synthetic_artifact, monkeypatch):
+    """Point a freshly imported app module at the synthetic verified artifact."""
+    app_module, mocks = _import_app_with_contract_session()
+    app_module._onnx_session = None
+    app_module._tokenizer = None
+    settings = MagicMock()
+    settings.ONNX_MODEL_DIR = str(synthetic_artifact)
+    settings.ARTIFACT_MANIFEST_NAME = "artifact_manifest.json"
+    settings.ONNX_MODEL_FILENAME = "model.onnx"
+    settings.NUM_THREADS = 1
+    settings.TOKENIZER_DIR = str(synthetic_artifact / "tokenizer")
+    app_module.settings = settings
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+    yield app_module, mocks
+    sys.modules.pop("app", None)
+    sys.modules.pop("config", None)
+
+
+@pytest.mark.no_services
+def test_get_model_loads_tokenizer_local_only(offline_app_env) -> None:
+    """Tokenizer must load from the baked local dir, local-only, no hub fallback."""
+    import os
+
+    app_module, mocks = offline_app_env
+
+    model = app_module.get_model()
+
+    call = mocks["transformers"].AutoTokenizer.from_pretrained.call_args
+    assert call is not None, "tokenizer must be loaded via AutoTokenizer.from_pretrained"
+    args, kwargs = call
+    assert args == (app_module.settings.TOKENIZER_DIR,)
+    assert kwargs.get("local_files_only") is True
+    assert "revision" not in kwargs, "revision implies hub resolution — must not be used"
+    assert "cache_dir" not in kwargs
+    assert os.environ.get("HF_HUB_OFFLINE") == "1"
+    assert os.environ.get("TRANSFORMERS_OFFLINE") == "1"
+    assert isinstance(model, app_module.ONNXEmbeddingModel)
+
+
+@pytest.mark.no_services
+def test_get_model_verifies_artifact_before_session(offline_app_env) -> None:
+    """A hash-mismatched artifact must fail before InferenceSession is created."""
+    from pathlib import Path
+
+    from verify_artifact import ArtifactIntegrityError
+
+    app_module, mocks = offline_app_env
+    artifact_dir = Path(app_module.settings.ONNX_MODEL_DIR)
+    (artifact_dir / "model.onnx").write_bytes(b"X" * len(b"fake-onnx-graph"))
+
+    with pytest.raises(ArtifactIntegrityError):
+        app_module.get_model()
+
+    mocks["onnxruntime"].InferenceSession.assert_not_called()

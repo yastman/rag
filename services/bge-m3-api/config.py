@@ -13,15 +13,17 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # Model Configuration
-    MODEL_NAME: str = "BAAI/bge-m3"  # HuggingFace model ID (tokenizer only with ONNX)
+    MODEL_NAME: str = "BAAI/bge-m3"  # upstream tokenizer/model repo (provenance only)
     MODEL_REVISION: str = "5617a9f61b028005a4858fdac845db406aefb181"
     MODEL_CACHE_DIR: str = "/models/hf"
-    USE_FP16: bool = True  # FP16 for CPU memory savings (legacy; ONNX INT8 ignores this)
+    USE_FP16: bool = True  # FP16 for CPU memory savings (legacy; ONNX runtime ignores this)
 
-    # ONNX Runtime Configuration
-    ONNX_MODEL_DIR: str = os.getenv(
-        "ONNX_MODEL_DIR", "/models/onnx"
-    )  # Directory containing model.int8.onnx + model.int8.onnx.data
+    # Pinned artifact contract (#3366): the hash-verified artifact is baked into
+    # the image; runtime loading is strictly local. See artifact_manifest.json.
+    ONNX_MODEL_DIR: str = os.getenv("ONNX_MODEL_DIR", "/models/artifact")
+    ONNX_MODEL_FILENAME: str = "model.onnx"
+    ARTIFACT_MANIFEST_NAME: str = "artifact_manifest.json"
+    TOKENIZER_DIR: str = os.getenv("TOKENIZER_DIR", "/models/artifact/tokenizer")
 
     # Performance Settings
     MAX_LENGTH: int = 2048  # For documents (typical chunk size)

@@ -1,7 +1,7 @@
 """
 BGE-M3 Embeddings API
 Multi-vector embeddings: dense + sparse + colbert
-ONNX INT8 runtime (philipchung/bge-m3-onnx)
+Pinned hash-verified ONNX artifact (philipchung/bge-m3-onnx @ 92465a6c, fp32)
 """
 
 import logging
@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
 from transformers import AutoTokenizer
+from verify_artifact import verify_artifact_dir
 
 from config import settings
 
@@ -198,21 +199,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="BGE-M3 Embeddings API",
-    description="Multi-vector embeddings API (dense + sparse + colbert) — ONNX INT8",
-    version="2.0.0",
+    description="Multi-vector embeddings API (dense + sparse + colbert) — pinned offline ONNX artifact",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
 
 def get_model():
-    """Load ONNX session and tokenizer (lazy, cached)."""
+    """Load the verified ONNX artifact and the baked local tokenizer (lazy, cached)."""
     global _onnx_session, _tokenizer
     if _onnx_session is None:
-        logger.info("Loading BGE-M3 ONNX model from %s", settings.ONNX_MODEL_DIR)
+        logger.info("Loading BGE-M3 ONNX artifact from %s", settings.ONNX_MODEL_DIR)
 
-        onnx_path = os.path.join(settings.ONNX_MODEL_DIR, "model.int8.onnx")
-        if not os.path.isfile(onnx_path):
-            raise FileNotFoundError(f"ONNX model not found at {onnx_path}")
+        # Reject missing, dummy, incomplete, and hash-mismatched artifacts
+        # before any inference (manifest sizes + SHA-256).
+        verify_artifact_dir(settings.ONNX_MODEL_DIR)
+
+        onnx_path = os.path.join(settings.ONNX_MODEL_DIR, settings.ONNX_MODEL_FILENAME)
 
         start_time = time.time()
 
@@ -225,13 +228,11 @@ def get_model():
         load_time = time.time() - start_time
         logger.info("ONNX session loaded in %.2fs", load_time)
 
-        # Load tokenizer from HuggingFace (model config only, no weights)
-        logger.info("Loading tokenizer for %s", settings.MODEL_NAME)
-        _tokenizer = AutoTokenizer.from_pretrained(  # nosec B615 — revision is always pinned (config default SHA)
-            settings.MODEL_NAME,
-            cache_dir=settings.MODEL_CACHE_DIR,
-            revision=settings.MODEL_REVISION,
-        )
+        # Load the tokenizer baked next to the model — strictly local, no hub.
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+        logger.info("Loading tokenizer from %s (local-only)", settings.TOKENIZER_DIR)
+        _tokenizer = AutoTokenizer.from_pretrained(settings.TOKENIZER_DIR, local_files_only=True)
         logger.info("Tokenizer loaded")
         model_loaded.set(1)
 
