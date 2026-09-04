@@ -297,3 +297,136 @@ async def test_on_phone_received_cancel_clears_state_and_sends_message():
     state.clear.assert_awaited_once()
     answer_text = message.answer.call_args[0][0]
     assert answer_text == "Обращение отменено."
+
+
+# ---------------------------------------------------------------------------
+# Bookmarks capability gate on phone-collector keyboards (#3241 review fix)
+# ---------------------------------------------------------------------------
+
+
+class _BotWithoutFavorites:
+    _favorites_service = None
+
+
+class _BotWithFavorites:
+    _favorites_service = object()
+
+
+def _keyboard_texts(message_answer_mock) -> list[str]:
+    kb = message_answer_mock.call_args.kwargs.get("reply_markup")
+    assert kb is not None, "phone flow must restore the client reply keyboard"
+    return [btn.text for row in kb.keyboard for btn in row]
+
+
+async def test_phone_cancel_keyboard_omits_bookmarks_when_capability_off():
+    """Cancelling the phone step must not re-advertise bookmarks without PostgreSQL."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.text = "❌ Отмена"
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.clear = AsyncMock()
+
+    await mod.on_phone_received(message, state, property_bot=_BotWithoutFavorites())
+
+    texts = _keyboard_texts(message.answer)
+    assert not any("закладки" in t.lower() for t in texts)
+    # Core menu actions stay reachable.
+    assert any("Подобрать" in t for t in texts)
+
+
+async def test_phone_cancel_keyboard_keeps_bookmarks_when_capability_on():
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.text = "❌ Отмена"
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.clear = AsyncMock()
+
+    await mod.on_phone_received(message, state, property_bot=_BotWithFavorites())
+
+    assert any("закладки" in t.lower() for t in _keyboard_texts(message.answer))
+
+
+async def test_phone_success_keyboard_omits_bookmarks_when_capability_off():
+    """After a sink-acknowledged submission the restored keyboard honours the gate."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.text = "+380501234567"
+    message.from_user = MagicMock()
+    message.from_user.id = 91
+    message.from_user.first_name = "Test"
+    message.from_user.last_name = None
+    message.from_user.username = None
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"service_key": "viewing", "viewing_objects": []})
+    state.clear = AsyncMock()
+
+    sink = MagicMock()
+    sink.record_request = AsyncMock(return_value=True)
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await mod.on_phone_received(
+            message, state, lead_sink=sink, property_bot=_BotWithoutFavorites()
+        )
+
+    assert "Заявка оформлена" in message.answer.call_args[0][0]
+    assert not any("закладки" in t.lower() for t in _keyboard_texts(message.answer))
+
+
+async def test_phone_success_keyboard_keeps_bookmarks_when_capability_on():
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.text = "+380501234567"
+    message.from_user = MagicMock()
+    message.from_user.id = 92
+    message.from_user.first_name = "Test"
+    message.from_user.last_name = None
+    message.from_user.username = None
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"service_key": "viewing", "viewing_objects": []})
+    state.clear = AsyncMock()
+
+    sink = MagicMock()
+    sink.record_request = AsyncMock(return_value=True)
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await mod.on_phone_received(
+            message, state, lead_sink=sink, property_bot=_BotWithFavorites()
+        )
+
+    assert any("закладки" in t.lower() for t in _keyboard_texts(message.answer))
+
+
+async def test_phone_contact_success_keyboard_omits_bookmarks_when_capability_off():
+    """Contact-share path forwards property_bot so the gate applies there too."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.contact = MagicMock()
+    message.contact.phone_number = "+359896759292"
+    message.from_user = MagicMock()
+    message.from_user.id = 123
+    message.from_user.first_name = "Test"
+    message.from_user.last_name = None
+    message.from_user.username = "testuser"
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.clear = AsyncMock()
+
+    sink = MagicMock()
+    sink.record_request = AsyncMock(return_value=True)
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await on_phone_contact(
+            message, state, lead_sink=sink, property_bot=_BotWithoutFavorites()
+        )
+
+    assert not any("закладки" in t.lower() for t in _keyboard_texts(message.answer))

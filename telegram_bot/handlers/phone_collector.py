@@ -117,6 +117,7 @@ async def _process_valid_phone(
     search_event_store: Any | None = None,
     lead_sink: Any | None = None,
     i18n: Any | None = None,
+    property_bot: Any | None = None,
 ) -> None:
     """Process validated phone: record via the durable sink, then confirm.
 
@@ -126,6 +127,7 @@ async def _process_valid_phone(
     so the submission can be retried (cancellation still works).
     """
     from telegram_bot.keyboards.client_keyboard import build_client_keyboard
+    from telegram_bot.services.favorites_service import bookmarks_ready
 
     data = await state.get_data()
     service_key = data.get("service_key", "unknown")
@@ -175,7 +177,14 @@ async def _process_valid_phone(
         user_id,
     )
 
-    await message.answer(phone_success, reply_markup=build_client_keyboard())
+    # Capability-gated keyboard (#3241): the post-submission keyboard must not
+    # re-advertise bookmarks when PostgreSQL is not configured.
+    await message.answer(
+        phone_success,
+        reply_markup=build_client_keyboard(
+            bookmarks_available=bookmarks_ready(property_bot)
+        ),
+    )
 
 
 async def on_phone_received(
@@ -185,10 +194,12 @@ async def on_phone_received(
     bot_config: Any | None = None,
     search_event_store: Any | None = None,
     lead_sink: Any | None = None,
+    property_bot: Any | None = None,
 ) -> None:
     """Handle phone number text input."""
     from telegram_bot.keyboards.client_keyboard import build_client_keyboard
     from telegram_bot.keyboards.phone_keyboard import is_phone_cancel
+    from telegram_bot.services.favorites_service import bookmarks_ready
 
     text = message.text or ""
 
@@ -196,7 +207,9 @@ async def on_phone_received(
         await state.clear()
         await message.answer(
             "Обращение отменено.",
-            reply_markup=build_client_keyboard(),
+            reply_markup=build_client_keyboard(
+                bookmarks_available=bookmarks_ready(property_bot)
+            ),
         )
         return
 
@@ -204,7 +217,9 @@ async def on_phone_received(
         await state.clear()
         await message.answer(
             "Обращение отменено.",
-            reply_markup=build_client_keyboard(),
+            reply_markup=build_client_keyboard(
+                bookmarks_available=bookmarks_ready(property_bot)
+            ),
         )
         return
 
@@ -228,7 +243,14 @@ async def on_phone_received(
         return
 
     await _process_valid_phone(
-        phone, message, state, bot_config, search_event_store, lead_sink, i18n
+        phone,
+        message,
+        state,
+        bot_config,
+        search_event_store,
+        lead_sink,
+        i18n,
+        property_bot=property_bot,
     )
 
 
@@ -239,12 +261,20 @@ async def on_phone_contact(
     search_event_store: Any | None = None,
     lead_sink: Any | None = None,
     i18n: Any | None = None,
+    property_bot: Any | None = None,
 ) -> None:
     """Handle shared contact via request_contact button."""
     if message.contact and message.contact.phone_number:
         phone = normalize_phone(message.contact.phone_number) or message.contact.phone_number
         await _process_valid_phone(
-            phone, message, state, bot_config, search_event_store, lead_sink, i18n
+            phone,
+            message,
+            state,
+            bot_config,
+            search_event_store,
+            lead_sink,
+            i18n,
+            property_bot=property_bot,
         )
     else:
         await message.answer("Не удалось получить номер. Введите вручную:")
