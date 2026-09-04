@@ -73,14 +73,14 @@ def synthetic_artifact(tmp_path: Path) -> Path:
     return tmp_path
 
 
-# ── Dummy 41-byte tracked fixtures must be rejected ────────────────────────────
+# ── Tiny tracked dummy fixtures must be rejected ───────────────────────────────
 
 
 def test_dummy_fixture_dir_rejected() -> None:
-    """The tracked 41-byte fixture dir has no manifest and must fail verification."""
+    """The tracked tiny fixture dir has no manifest and must fail verification."""
     fixtures = _REPO_ROOT / "tests" / "fixtures" / "bge_m3_onnx_model"
-    dummy_files = [p for p in fixtures.iterdir() if p.is_file() and p.stat().st_size == 41]
-    assert len(dummy_files) >= 2, "tracked 41-byte dummy fixtures must remain present"
+    dummy_files = [p for p in fixtures.iterdir() if p.is_file() and p.stat().st_size < 1024]
+    assert len(dummy_files) >= 2, "tracked tiny dummy fixtures must remain present"
     contents = {p.read_bytes() for p in dummy_files}
     assert len(contents) == 1, "all dummy fixtures must carry identical placeholder bytes"
     assert b"placeholder" in contents.pop()

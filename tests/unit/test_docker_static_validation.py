@@ -271,38 +271,58 @@ def test_bge_m3_model_cache_dir_uses_writable_hf_cache() -> None:
 def test_bge_m3_dockerfile_prepares_model_dirs_for_appuser() -> None:
     """Named volumes inherit target ownership on first use; prepare /models."""
     dockerfile = Path("services/bge-m3-api/Dockerfile").read_text(encoding="utf-8")
-    assert "mkdir -p /models/hf /models/onnx" in dockerfile
+    assert "mkdir -p /models/hf /models/artifact" in dockerfile
     assert "chown -R appuser:appgroup /models" in dockerfile
 
 
-def test_bge_m3_dockerfile_bakes_int8_model_from_build_context() -> None:
-    """The Docker image must contain the ONNX INT8 artifacts, not require a runtime mount."""
+def test_bge_m3_dockerfile_bakes_verified_artifact_from_build_context() -> None:
+    """The image must verify the pinned artifact (manifest + sha256) before baking
+    it, so the 41-byte dummy fixtures can never be silently substituted (#3366)."""
     dockerfile = Path("services/bge-m3-api/Dockerfile").read_text(encoding="utf-8")
     assert "from=bge_m3_onnx_model" in dockerfile
-    assert "model.int8.onnx" in dockerfile
-    assert "model.int8.onnx.data" in dockerfile
-    assert "cp /tmp/bge-m3-onnx/model.int8.onnx" in dockerfile
+    assert "verify_artifact.py" in dockerfile, "build must run the manifest verifier"
+    assert "artifact_manifest.json" in dockerfile
+    assert "model.onnx" in dockerfile
+    assert "model.onnx_data" in dockerfile
+    assert "cp /tmp/bge-m3-onnx/model.onnx" in dockerfile
+    assert "cp /tmp/bge-m3-onnx/tokenizer/" in dockerfile, "tokenizer assets must be baked"
+
+
+def test_bge_m3_dockerfile_sets_offline_env() -> None:
+    """Runtime must be strictly offline: hub access disabled, tokenizer local."""
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text(encoding="utf-8")
+    assert "HF_HUB_OFFLINE=1" in dockerfile
+    assert "TRANSFORMERS_OFFLINE=1" in dockerfile
+    assert "ONNX_MODEL_DIR=/models/artifact" in dockerfile
+    assert "TOKENIZER_DIR=/models/artifact/tokenizer" in dockerfile
+
+
+def test_bge_m3_dockerfile_ships_offline_smoke_script() -> None:
+    """The network-disabled container smoke must be runnable inside the image."""
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text(encoding="utf-8")
+    assert "smoke_offline.py" in dockerfile
+    assert Path("services/bge-m3-api/smoke_offline.py").is_file()
 
 
 def test_bge_m3_onnx_model_dir_env_in_ci_env() -> None:
     """tests/fixtures/compose.ci.env must define BGE_M3_ONNX_MODEL_HOST_DIR so
-    Compose config rendering can resolve the bind-mount source (#2229)."""
+    Compose config rendering can resolve the build context source (#2229)."""
     ci_env = _ci_env_map()
     assert "BGE_M3_ONNX_MODEL_HOST_DIR" in ci_env, (
         "BGE_M3_ONNX_MODEL_HOST_DIR is missing from tests/fixtures/compose.ci.env; "
-        "Compose config rendering requires it for the ONNX model bind mount"
+        "Compose config rendering requires it for the ONNX model build context"
     )
     model_dir = Path(ci_env["BGE_M3_ONNX_MODEL_HOST_DIR"])
     assert not model_dir.is_absolute(), (
         "tests/fixtures/compose.ci.env must use a repo-relative ONNX fixture path, "
         f"not a host-specific absolute path: {model_dir}"
     )
-    assert (model_dir / "model.int8.onnx").is_file(), (
-        "Compose CI BGE model context must include model.int8.onnx so "
+    assert (model_dir / "model.onnx").is_file(), (
+        "Compose CI BGE model context must include model.onnx so "
         "`docker compose build bge-m3` does not depend on host-local artifacts"
     )
-    assert (model_dir / "model.int8.onnx.data").is_file(), (
-        "Compose CI BGE model context must include model.int8.onnx.data so "
+    assert (model_dir / "model.onnx_data").is_file(), (
+        "Compose CI BGE model context must include model.onnx_data so "
         "`docker compose build bge-m3` does not depend on host-local artifacts"
     )
 

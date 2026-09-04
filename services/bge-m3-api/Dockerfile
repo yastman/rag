@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
-# BGE-M3 Embedding Service — ONNX INT8 runtime (uv sync)
+# BGE-M3 Embedding Service — pinned hash-verified ONNX artifact (uv sync)
 
 # ====== BUILD STAGE ======
 # Base images pinned — checked 2026-02-09
@@ -41,25 +41,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN groupadd -g 1001 appgroup && \
     useradd -u 1001 -g appgroup -m -d /app -s /bin/false appuser && \
-    mkdir -p /models/hf /models/onnx && \
+    mkdir -p /models/hf /models/artifact && \
     chown -R appuser:appgroup /models
 
+# Verify the pinned artifact (manifest presence, byte sizes, SHA-256) BEFORE
+# anything is baked: the 41-byte dummy fixtures and corrupted artifacts fail
+# the build here instead of silently becoming the runtime model (#3366).
+COPY verify_artifact.py /tmp/verify_artifact.py
 RUN --mount=type=bind,from=bge_m3_onnx_model,target=/tmp/bge-m3-onnx,readonly \
-    test -f /tmp/bge-m3-onnx/model.int8.onnx && \
-    test -f /tmp/bge-m3-onnx/model.int8.onnx.data && \
-    cp /tmp/bge-m3-onnx/model.int8.onnx /tmp/bge-m3-onnx/model.int8.onnx.data /models/onnx/ && \
-    chown appuser:appgroup /models/onnx/model.int8.onnx /models/onnx/model.int8.onnx.data
+    python /tmp/verify_artifact.py --dir /tmp/bge-m3-onnx \
+      --manifest /tmp/bge-m3-onnx/artifact_manifest.json && \
+    mkdir -p /models/artifact/tokenizer && \
+    cp /tmp/bge-m3-onnx/model.onnx /tmp/bge-m3-onnx/model.onnx_data /models/artifact/ && \
+    cp /tmp/bge-m3-onnx/tokenizer/. /models/artifact/tokenizer/ && \
+    cp /tmp/bge-m3-onnx/artifact_manifest.json /models/artifact/ && \
+    chown -R appuser:appgroup /models/artifact && \
+    rm /tmp/verify_artifact.py
 
 WORKDIR /app
 
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appgroup /app/config.py /app/app.py ./
+COPY --chown=appuser:appgroup verify_artifact.py smoke_offline.py ./
 
 ENV PATH="/app/.venv/bin:$PATH" \
     HF_HOME=/models/hf \
     TRANSFORMERS_CACHE=/models/hf \
-    SENTENCE_TRANSFORMERS_HOME=/models/sentence-transformers \
-    ONNX_MODEL_DIR=/models/onnx \
+    ONNX_MODEL_DIR=/models/artifact \
+    TOKENIZER_DIR=/models/artifact/tokenizer \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
     OMP_NUM_THREADS=2 \
     MKL_NUM_THREADS=2 \
     PYTHONUNBUFFERED=1 \
