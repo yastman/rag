@@ -292,7 +292,6 @@ async def _supervisor_run_core(
     async with ChatActionSender.typing(bot=aiogram_bot, chat_id=message.chat.id):
         core_result = await run_core_text_request(
             query=user_text,
-            collection=bot.config.qdrant_collection,
             user_context=user_context,
             dependencies=dependencies,
         )
