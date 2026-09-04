@@ -132,6 +132,32 @@ async def run_assistant_pipeline(
             error_type=None,
         )
 
+        if rag_result.get("embedding_error"):
+            # Terminal embedding/BGE dependency failure (#3321): preserve the
+            # controlled service-unavailable response. Generation, semantic
+            # cache store, rerank fallback, and success telemetry must not run.
+            error_type = str(rag_result.get("embedding_error_type") or "embedding_error")
+            emit_product_event(
+                dependencies.telemetry,
+                "search_completed",
+                request_id=rid,
+                route="dependency_error",
+                request_type=request_type,
+                retrieved_doc_ids=[],
+                latency_ms=_latency_ms(started),
+                error_type=error_type,
+            )
+            return AssistantResult(
+                response_text=str(rag_result.get("response", "") or ""),
+                route="dependency_error",
+                request_type=str(rag_result.get("query_type") or request_type),
+                documents_count=0,
+                latency_ms=_latency_ms(started),
+                error_type=error_type,
+                request_id=rid,
+                cache_hit=False,
+            )
+
         if rag_result.get("cache_hit"):
             return AssistantResult(
                 response_text=str(rag_result.get("response", "") or ""),
