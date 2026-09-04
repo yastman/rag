@@ -632,7 +632,9 @@ class TestHandleQuery:
                 await bot.handle_query(message)
 
         kwargs = mock_core.await_args.kwargs
-        assert kwargs["collection"] == mock_config.qdrant_collection
+        # #3359: collection is chosen by dependency construction (the injected
+        # Qdrant gateway), never passed per-request.
+        assert "collection" not in kwargs
         ctx = kwargs["user_context"]
         assert ctx.user_id == "777"
         assert ctx.session_id == make_session_id("chat", 42)

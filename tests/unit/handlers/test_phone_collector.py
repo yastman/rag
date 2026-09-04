@@ -137,6 +137,7 @@ async def test_on_phone_contact_valid_processes_phone():
     message.answer = AsyncMock()
     state = MagicMock()
     state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.update_data = AsyncMock()
     state.clear = AsyncMock()
 
     sink = MagicMock()
@@ -166,6 +167,7 @@ async def test_on_phone_contact_without_sink_is_truthful():
     message.answer = AsyncMock()
     state = MagicMock()
     state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.update_data = AsyncMock()
     state.clear = AsyncMock()
 
     with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
@@ -190,6 +192,7 @@ async def test_on_phone_contact_sink_failure_is_truthful():
     message.answer = AsyncMock()
     state = MagicMock()
     state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.update_data = AsyncMock()
     state.clear = AsyncMock()
 
     sink = MagicMock()
@@ -224,6 +227,7 @@ async def test_on_phone_received_records_via_sink():
             "date_range": "nearest",
         }
     )
+    state.update_data = AsyncMock()
     state.clear = AsyncMock()
 
     sink = MagicMock()
@@ -249,6 +253,7 @@ async def test_process_valid_phone_never_logs_raw_phone(caplog):
     message.answer = AsyncMock()
     state = MagicMock()
     state.get_data = AsyncMock(return_value={"service_key": "viewing"})
+    state.update_data = AsyncMock()
     state.clear = AsyncMock()
 
     sink = MagicMock()
@@ -364,6 +369,7 @@ async def test_phone_success_keyboard_omits_bookmarks_when_capability_off():
     message.answer = AsyncMock()
     state = MagicMock()
     state.get_data = AsyncMock(return_value={"service_key": "viewing", "viewing_objects": []})
+    state.update_data = AsyncMock()
     state.clear = AsyncMock()
 
     sink = MagicMock()
@@ -391,6 +397,7 @@ async def test_phone_success_keyboard_keeps_bookmarks_when_capability_on():
     message.answer = AsyncMock()
     state = MagicMock()
     state.get_data = AsyncMock(return_value={"service_key": "viewing", "viewing_objects": []})
+    state.update_data = AsyncMock()
     state.clear = AsyncMock()
 
     sink = MagicMock()
@@ -419,14 +426,58 @@ async def test_phone_contact_success_keyboard_omits_bookmarks_when_capability_of
     message.answer = AsyncMock()
     state = MagicMock()
     state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.update_data = AsyncMock()
     state.clear = AsyncMock()
 
     sink = MagicMock()
     sink.record_request = AsyncMock(return_value=True)
 
     with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
-        await on_phone_contact(
-            message, state, lead_sink=sink, property_bot=_BotWithoutFavorites()
-        )
+        await on_phone_contact(message, state, lead_sink=sink, property_bot=_BotWithoutFavorites())
 
     assert not any("закладки" in t.lower() for t in _keyboard_texts(message.answer))
+
+
+# Regression #3322: the lead request id is generated once per logical request
+# and kept in FSM data — a failed-persistence retry reuses it (idempotent at
+# the sink), while a post-success new submission starts a fresh id.
+async def test_lead_request_id_is_stable_across_failed_retries():
+    from types import SimpleNamespace
+
+    from telegram_bot.handlers.phone_collector import _process_valid_phone
+
+    class _FakeState:
+        def __init__(self, data):
+            self._data = dict(data)
+
+        async def get_data(self):
+            return dict(self._data)
+
+        async def update_data(self, **kwargs):
+            self._data.update(kwargs)
+
+        async def clear(self):
+            self._data.clear()
+
+    class _FailingSink:
+        def __init__(self):
+            self.seen_ids = []
+
+        async def record_request(self, **kwargs):
+            self.seen_ids.append(kwargs["request_id"])
+            return False  # persistence fails — user stays in FSM and retries
+
+    sink = _FailingSink()
+    state = _FakeState({"service_key": "viewing"})
+    message = SimpleNamespace(
+        from_user=SimpleNamespace(id=123, username=None, first_name="Ivan"),
+        answer=AsyncMock(),
+    )
+
+    await _process_valid_phone("+380501234567", message, state, lead_sink=sink)
+    await _process_valid_phone("+380501234567", message, state, lead_sink=sink)
+
+    assert sink.seen_ids, "sink must have been attempted"
+    assert len(sink.seen_ids) == 2
+    assert sink.seen_ids[0] == sink.seen_ids[1]
+    assert state._data["lead_request_id"] == sink.seen_ids[0]

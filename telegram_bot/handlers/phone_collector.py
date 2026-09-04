@@ -34,7 +34,9 @@ note).
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
+from uuid import uuid4
 
 from aiogram import F, Router
 from aiogram.enums import ContentType
@@ -134,10 +136,20 @@ async def _process_valid_phone(
     user = message.from_user
     user_id: int | str = user.id if user else "unknown"
 
+    # Stable request id at the FSM boundary (#3322): generated once per
+    # logical request and kept in FSM data, so a failed-persistence retry
+    # reuses the same id (idempotent at the sink) while a new submission
+    # after success starts a fresh FSM session and a fresh id.
+    request_id = str(data.get("lead_request_id") or "")
+    if not request_id:
+        request_id = f"{int(time.time())}-{uuid4().hex[:12]}"
+        await state.update_data(lead_request_id=request_id)
+
     recorded = False
     if lead_sink is not None and user is not None:
         recorded = await lead_sink.record_request(
             client_id=user.id,
+            request_id=request_id,
             phone=phone,
             service_key=service_key,
             username=getattr(user, "username", None),
