@@ -140,3 +140,48 @@ jobs:
 
       - name: CVE gate (critical/high, severity-filtered)
         run: uv run --frozen python scripts/ci/cve_gate.py
+
+  candidate:
+    # #3327: deterministic type/unit candidate coverage for required checks.
+    # Mirrors the local `make test-core` + `make test-no-service-lane` lanes
+    # and the candidate mypy scope. The contract suite joins this job once
+    # #3437 (env ownership) lands via #3328; it is intentionally not required
+    # while it still carries that known red pair.
+    name: Candidate Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install frozen environment
+        run: uv sync --frozen
+
+      - name: MyPy type check
+        run: >
+          uv run --no-sync mypy src/ telegram_bot/ services/ scripts/
+          --ignore-missing-imports --no-error-summary
+
+      - name: Monolith core tests
+        run: >
+          uv run --no-sync pytest
+          tests/unit/core/
+          tests/unit/runtime/
+          tests/regression/
+          tests/characterization/
+          tests/contract/test_runtime_no_telegram_bot_coupling_contract.py
+          tests/contract/test_layering_no_telegram_bot_imports_contract.py
+          --ignore=tests/unit/core/test_pipeline.py
+          -q --timeout=30 -m "not requires_extras and not slow"
+
+      - name: No-service integration/smoke lane
+        run: >
+          uv run --no-sync pytest tests/integration tests/smoke
+          -q --timeout=30 -m "no_services and not requires_extras and not slow"
