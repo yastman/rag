@@ -89,7 +89,8 @@ class HyDEGenerator:
             )
 
             hypothetical_doc = response.choices[0].message.content or query
-            logger.info("HyDE generated doc for '%s': %s...", query, hypothetical_doc[:100])
+            # #3356: size metadata only — no query or hypothetical document text.
+            logger.info("HyDE generated doc (%d chars)", len(hypothetical_doc))
 
             return hypothetical_doc
 
@@ -168,7 +169,8 @@ class QueryPreprocessor:
             normalized = pattern.sub(cyrillic, normalized)
 
         if normalized != query:
-            logger.debug("Translit normalized: '%s' -> '%s'", query, normalized)
+            # #3356: flag + sizes only; never the source or normalized text.
+            logger.debug("Translit normalized (len=%d→%d)", len(query), len(normalized))
 
         return normalized
 
