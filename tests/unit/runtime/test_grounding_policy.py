@@ -7,6 +7,7 @@ import pytest
 from src.runtime.grounding.policy import (
     build_safe_fallback_response,
     get_grounding_mode,
+    is_strict_grounding_safe,
     semantic_cache_safe_reuse_allowed,
     should_safe_fallback,
 )
@@ -89,3 +90,72 @@ def test_should_safe_fallback_threshold(grade_confidence: float, expected_fallba
         grade_confidence=grade_confidence,
     )
     assert result is expected_fallback
+
+
+# ---------------------------------------------------------------------------
+# #3358: strict grounding fails closed on absent/NaN/malformed confidence.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "bad_confidence",
+    [None, float("nan"), float("inf"), "0.9", [0.9], True],
+    ids=["none", "nan", "inf", "malformed-str", "malformed-list", "bool"],
+)
+def test_strict_confidence_absent_or_invalid_fails_closed(bad_confidence) -> None:
+    """Absent, NaN, malformed or missing confidence is missing evidence."""
+    assert not is_strict_grounding_safe(
+        documents=[{"text": "fact"}],
+        sources_enabled=True,
+        grade_confidence=bad_confidence,
+    )
+    assert should_safe_fallback(
+        grounding_mode="strict",
+        documents=[{"text": "fact"}],
+        sources_enabled=True,
+        grade_confidence=bad_confidence,
+    )
+
+
+def test_strict_subthreshold_confidence_fails_closed() -> None:
+    assert not is_strict_grounding_safe(
+        documents=[{"text": "fact"}],
+        sources_enabled=True,
+        grade_confidence=0.4,
+    )
+    assert should_safe_fallback(
+        grounding_mode="strict",
+        documents=[{"text": "fact"}],
+        sources_enabled=True,
+        grade_confidence=0.4,
+    )
+
+
+def test_strict_threshold_confidence_still_allowed() -> None:
+    assert is_strict_grounding_safe(
+        documents=[{"text": "fact"}],
+        sources_enabled=True,
+        grade_confidence=0.5,
+    )
+    assert not should_safe_fallback(
+        grounding_mode="strict",
+        documents=[{"text": "fact"}],
+        sources_enabled=True,
+        grade_confidence=0.5,
+    )
+
+
+def test_safe_fallback_response_is_nonempty_and_canonical() -> None:
+    response = build_safe_fallback_response([{"text": "fact"}])
+    assert response
+    assert "Не могу дать надежный ответ" in response
+
+
+def test_normal_mode_confidence_semantics_unchanged() -> None:
+    assert get_grounding_mode(query_type="GENERAL", topic_hint=None) == "normal"
+    assert not should_safe_fallback(
+        grounding_mode="normal",
+        documents=[{"text": "fact"}],
+        sources_enabled=True,
+        grade_confidence=None,
+    )

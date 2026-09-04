@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CACHE_VERSION = "v5"
-SEMANTIC_CACHE_VERSION = "v8"
+SEMANTIC_CACHE_VERSION = "v9"
 
 # Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {

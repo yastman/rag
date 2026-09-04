@@ -77,7 +77,7 @@ class TestCacheLayerManagerInit:
     def test_cache_versions_reflect_schema_boundaries(self):
         """Semantic cache schema changed, but exact-cache namespaces stay stable."""
         assert CACHE_VERSION == "v5"
-        assert SEMANTIC_CACHE_VERSION == "v8"
+        assert SEMANTIC_CACHE_VERSION == "v9"
 
 
 class TestCacheLayerManagerInitialize:
