@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from telegram_bot.capabilities import bookmarks_ready
 from telegram_bot.services.favorites_service import (
     Favorite,
     FavoritesService,
     _parse_jsonb,
-    bookmarks_ready,
 )
 
 

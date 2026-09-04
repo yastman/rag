@@ -9,8 +9,8 @@ from aiogram import BaseMiddleware
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, TelegramObject
 
+from telegram_bot.capabilities import bookmarks_ready
 from telegram_bot.keyboards.client_keyboard import build_client_keyboard
-from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 _CANCEL_TRIGGERS = frozenset({"/cancel", "отмена", "cancel", "❌ отмена"})

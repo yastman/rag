@@ -12,8 +12,8 @@ from aiogram_dialog.widgets.kbd import Button
 from aiogram_dialog.widgets.text import Const, Format
 
 from src.services.content_loader import load_services_config
+from telegram_bot.capabilities import bookmarks_ready
 from telegram_bot.keyboards.client_keyboard import build_client_keyboard
-from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 def get_main_menu_label(i18n: Any | None = None) -> str:

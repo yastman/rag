@@ -7,6 +7,7 @@ import contextlib
 from aiogram.types import Message
 from aiogram_dialog import DialogManager
 
+from telegram_bot.capabilities import bookmarks_ready
 from telegram_bot.dialogs.catalog._runtime import (
     _catalog_reply_markup,
     _copy_catalog_runtime,
@@ -15,7 +16,6 @@ from telegram_bot.dialogs.catalog._runtime import (
     _update_catalog_runtime,
 )
 from telegram_bot.services.apartment.catalog_session import CatalogRuntime
-from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 def _control_text(runtime: CatalogRuntime) -> str:

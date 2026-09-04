@@ -8,6 +8,7 @@ from typing import Any
 from aiogram.types import Message
 from aiogram_dialog import DialogManager, ShowMode, StartMode
 
+from telegram_bot.capabilities import bookmarks_ready
 from telegram_bot.dialogs.catalog._controls import show_catalog_controls
 from telegram_bot.dialogs.catalog._runtime import (
     _catalog_reply_markup,
@@ -24,7 +25,6 @@ from telegram_bot.services.apartment.catalog_session import (
     build_catalog_runtime,
     update_catalog_runtime_page,
 )
-from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 async def activate_catalog_state(
@@ -182,9 +182,7 @@ async def search_catalog_from_query(
             shown=len(page.results),
             total=page.total,
             i18n=dialog_manager.middleware_data.get("i18n"),
-            bookmarks_available=bookmarks_ready(
-                dialog_manager.middleware_data.get("property_bot")
-            ),
+            bookmarks_available=bookmarks_ready(dialog_manager.middleware_data.get("property_bot")),
         ),
     )
     await show_catalog_controls(message=message, dialog_manager=dialog_manager, runtime=runtime)
@@ -244,9 +242,7 @@ async def run_catalog_search_and_render(
                 shown=len(results),
                 total=int(runtime.get("total", len(results)) or len(results)),
                 i18n=i18n,
-                bookmarks_available=bookmarks_ready(
-                    manager.middleware_data.get("property_bot")
-                ),
+                bookmarks_available=bookmarks_ready(manager.middleware_data.get("property_bot")),
             )
             if view_mode == "list"
             else None

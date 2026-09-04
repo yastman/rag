@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.capabilities import bookmarks_ready
 from telegram_bot.startup_status import StartupReport, StartupSeverity
-from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 def _bot_stub() -> MagicMock:

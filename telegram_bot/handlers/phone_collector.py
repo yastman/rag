@@ -126,8 +126,8 @@ async def _process_valid_phone(
     acknowledgement the user gets truthful failure copy and stays in the FSM
     so the submission can be retried (cancellation still works).
     """
+    from telegram_bot.capabilities import bookmarks_ready
     from telegram_bot.keyboards.client_keyboard import build_client_keyboard
-    from telegram_bot.services.favorites_service import bookmarks_ready
 
     data = await state.get_data()
     service_key = data.get("service_key", "unknown")
@@ -181,9 +181,7 @@ async def _process_valid_phone(
     # re-advertise bookmarks when PostgreSQL is not configured.
     await message.answer(
         phone_success,
-        reply_markup=build_client_keyboard(
-            bookmarks_available=bookmarks_ready(property_bot)
-        ),
+        reply_markup=build_client_keyboard(bookmarks_available=bookmarks_ready(property_bot)),
     )
 
 
@@ -197,9 +195,9 @@ async def on_phone_received(
     property_bot: Any | None = None,
 ) -> None:
     """Handle phone number text input."""
+    from telegram_bot.capabilities import bookmarks_ready
     from telegram_bot.keyboards.client_keyboard import build_client_keyboard
     from telegram_bot.keyboards.phone_keyboard import is_phone_cancel
-    from telegram_bot.services.favorites_service import bookmarks_ready
 
     text = message.text or ""
 
@@ -207,9 +205,7 @@ async def on_phone_received(
         await state.clear()
         await message.answer(
             "Обращение отменено.",
-            reply_markup=build_client_keyboard(
-                bookmarks_available=bookmarks_ready(property_bot)
-            ),
+            reply_markup=build_client_keyboard(bookmarks_available=bookmarks_ready(property_bot)),
         )
         return
 
@@ -217,9 +213,7 @@ async def on_phone_received(
         await state.clear()
         await message.answer(
             "Обращение отменено.",
-            reply_markup=build_client_keyboard(
-                bookmarks_available=bookmarks_ready(property_bot)
-            ),
+            reply_markup=build_client_keyboard(bookmarks_available=bookmarks_ready(property_bot)),
         )
         return
 

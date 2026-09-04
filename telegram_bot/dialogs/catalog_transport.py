@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from telegram_bot.capabilities import bookmarks_ready
 from telegram_bot.dialogs.funnel import format_apartment_list
 from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
-from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 async def render_catalog_results_with_keyboard(
