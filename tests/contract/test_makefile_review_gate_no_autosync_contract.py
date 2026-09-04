@@ -98,10 +98,14 @@ def test_check_frozen_runs_both_lint_and_typecheck_no_sync() -> None:
 
 
 def test_candidate_gate_delegates_to_read_only_test_targets() -> None:
-    """Candidate delivery composes existing no-sync test targets."""
+    """Candidate delivery composes existing no-sync test targets.
+
+    #3326 inserted `format-check` (itself no-sync) before the long lanes so
+    the local candidate gate enforces the same formatting contract as CI.
+    """
     text = _makefile_text()
     assert re.search(
-        r"^candidate-check:\s*check-frozen\s+test\s+test-contract\b",
+        r"^candidate-check:\s*check-frozen\s+format-check\s+test\s+test-contract\b",
         text,
         re.MULTILINE,
     )

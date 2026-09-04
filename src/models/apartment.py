@@ -375,9 +375,7 @@ class HardFilters(BaseModel):
         description=(
             # Built from the canonical demo complexes (#3203) so the schema
             # cannot drift from the seed data.
-            "Название комплекса (EN): "
-            + ", ".join(DEMO_COMPLEX_CITIES)
-            + "."
+            "Название комплекса (EN): " + ", ".join(DEMO_COMPLEX_CITIES) + "."
         ),
     )
     view_tags: list[str] = Field(

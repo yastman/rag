@@ -32,9 +32,7 @@ _CITY_OPTIONS: list[tuple[str, str]] = [(city, city) for city in DEMO_CITIES] + 
     ("Любой город", "any"),
 ]
 
-_COMPLEX_OPTIONS: list[tuple[str, str]] = [
-    (name, name) for name in sorted(DEMO_COMPLEX_CITIES)
-] + [
+_COMPLEX_OPTIONS: list[tuple[str, str]] = [(name, name) for name in sorted(DEMO_COMPLEX_CITIES)] + [
     ("Любой комплекс", "any"),
 ]
 

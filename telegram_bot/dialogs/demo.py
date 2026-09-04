@@ -59,11 +59,7 @@ async def intro_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
         input_hint = "Напишите запрос текстом.\n"
 
     return {
-        "prompt": (
-            "🏖 Подбор апартаментов\n\n"
-            + input_hint
-            + "Или выберите пример:"
-        ),
+        "prompt": ("🏖 Подбор апартаментов\n\n" + input_hint + "Или выберите пример:"),
         "examples": examples,
     }
 
