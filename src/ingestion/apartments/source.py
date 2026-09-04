@@ -36,7 +36,7 @@ def read_apartments_csv(csv_path: str | Path) -> list[tuple[str, str, ApartmentR
     change_key: hash of mutable fields (triggers re-embedding when changed)
     """
     results: list[tuple[str, str, ApartmentRecord]] = []
-    with open(csv_path, newline="") as f:
+    with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             record = parse_apartment_row(row)
