@@ -74,6 +74,7 @@ async def _send_property_card(
     reply_markup = build_card_buttons(
         result["id"],
         is_favorited=is_fav,
+        bookmarks_available=favorites_service is not None,
     )
     photo_message_ids: list[int] = []
     if demo_photos:

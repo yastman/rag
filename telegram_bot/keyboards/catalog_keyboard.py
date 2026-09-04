@@ -99,7 +99,14 @@ def build_catalog_keyboard(
     shown: int,
     total: int,
     i18n: Any = None,
+    bookmarks_available: bool = True,
 ) -> ReplyKeyboardMarkup:
+    """Build the catalog reply keyboard.
+
+    Bookmarks are an optional capability (#3241): when ``bookmarks_available``
+    is False the «Избранное» button is omitted so the keyboard never advertises
+    a bookmarks flow that cannot work without PostgreSQL.
+    """
     if i18n is not None:
         show_more = i18n.get("results-show-more")
         filters = i18n.get("catalog-filters")
@@ -118,8 +125,13 @@ def build_catalog_keyboard(
     rows: list[list[KeyboardButton]] = []
     if shown < total:
         rows.append([KeyboardButton(text=show_more)])
-    rows.append([KeyboardButton(text=filters), KeyboardButton(text=bookmarks)])
-    rows.append([KeyboardButton(text=viewing), KeyboardButton(text=manager)])
+    if bookmarks_available:
+        rows.append([KeyboardButton(text=filters), KeyboardButton(text=bookmarks)])
+    else:
+        rows.append([KeyboardButton(text=filters), KeyboardButton(text=viewing)])
+        rows.append([KeyboardButton(text=manager)])
+    if bookmarks_available:
+        rows.append([KeyboardButton(text=viewing), KeyboardButton(text=manager)])
     rows.append([KeyboardButton(text=home)])
     return ReplyKeyboardMarkup(
         keyboard=rows,

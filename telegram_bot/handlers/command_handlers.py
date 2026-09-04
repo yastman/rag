@@ -64,7 +64,7 @@ async def cmd_start(
             await dialog_manager.reset_stack(remove_keyboard=True)
     from telegram_bot.dialogs.root_nav import show_client_main_menu
 
-    await show_client_main_menu(message, i18n=i18n)
+    await show_client_main_menu(message, i18n=i18n, property_bot=bot)
 
 
 async def cmd_help(bot: PropertyBot, message: Message) -> None:

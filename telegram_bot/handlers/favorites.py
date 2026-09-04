@@ -42,7 +42,13 @@ async def _handle_bookmarks(
 
     favorites_service = getattr(bot, "_favorites_service", None)
     if favorites_service is None:
-        await message.answer("Закладки временно недоступны.")
+        # Honest capability copy (#3241, evolving the #3204 wording): bookmarks
+        # are an optional capability — disabled because no PostgreSQL-backed
+        # favourites service was constructed, not "temporarily" anything.
+        await message.answer(
+            "Закладки недоступны: не подключено хранилище закладок (PostgreSQL).\n\n"
+            "Запустите PostgreSQL и перезапустите бота, чтобы включить закладки."
+        )
         return
 
     items = await favorites_service.list(telegram_id=message.from_user.id)
@@ -103,7 +109,7 @@ async def handle_fav_add(
 
     favorites_service = getattr(bot, "_favorites_service", None)
     if favorites_service is None:
-        await callback.answer("Закладки недоступны")
+        await callback.answer("Закладки недоступны: PostgreSQL не подключён")
         return
 
     state_data = await state.get_data()
@@ -165,7 +171,7 @@ async def handle_fav_remove(
 
     favorites_service = getattr(bot, "_favorites_service", None)
     if favorites_service is None:
-        await callback.answer("Закладки недоступны")
+        await callback.answer("Закладки недоступны: PostgreSQL не подключён")
         return
 
     await favorites_service.remove(telegram_id=callback.from_user.id, property_id=property_id)
@@ -225,7 +231,7 @@ async def handle_fav_viewing(
 
     favorites_service = getattr(bot, "_favorites_service", None)
     if favorites_service is None:
-        await callback.answer("Закладки недоступны")
+        await callback.answer("Закладки недоступны: PostgreSQL не подключён")
         return
 
     fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
@@ -276,7 +282,7 @@ async def handle_fav_viewing_all(
 
     favorites_service = getattr(bot, "_favorites_service", None)
     if favorites_service is None:
-        await callback.answer("Закладки недоступны")
+        await callback.answer("Закладки недоступны: PostgreSQL не подключён")
         return
 
     fav_items = await favorites_service.list(telegram_id=callback.from_user.id)

@@ -111,7 +111,11 @@ async def test_send_property_card_favorited_shows_remove(_mock_photos: MagicMock
     return_value=[Path("/tmp/demo.jpg")],
 )
 async def test_send_property_card_no_favorites_service(_mock_photos: MagicMock) -> None:
-    """If _favorites_service is not set, is_favorited defaults to False (no crash)."""
+    """Without _favorites_service the card hides the favourite toggle (#3241).
+
+    Bookmarks are a capability: no service means no misleading favourite UI —
+    the manager and viewing actions stay on the card.
+    """
     bot = _create_bot()
     # Ensure no favorites service
     if hasattr(bot, "_favorites_service"):
@@ -129,7 +133,10 @@ async def test_send_property_card_no_favorites_service(_mock_photos: MagicMock) 
     message.answer.assert_awaited_once()
     kb = message.answer.call_args.kwargs.get("reply_markup")
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
-    assert "fav:add:prop-99" in callbacks
+    assert "fav:add:prop-99" not in callbacks
+    assert "fav:remove:prop-99" not in callbacks
+    assert "card:ask:prop-99" in callbacks
+    assert "card:viewing:prop-99" in callbacks
 
 
 @patch(

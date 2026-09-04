@@ -99,15 +99,26 @@ def test_local_services_excludes_ingestion() -> None:
     )
 
 
-def test_local_services_includes_postgres_for_native_bot_favorites() -> None:
+def test_local_services_excludes_postgres_from_core_demo_topology() -> None:
+    """#3241: PostgreSQL left the core demo topology — bookmarks are optional.
+
+    The local sidecar set must start the core demo without PostgreSQL; the
+    bookmarks capability (and its favorites table) is opt-in via the
+    `postgres` compose profile instead of a required local service.
+    """
     text = _makefile_text()
     match = re.search(r"^LOCAL_SERVICES\s*:=\s*(.+)$", text, re.MULTILINE)
     assert match, "LOCAL_SERVICES not found in Makefile"
     services = match.group(1).strip().split()
-    assert "postgres" in services, (
-        "LOCAL_SERVICES must include postgres so native bot favorites backed by "
-        "realestate.public.user_favorites are available in the local loop"
+    assert "postgres" not in services, (
+        "LOCAL_SERVICES must not include postgres (#3241): the core demo topology "
+        "runs without PostgreSQL; bookmarks are an opt-in capability via the "
+        "'postgres' compose profile"
     )
+    for required in ("redis", "qdrant", "bge-m3"):
+        assert required in services, (
+            f"LOCAL_SERVICES must still include {required} for the core demo topology"
+        )
 
 
 def test_local_ingest_services_includes_ingestion() -> None:

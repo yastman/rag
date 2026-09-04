@@ -76,30 +76,42 @@ def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
     return texts
 
 
-def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
-    """Build persistent 3x2 ReplyKeyboard for client.
+def build_client_keyboard(
+    i18n: Any = None,
+    *,
+    bookmarks_available: bool = True,
+) -> ReplyKeyboardMarkup:
+    """Build persistent client ReplyKeyboard.
 
     Args:
         i18n: FluentTranslator instance. When provided, button texts are
             resolved from .ftl keys. Falls back to hardcoded Russian text.
+        bookmarks_available: Bookmarks are an optional capability (#3241) —
+            when False the bookmarks button is omitted so the keyboard never
+            advertises a feature the backend cannot serve (no PostgreSQL).
     """
     if i18n is not None:
-        texts = [i18n.get(key) for key in _ACTION_IDS]
+        pairs = [(key, i18n.get(key)) for key in _ACTION_IDS]
     else:
-        texts = list(MENU_BUTTONS.keys())  # fallback to hardcoded Russian
+        # MENU_BUTTONS maps fallback text -> action id; keep the FTL order.
+        fallback_by_action = {action: text for text, action in MENU_BUTTONS.items()}
+        pairs = [(key, fallback_by_action[action_id]) for key, action_id in _ACTION_IDS.items()]
 
-    # Ensure exactly 7 buttons (pad or trim if needed)
-    while len(texts) < 7:
-        texts.append("")
-    texts = texts[:7]
+    if not bookmarks_available:
+        pairs = [(key, text) for key, text in pairs if key != "kb-bookmarks"]
+
+    texts = [text for _key, text in pairs]
+
+    keyboard_rows: list[list[KeyboardButton]] = []
+    for index in range(0, len(texts) - 1, 2):
+        keyboard_rows.append(
+            [KeyboardButton(text=texts[index]), KeyboardButton(text=texts[index + 1])]
+        )
+    if len(texts) % 2 == 1:
+        keyboard_rows.append([KeyboardButton(text=texts[-1])])
 
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=texts[0]), KeyboardButton(text=texts[1])],
-            [KeyboardButton(text=texts[2]), KeyboardButton(text=texts[3])],
-            [KeyboardButton(text=texts[4]), KeyboardButton(text=texts[5])],
-            [KeyboardButton(text=texts[6])],  # Демонстрация — отдельный ряд
-        ],
+        keyboard=keyboard_rows,
         resize_keyboard=True,
         is_persistent=True,
     )

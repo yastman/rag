@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.favorites_service import Favorite, FavoritesService, _parse_jsonb
+from telegram_bot.services.favorites_service import (
+    Favorite,
+    FavoritesService,
+    _parse_jsonb,
+    bookmarks_ready,
+)
 
 
 @pytest.fixture
@@ -224,3 +229,32 @@ async def test_is_favorited(mock_pool: MagicMock) -> None:
 
     mock_pool.fetchval.return_value = None
     assert await svc.is_favorited(telegram_id=123, property_id="prop-99") is False
+
+
+# ---------------------------------------------------------------------------
+# bookmarks capability gate (#3241)
+# ---------------------------------------------------------------------------
+
+
+def test_bookmarks_ready_when_service_constructed() -> None:
+    """A bot with a constructed FavoritesService exposes the capability."""
+
+    class _Bot:
+        _favorites_service = FavoritesService(pool=MagicMock())
+
+    assert bookmarks_ready(_Bot()) is True
+
+
+def test_bookmarks_ready_false_without_service() -> None:
+    """No constructed service (e.g. PostgreSQL unreachable) means not ready."""
+
+    class _Bot:
+        _favorites_service = None
+
+    assert bookmarks_ready(_Bot()) is False
+
+
+def test_bookmarks_ready_fail_closed_on_none_or_plain_objects() -> None:
+    """None and objects without the attribute must read as not ready (fail closed)."""
+    assert bookmarks_ready(None) is False
+    assert bookmarks_ready(object()) is False

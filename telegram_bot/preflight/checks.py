@@ -62,7 +62,10 @@ _DEP_REMEDIATION: dict[str, str] = {
         "the shipped demo data (idempotent, never drops populated collections)"
     ),
     "bge_m3": "start the repo-local BGE-M3 service and verify /health and /encode/dense",
-    "postgres": "start PostgreSQL or accept degraded user-feature mode",
+    "postgres": (
+        "optional: start PostgreSQL (docker compose --profile postgres up -d) and restart "
+        "the bot to enable the bookmarks capability, or keep running without user features"
+    ),
 }
 
 

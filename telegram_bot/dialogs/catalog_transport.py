@@ -7,6 +7,7 @@ from typing import Any
 from telegram_bot.dialogs.funnel import format_apartment_list
 from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
+from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 async def render_catalog_results_with_keyboard(
@@ -20,7 +21,11 @@ async def render_catalog_results_with_keyboard(
     shown_count: int,
     telegram_id: int,
 ) -> None:
-    keyboard = build_catalog_keyboard(shown=shown_count, total=total_count)
+    keyboard = build_catalog_keyboard(
+        shown=shown_count,
+        total=total_count,
+        bookmarks_available=bookmarks_ready(property_bot),
+    )
     if view_mode == "list" or property_bot is None:
         text = format_apartment_list(results, shown_start=shown_start, total=total_count)
         await message.answer(text, parse_mode="HTML", reply_markup=keyboard)

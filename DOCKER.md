@@ -26,20 +26,23 @@ docker compose -f compose.yml -f compose.dev.yml up -d
 
 ## Profiles
 
-Services are gated by profiles. Run only what you need.
+Services are gated by profiles. Run only what you need. PostgreSQL is an
+opt-in service (#3241): the core demo topology starts without it, and the bot
+degrades gracefully (bookmarks capability disabled) when it is absent.
 
 | Profile | Services included |
 |---|---|
-| *(no profile)* | `postgres`, `redis`, `qdrant`, `bge-m3` |
-| `bot` | above + `bot` |
+| *(no profile)* | `redis`, `qdrant`, `bge-m3` |
+| `postgres` | above + `postgres` (opt-in domain DB) |
+| `bot` | above + `bot` (combine with `postgres` when the bot needs favorites) |
 | `ingest` | above + `ingestion` |
-| `full` | all services |
+| `full` | all services, including `postgres` |
 
 ## Services
 
 | Service | Image | Profile | Purpose |
 |---|---|---|---|
-| `postgres` | `postgres:17` | default | Bot domain DB (users/leads/funnel/favorites) |
+| `postgres` | `postgres:17` | `postgres`, `full` | Bot domain DB (users/leads/funnel/favorites) — opt-in |
 | `redis` | `redis:8.10.1` | default | Five caches: semantic answer, embedding, search, rerank, extraction |
 | `qdrant` | `qdrant/qdrant:v1.18.3` | default | Vector store — dense, sparse, ColBERT retrieval; storage config (`on_disk_payload`, `indexing_threshold_kb`) caps growth |
 | `bge-m3` | built locally | default | Self-hosted BGE-M3 ONNX embedding API |
@@ -64,8 +67,11 @@ Base `compose.yml` exposes **no ports**. All ports are loopback-bound in dev.
 # Minimal core (Qdrant + Redis, no auth — fastest start for native dev)
 make core-min-up
 
-# Full default core (postgres, redis, qdrant, bge-m3)
+# Default core (redis, qdrant, bge-m3 — no PostgreSQL)
 make core-up
+
+# Core + PostgreSQL (opt-in domain DB for bookmarks/user features)
+docker compose -f compose.yml -f compose.dev.yml --profile postgres up -d
 
 # Core + bot (Compose-managed bot)
 make docker-bot-up
@@ -107,7 +113,7 @@ Copy `.env.example` to `.env` and fill in at minimum:
 
 | Variable | Required for | Notes |
 |---|---|---|
-| `POSTGRES_PASSWORD` | all profiles | Any non-empty string for local dev |
+| `POSTGRES_PASSWORD` | compose rendering (postgres is an opt-in profile, #3241) | Any non-empty string for local dev |
 | `REDIS_PASSWORD` | all profiles | Any non-empty string for local dev |
 | `TELEGRAM_BOT_TOKEN` | `bot` profile | From @BotFather |
 | `BGE_M3_ONNX_MODEL_HOST_DIR` | `bge-m3` build | Path to ONNX INT8 model dir; baked into image at build time |

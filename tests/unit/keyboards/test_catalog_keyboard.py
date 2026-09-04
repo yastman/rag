@@ -34,3 +34,28 @@ def test_parse_catalog_button_maps_known_actions() -> None:
     assert parse_catalog_button("📅 Запись на осмотр") == "catalog_viewing"
     assert parse_catalog_button("👤 Написать менеджеру") == "catalog_manager"
     assert parse_catalog_button("🏠 Главное меню") == "catalog_home"
+
+
+# ---------------------------------------------------------------------------
+# Bookmarks capability gate (#3241)
+# ---------------------------------------------------------------------------
+
+
+def test_build_catalog_keyboard_omits_bookmarks_when_capability_disabled() -> None:
+    from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
+
+    kb = build_catalog_keyboard(shown=10, total=25, bookmarks_available=False)
+
+    texts = [button.text for row in kb.keyboard for button in row]
+    assert "📌 Избранное" not in texts
+    # Filters/viewing/manager/home remain reachable.
+    for expected in ("🔍 Фильтры", "📅 Запись на осмотр", "👤 Написать менеджеру", "🏠 Главное меню"):
+        assert expected in texts
+
+
+def test_build_catalog_keyboard_keeps_bookmarks_by_default() -> None:
+    from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
+
+    kb = build_catalog_keyboard(shown=10, total=25)
+    texts = [button.text for row in kb.keyboard for button in row]
+    assert "📌 Избранное" in texts

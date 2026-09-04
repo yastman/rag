@@ -13,6 +13,7 @@ from aiogram_dialog.widgets.text import Const, Format
 
 from src.services.content_loader import load_services_config
 from telegram_bot.keyboards.client_keyboard import build_client_keyboard
+from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 def get_main_menu_label(i18n: Any | None = None) -> str:
@@ -27,8 +28,13 @@ async def show_client_main_menu(
     message: Message,
     *,
     i18n: Any | None = None,
+    property_bot: Any | None = None,
 ) -> None:
-    """Send the client root message with the persistent lower keyboard."""
+    """Send the client root message with the persistent lower keyboard.
+
+    The keyboard is capability-gated (#3241): the bookmarks button appears
+    only when the favourites service exists on ``property_bot``.
+    """
     name = getattr(message.from_user, "first_name", "") or ""
     if i18n is not None:
         text = i18n.get("welcome-text", name=name)
@@ -36,7 +42,13 @@ async def show_client_main_menu(
         text = load_services_config().get("welcome", {}).get("text", "Добро пожаловать!")
         if name:
             text = text.replace("Привет! 👋", f"Привет, {name}! 👋", 1)
-    await message.answer(text, reply_markup=build_client_keyboard(i18n=i18n))
+    await message.answer(
+        text,
+        reply_markup=build_client_keyboard(
+            i18n=i18n,
+            bookmarks_available=bookmarks_ready(property_bot),
+        ),
+    )
 
 
 async def exit_to_client_root(
@@ -82,6 +94,7 @@ async def on_back_to_main_menu(
     middleware = getattr(manager, "middleware_data", None) or {}
     state = middleware.get("state") if isinstance(middleware, dict) else None
     i18n = middleware.get("i18n") if isinstance(middleware, dict) else None
+    property_bot = middleware.get("property_bot") if isinstance(middleware, dict) else None
     if state is not None:
         maybe_clear = state.clear()
         if inspect.isawaitable(maybe_clear):
@@ -90,7 +103,7 @@ async def on_back_to_main_menu(
         await manager.reset_stack(remove_keyboard=True)
     message = callback.message
     if message is not None and not isinstance(message, InaccessibleMessage):
-        await show_client_main_menu(message, i18n=i18n)
+        await show_client_main_menu(message, i18n=i18n, property_bot=property_bot)
 
 
 def root_menu_button(widget_id: str = "main_menu") -> Button:

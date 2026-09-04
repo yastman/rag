@@ -800,12 +800,15 @@ qa: all-checks test ## Full quality assurance
 
 
 .PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate release-polling-lock run-bot bot
-LOCAL_SERVICES := postgres redis qdrant bge-m3
+# Core demo sidecars (#3241): PostgreSQL is NOT part of the core demo topology —
+# bookmarks/user features are an optional capability. Opt in explicitly with
+# `$(LOCAL_COMPOSE_CMD) --profile postgres up -d` or `make docker-full-up`.
+LOCAL_SERVICES := redis qdrant bge-m3
 
 LOCAL_INGEST_SERVICES := ingestion
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
 
-local-up:  ## Start local Docker services (bot runs via make run-bot)
+local-up:  ## Start local Docker services (bot runs via make run-bot; PostgreSQL opt-in: --profile postgres)
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_SERVICES)
 	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
 

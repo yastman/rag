@@ -21,7 +21,11 @@ services:
   # =============================================================================
 
   postgres:
+    # Opt-in domain database (#3241): bookmarks/user features are an optional
+    # capability, so PostgreSQL is NOT part of the core demo topology. Start it
+    # explicitly with `docker compose --profile postgres up -d` or via `full`.
     <<: *security-defaults
+    profiles: ["postgres", "full"]
     image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
     restart: unless-stopped
     stop_grace_period: 30s
@@ -180,11 +184,12 @@ services:
       BUSINESS_HOURS_START: "${BUSINESS_HOURS_START:-9}"
       BUSINESS_HOURS_END: "${BUSINESS_HOURS_END:-18}"
       BUSINESS_HOURS_TZ: "${BUSINESS_HOURS_TZ:-Europe/Sofia}"
-      # Real Estate DB
+      # Real Estate DB — optional domain DB (#3241). The bot starts and degrades
+      # gracefully (bookmarks capability disabled) when PostgreSQL is absent.
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
     depends_on:
-      postgres:
-        condition: service_healthy
+      # No postgres dependency (#3241): PostgreSQL is an opt-in profile service;
+      # the bot's preflight treats it as OPTIONAL and degrades without it.
       redis:
         condition: service_healthy
       qdrant:
