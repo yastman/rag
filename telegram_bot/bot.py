@@ -551,23 +551,6 @@ class PropertyBot:
 
         await send_html_messages(message, text, reply_markup=reply_markup)
 
-    @staticmethod
-    def _trace_guard_blocked(
-        *,
-        user_text: str,
-        pipeline_start: float,
-        risk_score: float,
-        pattern: str | None,
-        root_trace_metadata: dict[str, Any] | None,
-    ) -> None:
-        return _bot_query_pipeline._trace_guard_blocked(
-            user_text=user_text,
-            pipeline_start=pipeline_start,
-            risk_score=risk_score,
-            pattern=pattern,
-            root_trace_metadata=root_trace_metadata,
-        )
-
     async def _send_core_response(
         self,
         *,
