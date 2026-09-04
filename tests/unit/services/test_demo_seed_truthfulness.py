@@ -51,7 +51,7 @@ def seed() -> list[dict[str, Any]]:
 
 
 def _load_seed() -> list[dict[str, Any]]:
-    with open(SEED_PATH, newline="") as f:
+    with open(SEED_PATH, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         return [ApartmentRecord.from_raw(row).to_payload() for row in reader]
 
@@ -155,9 +155,7 @@ class TestGoldenQueriesReturnResults:
             filters = _extract_filters(query)
             assert filters, f"Golden query extracts no filters: {query}"
 
-    def test_every_golden_query_returns_minimum_results(
-        self, seed: list[dict[str, Any]]
-    ) -> None:
+    def test_every_golden_query_returns_minimum_results(self, seed: list[dict[str, Any]]) -> None:
         for query in GOLDEN_DEMO_QUERIES:
             count = _match_count(seed, _extract_filters(query))
             assert count >= GOLDEN_QUERY_MIN_RESULTS, f"{query}: only {count} matches"
@@ -181,9 +179,7 @@ class TestSeedHygiene:
         assert len(seed) >= 297
 
     def test_seed_identities_are_unique(self, seed: list[dict[str, Any]]) -> None:
-        identities = [
-            (p["complex_name"], p["section"], p["apartment_number"]) for p in seed
-        ]
+        identities = [(p["complex_name"], p["section"], p["apartment_number"]) for p in seed]
         assert len(identities) == len(set(identities))
 
     def test_seed_rooms_cover_filter_dialog_options(self, seed: list[dict[str, Any]]) -> None:
@@ -272,9 +268,7 @@ def _stats_from_seed(seed: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 class TestDynamicExamplesAreTruthful:
-    def test_every_dynamic_example_matches_seed_data(
-        self, seed: list[dict[str, Any]]
-    ) -> None:
+    def test_every_dynamic_example_matches_seed_data(self, seed: list[dict[str, Any]]) -> None:
         examples = generate_search_examples(_stats_from_seed(seed))
         assert len(examples) == 4
         for example in examples:
@@ -290,8 +284,7 @@ class TestDynamicExamplesAreTruthful:
         combo_examples = [
             e
             for e in examples
-            if any(city_prompt in e for city_prompt in ("Солнечн", "Влас", "Элените"))
-            and "€" in e
+            if any(city_prompt in e for city_prompt in ("Солнечн", "Влас", "Элените")) and "€" in e
         ]
         for example in combo_examples:
             assert _match_count(seed, _extract_filters(example)) >= GOLDEN_QUERY_MIN_RESULTS

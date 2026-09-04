@@ -152,9 +152,7 @@ def generate_rows() -> list[dict[str, str]]:
             band = _PRICE_RANGE_OVERRIDES.get((city, rooms), _PRICE_RANGE[rooms])
             base = rng.randrange(band[0], band[1] + 1, 500)
             view_raw = rng.choice(_VIEWS)
-            price = _clamp_band(
-                _round_to_step(base * (1.0 + _view_premium(view_raw)), 500), band
-            )
+            price = _clamp_band(_round_to_step(base * (1.0 + _view_premium(view_raw)), 500), band)
 
             lo, hi = _AREA_RANGE[rooms]
             area = round(rng.uniform(lo, hi), 1)
@@ -201,12 +199,10 @@ def rows_to_csv(rows: list[dict[str, str]]) -> str:
 
 
 def _load_rows(csv_path: Path) -> list[dict[str, str]]:
-    with open(csv_path, newline="") as f:
+    with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames != CSV_COLUMNS:
-            raise SystemExit(
-                f"Unexpected CSV columns in {csv_path}: {reader.fieldnames}"
-            )
+            raise SystemExit(f"Unexpected CSV columns in {csv_path}: {reader.fieldnames}")
         return list(reader)
 
 
@@ -238,9 +234,7 @@ def validate_rows(rows: list[dict[str, str]]) -> None:
         )
 
     def count_expensive(city: str, min_price: int) -> int:
-        return sum(
-            1 for r in rows if r["city"] == city and float(r["price_eur"]) >= min_price
-        )
+        return sum(1 for r in rows if r["city"] == city and float(r["price_eur"]) >= min_price)
 
     pfb_rooms3 = sum(
         1 for r in rows if r["complex_name"] == "Premier Fort Beach" and int(r["rooms"]) == 3
@@ -258,7 +252,9 @@ def validate_rows(rows: list[dict[str, str]]) -> None:
 
     no_result = count_cheap("Свети Влас", 4, 60_000)
     if no_result != 0:
-        raise SystemExit(f"No-result guarantee broken: Свети Влас rooms=4 ≤ 60k has {no_result} rows")
+        raise SystemExit(
+            f"No-result guarantee broken: Свети Влас rooms=4 ≤ 60k has {no_result} rows"
+        )
 
     view_primaries = {r["view_raw"].split("/")[0].strip().replace(" ", "_") for r in rows}
     missing_views = {"sea", "pool", "garden", "forest"} - view_primaries
@@ -289,8 +285,7 @@ def main() -> None:
         actual = args.csv.read_text(encoding="utf-8")
         if actual != expected:
             raise SystemExit(
-                f"{args.csv} is out of date. Run: "
-                f"uv run python scripts/apartments/generate_seed.py"
+                f"{args.csv} is out of date. Run: uv run python scripts/apartments/generate_seed.py"
             )
         print(f"OK: {args.csv} matches the deterministic generator ({len(rows)} rows).")
         return
