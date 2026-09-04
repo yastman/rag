@@ -57,10 +57,12 @@ async def _rewrite_query(
     )
     if expanded_query != query:
         elapsed = time.perf_counter() - t0
+        # #3356: lengths only — never the raw query or the deterministic
+        # expansion text.
         logger.info(
-            "rewrite: deterministic expansion '%s' → '%s' (%.3fs)",
-            query,
-            expanded_query,
+            "rewrite: deterministic expansion applied (len=%d→%d, %.3fs)",
+            len(query),
+            len(expanded_query),
             elapsed,
         )
         return {
@@ -83,11 +85,14 @@ async def _rewrite_query(
         rewrite_actual_model = "fallback"
 
     elapsed = time.perf_counter() - t0
+    # #3356: metadata only — attempt count, text sizes, latency. No query or
+    # rewrite text, at any log level.
     logger.info(
-        "rewrite: attempt %d, '%.50s' → '%.50s' (%.3fs)",
+        "rewrite: attempt %d, len=%d→%d, effective=%s (%.3fs)",
         rewrite_count + 1,
-        query,
-        rewritten,
+        len(query),
+        len(rewritten),
+        effective,
         elapsed,
     )
 

@@ -413,9 +413,9 @@ class CacheLayerManager:
                 metadata=metadata,
                 ttl=ttl,
             )
+            # #3356: type/scope/role/ttl metadata only — no query text.
             logger.debug(
-                "Stored semantic: %s... (type=%s, scope=%s, role=%s, ttl=%ds)",
-                query[:50],
+                "Stored semantic (type=%s, scope=%s, role=%s, ttl=%ds)",
                 query_type,
                 cache_scope,
                 agent_role,

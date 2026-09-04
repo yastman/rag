@@ -4,7 +4,15 @@
 
 Security guardrails for production RAG deployment.
 Owns source-level security helpers under `src/security/`.
-Currently provides PII redaction before sensitive data reaches logs or traces.
+Provides PII redaction helpers for sensitive data that must reach logs or
+traces only in redacted form. Runtime pipelines do not log raw user queries,
+generated rewrites, hypothetical documents, transliterations, or injection
+excerpts at all: the rewrite, preprocessing, semantic-cache, and guard paths
+emit metadata only (request identifiers, types, categories, sizes, latency,
+model, cache outcome). This guarantee is executable:
+`tests/contract/test_log_privacy_contract.py` sends e-mail, phone, and
+passport canaries through those paths and asserts none reaches any log
+level or exception text (#3356).
 
 ## Files
 
@@ -35,7 +43,12 @@ redacted, meta = redactor.redact_query("Паспорт АА123456")
 
 ## Boundaries
 
-- Redacts **before** logging to external tracing/MLflow; original query is still used for search accuracy
+- The pipeline log boundary is "metadata only, no user text" — enforced by
+  `tests/contract/test_log_privacy_contract.py` (#3356), not by a manual
+  redaction step. `PIIRedactor` remains available for callers that
+  intentionally log redacted content.
+- Search, embeddings, cache keys, and returned behavior are unaffected: the
+  original query is still used everywhere except in logs
 - Does not perform authentication or authorization
 - Does not own Telegram middleware policy; see [`../../telegram_bot/middlewares/`](../../telegram_bot/middlewares/)
 

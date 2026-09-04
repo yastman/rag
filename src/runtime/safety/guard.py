@@ -168,12 +168,13 @@ async def guard_node(
     }
 
     if detected:
+        # #3356: mode/score/pattern category only — never the query excerpt,
+        # which may itself contain prompt-injection text or user PII.
         logger.warning(
-            "Injection detected (mode=%s, score=%.2f, pattern=%s): %.80s",
+            "Injection detected (mode=%s, score=%.2f, pattern=%s)",
             guard_mode,
             risk_score,
             pattern,
-            query,
         )
 
         if guard_mode == "hard":
