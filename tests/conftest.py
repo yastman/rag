@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from dotenv import load_dotenv
 
 
 # Register shared URL/collection fixtures (issue #2066). Smoke and integration
@@ -32,17 +31,11 @@ os.environ.setdefault("OTEL_LOGS_EXPORTER", "none")
 os.environ.setdefault("LANGFUSE_ENABLED", "false")
 os.environ.setdefault("LANGFUSE_HOST", "http://localhost:3001")
 
-# Load environment variables before any imports (respect PYTHON_DOTENV_DISABLED)
-# python-dotenv truthy values: 1, true, t, yes, y (case-insensitive)
-_env_disabled = os.environ.get("PYTHON_DOTENV_DISABLED", "").strip().lower() in (
-    "1",
-    "true",
-    "t",
-    "yes",
-    "y",
-)
-if not _env_disabled:
-    load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
+# Repository .env is never loaded in test processes (#3447): tests must not
+# inherit ambient credentials or endpoints (Redis/Qdrant/BGE URLs, API keys).
+# Setting this also blocks any later in-process dotenv loads (e.g. bot
+# config bootstrap) for the rest of the pytest run.
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -64,10 +57,6 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         for directory, marker in path_to_marker.items():
             if directory in item_path.parents:
                 item.add_marker(getattr(pytest.mark, marker))
-
-
-# Prevent later imports from discovering dotenv files outside this bootstrap.
-os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 
 
 # =============================================================================
