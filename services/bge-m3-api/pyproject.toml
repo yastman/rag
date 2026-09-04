@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     # Core ML/Embeddings — ONNX INT8 runtime (no PyTorch/FlagEmbedding)
     "onnxruntime>=1.22.0",
-    "transformers==5.12.1",
+    "transformers==5.16.1",
     # FastAPI & Web Server
     "fastapi==0.141.1",
     "starlette>=1.6.0",  # CVE-2026-48817/48818 SSRF fix
