@@ -280,6 +280,8 @@ async def _resolve_cache_stage(
     semantic_cache_filter_signature: Any,
     latency_stages: dict[str, float],
     state_contract: PipelineContext | None,
+    grounding_mode: str | None = None,
+    require_safe_reuse: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     """Run cache stage: fast-path from state_contract or full _cache_check.
 
@@ -317,6 +319,8 @@ async def _resolve_cache_stage(
         semantic_cache_already_checked=semantic_cache_prechecked,
         semantic_cache_filter_sensitive=semantic_cache_filter_sensitive,
         semantic_cache_filter_signature=semantic_cache_filter_signature,
+        grounding_mode=grounding_mode,
+        require_safe_reuse=require_safe_reuse,
     )
     return result, semantic_cache_prechecked
 
@@ -354,6 +358,8 @@ async def rag_pipeline(
     pre_computed_colbert: list[list[float]] | None = None,
     semantic_cache_already_checked: bool = False,
     skip_rewrite: bool = False,
+    grounding_mode: str | None = None,
+    require_safe_reuse: bool = False,
 ) -> dict[str, Any]:
     """Execute RAG pipeline: cache → retrieve → grade → rerank → rewrite loop → cache_store.
 
@@ -409,6 +415,8 @@ async def rag_pipeline(
         semantic_cache_filter_signature=semantic_cache_filter_signature,
         latency_stages=latency_stages,
         state_contract=state_contract,
+        grounding_mode=grounding_mode,
+        require_safe_reuse=require_safe_reuse,
     )
     semantic_cache_already_checked = semantic_cache_prechecked
     # Unpack typed fields from cache_result

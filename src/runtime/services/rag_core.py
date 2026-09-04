@@ -295,6 +295,8 @@ async def check_semantic_cache(
     cache: Any,
     agent_role: str | None = None,
     filter_signature: str | None = None,
+    grounding_mode: str | None = None,
+    require_safe_reuse: bool = False,
 ) -> tuple[bool, str | None]:
     """Check semantic cache for a given query vector.
 
@@ -306,6 +308,10 @@ async def check_semantic_cache(
         query_type: Query type (e.g. "FAQ", "GENERAL"). Non-cacheable types skip check.
         cache: Cache instance with check_semantic method.
         agent_role: Optional role for role-gated cache scoping (agent SDK only).
+        grounding_mode: Grounding policy of the request; forwarded so strict
+            reads only match entries stored under the same mode (#3320).
+        require_safe_reuse: When True, only entries carrying explicit
+            safe-reuse evidence may hit (#3320).
 
     Returns:
         Tuple of (hit, response).
@@ -324,6 +330,8 @@ async def check_semantic_cache(
         cache_scope="rag",
         agent_role=agent_role,
         filter_signature=filter_signature,
+        grounding_mode=grounding_mode,
+        require_safe_reuse=require_safe_reuse,
     )
 
     if cached:

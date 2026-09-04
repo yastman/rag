@@ -230,6 +230,8 @@ async def _cache_check(
     semantic_cache_already_checked: bool = False,
     semantic_cache_filter_sensitive: bool = False,
     semantic_cache_filter_signature: str | None = None,
+    grounding_mode: str | None = None,
+    require_safe_reuse: bool = False,
 ) -> dict[str, Any]:
     """Compute embedding and check semantic cache.
 
@@ -297,6 +299,8 @@ async def _cache_check(
             cache=cache,
             agent_role=agent_role,
             filter_signature=semantic_cache_filter_signature,
+            grounding_mode=grounding_mode,
+            require_safe_reuse=require_safe_reuse,
         )
 
     latency = time.perf_counter() - start

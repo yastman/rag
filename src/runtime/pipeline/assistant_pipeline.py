@@ -103,6 +103,13 @@ async def run_assistant_pipeline(
             PipelineContext(filters=ctx.filters) if ctx.filters else None
         )
 
+        # Grounding policy is computed BEFORE the semantic-cache read (#3320):
+        # a strict request must reach the cache lookup with its policy attached,
+        # never reuse a normal-mode entry computed after a hit.
+        topic_hint = get_query_topic_hint(request.query)
+        grounding_mode = get_grounding_mode(query_type=request_type, topic_hint=topic_hint)
+        require_safe_reuse = grounding_mode == "strict"
+
         rag_result = await rag_pipeline(
             query=request.query,
             user_id=_coerce_user_id(ctx.user_id),
@@ -117,6 +124,8 @@ async def run_assistant_pipeline(
             llm=dependencies.llm,
             agent_role=ctx.role,
             state_contract=state_contract,
+            grounding_mode=grounding_mode,
+            require_safe_reuse=require_safe_reuse,
         )
 
         documents = _as_document_list(rag_result.get("documents"))
@@ -172,8 +181,7 @@ async def run_assistant_pipeline(
                 rerank_applied=bool(rag_result.get("rerank_applied", False)),
             )
 
-        topic_hint = get_query_topic_hint(request.query)
-        grounding_mode = get_grounding_mode(query_type=request_type, topic_hint=topic_hint)
+        # topic_hint / grounding_mode were computed before the cache read (#3320).
         grade_confidence = rag_result.get("grade_confidence")
 
         generation = await generate_answer(

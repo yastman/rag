@@ -433,3 +433,28 @@ class TestCheckSemanticCache:
         assert "GENERAL" in CACHEABLE_QUERY_TYPES
         # Non-cacheable types not included
         assert "APARTMENT" not in CACHEABLE_QUERY_TYPES
+
+
+# Regression #3320: the core cache read must forward the grounding policy so
+# strict requests never reuse normal-mode entries.
+async def test_check_semantic_cache_forwards_grounding_policy() -> None:
+    recorded: dict = {}
+
+    class _RecordingCache:
+        async def check_semantic(self, **kwargs):
+            recorded.update(kwargs)
+            return
+
+    hit, response = await check_semantic_cache(
+        "query",
+        [0.1] * 10,
+        "FAQ",
+        cache=_RecordingCache(),
+        grounding_mode="strict",
+        require_safe_reuse=True,
+    )
+
+    assert hit is False
+    assert response is None
+    assert recorded["grounding_mode"] == "strict"
+    assert recorded["require_safe_reuse"] is True
