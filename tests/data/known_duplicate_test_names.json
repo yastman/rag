@@ -47,10 +47,6 @@
     "tests/integration/test_docker_services.py",
     "tests/smoke/test_preflight.py"
   ],
-  "test_redis_maxmemory_set": [
-    "tests/load/test_load_redis_eviction.py",
-    "tests/smoke/test_preflight.py"
-  ],
   "test_settings_defaults": [
     "tests/unit/test_bge_m3_endpoints.py",
     "tests/unit/test_small_to_big.py"
