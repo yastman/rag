@@ -285,7 +285,7 @@ def test_bge_m3_dockerfile_bakes_verified_artifact_from_build_context() -> None:
     assert "model.onnx" in dockerfile
     assert "model.onnx_data" in dockerfile
     assert "cp /tmp/bge-m3-onnx/model.onnx" in dockerfile
-    assert "cp /tmp/bge-m3-onnx/tokenizer/" in dockerfile, "tokenizer assets must be baked"
+    assert "cp -r /tmp/bge-m3-onnx/tokenizer/" in dockerfile, "tokenizer assets must be baked"
 
 
 def test_bge_m3_dockerfile_sets_offline_env() -> None:

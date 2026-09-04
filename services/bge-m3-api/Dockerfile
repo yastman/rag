@@ -53,7 +53,7 @@ RUN --mount=type=bind,from=bge_m3_onnx_model,target=/tmp/bge-m3-onnx,readonly \
       --manifest /tmp/bge-m3-onnx/artifact_manifest.json && \
     mkdir -p /models/artifact/tokenizer && \
     cp /tmp/bge-m3-onnx/model.onnx /tmp/bge-m3-onnx/model.onnx_data /models/artifact/ && \
-    cp /tmp/bge-m3-onnx/tokenizer/. /models/artifact/tokenizer/ && \
+    cp -r /tmp/bge-m3-onnx/tokenizer/. /models/artifact/tokenizer/ && \
     cp /tmp/bge-m3-onnx/artifact_manifest.json /models/artifact/ && \
     chown -R appuser:appgroup /models/artifact && \
     rm /tmp/verify_artifact.py
