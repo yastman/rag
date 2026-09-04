@@ -234,3 +234,50 @@ async def test_send_property_card_checks_favorites_when_service_provided() -> No
         )
 
     favorites_service.is_favorited.assert_awaited_once_with(123, "apt42")
+
+
+# ---------------------------------------------------------------------------
+# Bookmarks capability gate (#3241)
+# ---------------------------------------------------------------------------
+
+
+def _button_texts(markup) -> list[str]:
+    return [btn.text for row in markup.inline_keyboard for btn in row]
+
+
+def test_build_card_buttons_hides_favorite_toggle_when_capability_disabled():
+    """No bookmarks capability means the card must not advertise favourites."""
+    markup = build_card_buttons("p1", bookmarks_available=False)
+
+    texts = _button_texts(markup)
+    assert "📌 В избранное" not in texts
+    assert "❌ Убрать из избранного" not in texts
+    # The manager and viewing actions stay available.
+    assert "💬 Менеджеру" in texts
+    assert "📅 На осмотр" in texts
+
+
+def test_build_card_buttons_keeps_favorite_toggle_when_capability_enabled():
+    markup = build_card_buttons("p1", bookmarks_available=True)
+    assert "📌 В избранное" in _button_texts(markup)
+
+
+@pytest.mark.asyncio
+async def test_send_property_card_omits_favorite_button_without_service() -> None:
+    """send_property_card without a favourites service hides the favourite toggle."""
+    from unittest.mock import AsyncMock, patch
+
+    from telegram_bot.keyboards.property_card import send_property_card
+
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=AsyncMock())
+
+    result = {"id": "apt42", "payload": {"complex_name": "Fort Beach", "price_eur": 120000}}
+
+    with patch("telegram_bot.keyboards.property_card.get_demo_photo_paths", return_value=[]):
+        await send_property_card(message, result)
+
+    markup = message.answer.await_args.kwargs["reply_markup"]
+    texts = _button_texts(markup)
+    assert "📌 В избранное" not in texts
+    assert "💬 Менеджеру" in texts

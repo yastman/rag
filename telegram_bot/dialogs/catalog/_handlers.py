@@ -76,7 +76,11 @@ async def _handle_catalog_home_message(
     manager.show_mode = ShowMode.NO_UPDATE
     with contextlib.suppress(Exception):
         await manager.reset_stack(remove_keyboard=True)
-    await show_client_main_menu(message, i18n=manager.middleware_data.get("i18n"))
+    await show_client_main_menu(
+        message,
+        i18n=manager.middleware_data.get("i18n"),
+        property_bot=manager.middleware_data.get("property_bot"),
+    )
 
 
 async def _handle_catalog_manager_message(

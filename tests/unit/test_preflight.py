@@ -314,7 +314,7 @@ class TestPostgresRemediation:
         assert result is False
         assert "localhost:5432" in caplog.text
         assert "optional for native bot runs" in caplog.text
-        assert "compose.yml:compose.dev.yml" in caplog.text
+        assert "--profile postgres" in caplog.text
 
 
 # ===========================================================================

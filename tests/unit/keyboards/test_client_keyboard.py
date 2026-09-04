@@ -263,3 +263,34 @@ def test_client_keyboard_keys_exist_in_all_locales():
         for key in _ACTION_IDS:
             result = translator.get(key)
             assert result != key, f"Missing key '{key}' in locale '{locale}'"
+
+
+# ---------------------------------------------------------------------------
+# Bookmarks capability gate (#3241)
+# ---------------------------------------------------------------------------
+
+
+def test_build_client_keyboard_omits_bookmarks_when_capability_disabled():
+    """Without the bookmarks capability the keyboard must not advertise it."""
+    kb = build_client_keyboard(bookmarks_available=False)
+    buttons = [btn.text for row in kb.keyboard for btn in row]
+    assert len(buttons) == 6
+    assert not any("закладки" in b.lower() for b in buttons)
+    # Core actions stay reachable.
+    assert any("Подобрать" in b for b in buttons)
+    assert any("Демонстрация" in b for b in buttons)
+
+
+def test_build_client_keyboard_keeps_bookmarks_by_default():
+    kb = build_client_keyboard()
+    buttons = [btn.text for row in kb.keyboard for btn in row]
+    assert len(buttons) == 7
+    assert any("закладки" in b.lower() for b in buttons)
+
+
+def test_build_client_keyboard_gated_omits_bookmarks_via_i18n():
+    i18n = _make_mock_i18n({key: key for key in _ACTION_IDS})
+    kb = build_client_keyboard(i18n=i18n, bookmarks_available=False)
+    buttons = [btn.text for row in kb.keyboard for btn in row]
+    assert "kb-bookmarks" not in buttons
+    assert len(buttons) == 6

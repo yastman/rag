@@ -46,12 +46,22 @@ async def get_menu_data(
     callback: Any = None,
     event_from_user: Any = None,
     i18n: Any = None,
+    property_bot: Any = None,
     **kwargs: Any,
-) -> dict[str, str]:
-    """Getter: provide localized menu text."""
+) -> dict[str, Any]:
+    """Getter: provide localized menu text and the bookmarks capability flag.
+
+    Bookmarks are an optional capability (#3241): the ``bookmarks_ready`` flag
+    gates the menu button so the root menu never advertises bookmarks when the
+    favourites service was not constructed (no validated PostgreSQL).
+    """
+    from telegram_bot.services.favorites_service import bookmarks_ready
+
     name = ""
     if event_from_user is not None:
         name = getattr(event_from_user, "first_name", "") or ""
+
+    ready = {"bookmarks_ready": bookmarks_ready(property_bot)}
 
     if i18n is None:
         welcome = load_services_config().get("welcome", {}).get("text", "Добро пожаловать!")
@@ -67,6 +77,7 @@ async def get_menu_data(
             "btn_ask": "💬 Задать вопрос",
             "btn_bookmarks": "📌 Мои закладки",
             "btn_demo": "🎯 Демонстрация",
+            **ready,
         }
 
     return {
@@ -78,6 +89,7 @@ async def get_menu_data(
         "btn_ask": i18n.get("kb-ask"),
         "btn_bookmarks": i18n.get("kb-bookmarks"),
         "btn_demo": i18n.get("kb-demo"),
+        **ready,
     }
 
 
@@ -161,6 +173,9 @@ client_menu_dialog = Dialog(
                 Format("{btn_bookmarks}"),
                 id="bookmarks",
                 on_click=on_menu_action,
+                # Capability-gated (#3241): hidden unless the favourites
+                # service exists (validated PostgreSQL readiness).
+                when="bookmarks_ready",
             ),
             width=2,
         ),

@@ -10,6 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, TelegramObject
 
 from telegram_bot.keyboards.client_keyboard import build_client_keyboard
+from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 _CANCEL_TRIGGERS = frozenset({"/cancel", "отмена", "cancel", "❌ отмена"})
@@ -50,6 +51,10 @@ class FSMCancelMiddleware(BaseMiddleware):
         await state.clear()
         await msg.answer(
             "😊 Заявка отменена. Когда будете готовы — мы на связи!",
-            reply_markup=build_client_keyboard(),
+            # Capability-gated keyboard (#3241): no bookmarks button without
+            # a validated PostgreSQL-backed favourites service.
+            reply_markup=build_client_keyboard(
+                bookmarks_available=bookmarks_ready(data.get("property_bot"))
+            ),
         )
         return None

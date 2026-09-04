@@ -1,7 +1,9 @@
 """Tests for Docker Compose configuration correctness.
 
 Covers three issues (M7, M8, M9):
-  M7 - bot service must declare depends_on postgres in dev and vps compose
+  M7 - bot/postgres startup topology (evolved by #3241: PostgreSQL is an
+       opt-in profile service, the bot no longer waits for it and degrades
+       gracefully — bookmarks capability disabled — without it)
   M8 - Makefile docker-ai-up target must use a profile that exists in dev compose
   M9 - VPS compose must have the same security baseline as dev compose
 """
@@ -70,48 +72,58 @@ def vps() -> dict:
 
 
 # =============================================================================
-# M7 — bot depends_on postgres
+# M7 — bot/postgres startup topology (#3241: PostgreSQL is opt-in)
 # =============================================================================
 
 
 class TestBotDependsOnPostgres:
-    """M7: bot service must wait for postgres before starting."""
+    """M7 (#3241): the core demo topology starts without PostgreSQL.
 
-    def test_dev_bot_depends_on_postgres(self, dev: dict) -> None:
-        """bot in dev compose must declare depends_on: postgres."""
+    PostgreSQL moved behind the ``postgres``/``full`` profiles and the bot no
+    longer declares a depends_on on it: the preflight treats postgres as
+    OPTIONAL and the bookmarks capability stays disabled until it is reachable.
+    """
+
+    def test_dev_bot_does_not_depend_on_postgres(self, dev: dict) -> None:
+        """bot in dev compose must not gate its startup on postgres."""
         bot = dev["services"]["bot"]
-        assert "depends_on" in bot, "bot service has no depends_on"
-        depends = bot["depends_on"]
-        # depends_on can be a list or a dict (with condition)
-        if isinstance(depends, dict):
-            assert "postgres" in depends, "bot.depends_on in dev compose does not include postgres"
-        else:
-            assert "postgres" in depends, "bot.depends_on in dev compose does not include postgres"
+        depends = bot.get("depends_on") or {}
+        assert "postgres" not in depends, (
+            "bot.depends_on must not include postgres (#3241): the core demo "
+            "topology starts without PostgreSQL and the bot degrades gracefully"
+        )
 
-    def test_dev_bot_postgres_dependency_is_healthy(self, dev: dict) -> None:
-        """bot in dev compose must wait for postgres to be healthy."""
+    def test_dev_bot_still_depends_on_core_services_healthy(self, dev: dict) -> None:
+        """bot must keep waiting for the core CRITICAL deps to be healthy."""
         bot = dev["services"]["bot"]
         depends = bot["depends_on"]
         assert isinstance(depends, dict), "bot.depends_on must be a dict with conditions"
-        assert depends["postgres"]["condition"] == "service_healthy", (
-            "bot.depends_on.postgres must use condition: service_healthy"
+        for svc in ("redis", "qdrant", "bge-m3"):
+            assert depends.get(svc, {}).get("condition") == "service_healthy", (
+                f"bot.depends_on.{svc} must use condition: service_healthy"
+            )
+
+    def test_dev_postgres_is_profile_gated(self, dev: dict) -> None:
+        """postgres must be an opt-in profile service (#3241)."""
+        postgres = dev["services"]["postgres"]
+        profiles = set(postgres.get("profiles") or [])
+        assert {"postgres", "full"} <= profiles, (
+            f"postgres must be gated behind the 'postgres' and 'full' profiles, got {profiles!r}"
         )
 
-    def test_vps_bot_depends_on_postgres(self, vps: dict) -> None:
-        """bot in vps compose must declare depends_on: postgres."""
-        bot = vps["services"]["bot"]
-        assert "depends_on" in bot, "bot service has no depends_on in vps compose"
-        depends = bot["depends_on"]
-        if isinstance(depends, dict):
-            assert "postgres" in depends, "bot.depends_on in vps compose does not include postgres"
-        else:
-            assert "postgres" in depends, "bot.depends_on in vps compose does not include postgres"
+    @pytest.mark.parametrize("svc_name", ["redis", "qdrant", "bge-m3"])
+    def test_dev_core_services_are_unprofiled(self, dev: dict, svc_name: str) -> None:
+        """The core demo topology services must start by default."""
+        assert not dev["services"][svc_name].get("profiles"), (
+            f"{svc_name} belongs to the core demo topology and must be unprofiled"
+        )
 
     def test_vps_bot_postgres_dependency_is_healthy(self, vps: dict) -> None:
-        """bot in vps compose must wait for postgres to be healthy."""
+        """VPS bot postgres dependency (when the private overlay re-adds it) is healthy."""
         bot = vps["services"]["bot"]
-        depends = bot["depends_on"]
-        assert isinstance(depends, dict), "bot.depends_on must be a dict with conditions in vps"
+        depends = bot.get("depends_on") or {}
+        if "postgres" not in depends:
+            pytest.skip("VPS overlay adopts the #3241 opt-in topology (no postgres dependency)")
         assert depends["postgres"]["condition"] == "service_healthy", (
             "bot.depends_on.postgres must use condition: service_healthy in vps"
         )

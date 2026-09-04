@@ -203,7 +203,13 @@ async def setup_cache(bot: Any) -> None:
 
 
 async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -> None:
-    """Initialize PostgreSQL pool, schema, and dependent services."""
+    """Initialize PostgreSQL pool, schema, and dependent services.
+
+    Bookmarks and other user features are an explicit optional capability
+    (#3241): the services are constructed only after the database connection
+    is validated here; when PostgreSQL is unavailable the bot starts without
+    them and UI surfaces hide the bookmarks entry points.
+    """
     from telegram_bot.startup_status import StartupSeverity, StartupSignal
 
     log = logging.getLogger(__name__)
@@ -215,14 +221,17 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
             StartupSignal(
                 source="postgres_runtime",
                 severity=StartupSeverity.DEGRADED,
-                summary="PostgreSQL unavailable — preflight marked it as not reachable",
+                summary="Bookmarks capability disabled — PostgreSQL not reachable",
                 remediation=(
-                    "restore PostgreSQL connectivity for favorites, search events, "
-                    "and user services"
+                    "start PostgreSQL (opt-in: docker compose --profile postgres up -d) "
+                    "and restart the bot to enable bookmarks, search events, and user services"
                 ),
             )
         )
-        log.info("Skipping PostgreSQL pool init because preflight already marked it unavailable")
+        log.info(
+            "Bookmarks capability: disabled (PostgreSQL unreachable) — "
+            "favorites/menu buttons stay hidden"
+        )
         return
 
     try:
@@ -262,6 +271,7 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
         log.info("Favorites service ready")
         bot._search_event_store = SearchEventStore(pool=bot._pg_pool)
         log.info("Search event store ready")
+        log.info("Bookmarks capability: enabled (PostgreSQL connection validated)")
 
     except Exception:
         log.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
@@ -269,10 +279,10 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
             StartupSignal(
                 source="postgres_runtime",
                 severity=StartupSeverity.DEGRADED,
-                summary="PostgreSQL pool unavailable, user features disabled",
+                summary="Bookmarks capability disabled — PostgreSQL pool init failed",
                 remediation=(
-                    "restore PostgreSQL connectivity for favorites, search events, "
-                    "and user services"
+                    "start PostgreSQL (opt-in: docker compose --profile postgres up -d) "
+                    "and restart the bot to enable bookmarks, search events, and user services"
                 ),
             )
         )

@@ -132,3 +132,50 @@ def test_client_menu_window_has_non_empty_text_widget():
     text_widget = getattr(window, "text", None)
 
     assert text_widget is not None
+
+
+# ---------------------------------------------------------------------------
+# Bookmarks capability gate (#3241)
+# ---------------------------------------------------------------------------
+
+
+class _BotWithoutFavorites:
+    _favorites_service = None
+
+
+class _BotWithFavorites:
+    _favorites_service = object()
+
+
+async def test_client_menu_getter_reports_bookmarks_ready_from_property_bot():
+    """The getter derives the capability flag from the wired property_bot."""
+    result = await get_menu_data(property_bot=_BotWithFavorites())
+    assert result["bookmarks_ready"] is True
+
+
+async def test_client_menu_getter_reports_bookmarks_not_ready_without_service():
+    """Without a favourites service the menu data must hide the capability."""
+    result = await get_menu_data(property_bot=_BotWithoutFavorites())
+    assert result["bookmarks_ready"] is False
+
+
+async def test_client_menu_getter_defaults_to_not_ready():
+    """Missing property_bot (fail closed) must not advertise bookmarks."""
+    result = await get_menu_data()
+    assert result["bookmarks_ready"] is False
+
+
+def test_client_menu_bookmarks_button_is_capability_gated():
+    """The bookmarks widget renders only when the getter flags readiness."""
+    from aiogram_dialog.widgets.common.when import true_condition
+
+    window = client_menu_dialog.windows[ClientMenuSG.main]
+    buttons = {
+        getattr(btn, "widget_id", ""): btn
+        for btn in _iter_widgets(getattr(window, "keyboard", None))
+    }
+    bookmarks_btn = buttons["bookmarks"]
+    # A string `when` compiles to a data-key predicate (not the pass-all default).
+    assert bookmarks_btn.condition is not true_condition
+    assert bookmarks_btn.is_({"bookmarks_ready": True}, manager=None) is True
+    assert bookmarks_btn.is_({"bookmarks_ready": False}, manager=None) is False

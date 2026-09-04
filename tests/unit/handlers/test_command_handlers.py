@@ -143,7 +143,8 @@ class TestCmdStart:
         ) as mock_show_menu:
             await cmd_start(mock_bot, message)
 
-            mock_show_menu.assert_called_once_with(message, i18n=None)
+            # property_bot is passed for the #3241 bookmarks capability gate.
+        mock_show_menu.assert_called_once_with(message, i18n=None, property_bot=mock_bot)
 
 
 class TestCmdClearcache:

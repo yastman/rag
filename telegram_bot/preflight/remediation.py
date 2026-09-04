@@ -87,9 +87,9 @@ def _postgres_local_remediation(database_url: str) -> str | None:
     host = parsed.hostname or "localhost"
     port = parsed.port or 5432
     return (
-        f"Postgres unreachable at {host}:{port}; this is optional for native bot runs. "
-        "If you need user features locally, start a compose stack that publishes Postgres "
-        "via compose.yml:compose.dev.yml."
+        f"Postgres unreachable at {host}:{port}; PostgreSQL is optional for native bot runs "
+        "(bookmarks capability disabled). To enable it, start the opt-in profile: "
+        "docker compose --profile postgres up -d."
     )
 
 

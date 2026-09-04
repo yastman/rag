@@ -29,7 +29,7 @@ The live Telegram bot is a real-estate assistant: a RAG Q&A core plus a service 
 | 🔑 Services | Service info | domain |
 | 📅 Book a viewing | Schedule a viewing | domain |
 | 👤 Contact a manager | Human handoff (HITL) | domain/agent |
-| 📌 My bookmarks | Saved listings | domain |
+| 📌 My bookmarks | Saved listings (optional capability — requires the opt-in PostgreSQL profile; hidden when PostgreSQL is not configured) | domain |
 | 🎯 Demo | Guided demo flow | domain |
 
 ## How It Works
@@ -86,7 +86,7 @@ External sidecar services (Docker Compose — **not** part of the Python binary)
 | Qdrant | Vector store — dense, sparse, and ColBERT-style retrieval |
 | BGE-M3 (ONNX) | Self-hosted embeddings served via a local API |
 | Redis | Five independent caches: semantic answer, embedding, search, rerank, extraction. Version-prefixed keys; graceful degradation on miss |
-| PostgreSQL | Domain state (users, leads, funnel, favorites) |
+| PostgreSQL *(opt-in)* | Domain state (users, leads, funnel, favorites). Not part of the core demo topology — the bot starts and degrades gracefully (bookmarks hidden) without it |
 
 Q&A and product actions route through the assistant core (`src/core/`) and deterministic product services; the legacy agent facade layer was removed (#3216).
 
@@ -123,7 +123,7 @@ uv sync --extra telegram      # bot dependencies
 cp .env.example .env          # fill in credentials
 make core-min-up              # start Qdrant + Redis via compose.core.yml (minimal)
 # or
-make core-up                  # start full sidecar stack (adds BGE-M3, PostgreSQL)
+make core-up                  # start the default core sidecars (adds BGE-M3; PostgreSQL is opt-in)
 ```
 
 Run the bot natively:

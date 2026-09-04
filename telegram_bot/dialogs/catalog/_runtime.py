@@ -84,11 +84,17 @@ __all__ = [
 ]
 
 
-def _catalog_reply_markup(runtime: CatalogRuntime, *, i18n: Any = None) -> Any:
+def _catalog_reply_markup(
+    runtime: CatalogRuntime,
+    *,
+    i18n: Any = None,
+    bookmarks_available: bool = True,
+) -> Any:
     from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 
     return build_catalog_keyboard(
         shown=_runtime_int(runtime.get("shown_count")),
         total=_runtime_int(runtime.get("total")),
         i18n=i18n,
+        bookmarks_available=bookmarks_available,
     )

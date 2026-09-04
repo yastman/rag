@@ -85,25 +85,34 @@ def build_card_buttons(
     property_id: str,
     *,
     is_favorited: bool = False,
+    bookmarks_available: bool = True,
 ) -> InlineKeyboardMarkup:
-    """Build inline buttons for a property card (2+1 layout)."""
-    if is_favorited:
-        fav_btn = InlineKeyboardButton(
-            text="❌ Убрать из избранного",
-            callback_data=FavoriteCB(action="remove", apartment_id=property_id).pack(),
-        )
-    else:
-        fav_btn = InlineKeyboardButton(
-            text="📌 В избранное",
-            callback_data=FavoriteCB(action="add", apartment_id=property_id).pack(),
-        )
+    """Build inline buttons for a property card (2+1 layout).
+
+    Bookmarks are an optional capability (#3241): when ``bookmarks_available``
+    is False the favourite toggle is omitted entirely instead of advertising an
+    action that would fail — no misleading favourite UI without PostgreSQL.
+    """
     manager_btn = InlineKeyboardButton(
         text="💬 Менеджеру",
         callback_data=f"card:ask:{property_id}",
     )
+    first_row = [manager_btn]
+    if bookmarks_available:
+        if is_favorited:
+            fav_btn = InlineKeyboardButton(
+                text="❌ Убрать из избранного",
+                callback_data=FavoriteCB(action="remove", apartment_id=property_id).pack(),
+            )
+        else:
+            fav_btn = InlineKeyboardButton(
+                text="📌 В избранное",
+                callback_data=FavoriteCB(action="add", apartment_id=property_id).pack(),
+            )
+        first_row = [fav_btn, manager_btn]
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [fav_btn, manager_btn],
+            first_row,
             [
                 InlineKeyboardButton(
                     text="📅 На осмотр",
@@ -163,7 +172,13 @@ async def send_property_card(
         is_fav = await favorites_service.is_favorited(telegram_id, result.get("id", ""))
 
     demo_photos = get_demo_photo_paths()
-    reply_markup = build_card_buttons(result.get("id", ""), is_favorited=is_fav)
+    # No favourites service ⇒ bookmarks capability disabled (#3241): the card
+    # must not advertise the favourite toggle it cannot honour.
+    reply_markup = build_card_buttons(
+        result.get("id", ""),
+        is_favorited=is_fav,
+        bookmarks_available=favorites_service is not None,
+    )
 
     photo_message_ids: list[int] = []
     if demo_photos:

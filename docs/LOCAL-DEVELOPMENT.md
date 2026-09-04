@@ -40,7 +40,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mod
 
 ```bash
 make core-min-up     # minimal: Qdrant + Redis
-make core-up         # full: + BGE-M3, PostgreSQL
+make core-up         # default core: + BGE-M3 (PostgreSQL is opt-in, #3241)
 ```
 
 ### Windows (PowerShell)
@@ -49,8 +49,11 @@ make core-up         # full: + BGE-M3, PostgreSQL
 # Minimal: Qdrant + Redis (standalone core stack)
 docker compose -f compose.core.yml up -d
 
-# Full: + BGE-M3, PostgreSQL
+# Default core: + BGE-M3 (PostgreSQL opt-in, #3241)
 docker compose -f compose.yml -f compose.dev.yml up -d
+
+# Add the opt-in domain DB (bookmarks/user features)
+docker compose -f compose.yml -f compose.dev.yml --profile postgres up -d
 ```
 
 The retrieval stack uses dense + sparse + ColBERT from the local BGE-M3. Tunables live in `.env.example` (e.g. `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`).

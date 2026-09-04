@@ -15,6 +15,7 @@ from telegram_bot.dialogs.catalog._runtime import (
     _update_catalog_runtime,
 )
 from telegram_bot.services.apartment.catalog_session import CatalogRuntime
+from telegram_bot.services.favorites_service import bookmarks_ready
 
 
 def _control_text(runtime: CatalogRuntime) -> str:
@@ -69,6 +70,7 @@ async def show_catalog_controls(
                 message_id=int(control_message_id),
             )
     i18n = dialog_manager.middleware_data.get("i18n")
+    bookmarks_available = bookmarks_ready(dialog_manager.middleware_data.get("property_bot"))
     if (
         text is None
         and current_runtime.get("view_mode") == "list"
@@ -78,7 +80,9 @@ async def show_catalog_controls(
         return current_runtime
     sent = await message.answer(
         text or _control_text(current_runtime),
-        reply_markup=_catalog_reply_markup(current_runtime, i18n=i18n),
+        reply_markup=_catalog_reply_markup(
+            current_runtime, i18n=i18n, bookmarks_available=bookmarks_available
+        ),
     )
     message_id = getattr(sent, "message_id", None)
     if isinstance(message_id, int):
