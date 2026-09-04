@@ -465,10 +465,10 @@ test-smoke: ## Run smoke tests (requires live services)
 	uv run pytest tests/smoke/ -v --tb=short
 	@echo "$(GREEN)✓ Smoke tests complete$(NC)"
 
-test-load-eviction: ## Run Redis eviction tests
-	@echo "$(BLUE)Running Redis eviction tests...$(NC)"
-	REDIS_URL="$${REDIS_URL:-redis://localhost:6379}" \
-	uv run pytest tests/load/test_load_redis_eviction.py -v -s
+test-load-eviction: ## Run Redis eviction load on a run-owned disposable container (requires Docker)
+	@echo "$(BLUE)Running Redis eviction load (run-owned disposable target)...$(NC)"
+	PYTHON_DOTENV_DISABLED=1 \
+	uv run pytest tests/load/test_load_redis_eviction.py -v
 	@echo "$(GREEN)✓ Redis eviction tests complete$(NC)"
 
 smoke-fast: ## Quick zoo smoke (~30 sec, bash only)
