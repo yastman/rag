@@ -169,7 +169,7 @@ def _normalize_strict_node(node: Any) -> None:
 
 def _openai_strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Return a deep copy of ``schema`` normalized for OpenAI strict mode (#3325)."""
-    normalized = json.loads(json.dumps(schema))
+    normalized: dict[str, Any] = json.loads(json.dumps(schema))
     _normalize_strict_node(normalized)
     return normalized
 
