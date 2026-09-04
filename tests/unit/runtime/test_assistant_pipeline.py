@@ -188,7 +188,9 @@ async def _run(
             AssistantRequest(
                 query="топ студий у моря в Солнечном Берегу",
                 collection="c",
-                user_context=UserContext(user_id="42", session_id="s", role="client", filters=filters),
+                user_context=UserContext(
+                    user_id="42", session_id="s", role="client", filters=filters
+                ),
                 request_id="req-3208",
             ),
             dependencies=dependencies,
@@ -311,3 +313,74 @@ async def test_no_store_without_cache_key_embedding() -> None:
     )
 
     cache.store_semantic.assert_not_awaited()
+
+
+# Regression #3321: an embedding/BGE dependency failure is a terminal
+# controlled result — generation and cache-store must never run.
+async def test_embedding_error_is_terminal_dependency_failure(monkeypatch) -> None:
+    from unittest.mock import AsyncMock
+
+    from src.core import AssistantRequest, CoreDependencies, UserContext
+    from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
+
+    generate_calls: list[Any] = []
+
+    async def fake_rag_pipeline(**kwargs):
+        return {
+            "response": "Service temporarily unavailable",
+            "cache_hit": False,
+            "documents": [],
+            "search_results_count": 0,
+            "rerank_applied": False,
+            "rerank_cache_hit": False,
+            "grade_confidence": 0.0,
+            "embeddings_cache_hit": False,
+            "embedding_error": True,
+            "embedding_error_type": "bge_unavailable",
+            "latency_stages": {},
+            "rewrite_count": 0,
+            "query_type": "GENERAL",
+            "retrieved_context": [],
+            "semantic_cache_already_checked": False,
+        }
+
+    async def failing_generate_answer(_request):
+        generate_calls.append(_request)
+        raise AssertionError("generation must not run after embedding failure")
+
+    classify_mod = types.ModuleType("src.runtime.routing.classify")
+    classify_mod.classify_query = lambda _: "GENERAL"
+
+    monkeypatch.setitem(sys.modules, "src.runtime.routing.classify", classify_mod)
+    monkeypatch.setattr(
+        "src.runtime.pipeline.assistant_pipeline.rag_pipeline",
+        fake_rag_pipeline,
+    )
+    monkeypatch.setattr(
+        "src.runtime.pipeline.assistant_pipeline.generate_answer",
+        failing_generate_answer,
+    )
+
+    cache = AsyncMock()
+    result = await run_assistant_pipeline(
+        AssistantRequest(
+            query="q",
+            collection="c",
+            user_context=UserContext(user_id="42", session_id="s"),
+            request_id="req-embed-fail",
+        ),
+        dependencies=CoreDependencies(
+            cache=cache,
+            embeddings=object(),
+            sparse_embeddings=object(),
+            qdrant=object(),
+            config=object(),
+        ),
+    )
+
+    assert result.response_text == "Service temporarily unavailable"
+    assert result.error_type == "bge_unavailable"
+    assert result.route != "rag_search"
+    assert result.cache_hit is False
+    assert generate_calls == []
+    cache.assert_not_awaited()
