@@ -57,6 +57,10 @@ def main() -> int:
     health: dict | None = None
     while health is None:
         try:
+            # Fresh connection per attempt: a refused dial leaves a shared
+            # connection in an unrecoverable state.
+            conn.close()
+            conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=30)
             conn.request("GET", "/health")
             response = conn.getresponse()
             body = response.read().decode("utf-8")
@@ -105,11 +109,14 @@ def main() -> int:
     for i, token_vectors in enumerate(colbert):
         if not token_vectors or not isinstance(token_vectors, list):
             _fail(f"colbert_vecs[{i}] has no token vectors")
+        # Rows beyond a text's real tokens are attention-mask-zeroed pads
+        # (canonical FlagEmbedding math), so require real signal per text
+        # rather than non-zero rows everywhere.
         for j, row in enumerate(token_vectors):
             if len(row) != COLBERT_DIM:
                 _fail(f"colbert_vecs[{i}][{j}] dim {len(row)} != {COLBERT_DIM}")
-            if all(v == 0.0 for v in row):
-                _fail(f"colbert_vecs[{i}][{j}] is an all-zero vector")
+        if all(all(v == 0.0 for v in row) for row in token_vectors):
+            _fail(f"colbert_vecs[{i}] has no non-zero token vector")
 
     if data.get("partial_failures"):
         _fail(f"unexpected partial failures: {data['partial_failures']}")
