@@ -6,6 +6,8 @@ import hashlib
 import logging
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
+
 from src.models.apartment import (
     ApartmentSearchFilters,
     ExtractionMeta,
@@ -49,6 +51,13 @@ class ApartmentExtractionPipeline:
         LLM only fills gaps. The two results are merged with
         :func:`merge_extraction_results` (regex wins for numeric, LLM keeps
         soft preferences and fills missing fields). See issue #1609.
+
+        LLM failure behavior (#3224): the LLM participates only as gap-fill
+        and every failure mode degrades to the regex result —
+        ``pydantic.ValidationError`` (invalid/partial structured output from
+        the native boundary) is logged concisely, any other provider error
+        (connection, timeout, ...) with a full traceback. Failed LLM results
+        are never cached.
         """
         # 1. Cache
         cached = await self._cache_get(query)
@@ -72,8 +81,12 @@ class ApartmentExtractionPipeline:
                 merged = merge_extraction_results(regex_result, llm_result)
                 await self._cache_set(query, merged)
                 return merged
+            except ValidationError as exc:
+                logger.warning(
+                    "LLM returned invalid structured output, using regex result: %s", exc
+                )
             except Exception:
-                logger.warning("LLM extraction failed, falling back to regex", exc_info=True)
+                logger.warning("LLM gap-fill unavailable, falling back to regex", exc_info=True)
 
         # 4. Regex-only fallback (no LLM configured or LLM failed).
         return regex_result

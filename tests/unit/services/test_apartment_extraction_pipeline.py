@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+from pydantic import ValidationError
+
+from src.adapters.llm.base import LLMConnectionError
 from src.models.apartment import (
     ApartmentSearchFilters,
     ExtractionMeta,
@@ -246,3 +250,55 @@ class TestRegexWinsForNumeric:
         assert result.hard.rooms == 2
         assert result.hard.city == "Солнечный берег"
         assert result.meta.source == "hybrid"
+
+
+class TestLlmFailureFallback:
+    """Explicit LLM failure behavior (#3224): every failure mode degrades to regex."""
+
+    @staticmethod
+    def _validation_error() -> ValidationError:
+        with pytest.raises(ValidationError) as exc_info:
+            HardFilters.model_validate({"rooms": "not-a-number"})
+        return exc_info.value
+
+    async def test_invalid_structured_output_falls_back_to_regex(self) -> None:
+        """Invalid/partial structured output (ValidationError) fails safely to regex."""
+        regex = _make_regex_extractor("HIGH")
+        llm = AsyncMock()
+        llm.extract = AsyncMock(side_effect=self._validation_error())
+
+        pipeline = ApartmentExtractionPipeline(regex_extractor=regex, llm_extractor=llm)
+        result = await pipeline.extract("двушка солнечный берег")
+
+        assert result.meta.source == "regex"
+        assert result.hard.rooms == 2
+        assert result.hard.city == "Солнечный берег"
+
+    async def test_provider_failure_falls_back_to_regex(self) -> None:
+        """LLM unavailable (connection/provider error) keeps regex-only operation."""
+        regex = _make_regex_extractor("HIGH")
+        llm = AsyncMock()
+        llm.extract = AsyncMock(side_effect=LLMConnectionError("provider down"))
+
+        pipeline = ApartmentExtractionPipeline(regex_extractor=regex, llm_extractor=llm)
+        result = await pipeline.extract("двушка солнечный берег")
+
+        assert result.meta.source == "regex"
+        assert result.hard.rooms == 2
+
+    async def test_failed_llm_result_is_not_cached(self) -> None:
+        """A failed LLM gap-fill must never poison the extraction cache."""
+        redis = AsyncMock()
+        redis.get = AsyncMock(return_value=None)
+        redis.set = AsyncMock()
+
+        regex = _make_regex_extractor("HIGH")
+        llm = AsyncMock()
+        llm.extract = AsyncMock(side_effect=self._validation_error())
+
+        pipeline = ApartmentExtractionPipeline(
+            regex_extractor=regex, llm_extractor=llm, redis=redis
+        )
+        await pipeline.extract("двушка солнечный берег")
+
+        redis.set.assert_not_called()
