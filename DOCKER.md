@@ -44,7 +44,7 @@ degrades gracefully (bookmarks capability disabled) when it is absent.
 |---|---|---|---|
 | `postgres` | `postgres:17` | `postgres`, `full` | Bot domain DB (users/leads/funnel/favorites) — opt-in |
 | `redis` | `redis:8.10.1` | default | Five caches: semantic answer, embedding, search, rerank, extraction |
-| `qdrant` | `qdrant/qdrant:v1.18.3` | default | Vector store — dense, sparse, ColBERT retrieval; storage config (`on_disk_payload`, `indexing_threshold_kb`) caps growth |
+| `qdrant` | `qdrant/qdrant:v1.19.0` | default | Vector store — dense, sparse, ColBERT retrieval; storage config (`on_disk_payload`, `indexing_threshold_kb`) caps growth |
 | `bge-m3` | built locally | default | Self-hosted BGE-M3 ONNX embedding API |
 | `bot` | built locally | `bot` | Telegram bot process |
 | `ingestion` | built locally | `ingest` | Unified ingestion pipeline (Markdown-only, stdlib parsing) |
@@ -98,6 +98,31 @@ Windows PowerShell equivalents:
 docker compose -f compose.core.yml up -d
 docker compose -f compose.yml -f compose.dev.yml up -d
 docker compose -f compose.yml -f compose.dev.yml down
+```
+
+### Qdrant upgrade / snapshot rollback
+
+Before upgrading a **populated** Qdrant volume, take a snapshot so the data can
+be restored into the previous server version (snapshots are the supported
+rollback path; a data directory written by a newer server is not readable by an
+older one):
+
+```bash
+# 1. Snapshot the collection (run while the old version is still up)
+curl -X POST "http://127.0.0.1:6333/collections/{collection}/snapshots"
+
+# 2. Copy the snapshot off the volume (host-side snapshot store: /qdrant/snapshots)
+docker compose cp qdrant:/qdrant/snapshots/{collection} ./qdrant-snapshots
+
+# 3. Upgrade the image tag, then recreate only qdrant on the same volume
+docker compose -f compose.yml -f compose.dev.yml up -d qdrant
+
+# Rollback: pin the previous image tag, start with a FRESH volume, copy the
+# snapshot back and recover it into the previous server version
+docker compose cp ./qdrant-snapshots/{snapshot}.snapshot qdrant:/qdrant/snapshots/
+curl -X PUT "http://127.0.0.1:6333/collections/{collection}/snapshots/recover?priority=snapshot" \
+  -H 'Content-Type: application/json' \
+  -d '{"location": "file:///qdrant/snapshots/{snapshot}.snapshot"}'
 ```
 
 Native bot run (bot as host process, sidecars in Compose):
