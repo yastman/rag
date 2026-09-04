@@ -201,7 +201,6 @@ async def _run_boundary(
     ):
         return await run_assistant_request(
             query,
-            collection="i3200_characterization",
             dependencies=dependencies,
             request_id=request_id,
         )

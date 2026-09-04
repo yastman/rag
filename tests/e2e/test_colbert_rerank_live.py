@@ -158,7 +158,6 @@ async def test_colbert_rerank_active_in_full_pipeline() -> None:
 
         result = await run_assistant_request(
             "What documents are available?",
-            collection=collection_name,
             user_context=UserContext(
                 user_id="e2e-colbert-test",
                 session_id="e2e-colbert-test:colbert",

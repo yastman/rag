@@ -59,7 +59,6 @@ async def test_run_assistant_pipeline_returns_assistant_result(monkeypatch) -> N
     result = await run_assistant_pipeline(
         AssistantRequest(
             query="q",
-            collection="c",
             user_context=UserContext(user_id="42", session_id="s"),
             request_id="req-1",
         ),
@@ -101,7 +100,6 @@ async def test_run_assistant_pipeline_propagates_exception(monkeypatch) -> None:
         await run_assistant_pipeline(
             AssistantRequest(
                 query="q",
-                collection="c",
                 user_context=UserContext(user_id="42", session_id="s"),
                 request_id="req-1",
             ),
@@ -187,7 +185,6 @@ async def _run(
         return await run_assistant_pipeline(
             AssistantRequest(
                 query="топ студий у моря в Солнечном Берегу",
-                collection="c",
                 user_context=UserContext(
                     user_id="42", session_id="s", role="client", filters=filters
                 ),
@@ -365,7 +362,6 @@ async def test_embedding_error_is_terminal_dependency_failure(monkeypatch) -> No
     result = await run_assistant_pipeline(
         AssistantRequest(
             query="q",
-            collection="c",
             user_context=UserContext(user_id="42", session_id="s"),
             request_id="req-embed-fail",
         ),
@@ -426,7 +422,6 @@ async def test_strict_grounding_policy_reaches_cache_read(monkeypatch) -> None:
     await assistant_pipeline.run_assistant_pipeline(
         AssistantRequest(
             query="legal question",
-            collection="c",
             user_context=UserContext(user_id="42"),
             request_id="req-strict-cache",
         ),
@@ -467,7 +462,6 @@ async def test_chitchat_bypasses_rag_with_canonical_response(monkeypatch) -> Non
     result = await run_assistant_pipeline(
         AssistantRequest(
             query="привет",
-            collection="c",
             user_context=UserContext(user_id="42"),
             request_id="req-chitchat",
         ),
@@ -517,7 +511,6 @@ async def test_off_topic_bypasses_rag_with_refusal(monkeypatch) -> None:
     result = await run_assistant_pipeline(
         AssistantRequest(
             query="как приготовить борщ",
-            collection="c",
             user_context=UserContext(user_id="42"),
             request_id="req-offtopic",
         ),

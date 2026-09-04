@@ -34,7 +34,6 @@ from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
 async def run_assistant_request(
     query: str,
     *,
-    collection: str,
     user_context: UserContext | None = None,
     request_id: str | None = None,
     dependencies: CoreDependencies | None = None,
@@ -77,7 +76,6 @@ async def run_assistant_request(
 
     request = AssistantRequest(
         query=query,
-        collection=collection,
         user_context=user_context or UserContext(),
         request_id=rid,
     )
