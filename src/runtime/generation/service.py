@@ -183,6 +183,16 @@ async def generate_answer(
         )
         answer = sanitize_response(answer)
         actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
+        if not answer.strip():
+            # #3360: content that is None, empty, whitespace-only, or emptied
+            # by sanitization is not a grounded success. Reuse the terminal
+            # fallback semantics so the caller always receives a sendable,
+            # non-empty response that is never cached as reusable.
+            logger.warning("generate_answer: empty provider output, using fallback")
+            answer = extra.get("build_fallback_response", _build_fallback_response)(docs)
+            actual_model = "fallback"
+            ttft_ms = 0.0
+            hard_timeout = True
         ttft_ms = llm_elapsed_ns / 1_000_000
         usage = getattr(response_obj, "usage", None)
         if usage is not None:
@@ -253,7 +263,11 @@ async def generate_answer(
                 "safe_fallback_used": False,
                 "grounded": actual_model != "fallback",
                 "legal_answer_safe": legal_answer_safe,
-                "semantic_cache_safe_reuse": legal_answer_safe,
+                # #3360: provider model/usage are diagnostics, never proof of
+                # grounded success — fallback results are never cache-safe.
+                "semantic_cache_safe_reuse": (
+                    legal_answer_safe if actual_model != "fallback" else False
+                ),
                 "needs_coverage": needs_coverage,
                 "usage_details": _extract_usage_details(usage),
             }
