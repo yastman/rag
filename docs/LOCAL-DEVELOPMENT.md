@@ -32,6 +32,27 @@ uv run pre-commit install --hook-type pre-push
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Static
 ```
 
+## Working across two computers
+
+Git carries the shared project context: [AGENTS.md](../AGENTS.md), scoped
+`AGENTS.override.md` files, [PROJECT.md](../PROJECT.md), the maintained `docs/` tree,
+and any current project `CLAUDE.md` or `.claude/rules/` files.
+[AGENTS.md](../AGENTS.md) defines their authority; GitHub Issues remain the owner of
+work status. Do not add obsolete specs, historical worker plans, or session artifacts
+just to transfer them to another computer.
+
+Commit and push shared documentation with the related task changes. On the other
+computer, update a clean `dev` checkout with `git pull --ff-only origin dev` before
+starting a new task. To continue unfinished work, push its task branch and check out
+that same branch on the other computer.
+
+Configure each machine separately using the setup steps above. Keep credentials and
+personal settings in ignored files such as `.env`, `.mcp.json`, `CLAUDE.local.md`, and
+`.claude/settings.json`. Virtual environments, indexes, caches, worktrees, generated
+reports, and session prompts stay local. If a shared document does not appear in
+`git status`, run `git check-ignore -v --no-index -- <path>` to identify the rule,
+including rules in a machine's global Git ignore file.
+
 ## Bring up the sidecar stack
 
 Before building the default stack, prepare the verified BGE model artifact using the
