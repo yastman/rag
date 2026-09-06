@@ -49,6 +49,9 @@ remain proposals until an accepted, bounded change implements them.
 
 - Use one branch and one worktree per mutating task. Check
   `git worktree list --porcelain` before creating or resuming isolation.
+- Create new worktrees inside the main checkout at `.worktrees/<task-name>/`.
+  Resolve the main checkout from the worktree list; do not nest new worktrees inside
+  a linked worktree. Resume an existing task worktree when present.
 - Default standalone branches to `codex/<short-purpose>` from fresh `origin/dev`.
   Resume the existing task branch when present; never reuse unknown dirty state.
 - Follow the user's delegation preference and exposed runtime roles. If delegating, assign

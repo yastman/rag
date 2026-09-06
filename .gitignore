@@ -203,8 +203,12 @@ services/bge-m3-api/models/
 *.bin
 *.safetensors
 reports/
+
+# Project-local Git worktrees (creation location is defined in AGENTS.md)
 .worktrees/
 .claude/worktrees/
+
+# Local agent and integration files
 drive-sync/
 CLAUDE.local.md
 CLAUDE.md
