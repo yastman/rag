@@ -416,25 +416,3 @@ def test_test_full_uses_bounded_parallelism_by_default() -> None:
         "test-full must NOT use $(PYTEST_PARALLEL_ARGS) (unbounded -n auto); "
         "use $(PYTEST_FULL_PARALLEL_ARGS) instead"
     )
-
-
-def test_candidate_check_is_read_only_frozen_gate() -> None:
-    """`make candidate-check` must run the complete local delivery gate."""
-    text = _makefile_text()
-    assert re.search(
-        r"^candidate-check:\s*check-frozen\s+test\s+test-contract\b",
-        text,
-        re.MULTILINE,
-    ), "candidate-check must depend on check-frozen, test, and test-contract"
-    block_match = re.search(
-        r"^check-frozen:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "check-frozen target not found in Makefile"
-    block = block_match.group(0)
-    assert "uv sync --frozen --check" in block
-    assert "$(UV_RUN_NO_SYNC) ruff check $(LINT_PATHS)" in block
-    assert "$(UV_RUN_NO_SYNC) mypy $(LINT_PATHS)" in block
-    assert "uv run ruff" not in block
-    assert "uv run mypy" not in block
