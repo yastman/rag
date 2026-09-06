@@ -34,9 +34,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mod
 
 ## Working across two computers
 
-Git carries the shared project context: [AGENTS.md](../AGENTS.md), scoped
-`AGENTS.override.md` files, [PROJECT.md](../PROJECT.md), the maintained `docs/` tree,
-and any current project `CLAUDE.md` or `.claude/rules/` files.
+Git carries the shared project context: [AGENTS.md](../AGENTS.md), the existing
+allowlisted `AGENTS.override.md` files, [PROJECT.md](../PROJECT.md), the maintained
+`docs/` tree, and any current project `CLAUDE.md` files. New `AGENTS.override.md`
+files and `.claude/rules/` remain ignored.
 [AGENTS.md](../AGENTS.md) defines their authority; GitHub Issues remain the owner of
 work status. Do not add obsolete specs, historical worker plans, or session artifacts
 just to transfer them to another computer.
