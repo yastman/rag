@@ -17,14 +17,6 @@ REMOVED_FILES = {
 }
 
 REMOVED_SYMBOLS = {
-    "scripts/archive/git_hygiene.py": {
-        "find_merged_branches",
-        "find_no_upstream_branches",
-        "find_stale_worktrees",
-        "fix_merged_branches",
-    },
-    "archive/evaluation/langfuse_integration.py": {"trace_search_with_spans"},
-    "src/ingestion/docling_client.py": {"convert_file"},
     "src/runtime/config.py": {"create_hybrid_embeddings"},
     "src/runtime/pipeline/rag.py": {
         "_detect_filter_sensitive_query",

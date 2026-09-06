@@ -1,45 +1,39 @@
 # tests/contract/test_legacy_ingestion_removed_contract.py
-"""Contract: legacy ingestion modules listed in #1532 must be removed and
-their per-file Ruff ignores must be cleaned from ``pyproject.toml``.
+"""Contract: legacy ingestion modules listed in #1532 must stay removed and
+their per-file Ruff ignores must stay out of ``pyproject.toml``.
 
-Issue #1532 (https://github.com/yastman/rag/issues/1532) lists three legacy
+Issue #1532 (https://github.com/yastman/rag/issues/1532) listed three legacy
 files claimed to be "replaced by the unified pipeline" (`src/ingestion/unified/`):
 
     - src/ingestion/docling_client.py
     - src/ingestion/gdrive_flow.py
     - src/ingestion/service.py
 
-In addition, ``pyproject.toml`` carries per-file Ruff ignores for these paths
-that need to disappear once the modules are gone.
-
-Audit (2026-05-21) — actual repository state:
-
-    | File | Status |
-    |------|--------|
-    | ``src/ingestion/gdrive_flow.py`` | Already removed (see #1793). |
-    | ``src/ingestion/docling_client.py`` | **STILL LIVE.** Imported by `src/ingestion/docling_native.py` (`NativeDoclingAdapter` subclasses `DoclingClient`) and by `src/ingestion/unified/targets/qdrant_hybrid_target.py` (the unified pipeline itself uses `DoclingClient` / `DoclingConfig`). |
-    | ``src/ingestion/service.py`` | **STILL LIVE.** Imported by `telegram_bot/services/ingestion_cocoindex.py`, which re-exports `IngestionService`, `IngestionStats`, `ingest_from_directory`, `ingest_from_gdrive`, `get_ingestion_status` as the bot's CLI entrypoint (`python -m telegram_bot.services.ingestion_cocoindex`). |
-
-Per-file Ruff ignores in ``pyproject.toml`` (line 269-270) declare
-``ASYNC240`` for ``docling_client.py`` and ``service.py``, but ``ASYNC240``
-is *also* in the global ``ignore`` list (line 252), so the per-file entries
-are redundant and can be removed without touching the modules themselves.
+All three are absent from the tracked tree: ``gdrive_flow.py`` was removed
+by #1793, and ``docling_client.py`` / ``service.py`` were removed by #3288
+(the #3235 delivery — production ingestion is Markdown-only; the canonical
+Markdown-only invariants live in
+``tests/contract/test_markdown_only_ingestion_contract.py``). ``pyproject.toml``
+must not carry per-file Ruff ignores for these paths either; the stale
+comment claiming the modules still had live runtime callers was removed by
+#3484.
 
 This contract test therefore enforces three layers:
 
-1.  ``gdrive_flow.py`` must remain absent (regression guard).
-2.  Per-file Ruff ignores for the three paths must be absent from
+1.  All three modules must remain absent (regression guard).
+2.  Per-file Ruff ignores for the three paths must stay absent from
     ``pyproject.toml`` — safe because ``ASYNC240`` is globally ignored.
-3.  No non-test runtime module under ``src/`` (excluding deprecated shims),
-    ``telegram_bot/``, ``mini_app/``, ``services/``, or ``scripts/`` may
-    import any of the three modules. The two known live callers are tracked
-    via `xfail` markers so this contract documents the blocker without
-    breaking CI; once the live callers are migrated to the unified pipeline,
-    the `xfail` markers must be removed.
+3.  No non-test runtime module under ``src/``, ``telegram_bot/``,
+    ``mini_app/``, ``services/``, or ``scripts/`` may import any of the
+    three modules. Any new caller of the legacy modules will fail this
+    test loudly.
 
 Cross-refs:
     - #1532 — original issue.
-    - #1793 — already removed `gdrive_flow.py` and orphaned tests.
+    - #1793 — removed `gdrive_flow.py` and orphaned tests.
+    - #3288 — removed the Docling/legacy ingestion implementation (#3235).
+    - #3484 — removed the stale tombstones describing the deleted modules
+      as live.
     - `tests/contract/test_no_deprecated_gdrive_ingestion.py` — sibling
       contract for the gdrive_flow / gdrive_indexer surface.
 """
@@ -60,12 +54,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LEGACY_MODULES: tuple[str, ...] = (
     "src/ingestion/docling_client.py",
     "src/ingestion/gdrive_flow.py",
+    "src/ingestion/service.py",
 )
 
 # Module names (importable form) used by the AST walker below.
 LEGACY_DOTTED_MODULES: tuple[str, ...] = (
     "src.ingestion.docling_client",
     "src.ingestion.gdrive_flow",
+    "src.ingestion.service",
 )
 
 # Roots scanned for runtime imports of the legacy modules. Tests are excluded
@@ -94,8 +90,8 @@ def test_pyproject_has_no_per_file_ignore_for_legacy_module(module_path: str) ->
     """``pyproject.toml`` must not list the legacy module under
     ``[tool.ruff.lint.per-file-ignores]``.
 
-    Safe to assert even while the module file exists, because every rule
-    currently pinned per-file (``ASYNC240``) is also in the global
+    Safe to assert permanently, because the only rule ever pinned per-file
+    for these paths (``ASYNC240``) is also in the global
     ``[tool.ruff.lint] ignore`` list.
     """
     pyproject_path = REPO_ROOT / "pyproject.toml"
@@ -158,10 +154,10 @@ KNOWN_LIVE_CALLERS: dict[str, str] = {}
 def test_no_runtime_imports_of_legacy_ingestion_modules() -> None:
     """No production runtime module may import the three legacy ingestion modules.
 
-    Every violation found is reported. Known live callers are surfaced as a
-    soft `xfail`, so this test stays green in CI while documenting the
-    pending migration. Any *new* caller of the legacy modules will fail this
-    test loudly.
+    Every violation found is reported. A caller listed in
+    ``KNOWN_LIVE_CALLERS`` (empty today) would be surfaced as a soft
+    `xfail`; any *new* caller of the legacy modules will fail this test
+    loudly.
     """
     findings: dict[str, set[str]] = {}
     for py_file in _iter_runtime_python_files():
