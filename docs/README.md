@@ -1,93 +1,43 @@
-# Documentation Hub
+# Documentation hub
 
-Navigation map for the RAG Q&A chatbot. This page links **only to docs that exist**;
-it is the target of the `docs/README.md` reference in [`AGENTS.md`](../AGENTS.md) and
-[`README.md`](../README.md).
+Choose the document for the task. Each durable fact has one owner.
 
-> Planning state (roadmap, phases, todo/decision cards) does **not** live here — it lives
-> in the **codeindexer** memory store. Start a session with `briefing(project="rag-fresh")`.
+| Need | Owner |
+| --- | --- |
+| Product goal, accepted baseline, terms | [PROJECT.md](../PROJECT.md) |
+| Start the application | [README.md](../README.md) |
+| Work and delivery rules | [AGENTS.md](../AGENTS.md) |
+| Module ownership, flows, dependencies | [Structure](architecture/STRUCTURE.md) |
+| Dependencies, Windows/WSL, local setup | [Local Development](LOCAL-DEVELOPMENT.md) |
+| Test lanes and validation | [Tests](../tests/README.md) |
+| Test-writing conventions | [Test-writing guide](engineering/test-writing-guide.md) |
+| Compose services, profiles, ports, environment | [DOCKER.md](../DOCKER.md) |
+| Recovery and demo procedures | [Runbooks](runbooks/README.md) |
+| Contribution process | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| Security policy | [SECURITY.md](../SECURITY.md) |
+| Accepted architectural rationale | [ADRs](adr/) |
 
-## Start here
+## Subsystem entry points
 
-| You want… | Read |
-|---|---|
-| What this is, features, the spine | [`../README.md`](../README.md) |
-| Agent/onboarding gateway | [`../AGENTS.md`](../AGENTS.md) |
-| Runtime, Compose, ports, env, deploy | [`../DOCKER.md`](../DOCKER.md) |
-| Contributing workflow | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
-| Security policy | [`../SECURITY.md`](../SECURITY.md) · Code of conduct: [`../CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) |
-| Change history | [`../CHANGELOG.md`](../CHANGELOG.md) |
+| Change | Read |
+| --- | --- |
+| Public API and dependency contracts | [Core](../src/core/README.md) |
+| Retrieval, generation, routing, caches | [Runtime](../src/runtime/README.md) |
+| Telegram handlers, lifecycle, product UI | [Telegram](../telegram_bot/README.md), [local rules](../telegram_bot/AGENTS.override.md) |
+| Markdown ingestion and cleanup | [Ingestion authority](INGESTION.md), [local rules](../src/ingestion/unified/AGENTS.override.md) |
+| Apartment corpus | [Apartment ingestion](../src/ingestion/apartments/README.md) |
+| BGE artifact, API, image | [BGE-M3](../services/bge-m3-api/README.md), [local rules](../services/bge-m3-api/AGENTS.override.md) |
+| Operator scripts | [Scripts](../scripts/README.md), [local rules](../scripts/AGENTS.override.md) |
+| Real user-journey demonstration | [Five-minute demo](runbooks/FIVE-MINUTE-DEMO.md) |
 
-## The spine (the one flow worth memorising)
+## Decisions and work state
 
-```
-run_assistant_request        src/core/assistant.py
-  → run_assistant_pipeline   src/runtime/pipeline/assistant_pipeline.py
-    → classify_query
-    → rag_pipeline           src/runtime/pipeline/rag.py   (cache → hybrid search → grade → rerank → optional rewrite loop)
-    → generate_answer        src/runtime/generation/service.py
-```
+[GitHub Issues](https://github.com/yastman/rag/issues) own work, priorities, dependencies,
+and acceptance. PRs own review and delivery evidence. CodeIndexer provides search and context;
+there is no mandatory second phase/card lifecycle.
 
-Layering (enforced by `import-linter`, see [`../pyproject.toml`](../pyproject.toml) `[tool.importlinter]`):
-`src/core` → `src/runtime` → `telegram_bot`. Inner layers must not import outer ones.
+The [RAG VPS v2 proposal](architecture/RAG_VPS_V2_PROPOSED.md) is a design target.
+Dated audits and execution reports are historical evidence, not current configuration.
 
-## Engine — `src/`
-
-| Area | README |
-|---|---|
-| Overview | [`../src/README.md`](../src/README.md) |
-| Public boundary (DI contracts + entrypoint) | [`../src/core/README.md`](../src/core/README.md) |
-| Pipeline / RAG / retrieval / generation engine | [`../src/runtime/README.md`](../src/runtime/README.md) |
-| Config / settings | [`../src/config/README.md`](../src/config/README.md) |
-| Retrieval | [`../src/retrieval/README.md`](../src/retrieval/README.md) |
-| Ingestion (overview · unified · apartments) | [`../src/ingestion/README.md`](../src/ingestion/README.md) · [`../src/ingestion/unified/AGENTS.override.md`](../src/ingestion/unified/AGENTS.override.md) · [`../src/ingestion/apartments/README.md`](../src/ingestion/apartments/README.md) |
-| Models · utils · security | [`../src/models/README.md`](../src/models/README.md) · [`../src/utils/README.md`](../src/utils/README.md) · [`../src/security/README.md`](../src/security/README.md) |
-| Adapters · service clients · observability | [`../src/adapters/README.md`](../src/adapters/README.md) · [`../src/services/README.md`](../src/services/README.md) · [`../src/observability/README.md`](../src/observability/README.md) |
-
-## Adapter — `telegram_bot/`
-
-| Area | README |
-|---|---|
-| Overview · local rules | [`../telegram_bot/README.md`](../telegram_bot/README.md) · [`../telegram_bot/AGENTS.override.md`](../telegram_bot/AGENTS.override.md) |
-| Handlers · dialogs · services | [`../telegram_bot/handlers/README.md`](../telegram_bot/handlers/README.md) · [`../telegram_bot/dialogs`](../telegram_bot/dialogs) · [`../telegram_bot/services/README.md`](../telegram_bot/services/README.md) |
-| Integrations · pipelines · keyboards · middlewares | [`../telegram_bot/integrations/README.md`](../telegram_bot/integrations/README.md) · [`../telegram_bot/pipelines/README.md`](../telegram_bot/pipelines/README.md) · [`../telegram_bot/keyboards/README.md`](../telegram_bot/keyboards/README.md) · [`../telegram_bot/middlewares/README.md`](../telegram_bot/middlewares/README.md) |
-| Constants · config · models · locales | [`../telegram_bot/constants/README.md`](../telegram_bot/constants/README.md) · [`../telegram_bot/config/README.md`](../telegram_bot/config/README.md) · [`../telegram_bot/models/README.md`](../telegram_bot/models/README.md) · [`../telegram_bot/locales/README.md`](../telegram_bot/locales/README.md) |
-| Query pipeline · lifecycle · preflight | [`../telegram_bot/pipeline/README.md`](../telegram_bot/pipeline/README.md) · [`../telegram_bot/lifecycle/README.md`](../telegram_bot/lifecycle/README.md) · [`../telegram_bot/preflight/README.md`](../telegram_bot/preflight/README.md) |
-| Observability | [`../telegram_bot/observability/README.md`](../telegram_bot/observability/README.md) |
-
-## Sidecar services & infra
-
-| Area | README |
-|---|---|
-| Services overview · local rules | [`../services/README.md`](../services/README.md) · [`../services/AGENTS.override.md`](../services/AGENTS.override.md) |
-| BGE-M3 embeddings API | [`../services/bge-m3-api/README.md`](../services/bge-m3-api/README.md) · [`../services/bge-m3-api/AGENTS.override.md`](../services/bge-m3-api/AGENTS.override.md) |
-| Docker / Compose assets | [`../docker/README.md`](../docker/README.md) · [`../docker/ingestion/README.md`](../docker/ingestion/README.md) · [`../docker/postgres/README.md`](../docker/postgres/README.md) |
-
-## Tests, scripts, audits
-
-| Area | README |
-|---|---|
-| Test pyramid + tier→command map | [`../tests/README.md`](../tests/README.md) |
-| Scripts · local rules · E2E helpers | [`../scripts/README.md`](../scripts/README.md) · [`../scripts/AGENTS.override.md`](../scripts/AGENTS.override.md) · [`../scripts/e2e/README.md`](../scripts/e2e/README.md) |
-| Audits | [`audits/runtime-infra-config-audit-2026-06.md`](audits/runtime-infra-config-audit-2026-06.md) · Candidate freeze 2026-09-03: [`audits/candidate-freeze-2026-09-03.md`](audits/candidate-freeze-2026-09-03.md) · Redis demo behavior (polling lock, fail-open caches) 2026-09-03: [`audits/redis-demo-behavior-2026-09-03.md`](audits/redis-demo-behavior-2026-09-03.md) |
-
-## Guides & runbooks
-
-| You want… | Read |
-|---|---|
-| Local setup + the validation ladder | [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) |
-| Ingestion pipeline (unified, Markdown-only, idempotency) | [`INGESTION.md`](INGESTION.md) |
-| Operational runbooks (services, preflight, self-hosted runner) | [`runbooks/README.md`](runbooks/README.md) |
-| Five-minute demo operator runbook + rehearsal log | [`runbooks/FIVE-MINUTE-DEMO.md`](runbooks/FIVE-MINUTE-DEMO.md) · [`runbooks/DEMO-REHEARSAL-LOG.md`](runbooks/DEMO-REHEARSAL-LOG.md) |
-| Writing tests (tiers, markers, fixtures) | [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md) |
-
-## Planned docs (not yet written)
-
-Referenced by governance contracts / older READMEs but do **not** exist yet. Tracked for a
-restore-or-descope decision on the roadmap; until written, this hub is the source of truth
-for what exists.
-
-- `BOT_INTERNAL_STRUCTURE.md`
-- `ONBOARDING.md`
-- `DEVELOPER_GUIDE.md`
-- `TROUBLESHOOTING_CACHE.md`
+Update the owning document when changing a fact. Link from other pages. Use Git for raw
+history. Add a document only for durable knowledge or a repeatable procedure with no existing home.

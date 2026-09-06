@@ -1,44 +1,41 @@
-# core/
+# Assistant core
 
-## Purpose
+Transport-free public API, dependency contracts, app wiring, and telemetry.
+The [structure map](../../docs/architecture/STRUCTURE.md) owns module boundaries.
 
-Public boundary for the RAG assistant.
-Owns the `run_assistant_request` entrypoint, Protocol-based DI contracts, app wiring, and telemetry helpers.
-All adapters (Telegram, tests) call through this layer.
+| File | Responsibility |
+| --- | --- |
+| [assistant.py](assistant.py) | Low-level run_assistant_request entrypoint |
+| [app.py](app.py) | AssistantApp: dependency assembly and run_text facade |
+| [contracts.py](contracts.py) | UserContext, AssistantResult, CoreDependencies, provider protocols |
+| [telemetry.py](telemetry.py) | Product-event emission |
 
-## Files
+## Calling the core
 
-| File | Purpose |
-|------|---------|
-| [`__init__.py`](./__init__.py) | Package exports |
-| [`assistant.py`](./assistant.py) | `run_assistant_request`: single public entrypoint for all adapters |
-| [`app.py`](./app.py) | `AssistantApp`: wires dependencies for the assistant pipeline |
-| [`contracts.py`](./contracts.py) | Protocol-based DI types: `AssistantRequest`, `AssistantResult`, `CoreDependencies`, provider Protocols |
-| [`telemetry.py`](./telemetry.py) | `emit_product_event`: structured telemetry helper |
-
-## Boundaries
-
-- `run_assistant_request` is the only public entrypoint — all callers use it.
-- Does **not** handle transport-layer concerns (Telegram, HTTP).
-- Delegates retrieval and generation to [`src/runtime/`](../runtime/).
-
-## Usage
+Within an async function with an explicitly prepared CoreDependencies bundle:
 
 ```python
 from src.core.assistant import run_assistant_request
-from src.core.contracts import AssistantRequest
+from src.core.contracts import UserContext
 
-result = await run_assistant_request(AssistantRequest(query="What are citizen rights?"), deps=deps)
-print(result.answer)
+result = await run_assistant_request(
+    "What documents support this answer?",
+    user_context=UserContext(),
+    dependencies=dependencies,
+)
+print(result.response_text)
 ```
 
-## Focused checks
+The entrypoint takes a query string and keyword-only dependencies; it does not take an
+AssistantRequest object or a deps keyword. Without dependencies it returns the service-unavailable
+skeleton result and does not call live services. AssistantApp.run_text supplies the higher-level
+assembly path; see its source before constructing runtime dependencies in an adapter.
 
-```bash
-uv run pytest tests/unit/core/ -q
-```
+Core does not own Telegram handling. Shared contracts/telemetry are consumed by runtime;
+the implementation delegates execution to runtime.
 
-## See Also
+## Verification
 
-- [`src/config/`](../config/) — Settings and constants
-- [`src/runtime/`](../runtime/) — Pipeline, RAG, retrieval, generation engine
+Start with `make test-core`. For a focused edit use
+`uv run --no-sync pytest tests/unit/core/ -q`.
+See [Tests](../../tests/README.md) and [AGENTS](../../AGENTS.md) for the complete delivery gate.

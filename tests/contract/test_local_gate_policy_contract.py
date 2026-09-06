@@ -58,6 +58,23 @@ _APPROVED_HOSTED_RUNS = {
     (".github/workflows/ci.yml", "cve-scan", "CVE gate (critical/high, severity-filtered)"): (
         "uv run --frozen python scripts/ci/cve_gate.py"
     ),
+    # Candidate Gate was delivered by #3327; keep its exact deterministic scope.
+    (".github/workflows/ci.yml", "candidate", "Set up Python"): "uv python install 3.12",
+    (".github/workflows/ci.yml", "candidate", "Install frozen environment"): "uv sync --frozen",
+    (".github/workflows/ci.yml", "candidate", "MyPy type check"): (
+        "uv run --no-sync mypy src/ telegram_bot/ services/ scripts/ "
+        "--ignore-missing-imports --no-error-summary"
+    ),
+    (".github/workflows/ci.yml", "candidate", "Monolith core tests"): (
+        "uv run --no-sync pytest tests/unit/core/ tests/unit/runtime/ tests/regression/ "
+        "tests/characterization/ tests/contract/test_runtime_no_telegram_bot_coupling_contract.py "
+        "tests/contract/test_layering_no_telegram_bot_imports_contract.py "
+        '--ignore=tests/unit/core/test_pipeline.py -q --timeout=30 -m "not requires_extras and not slow"'
+    ),
+    (".github/workflows/ci.yml", "candidate", "No-service integration/smoke lane"): (
+        "uv run --no-sync pytest tests/integration tests/smoke "
+        '-q --timeout=30 -m "no_services and not requires_extras and not slow"'
+    ),
     (
         ".github/workflows/publish-internal-images.yml",
         "publish",
@@ -140,7 +157,7 @@ def _workflow_executors(
     return runs, tuple(actions), tuple(reusable_jobs), tuple(custom_shells)
 
 
-def _assert_no_hosted_test_commands(
+def _assert_approved_hosted_execution(
     workflows: dict[str, str],
     *,
     approved_runs: dict[tuple[str, str, str], str] | None = None,
@@ -175,21 +192,21 @@ def _assert_no_hosted_test_commands(
     unknown_actions = sorted(actual_actions - expected_actions)
     missing_actions = sorted(expected_actions - actual_actions)
     assert not (missing or extra or changed), (
-        "hosted workflows must not run local tests: approved run allowlist mismatch; "
+        "hosted workflow execution policy: approved run allowlist mismatch; "
         f"missing={missing}, extra={extra}, changed={changed}"
     )
     assert not unknown_actions, (
-        f"hosted workflows must not run local tests: unapproved actions {unknown_actions}"
+        f"hosted workflow execution policy: unapproved actions {unknown_actions}"
     )
     assert not missing_actions, (
-        f"hosted workflows must not run local tests: missing approved actions {missing_actions}"
+        f"hosted workflow execution policy: missing approved actions {missing_actions}"
     )
     assert not reusable_jobs, (
-        "hosted workflows must not run local tests: reusable workflow jobs require explicit policy "
+        "hosted workflow execution policy: reusable workflow jobs require explicit policy "
         f"{reusable_jobs}"
     )
     assert not custom_shells, (
-        f"hosted workflows must not run local tests: custom shells are prohibited {custom_shells}"
+        f"hosted workflow execution policy: custom shells are prohibited {custom_shells}"
     )
 
 
@@ -221,8 +238,8 @@ jobs:
         run: pytest tests/unit/
 """
 
-    with pytest.raises(AssertionError, match="hosted workflows must not run local tests"):
-        _assert_no_hosted_test_commands(
+    with pytest.raises(AssertionError, match="hosted workflow execution policy"):
+        _assert_approved_hosted_execution(
             {".github/workflows/example.yml": workflow},
             approved_runs={},
             allowed_actions=set(),
@@ -239,8 +256,8 @@ jobs:
         run: uv lock --locked && pytest tests/unit/
 """
 
-    with pytest.raises(AssertionError, match="hosted workflows must not run local tests"):
-        _assert_no_hosted_test_commands(
+    with pytest.raises(AssertionError, match="hosted workflow execution policy"):
+        _assert_approved_hosted_execution(
             {".github/workflows/example.yml": workflow},
             approved_runs={
                 (".github/workflows/example.yml", "lock", "Verify lockfile"): "uv lock --locked"
@@ -259,7 +276,7 @@ jobs:
         run: uv lock --locked
 """
 
-    _assert_no_hosted_test_commands(
+    _assert_approved_hosted_execution(
         {".github/workflows/example.yml": workflow},
         approved_runs={
             (".github/workflows/example.yml", "lock", "Verify lockfile"): "uv lock --locked"
@@ -310,7 +327,7 @@ def test_hosted_test_command_contract_rejects_custom_shells(workflow: str) -> No
     }
 
     with pytest.raises(AssertionError, match="custom shells"):
-        _assert_no_hosted_test_commands(
+        _assert_approved_hosted_execution(
             {".github/workflows/example.yml": workflow},
             approved_runs=approved_runs,
             allowed_actions=set(),
@@ -326,14 +343,14 @@ jobs:
 """
 
     with pytest.raises(AssertionError, match="missing approved actions"):
-        _assert_no_hosted_test_commands(
+        _assert_approved_hosted_execution(
             {".github/workflows/example.yml": workflow},
             approved_runs={},
             allowed_actions={"gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7"},
         )
 
 
-def test_active_github_workflows_do_not_run_local_tests() -> None:
+def test_active_github_workflows_match_approved_execution_scope() -> None:
     workflow_paths = sorted(
         {
             *REPO.glob(".github/workflows/*.yml"),
@@ -342,7 +359,7 @@ def test_active_github_workflows_do_not_run_local_tests() -> None:
     )
     assert workflow_paths, "repository must define at least one active GitHub workflow"
 
-    _assert_no_hosted_test_commands(
+    _assert_approved_hosted_execution(
         {
             path.relative_to(REPO).as_posix(): path.read_text(encoding="utf-8")
             for path in workflow_paths
@@ -431,8 +448,8 @@ def test_docs_define_candidate_check_as_delivery_gate() -> None:
         assert "delivery" in text.lower(), f"{path} must identify the delivery gate"
 
 
-def test_docs_keep_pytest_local_and_name_linux_portability_route() -> None:
+def test_docs_name_hosted_candidate_and_linux_portability_route() -> None:
     local_development = _text("docs/LOCAL-DEVELOPMENT.md")
-    assert re.search(r"GitHub[^\n]*no pytest", local_development, re.IGNORECASE)
+    assert "Candidate Gate" in local_development
     assert "WSL" in local_development
     assert "container" in local_development.lower()

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check Markdown relative links and exit nonzero on missing targets.
 
-Checks at least README.md, DOCKER.md, AGENTS.md, all docs/**/*.md,
-and folder README.md files. Skips external URLs, anchors-only links,
+Checks root Markdown, docs/**/*.md, folder README.md and scoped AGENTS files.
+Skips external URLs, anchors-only links,
 mailto links, and generated/cache/vendor directories.
 """
 
@@ -66,23 +66,21 @@ def resolve_link(source_file: Path, url: str) -> Path:
 
 def collect_markdown_files(root: Path) -> list[Path]:
     """Collect markdown files to check."""
-    files = set()
+    files: set[Path] = set()
 
-    # Always include these root files if they exist
-    for name in ("README.md", "DOCKER.md", "AGENTS.md"):
-        p = root / name
-        if p.exists():
-            files.add(p.resolve())
+    # Root documents include the project contract and repository instructions.
+    files.update(p.resolve() for p in root.glob("*.md") if p.is_file())
 
     # All docs/**/*.md
     for p in (root / "docs").rglob("*.md"):
-        if not should_skip_dir(p):
+        if not should_skip_dir(p.relative_to(root)):
             files.add(p.resolve())
 
-    # Folder README.md files
-    for p in root.rglob("README.md"):
-        if not should_skip_dir(p):
-            files.add(p.resolve())
+    # Evaluate exclusions relative to the repository: its parent may be .worktrees.
+    for name in ("README.md", "AGENTS.md", "AGENTS.override.md"):
+        for p in root.rglob(name):
+            if not should_skip_dir(p.relative_to(root)):
+                files.add(p.resolve())
 
     return sorted(files)
 

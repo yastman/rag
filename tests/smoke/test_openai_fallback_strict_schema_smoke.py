@@ -28,7 +28,7 @@ from src.models.apartment import ApartmentSearchFilters
 from src.runtime.llm.router import create_llm_client, json_schema_response_format
 
 
-pytestmark = pytest.mark.smoke
+pytestmark = [pytest.mark.smoke, pytest.mark.requires_services]
 
 
 def _resolve_openai_key() -> str:
@@ -43,7 +43,6 @@ def _resolve_openai_key() -> str:
     return key
 
 
-@pytest.mark.requires_services
 async def test_openai_fallback_accepts_production_strict_schema() -> None:
     if not _resolve_openai_key():
         pytest.skip("OPENAI_API_KEY is not configured — opt-in smoke only (#3325)")

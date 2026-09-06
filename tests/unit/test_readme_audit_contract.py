@@ -79,19 +79,6 @@ class TestRetrievalReadme:
         assert "search engine classes" in text
 
 
-class TestDocsReadme:
-    def test_missing_root_docs_indexed(self):
-        text = _read("docs/README.md")
-        required = [
-            "BOT_INTERNAL_STRUCTURE.md",
-            "ONBOARDING.md",
-            "DEVELOPER_GUIDE.md",
-            "TROUBLESHOOTING_CACHE.md",
-        ]
-        for name in required:
-            assert name in text, f"Missing doc index entry for {name}"
-
-
 class TestDataDemoReadme:
     def test_explicit_not_committed_wording(self):
         text = _read("data/demo/README.md")

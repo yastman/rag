@@ -1,59 +1,47 @@
-# Runbook: dev branch protection and required checks (#3327)
+# Delivering to dev
 
-## Required status checks on `dev`
+## Required checks
 
-All of these are deterministic: no credentials, no live external providers,
-no stateful services.
+The protected branch uses these check names. Verify the live policy before changing delivery
+configuration; the GitHub API is authoritative for its current settings.
 
-| Check (exact name) | Workflow | Covers |
+| Check | Workflow | Scope |
 | --- | --- | --- |
-| `CodeQL` | codeql | static security analysis |
-| `Compose Config` | CI | Compose topology renders |
-| `CVE Scan` | CI | dependency CVE gate (critical/high) |
-| `Candidate Gate` | CI | mypy + monolith core unit + no-service lane |
-| `GitHub Actions Lint` | CI | actionlint |
-| `Lint` | CI | Ruff lint + Ruff format check |
-| `Lockfile Check` | CI | `uv lock --locked` |
-| `Secret Scan` | CI | gitleaks |
-| `Semgrep` | CI | project Semgrep guardrails |
+| CodeQL | codeql | Static security analysis |
+| Compose Config | CI | Compose rendering |
+| CVE Scan | CI | Dependency severity gate |
+| Candidate Gate | CI | MyPy, core, no-service integration/smoke |
+| GitHub Actions Lint | CI | actionlint |
+| Lint | CI | Ruff lint and format |
+| Lockfile Check | CI | Lock consistency |
+| Secret Scan | CI | Gitleaks |
+| Semgrep | CI | Project guardrails |
 
-`Candidate Gate` mirrors the local candidate lanes (`mypy`, `make test-core`,
-`make test-no-service-lane`). The contract suite intentionally joins this job
-only after #3437 (env-ownership ownership repair) lands through #3328; until
-then it still carries a known red pair and must not gate `dev`.
+See [ci.yml](../../.github/workflows/ci.yml) and
+[codeql.yml](../../.github/workflows/codeql.yml) for execution. Candidate Gate covers
+deterministic tests but does not currently run the full contract suite. The local
+`make candidate-check` delivery gate remains required, including contracts.
 
-## Intentionally advisory
+## Normal delivery
 
-- Live credentialed checks (real Telegram/LLM/STT smokes, #3412) never gate.
-- Local-only gates (`make candidate-check` full run, deptry, pip-audit
-  advisory output) stay authoritative for delivery but do not run in hosted
-  CI; local gates remain the delivery contract per `AGENTS.md`.
+1. Run the local checks required by [AGENTS.md](../../AGENTS.md) on the candidate.
+2. Push the task branch and open a PR targeting dev.
+3. Wait for required checks; inspect failures and fix forward.
+4. Merge through the normal protected-branch workflow. Fetch and verify the resulting
+   commit is contained in origin/dev before reporting delivery.
 
-## Emergency procedure
+Do not assume a direct push bypasses protection. Do not use admin merge, force-push,
+disable checks, or edit branch protection to deliver an ordinary task.
 
-Required checks block PR merges into `dev` for everyone, including admins
-(`enforce_admins` is enabled). If hosted CI is broken and an urgent fix must
-land:
+## Failure and recovery
 
-1. Fix forward if at all possible — a revert PR also passes CI.
-2. If CI itself is the outage, an admin may temporarily update the
-   protection: `gh api -X PUT repos/yastman/rag/branches/dev/protection
-   --input <payload-without-required-checks>` (or via Settings → Branches →
-   dev). Record the reason and the window in this file's changelog section
-   below.
-3. Restore the payload immediately after the outage and re-run the failed
-   checks on the final head so the promoted SHA has green evidence.
+Distinguish a candidate failure from infrastructure failure using the actual log and commit.
+A rerun is appropriate for a diagnosed transient fault; repeating a deterministic failure
+does not establish success. Keep blocked work committed on its task branch.
 
-Direct pushes to `dev` bypass required status checks by GitHub design; the
-AGENTS.md delivery flow (branch → focused tests → `--no-ff` merge of a
-tested candidate) remains the only sanctioned way to move `dev`, and CI runs
-on every push to `dev` as the post-hoc gate.
+Emergency protection changes require explicit owner authorization for that operation,
+a recorded reason and restoration plan, and verification after restoration. Keep incident
+evidence with the issue/PR, not in this runbook. Never weaken policy as an automatic fallback.
 
-## Changelog
-
-- 2026-09-04 — #3327: required status checks enabled for the nine contexts
-  above (`strict: false`, `enforce_admins: true`). Proof of enforcement:
-  PR #3463 with failing `Lint`/`Candidate Gate` was refused
-  (`mergeStateStatus: BLOCKED`, "base branch policy prohibits the merge").
-  This PR is the companion green-path proof: all required checks pass and
-  the merge is accepted under the same policy.
+Live credentialed tests are separate operator checks. They are not silently required or
+silently claimed by a hosted deterministic check.

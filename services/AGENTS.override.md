@@ -1,26 +1,18 @@
-# AGENTS.override.md
+# Sidecar services
 
-## Scope
-- Applies to `services/**` (root for standalone microservice containers).
-- Extends root `AGENTS.md` with cross-service constraints.
+Applies to services/**; extends [root AGENTS](../AGENTS.md).
 
-## Local Rules
-- Each subservice (`bge-m3-api/`, ...) owns its own Dockerfile and, where applicable, service-local dependency manifest.
-- Do not share Python imports across subservices — communication must go through HTTP contracts.
-- Keep healthcheck path and exposed port stable; downstream consumers in `compose.yml` and `src/retrieval/` depend on them.
-- See per-subservice `AGENTS.override.md` for inner rules; this file covers `services/` as a whole.
+- A sidecar owns its Dockerfile and service-local dependency manifest/lock.
+- Use HTTP contracts between sidecars; do not share Python imports or mutable process state.
+- Keep endpoint/port/health contracts stable. Changes require all Compose files, consumers,
+  and [service documentation](README.md) to agree.
+- Read the nearest service override before editing it.
 
-## Required Validation
-- After Dockerfile or compose changes: `make verify-compose-images`.
-- Run subservice-scoped unit tests, e.g. `uv run pytest tests/unit/test_bge_m3_endpoints.py -q`.
-- Smoke (when stack running): `uv run pytest tests/smoke/test_zoo_smoke.py -q`.
+## Checks
 
-## Guardrails
-- Do not change service names, ports, or healthcheck routes without updating `compose.yml`, `compose.dev.yml`, and the root `services/README.md` table.
-- Do not introduce shared mutable state between subservices.
+Run focused service tests using the dependency selection in [Tests](../tests/README.md).
+Dockerfile/Compose changes require `make verify-compose-images` and relevant static checks.
+With a configured stack, use `uv run --no-sync pytest tests/smoke/test_zoo_smoke.py -q`.
+A skipped live test is not image/runtime proof. Root delivery gates remain required.
 
-## References
-- `services/README.md`
-- `DOCKER.md`
-- `compose.yml`
-- root `AGENTS.md`
+[DOCKER.md](../DOCKER.md) owns deployment wiring.

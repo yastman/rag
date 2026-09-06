@@ -1,204 +1,84 @@
-<div align="center">
-
 # RAG Q&A Chatbot
 
-**Ask questions in natural language. Get answers grounded in your private documents.**
+A self-hosted Telegram assistant for grounded answers over private documents, with a
+real-estate layer for apartment search, service cards, viewing requests, and manager handoff.
+Python 3.12+, an in-process core/runtime, and Docker Compose sidecars.
 
-[![CI](https://github.com/yastman/rag/actions/workflows/ci.yml/badge.svg)](https://github.com/yastman/rag/actions/workflows/ci.yml)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Docker Compose](https://img.shields.io/badge/runtime-Docker%20Compose-2496ED.svg)](DOCKER.md)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[PROJECT.md](PROJECT.md) defines accepted scope; [AGENTS.md](AGENTS.md) defines work rules.
 
-</div>
+## Quick start
 
----
-
-A self-hostable RAG question-answer bot. Users ask in natural language via Telegram; the system retrieves grounded context from a Qdrant document store and generates a cited answer via an LLM. It is a Python modular monolith — one process, in-process function calls, with external sidecar services managed by Docker Compose.
-
-The current live domain is real-estate/apartments. The domain layer is replaceable.
-
-## Features
-
-The live Telegram bot is a real-estate assistant: a RAG Q&A core plus a service menu. All actions are kept; only the question path is the pure RAG core, the rest is the (replaceable) domain layer.
-
-| Menu action | What it does | Layer |
-|---|---|---|
-| 💬 Ask a question | RAG Q&A over the document store | **core** |
-| 🏠 Find an apartment | Filtered catalog search | domain |
-| 🔑 Services | Service info | domain |
-| 📅 Book a viewing | Schedule a viewing | domain |
-| 👤 Contact a manager | Human handoff (HITL) | domain/agent |
-| 📌 My bookmarks | Saved listings (optional capability — requires the opt-in PostgreSQL profile; hidden when PostgreSQL is not configured) | domain |
-| 🎯 Demo | Guided demo flow | domain |
-
-## How It Works
-
-```
-User message (Telegram)
-        │
-        ▼
-run_assistant_request()          src/core/assistant.py
-        │
-        ▼
-run_assistant_pipeline()         src/runtime/pipeline/assistant_pipeline.py
-        │
-        ├─ classify_query()      src/runtime/routing/classify.py
-        │
-        ▼
-rag_pipeline()                   src/runtime/pipeline/rag.py
-        │  cache check → hybrid Qdrant search (dense+sparse+ColBERT)
-        │  → grade docs → optional rerank → optional query-rewrite loop
-        │  returns: grounded document context
-        │
-        ▼
-generate_answer()                src/runtime/generation/service.py
-        │  LLM call with retrieved context
-        │
-        ▼
-AssistantResult (answer + citations)
-        │
-        ▼
-Telegram reply
-```
-
-`run_assistant_request` (`src/core/assistant.py`) is the single public entrypoint used by all adapters and the golden E2E test.
-
-## Architecture
-
-> This section describes the runtime currently shipped by this repository. The proposed reusable
-> RAG VPS v2 target is documented separately in
-> [`docs/architecture/RAG_VPS_V2_PROPOSED.md`](docs/architecture/RAG_VPS_V2_PROPOSED.md); it is a
-> design target, not a claim about the current implementation.
-
-One Python process. Three layers:
-
-| Layer | Path | Role |
-|---|---|---|
-| Adapter | `telegram_bot/` | Telegram interface — converts messages to/from `AssistantRequest` / `AssistantResult` |
-| Public boundary | `src/core/` | `contracts.py` defines Protocol-based DI types; `assistant.py` is the entrypoint |
-| Engine | `src/runtime/` | Pipeline, RAG, retrieval, generation, grounding |
-
-External sidecar services (Docker Compose — **not** part of the Python binary):
-
-| Service | Purpose |
-|---|---|
-| Qdrant | Vector store — dense, sparse, and ColBERT-style retrieval |
-| BGE-M3 (ONNX) | Self-hosted embeddings served via a local API |
-| Redis | Five independent caches: semantic answer, embedding, search, rerank, extraction. Version-prefixed keys; graceful degradation on miss |
-| PostgreSQL *(opt-in)* | Domain state (users, leads, funnel, favorites). Not part of the core demo topology — the bot starts and degrades gracefully (bookmarks hidden) without it |
-
-Q&A and product actions route through the assistant core (`src/core/`) and deterministic product services; the legacy agent facade layer was removed (#3216).
-
-## Ingestion
-
-`src/ingestion/unified/` — deterministic, idempotent, production-ready:
-
-- SHA256-based file identity: re-ingesting the same file is a no-op.
-- Idempotent upsert: changed files replace prior chunks by source path. Deleted source files are a known limitation — their chunks remain in Qdrant until manual cleanup.
-- Error handling: failed documents are logged and skipped; `run_watch` retries on the next polling cycle (60 s). No DLQ or exponential backoff — orphaned chunks from deleted source files remain in Qdrant until manual cleanup (known limitation).
-- Ingestion is Markdown-only (#3235): a stdlib parser handles `.md` files deterministically; no converter SDK, sidecar, or ML stack.
-
-## Adapt to Your Domain
-
-Replace the domain layer; keep the engine and infrastructure.
-
-**Replaceable:** `telegram_bot/services/apartment_*` prompts and extraction logic, search schema fields, CRM/tool integrations, UI copy, i18n strings.
-
-**Keep:** `src/core/`, `src/runtime/`, `src/ingestion/unified/`, Redis cache layer, Docker Compose profiles.
-
-The current domain (real-estate/apartments) lives entirely in the adapter and service layers. Swapping it does not require touching the retrieval engine or pipeline.
-
-## Quick Start
-
-Prerequisites: Python 3.12, [`uv`](https://docs.astral.sh/uv/), Docker with Compose.
-
-> Runtime: Docker Compose only. No k8s, no Mini App, no CRM/Kommo integration.
-> Commands below are Linux/POSIX. See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for
-> PowerShell (Windows) equivalents.
+Linux/POSIX commands; see [Local Development](docs/LOCAL-DEVELOPMENT.md) for PowerShell/WSL.
 
 ```bash
-uv sync                       # core + dev tools
-uv sync --extra telegram      # bot dependencies
-cp .env.example .env          # fill in credentials
-make core-min-up              # start Qdrant + Redis via compose.core.yml (minimal)
-# or
-make core-up                  # start the default core sidecars (adds BGE-M3; PostgreSQL is opt-in)
-```
-
-Run the bot natively:
-```bash
+uv sync --frozen --extra telegram
+cp .env.example .env
+# Fill in credentials and configure the verified BGE model artifact.
+make core-up
 make run-bot
 ```
 
-Run the Compose bot stack:
-```bash
-make docker-bot-up
-```
+The default sidecar stack needs a verified BGE-M3 artifact before its image can be built.
+Follow the [BGE artifact instructions](services/bge-m3-api/README.md) and
+[Compose guide](DOCKER.md). `make core-min-up` starts Qdrant + Redis only; embeddings and
+data readiness still need to be supplied for the full bot. `make docker-bot-up` runs the bot
+in Compose. PostgreSQL is an opt-in product capability.
 
-Notable configurable env vars (see `.env.example`): `QDRANT_QUANTIZATION_MODE`, `REDIS_MAX_CONNECTIONS`.
+Local configuration is the root .env, based on [.env.example](.env.example).
+[pyproject.toml](pyproject.toml) and [uv.lock](uv.lock) own application/Telegram dependencies.
+
+## Runtime
+
+Telegram messages reach [run_assistant_request](src/core/assistant.py), which delegates to
+the procedural [assistant pipeline](src/runtime/pipeline/assistant_pipeline.py).
+Retrieval/generation or a deterministic product action returns an AssistantResult.
+See [Structure](docs/architecture/STRUCTURE.md) for owners and dependency boundaries.
+
+Qdrant stores search data; BGE-M3 supplies embeddings/reranking; Redis supplies caches and
+coordination. PostgreSQL-backed features and manager/CRM integrations depend on their
+configuration and capability checks. A module's presence does not prove it is enabled.
+
+[Unified ingestion](docs/INGESTION.md) is Markdown-only, with stable file identity and
+idempotent writes. Removing a source file does not automatically delete its Qdrant chunks;
+follow the ingestion cleanup procedure.
 
 ## Validation
 
-> Linux/POSIX only. `make` targets require a POSIX shell.
+Start with focused tests. `make dev-setup` installs commit and push hooks.
 
 ```bash
-make dev-setup       # Install dependencies, commit/push hooks, and local services
-make check           # Commit-level Ruff lint + MyPy type checking
-make pre-push        # Manual push gate: lint, format check, and core tests
-make test-core       # Scope gate for src/core or src/runtime changes
-make test            # Scope gate for adapter/service changes
-make test-contract   # Scope gate for contract changes
-make candidate-check # Authoritative local delivery gate
-make test-full       # Major-candidate gate; manual and local only
-make e2e-core-live   # Golden E2E: indexes fixture corpus, runs full spine through run_assistant_request
-make qdrant-audit-indexes  # Audit Qdrant payload indexes
+make test-core        # Core/runtime behavior and import boundaries
+make test             # Core + no-service integration/smoke lane
+make test-contract    # Repository contracts
+make candidate-check  # Authoritative local delivery gate
 ```
 
-`make e2e-core-live` is the main proof of the core path. It exercises classification, retrieval, generation fallback, and runs without Telegram or voice. It requires local Qdrant and BGE-M3 running (`make core-up`).
+The delivery gate includes frozen-environment checks, lint/types, formatting, deterministic
+tests, and contracts. [Tests](tests/README.md) explains setup and lane coverage.
+`make test-full` is the manual full-suite gate. Live scenarios require their services and
+credentials; static/unit checks do not establish live readiness.
 
-Commit and push hooks run automatically after `make dev-setup`. GitHub runs no pytest; all pytest
-suites are local. Run Linux portability and release verification through WSL or a container.
+GitHub runs the approved Candidate Gate and static/security checks. Hosted coverage is
+narrower than the full local delivery gate. See [branch protection](docs/runbooks/BRANCH-PROTECTION.md)
+and the actual [CI workflow](.github/workflows/ci.yml).
 
-## Honest Current State
+## Navigation
 
-The core pipeline (`src/core/` + `src/runtime/`) is healthy and well-tested. The following surfaces are physically in-tree but are **archived/reference** — not part of the active production path, and being trimmed in open issues:
+| Task | Read |
+| --- | --- |
+| Understand product scope | [PROJECT.md](PROJECT.md) |
+| Work on the repository | [AGENTS.md](AGENTS.md) |
+| Find code owners and flows | [Structure](docs/architecture/STRUCTURE.md) |
+| Install, run, diagnose the environment | [Local Development](docs/LOCAL-DEVELOPMENT.md) |
+| Change deployment/profiles/ports | [DOCKER.md](DOCKER.md) |
+| Change document ingestion | [INGESTION.md](docs/INGESTION.md) |
+| Choose checks | [Tests](tests/README.md) |
+| Perform an operational procedure | [Runbooks](docs/runbooks/README.md) |
+| Find other maintained documents | [Documentation hub](docs/README.md) |
 
-- **LangGraph dead nodes** — some graph nodes are no longer on the live execution path but remain in the file tree.
-
-**Langfuse removed** — Langfuse SDK and tracing are fully removed (no `from langfuse` imports anywhere). The `@observe` decorators that remain are local **no-op shims** (`src.observability` / `telegram_bot.observability`) — not tracing. Observability is through structured logs.
-
-
-The active production adapter is Telegram (`telegram_bot/`). Voice input is active via `telegram_bot/dialogs/` (catalog and demo dialogs).
-
-## Project Map
-
-| Area | Path |
-|---|---|
-| Core entrypoint | [`src/core/assistant.py`](src/core/assistant.py) |
-| Pipeline + RAG engine | [`src/runtime/pipeline/`](src/runtime/pipeline/) |
-| Telegram adapter | [`telegram_bot/`](telegram_bot/) |
-| Domain services | [`telegram_bot/services/`](telegram_bot/services/) |
-| Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
-| Compose runtime | [`compose.yml`](compose.yml), [`DOCKER.md`](DOCKER.md) |
-
-## Documentation
-
-| Document | Use it for |
-|---|---|
-| [`DOCKER.md`](DOCKER.md) | Compose services, profiles, ports, env, runtime contracts |
-| [`docs/architecture/STRUCTURE.md`](docs/architecture/STRUCTURE.md) | Current module ownership and dependency direction |
-| [`docs/INGESTION.md`](docs/INGESTION.md) | Markdown-only ingestion authority (supported formats, prohibited converter stack, [#3235](https://github.com/yastman/rag/issues/3235)) |
-| [`docs/architecture/RAG_VPS_V2_PROPOSED.md`](docs/architecture/RAG_VPS_V2_PROPOSED.md) | Proposed reusable production RAG v2 architecture; not current runtime state |
-| [`ARCHITECTURE_DOSSIER.md`](ARCHITECTURE_DOSSIER.md) | Dated 2026-07-06 architecture-review snapshot |
-
-## Direction
-
-The shipped real-estate demo is being frozen under [#3197](https://github.com/yastman/rag/issues/3197)
-and simplified under [#3198](https://github.com/yastman/rag/issues/3198). The reusable RAG VPS v2
-architecture is a separate proposed target; its full contract lives in
-[`docs/architecture/RAG_VPS_V2_PROPOSED.md`](docs/architecture/RAG_VPS_V2_PROPOSED.md). Until a
-bounded implementation issue changes the code, current-runtime sections above remain authoritative.
+The [RAG VPS v2 proposal](docs/architecture/RAG_VPS_V2_PROPOSED.md) describes a future design.
+[GitHub Issues](https://github.com/yastman/rag/issues) own work state;
+[ADRs](docs/adr/) own accepted rationale.
 
 ## License
 

@@ -1,53 +1,32 @@
 # Contributing
 
-Thank you for your interest in contributing.
+[PROJECT.md](PROJECT.md) defines scope. [AGENTS.md](AGENTS.md) owns repository workflow,
+task tracking, and delivery rules for both automated and manual contributions.
 
-## Getting Started
+1. Use the existing GitHub issue when available; define the concrete outcome and boundaries.
+2. Work on a focused branch from dev, preserving unrelated work.
+3. Implement and update the document that owns any changed fact.
+4. Run focused checks, then the required local `make candidate-check` delivery gate.
+5. Open a PR against dev and wait for required hosted checks before merging.
 
-- Read [`README.md`](README.md) for project overview.
-- See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for setup and the day-to-day development workflow.
+Use [Local Development](docs/LOCAL-DEVELOPMENT.md) for setup and
+[Tests](tests/README.md) for exact lane commands. `make dev-setup` installs hooks;
+`make test-full` is the manual major-candidate gate. WSL or a Linux container supplies
+the POSIX environment for Make/release verification.
 
-## Development Workflow
+GitHub runs approved deterministic candidate and static/security checks. Those checks
+complement the full local gate; they do not replace it. See
+[branch protection](docs/runbooks/BRANCH-PROTECTION.md).
 
-1. Create a branch from `dev` for your changes.
-2. Make focused changes with clear commit messages.
-3. Run the local verification ladder before pushing:
+## Changes and evidence
 
-```bash
-make dev-setup        # first setup: dependencies, commit/push hooks, services
-make check            # commit-level lint + type checking
-make pre-push         # manual push gate: lint + format-check + core tests
-make test-core        # scope gate for core/runtime changes
-make test             # scope gate for adapter/service changes
-make test-contract    # scope gate for contract changes
-make candidate-check  # authoritative local delivery gate
-make test-full        # major-candidate gate; manual and local only
-```
+Explain the problem, resulting behavior, and actual validation in the PR. Include extra
+detail only for a relevant risk or contract change. Keep temporary evidence and acceptance
+progress with the issue/PR; keep raw history in Git.
 
-GitHub runs no pytest. On Windows, run the direct `uv run --no-sync pytest ...` commands
-documented in [`tests/README.md`](tests/README.md); use WSL or a container for Linux portability
-and release verification.
+Do not commit credentials, private datasets, local recordings, caches, or generated logs.
+Use test fixtures for local checks. Production, CRM, and messaging writes need explicit
+authorization for the operation; a code change alone does not authorize live side effects.
 
-4. Open a pull request against `dev`.
-
-## What Not to Commit
-
-- `.env` or any file containing real credentials
-- generated artifacts, logs, or local session data
-- Real datasets, personal recordings, or client exports
-- Production deploy scripts or VPS/SSH keys
-
-## Code of Conduct
-
-This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
-
-## Safe Boundaries
-
-- Do not run production or CRM write flows without maintainer approval.
-- Use fake/demo credentials for local development and testing.
-- Treat Telegram, Kommo, LiveKit, and cloud credentials as external secrets.
-
-## Questions
-
-- For general questions, open a public discussion or issue.
-- For security concerns, see [`SECURITY.md`](SECURITY.md).
+See [security policy](SECURITY.md) for security reports and
+[code of conduct](CODE_OF_CONDUCT.md) for participation.

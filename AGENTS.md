@@ -1,87 +1,88 @@
-# AGENTS.md — OMP runbook for rag-fresh
+# Working in rag-fresh
 
-Operational routing only. Product/runtime facts live in `README.md`; read it only when needed.
+Use the smallest context and change that can prove the requested outcome.
+User instructions take precedence over repository workflow defaults.
 
-## Bootstrap
+## Start and locate
 
-1. Project: `rag-fresh`; resolve the current checkout with `git rev-parse --show-toplevel`.
-2. Classify the request and take only its route below. Do not preload unrelated context.
+1. Resolve the checkout with `git rev-parse --show-toplevel`; inspect HEAD and
+   `git status --short`. Preserve unrelated changes.
+2. Identify the outcome, affected area, and existing GitHub issue when supplied.
+3. Use the using-codeindex-codegraph skill before source search. Check indexed root/revision
+   against this checkout; current Git/files win on mismatch. Do not refresh indexes implicitly.
+4. Read the nearest scoped instructions below. Load other documents only for a concrete gap.
 
+## Fact owners
+
+| Need | Read |
+| --- | --- |
+| Product goal, accepted scope, terms | [PROJECT.md](PROJECT.md) |
+| Setup and entry points | [README.md](README.md) |
+| Module ownership, flows, import boundaries | [Structure](docs/architecture/STRUCTURE.md) |
+| Environment and Windows/WSL setup | [Local Development](docs/LOCAL-DEVELOPMENT.md) |
+| Test commands and lane coverage | [Tests](tests/README.md) |
+| Deployment and recovery | [DOCKER.md](DOCKER.md), [runbooks](docs/runbooks/README.md) |
+| Other maintained documentation | [Documentation hub](docs/README.md) |
+
+GitHub Issues own work state, priority, dependencies, and acceptance. PRs own review/delivery
+evidence. CodeGraph/CodeIndexer provide search, callers, tests, and semantic/history context;
+they are not a second required task tracker. Existing card/phase IDs are lookup references,
+not a requirement to create phase branches, duplicate cards, or synchronize two lifecycles.
+
+Keep one owner per durable fact and link to it. Update that owner when a change makes it false.
+Keep progress, investigation logs, and test-run evidence in the issue/PR. Proposed designs
+remain proposals until an accepted, bounded change implements them.
+
+## Work routes
+
+- **Code:** get source/flow and affected tests from CodeGraph; use CodeIndexer
+  (`project="rag-fresh"`) for a named context gap. Do not repeat a whole-repo scan.
+- **Failure:** check CodeIndexer `solutions`, reproduce, then change the responsible layer.
+  Separate baseline failures, environment faults, and regressions.
+- **Library/API:** verify the installed version and use Context7 or official versioned docs.
+- **Docs/rules:** use doc-gardening; use writing-for-agents for instruction changes.
+  Record documentation/rule impact and preserve authority and gates explicitly.
+- **Review:** record target and base; inspect `git diff` and `git diff --cached` for WIP,
+  or `git diff <base>...<head>` for commits. Exclude unrelated work.
+
+## Change and deliver
+
+- Use one branch and one worktree per mutating task. Check
+  `git worktree list --porcelain` before creating or resuming isolation.
+- Default standalone branches to `codex/<short-purpose>` from fresh `origin/dev`.
+  Resume the existing task branch when present; never reuse unknown dirty state.
+- Follow the user's delegation preference and exposed runtime roles. If delegating, assign
+  non-overlapping ownership and an expected HEAD. Main owns integration and acceptance;
+  children do not push, merge, clean worktrees, or mutate task state.
+- Commit/push/merge within the user's authorization. Review the complete diff, run required
+  checks, and deliver the tested candidate without rewriting shared history.
+- Fetch and prove the delivered commit is in `origin/dev` before reporting delivery.
+  Close issues only when acceptance is met; clean only task-owned clean worktrees/merged branches.
+- Diagnose failed gates or a moved remote before delivery. Do not weaken a check to make
+  the current change pass. Report unresolved blockers with the exact command and evidence.
 
 ## Local quality contract
 
-- `make dev-setup` installs commit and push hooks; run the narrowest focused test first.
-- Core changes: run `make test-core` first.
-- Adapter or service changes: run `make test-core`, then `make test`.
-- Contract changes: run `make test-contract`.
-- Delivery gate: run `make candidate-check` (`check-frozen`, `test`, and `test-contract`).
-- Use `make test-full` only for a manual pre-merge full-suite check.
-- GitHub runs no pytest; its checks are advisory. Local gates are authoritative.
+`make dev-setup` installs commit and push hooks. Start with a focused test.
 
-## Routes
-
-| Request | Route |
+| Change | Required scope checks |
 | --- | --- |
-| `выполни фазу <exact-id>` | Use the solo phase flow below. |
-| `выполни карточку <exact-id>` | Fetch `memory_cards(action="get", id=CARD_ID, compact=false)`, take its `phase_id`, then use the solo phase flow. |
-| Standalone mutating issue | Use one branch and worktree; do not duplicate one already represented by a card. |
-| Partial phase ID/name | Resolve once through the bounded CodeIndexer route, then use the solo phase flow. |
-| Code question/change | CodeGraph first; CodeIndexer only when semantic/history/diff context helps. |
-| Bug/test failure | Check CodeIndexer `solutions`, then diagnose before changing code. |
-| External API/library docs | Use Context7; delegate to `librarian` when research can run independently. |
-| Review | Review the exact target against its Git base; exclude unrelated WIP. |
-| Actual merge/rebase conflict | Resolve from Git's authoritative conflict state. |
+| Core/runtime | `make test-core` first |
+| Adapter or service | `make test-core`, then `make test`, plus scoped checks |
+| Test contracts | `make test-contract` |
+| Docs/instructions | Links/paths, affected tests, changed rule review, `git diff --check` |
 
-## Scoped guidance
+The delivery gate is `make candidate-check`: frozen environment, lint/types, formatting,
+deterministic tests, and contracts. `make test-full` is the manual major-candidate/full-suite
+gate. GitHub runs the approved deterministic Candidate Gate plus static/security checks.
+The full local gate remains required; hosted coverage is narrower. Follow
+[branch protection](docs/runbooks/BRANCH-PROTECTION.md) and never bypass required checks.
+The setup and test guides own platform commands and prerequisites.
 
-Before editing one of these areas, read its nearest scoped override:
+## Scoped instructions
 
-- When delegating to `reviewer`, omit `effort`; never pass `effort: "hi"`, so its `@slow` selector controls the reasoning level.
-
-- [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
-- [`src/ingestion/unified/AGENTS.override.md`](src/ingestion/unified/AGENTS.override.md)
-- [`scripts/AGENTS.override.md`](scripts/AGENTS.override.md)
-- [`services/AGENTS.override.md`](services/AGENTS.override.md)
-- [`services/bge-m3-api/AGENTS.override.md`](services/bge-m3-api/AGENTS.override.md)
-
-
-## MCP/tool responsibilities
-
-- **CodeIndexer** (`project="rag-fresh"`): phase/card lifecycle and semantic/history context. If it
-  is unavailable, do not emulate lifecycle mutations.
-- **CodeGraph**: current source, flows, edit targets, tests, and blast radius; query once and refine
-  only for a concrete gap. On mismatch or staleness, trust the current worktree files.
-- **Context7**: versioned external API documentation only.
-- **Git**: authoritative files, diff, commits, branches, and worktrees.
-- **GitHub**: PR, CI, merge, and remote delivery evidence; never roadmap state.
-
-Before review, record the target and base. Review WIP with `git diff` plus `git diff --cached`, or
-committed work with `git diff <base>...<head>`.
-
-## Orchestration
-
-Main owns scope, lifecycle, integration, and acceptance. Give each child explicit ownership and
-acceptance. Children never push, merge, clean worktrees, or mutate CodeIndexer; assigned writers may
-commit owned files when Main authorizes it. Each assignment names the target worktree and expected
-HEAD; the writer verifies its Git root, HEAD, and tracked state before work.
-
-## Solo phase flow
-
-1. Fetch the phase, compact card list, and the selected card in full.
-2. Main validates dependencies/acceptance, then `git fetch origin`.
-3. Resume the verified `phase/<phase-id>` worktree or create a clean one from `origin/dev`; preserve
-   unknown dirty state.
-4. Inspect `git worktree list --porcelain` to confirm current state. For each card, resume or
-   create `card/<card-id>-<slug>` and its linked worktree from the current phase head, maintaining
-   one worktree per mutating card. Never mix cards or reuse a dirty one.
-5. Query CodeGraph once; refine only for a concrete gap.
-6. Implement and test the card, inspect its complete diff, commit all intended changes, push the
-   card branch, and merge it into the phase branch with `--no-ff`. Use a labelled WIP commit before
-   interruption or handoff. Mark it DONE only after the merge.
-7. After all cards, merge fresh `origin/dev` into the clean phase branch, run `make test-full`, and
-   push the exact tested candidate to `dev` without rewriting history.
-8. Fetch `origin` and prove the candidate is in `origin/dev`; then remove clean worktrees and delete
-   the delivered card and phase branches locally and remotely.
-
-Use CodeIndexer `solutions` for diagnosis. Resolve partial IDs with bounded roadmap search; ask when
-no ID or name is supplied. Failed gates or ancestry leave the work unfinished and recoverable.
+- [telegram_bot/AGENTS.override.md](telegram_bot/AGENTS.override.md)
+- [src/ingestion/unified/AGENTS.override.md](src/ingestion/unified/AGENTS.override.md)
+- [scripts/AGENTS.override.md](scripts/AGENTS.override.md)
+- [services/AGENTS.override.md](services/AGENTS.override.md)
+- [services/bge-m3-api/AGENTS.override.md](services/bge-m3-api/AGENTS.override.md)

@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "check_markdown_links.py"
@@ -30,3 +32,16 @@ def test_current_repository_markdown_links_are_valid() -> None:
     checker = _load_module()
 
     assert checker.check_links(REPO_ROOT) == []
+
+
+@pytest.mark.parametrize("relative", ["docs/README.md", "PROJECT.md", "src/AGENTS.override.md"])
+def test_missing_links_are_checked_inside_a_linked_worktree(tmp_path, relative) -> None:
+    checker = _load_module()
+    root = tmp_path / ".worktrees" / "task"
+    document = root / relative
+    document.parent.mkdir(parents=True)
+    document.write_text("[missing](missing.md)\n", encoding="utf-8")
+
+    assert checker.check_links(root) == [
+        (document.resolve(), 1, "missing.md", (document.parent / "missing.md").resolve())
+    ]
