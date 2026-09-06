@@ -208,14 +208,21 @@ reports/
 .worktrees/
 .claude/worktrees/
 
-# Shared agent guidance (AGENTS.md, AGENTS.override.md, CLAUDE.md and
-# .claude/rules/) is versioned so it follows the project between workstations.
-# Keep only personal guidance and local integration state here.
+# Shared AGENTS.md and CLAUDE.md guidance follows the project between workstations.
+# Keep local integration state and new scoped overrides ignored; retain the
+# existing project-owned override files below.
 drive-sync/
 CLAUDE.local.md
+**/AGENTS.override.md
+!telegram_bot/AGENTS.override.md
+!src/ingestion/unified/AGENTS.override.md
+!scripts/AGENTS.override.md
+!services/AGENTS.override.md
+!services/bge-m3-api/AGENTS.override.md
 !scripts/lib/
 
-# Local AI caches and session prompts
+# Local AI rules, caches and session prompts
+.claude/rules/
 .claude/cache/
 .claude/prompts/
 docs/audits/
