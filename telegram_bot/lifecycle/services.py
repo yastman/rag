@@ -131,7 +131,7 @@ def build_services(config: BotConfig) -> Services:
 
     i18n_hub = None
     try:
-        from .middlewares.i18n import create_translator_hub
+        from telegram_bot.middlewares.i18n import create_translator_hub
 
         i18n_hub = create_translator_hub()
     except Exception:
