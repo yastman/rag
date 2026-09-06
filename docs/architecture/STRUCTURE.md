@@ -1,28 +1,72 @@
 # Canonical project structure
 
-This map records active module ownership. It describes current directories, not planned packages.
+Current module ownership. [PROJECT.md](../../PROJECT.md) owns product scope;
+the [RAG VPS v2 proposal](RAG_VPS_V2_PROPOSED.md) is a separate future design.
 
-> **Status:** current-state authority. The proposed reusable RAG VPS v2 target is documented in
-> [`RAG_VPS_V2_PROPOSED.md`](RAG_VPS_V2_PROPOSED.md) and must not be read as already implemented.
+## Owners
 
-## Assistant path
+| Path | Owns | Start here |
+| --- | --- | --- |
+| src/core | Transport-free API, request/result and dependency contracts, app assembly | [assistant.py](../../src/core/assistant.py), [contracts.py](../../src/core/contracts.py), [app.py](../../src/core/app.py) |
+| src/runtime/pipeline | Procedural request routing and RAG orchestration | [assistant_pipeline.py](../../src/runtime/pipeline/assistant_pipeline.py), [rag.py](../../src/runtime/pipeline/rag.py) |
+| src/runtime/generation | Prompts, answer generation, output policy | [service.py](../../src/runtime/generation/service.py) |
+| src/runtime/qdrant | Search and collection readiness | [service.py](../../src/runtime/qdrant/service.py), [readiness.py](../../src/runtime/qdrant/readiness.py) |
+| src/runtime/retrieval | Retrieval composition | [runtime guide](../../src/runtime/README.md) |
+| src/runtime/integrations | Cache/embedding/prompt integrations | [runtime guide](../../src/runtime/README.md) |
+| src/runtime/config.py | Runtime GraphConfig; its name does not imply a graph framework | [config.py](../../src/runtime/config.py) |
+| src/services | Shared clients and state/content owners | [services](../../src/services/README.md) |
+| src/adapters | Provider adapters below orchestration | [adapters](../../src/adapters/README.md) |
+| src/ingestion/unified | Markdown load/chunk/manifest/write path | [flow.py](../../src/ingestion/unified/flow.py), [ingestion contract](../INGESTION.md) |
+| src/ingestion/apartments | Catalog data ingestion | [apartment ingestion](../../src/ingestion/apartments/README.md) |
+| src/retrieval | Retrieval-facing helpers outside orchestration | [retrieval](../../src/retrieval/README.md) |
+| telegram_bot | Transport, lifecycle, handlers/dialogs, product UI | [main.py](../../telegram_bot/main.py), [adapter](../../telegram_bot/assistant_core_adapter.py), [bot guide](../../telegram_bot/README.md) |
+| services/bge-m3-api | Independently packaged embedding/reranking sidecar and artifact | [service guide](../../services/bge-m3-api/README.md) |
+| scripts | Out-of-process bootstrap and operator commands | [scripts](../../scripts/README.md) |
 
-| Path | Ownership |
-|---|---|
-| `src/core` | Public transport-free assistant entrypoint, contracts, dependency wiring, and telemetry |
-| `src/runtime` | RAG orchestration, retrieval, grounding, generation, graph construction, and runtime integrations |
-| `src/runtime/pipeline` | Procedural classify, cache, retrieve, grade/rerank, rewrite, and generate stages |
-| `src/adapters` | Provider adapters for embeddings and LLMs |
-| `src/ingestion` | Document loading, chunking, and collection writes |
-| `src/ingestion/unified` | Unified ingestion command path |
-| `src/retrieval` | Retrieval-facing classification helpers outside runtime orchestration |
-| `telegram_bot` | Telegram transport, handlers, and process assembly |
-| `services/bge-m3-api` | BGE-M3 embedding sidecar |
+A compatibility re-export is not a second owner. Follow its target before changing behavior.
+Check current callers before declaring a module unused.
 
-## Dependency direction
+## Flows
 
-`src/core` is the public boundary and delegates execution to `src/runtime`. Transport packages may call the core or runtime APIs, but runtime code must not import `telegram_bot`.
+Arrows mean calls/data movement, not strict package layers.
 
-`src/adapters` supplies integrations below orchestration and must not acquire new imports from `src/runtime`. `src/ingestion` is parallel infrastructure: it owns writes and must not import runtime orchestration. Runtime retrieval is query-only.
+```text
+Telegram → assistant_core_adapter → src/core.run_assistant_request
+         → src/runtime.pipeline.run_assistant_pipeline
+             → RAG retrieval/cache/grounding → generation → AssistantResult
+             → deterministic product action → AssistantResult
+         → Telegram response
 
-When an active directory moves or ownership changes, update this map and the canonical structure contracts in the same change.
+Markdown → unified ingestion → manifest/chunks → Qdrant writes
+Apartment corpus → apartment ingestion → catalog collection
+Query runtime → Qdrant reads; BGE-M3 and Redis support retrieval/cache
+```
+
+Knowledge and apartment collections have different schemas and roles. Startup readiness
+does not prove a live known-corpus answer or Telegram journey.
+
+## Dependency constraints
+
+[pyproject.toml](../../pyproject.toml) is the executable import-linter authority.
+Core delegates to runtime; runtime also uses shared core contracts/telemetry.
+This intentional relationship is not a strictly one-way package hierarchy.
+
+- Neither src/core nor src/runtime imports telegram_bot.
+- src/core/contracts.py remains independent of implementation and transport.
+- Active src code must not import archive.
+- Provider adapters stay below orchestration: do not add imports from src/runtime into
+  src/adapters modules.
+- Ingestion owns writes and identity/manifest handling. Query retrieval is read-oriented;
+  setup/readiness scripts have separate operational responsibilities.
+
+Validate boundaries with focused behavior tests and import-linter. Internal wrappers and
+filenames are not permanent architecture merely because a migration once introduced them.
+
+## Configuration and updates
+
+Root pyproject.toml/uv.lock own application dependencies; BGE owns its service manifest/lock.
+Compose files own wiring, documented by [DOCKER.md](../../DOCKER.md).
+The root .env is local configuration, not a versioned source of defaults.
+
+Update this map and affected links with ownership/entry-point changes. Record newly accepted
+architectural decisions in ADRs; keep implementation progress on GitHub.

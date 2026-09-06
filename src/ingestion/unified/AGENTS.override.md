@@ -1,32 +1,21 @@
-# AGENTS.override.md
+# Unified ingestion
 
-## Scope
-- Applies to `src/ingestion/unified/**`.
-- Extends root `AGENTS.md` with ingestion-specific rules.
+Applies to src/ingestion/unified/**; extends [root AGENTS](../../../AGENTS.md).
 
-## Local Rules
-- Keep ingestion deterministic and idempotent (manifest identity + Qdrant content-hash dedup must stay stable).
-- Preserve sync-safe behavior in the writer path used by ingestion runtime.
-- Maintain compatibility between:
-  - `flow.py`
-  - `qdrant_writer.py`
+- Preserve deterministic identity, manifest semantics, and idempotent writes.
+- flow.py and qdrant_writer.py must agree on sync-safe write behavior.
+- Do not silently alter collection names, file hashing, or identity semantics.
+- Preserve defaults when adding configuration.
+- Removing a source from sync_dir does not delete its Qdrant chunks. No vanished-source scan
+  exists; cleanup uses explicit delete_file_sync/delete_by_source_path_sync operations.
+- Supported formats and ingestion behavior are owned by [INGESTION.md](../../../docs/INGESTION.md).
 
-## Required Validation
-- Base checks:
-  - `make check`
-  - `make test-ingestion`
-- Ingestion functional checks when behavior changes:
-  - `python -m src.ingestion.unified.cli preflight`
-- If flow semantics changed, run one controlled ingestion pass in dev:
-  - `python -m src.ingestion.unified.cli run`
+## Checks
 
-## Guardrails
-- Do not silently alter collection names, manifest hashing, or file identity semantics.
-- Prefer additive config changes over breaking defaults.
-- **Deleted source files are a known limitation**: removing a file from `sync_dir` does not remove its chunks from Qdrant (no vanished-source scan). Do not document this as handled; orphaned points need manual cleanup via `delete_file_sync`/`delete_by_source_path_sync`.
+Run `make check` and `make test-ingestion`.
+For behavior changes, run `uv run --no-sync python -m src.ingestion.unified.cli preflight`.
+For flow changes, use one controlled development ingestion:
+`uv run --no-sync python -m src.ingestion.unified.cli run`.
+Confirm the target directory/collection first; a documentation edit does not require a live write.
 
-## References
-- `docs/INGESTION.md`
-- `docs/LOCAL-DEVELOPMENT.md`
-- `docs/PIPELINE_OVERVIEW.md`
-- `src/ingestion/unified/cli.py`
+Use [local setup](../../../docs/LOCAL-DEVELOPMENT.md) and [CLI](cli.py) for supported commands.

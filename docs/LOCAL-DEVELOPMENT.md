@@ -16,8 +16,7 @@ and [`README.md`](README.md) for the documentation map.
 
 ```bash
 cp .env.example .env     # fill in credentials (Telegram token, API keys)
-uv sync                  # core + dev tools (PEP 735 dev group)
-uv sync --extra telegram # bot dependencies (aiogram stack; root lock is the single Telegram authority, #3210)
+uv sync --frozen --extra telegram # root lock owns application + bot dependencies
 make setup-hooks         # install commit and push hooks
 ```
 
@@ -26,8 +25,7 @@ make setup-hooks         # install commit and push hooks
 ```powershell
 uv python install 3.12
 Copy-Item .env.example .env        # fill in credentials
-uv sync                            # core + dev tools (Python 3.12)
-uv sync --extra telegram           # bot dependencies
+uv sync --frozen --extra telegram # application + bot dependencies
 uv run pre-commit install
 uv run pre-commit install --hook-type pre-push
 # Preflight validation:
@@ -35,6 +33,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mod
 ```
 
 ## Bring up the sidecar stack
+
+Before building the default stack, prepare the verified BGE model artifact using the
+[service guide](../services/bge-m3-api/README.md). The minimal stack alone does not supply
+embeddings or the product's data-readiness contract. Use the explicit Compose files below;
+do not load another checkout's private environment.
 
 ### Linux / POSIX
 
@@ -88,10 +91,10 @@ uv run python -m telegram_bot.main
 |---|---|
 | Commit | Automatic pre-commit hooks; `make check` runs Ruff lint + MyPy |
 | Push | Automatic pre-push hooks; `make pre-push` manually runs lint + format check + core tests |
-| `make test-core` | Monolith core gate (~91 tests, ~8s) — run first for any `src/core` or `src/runtime` change |
-| `make test` | Unit + critical graph paths — for adapter/service changes |
+| `make test-core` | Core/runtime, regression, characterization, and import boundaries |
+| `make test` | Core gate + no-service integration/smoke lane |
 | `make test-contract` | Static contract tests (trace/schema/architecture) |
-| Candidate | `make candidate-check` is the authoritative local delivery gate (`check-frozen` + `test` + `test-contract`) |
+| Candidate | `make candidate-check` is the authoritative local delivery gate (`check-frozen` + `format-check` + `test` + `test-contract`) |
 | Major candidate | `make test-full` runs all local tiers manually; on Windows use `scripts/windows_preflight.ps1 -Mode Full` |
 | `make test-cov` | Coverage report (`[tool.coverage]` `fail_under=80`) — currently a manual gate |
 | `make e2e-core-live` | Golden E2E: indexes a fixture corpus and runs the full spine through `run_assistant_request` (needs `make core-up`) |
@@ -103,6 +106,12 @@ uv run python -m telegram_bot.main
 Run `make candidate-check` before delivery.
 Core changes → run `make test-core` first. Subsystem `AGENTS.override.md` files may pin
 tighter commands — read the nearest one before editing an area.
+
+The current check-frozen recipe expects the exact base+dev selection. In an isolated
+worktree, run `uv sync --frozen` before candidate-check; this can remove Telegram/BGE
+test extras installed by a previous lane. Restore the needed extra before running that
+lane again. Do not repeatedly sync a shared developer environment between incompatible
+selections. See [Tests](../tests/README.md) for lane ownership.
 
 ## Demo data readiness (Qdrant, #3202)
 
@@ -141,11 +150,13 @@ environment off an incompatible schema: snapshot (`make qdrant-backup`), export 
 re-create the collection under the contract schema, and re-index — see
 [`runbooks/`](runbooks/README.md) and [`INGESTION.md`](INGESTION.md).
 
-> GitHub runs no pytest. All pytest suites are local. On Windows the pre-push core hook invokes
-> `uv run --no-sync pytest` directly, without requiring Make. Run Linux portability and release
-> verification locally through WSL or a container. See [`../tests/README.md`](../tests/README.md)
-> for direct commands and [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md)
-> for conventions.
+GitHub Candidate Gate runs MyPy, core tests, and the no-service lane; the full local gate
+additionally checks contracts. Required hosted checks are documented in
+[branch protection](runbooks/BRANCH-PROTECTION.md).
+On Windows the pre-push core hook invokes `uv run --no-sync pytest` without Make.
+Run Linux portability and release verification through WSL or a container.
+See [Tests](../tests/README.md) for direct commands and
+[test-writing guide](engineering/test-writing-guide.md) for conventions.
 
 ## Operational checks
 

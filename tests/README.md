@@ -1,234 +1,88 @@
 # Tests
 
-This directory contains the full test pyramid for the contextual RAG system.
-For test-writing conventions, see [`docs/engineering/test-writing-guide.md`](../docs/engineering/test-writing-guide.md).
+[AGENTS.md](../AGENTS.md) owns required checks by change type.
+This page explains executable lanes; [test-writing guide](../docs/engineering/test-writing-guide.md)
+owns conventions. [Makefile](../Makefile) and [pyproject.toml](../pyproject.toml) own selectors,
+markers, and tool configuration.
 
-## Directory Structure
+## Environment
 
-```
-tests/
-├── conftest.py          # Shared fixtures and hooks
-├── unit/                # Fast, isolated tests (mocked/no external deps)
-│   └── e2e_adapters/    # Unit checks for E2E adapters/config/validators (not live E2E)
-├── contract/            # Static contracts: trace families, span coverage, error shapes
-├── integration/         # Service-aware paths and real component interaction
-├── smoke/               # Quick health checks against live services
-├── eval/                # RAG evaluation (RAGAS, ground_truth.json)
-├── baseline/            # (empty; Langfuse baseline metrics removed, #2844)
-├── chaos/               # Resilience tests (service failures, LLM fallbacks)
-├── load/                # Load/throughput and Redis eviction tests
-├── e2e/                 # End-to-end pipeline and Telegram E2E tests
-├── fixtures/            # Shared test data and CI env stubs (e.g., compose.ci.env)
-└── data/                # Test datasets and generated assets
-```
+Run from the repository root in an isolated worktree. Use Python 3.12 and the frozen lock.
 
-## Test Tiers
-
-### Local-fast checks (no Docker required)
-These are the default gate for PRs and local development.
-
-| Tier | Location | What it proves | Typical duration |
-|------|----------|----------------|------------------|
-| Unit | `tests/unit/` | Isolated logic with mocks/fakes | Seconds |
-| Contract | `tests/contract/` | Trace/schema contracts via static analysis | Seconds |
-
-### Tier to command / CI mapping
-
-| What | Scope | Coverage threshold |
-|------|-------|--------------------|
-| `make test` | core gate: `test-core` + no-service integration/smoke lane | none |
-| `make test-contract` | contract only (`tests/contract/`) | none |
-| Local delivery gate | `make candidate-check` (`check-frozen` + `test` + `test-contract`) | coverage remains a separate `make test-cov` check |
-
-Commit hooks handle fast file checks. Push hooks add static/security checks and the core pytest
-gate. GitHub runs no pytest; local results are authoritative. Run `make test-full` for a major
-candidate and use WSL or a container for Linux portability and release verification.
-
-### Heavy / runtime checks (services or credentials required)
-Run these selectively, not on every save.
-
-| Tier | Location | What it proves | Typical duration |
-|------|----------|----------------|------------------|
-| Integration | `tests/integration/` | Real service interaction (Qdrant, Redis, APIs) | Minutes |
-| Smoke | `tests/smoke/` | Live service health and routing sanity | Minutes |
-| Eval | `tests/eval/` | RAG quality (faithfulness, relevance) | Minutes |
-| Chaos | `tests/chaos/` | Degraded-service behavior and fallbacks | Minutes |
-| Load | `tests/load/` | Concurrent throughput and cache eviction | Minutes |
-| E2E | `tests/e2e/` | Full-stack pipeline and Telegram flows | Slow |
-
-Canonical E2E placement:
-- Live end-to-end scenarios belong only to `tests/e2e/`.
-- `tests/unit/e2e_adapters/` is unit-only coverage for E2E helper code (config, adapters, validators) and must stay in the local-fast lane.
-
-## Commands
-
-### Quick checks (lint + types)
 ```bash
-make check
+uv sync --frozen                    # Base + dev; exact check-frozen environment
+uv sync --frozen --extra telegram   # When exercising Telegram owners
+uv sync --frozen --extra bge-extras # FastAPI endpoint tests, not the BGE model environment
 ```
 
-### Fast test gate (unit + critical graph paths)
-```bash
-make test
-```
+These are alternative dependency selections. An exact sync may remove packages installed
+by the previous selection. The current check-frozen recipe checks the base+dev selection;
+return the isolated environment to `uv sync --frozen` before `make candidate-check`.
+Do not alter a shared developer environment to satisfy this requirement. Service-local
+model/image dependencies are separate from root endpoint-test extras.
 
-### Core unit tests (parallel, default local gate)
-```bash
-PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
-```
+## Choose a lane
 
-### Focused run (preferred while developing)
-```bash
-uv run pytest tests/unit/test_<module>.py -q
-```
+| Command | Proves | Prerequisites |
+| --- | --- | --- |
+| Focused `uv run --no-sync pytest <path> -q` | Changed behavior/contract | Dependencies for that test |
+| `make test-core` | Core/runtime, regression, characterization, selected import boundaries | Base + dev |
+| `make test` | test-core plus no-service integration/smoke | Base + dev |
+| `make test-contract` | Repository contracts, excluding requires_extras | Base + dev; optional checks may skip |
+| `make test-unit` | Broad lean unit lane with explicit exclusions | Base + dev; exclusions are in Makefile |
+| `make test-telegram-adapter` | Telegram adapter owners | Target syncs Telegram dependencies |
+| `make test-ingestion` | Markdown ingestion | Target syncs dev groups |
+| `make test-bge-extras` | Mocked BGE HTTP endpoint behavior | Target syncs bge-extras; no model/service needed |
+| `make candidate-check` | Required local delivery gate | Exact base+dev environment |
+| `make test-full` | Full manual suite, parallel-safe then stateful/live lanes | All extras/groups; required services/credentials |
+| `make e2e-core-live` | Real known-corpus core ingestion/answer path | Qdrant, BGE-M3, provider configuration |
+| `make demo-gate` | Operator demo readiness and Telegram journey | Configured stack, test account/credentials |
 
-### Contract tests (no Docker)
-```bash
-make test-contract
-```
+candidate-check runs check-frozen (environment + Ruff + MyPy), format-check, test, and
+test-contract. A skipped optional/live check is not proof that capability works.
+Coverage is a separate `make test-cov` check, configured in pyproject.toml.
 
-### Windows (PowerShell)
-`make` and Bash examples are POSIX-only. Run the implemented preflight:
+## Native Windows checks
+
+Use PowerShell with the root lock; Make recipes require POSIX tools. For a focused test:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Static
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_preflight.ps1 -Mode Tests
-uv run --no-sync --python 3.12 python -m pytest tests/contract -q -n 0
+uv run --no-sync --python 3.12 pytest tests/unit/core/ -q
+uv run --no-sync --python 3.12 pytest tests/contract -q -n 0 -m "not requires_extras"
 ```
 
-### Integration tests (requires services)
-```bash
-make test-integration        # graph paths only (~5s, no Docker)
-make test-integration-full   # all integration tests (requires Docker)
-```
+The cross-platform pre-push hook in [.pre-commit-config.yaml](../.pre-commit-config.yaml)
+contains the complete core selector. Do not replace it with only tests/unit/core and claim
+the full core gate ran.
 
-### Smoke tests (requires live services)
-```bash
-make test-smoke
-make test-preflight          # Qdrant/Redis config checks
-```
+[scripts/windows_preflight.ps1](../scripts/windows_preflight.ps1) offers Static, Tests,
+and Full modes. Full syncs all extras/groups and executes the native full-suite route;
+it is not identical to candidate-check. Use WSL or a Linux container for the POSIX delivery
+gate and Linux portability. See [Local Development](../docs/LOCAL-DEVELOPMENT.md).
 
-### Load / chaos / nightly
-```bash
-make test-load-eviction      # Redis eviction tests
-make test-nightly            # chaos + smoke + slow unit
-```
+## Test ownership
 
-### E2E
-```bash
-make e2e-test                # pytest E2E suite (live services)
-make e2e-telegram-test       # Telegram userbot runner
-make bot-response-smoke      # #2192: prove make bot actually answers
-```
+| Directory | Purpose |
+| --- | --- |
+| unit | Isolated logic and adapter tests |
+| contract | Import, config, API, and repository constraints |
+| regression / characterization | Preserved behavior and known failure cases |
+| integration / smoke | No-service component scenarios and separately marked live checks |
+| e2e | End-to-end scenarios; helpers have unit tests in unit/e2e_adapters |
+| chaos / load | Controlled faults and capacity behavior |
+| fixtures / data | Shared test inputs |
 
-#### Telethon E2E runner — unit tests vs live run
+Every integration/smoke file carries exactly one file-level no_services or requires_services
+marker. Keep credentialed/provider checks out of deterministic lanes. Use fixtures, not a
+developer's private .env or data. Do not run live tests merely because credentials are present.
 
-Unit tests (no credentials needed, no live bot required):
-```bash
-uv run pytest tests/unit/scripts -k e2e_runner -q
-```
+## Hosted and local evidence
 
-Live end-to-end run against a real bot (requires `.env` with valid credentials):
-```bash
-make e2e-telegram-test  # requires: TELEGRAM_API_ID, TELEGRAM_API_HASH, E2E_BOT_USERNAME in .env; live bot running
-# or directly:
-uv run python scripts/e2e/runner.py --no-judge          # passthrough mode
-uv run python scripts/e2e/runner.py --group immigration # specific group
-```
+GitHub Candidate Gate runs MyPy, core tests, and the no-service lane, alongside hosted
+static/security checks. The full contract suite and full local delivery gate are not currently
+part of that job. Exact required check names and merge rules live in
+[branch protection](../docs/runbooks/BRANCH-PROTECTION.md).
 
-`make bot-response-smoke` runs five preflight stages (env vars, Telethon
-session file, `getMe` username match, `getWebhookInfo` empty, polling
-lock state) before delegating to `scripts.e2e.quick_test` for one safe
-query. Use it to gate "make bot is healthy" against "make bot answers".
-
-### RAG evaluation
-```bash
-make eval-rag                # RAGAS on ground_truth.json
-make eval-rag-quick          # 10-sample subset
-make eval-rag-full           # RAGAS + DeepEval
-```
-
-
-### Baseline / observability
-
-> `tests/baseline/` was removed in P19 (Langfuse integration removed, #2844). The `make baseline-smoke` and `make baseline-compare` targets are no longer available. Observability is through structured logs.
-
-### Compose validation (for runtime-impacting changes)
-When changing `compose*.yml`, Dockerfiles, or service definitions, verify the effective config:
-
-```bash
-docker compose -f compose.yml -f compose.dev.yml config --services
-```
-
-CI uses `tests/fixtures/compose.ci.env` for interpolation validation:
-```bash
-COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
-```
-
-### Other useful commands
-```bash
-make test-cov                # coverage report
-make test-lf                 # last failed only
-make test-profile            # slowest tests
-make test-store-durations    # update .test_durations for CI sharding
-```
-
-## Markers
-
-Markers are defined in `pyproject.toml`. Common ones:
-
-- `unit` — core unit tests
-- `integration` — integration tests
-- `slow` — tests taking > 5 seconds
-- `smoke` — smoke tests
-- `chaos` — resilience/failure injection
-- `load` — load/performance tests
-- `e2e` — end-to-end tests
-- `requires_extras` — needs optional dependencies (skipped in core tier)
-- `kommo` — live Kommo CRM tests (requires token)
-
-See `pyproject.toml` for the full marker list (including exclusions for old API tests).
-
-## Key Test Files
-
-| File | Description |
-|------|-------------|
-| `unit/test_qdrant_service.py` | QdrantService with mocked client |
-| `unit/test_small_to_big.py` | Small-to-big chunk expansion |
-| `regression/test_rag_core_regression.py` | RAG core regression suite |
-| `unit/test_local_compose_contract.py` | Compose config validation |
-| `contract/test_layering_contract.py` | Architecture layering contract |
-| `contract/test_no_langfuse_sdk_import_contract.py` | No Langfuse SDK imports remain |
-| `integration/test_qdrant_service.py` | Real Qdrant service integration |
-| `smoke/test_preflight.py` | Qdrant/Redis preflight checks |
-| `eval/ground_truth.json` | Q&A pairs for RAG evaluation |
-
-
-## Writing Tests
-
-- **Default guide**: [`docs/engineering/test-writing-guide.md`](../docs/engineering/test-writing-guide.md)
-- **Unit tests**: Mock external services; keep them fast and deterministic.
-- **Integration tests**: Use real services; mark with `@pytest.mark.integration`.
-- **Heavy tests**: Do not move live-service scenarios into the local fast lane.
-- **Reuse**: Search existing coverage before adding new files (`rg -n "<behavior>" tests/`).
-- **Fixtures**: Use `conftest.py` for shared setup; keep scopes narrow.
-
-## Test Naming
-
-```
-test_<feature>.py                  # File
-test_<behavior>_<expected>()       # Function
-```
-
-Example:
-```python
-def test_store_embedding_creates_hash():
-    """Embedding storage creates unique hash key."""
-    ...
-```
-
-## Notes
-
-- The full heavy suite (chaos, load, E2E) is not required for every commit; run the fast gate (`make test` or `make test-unit`) locally.
-- The old deprecated directory is no longer collected (`norecursedirs` in `pyproject.toml`).
-- `docker-up` is an alias for `docker-core-up`; prefer `make local-up` for local development.
+Before claiming success, record the command, exit status, relevant result/skip counts, and
+tested commit. Diagnose baseline/environment failures separately; do not ignore them or
+change assertions solely to produce a green result.

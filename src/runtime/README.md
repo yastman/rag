@@ -1,45 +1,29 @@
-# `src/runtime` — shared runtime engine
+# Shared runtime engine
 
-The engine layer of the monolith. `src/core/` (public boundary) and `telegram_bot/`
-(adapter) both call into here.
+Procedural routing, retrieval, grounding, generation, runtime configuration, and integrations.
+The assistant core and transport assembly use this engine.
 
-Layering: `src/core` → `src/runtime` → `telegram_bot` (enforced by `import-linter`; see
-[`../../pyproject.toml`](../../pyproject.toml) `[tool.importlinter]`). The reverse-layering
-migration that created this package is complete — the runtime kernel does not import from
-`telegram_bot`.
-
-## Subpackages
-
-| Path | Role |
-|------|------|
-| `pipeline/` | RAG orchestration — `assistant_pipeline.py`, `rag.py` (`rag_pipeline`), retrieve / grade+rerank / cache stages |
-| `generation/` | Answer generation — `service.py` (`generate_answer`), prompts, streaming, policy |
-| `qdrant/` | `QdrantService` — hybrid dense + sparse + ColBERT search gateway |
-| `retrieval/` | `RetrievalService` — composes embeddings with the Qdrant gateway |
-| `grounding/` | Grounding / citation policy |
-| `llm/` | `router.py` — LLM provider routing |
-| `services/` | Runtime helpers — query preprocessing, cache policy, small-to-big, ColBERT rerank, coverage mode |
-| `integrations/` | `CacheLayerManager` (Redis caches), embeddings, prompt manager |
-| `domain_defaults.py` | Domain-tunable retrieval / generation defaults |
-
-## The spine
-
-```
-run_assistant_pipeline   pipeline/assistant_pipeline.py
-  → classify_query
-  → rag_pipeline         pipeline/rag.py     (cache → hybrid search → grade → rerank → optional rewrite loop)
-  → generate_answer      generation/service.py
-```
+| Area | Start point |
+| --- | --- |
+| Request execution | [pipeline/assistant_pipeline.py](pipeline/assistant_pipeline.py) |
+| RAG orchestration | [pipeline/rag.py](pipeline/rag.py) |
+| Generation | [generation/service.py](generation/service.py) |
+| Qdrant search | [qdrant/service.py](qdrant/service.py) |
+| Qdrant readiness | [qdrant/readiness.py](qdrant/readiness.py) |
+| Runtime configuration | [config.py](config.py) |
+| Provider client | [llm/router.py](llm/router.py) |
+| Cache/embedding/prompt integration | [integrations](integrations/) |
 
 ## Boundaries
 
-- Engine code must not import from `telegram_bot/`. The contract test
-  [`tests/contract/test_runtime_no_telegram_bot_coupling_contract.py`](../../tests/contract/test_runtime_no_telegram_bot_coupling_contract.py)
-  enforces this.
-- Retrieval is query-only; ingestion writes are owned by `src/ingestion/`.
+The [canonical structure map](../../docs/architecture/STRUCTURE.md) owns dependency direction.
+Core delegates here; runtime consumes shared core contracts/telemetry. Runtime must not import
+telegram_bot. Document ingestion owns writes.
 
-## Verification
+GraphConfig is the current runtime configuration type; its name does not imply graph-based
+execution. Check composition and consumers before moving/deleting fields.
 
-```bash
-make test-core
-```
+## Validation
+
+Start with `make test-core` and focused behavior tests.
+[AGENTS.md](../../AGENTS.md) owns delivery policy; [Tests](../../tests/README.md) explains lanes.

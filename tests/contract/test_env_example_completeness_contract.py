@@ -71,6 +71,11 @@ ENV_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 # These are runtime-only / test-fixture / container-internal vars that
 # operators should never set in their local .env.
 ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
+    # Baked BGE artifact/runtime configuration, not root operator settings.
+    "TOKENIZER_DIR": "services/bge-m3-api/Dockerfile owns the in-image tokenizer path",
+    "HF_HUB_OFFLINE": "BGE Dockerfile/app enforce offline model loading",
+    "TRANSFORMERS_OFFLINE": "BGE Dockerfile/app enforce offline tokenizer loading",
+    "POLLING_LOCK_KEY": "scripts/e2e/demo_gate.py probe override; bot uses its canonical constant",
     # --- Standard library / Python runtime -----------------------------------
     "PATH": "OS PATH; never an operator-set bot variable",
     "HOME": "OS HOME; never an operator-set bot variable",
