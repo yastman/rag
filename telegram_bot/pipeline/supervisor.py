@@ -287,7 +287,7 @@ async def _supervisor_run_core(
         qdrant=bot._qdrant,
         reranker=bot._reranker,
         llm=bot._llm,
-        config=bot.config,
+        config=bot._graph_config,
     )
     async with ChatActionSender.typing(bot=aiogram_bot, chat_id=message.chat.id):
         core_result = await run_core_text_request(

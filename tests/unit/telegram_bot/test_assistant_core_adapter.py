@@ -82,7 +82,6 @@ async def test_run_core_text_request_uses_assistant_app(monkeypatch) -> None:
 
     result = await adapter.run_core_text_request(
         query="hello",
-        collection="collection-a",
         user_context=user_context,
         dependencies=dependencies,
         request_id="req-1",
@@ -92,7 +91,6 @@ async def test_run_core_text_request_uses_assistant_app(monkeypatch) -> None:
     assert seen["dependencies"] is dependencies
     run_text.assert_awaited_once_with(
         "hello",
-        collection="collection-a",
         user_context=user_context,
         request_id="req-1",
     )

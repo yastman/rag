@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.config import BotConfig
@@ -15,6 +16,17 @@ from tests.unit._bot_config_factory import make_bot_config as _make_config
 @asynccontextmanager
 async def _noop_typing(*_args, **_kwargs):
     yield
+
+
+def _fake_llm_response(text: str, model: str = "gpt-test") -> MagicMock:
+    """Build a minimal OpenAI-style completion response (real LLM interface)."""
+    choice = SimpleNamespace(message=SimpleNamespace(content=text))
+    usage = SimpleNamespace(completion_tokens=10)
+    resp = MagicMock()
+    resp.choices = [choice]
+    resp.usage = usage
+    resp.model = model
+    return resp
 
 
 def _create_bot(config: BotConfig | None = None):
@@ -310,6 +322,81 @@ class TestQuerySupervisorCoreEntrypoint:
         assert result == "Sunny Beach studio is 110k EUR."
         mock_run_core.assert_awaited_once()
         message.answer.assert_awaited_once()
+
+        # #3486: the core must receive the runtime GraphConfig, not BotConfig.
+        deps = mock_run_core.await_args.kwargs["dependencies"]
+        assert deps.config is bot._graph_config
+        assert deps.config is not bot.config
+        assert callable(deps.config.create_llm)
+        assert callable(deps.config.get_reasoning_kwargs)
+
+    async def test_core_generation_reaches_llm_boundary_with_graph_config(self):
+        """Regression #3486: the real supervisor → adapter → core → generation
+        chain reaches the substituted LLM boundary on non-empty retrieval.
+
+        Only retrieval (``assistant_pipeline.rag_pipeline``) and the external
+        LLM boundary (``GraphConfig.create_llm(...).completion``) are
+        substituted; ``run_core_text_request``, ``AssistantApp.run_text`` and
+        ``generate_answer`` run for real. With the defect, generation receives
+        ``BotConfig`` and the request dies with ``dependency_failed`` before
+        any LLM call.
+        """
+        bot = _create_bot()
+        message = _make_message("Подскажите варианты студии у моря")
+
+        async def fake_rag_pipeline(**_kwargs):
+            return {
+                "documents": [
+                    {
+                        "page_content": "Студия у моря в Солнечном Берегу стоит 110 000 евро.",
+                        "metadata": {
+                            "source_id": "doc-1",
+                            "title": "Studio fact",
+                            "url": "fixture://doc-1",
+                        },
+                    }
+                ],
+                "cache_hit": False,
+                "query_type": "GENERAL",
+            }
+
+        llm_spy = MagicMock()
+        llm_spy.completion = AsyncMock(
+            return_value=_fake_llm_response("Студия у моря стоит 110 000 евро.")
+        )
+
+        with (
+            patch(
+                "src.runtime.pipeline.assistant_pipeline.rag_pipeline",
+                new=fake_rag_pipeline,
+            ),
+            patch(
+                "src.runtime.config.GraphConfig.create_llm",
+                return_value=llm_spy,
+            ) as mock_create_llm,
+            patch(
+                "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
+                side_effect=_noop_typing,
+            ),
+        ):
+            bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._cache = MagicMock()
+            meta: dict = {}
+
+            result = await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="ru", root_trace_metadata=meta
+            )
+
+        # Generation built its LLM from the passed runtime config and reached
+        # the external completion boundary exactly once.
+        mock_create_llm.assert_called_once()
+        llm_spy.completion.assert_awaited_once()
+        # The answer is the LLM output (non-empty), not the dependency_failed
+        # service-unavailable canned response.
+        assert result.strip()
+        assert "110 000" in result
+        assert meta["query_type"] == "GENERAL"
+        assert meta["grounded"] is True
 
 
 class TestQuerySupervisorConvergence:
