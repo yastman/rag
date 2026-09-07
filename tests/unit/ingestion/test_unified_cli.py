@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -397,6 +398,171 @@ class TestCmdPreflight:
         output = capsys.readouterr().out
         assert "Sync dir" in output
         assert "[FAIL]" in output
+
+
+# ---------------------------------------------------------------------------
+# cmd_preflight — Qdrant authentication (#3494)
+# ---------------------------------------------------------------------------
+
+QDRANT_AUTH_HOST = "qdrant-preflight.test"
+BGE_AUTH_HOST = "bge-preflight.test"
+
+
+class TestPreflightQdrantAuth:
+    """Request-level Qdrant authentication for cmd_preflight (#3494).
+
+    Uses httpx.MockTransport so assertions run against real request objects
+    (per-host headers) and real response statuses. The Qdrant key must be
+    scoped to the Qdrant request only — the same client probes BGE-M3.
+    """
+
+    @staticmethod
+    def _base_env(tmp_path: Path) -> dict[str, str]:
+        sync_dir = tmp_path / "sync"
+        sync_dir.mkdir()
+        (sync_dir / "knowledge.md").write_text("# test", encoding="utf-8")
+        return {
+            "QDRANT_URL": f"http://{QDRANT_AUTH_HOST}:6333",
+            "BGE_M3_URL": f"http://{BGE_AUTH_HOST}:8000",
+            "COLLECTION_NAME": "preflight_col",
+            "SYNC_DIR": str(sync_dir),
+            "RAG_TESTING": "true",
+            "LANGFUSE_TRACING_ENABLED": "false",
+            "LANGFUSE_ENABLED": "false",
+            "OTEL_SDK_DISABLED": "true",
+        }
+
+    @staticmethod
+    def _patch_async_client(transport: httpx.MockTransport):
+        """Make httpx.AsyncClient(...) construct a real client on ``transport``."""
+        real_async_client = httpx.AsyncClient
+
+        def _factory(*args, **kwargs):
+            kwargs["transport"] = transport
+            return real_async_client(*args, **kwargs)
+
+        return patch("httpx.AsyncClient", side_effect=_factory)
+
+    async def _run_preflight(
+        self, env: dict[str, str], qdrant_responder
+    ) -> tuple[int, list[httpx.Request]]:
+        """Run cmd_preflight with the real UnifiedConfig from ``env``.
+
+        Records every outgoing request. Qdrant requests go to
+        ``qdrant_responder``; BGE probes always answer 200 without auth.
+        """
+        requests_seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests_seen.append(request)
+            if request.url.host == QDRANT_AUTH_HOST:
+                return qdrant_responder(request)
+            return httpx.Response(200, json={"embeddings": [[0.1]]})
+
+        transport = httpx.MockTransport(handler)
+        args = argparse.Namespace(command="preflight", verbose=False)
+        with (
+            patch.dict(os.environ, env, clear=True),
+            self._patch_async_client(transport),
+        ):
+            from src.ingestion.unified.cli import cmd_preflight
+
+            exit_code = await cmd_preflight(args)
+        return exit_code, requests_seen
+
+    def _qdrant_requests(self, requests_seen: list[httpx.Request]) -> list[httpx.Request]:
+        return [r for r in requests_seen if r.url.host == QDRANT_AUTH_HOST]
+
+    def _bge_requests(self, requests_seen: list[httpx.Request]) -> list[httpx.Request]:
+        return [r for r in requests_seen if r.url.host == BGE_AUTH_HOST]
+
+    async def test_configured_key_authenticates_protected_qdrant(self, tmp_path, capsys):
+        """A correctly configured key makes preflight of a protected collection pass."""
+        KEY = "correct-preflight-key"
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            if request.headers.get("api-key") == KEY:
+                return httpx.Response(200, json={"result": {"points_count": 7}})
+            return httpx.Response(401, json={"status": {"error": "Unauthorized"}})
+
+        env = self._base_env(tmp_path) | {"QDRANT_API_KEY": KEY}
+        exit_code, requests_seen = await self._run_preflight(env, respond)
+
+        assert exit_code == 0
+        output = capsys.readouterr().out
+        assert "READY" in output
+        assert KEY not in output  # credential never surfaces in output
+
+        qdrant_requests = self._qdrant_requests(requests_seen)
+        assert len(qdrant_requests) == 1
+        request = qdrant_requests[0]
+        assert request.method == "GET"
+        assert request.url.path == "/collections/preflight_col"
+        assert request.headers.get("api-key") == KEY
+
+    async def test_wrong_key_against_protected_qdrant_is_not_ready(self, tmp_path, capsys):
+        """A wrong key keeps a controlled failed result (HTTP 401, exit 1)."""
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"status": {"error": "Unauthorized"}})
+
+        env = self._base_env(tmp_path) | {"QDRANT_API_KEY": "wrong-preflight-key"}
+        exit_code, requests_seen = await self._run_preflight(env, respond)
+
+        assert exit_code == 1
+        output = capsys.readouterr().out
+        assert "NOT READY" in output
+        assert "HTTP 401" in output
+        assert "wrong-preflight-key" not in output
+        # The configured (wrong) key was still sent to Qdrant only.
+        assert self._qdrant_requests(requests_seen)[0].headers.get("api-key") == (
+            "wrong-preflight-key"
+        )
+
+    async def test_missing_key_against_protected_qdrant_is_not_ready(self, tmp_path, capsys):
+        """No configured key against a protected collection: controlled 401, exit 1."""
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"status": {"error": "Unauthorized"}})
+
+        env = self._base_env(tmp_path)  # QDRANT_API_KEY absent
+        exit_code, requests_seen = await self._run_preflight(env, respond)
+
+        assert exit_code == 1
+        output = capsys.readouterr().out
+        assert "NOT READY" in output
+        assert "HTTP 401" in output
+        assert "api-key" not in self._qdrant_requests(requests_seen)[0].headers
+
+    async def test_empty_key_unauthenticated_qdrant_sends_no_auth(self, tmp_path, capsys):
+        """Empty key against an open Qdrant: no auth header sent, preflight passes."""
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            assert "api-key" not in request.headers
+            assert "authorization" not in request.headers
+            return httpx.Response(200, json={"result": {"points_count": 3}})
+
+        env = self._base_env(tmp_path) | {"QDRANT_API_KEY": ""}
+        exit_code, _ = await self._run_preflight(env, respond)
+
+        assert exit_code == 0
+        assert "READY" in capsys.readouterr().out
+
+    async def test_bge_probes_never_receive_qdrant_credentials(self, tmp_path):
+        """The Qdrant key must never leak to the BGE host via shared client headers."""
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"result": {"points_count": 7}})
+
+        env = self._base_env(tmp_path) | {"QDRANT_API_KEY": "correct-preflight-key"}
+        exit_code, requests_seen = await self._run_preflight(env, respond)
+
+        assert exit_code == 0
+        bge_requests = self._bge_requests(requests_seen)
+        assert {r.url.path for r in bge_requests} == {"/encode/dense", "/encode/sparse"}
+        for request in bge_requests:
+            assert "api-key" not in request.headers
+            assert "authorization" not in request.headers
 
 
 # ---------------------------------------------------------------------------

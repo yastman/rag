@@ -90,8 +90,16 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         # Qdrant reachable + collection exists
+        # #3494: authenticate the Qdrant request with the configured key.
+        # Per-request headers only — the shared client also probes BGE-M3,
+        # which must never receive the Qdrant credential.
+        qdrant_api_key = config.qdrant_api_key
+        qdrant_headers = {"api-key": qdrant_api_key} if qdrant_api_key else None
         try:
-            resp = await client.get(f"{config.qdrant_url}/collections/{config.collection_name}")
+            resp = await client.get(
+                f"{config.qdrant_url}/collections/{config.collection_name}",
+                headers=qdrant_headers,
+            )
             results["qdrant"] = resp.status_code == 200
             if results["qdrant"]:
                 data = resp.json().get("result", {})
