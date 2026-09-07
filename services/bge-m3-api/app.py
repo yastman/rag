@@ -250,7 +250,12 @@ class EncodeRequest(BaseModel):
     texts: list[str] = Field(
         ..., description="List of texts to encode", max_length=ENCODE_MAX_ITEMS
     )
-    max_length: int = Field(settings.MAX_LENGTH, description="Max token length")
+    max_length: int = Field(
+        settings.MAX_LENGTH,
+        description="Max token length (1 through the configured MAX_LENGTH)",
+        ge=1,
+        le=settings.MAX_LENGTH,
+    )
 
 
 class PartialFailure(BaseModel):

@@ -836,3 +836,66 @@ class TestEncodeMaxItems:
         at_limit = ["text"] * ENCODE_MAX_ITEMS
         resp = await client.post("/encode/dense", json={"texts": at_limit})
         assert resp.status_code == 200
+
+
+class TestEncodeMaxLengthValidation:
+    """Tests for EncodeRequest.max_length bounds on /encode/* endpoints (#3493).
+
+    The lower bound is 1 and the upper bound is the existing configured
+    ``settings.MAX_LENGTH`` (config.py contract), used for both the default
+    and the upper bound — no new constant, no clamping.
+    """
+
+    _PATHS = (
+        "/encode/dense", "/encode/sparse", "/encode/colbert", "/encode/hybrid",
+    )
+
+    @pytest.mark.parametrize("path", _PATHS)
+    @pytest.mark.parametrize("max_length", (-1, 0, 2049))
+    async def test_invalid_length_never_calls_model(
+        self, client, bge_app, monkeypatch, path, max_length
+    ):
+        """Out-of-range max_length returns 422 before any model call."""
+        fake_model = bge_app["fake_model"]
+        # Spy installed AFTER fixture setup/warmup: counts only this request.
+        encode = MagicMock(wraps=fake_model.encode)
+        monkeypatch.setattr(fake_model, "encode", encode)
+        response = await client.post(path, json={
+            "texts": ["audit"], "max_length": max_length,
+        })
+        assert response.status_code == 422
+        encode.assert_not_called()
+
+    @pytest.mark.parametrize("path", _PATHS)
+    @pytest.mark.parametrize(
+        ("request_body", "expected_max_length"),
+        (
+            ({"texts": ["audit"], "max_length": 1}, 1),
+            ({"texts": ["audit"], "max_length": 2048}, 2048),
+            # Parameter absent → DTO default (settings.MAX_LENGTH) reaches the model.
+            ({"texts": ["audit"]}, 2048),
+        ),
+        ids=("min-1", "max-2048", "default-absent"),
+    )
+    async def test_valid_length_passes_expected_value_to_model(
+        self, client, bge_app, monkeypatch, path, request_body, expected_max_length
+    ):
+        """Boundary values and the absent parameter reach the model unchanged."""
+        fake_model = bge_app["fake_model"]
+        # Fresh spy per request — no accumulated-call reuse.
+        encode = MagicMock(wraps=fake_model.encode)
+        monkeypatch.setattr(fake_model, "encode", encode)
+        response = await client.post(path, json=request_body)
+        assert response.status_code == 200
+        assert encode.call_args.kwargs["max_length"] == expected_max_length
+
+    async def test_openapi_schema_documents_bounds(self, client, bge_app):
+        """OpenAPI schema shows minimum=1, maximum/default=settings.MAX_LENGTH."""
+        settings_max_length = bge_app["config"].settings.MAX_LENGTH
+        response = await client.get("/openapi.json")
+        assert response.status_code == 200
+        schema = response.json()["components"]["schemas"]["EncodeRequest"]
+        max_length_schema = schema["properties"]["max_length"]
+        assert max_length_schema["minimum"] == 1
+        assert max_length_schema["maximum"] == settings_max_length
+        assert max_length_schema["default"] == settings_max_length
