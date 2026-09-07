@@ -1,21 +1,27 @@
 """Focused unit tests for generate_answer (src/runtime/generation/service.py).
 
-Three scenarios, no live LLM key:
+Scenarios, no live LLM key:
 1. Happy path — LLM responds; result carries answer + grounded=True
 2. LLM failure fallback — exception during LLM call → reasonable response, no raise
 3. Low-grounding / safe-fallback — strict grounding mode with low-confidence docs →
    returns safe_fallback_used=True, no LLM call
+4. #3483 — LiteLLM connection failure classified through the project-owned
+   boundary exception (LLMConnectionError), same safe fallback semantics;
+   non-connection provider errors stay distinguishable and observable.
 """
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from litellm.exceptions import APIConnectionError, RateLimitError
 
 from src.runtime.generation.contracts import GenerationRequest
 from src.runtime.generation.service import generate_answer
+from src.runtime.llm.router import LiteLlmClient
 from src.runtime.services.coverage_mode import CoverageDecision
 from src.runtime.services.response_style_detector import StyleInfo
 
@@ -173,3 +179,116 @@ async def test_generate_answer_safe_fallback_on_low_grounding() -> None:
     assert result.payload["llm_provider_model"] == "safe_fallback"
     # LLM was never invoked
     llm_mock.completion.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test 4 (#3483): LiteLLM connection-error classification end to end
+# ---------------------------------------------------------------------------
+
+
+class _FailingRouter:
+    """LiteLLM Router double whose acompletion raises the given provider error (#3483)."""
+
+    def __init__(self, exc: BaseException) -> None:
+        self.exc = exc
+
+    async def acompletion(self, **kwargs: object) -> object:
+        raise self.exc
+
+
+_DOCS = [
+    {
+        "metadata": {"title": "Объект B2", "price": 95000, "city": "Варна"},
+        "content": "Рассрочка доступна",
+    }
+]
+
+
+def _request_with_failing_router(exc: BaseException) -> GenerationRequest:
+    """Build a normal-path request whose config yields a REAL LiteLlmClient over a failing Router."""
+    cfg = _config()
+    cfg.create_llm.return_value = LiteLlmClient(
+        router=_FailingRouter(exc), default_model="gpt-test", timeout=5
+    )
+    return GenerationRequest(
+        query="Что такое рассрочка?",
+        documents=_DOCS,
+        grounding_mode="normal",
+        llm_call_count=1,
+        config=cfg,
+        extra_kwargs=_base_dyn(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_answer_litellm_connection_error_classified_through_boundary(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """#3483: a LiteLLM connection failure is normalized at the adapter boundary and
+    logged as a connection failure — not an unknown provider failure — with the same
+    safe fallback semantics as before the refactor.
+
+    Characterization on base (7f5b0eceb): the same Router double produced a
+    WARNING with the raw provider type name "(APIConnectionError)" only because
+    policy._is_connection_error imported openai.APIConnectionError directly and
+    litellm's error subclasses it. The repair keeps the classification (WARNING,
+    no traceback) but routes it through the project-owned LLMConnectionError.
+    """
+    request = _request_with_failing_router(
+        APIConnectionError("Connection refused", llm_provider="test", model="test")
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="src.runtime.generation.service"):
+        result = await generate_answer(request)
+
+    # Classified as a connection failure through the project-owned boundary.
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING
+        and "LLM connection failed (LLMConnectionError)" in r.getMessage()
+    ]
+    assert warnings, (
+        "LiteLLM connection failure must be recognized through the canonical "
+        "adapter/error contract (project-owned LLMConnectionError), got: "
+        + "; ".join(r.getMessage() for r in caplog.records)
+    )
+    # Not an unknown provider failure: no ERROR-level traceback log.
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    # Fallback text / cache-safety semantics are unchanged.
+    assert result.response_text
+    assert result.payload["response"].startswith("⚠️")
+    assert result.payload["llm_provider_model"] == "fallback"
+    assert result.payload["grounded"] is False
+    assert result.payload["llm_timeout"] is True
+    assert result.payload["fallback_used"] is True
+    assert result.payload["safe_fallback_used"] is False
+    assert result.payload["semantic_cache_safe_reuse"] is False
+    assert result.payload["llm_call_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_generate_answer_non_connection_provider_error_remains_observable(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """#3483 pin: a non-connection provider error is NOT classified as a connection
+    failure — it keeps the ERROR-level traceback observability and the same fallback."""
+    request = _request_with_failing_router(
+        RateLimitError("quota exhausted", llm_provider="test", model="test")
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="src.runtime.generation.service"):
+        result = await generate_answer(request)
+
+    assert not [r for r in caplog.records if "LLM connection failed" in r.getMessage()], (
+        "a rate-limit error must not be classified as a connection failure"
+    )
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR and r.exc_info]
+    assert errors, "non-connection provider failures must stay observable with a traceback"
+
+    # Same safe fallback semantics as the connection branch.
+    assert result.response_text
+    assert result.payload["llm_provider_model"] == "fallback"
+    assert result.payload["grounded"] is False
+    assert result.payload["semantic_cache_safe_reuse"] is False

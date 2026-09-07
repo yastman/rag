@@ -14,6 +14,7 @@ import logging
 import time
 from typing import Any
 
+from src.adapters.llm.base import LLMConnectionError
 from src.runtime.grounding.policy import should_safe_fallback
 
 from .contracts import GenerationCallable, GenerationRequest, GenerationResult
@@ -199,9 +200,10 @@ async def generate_answer(
             completion_tokens = _coerce_positive_number(getattr(usage, "completion_tokens", None))
 
     except Exception as e:
-        from .policy import _is_connection_error
-
-        if _is_connection_error(e):
+        # #3483: connection failures arrive pre-normalized as the project-owned
+        # LLMConnectionError from the LiteLLM boundary (LiteLlmClient.completion);
+        # every other provider failure keeps its raw type and traceback log.
+        if isinstance(e, LLMConnectionError):
             logger.warning(
                 "generate_answer: LLM connection failed (%s), using fallback", type(e).__name__
             )

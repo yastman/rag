@@ -8,6 +8,7 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
+from src.adapters.llm.base import LLMConnectionError
 from src.runtime.grounding.policy import should_safe_fallback
 from src.runtime.llm import normalize_connection_error
 
@@ -303,7 +304,13 @@ async def generate_answer_stream(
 
             if hasattr(chunk, "model") and chunk.model:
                 actual_model = chunk.model
+    except LLMConnectionError as exc:
+        # #3483: already normalized at the LiteLLM boundary while awaiting the
+        # stream (LiteLlmClient.completion); keep the connection-error log.
+        logger.exception("LLM connection error during streaming: %s", exc)
+        raise
     except Exception as exc:
+        # Raw provider errors can still escape mid-iteration (chunk transport).
         normalized = normalize_connection_error(exc)
         if normalized is not None:
             logger.exception("LLM connection error during streaming: %s", exc)

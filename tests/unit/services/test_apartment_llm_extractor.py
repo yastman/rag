@@ -10,6 +10,7 @@ import pytest
 from litellm.exceptions import APIConnectionError
 from pydantic import ValidationError
 
+from src.adapters.llm.base import LLMConnectionError
 from src.models.apartment import (
     ApartmentSearchFilters,
     ExtractionMeta,
@@ -181,7 +182,12 @@ class TestNativeStructuredRoundTrip:
             await extractor.extract(query="двушка")
 
     async def test_provider_connection_error_propagates(self) -> None:
-        """Provider failure propagates unchanged to the pipeline's regex-only fallback."""
+        """Provider connection failure propagates to the pipeline's regex-only fallback.
+
+        #3483: the failure surfaces as the project-owned LLMConnectionError —
+        the LiteLLM boundary owns provider exception classification; the raw
+        provider error stays attached for diagnostics.
+        """
 
         class _DownRouter:
             async def acompletion(self, **kwargs: object) -> object:
@@ -194,8 +200,9 @@ class TestNativeStructuredRoundTrip:
         extractor = _make_extractor(
             create_llm_client(model="gpt-4o-mini", router=_DownRouter(), timeout=5)
         )
-        with pytest.raises(APIConnectionError):
+        with pytest.raises(LLMConnectionError) as excinfo:
             await extractor.extract(query="двушка")
+        assert isinstance(excinfo.value.raw_error, APIConnectionError)
 
 
 class TestMergeExtractionResults:
