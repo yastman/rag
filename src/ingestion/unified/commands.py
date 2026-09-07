@@ -49,7 +49,12 @@ def _inspect_sync_dir(
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Run ingestion."""
+    """Run ingestion.
+
+    Returns 0 only when the finished one-shot batch reports no per-file
+    errors; any ``errors > 0`` in the orchestrator result fails the command
+    with exit code 1 and a terminal ``error`` trace (#3489).
+    """
     from src.ingestion.unified.config import UnifiedConfig
     from src.ingestion.unified.flow import run_once, run_watch
 
@@ -61,8 +66,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         if watch_mode:
             logging.info("Starting watch mode via new orchestrator path")
             run_watch(config)
+            result = None
         else:
-            run_once(config)
+            result = run_once(config)
     except Exception as exc:
         try_update_ingestion_trace(
             command="run",
@@ -71,9 +77,24 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         raise
 
-    try_update_ingestion_trace(command="run", status="completed", metadata={"watch": watch_mode})
+    if result is None:
+        # Watch mode keeps its previous terminal shape (#3489 keeps it as-is).
+        try_update_ingestion_trace(
+            command="run", status="completed", metadata={"watch": watch_mode}
+        )
+        return 0
 
-    return 0
+    metadata = {
+        "watch": False,
+        "processed": result.processed,
+        "skipped": result.skipped,
+        "errors": result.errors,
+    }
+    status = "error" if result.errors > 0 else "completed"
+    exit_code = 1 if result.errors > 0 else 0
+    try_update_ingestion_trace(command="run", status=status, metadata=metadata)
+
+    return exit_code
 
 
 async def cmd_preflight(args: argparse.Namespace) -> int:
