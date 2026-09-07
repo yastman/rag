@@ -73,7 +73,7 @@ async def run_assistant_pipeline(
             response_text = (
                 _get_chitchat_response(request.query)
                 if request_type == CHITCHAT
-                else choice(OFF_TOPIC_RESPONSES)
+                else choice(OFF_TOPIC_RESPONSES)  # nosec B311 - non-crypto
             )
             emit_product_event(
                 dependencies.telemetry,
@@ -162,21 +162,14 @@ async def run_assistant_pipeline(
 
         documents = _as_document_list(rag_result.get("documents"))
         retrieved_doc_ids = _extract_doc_ids(documents)
-        emit_product_event(
-            dependencies.telemetry,
-            "search_completed",
-            request_id=rid,
-            route="cache_hit" if rag_result.get("cache_hit") else "rag_search",
-            request_type=request_type,
-            retrieved_doc_ids=retrieved_doc_ids,
-            latency_ms=_latency_ms(started),
-            error_type=None,
-        )
 
         if rag_result.get("embedding_error"):
             # Terminal embedding/BGE dependency failure (#3321): preserve the
             # controlled service-unavailable response. Generation, semantic
             # cache store, rerank fallback, and success telemetry must not run.
+            # The search outcome is emitted only here (#3479): exactly one
+            # search_completed event per completed search, categorized as a
+            # dependency error — never a preceding rag_search success.
             error_type = str(rag_result.get("embedding_error_type") or "embedding_error")
             emit_product_event(
                 dependencies.telemetry,
@@ -198,6 +191,20 @@ async def run_assistant_pipeline(
                 request_id=rid,
                 cache_hit=False,
             )
+
+        # Retrieval succeeded (fresh search or cache hit): emit the single
+        # search outcome now that the outcome is known (#3479). Still fires
+        # before generation so the search stage stays attributed separately.
+        emit_product_event(
+            dependencies.telemetry,
+            "search_completed",
+            request_id=rid,
+            route="cache_hit" if rag_result.get("cache_hit") else "rag_search",
+            request_type=request_type,
+            retrieved_doc_ids=retrieved_doc_ids,
+            latency_ms=_latency_ms(started),
+            error_type=None,
+        )
 
         if rag_result.get("cache_hit"):
             return AssistantResult(

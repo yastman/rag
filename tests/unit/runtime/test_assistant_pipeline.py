@@ -382,6 +382,116 @@ async def test_embedding_error_is_terminal_dependency_failure(monkeypatch) -> No
     cache.assert_not_awaited()
 
 
+# Regression #3479: a terminal embedding dependency failure must produce
+# exactly ONE truthful search outcome — the dependency error — never a
+# preceding rag_search success for the same request. Driven through the
+# public core entrypoint with a recording telemetry listener and a real
+# rag_pipeline whose embedding dependency is down.
+async def test_embedding_error_emits_single_dependency_error_search_outcome() -> None:
+    from unittest.mock import patch
+
+    from src.core import CoreDependencies, UserContext
+    from src.core.assistant import run_assistant_request
+
+    query = "тестовый вопрос по документам поиска"
+    rid = "req-3479-embed-outage"
+
+    class _RecordingTelemetry:
+        def __init__(self) -> None:
+            self.events: list[tuple[str, dict[str, Any]]] = []
+
+        def log_event(self, event: str, **fields: Any) -> None:
+            self.events.append((event, dict(fields)))
+
+    class _EmbedOutageEmbeddings:
+        async def aembed_query(self, text: str) -> list[float]:
+            raise RuntimeError("bge endpoint unavailable")
+
+    class _StubSparseEmbeddings:
+        async def aembed_query(self, text: str) -> dict[str, Any]:
+            return {}
+
+    class _StubQdrant:
+        async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+            return []
+
+    class _EmbedOutageCache:
+        def __init__(self) -> None:
+            self.semantic_stores: list[dict[str, Any]] = []
+
+        async def get_embedding(self, key: str) -> list[float] | None:
+            return None
+
+        async def check_semantic(self, *args: object, **kwargs: object) -> dict | None:
+            return None
+
+        async def store_semantic(self, *args: object, **kwargs: object) -> bool:
+            self.semantic_stores.append(dict(kwargs))
+            return True
+
+    telemetry = _RecordingTelemetry()
+    cache = _EmbedOutageCache()
+    generate_calls: list[Any] = []
+
+    async def _generate_must_not_run(request: Any) -> Any:
+        generate_calls.append(request)
+        raise AssertionError("generation must not run after embedding failure")
+
+    dependencies = CoreDependencies(
+        cache=cache,
+        embeddings=_EmbedOutageEmbeddings(),
+        sparse_embeddings=_StubSparseEmbeddings(),
+        qdrant=_StubQdrant(),
+        config=object(),
+        telemetry=telemetry,
+    )
+
+    with patch(
+        "src.runtime.pipeline.assistant_pipeline.generate_answer",
+        _generate_must_not_run,
+    ):
+        result = await run_assistant_request(
+            query,
+            user_context=UserContext(user_id="42", session_id="s"),
+            request_id=rid,
+            dependencies=dependencies,
+        )
+
+    # Terminal embedding-error result (#3321 behavior preserved).
+    assert result.route == "dependency_error"
+    assert result.error_type
+
+    # COMPLETE ordered event list: one started, ONE search outcome carrying
+    # the error category, one completed — no interleaved success.
+    assert [(name, fields.get("route")) for name, fields in telemetry.events] == [
+        ("assistant_request_started", "unknown"),
+        ("search_completed", "dependency_error"),
+        ("assistant_request_completed", "dependency_error"),
+    ]
+
+    search_events = [
+        fields
+        for name, fields in telemetry.events
+        if name == "search_completed" and fields.get("request_id") == rid
+    ]
+    assert [fields.get("route") for fields in search_events] == ["dependency_error"]
+    assert search_events[0]["error_type"]  # an error category, not a success
+    # No raw query text leaked into the outcome payload.
+    assert query not in [str(value) for value in search_events[0].values()]
+
+    # No rag_search success outcome for this request.
+    assert [
+        fields
+        for name, fields in telemetry.events
+        if name == "search_completed"
+        and fields.get("request_id") == rid
+        and fields.get("route") == "rag_search"
+    ] == []
+
+    assert generate_calls == []
+    assert cache.semantic_stores == []
+
+
 # Regression #3320: grounding policy must be computed BEFORE the semantic
 # cache read so strict requests require safe-reuse evidence.
 async def test_strict_grounding_policy_reaches_cache_read(monkeypatch) -> None:
