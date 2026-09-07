@@ -1,4 +1,4 @@
-"""Verify .env.example contains all BotConfig CRM/manager fields (#402)."""
+"""Verify .env.example contains required BotConfig manager/database fields (#402)."""
 
 import re
 from pathlib import Path
@@ -57,9 +57,7 @@ class TestEnvExampleSanitization:
 
 
 class TestEnvExampleCompleteness:
-    """Env example must document all CRM and manager config vars."""
-
-    REQUIRED_CRM_VARS: list[str] = []
+    """Env example must document required manager and database config vars."""
 
     REQUIRED_MANAGER_VARS = [
         "MANAGER_IDS",
@@ -69,13 +67,6 @@ class TestEnvExampleCompleteness:
         "REALESTATE_DATABASE_URL",
     ]
 
-    REQUIRED_RUNTIME_VARS: list[str] = []
-
-    @pytest.mark.parametrize("var", REQUIRED_CRM_VARS)
-    def test_crm_var_in_env_example(self, var: str):
-        keys = _parse_env_example()
-        assert var in keys, f"{var} missing from .env.example"
-
     @pytest.mark.parametrize("var", REQUIRED_MANAGER_VARS)
     def test_manager_var_in_env_example(self, var: str):
         keys = _parse_env_example()
@@ -83,10 +74,5 @@ class TestEnvExampleCompleteness:
 
     @pytest.mark.parametrize("var", REQUIRED_DB_VARS)
     def test_db_var_in_env_example(self, var: str):
-        keys = _parse_env_example()
-        assert var in keys, f"{var} missing from .env.example"
-
-    @pytest.mark.parametrize("var", REQUIRED_RUNTIME_VARS)
-    def test_runtime_var_in_env_example(self, var: str):
         keys = _parse_env_example()
         assert var in keys, f"{var} missing from .env.example"
