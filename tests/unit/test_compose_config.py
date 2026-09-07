@@ -5,13 +5,12 @@ Covers three issues (M7, M8, M9):
        opt-in profile service, the bot no longer waits for it and degrades
        gracefully — bookmarks capability disabled — without it)
   M8 - Makefile docker-ai-up target must use a profile that exists in dev compose
-  M9 - VPS compose must have the same security baseline as dev compose
+  M9 - base compose must define the x-security-defaults anchor overlays reuse
 """
 
 from __future__ import annotations
 
 import re
-from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -21,30 +20,12 @@ import yaml
 ROOT = Path(__file__).parents[2]
 BASE_COMPOSE = ROOT / "compose.yml"
 DEV_OVERRIDE = ROOT / "compose.dev.yml"
-VPS_OVERRIDE = ROOT / "compose.vps.yml"
 MAKEFILE = ROOT / "Makefile"
 
 
 def _load_compose(path: Path) -> dict:
     with path.open() as f:
         return yaml.full_load(f)
-
-
-def _merge_value(base: object, override: object) -> object:
-    if isinstance(base, dict) and isinstance(override, dict):
-        merged = deepcopy(base)
-        for key, value in override.items():
-            merged[key] = _merge_value(merged[key], value) if key in merged else deepcopy(value)
-        return merged
-    return deepcopy(override)
-
-
-def _merge_compose(*paths: Path) -> dict:
-    merged: dict = {}
-    for path in paths:
-        data = _load_compose(path)
-        merged = _merge_value(merged, data)
-    return merged
 
 
 def _load_merged_dev() -> dict:
@@ -62,13 +43,6 @@ def _load_merged_dev() -> dict:
 @pytest.fixture(scope="module")
 def dev() -> dict:
     return _load_merged_dev()
-
-
-@pytest.fixture(scope="module")
-def vps() -> dict:
-    if not VPS_OVERRIDE.exists():
-        pytest.skip("compose.vps.yml is not tracked in the public repo")
-    return _merge_compose(BASE_COMPOSE, VPS_OVERRIDE)
 
 
 # =============================================================================
@@ -116,16 +90,6 @@ class TestBotDependsOnPostgres:
         """The core demo topology services must start by default."""
         assert not dev["services"][svc_name].get("profiles"), (
             f"{svc_name} belongs to the core demo topology and must be unprofiled"
-        )
-
-    def test_vps_bot_postgres_dependency_is_healthy(self, vps: dict) -> None:
-        """VPS bot postgres dependency (when the private overlay re-adds it) is healthy."""
-        bot = vps["services"]["bot"]
-        depends = bot.get("depends_on") or {}
-        if "postgres" not in depends:
-            pytest.skip("VPS overlay adopts the #3241 opt-in topology (no postgres dependency)")
-        assert depends["postgres"]["condition"] == "service_healthy", (
-            "bot.depends_on.postgres must use condition: service_healthy in vps"
         )
 
 
@@ -179,40 +143,12 @@ class TestMakefileAiProfile:
 
 
 # =============================================================================
-# M9 — VPS security baseline parity with dev compose
+# M9 — base compose security defaults (anchor reused by overlays)
 # =============================================================================
 
-# Services that have security defaults applied in dev compose (via <<: *security-defaults)
-_SECURITY_SERVICES = ["bge-m3", "docling", "bot"]
 
-# Services that exist in both dev AND vps compose
-_VPS_SECURITY_SERVICES = [s for s in _SECURITY_SERVICES if s != "ingestion"]
-
-
-class TestVpsSecurityBaseline:
-    """M9: VPS compose services must match the security baseline from dev compose."""
-
-    @pytest.mark.parametrize("svc_name", _VPS_SECURITY_SERVICES)
-    def test_vps_service_has_security_opt(self, vps: dict, svc_name: str) -> None:
-        """VPS service must have security_opt: no-new-privileges."""
-        services = vps["services"]
-        if svc_name not in services:
-            pytest.skip(f"Service {svc_name} not present in vps compose")
-        svc = services[svc_name]
-        assert "security_opt" in svc, f"vps:{svc_name} missing security_opt (no-new-privileges)"
-        assert "no-new-privileges:true" in svc["security_opt"], (
-            f"vps:{svc_name}.security_opt must include 'no-new-privileges:true'"
-        )
-
-    @pytest.mark.parametrize("svc_name", _VPS_SECURITY_SERVICES)
-    def test_vps_service_has_cap_drop_all(self, vps: dict, svc_name: str) -> None:
-        """VPS service must drop ALL Linux capabilities."""
-        services = vps["services"]
-        if svc_name not in services:
-            pytest.skip(f"Service {svc_name} not present in vps compose")
-        svc = services[svc_name]
-        assert "cap_drop" in svc, f"vps:{svc_name} missing cap_drop"
-        assert "ALL" in svc["cap_drop"], f"vps:{svc_name}.cap_drop must include 'ALL'"
+class TestBaseComposeSecurityDefaults:
+    """M9: base compose defines the shared security baseline overlays reuse."""
 
     def test_base_has_x_security_defaults_anchor(self) -> None:
         """Base compose must define x-security-defaults YAML extension anchor."""
@@ -220,132 +156,3 @@ class TestVpsSecurityBaseline:
         assert "x-security-defaults" in content, (
             "compose.yml is missing x-security-defaults extension field"
         )
-
-    @pytest.mark.parametrize("svc_name", ["bge-m3", "bot"])
-    def test_vps_service_has_read_only(self, vps: dict, svc_name: str) -> None:
-        """VPS services that are read-only in dev must also be read-only in vps."""
-        services = vps["services"]
-        if svc_name not in services:
-            pytest.skip(f"Service {svc_name} not present in vps compose")
-        svc = services[svc_name]
-        assert svc.get("read_only") is True, (
-            f"vps:{svc_name} must have read_only: true (matching dev compose)"
-        )
-
-    @pytest.mark.parametrize("svc_name", ["bge-m3", "bot"])
-    def test_vps_service_has_tmpfs(self, vps: dict, svc_name: str) -> None:
-        """VPS services must have tmpfs /tmp (required when read_only: true)."""
-        services = vps["services"]
-        if svc_name not in services:
-            pytest.skip(f"Service {svc_name} not present in vps compose")
-        svc = services[svc_name]
-        tmpfs = svc.get("tmpfs", [])
-        assert "/tmp" in tmpfs, (
-            f"vps:{svc_name} missing tmpfs: [/tmp] (needed with read_only: true)"
-        )
-
-
-def _memory_to_mb(raw: str) -> int:
-    """Parse Docker memory limit string (e.g. '512M', '1G', '1536M') to megabytes."""
-    raw = str(raw).strip().upper()
-    match = re.fullmatch(r"(\d+)([MG])", raw)
-    assert match, f"Unsupported memory limit format: {raw!r}"
-    value = int(match.group(1))
-    unit = match.group(2)
-    return value * 1024 if unit == "G" else value
-
-
-def _duration_to_seconds(raw: str) -> int:
-    match = re.fullmatch(r"(\d+)([smh])", str(raw).strip())
-    assert match, f"Unsupported duration format: {raw!r}"
-    value = int(match.group(1))
-    unit = match.group(2)
-    return value if unit == "s" else value * 60 if unit == "m" else value * 3600
-
-
-class TestModelServiceHealthcheckGrace:
-    """Model services need enough healthcheck grace period for cold starts."""
-
-    @pytest.mark.parametrize("svc_name", ["bge-m3"])
-    def test_model_service_start_period_is_sufficient(self, vps: dict, svc_name: str) -> None:
-        svc = vps["services"][svc_name]
-        start_period = svc.get("healthcheck", {}).get("start_period")
-        assert start_period, f"{svc_name}.healthcheck.start_period is required"
-        assert _duration_to_seconds(start_period) >= 300, (
-            f"{svc_name}.healthcheck.start_period must be >=300s for cold model downloads; "
-            f"got {start_period!r}"
-        )
-
-
-class TestPostgresShutdownSafety:
-    """Stateful Postgres must get enough time to exit cleanly before Docker kills it."""
-
-    def test_postgres_has_explicit_stop_grace_period(self, vps: dict) -> None:
-        postgres = vps["services"]["postgres"]
-        stop_grace_period = postgres.get("stop_grace_period")
-        assert stop_grace_period, "postgres.stop_grace_period is required for graceful WAL flush"
-        assert _duration_to_seconds(stop_grace_period) >= 30, (
-            "postgres.stop_grace_period must be >=30s to avoid forced kills during shutdown; "
-            f"got {stop_grace_period!r}"
-        )
-
-
-VPS_CORE_SERVICES = {
-    "postgres",
-    "redis",
-    "qdrant",
-    "bge-m3",
-    "bot",
-}
-
-VPS_NONCORE_SERVICES = {
-    "docling",
-    "ingestion",
-    "clickhouse",
-    "minio",
-    "redis-langfuse",
-    "langfuse-worker",
-    "langfuse",
-}
-
-
-class TestVpsMinimalRuntime:
-    """Minimal VPS runtime: only RAG chatbot core starts by default."""
-
-    @pytest.mark.parametrize("svc_name", sorted(VPS_CORE_SERVICES))
-    def test_vps_core_service_is_profile_free(self, vps: dict, svc_name: str) -> None:
-        svc = vps["services"][svc_name]
-        assert not svc.get("profiles"), f"{svc_name} must start in default VPS runtime"
-
-    @pytest.mark.parametrize("svc_name", sorted(VPS_NONCORE_SERVICES))
-    def test_vps_noncore_service_is_profile_gated(self, vps: dict, svc_name: str) -> None:
-        svc = vps["services"][svc_name]
-        assert "vps-noncore" in (svc.get("profiles") or []), (
-            f"{svc_name} must not start in default VPS runtime"
-        )
-
-    @pytest.mark.parametrize("svc_name", ["langfuse"])
-    def test_vps_noncore_host_ports_removed(self, vps: dict, svc_name: str) -> None:
-        assert not vps["services"][svc_name].get("ports"), (
-            f"{svc_name} should not publish host ports in minimal VPS default"
-        )
-
-    @pytest.mark.parametrize("svc_name", ["bot"])
-    def test_vps_core_does_not_default_to_internal_langfuse(self, vps: dict, svc_name: str) -> None:
-        env = vps["services"][svc_name]["environment"]
-        assert env.get("LANGFUSE_HOST") != "${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}"
-        assert "http://langfuse:3000" not in str(env.get("LANGFUSE_HOST", ""))
-
-
-class TestHandoffComposeContract:
-    """Bot compose env must expose the production handoff contract."""
-
-    def test_vps_bot_compose_includes_handoff_flag(self, vps: dict) -> None:
-        bot_env = vps["services"]["bot"]["environment"]
-        assert "HANDOFF_ENABLED" in bot_env
-        assert bot_env["HANDOFF_ENABLED"] == "${HANDOFF_ENABLED:-false}"
-
-    def test_vps_bot_compose_includes_handoff_contract_env(self, vps: dict) -> None:
-        bot_env = vps["services"]["bot"]["environment"]
-        assert "HANDOFF_ENABLED" in bot_env
-        assert "MANAGERS_GROUP_ID" in bot_env

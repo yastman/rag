@@ -31,10 +31,3 @@ class TestDevComposeEnv:
     def test_dev_compose_has_var(self, var: str):
         env = _load_bot_env("compose.yml")
         assert var in env, f"{var} missing from compose.yml bot environment"
-
-
-class TestVpsComposeEnv:
-    @pytest.mark.parametrize("var", REQUIRED_VARS)
-    def test_vps_compose_has_var(self, var: str):
-        env = _load_bot_env("compose.yml")
-        assert var in env, f"{var} missing from compose.yml bot environment"
