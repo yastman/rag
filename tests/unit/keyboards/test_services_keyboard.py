@@ -38,6 +38,16 @@ def test_build_service_card_buttons():
     assert "svc:menu" in callbacks
 
 
+def test_callback_data_within_64_bytes():
+    """All services/CTA callback payloads fit Telegram's 64-byte limit."""
+    keyboards = (build_services_menu(), build_service_card_buttons("installment"))
+    for kb in keyboards:
+        for row in kb.inline_keyboard:
+            for btn in row:
+                assert btn.callback_data is not None
+                assert len(btn.callback_data.encode()) <= 64
+
+
 def test_parse_service_callback():
     assert parse_service_callback("svc:passive_income") == ("service", "passive_income")
     assert parse_service_callback("svc:back") == ("back", None)
