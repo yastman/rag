@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from litellm.exceptions import APIConnectionError
+from litellm.exceptions import APIConnectionError, RateLimitError
 from pydantic import BaseModel
 
 from src.adapters.llm.base import LLMConnectionError
@@ -31,6 +31,18 @@ class DummyRouter:
         self.acompletion = AsyncMock(
             return_value=response if response is not None else {"ok": True}
         )
+
+
+class FailingRouter:
+    """Router double whose ``acompletion`` always raises the given provider error (#3483)."""
+
+    def __init__(self, exc: BaseException) -> None:
+        self.exc = exc
+        self.calls: list[dict[str, object]] = []
+
+    async def acompletion(self, **kwargs: object) -> object:
+        self.calls.append(kwargs)
+        raise self.exc
 
 
 def test_model_list_preserves_proxy_fallback_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -174,6 +186,48 @@ def test_normalize_connection_error_maps_only_connection_failures() -> None:
     assert isinstance(normalized, LLMConnectionError)
     assert normalized.raw_error is connection_exc
     assert normalize_connection_error(RuntimeError("other")) is None
+
+
+@pytest.mark.asyncio
+async def test_completion_normalizes_router_connection_error_at_boundary() -> None:
+    """#3483: the boundary raises the project-owned LLMConnectionError for connection failures.
+
+    ``Router.acompletion`` speaking ``litellm.exceptions.APIConnectionError`` must
+    not leak past ``LiteLlmClient.completion`` — generation verbs classify
+    connection failures only through the project-owned exception.
+    """
+    raw = APIConnectionError("refused", llm_provider="test", model="test")
+    client = create_llm_client(model="gpt-4o-mini", router=FailingRouter(raw), timeout=12)
+
+    with pytest.raises(LLMConnectionError) as excinfo:
+        await client.completion(messages=[{"role": "user", "content": "hi"}])
+
+    assert excinfo.value.raw_error is raw
+
+
+@pytest.mark.asyncio
+async def test_completion_propagates_non_connection_provider_error_unchanged() -> None:
+    """#3483: non-connection provider failures keep their raw, distinguishable type."""
+    raw = RateLimitError("quota exhausted", llm_provider="test", model="test")
+    client = create_llm_client(model="gpt-4o-mini", router=FailingRouter(raw), timeout=12)
+
+    with pytest.raises(RateLimitError) as excinfo:
+        await client.completion(messages=[{"role": "user", "content": "hi"}])
+
+    assert excinfo.value is raw
+
+
+@pytest.mark.asyncio
+async def test_stream_await_phase_normalizes_connection_error_at_boundary() -> None:
+    """#3483: streaming shares the canonical point — a connection failure raised
+    while awaiting the stream surfaces as the project-owned exception."""
+    raw = APIConnectionError("refused", llm_provider="test", model="test")
+    client = create_llm_client(model="gpt-4o-mini", router=FailingRouter(raw), timeout=12)
+
+    with pytest.raises(LLMConnectionError) as excinfo:
+        await client.stream(messages=[{"role": "user", "content": "hi"}])
+
+    assert excinfo.value.raw_error is raw
 
 
 @pytest.mark.asyncio

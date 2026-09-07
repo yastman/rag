@@ -161,35 +161,3 @@ def _extract_usage_details(usage: Any | None) -> dict[str, int] | None:
             details[target_key] = int(value)
 
     return details or None
-
-
-_CONNECTION_ERROR_TYPES: tuple[type[BaseException], ...]
-_HTTPX_CONNECT_ERROR: type[BaseException] | None
-try:
-    from httpx import ConnectError
-
-    _HTTPX_CONNECT_ERROR = ConnectError
-except ImportError:
-    _HTTPX_CONNECT_ERROR = None
-
-_OPENAI_API_CONNECTION_ERROR: type[BaseException] | None
-try:
-    from openai import APIConnectionError
-
-    _OPENAI_API_CONNECTION_ERROR = APIConnectionError
-except ImportError:
-    _OPENAI_API_CONNECTION_ERROR = None
-
-_conn_errors: list[type[BaseException]] = []
-if _HTTPX_CONNECT_ERROR is not None:
-    _conn_errors.append(_HTTPX_CONNECT_ERROR)
-if _OPENAI_API_CONNECTION_ERROR is not None:
-    _conn_errors.append(_OPENAI_API_CONNECTION_ERROR)
-_CONNECTION_ERROR_TYPES = tuple(_conn_errors)
-
-
-def _is_connection_error(exc: BaseException) -> bool:
-    """Return True when *exc* is a known LLM connection failure."""
-    if not _CONNECTION_ERROR_TYPES:
-        return False
-    return isinstance(exc, _CONNECTION_ERROR_TYPES)

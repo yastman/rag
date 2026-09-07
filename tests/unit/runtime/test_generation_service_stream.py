@@ -147,6 +147,69 @@ async def test_generate_answer_stream_connection_error_yields_structured_fallbac
             pass
 
 
+@pytest.mark.asyncio
+async def test_generate_answer_stream_await_phase_connection_error_raises_owned_type() -> None:
+    """#3483: a connection failure raised while awaiting the stream surfaces as the
+    project-owned LLMConnectionError carrying the raw provider error.
+
+    Exercises the genuine boundary (real LiteLlmClient over a failing Router) so
+    the await phase of streaming shares the canonical classification point with
+    normal completion; observable behavior (owned exception type, raw error
+    preserved) is unchanged from base.
+    """
+    raw = APIConnectionError("Connection refused", llm_provider="test", model="test")
+    router = _FailingCompletionRouter(raw)
+    llm = LiteLlmClient(router=router, default_model="gpt-4o-mini", timeout=5)
+
+    config = MagicMock()
+    config.show_sources = True
+    config.response_style_enabled = False
+    config.response_style_shadow_mode = False
+    config.generate_max_tokens = 128
+    config.domain = "test"
+    config.llm_model = "gpt-4o-mini"
+    config.llm_temperature = 0.0
+    config.get_reasoning_kwargs = MagicMock(return_value={})
+    config.create_llm = MagicMock(return_value=llm)
+
+    lf_client = MagicMock()
+    metadata_out: dict[str, object] = {}
+    _PipelineMetrics.metric = _Metrics()
+
+    request = GenerationRequest(
+        query="Test query",
+        documents=[{"content": "some context", "score": 0.9, "metadata": {}}],
+        raw_messages=[{"role": "user", "content": "Test query"}],
+        latency_stages={},
+        llm_call_count=0,
+        grounding_mode="default",
+        grade_confidence=0.9,
+        config=config,
+        extra_kwargs={
+            "lf_client": lf_client,
+            "style_detector": _StyleDetector(),
+            "detect_coverage_mode": lambda _query: CoverageDecision(False, None),
+            "PipelineMetrics": _PipelineMetrics,
+        },
+    )
+
+    with pytest.raises(LLMConnectionError) as excinfo:
+        async for _chunk in generate_answer_stream(request, metadata_out):
+            pass
+
+    assert excinfo.value.raw_error is raw
+
+
+class _FailingCompletionRouter:
+    """Router double whose acompletion raises the given provider error (#3483)."""
+
+    def __init__(self, exc: BaseException) -> None:
+        self.exc = exc
+
+    async def acompletion(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+
 # ---------------------------------------------------------------------------
 # Real-client streaming canary (review C1, #3223)
 # ---------------------------------------------------------------------------

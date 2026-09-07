@@ -262,6 +262,12 @@ class LiteLlmClient:
     logged and never forwarded to the SDK. All other kwargs pass through to
     ``acompletion`` unchanged. Shim-era kwargs (``name``, ``max_retries``)
     are rejected with a clear error.
+
+    Connection-error classification is owned here end to end (#3483):
+    ``completion`` re-raises LiteLLM connection failures as the project-owned
+    :class:`LLMConnectionError`, so every verb (completion, structured,
+    stream) and every generation call site classifies them through one
+    contract instead of importing provider exception types.
     """
 
     router: Router
@@ -276,14 +282,25 @@ class LiteLlmClient:
         observation_name: str | None = None,
         **kwargs: Any,
     ) -> Any:
-        """Run one native ``Router.acompletion`` call and return its response."""
+        """Run one native ``Router.acompletion`` call and return its response.
+
+        Raises :class:`LLMConnectionError` for LiteLLM connection failures
+        (normalized via :func:`normalize_connection_error`); every other
+        provider exception propagates unchanged.
+        """
         _reject_shim_kwargs(kwargs)
         target_model = model or self.default_model
         if observation_name:
             logger.debug("LLM completion '%s' (model=%s)", observation_name, target_model)
         request: dict[str, Any] = {"model": target_model, "messages": messages, **kwargs}
         request.setdefault("timeout", self.timeout)
-        return await self.router.acompletion(**request)
+        try:
+            return await self.router.acompletion(**request)
+        except Exception as exc:
+            normalized = normalize_connection_error(exc)
+            if normalized is not None:
+                raise normalized from exc
+            raise
 
     async def structured(
         self,
