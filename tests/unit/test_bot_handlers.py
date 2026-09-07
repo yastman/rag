@@ -266,6 +266,96 @@ class TestPropertyBotInit:
 
         assert services.reranker is None
 
+    def test_build_services_calls_canonical_translator_factory(self, mock_config):
+        """build_services imports create_translator_hub from the canonical
+        telegram_bot.middlewares.i18n path (#3490). The previous relative
+        import resolved to telegram_bot.lifecycle.middlewares (nonexistent),
+        so the failure was swallowed and translations were silently disabled.
+        """
+        from telegram_bot.lifecycle.services import build_services
+
+        hub = object()  # sentinel hub
+        with (
+            patch("src.runtime.integrations.cache.CacheLayerManager"),
+            patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("src.runtime.services.qdrant.QdrantService"),
+            patch("src.runtime.config.GraphConfig.create_llm", return_value=MagicMock()),
+            patch(
+                "telegram_bot.services.apartment.apartments_service.ApartmentsService",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.apartment.apartment_extraction_pipeline.ApartmentExtractionPipeline",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.apartment.apartment_filter_extractor.ApartmentFilterExtractor",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.observability.redis_monitor.RedisHealthMonitor",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.middlewares.i18n.create_translator_hub",
+                return_value=hub,
+            ) as factory,
+        ):
+            services = build_services(mock_config)
+
+        factory.assert_called_once_with()
+        assert services.i18n_hub is hub
+
+    def test_build_services_keeps_fallback_and_diagnostic_on_translator_failure(
+        self, mock_config, caplog
+    ):
+        """A real translation-loading failure keeps the chosen fallback
+        (i18n_hub=None) and logs the cause (#3490). The catch is not widened.
+        """
+        from telegram_bot.lifecycle.services import build_services
+
+        with (
+            patch("src.runtime.integrations.cache.CacheLayerManager"),
+            patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("src.runtime.services.qdrant.QdrantService"),
+            patch("src.runtime.config.GraphConfig.create_llm", return_value=MagicMock()),
+            patch(
+                "telegram_bot.services.apartment.apartments_service.ApartmentsService",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.apartment.apartment_extraction_pipeline.ApartmentExtractionPipeline",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.apartment.apartment_filter_extractor.ApartmentFilterExtractor",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.services.observability.redis_monitor.RedisHealthMonitor",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "telegram_bot.middlewares.i18n.create_translator_hub",
+                side_effect=RuntimeError("translation fixture failed"),
+            ) as factory,
+            caplog.at_level(logging.WARNING),
+        ):
+            services = build_services(mock_config)
+
+        factory.assert_called_once_with()
+        assert services.i18n_hub is None
+        diagnostics = [
+            record
+            for record in caplog.records
+            if "Failed to initialize i18n hub" in record.getMessage()
+        ]
+        assert diagnostics, "expected a fallback diagnostic log record"
+        assert diagnostics[0].exc_info is not None
+        assert "translation fixture failed" in caplog.text
+
 
 class TestCommandHandlers:
     """Test command handlers."""
@@ -1013,6 +1103,26 @@ class TestBotLifecycle:
         await bot._polling_lock_heartbeat_tick()
         assert bot._polling_lock.refresh.await_count == 2
         bot.dp.stop_polling.assert_awaited_once_with()
+
+    def test_setup_workflow_data_installs_i18n_hub(self, mock_config):
+        """Lifecycle must install i18n middleware on the dispatcher when the
+        hub is healthy (#3490). The hub comes from the canonical translator
+        factory verified by TestPropertyBotInit; the middleware boundary is
+        spied, not the whole setup_workflow_data.
+        """
+        from telegram_bot.lifecycle.lifecycle import setup_workflow_data
+        from telegram_bot.middlewares.i18n import create_translator_hub
+
+        bot, _ = _create_bot(mock_config)
+        bot._i18n_hub = create_translator_hub()
+        bot._user_service = MagicMock()
+
+        with patch(
+            "telegram_bot.middlewares.i18n.setup_i18n_middleware"
+        ) as setup_i18n_middleware:
+            setup_workflow_data(bot)
+
+        setup_i18n_middleware.assert_called_once_with(bot.dp, bot._i18n_hub, bot._user_service)
 
 
 class TestSetupMiddlewares:
