@@ -275,12 +275,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "__init__.py" = ["F401", "E402"]  # Allow unused imports and late imports
 "test_*.py" = ["E402", "T201", "SIM117"]  # Allow late imports, print(), nested with in tests
 "tests/**/*.py" = ["E402", "T201", "SIM117"]  # Same for tests/ directory
-# Per-file ASYNC240 ignores for src/ingestion/docling_client.py and
-# src/ingestion/service.py removed in #1532: ASYNC240 is already in the
-# global ignore list above, so the per-file entries were redundant. The
-# modules themselves cannot be deleted yet because there are live runtime
-# callers; see tests/contract/test_legacy_ingestion_removed_contract.py
-# for the full audit.
 
 "*.py" = ["ARG001"]               # Allow unused function arguments (common in callbacks)
 
