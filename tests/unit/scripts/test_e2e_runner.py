@@ -12,14 +12,15 @@ import pytest
 
 from scripts.e2e.claude_judge import CriterionScore, JudgeResult, PassthroughJudge
 from scripts.e2e.config import E2EConfig
-from scripts.e2e.report_generator import TestReport, TestResult
+from scripts.e2e.report_generator import TestReport as E2EReport
+from scripts.e2e.report_generator import TestResult as E2EResult
 from scripts.e2e.scenarios import (
     SCENARIOS,
-    TestGroup,
-    TestScenario,
     get_scenario_by_id,
     get_scenarios_by_group,
 )
+from scripts.e2e.scenarios import TestGroup as ScenarioGroup
+from scripts.e2e.scenarios import TestScenario as Scenario
 
 
 # ---------------------------------------------------------------------------
@@ -62,10 +63,10 @@ def _fail_judge_result(summary: str = "fail") -> JudgeResult:
 
 
 def _make_test_result(
-    scenario: TestScenario, passed: bool = True, error: str | None = None
-) -> TestResult:
+    scenario: Scenario, passed: bool = True, error: str | None = None
+) -> E2EResult:
     jr = _pass_judge_result() if passed else _fail_judge_result()
-    return TestResult(
+    return E2EResult(
         scenario=scenario,
         bot_response="some response" if passed else "",
         response_time_ms=500,
@@ -88,19 +89,19 @@ class TestGroupParsing:
 
     def test_group_smoke_subset(self):
         """get_scenarios_by_group returns only matching group."""
-        immigration = get_scenarios_by_group(TestGroup.IMMIGRATION)
+        immigration = get_scenarios_by_group(ScenarioGroup.IMMIGRATION)
         assert len(immigration) > 0
-        assert all(s.group == TestGroup.IMMIGRATION for s in immigration)
+        assert all(s.group == ScenarioGroup.IMMIGRATION for s in immigration)
 
     def test_group_commands_subset(self):
-        commands = get_scenarios_by_group(TestGroup.COMMANDS)
+        commands = get_scenarios_by_group(ScenarioGroup.COMMANDS)
         assert len(commands) > 0
-        assert all(s.group == TestGroup.COMMANDS for s in commands)
+        assert all(s.group == ScenarioGroup.COMMANDS for s in commands)
 
     def test_all_groups_are_proper_subsets(self):
         """Every defined group has at least one scenario, and is a subset of SCENARIOS."""
         scenario_ids = {s.id for s in SCENARIOS}
-        for group in TestGroup:
+        for group in ScenarioGroup:
             group_scenarios = get_scenarios_by_group(group)
             for s in group_scenarios:
                 assert s.id in scenario_ids
@@ -108,7 +109,7 @@ class TestGroupParsing:
     def test_unknown_group_not_in_enum(self):
         """TestGroup enum does not have a 'nonexistent' value."""
         with pytest.raises((ValueError, KeyError)):
-            TestGroup("nonexistent_group_xyz")
+            ScenarioGroup("nonexistent_group_xyz")
 
     def test_get_scenario_by_id_found(self):
         scenario = get_scenario_by_id("0.1")
@@ -130,29 +131,29 @@ class TestRequestAssembly:
 
     def test_text_scenario_query_preserved(self):
         """A text scenario carries its query string unchanged."""
-        s = TestScenario(
+        s = Scenario(
             id="3.1",
             name="Price max",
             query="квартиры до 80000 евро",
-            group=TestGroup.PRICE_FILTERS,
+            group=ScenarioGroup.PRICE_FILTERS,
         )
         assert s.query == "квартиры до 80000 евро"
         assert s.delivery == "text"
 
     def test_voice_scenario_delivery_flag(self):
         """Voice scenarios have delivery=='voice'."""
-        s = TestScenario(
+        s = Scenario(
             id="8.1",
             name="Voice search",
             query="(voice) найди квартиру",
-            group=TestGroup.VOICE_TRANSCRIPTION,
+            group=ScenarioGroup.VOICE_TRANSCRIPTION,
             delivery="voice",
         )
         assert s.delivery == "voice"
 
     def test_text_delivery_is_default(self):
         """Default delivery is 'text'."""
-        s = TestScenario(id="x.1", name="test", query="hello", group=TestGroup.COMMANDS)
+        s = Scenario(id="x.1", name="test", query="hello", group=ScenarioGroup.COMMANDS)
         assert s.delivery == "text"
 
     @pytest.mark.asyncio
@@ -160,11 +161,11 @@ class TestRequestAssembly:
         """run_single_test calls client.send_and_wait for text delivery."""
         from scripts.e2e.runner import run_single_test
 
-        scenario = TestScenario(
+        scenario = Scenario(
             id="1.1",
             name="/start",
             query="/start",
-            group=TestGroup.COMMANDS,
+            group=ScenarioGroup.COMMANDS,
             expected_keywords=["привет"],
         )
 
@@ -203,11 +204,11 @@ class TestRequestAssembly:
         """run_single_test calls client.send_voice_and_wait for voice delivery."""
         from scripts.e2e.runner import run_single_test
 
-        scenario = TestScenario(
+        scenario = Scenario(
             id="8.1",
             name="Voice",
             query="(voice) найди квартиру",
-            group=TestGroup.VOICE_TRANSCRIPTION,
+            group=ScenarioGroup.VOICE_TRANSCRIPTION,
             delivery="voice",
         )
 
@@ -247,11 +248,11 @@ class TestJudgeVerdict:
     async def test_response_with_keywords_passes(self):
         cfg = _make_config()
         judge = PassthroughJudge(cfg)
-        scenario = TestScenario(
+        scenario = Scenario(
             id="0.1",
             name="Immigration",
             query="Digital Nomad виза",
-            group=TestGroup.IMMIGRATION,
+            group=ScenarioGroup.IMMIGRATION,
             expected_keywords=["digital", "nomad", "виза"],
         )
         result = await judge.evaluate(
@@ -263,11 +264,11 @@ class TestJudgeVerdict:
     async def test_response_missing_keywords_fails(self):
         cfg = _make_config()
         judge = PassthroughJudge(cfg)
-        scenario = TestScenario(
+        scenario = Scenario(
             id="0.1",
             name="Immigration",
             query="Digital Nomad виза",
-            group=TestGroup.IMMIGRATION,
+            group=ScenarioGroup.IMMIGRATION,
             expected_keywords=["digital", "nomad", "виза", "болгар"],
         )
         result = await judge.evaluate(scenario=scenario, bot_response="Погода сегодня хорошая")
@@ -277,11 +278,11 @@ class TestJudgeVerdict:
     async def test_empty_response_fails(self):
         cfg = _make_config()
         judge = PassthroughJudge(cfg)
-        scenario = TestScenario(
+        scenario = Scenario(
             id="1.1",
             name="/start",
             query="/start",
-            group=TestGroup.COMMANDS,
+            group=ScenarioGroup.COMMANDS,
         )
         result = await judge.evaluate(scenario=scenario, bot_response="")
         assert result.passed is False
@@ -291,11 +292,11 @@ class TestJudgeVerdict:
     async def test_whitespace_only_response_fails(self):
         cfg = _make_config()
         judge = PassthroughJudge(cfg)
-        scenario = TestScenario(
+        scenario = Scenario(
             id="1.1",
             name="/start",
             query="/start",
-            group=TestGroup.COMMANDS,
+            group=ScenarioGroup.COMMANDS,
         )
         result = await judge.evaluate(scenario=scenario, bot_response="   \n  ")
         assert result.passed is False
@@ -305,11 +306,11 @@ class TestJudgeVerdict:
         """run_single_test returns a not-passed result on TimeoutError."""
         from scripts.e2e.runner import run_single_test
 
-        scenario = TestScenario(
+        scenario = Scenario(
             id="1.1",
             name="/start",
             query="/start",
-            group=TestGroup.COMMANDS,
+            group=ScenarioGroup.COMMANDS,
             timeout=5,
         )
 
@@ -334,11 +335,11 @@ class TestJudgeVerdict:
         """run_single_test wraps unexpected exceptions into an error result."""
         from scripts.e2e.runner import run_single_test
 
-        scenario = TestScenario(
+        scenario = Scenario(
             id="1.1",
             name="/start",
             query="/start",
-            group=TestGroup.COMMANDS,
+            group=ScenarioGroup.COMMANDS,
         )
 
         mock_client = AsyncMock()
@@ -366,10 +367,10 @@ class TestJudgeVerdict:
 class TestExitCode:
     """TestReport.pass_rate drives exit code: ≥80% → 0, <80% → 1."""
 
-    def _make_report(self, results: list[TestResult]) -> TestReport:
+    def _make_report(self, results: list[E2EResult]) -> E2EReport:
         from datetime import datetime
 
-        return TestReport(
+        return E2EReport(
             timestamp=datetime.now(),
             bot_username="@testbot",
             judge_provider="passthrough",
