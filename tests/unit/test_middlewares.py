@@ -68,6 +68,8 @@ class TestErrorHandlerMiddleware:
                 await middleware(handler, event, data)
 
         assert any("Error in handler" in record.message for record in caplog.records)
+        # Exception details reach the log: message text plus attached stack trace.
+        assert any("Value error" in record.message and record.exc_info for record in caplog.records)
 
     async def test_error_does_not_send_message_for_non_message_event(self):
         """Test that error does not try to send message for non-Message events."""
@@ -154,8 +156,10 @@ class TestThrottlingMiddleware:
         result2 = await middleware(handler, event, data)
         assert result2 is None
 
-        # Should have sent throttle message
+        # Should have sent user-facing throttle message
         event.answer.assert_called_once()
+        throttle_text = event.answer.call_args[0][0]
+        assert "подождите" in throttle_text.lower() or "⏱" in throttle_text
 
     async def test_middleware_exempts_admins(self):
         """Test that admins are exempt from throttling."""
