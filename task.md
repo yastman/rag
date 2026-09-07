@@ -58,9 +58,9 @@ flowchart TD
 
 ## Старт координатора
 
-- [ ] Прочитать этот файл, root/scoped AGENTS и пакет выбранной Issue. Из #3338 читать только раздел `Agent execution — 2026-09-06` между маркерами `agent-execution-day-2026-09-06:start/end`; весь исторический DAG и комментарии эпика в worker context не загружать. У выбранной Issue сохранить её исходную приёмку и новые релевантные уточнения. Не выполнять остальной backlog из #3338.
-- [ ] Применить skills. `dispatching-parallel-agents` обязателен для независимых workers. `systematic-debugging` включать при непонятном failure. `requesting-code-review` и review-этапы `subagent-driven-development` оставить до следующего пользовательского этапа; требование остановки перед ревью имеет приоритет.
-- [ ] Проверить Git и GitHub:
+- [x] Прочитать этот файл, root/scoped AGENTS и пакет выбранной Issue. Из #3338 читать только раздел `Agent execution — 2026-09-06` между маркерами `agent-execution-day-2026-09-06:start/end`; весь исторический DAG и комментарии эпика в worker context не загружать. У выбранной Issue сохранить её исходную приёмку и новые релевантные уточнения. Не выполнять остальной backlog из #3338.
+- [x] Применить skills. `dispatching-parallel-agents` обязателен для независимых workers. `systematic-debugging` включать при непонятном failure. `requesting-code-review` и review-этапы `subagent-driven-development` оставить до следующего пользовательского этапа; требование остановки перед ревью имеет приоритет.
+- [x] Проверить Git и GitHub:
 
 ```powershell
 rtk git rev-parse --show-toplevel
@@ -71,8 +71,8 @@ rtk git rev-parse origin/dev
 rtk proxy gh pr list --repo yastman/rag --state open --limit 100 --json number,title,headRefName,baseRefName,url
 ```
 
-- [ ] Сопоставить действующие PR с Issue, проверить tracked/untracked состояние существующих worktrees. Возобновлять совпадающую задачу; не создавать duplicate PR. На снимке есть незавершённые worktrees #3350/#3366 — сохранить их, включая их локальные `task.md` и планы.
-- [ ] Определить фактическое количество слотов. Для fresh worker использовать `fork_turns="none"`, нужную роль и самодостаточный пакет. Не передавать весь backlog/историю разговора. `implementer` — для кода; `sonic` возможен только для механических aliases #3344. Модели выбирать по текущей конфигурации пользователя, не задавать более дорогую модель самовольно.
+- [x] Сопоставить действующие PR с Issue, проверить tracked/untracked состояние существующих worktrees. Возобновлять совпадающую задачу; не создавать duplicate PR. На снимке есть незавершённые worktrees #3350/#3366 — сохранить их, включая их локальные `task.md` и планы.
+- [x] Определить фактическое количество слотов. Для fresh worker использовать `fork_turns="none"`, нужную роль и самодостаточный пакет. Не передавать весь backlog/историю разговора. `implementer` — для кода; `sonic` возможен только для механических aliases #3344. Модели выбирать по текущей конфигурации пользователя, не задавать более дорогую модель самовольно.
 
 ## Worktrees и окружения
 
@@ -105,13 +105,13 @@ rtk proxy gh issue view 3486 --repo yastman/rag --json number,title,body,comment
 rtk git worktree add .worktrees/issue-3486-runtime-config -b codex/issue-3486-runtime-config origin/dev
 ```
 
-- [ ] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
+- [x] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
 
 ```text
 rtk uv run --no-sync pytest -q tests/unit/test_bot_query_supervisor.py tests/unit/telegram_bot/test_assistant_core_adapter.py tests/unit/runtime/test_assistant_pipeline.py tests/unit/runtime/test_generate_answer.py::test_generate_answer_llm_failure_returns_fallback
 ```
 
-- [ ] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
+- [x] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
 
 ### #3490: Восстановить штатное создание переводчика и подключение i18n
 
@@ -126,13 +126,13 @@ rtk proxy gh issue view 3490 --repo yastman/rag --json number,title,body,comment
 rtk git worktree add .worktrees/issue-3490-translator-import -b codex/issue-3490-translator-import origin/dev
 ```
 
-- [ ] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
+- [x] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
 
 ```text
 rtk uv run --no-sync pytest -q tests/unit/test_bot_handlers.py::TestPropertyBotInit tests/unit/middlewares/test_i18n.py tests/unit/test_i18n_middleware.py tests/unit/test_bot_handlers.py::TestBotLifecycle::test_setup_workflow_data_installs_i18n_hub
 ```
 
-- [ ] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
+- [x] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
 
 ### #3489: Вернуть ненулевой exit code при per-file ошибках one-shot ingestion
 
@@ -145,14 +145,14 @@ rtk proxy gh issue view 3489 --repo yastman/rag --json number,title,body,comment
 rtk git worktree add .worktrees/issue-3489-ingestion-exit -b codex/issue-3489-ingestion-exit origin/dev
 ```
 
-- [ ] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
+- [x] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
 
 ```text
 rtk uv run --no-sync pytest -q tests/unit/ingestion/test_unified_cli.py::TestCmdRun
 rtk uv run --no-sync pytest -q tests/unit/ingestion/test_unified_cli.py
 ```
 
-- [ ] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
+- [x] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
 
 ### #3493: Ограничить max_length всех BGE encode endpoints существующим пределом
 
@@ -165,7 +165,7 @@ rtk proxy gh issue view 3493 --repo yastman/rag --json number,title,body,comment
 rtk git worktree add .worktrees/issue-3493-encode-max-length -b codex/issue-3493-encode-max-length origin/dev
 ```
 
-- [ ] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
+- [x] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
 
 ```text
 rtk uv run --no-sync pytest -q tests/unit/test_bge_m3_endpoints.py tests/unit/test_bge_m3_rerank.py
@@ -173,7 +173,7 @@ rtk uv run --no-sync pytest -q tests/unit/test_bge_m3_artifact.py
 rtk uv run --no-sync pytest -q tests/unit/test_docker_static_validation.py -k "bge_m3 or bge-m3"
 ```
 
-- [ ] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
+- [x] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
 
 ### #3344: Убрать ложную pytest collection четырёх импортированных Test-типов
 
@@ -186,14 +186,14 @@ rtk proxy gh issue view 3344 --repo yastman/rag --json number,title,body,comment
 rtk git worktree add .worktrees/issue-3344-pytest-import-aliases -b codex/issue-3344-pytest-import-aliases origin/dev
 ```
 
-- [ ] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
+- [x] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
 
 ```text
 rtk uv run --no-sync pytest -q tests/unit/scripts/test_e2e_runner.py
 rtk uv run --no-sync pytest --collect-only -q tests/unit
 ```
 
-- [ ] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
+- [x] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
 
 ### #3484: Убрать противоречия о уже удалённом Docling из текущих контрактов
 
@@ -206,7 +206,7 @@ rtk proxy gh issue view 3484 --repo yastman/rag --json number,title,body,comment
 rtk git worktree add .worktrees/issue-3484-current-ingestion-prose -b codex/issue-3484-current-ingestion-prose origin/dev
 ```
 
-- [ ] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
+- [x] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
 
 ```text
 rtk uv run --no-sync pytest -q tests/contract/test_legacy_ingestion_removed_contract.py tests/contract/test_dead_code_cleanup_contract.py tests/contract/test_markdown_only_ingestion_contract.py
@@ -214,7 +214,7 @@ rtk rg -n -i "docling_client|src/ingestion/service[.]py|STILL LIVE|cannot be del
 rtk rg -n -i "src[.]api|client.direct|ImperativeBotAgent|Voyage|LangGraph|LangChain" pyproject.toml tests/contract
 ```
 
-- [ ] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
+- [x] Worker возвращает Main owned diff и доказательства. Предложить `Closes` только при доказанной полной исходной приёмке; иначе `Refs`.
 
 ### #3482: Подготовить частичный PR со снятием устаревшей Makefile-проверки
 
@@ -227,13 +227,13 @@ rtk proxy gh issue view 3482 --repo yastman/rag --json number,title,body,comment
 rtk git worktree add .worktrees/issue-3482-make-contract-partial -b codex/issue-3482-make-contract-partial origin/dev
 ```
 
-- [ ] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
+- [x] Worker воспроизводит scoped baseline, выполняет конкретные шаги Issue, затем запускает:
 
 ```text
 rtk uv run --no-sync pytest -q tests/unit/test_makefile_contract.py tests/contract/test_local_gate_policy_contract.py tests/contract/test_makefile_review_gate_no_autosync_contract.py
 ```
 
-- [ ] Worker возвращает Main owned diff и доказательства. Это частичный результат: только `Refs #3482`.
+- [x] Worker возвращает Main owned diff и доказательства. Это частичный результат: только `Refs #3482`.
 
 ## Промпт одного worker
 
@@ -289,6 +289,22 @@ Main заполняет фактические Issue/абсолютный worktr
 ## Результат сегодняшнего запуска
 
 Main возвращает таблицу: Issue → Draft PR URL (или конкретный blocker) → base/HEAD SHA → изменённые файлы → focused/scoped/candidate результаты → оставшаяся приёмка → `Refs`/`Closes`. Статус implementation и статус delivered различать. Создание PR не означает, что ревью/слияние или закрытие уже произошли.
+
+## Выполнение — 2026-09-07 (base `7f5b0eceb185cc652f6e938699247069f7da434a`)
+
+DAG выполнен: Main + три параллельных исполнителя в трёх волнах (#3486/#3490/#3489 → #3482/#3493/#3344 → #3484) через `superpowers:dispatching-parallel-agents`; отдельные worktrees `.worktrees/issue-<n>-<slug>` и ветки `codex/issue-<n>-<slug>` от свежего `origin/dev`; diff-бюджеты всех семи пакетов соблюдены и проверены чтением полных diff'ов. Семь Draft PR созданы в `dev`; ревью/merge/закрытие Issue не выполнялись. Worktrees и ветки сохранены для этапа ревью. Отмечено окружение: `rtk` на машине исполнения отсутствовал — использованы прямые `uv`/`gh`/`make` с теми же семантиками (`--frozen`, `--no-sync`); pre-commit/push hooks в клоне не установлены, все обязательные gates выполнены как Make-цели, приёмка не ослаблялась.
+
+| Issue | Draft PR | HEAD SHA | Файлы | Gates Main | Итог |
+|---|---|---|---|---|---|
+| #3486 | [#3502](https://github.com/yastman/rag/pull/3502) | `e110267f301a38f35d31bdb943b5e1269ec99b85` | `supervisor.py` + 2 теста | focused 31 passed; candidate-check ✓ (core 328 / no-service 21 / contract 953) | `Refs` — red baseline `test-unit` |
+| #3490 | [#3503](https://github.com/yastman/rag/pull/3503) | `5ec6cb3a847eae268b9de953340c733e18ae1e05` | `services.py` + handler-тесты | focused 25 passed (файл 76); candidate-check ✓ | `Refs` — red baseline `test-unit` |
+| #3489 | [#3501](https://github.com/yastman/rag/pull/3501) | `893e13b163a39fc1d7b22f8b79ec60b984e40656` | `commands.py` + CLI-тесты | focused 8/49; `make check` ✓; `test-ingestion` 170; candidate-check ✓ | `Closes` (live-preflight не доказан — нет dev stack; указано в PR) |
+| #3482 | [#3500](https://github.com/yastman/rag/pull/3500) | `4cc4432a3db2cb8c7ec3e31fcc639dc3799ebd29` | 1 тест (−22 строки) | focused 50; mutation-check PASS; candidate-check ✓ | `Refs` — частичный по пакету |
+| #3493 | [#3504](https://github.com/yastman/rag/pull/3504) | `faa6cf28c436e7b6428fa368b2ea2dbdc4a2b519` | `app.py` + endpoints-тесты | focused 64+23+11; candidate-check ✓ | `Closes` (image/offline-artifact вне proof; указано в PR) |
+| #3344 | [#3505](https://github.com/yastman/rag/pull/3505) | `4cc6cdae4869de6f760204bf0ac220fc74566309` | `test_e2e_runner.py` | focused 26; collection 4160 tests / 0 warnings; candidate-check ✓ | `Closes` |
+| #3484 | [#3506](https://github.com/yastman/rag/pull/3506) | `4d5287a5f062809078b3634a531ce32737c27d3c` | `pyproject.toml` + 2 контракта | focused 28; `test-contract` 955; candidate-check ✓ | `Closes` (2 out-of-budget резидуума перечислены в PR) |
+
+Baseline-блокеры: `make test-unit` на чистом `origin/dev` @ `7f5b0eceb` падает с 5 pre-existing провалами — устаревший тест #3482; `test_readme_documents_minimal_and_default_core_profiles`; `test_setup_workflow_data_registers_lead_sink_for_handlers`; `test_pr_template_has_validation_and_runtime_fields`; stale `collection=` в `test_assistant_core_adapter.py` (чинится #3502). Проверено запуском этих тестов на чистом чекауте; ни один кандидат не добавил регрессий, `make candidate-check` зелёный у всех семи. Из-за red broad unit lane Telegram-кандидаты #3486/#3490 — `Refs` с перечнем блокеров в PR; перевод в `Closes` — на этапе ревью после слияния baseline-фиксов. Все 7 Issues и #3338 остались открытыми: `Closes` сработает при merge в `dev` (правила GitHub соблюдены).
 
 Короткая команда следующему исполнителю:
 
