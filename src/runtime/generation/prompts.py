@@ -31,7 +31,7 @@ def _language_instruction(language: str) -> str:
 
 
 class _PromptConfig:
-    """Resolved prompt/token config shared between generate_answer and generate_answer_stream."""
+    """Resolved prompt/token config shared by generate_answer."""
 
     __slots__ = (
         "max_tokens",

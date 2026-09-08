@@ -4,7 +4,6 @@ Helpers split into focused modules:
   messages.py  — history selection and LLM message assembly
   setup.py     — _GenerationSetup, _resolve_generation_setup, _get_dynamic_modules
   prompts.py   — _PromptConfig, _PromptAndMessages, prompt/message building
-  streaming.py — generate_answer_stream and safe-fallback helper
 """
 
 from __future__ import annotations
@@ -37,7 +36,6 @@ from .setup import (
     _get_dynamic_modules,
     _resolve_generation_setup,
 )
-from .streaming import generate_answer_stream
 
 
 logger = logging.getLogger(__name__)
@@ -111,16 +109,12 @@ async def generate_answer(
                     "llm_provider_model": "safe_fallback",
                     "llm_ttft_ms": 0.0,
                     "llm_response_duration_ms": elapsed * 1000,
-                    "llm_stream_only_ttft_ms": None,
-                    "llm_ttft_drift_ms": None,
                     "llm_call_count": max(0, int(request.llm_call_count)),
                     "latency_stages": {**current_latency, "generate": elapsed},
                     "llm_decode_ms": None,
                     "llm_tps": None,
                     "llm_queue_ms": None,
                     "llm_timeout": False,
-                    "llm_stream_recovery": False,
-                    "streaming_enabled": False,
                     "response_style": style_info.style,
                     "response_difficulty": style_info.difficulty,
                     "response_style_reasoning": style_info.reasoning,
@@ -245,16 +239,12 @@ async def generate_answer(
                 "llm_provider_model": actual_model,
                 "llm_ttft_ms": ttft_ms,
                 "llm_response_duration_ms": elapsed * 1000,
-                "llm_stream_only_ttft_ms": None,
-                "llm_ttft_drift_ms": None,
                 "llm_call_count": current_llm_calls + 1,
                 "latency_stages": {**current_latency, "generate": elapsed},
                 "llm_decode_ms": None,
                 "llm_tps": llm_tps,
                 "llm_queue_ms": llm_queue_ms,
                 "llm_timeout": hard_timeout,
-                "llm_stream_recovery": False,
-                "streaming_enabled": False,
                 "response_style": style_info.style,
                 "response_difficulty": style_info.difficulty,
                 "response_style_reasoning": style_info.reasoning,
@@ -278,5 +268,4 @@ async def generate_answer(
     )
 
 
-# Make generate_answer_stream available from this module for backward compatibility
-__all__ = ["generate_answer", "generate_answer_stream"]
+__all__ = ["generate_answer"]

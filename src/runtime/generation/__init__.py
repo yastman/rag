@@ -1,7 +1,7 @@
 """Runtime generation exports."""
 
 from .contracts import GenerationCallable, GenerationRequest, GenerationResult
-from .service import generate_answer, generate_answer_stream
+from .service import generate_answer
 
 
 __all__ = [
@@ -9,5 +9,4 @@ __all__ = [
     "GenerationRequest",
     "GenerationResult",
     "generate_answer",
-    "generate_answer_stream",
 ]

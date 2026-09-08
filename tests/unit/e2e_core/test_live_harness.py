@@ -103,7 +103,6 @@ def test_build_live_core_harness_uses_graph_config_for_real_llm() -> None:
     fake_config = mock.MagicMock()
     fake_config.llm_temperature = 0.7
     fake_config.generate_max_tokens = 1024
-    fake_config.streaming_enabled = True
     fake_config.show_sources = True
     fake_config.response_style_enabled = True
     fake_config.response_style_shadow_mode = True
@@ -125,7 +124,6 @@ def test_build_live_core_harness_uses_graph_config_for_real_llm() -> None:
     assert harness.dependencies.config is fake_config
     assert fake_config.llm_temperature == 0.0
     assert fake_config.generate_max_tokens == 600
-    assert fake_config.streaming_enabled is False
     assert fake_config.show_sources is False
     assert fake_config.response_style_enabled is False
     assert fake_config.response_style_shadow_mode is False

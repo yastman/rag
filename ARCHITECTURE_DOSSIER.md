@@ -99,7 +99,7 @@ telegram_bot*, *Core contracts layer is import-independent*, *src must not impor
 | `src/core/` | Public boundary: `assistant.py` (entrypoint), `contracts.py` (Protocol DI), `app.py`, `telemetry.py` |
 | `src/runtime/pipeline/` | The spine: `assistant_pipeline.py`, `rag.py` (24k), `_retrieve.py`, `_cache_stage.py`, `_grade_rerank.py`, `_rewrite_cache.py` |
 | `src/runtime/qdrant/service.py` | Qdrant hybrid search (dense/sparse/ColBERT, weighted RRF/DBSF) — 32k, central |
-| `src/runtime/generation/` | LLM answer generation: `service.py`, `prompts.py`, `policy.py`, `streaming.py`, `messages.py` |
+| `src/runtime/generation/` | LLM answer generation: `service.py`, `prompts.py`, `policy.py`, `messages.py` |
 | `src/runtime/integrations/` | `cache.py` (30k, the 5 Redis caches + `CacheLayerManager`), `embeddings.py` (BGE-M3 shims), `prompt_manager.py` |
 | `src/runtime/retrieval/` | Retrieval service facade |
 | `src/runtime/grounding/` | Grounding/citation policy |
