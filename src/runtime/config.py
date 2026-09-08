@@ -125,14 +125,13 @@ class DomainConfig(BaseModel):
 
 
 class ResponseConfig(BaseModel):
-    """Response style, sources, and streaming settings."""
+    """Response style and source attribution settings."""
 
     # Response length control rollout (#129)
     response_style_enabled: bool = False
     response_style_shadow_mode: bool = False
     # Source attribution (#225)
     show_sources: bool = False
-    streaming_enabled: bool = True
     # TTFT drift warning threshold in ms (#675); raise for reasoning models behind proxy
     ttft_drift_warn_ms: int = 500
 
@@ -308,10 +307,6 @@ class _GraphEnvSettings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("show_sources", "SHOW_SOURCES"),
     )
-    streaming_enabled: bool = Field(
-        default=True,
-        validation_alias=AliasChoices("streaming_enabled", "STREAMING_ENABLED"),
-    )
     ttft_drift_warn_ms: int = Field(
         default=500,
         validation_alias=AliasChoices("ttft_drift_warn_ms", "TTFT_DRIFT_WARN_MS"),
@@ -388,7 +383,6 @@ _FLAT_KWARGS: dict[str, tuple[str, str]] = {
     "response_style_enabled": ("response", "response_style_enabled"),
     "response_style_shadow_mode": ("response", "response_style_shadow_mode"),
     "show_sources": ("response", "show_sources"),
-    "streaming_enabled": ("response", "streaming_enabled"),
     "ttft_drift_warn_ms": ("response", "ttft_drift_warn_ms"),
     # Voice
     "show_transcription": ("voice", "show_transcription"),
@@ -482,7 +476,6 @@ class GraphConfig:
         response_style_enabled: bool
         response_style_shadow_mode: bool
         show_sources: bool
-        streaming_enabled: bool
         ttft_drift_warn_ms: int
         # Voice
         show_transcription: bool
@@ -580,7 +573,6 @@ class GraphConfig:
                 response_style_enabled=e.response_style_enabled,
                 response_style_shadow_mode=e.response_style_shadow_mode,
                 show_sources=e.show_sources,
-                streaming_enabled=e.streaming_enabled,
                 ttft_drift_warn_ms=e.ttft_drift_warn_ms,
             ),
             voice=VoiceConfig(

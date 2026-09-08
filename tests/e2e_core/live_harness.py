@@ -200,7 +200,6 @@ class FakeLLMConfig:
     llm_model = "fake-live-e2e"
     llm_temperature = 0.0
     generate_max_tokens = 600
-    streaming_enabled = False
     show_sources = False
     response_style_enabled = False
     response_style_shadow_mode = False
@@ -221,7 +220,6 @@ class FailingLLMConfig:
     llm_model: str = "failing-live-e2e"
     llm_temperature: float = 0.0
     generate_max_tokens: int = 600
-    streaming_enabled: bool = False
     show_sources: bool = False
     response_style_enabled: bool = False
     response_style_shadow_mode: bool = False
@@ -497,7 +495,6 @@ def _build_live_llm_config(env: LiveE2EEnv) -> Any:
     config.domain = "недвижимость в Болгарии"
     config.llm_temperature = 0.0
     config.generate_max_tokens = int(os.getenv("E2E_CORE_REAL_LLM_MAX_TOKENS", "600"))
-    config.streaming_enabled = False
     config.show_sources = False
     config.response_style_enabled = False
     config.response_style_shadow_mode = False

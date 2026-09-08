@@ -44,7 +44,6 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
         "RESPONSE_STYLE_ENABLED",
         "RESPONSE_STYLE_SHADOW_MODE",
         "SHOW_SOURCES",
-        "STREAMING_ENABLED",
         "TTFT_DRIFT_WARN_MS",
         "SHOW_TRANSCRIPTION",
         "VOICE_LANGUAGE",
@@ -99,7 +98,6 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
     assert cfg.response_style_enabled is False
     assert cfg.response_style_shadow_mode is False
     assert cfg.show_sources is False
-    assert cfg.streaming_enabled is True
     assert cfg.ttft_drift_warn_ms == 500
 
     # Voice defaults
@@ -119,7 +117,6 @@ def test_graph_config_from_env_roundtrip_overrides(monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("LLM_MAX_TOKENS", "2048")
     monkeypatch.setenv("SEARCH_TOP_K", "20")
     monkeypatch.setenv("RERANK_TOP_K", "5")
-    monkeypatch.setenv("STREAMING_ENABLED", "false")
     monkeypatch.setenv("SHOW_SOURCES", "true")
     monkeypatch.setenv("BOT_DOMAIN", "healthcare")
     monkeypatch.setenv("BOT_LANGUAGE", "en")
@@ -139,7 +136,6 @@ def test_graph_config_from_env_roundtrip_overrides(monkeypatch: pytest.MonkeyPat
     assert cfg.llm_max_tokens == 2048
     assert cfg.search_top_k == 20
     assert cfg.rerank_top_k == 5
-    assert cfg.streaming_enabled is False
     assert cfg.show_sources is True
     assert cfg.domain == "healthcare"
     assert cfg.domain_language == "en"

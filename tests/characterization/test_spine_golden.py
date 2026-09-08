@@ -645,7 +645,6 @@ class TestGenerateAnswerGolden:
             "safe_fallback_used": result.payload["safe_fallback_used"],
             "llm_call_count": result.payload["llm_call_count"],
             "llm_provider_model": result.payload["llm_provider_model"],
-            "streaming_enabled": result.payload.get("streaming_enabled", False),
         }
 
         golden_name = "generate_answer.json"

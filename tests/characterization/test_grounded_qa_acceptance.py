@@ -114,7 +114,6 @@ class _CannedLLMConfig:
     llm_model = "canned-characterization-llm"
     llm_temperature = 0.0
     generate_max_tokens = 512
-    streaming_enabled = False
     show_sources = False
     response_style_enabled = False
     response_style_shadow_mode = False
@@ -501,8 +500,8 @@ class TestEmptyProviderOutput:
         assert result.grounded is False
         assert result.semantic_cache_safe_reuse is False
 
-    async def test_fallback_flags_match_streaming_semantics(self) -> None:
-        """Sync and streaming share the same terminal fallback flags (#3360)."""
+    async def test_terminal_fallback_flags_not_grounded_or_cache_safe(self) -> None:
+        """Terminal fallback flags: not grounded, not safe for reuse, fallback text sent."""
         config = _CannedLLMConfig(None)
         rag = _rag_stub([_known_doc()])
 
@@ -510,7 +509,7 @@ class TestEmptyProviderOutput:
             KNOWN_CORPUS_QUESTION, config=config, rag=rag, request_id="i3360-parity"
         )
 
-        # Terminal flags identical to the streaming path's empty-output
+        # Terminal flags for the one-shot non-streaming path's empty-output
         # rejection: not grounded, not safe for reuse, fallback text sent.
         assert result.grounded is False
         assert result.safe_fallback_used is False

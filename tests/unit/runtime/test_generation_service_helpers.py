@@ -1,4 +1,4 @@
-"""Regression tests for generate_answer / generate_answer_stream shared helper logic.
+"""Regression tests for generate_answer shared helper logic.
 
 These characterization tests pin the behavior of the shared blocks:
 - _resolve_generation_setup: query/style/coverage/sources/legal-answer-safe resolution

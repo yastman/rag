@@ -15,7 +15,7 @@ from .policy import _MAX_HISTORY_MESSAGES
 
 
 class _GenerationSetup:
-    """Resolved common setup values shared between generate_answer and generate_answer_stream."""
+    """Resolved common setup values shared by generate_answer."""
 
     __slots__ = (
         "coverage_reason",
