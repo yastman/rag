@@ -1044,6 +1044,65 @@ async def test_pipeline_rewrite_loop(
     assert len(result["documents"]) > 0
 
 
+async def test_pipeline_backend_error_after_rewrite_attempt_is_preserved(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """#3478: a backend failure on a rewritten retry keeps its error flags.
+
+    The final assembled context must carry retrieval_backend_error /
+    retrieval_error_type so the core treats the request as a terminal
+    dependency failure instead of an ordinary empty search.
+    """
+    from src.runtime.pipeline.rag import rag_pipeline
+
+    call_count = 0
+    healthy_irrelevant = (
+        [{"text": "irrelevant", "score": 0.001, "metadata": {}}],
+        {"backend_error": False, "error_type": None, "error_message": None},
+    )
+    backend_down = (
+        [],
+        {"backend_error": True, "error_type": "ConnectError", "error_message": "qdrant down"},
+    )
+
+    async def side_effect(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        return healthy_irrelevant if call_count == 1 else backend_down
+
+    mock_qdrant.hybrid_search_rrf = AsyncMock(side_effect=side_effect)
+
+    mock_rewrite_result = {
+        "rewritten_query": "уточнённый запрос",
+        "rewrite_count": 1,
+        "rewrite_effective": True,
+        "rewrite_provider_model": "test-model",
+        "latency_stages": {},
+    }
+
+    with (
+        patch.dict("os.environ", {"MAX_REWRITE_ATTEMPTS": "1"}),
+        patch(
+            "src.runtime.pipeline.rag._rewrite_query",
+            new=AsyncMock(return_value=mock_rewrite_result),
+        ),
+    ):
+        result = await rag_pipeline(
+            "непонятный запрос",
+            user_id=42,
+            session_id="test",
+            cache=mock_cache,
+            embeddings=mock_embeddings,
+            sparse_embeddings=mock_sparse,
+            qdrant=mock_qdrant,
+        )
+
+    assert result["rewrite_count"] >= 1
+    assert result["retrieval_backend_error"] is True
+    assert result["retrieval_error_type"] == "ConnectError"
+    assert result["documents"] == []
+
+
 async def test_pipeline_returns_empty_docs_when_retrieval_is_irrelevant(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
 ):

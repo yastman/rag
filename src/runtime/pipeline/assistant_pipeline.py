@@ -49,6 +49,11 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIDENCE_THRESHOLD = 0.005
 
+# Controlled service-unavailable response for a terminal retrieval backend
+# failure (#3478) — the same canonical text as the embedding failure path
+# (_cache_stage) and the core-level unhandled-error fallback (assistant.py).
+_RETRIEVAL_UNAVAILABLE_RESPONSE = "Сервис временно недоступен. Пожалуйста, повторите через минуту."
+
 
 async def run_assistant_pipeline(
     request: AssistantRequest,
@@ -183,6 +188,37 @@ async def run_assistant_pipeline(
             )
             return AssistantResult(
                 response_text=str(rag_result.get("response", "") or ""),
+                route="dependency_error",
+                request_type=str(rag_result.get("query_type") or request_type),
+                documents_count=0,
+                latency_ms=_latency_ms(started),
+                error_type=error_type,
+                request_id=rid,
+                cache_hit=False,
+            )
+
+        if rag_result.get("retrieval_backend_error"):
+            # Terminal Qdrant retrieval dependency failure (#3478): the search
+            # backend answered with an error — not an ordinary empty result.
+            # Preserve the controlled service-unavailable response with a
+            # typed error category. No query-rewrite downgrade, no generation,
+            # no semantic cache store, no success telemetry. Exactly one
+            # search outcome is emitted here, categorized as a dependency
+            # error (#3479 pattern) — never a rag_search success.
+            error_type = str(rag_result.get("retrieval_error_type") or "retrieval_backend_error")
+            emit_product_event(
+                dependencies.telemetry,
+                "search_completed",
+                request_id=rid,
+                route="dependency_error",
+                request_type=request_type,
+                retrieved_doc_ids=[],
+                latency_ms=_latency_ms(started),
+                error_type=error_type,
+            )
+            return AssistantResult(
+                response_text=str(rag_result.get("response", "") or "")
+                or _RETRIEVAL_UNAVAILABLE_RESPONSE,
                 route="dependency_error",
                 request_type=str(rag_result.get("query_type") or request_type),
                 documents_count=0,
