@@ -9,10 +9,8 @@ docker/postgres/init
 
 ## Contents
 - 00-init-databases.sql
-- 04-voice-schema.sql
 - 05-realestate-schema.sql
 - 08-user-favorites.sql
-- 09-drop-orphaned-scheduler-voice-tables.sql
 
 ## Parent
 - [..](..)

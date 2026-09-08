@@ -7,6 +7,13 @@ again and must remain available to production readers/writers.
 Orphaned Postgres tables (no kept writers/readers):
   - lead_score_sync_audit
   - scheduler_leases
+  - call_transcripts
+
+The docker/postgres/init create-then-drop scripts (04-voice-schema.sql,
+09-drop-orphaned-scheduler-voice-tables.sql) were removed by #3450: fresh
+bootstraps create only live schemas. Cleanup of those orphaned tables on
+pre-existing volumes is an operator migration concern, not an init-script
+concern — this contract now only pins that kept code never recreates them.
 
 Orphaned Redis keyspaces (reader archived in ARCH-06):
   - session:last_active:* (written by bot.py; reader was session_summary_worker)
@@ -22,9 +29,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BOOTSTRAP = REPO_ROOT / "telegram_bot" / "lifecycle" / "postgres_bootstrap.py"
-DROP_SQL = (
-    REPO_ROOT / "docker" / "postgres" / "init" / "09-drop-orphaned-scheduler-voice-tables.sql"
-)
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
 FUNNEL_LEAD_SCORING = REPO_ROOT / "telegram_bot" / "services" / "funnel_lead_scoring.py"
 
@@ -32,6 +36,7 @@ FUNNEL_LEAD_SCORING = REPO_ROOT / "telegram_bot" / "services" / "funnel_lead_sco
 ORPHANED_TABLES = (
     "lead_score_sync_audit",
     "scheduler_leases",
+    "call_transcripts",
 )
 
 # Live tables owned by bootstrap for CRM/nurturing/funnel features.
@@ -59,30 +64,6 @@ def test_live_crm_funnel_tables_present_in_bootstrap() -> None:
     assert not missing, (
         f"Live CRM/funnel tables missing from bootstrap: {missing}. "
         "Add CREATE TABLE IF NOT EXISTS statements to REALESTATE_SCHEMA_STATEMENTS."
-    )
-
-
-def test_drop_sql_retains_live_crm_funnel_tables() -> None:
-    """Docker init must not DROP live CRM/nurturing/funnel tables."""
-    sql = DROP_SQL.read_text(encoding="utf-8").lower()
-    destroyed = [t for t in LIVE_BOOTSTRAP_TABLES if f"drop table if exists {t}" in sql]
-    assert not destroyed, (
-        f"Live CRM/funnel tables still dropped by docker init: {destroyed}. "
-        "Remove those DROP TABLE statements from "
-        "09-drop-orphaned-scheduler-voice-tables.sql."
-    )
-
-
-def test_drop_sql_still_drops_orphaned_tables() -> None:
-    """Docker init must keep DROP for truly orphaned scheduler/voice state."""
-    sql = DROP_SQL.read_text(encoding="utf-8").lower()
-    missing = [t for t in ORPHANED_TABLES if f"drop table if exists {t}" not in sql]
-    assert not missing, (
-        f"Orphaned tables missing from docker init drops: {missing}. "
-        "Keep DROP TABLE IF EXISTS for lead_score_sync_audit and scheduler_leases."
-    )
-    assert "drop table if exists call_transcripts" in sql, (
-        "call_transcripts DROP missing from docker init (voice ARCH-02)."
     )
 
 
