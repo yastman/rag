@@ -15,8 +15,10 @@ append-only durability contract:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -43,7 +45,8 @@ class _FakePipeline:
         return self
 
     async def execute(self) -> list[Any]:
-        if self._redis.fail:
+        await asyncio.sleep(0)  # yield: lets concurrent tasks interleave
+        if self._redis.fail or self._redis.fail_pipeline:
             raise RuntimeError("boom")
         results: list[Any] = []
         for op in self._ops:
@@ -67,17 +70,24 @@ class _FakePipeline:
 
 
 class _FakeRedis:
-    """Minimal hash/pipeline Redis stand-in with real HSETNX semantics."""
+    """Minimal hash/pipeline Redis stand-in with real HSETNX semantics.
 
-    def __init__(self, *, fail: bool = False) -> None:
+    ``fail`` breaks every operation; ``fail_pipeline`` breaks only pipelined
+    writes (used to simulate failures between a remote side effect and the
+    durable state write).
+    """
+
+    def __init__(self, *, fail: bool = False, fail_pipeline: bool = False) -> None:
         self.hashes: dict[str, dict[str, str]] = {}
         self.expires: list[tuple[str, int]] = []
         self.fail = fail
+        self.fail_pipeline = fail_pipeline
 
     def pipeline(self) -> _FakePipeline:
         return _FakePipeline(self)
 
     async def hgetall(self, key: str) -> dict[str, str]:
+        await asyncio.sleep(0)  # yield: lets concurrent tasks interleave
         if self.fail:
             raise RuntimeError("redis down")
         return dict(self.hashes.get(key, {}))
@@ -85,6 +95,28 @@ class _FakeRedis:
 
 def _make_redis(*, fail: bool = False) -> _FakeRedis:
     return _FakeRedis(fail=fail)
+
+
+def _seed_notify_state(
+    redis: _FakeRedis,
+    *,
+    client_id: int = 123,
+    request_id: str = "req-1",
+    topic_id: int | None = None,
+    notified: bool = False,
+    age_seconds: int = 0,
+) -> None:
+    """Seed a notification-state entry as the sink would have written it."""
+    entry = {
+        "status": "notified" if notified else "sending",
+        "topic_id": topic_id,
+        "updated_at": int(time.time()) - age_seconds,
+    }
+    if notified:
+        entry["notified"] = True
+        entry["notified_at"] = entry["updated_at"]
+    key = f"lead_notify:v2:{client_id}"
+    redis.hashes.setdefault(key, {})[request_id] = json.dumps(entry)
 
 
 def _make_bridge(*, sent: bool = True) -> MagicMock:
@@ -339,6 +371,242 @@ async def test_listing_fails_closed_when_redis_is_down():
     sink = LeadRequestSink(redis=redis)
 
     assert await sink.list_requests(123) == []
+
+
+# --- Notification gating and dedup (#3477) ----------------------------------
+
+
+async def test_persistence_failure_never_calls_the_bridge():
+    """A request the sink could not save must produce zero manager side effects."""
+    redis = _make_redis(fail=True)
+    bridge = _make_bridge()
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    ack = await sink.record_request(**_record_kwargs())
+
+    assert ack is False
+    bridge.create_topic.assert_not_awaited()
+    bridge.send_to_topic.assert_not_awaited()
+
+
+async def test_acknowledged_retry_skips_second_notification():
+    """A retry of an already-acknowledged request is one record, one notification."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is True
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is True
+
+    bridge.create_topic.assert_awaited_once()
+    bridge.send_to_topic.assert_awaited_once()
+    assert set(redis.hashes["lead_request:v2:123"]) == {"req-1"}
+
+
+async def test_notification_identity_is_durable_and_versioned():
+    """The acknowledged notification is recorded under a versioned state key."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is True
+
+    state_raw = redis.hashes.get("lead_notify:v2:123", {}).get("req-1")
+    assert state_raw is not None
+    state = json.loads(state_raw)
+    assert state["notified"] is True
+    assert state["topic_id"] == 4242
+    # The state key is versioned and never collides with record namespaces.
+    assert "lead_notify:123" not in redis.hashes
+
+
+async def test_two_distinct_requests_notify_independently():
+    redis = _make_redis()
+    bridge = _make_bridge()
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is True
+    assert await sink.record_request(**_record_kwargs(request_id="req-2")) is True
+
+    assert bridge.create_topic.await_count == 2
+    assert set(redis.hashes["lead_request:v2:123"]) == {"req-1", "req-2"}
+    state_fields = set(redis.hashes["lead_notify:v2:123"])
+    assert state_fields == {"req-1", "req-2"}
+
+
+async def test_retry_after_send_failure_reuses_stored_topic():
+    """Create-succeeded/send-failed must resume the known topic, not create another."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+    bridge.send_to_topic = AsyncMock(side_effect=[False, True])
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is False
+    assert bridge.create_topic.await_count == 1
+
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is True
+
+    bridge.create_topic.assert_awaited_once()  # topic reused, not duplicated
+    assert bridge.send_to_topic.await_count == 2
+    assert bridge.send_to_topic.await_args_list[0].kwargs["topic_id"] == 4242
+    assert bridge.send_to_topic.await_args_list[1].kwargs["topic_id"] == 4242
+
+
+async def test_retry_after_send_exception_reuses_stored_topic():
+    redis = _make_redis()
+    bridge = _make_bridge()
+    bridge.send_to_topic = AsyncMock(side_effect=[RuntimeError("send blew up"), True])
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is False
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is True
+
+    bridge.create_topic.assert_awaited_once()
+
+
+async def test_fresh_claim_by_another_attempt_is_not_duplicated():
+    """A concurrent in-progress claim blocks a second notification attempt."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+    _seed_notify_state(redis, request_id="req-1", topic_id=None, notified=False)
+
+    ack = await sink.record_request(**_record_kwargs(request_id="req-1"))
+
+    assert ack is False
+    bridge.create_topic.assert_not_awaited()
+    bridge.send_to_topic.assert_not_awaited()
+    # The record itself is still durably present.
+    assert "req-1" in redis.hashes["lead_request:v2:123"]
+
+
+async def test_stale_claim_is_recovered_after_bounded_lease():
+    """A crashed attempt's claim older than the lease is taken over, once."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+    _seed_notify_state(redis, request_id="req-1", topic_id=None, age_seconds=600)
+
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is True
+
+    bridge.create_topic.assert_awaited_once()
+    state = json.loads(redis.hashes["lead_notify:v2:123"]["req-1"])
+    assert state["notified"] is True
+
+
+async def test_topic_created_but_untracked_is_reported_false(caplog):
+    """Ambiguous outcome: topic exists remotely but state write failed."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+
+    def _create_then_break_state(**_kwargs: object) -> int:
+        redis.fail_pipeline = True
+        return 4242
+
+    bridge.create_topic = AsyncMock(side_effect=_create_then_break_state)
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    with caplog.at_level(logging.WARNING, logger="telegram_bot.services.lead_sink"):
+        ack = await sink.record_request(**_record_kwargs(request_id="req-1"))
+
+    assert ack is False
+    assert bridge.create_topic.await_count == 1
+    bridge.send_to_topic.assert_not_awaited()
+    # Observable: the ambiguity is logged, never silent.
+    assert any("not recorded durably" in rec.getMessage() for rec in caplog.records)
+    # Bounded recovery: within the claim lease no extra topic is created.
+    redis.fail_pipeline = False
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is False
+    assert bridge.create_topic.await_count == 1
+
+
+async def test_delivered_but_unacked_notification_resends_once_on_retry():
+    """Ambiguous outcome: message delivered, acknowledgement write failed.
+
+    Recovery reuses the topic and resends (at-least-once per topic) — never
+    a second topic.
+    """
+    redis = _make_redis()
+    bridge = _make_bridge()
+    send_calls: list[int] = []
+
+    async def _flaky_send(*, topic_id: int, text: str) -> bool:
+        send_calls.append(topic_id)
+        if len(send_calls) == 1:
+            redis.fail_pipeline = True  # acknowledgement write fails
+        else:
+            redis.fail_pipeline = False
+        return True
+
+    bridge.send_to_topic = AsyncMock(side_effect=_flaky_send)
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is False
+    redis.fail_pipeline = False  # the flap is over; the retry converges
+    assert await sink.record_request(**_record_kwargs(request_id="req-1")) is True
+
+    bridge.create_topic.assert_awaited_once()
+    assert send_calls == [4242, 4242]
+
+
+async def test_notification_payload_authority_is_the_persisted_record():
+    """A retry must speak the first persisted payload, not the retry's kwargs."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+    bridge.send_to_topic = AsyncMock(side_effect=[False, True])
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    await sink.record_request(**_record_kwargs(request_id="req-1"))
+    await sink.record_request(
+        **_record_kwargs(request_id="req-1", phone="+380999999999", date_range="next_week")
+    )
+
+    text = bridge.send_to_topic.await_args_list[-1].kwargs["text"]
+    assert "+380501234567" in text  # the persisted payload
+    assert "+380999999999" not in text  # the retry's kwarg is not the authority
+    assert "ближайшие дни" in text
+    assert "через неделю" not in text
+
+
+async def test_concurrent_same_id_retries_create_exactly_one_topic():
+    """Concurrent same-id attempts: atomic claim → exactly one creator."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+
+    acks = await asyncio.gather(
+        sink.record_request(**_record_kwargs(request_id="req-1")),
+        sink.record_request(**_record_kwargs(request_id="req-1")),
+    )
+
+    assert bridge.create_topic.await_count == 1
+    assert bridge.send_to_topic.await_count == 1
+    assert any(acks)  # the claim winner completes the acknowledged flow
+    state = json.loads(redis.hashes["lead_notify:v2:123"]["req-1"])
+    assert state["notified"] is True
+
+
+async def test_state_write_failure_refuses_untracked_side_effect():
+    """Redis unavailable for state: no side effect is fired untracked."""
+    redis = _make_redis()
+    bridge = _make_bridge()
+    sink = LeadRequestSink(redis=redis, forum_bridge=bridge)
+    # Break only the notification-state read: persist has already succeeded
+    # by the time the sink reads state, so simulate breakage right after.
+    original_hgetall = redis.hgetall
+
+    async def _break_state_read(key: str) -> dict[str, str]:
+        if key.startswith("lead_notify:"):
+            raise RuntimeError("redis flapped")
+        return dict(await original_hgetall(key))
+
+    redis.hgetall = _break_state_read  # type: ignore[method-assign]
+
+    ack = await sink.record_request(**_record_kwargs(request_id="req-1"))
+
+    assert ack is False
+    bridge.create_topic.assert_not_awaited()
+    bridge.send_to_topic.assert_not_awaited()
 
 
 # --- Lifecycle wiring -------------------------------------------------------
