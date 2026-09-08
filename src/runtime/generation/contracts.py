@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.core.contracts import DEFAULT_REQUEST_LANGUAGE
+
 
 @dataclass
 class GenerationRequest:
@@ -20,6 +22,9 @@ class GenerationRequest:
     grounding_mode: str = "normal"
     grade_confidence: float | None = None
     config: Any | None = None
+    # Canonical request locale (#3491): drives the per-locale generation
+    # instruction; never mutates global config.
+    language: str = DEFAULT_REQUEST_LANGUAGE
     extra_kwargs: dict[str, Any] = field(default_factory=dict)
 
 

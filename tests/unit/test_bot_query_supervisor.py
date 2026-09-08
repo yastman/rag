@@ -330,6 +330,46 @@ class TestQuerySupervisorCoreEntrypoint:
         assert callable(deps.config.create_llm)
         assert callable(deps.config.get_reasoning_kwargs)
 
+    async def test_supervisor_forwards_canonical_locale_code_to_core(self):
+        """#3491: the Fluent locale reaches the core as a canonical locale code.
+
+        The supervisor passes the transport-neutral code (not a display label)
+        into ``UserContext.language``; an unsupported locale falls back to the
+        configured domain language.
+        """
+        config = _make_config(content_filter_enabled=False)
+        bot = _create_bot(config)
+        message = _make_message("What is included in the complex?")
+
+        with (
+            patch(
+                "telegram_bot.assistant_core_adapter.run_core_text_request",
+                new_callable=AsyncMock,
+                return_value=_core_result("core answer"),
+            ) as mock_run_core,
+            patch(
+                "telegram_bot.pipeline.supervisor.ChatActionSender.typing",
+                side_effect=_noop_typing,
+            ),
+        ):
+            bot._resolve_user_role = AsyncMock(return_value="client")
+            bot._cache = MagicMock()
+
+            await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="en", root_trace_metadata={}
+            )
+            supported = mock_run_core.await_args.kwargs["user_context"].language
+
+            await bot._handle_query_supervisor(
+                message, time.perf_counter(), locale="xx", root_trace_metadata={}
+            )
+            unsupported = mock_run_core.await_args.kwargs["user_context"].language
+
+        assert supported == "en"
+        # Unsupported locale falls back to the configured domain language.
+        assert unsupported == "ru"
+        assert config.domain_language == "ru"
+
     async def test_core_generation_reaches_llm_boundary_with_graph_config(self):
         """Regression #3486: the real supervisor → adapter → core → generation
         chain reaches the substituted LLM boundary on non-empty retrieval.

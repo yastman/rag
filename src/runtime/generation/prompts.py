@@ -5,6 +5,8 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
+from src.core.contracts import DEFAULT_REQUEST_LANGUAGE, normalize_request_language
+
 from .context import _MAX_CONTEXT_DOCS, _format_context
 from .messages import _build_llm_messages, _ensure_history_instruction
 from .policy import (
@@ -12,6 +14,20 @@ from .policy import (
     _EXHAUSTIVE_GENERATE_FALLBACK,
     _GENERATE_FALLBACK,
 )
+
+
+# Canonical per-locale answer instruction (#3491). The request locale decides
+# the answer language; unsupported locales fall back to the canonical default.
+_LANGUAGE_INSTRUCTIONS: dict[str, str] = {
+    "ru": "Отвечай на русском языке.",
+    "en": "Answer in English.",
+    "uk": "Відповідай українською мовою.",
+}
+
+
+def _language_instruction(language: str) -> str:
+    """Return the canonical per-locale answer instruction for a request locale."""
+    return _LANGUAGE_INSTRUCTIONS[normalize_request_language(language)]
 
 
 class _PromptConfig:
@@ -175,6 +191,7 @@ def _build_prompt_and_messages(
     context: str,
     dyn: dict[str, Any],
     extra: dict[str, Any],
+    language: str = DEFAULT_REQUEST_LANGUAGE,
 ) -> _PromptAndMessages:
     """Select prompt config, build system prompt with citation, and construct LLM messages."""
     style_enabled = bool(getattr(config, "response_style_enabled", False))
@@ -200,6 +217,12 @@ def _build_prompt_and_messages(
         citation_instruction = extra.get("citation_instruction", _CITATION_INSTRUCTION)
         separator = "\n" if system_prompt.endswith("\n") else "\n\n"
         system_prompt = f"{system_prompt}{separator}{citation_instruction}"
+
+    # Per-locale answer instruction (#3491): the request locale always reaches
+    # the LLM messages so identical text in different languages prompts
+    # differently and never shares cache semantics.
+    separator = "\n" if system_prompt.endswith("\n") else "\n\n"
+    system_prompt = f"{system_prompt}{separator}{_language_instruction(language)}"
 
     llm_messages = _build_llm_messages(
         system_prompt=system_prompt,

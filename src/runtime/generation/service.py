@@ -149,6 +149,7 @@ async def generate_answer(
         context=context,
         dyn=dyn,
         extra=extra,
+        language=request.language,
     )
     max_tokens = pm.max_tokens
     response_policy_mode = pm.response_policy_mode

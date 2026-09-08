@@ -25,6 +25,24 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
+# Canonical request locale codes (#3491). "ru" is the single explicit
+# fallback: it is the UserContext default, the semantic-cache isolation
+# default, and the documented domain language.
+DEFAULT_REQUEST_LANGUAGE: str = "ru"
+SUPPORTED_REQUEST_LANGUAGES: frozenset[str] = frozenset({"ru", "en", "uk"})
+
+
+def normalize_request_language(value: str | None) -> str:
+    """Return the canonical request locale code for generation and cache isolation.
+
+    Missing or unsupported locale codes fall back to ``DEFAULT_REQUEST_LANGUAGE``
+    so prompt building and semantic-cache read/store always observe one
+    consistent value for the same request.
+    """
+    code = str(value or "").strip().lower()
+    return code if code in SUPPORTED_REQUEST_LANGUAGES else DEFAULT_REQUEST_LANGUAGE
+
+
 @dataclass
 class UserContext:
     """Minimal user/session context for core assistant request handling."""
@@ -33,7 +51,7 @@ class UserContext:
     session_id: str = ""
     role: str = "client"
     filters: dict[str, Any] | None = None
-    language: str = "ru"
+    language: str = DEFAULT_REQUEST_LANGUAGE
 
 
 @dataclass
@@ -160,6 +178,8 @@ class AssistantError(RuntimeError):
 
 
 __all__ = [
+    "DEFAULT_REQUEST_LANGUAGE",
+    "SUPPORTED_REQUEST_LANGUAGES",
     "AssistantError",
     "AssistantRequest",
     "AssistantResult",
@@ -172,4 +192,5 @@ __all__ = [
     "SparseEmbeddingProvider",
     "TelemetryLogger",
     "UserContext",
+    "normalize_request_language",
 ]

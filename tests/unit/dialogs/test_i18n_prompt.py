@@ -5,16 +5,24 @@ from __future__ import annotations
 from ._property_bot_ast import get_default_map, get_parameter_names, get_property_bot_method
 
 
-def test_locale_to_language_mapping_covers_all_locales():
-    """LOCALE_TO_LANGUAGE maps all supported locale codes."""
-    from telegram_bot.pipeline.supervisor import LOCALE_TO_LANGUAGE
+def test_supervisor_aligns_with_canonical_locale_codes():
+    """The supervisor forwards canonical locale codes to the core (#3491).
 
-    assert "ru" in LOCALE_TO_LANGUAGE
-    assert "en" in LOCALE_TO_LANGUAGE
-    assert "uk" in LOCALE_TO_LANGUAGE
-    assert LOCALE_TO_LANGUAGE["ru"] == "русском языке"
-    assert LOCALE_TO_LANGUAGE["en"] == "English"
-    assert LOCALE_TO_LANGUAGE["uk"] == "українською мовою"
+    The legacy display-label map (``LOCALE_TO_LANGUAGE``) is gone: the core
+    consumes transport-neutral codes owned by ``src.core.contracts``.
+    """
+    import telegram_bot.pipeline.supervisor as supervisor
+    from src.core.contracts import normalize_request_language
+
+    assert not hasattr(supervisor, "LOCALE_TO_LANGUAGE")
+    assert {"ru", "en", "uk"} <= supervisor.SUPPORTED_REQUEST_LANGUAGES
+    assert normalize_request_language("ru") == "ru"
+    assert normalize_request_language("en") == "en"
+    assert normalize_request_language("uk") == "uk"
+    # Missing/unsupported locales fall back to the one canonical default.
+    assert normalize_request_language("de") == "ru"
+    assert normalize_request_language("") == "ru"
+    assert normalize_request_language(None) == "ru"
 
 
 def test_handle_query_accepts_locale_parameter():

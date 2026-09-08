@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from time import time
 from typing import Any
 
+from src.core.contracts import DEFAULT_REQUEST_LANGUAGE
 from src.runtime.grounding.policy import semantic_cache_safe_reuse_allowed
 from src.runtime.services.query_filter_signal import build_filter_signature
 
@@ -160,6 +161,7 @@ async def maybe_store_semantic_response(
     decision: SemanticCacheDecision,
     agent_role: str | None = None,
     filter_signature: str | None = None,
+    language: str = DEFAULT_REQUEST_LANGUAGE,
 ) -> bool:
     if cache_scope != "rag":
         return False
@@ -177,5 +179,6 @@ async def maybe_store_semantic_response(
         agent_role=agent_role,
         metadata=decision.metadata,
         filter_signature=filter_signature,
+        language=language,
     )
     return True

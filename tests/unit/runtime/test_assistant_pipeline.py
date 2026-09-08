@@ -637,3 +637,267 @@ async def test_off_topic_bypasses_rag_with_refusal(monkeypatch) -> None:
     assert result.response_text in OFF_TOPIC_RESPONSES
     assert result.route == "non_rag"
     assert result.request_type == "OFF_TOPIC"
+
+
+# ---------------------------------------------------------------------------
+# #3491 — request locale reaches generation prompts and semantic cache
+# read/store. Identical text with different locales must produce different
+# generation instructions, and a semantic cache read/store must always carry
+# the request locale so an answer in one language is never served to another.
+# ---------------------------------------------------------------------------
+
+_LOCALE_QUERY = "Расскажи что включает в себя комплекс и какая инфраструктура рядом"
+
+# Canonical per-locale generation instructions (#3491).
+_LOCALE_INSTRUCTIONS = {
+    "ru": "Отвечай на русском языке.",
+    "en": "Answer in English.",
+    "uk": "Відповідай українською мовою.",
+}
+
+
+class _LocaleRecordingCache:
+    """Cache double recording semantic read/store kwargs; always a miss."""
+
+    def __init__(self) -> None:
+        self.reads: list[dict[str, Any]] = []
+        self.stores: list[dict[str, Any]] = []
+
+    async def get_embedding(self, key: str) -> list[float] | None:
+        return None
+
+    async def store_embedding(self, key: str, dense: list[float]) -> None:
+        return None
+
+    async def get_sparse_embedding(self, key: str) -> None:
+        return None
+
+    async def store_sparse_embedding(self, key: str, sparse: Any) -> None:
+        return None
+
+    async def get_search_results(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def store_search_results(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def check_semantic(self, *args: Any, **kwargs: Any) -> str | None:
+        self.reads.append(dict(kwargs))
+        return None
+
+    async def store_semantic(self, *args: Any, **kwargs: Any) -> bool:
+        self.stores.append(dict(kwargs))
+        return True
+
+
+class _LocaleStubEmbeddings:
+    async def aembed_query(self, text: str) -> list[float]:
+        return [0.1, 0.2, 0.3, 0.4]
+
+
+class _LocaleStubSparseEmbeddings:
+    async def aembed_query(self, text: str) -> dict[str, Any]:
+        return {}
+
+
+class _LocaleStubQdrant:
+    async def hybrid_search_rrf(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        return []
+
+
+class _RecordingLLM:
+    """LLM double that records the exact messages sent to the provider."""
+
+    def __init__(self, calls: list[list[dict[str, str]]]) -> None:
+        self._calls = calls
+
+    async def completion(self, *, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+        self._calls.append([dict(message) for message in messages])
+        return types.SimpleNamespace(
+            choices=[
+                types.SimpleNamespace(message=types.SimpleNamespace(content="Тестовый ответ"))
+            ],
+            model="locale-test-model",
+            usage=types.SimpleNamespace(completion_tokens=10),
+        )
+
+
+def _locale_dependencies(cache: Any, llm_calls: list[list[dict[str, str]]]) -> Any:
+    """Core dependencies with real prompt/cache policies; only externals stubbed."""
+    from src.core import CoreDependencies
+
+    config = MagicMock()
+    config.show_sources = False
+    config.response_style_enabled = False
+    config.response_style_shadow_mode = False
+    config.generate_max_tokens = 512
+    config.domain = "real-estate"
+    config.llm_temperature = 0.2
+    config.llm_model = "locale-test-model"
+    config.get_reasoning_kwargs.return_value = {}
+    config.create_llm.return_value = _RecordingLLM(llm_calls)
+    return CoreDependencies(
+        cache=cache,
+        embeddings=_LocaleStubEmbeddings(),
+        sparse_embeddings=_LocaleStubSparseEmbeddings(),
+        qdrant=_LocaleStubQdrant(),
+        config=config,
+    )
+
+
+async def test_request_locale_drives_generation_prompt_and_cache_read() -> None:
+    """#3491 boundary: ru/en/uk requests with identical text get corresponding
+    generation instructions, and every semantic-cache read carries the request
+    locale. Driven through the public core entrypoint with real prompt and
+    cache policies; only cache/embeddings/qdrant/LLM externals are stubbed."""
+    from src.core import UserContext
+    from src.core.assistant import run_assistant_request
+
+    prompts_by_language: dict[str, str] = {}
+
+    for locale in ("ru", "en", "uk"):
+        llm_calls: list[list[dict[str, str]]] = []
+        cache = _LocaleRecordingCache()
+        result = await run_assistant_request(
+            _LOCALE_QUERY,
+            user_context=UserContext(user_id="42", session_id="s", language=locale),
+            request_id=f"req-3491-{locale}",
+            dependencies=_locale_dependencies(cache, llm_calls),
+        )
+
+        assert result.error_type is None, f"harness failure for locale={locale}"
+        assert len(llm_calls) == 1, f"generation must run exactly once for locale={locale}"
+        system_prompt = llm_calls[0][0]["content"]
+        prompts_by_language[locale] = system_prompt
+        # The request locale reaches the LLM as a per-locale instruction.
+        assert _LOCALE_INSTRUCTIONS[locale] in system_prompt, (
+            f"generation prompt must carry the {locale} instruction"
+        )
+        # Different locales must produce different prompts for identical text.
+        assert len(set(prompts_by_language.values())) == len(prompts_by_language)
+        # The semantic cache read carries the request locale.
+        assert cache.reads, f"semantic cache read must happen for locale={locale}"
+        assert cache.reads[0].get("language") == locale, (
+            f"semantic cache read must be isolated by locale={locale}"
+        )
+
+
+async def test_unsupported_locale_falls_back_consistently() -> None:
+    """#3491: a missing/unsupported locale falls back to one canonical code for
+    both the prompt instruction and the semantic-cache read."""
+    from src.core import UserContext
+    from src.core.assistant import run_assistant_request
+
+    llm_calls: list[list[dict[str, str]]] = []
+    cache = _LocaleRecordingCache()
+    result = await run_assistant_request(
+        _LOCALE_QUERY,
+        user_context=UserContext(user_id="42", session_id="s", language="de"),
+        request_id="req-3491-unsupported",
+        dependencies=_locale_dependencies(cache, llm_calls),
+    )
+
+    assert result.error_type is None, "harness failure for unsupported locale"
+    assert len(llm_calls) == 1
+    system_prompt = llm_calls[0][0]["content"]
+    assert _LOCALE_INSTRUCTIONS["ru"] in system_prompt
+    assert _LOCALE_INSTRUCTIONS["en"] not in system_prompt
+    assert cache.reads, "semantic cache read must happen"
+    assert cache.reads[0].get("language") == "ru"
+
+
+async def test_request_locale_reaches_semantic_cache_store() -> None:
+    """#3491: the core-owned semantic cache store carries the same request
+    locale as the read, so a stored answer can never be reused for another
+    language. Store policy stays real; only rag/generation seams are stubbed
+    to make the store eligible (the established #3208 pattern)."""
+    from unittest.mock import AsyncMock, patch
+
+    from src.core import AssistantRequest, CoreDependencies, UserContext
+    from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
+
+    rag = AsyncMock(
+        return_value={
+            "documents": [_doc()],
+            "cache_hit": False,
+            "query_type": "FAQ",
+            "rerank_applied": False,
+            "grade_confidence": 0.9,
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+        }
+    )
+    gen = AsyncMock(
+        return_value=GenerationResult(
+            payload={
+                "response": "english answer",
+                "llm_provider_model": "fake-model",
+                "usage_details": {"input": 1, "output": 2},
+                "grounded": True,
+                "legal_answer_safe": True,
+                "semantic_cache_safe_reuse": True,
+                "safe_fallback_used": False,
+                "llm_call_count": 1,
+            }
+        )
+    )
+    cache = _LocaleRecordingCache()
+    dependencies = CoreDependencies(
+        cache=cache,
+        embeddings=object(),
+        sparse_embeddings=object(),
+        qdrant=object(),
+        config=object(),
+    )
+    with (
+        patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
+        patch("src.runtime.pipeline.assistant_pipeline.rag_pipeline", rag),
+        patch("src.runtime.pipeline.assistant_pipeline.generate_answer", gen),
+    ):
+        await run_assistant_pipeline(
+            AssistantRequest(
+                query=_LOCALE_QUERY,
+                user_context=UserContext(user_id="42", session_id="s", language="en"),
+                request_id="req-3491-store",
+            ),
+            dependencies=dependencies,
+        )
+
+    assert cache.stores, "eligible generation must store to the semantic cache"
+    assert cache.stores[0].get("language") == "en"
+
+
+async def test_parallel_requests_in_different_languages_stay_isolated() -> None:
+    """#3491: concurrent ru/en requests sharing one config, cache, and LLM
+    boundary observe their own locale only — the request locale is never
+    written into shared config and prompts never bleed across languages."""
+    import asyncio
+
+    from src.core import UserContext
+    from src.core.assistant import run_assistant_request
+
+    llm_calls: list[list[dict[str, str]]] = []
+    cache = _LocaleRecordingCache()
+    deps = _locale_dependencies(cache, llm_calls)
+
+    async def _run(locale: str) -> None:
+        result = await run_assistant_request(
+            _LOCALE_QUERY,
+            user_context=UserContext(user_id="42", session_id="s", language=locale),
+            request_id=f"req-3491-parallel-{locale}",
+            dependencies=deps,
+        )
+        assert result.error_type is None, f"harness failure for locale={locale}"
+
+    await asyncio.gather(_run("ru"), _run("en"))
+
+    assert len(llm_calls) == 2
+    prompts = [call[0]["content"] for call in llm_calls]
+    assert prompts[0] != prompts[1]
+    # Exactly one request saw each locale instruction — no cross-language bleed.
+    assert sum(_LOCALE_INSTRUCTIONS["ru"] in prompt for prompt in prompts) == 1
+    assert sum(_LOCALE_INSTRUCTIONS["en"] in prompt for prompt in prompts) == 1
+    # Each semantic-cache read was isolated under its own request locale.
+    assert {call.get("language") for call in cache.reads} == {"ru", "en"}
+    # The shared config object was only read, never mutated per request.
+    assert deps.config.llm_model == "locale-test-model"
+    assert deps.config.create_llm.call_count == 2

@@ -14,6 +14,8 @@
 """Core application module exports."""
 
 from .contracts import (
+    DEFAULT_REQUEST_LANGUAGE,
+    SUPPORTED_REQUEST_LANGUAGES,
     AssistantError,
     AssistantRequest,
     AssistantResult,
@@ -26,6 +28,7 @@ from .contracts import (
     SparseEmbeddingProvider,
     TelemetryLogger,
     UserContext,
+    normalize_request_language,
 )
 
 
@@ -45,6 +48,8 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "DEFAULT_REQUEST_LANGUAGE",
+    "SUPPORTED_REQUEST_LANGUAGES",
     "AssistantApp",
     "AssistantError",
     "AssistantRequest",
@@ -58,5 +63,6 @@ __all__ = [
     "SparseEmbeddingProvider",
     "TelemetryLogger",
     "UserContext",
+    "normalize_request_language",
     "run_assistant_request",
 ]

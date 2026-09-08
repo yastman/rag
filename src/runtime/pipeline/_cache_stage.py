@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Any
 
+from src.core.contracts import DEFAULT_REQUEST_LANGUAGE
 from src.runtime.pipeline._retrieve import (
     _compute_retrieval_filters,
     _ensure_sparse_vector,
@@ -232,6 +233,7 @@ async def _cache_check(
     semantic_cache_filter_signature: str | None = None,
     grounding_mode: str | None = None,
     require_safe_reuse: bool = False,
+    language: str = DEFAULT_REQUEST_LANGUAGE,
 ) -> dict[str, Any]:
     """Compute embedding and check semantic cache.
 
@@ -301,6 +303,7 @@ async def _cache_check(
             filter_signature=semantic_cache_filter_signature,
             grounding_mode=grounding_mode,
             require_safe_reuse=require_safe_reuse,
+            language=language,
         )
 
     latency = time.perf_counter() - start
