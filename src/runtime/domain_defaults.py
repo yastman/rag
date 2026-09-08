@@ -6,7 +6,7 @@ apartment catalog). They are collected here so the generic runtime modules
 import from one place rather than embedding domain strings inline.
 
 To adapt the system to a different domain, replace the values in this file
-(city patterns, transliteration map, canned responses, prompts) without
+(city patterns, short-query expansions, canned responses, prompts) without
 touching generic runtime logic.
 
 Issue: #2949 — isolate domain logic from generic runtime.
@@ -96,39 +96,6 @@ _CITY_RE = re.compile(
 )
 
 # ---------------------------------------------------------------------------
-# Transliteration map: Latin → Cyrillic (Bulgarian cities and resorts)
-# ---------------------------------------------------------------------------
-
-TRANSLIT_MAP: dict[str, str] = {
-    # Cities
-    "Burgas": "Бургас",
-    "Varna": "Варна",
-    "Sofia": "София",
-    "Plovdiv": "Пловдив",
-    # Resorts
-    "Nesebar": "Несебър",
-    "Nessebar": "Несебър",
-    "Sozopol": "Созопол",
-    "Pomorie": "Поморие",
-    "Sunny Beach": "Солнечный берег",
-    "Sveti Vlas": "Святой Влас",
-    "Svyati Vlas": "Святой Влас",
-    "St Vlas": "Святой Влас",
-    "Elenite": "Елените",
-    "Ravda": "Равда",
-    "Sarafovo": "Сарафово",
-    "Primorsko": "Приморско",
-    "Tsarevo": "Царево",
-    "Lozenets": "Лозенец",
-    "Golden Sands": "Золотые пески",
-    "Albena": "Албена",
-    "Balchik": "Балчик",
-    "Kavarna": "Каварна",
-    "Obzor": "Обзор",
-    "Byala": "Бяла",
-}
-
-# ---------------------------------------------------------------------------
 # Short query expansions (finance / installment queries)
 # ---------------------------------------------------------------------------
 
@@ -136,25 +103,6 @@ SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = {
     "рассрочки": "какие варианты рассрочки при покупке квартиры",
     "рассрочка": "какие варианты рассрочки при покупке квартиры",
 }
-
-# ---------------------------------------------------------------------------
-# HyDE system prompt (real-estate expert persona)
-# ---------------------------------------------------------------------------
-
-HYDE_SYSTEM_PROMPT = """Ты - эксперт по недвижимости.
-Твоя задача: написать короткий гипотетический ответ на вопрос пользователя,
-как если бы ты описывал идеальный результат поиска.
-
-ПРАВИЛА:
-1. Пиши 2-3 предложения, описывающих типичный объект недвижимости
-2. Включай релевантные детали: город, тип, цена, площадь, особенности
-3. Пиши на русском языке
-4. НЕ задавай уточняющих вопросов
-5. НЕ пиши вступление типа "Вот пример..."
-
-Пример вопроса: "квартира у моря"
-Пример ответа: "Уютная двухкомнатная квартира в Несебре, 50м², в 200 метрах от пляжа. Полностью меблирована, с балконом и видом на море. Цена 65,000 евро, поддержка 8 евро/м² в год."
-"""
 
 # ---------------------------------------------------------------------------
 # Guard / filter: blocked response and query rewrite prompt

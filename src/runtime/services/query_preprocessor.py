@@ -1,32 +1,41 @@
-"""Query preprocessing for RAG pipeline optimization.
+"""Live query helpers for the retrieval pipeline.
 
-HyDEGenerator uses the in-process LiteLLM SDK router.
-QueryPreprocessor is rule-based (no LLM calls).
+Two rule-based helpers, no LLM calls:
+
+- ``expand_short_query`` — deterministic expansion of short finance intents,
+  used by the rewrite stage before any LLM rewrite is attempted.
+- ``get_rrf_weights`` — dense/sparse RRF fusion weights derived from the query
+  text, used by the hybrid retrieval filter plan.
+
+#3429 deleted the dormant HyDE generator and query-analysis surface that used
+to live alongside these helpers; their outputs are unchanged.
 """
 
 import logging
 import re
-from typing import Any
 
-import openai
-
-from src.runtime.domain_defaults import (
-    HYDE_SYSTEM_PROMPT as _DOMAIN_HYDE_SYSTEM_PROMPT,
-)
 from src.runtime.domain_defaults import (
     SHORT_FINANCE_QUERY_EXPANSIONS as _DOMAIN_SHORT_FINANCE,
 )
-from src.runtime.domain_defaults import (
-    TRANSLIT_MAP as _DOMAIN_TRANSLIT_MAP,
-)
-from src.runtime.integrations.prompt_manager import get_prompt
-from src.runtime.llm import create_llm_client
 
 
 logger = logging.getLogger(__name__)
 
 
 _SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = _DOMAIN_SHORT_FINANCE
+
+# Patterns indicating exact search (favor sparse vectors)
+EXACT_PATTERNS: tuple[str, ...] = (
+    r"\bID\s*\d+",  # "ID 12345"
+    r"\b\d{5,}\b",  # Long numbers (IDs)
+    r"корпус\s*\d+",  # "корпус 5"
+    r"корпус\s*[А-Яа-яA-Za-z]",  # corpus with letter (e.g. A)
+    r"блок\s*\d+",  # "блок 3"
+    r"блок\s*[А-Яа-яA-Za-z]",  # block with letter (e.g. B)
+    r"секция\s*\d+",  # "секция 2"
+    r"этаж\s*\d+",  # "этаж 5"
+    r"ЖК\s+\w+",  # "ЖК Елените"
+)
 
 
 def expand_short_query(query: str, *, topic_hint: str | None = None) -> str:
@@ -41,198 +50,11 @@ def expand_short_query(query: str, *, topic_hint: str | None = None) -> str:
     return _SHORT_FINANCE_QUERY_EXPANSIONS.get(normalized, query)
 
 
-class HyDEGenerator:
-    """Hypothetical Document Embeddings (HyDE) generator.
+def get_rrf_weights(query: str) -> tuple[float, float]:
+    """Calculate RRF fusion weights based on query type."""
+    for pattern in EXACT_PATTERNS:
+        if re.search(pattern, query, re.IGNORECASE):
+            logger.debug("Exact query detected, using sparse-favored weights")
+            return (0.2, 0.8)
 
-    HyDE improves retrieval for short/vague queries by:
-    1. Generating a hypothetical answer to the query
-    2. Embedding the hypothetical answer instead of the query
-    3. Searching with the answer embedding (better semantic match)
-
-    Best for: Short queries (< 5 words) without domain-specific keywords.
-    Not recommended for: Exact queries (IDs, corpus numbers), long queries.
-    """
-
-    HYDE_SYSTEM_PROMPT = _DOMAIN_HYDE_SYSTEM_PROMPT
-
-    def __init__(
-        self,
-        api_key: str | None = None,
-        base_url: str = "",
-        model: str = "gpt-4o-mini",
-    ):
-        self.api_key = api_key or "not-needed"
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        _ = self.api_key, self.base_url  # Compatibility fields; routing reads provider env.
-        self.client = create_llm_client(model=model, timeout=30.0)
-
-    async def generate_hypothetical_document(self, query: str) -> str:
-        """Generate a hypothetical document that would answer the query.
-
-        Args:
-            query: User query (typically short, < 5 words)
-
-        Returns:
-            Hypothetical document text for embedding
-        """
-        try:
-            system_prompt = get_prompt("hyde", fallback=self.HYDE_SYSTEM_PROMPT)
-            response = await self.client.completion(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": query},
-                ],
-                temperature=0.7,
-                max_tokens=200,
-            )
-
-            hypothetical_doc = response.choices[0].message.content or query
-            # #3356: size metadata only — no query or hypothetical document text.
-            logger.info("HyDE generated doc (%d chars)", len(hypothetical_doc))
-
-            return hypothetical_doc
-
-        except (
-            openai.APIConnectionError,
-            openai.RateLimitError,
-            openai.APITimeoutError,
-        ) as e:
-            logger.error("HyDE generation API error: %s", e)
-            return query
-        except Exception as e:
-            logger.error("HyDE generation failed (%s): %s", type(e).__name__, e)
-            return query
-
-
-class QueryPreprocessor:
-    """Preprocesses queries for optimal search and caching.
-
-    Handles:
-    - Transliteration normalization (Latin -> Cyrillic place names)
-    - Dynamic RRF weight calculation based on query type
-    - Adaptive cache threshold selection
-    """
-
-    # Transliteration map: Latin -> Cyrillic (Bulgarian cities and resorts).
-    # Sourced from domain_defaults to isolate domain-specific content (#2949).
-    TRANSLIT_MAP = _DOMAIN_TRANSLIT_MAP
-
-    # Precompiled (pattern, replacement) pairs derived from TRANSLIT_MAP.
-    #
-    # The TRANSLIT_MAP is static and shared across all instances, so the
-    # compiled patterns can be hoisted out of the per-query hot path
-    # (issue #1644). Each pattern preserves the original IGNORECASE flag and
-    # iteration order matches dict insertion order, so multi-word phrases
-    # like "Sunny Beach" still match before any prefix subset would.
-    _COMPILED_TRANSLIT: tuple[tuple[re.Pattern[str], str], ...] = tuple(
-        (re.compile(re.escape(_latin), re.IGNORECASE), _cyrillic)
-        for _latin, _cyrillic in TRANSLIT_MAP.items()
-    )
-
-    # Patterns indicating exact search (favor sparse vectors)
-    EXACT_PATTERNS = [
-        r"\bID\s*\d+",  # "ID 12345"
-        r"\b\d{5,}\b",  # Long numbers (IDs)
-        r"корпус\s*\d+",  # "корпус 5"
-        r"корпус\s*[А-Яа-яA-Za-z]",  # corpus with letter (e.g. A)
-        r"блок\s*\d+",  # "блок 3"
-        r"блок\s*[А-Яа-яA-Za-z]",  # block with letter (e.g. B)
-        r"секция\s*\d+",  # "секция 2"
-        r"этаж\s*\d+",  # "этаж 5"
-        r"ЖК\s+\w+",  # "ЖК Елените"
-    ]
-
-    # Patterns requiring strict cache threshold
-    STRICT_CACHE_PATTERNS = [
-        r"\b\d{3,}\b",  # Numbers 3+ digits
-        r"корпус",
-        r"блок",
-        r"секция",
-        r"этаж",
-        r"\bID\b",
-    ]
-
-    def normalize_translit(self, query: str) -> str:
-        """Convert Latin place names to Cyrillic for BM42 sparse search.
-
-        Uses precompiled patterns from ``_COMPILED_TRANSLIT`` (issue #1644) so
-        the per-query cost is just N substitutions, not N compile + N
-        substitutions. Behaviour is byte-identical to the previous per-call
-        ``re.compile`` implementation, including the IGNORECASE flag and
-        dict-insertion-order substitution sequence.
-        """
-        normalized = query
-
-        for pattern, cyrillic in self._COMPILED_TRANSLIT:
-            normalized = pattern.sub(cyrillic, normalized)
-
-        if normalized != query:
-            # #3356: flag + sizes only; never the source or normalized text.
-            logger.debug("Translit normalized (len=%d→%d)", len(query), len(normalized))
-
-        return normalized
-
-    def get_rrf_weights(self, query: str) -> tuple[float, float]:
-        """Calculate RRF fusion weights based on query type."""
-        for pattern in self.EXACT_PATTERNS:
-            if re.search(pattern, query, re.IGNORECASE):
-                logger.debug("Exact query detected, using sparse-favored weights")
-                return (0.2, 0.8)
-
-        return (0.6, 0.4)
-
-    def get_cache_threshold(self, query: str) -> float:
-        """Get cache similarity threshold based on query type."""
-        for pattern in self.STRICT_CACHE_PATTERNS:
-            if re.search(pattern, query, re.IGNORECASE):
-                logger.debug("Strict cache threshold for query with identifiers")
-                return 0.05
-
-        return 0.10
-
-    def has_exact_identifier(self, query: str) -> bool:
-        """Check if query contains exact identifiers."""
-        return any(re.search(pattern, query, re.IGNORECASE) for pattern in self.EXACT_PATTERNS)
-
-    def count_words(self, query: str) -> int:
-        """Count words in query (for HyDE threshold)."""
-        return len(query.split())
-
-    def should_use_hyde(self, query: str, min_words: int = 5) -> bool:
-        """Determine if HyDE should be applied to this query."""
-        if self.has_exact_identifier(query):
-            logger.debug("HyDE skipped: query has exact identifiers")
-            return False
-
-        word_count = self.count_words(query)
-        should_hyde = word_count < min_words
-
-        if should_hyde:
-            logger.debug("HyDE enabled: short query (%d words < %d)", word_count, min_words)
-        else:
-            logger.debug("HyDE skipped: long query (%d words >= %d)", word_count, min_words)
-
-        return should_hyde
-
-    def analyze(
-        self, query: str, use_hyde: bool = False, hyde_min_words: int = 5
-    ) -> dict[str, Any]:
-        """Perform full query preprocessing analysis."""
-        normalized = self.normalize_translit(query)
-        dense_w, sparse_w = self.get_rrf_weights(query)
-        is_exact = self.has_exact_identifier(query)
-        word_count = self.count_words(query)
-
-        apply_hyde = use_hyde and self.should_use_hyde(query, hyde_min_words)
-
-        return {
-            "original_query": query,
-            "normalized_query": normalized,
-            "rrf_weights": {"dense": dense_w, "sparse": sparse_w},
-            "cache_threshold": self.get_cache_threshold(query),
-            "is_exact": is_exact,
-            "use_hyde": apply_hyde,
-            "word_count": word_count,
-        }
+    return (0.6, 0.4)
