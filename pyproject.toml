@@ -32,31 +32,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Explicit core extra for CI/docs symmetry. The base install already contains
-# this same lean set so `uv sync` / `uv sync --no-dev` remain core-only.
-# NOTE (#2710): this extra is intentionally identical to the base dependencies
-# list above. It exists so Makefile/CI can reference `--extra core` explicitly
-# without diverging from the default install. Do not add packages here that
-# are not already in [project.dependencies].
-core = [
-    "openai",
-    "qdrant-client>=1.19.0",
-    "redis>=7.1.0,<8",
-    "redisvl>=0.26.0,<0.27",
-    "pydantic>=2.13.5",
-    "pydantic-settings>=2.15.0",
-    "httpx>=0.27.0",
-    "tenacity>=8.2.0",
-    "pyyaml>=6.0.0",
-    "litellm==1.98.0",  # #3227: frozen pair with openai 2.54.0 (see base dependencies).
-    "python-dotenv",
-    "typing-extensions>=4.0.0",
-    "numpy>=2.4.6",
-    "aiohttp>=3.14.1",
-    "requests>=2.34.2",
-    "phonenumbers>=9.0.30",
-]
-
 # Telegram production dependency authority (#3210): this extra together with
 # the base dependencies above is the ONLY manifest for the shipped Telegram
 # runtime. The nested telegram_bot/pyproject.toml + telegram_bot/uv.lock
@@ -81,15 +56,9 @@ telegram = [
 # bge-m3-api service test dependencies (FastAPI endpoint tests)
 # Only needed to run tests/unit/test_bge_m3_endpoints.py + test_bge_m3_rerank.py
 # Install: uv sync --extra bge-extras
+# httpx comes from the base dependencies; do not re-declare it here (#3335).
 bge-extras = [
     "fastapi>=0.141.1",
-    "httpx>=0.27.0",
-]
-
-# All optional dependencies (kept surfaces only; archived extras removed by #2640,
-# docling-native removed by #3235 — ingestion is Markdown-only stdlib).
-all = [
-    "contextual-rag[core,telegram]",
 ]
 
 # =============================================================================
