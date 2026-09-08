@@ -236,6 +236,7 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
         )
         return
 
+    pool: Any = None
     try:
         import asyncpg
 
@@ -254,30 +255,55 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
             if test_conn is not None:
                 await test_conn.close()
 
-        bot._pg_pool = await asyncpg.create_pool(
+        # Build everything against locals first (#3440): the bot keeps no
+        # partial capability while the schema bootstrap or any constructor
+        # is still in flight.
+        pool = await asyncpg.create_pool(
             bot.config.realestate_database_url,
             min_size=0,
             max_size=5,
             timeout=5,
         )
         log.info("PostgreSQL pool ready (realestate)")
-        await bot._ensure_realestate_schema()
+        from telegram_bot.lifecycle.postgres_bootstrap import ensure_realestate_schema
+
+        await ensure_realestate_schema(pool)
         log.info("PostgreSQL schema ready (realestate)")
 
         from telegram_bot.services.favorites_service import FavoritesService
         from telegram_bot.services.observability.search_event_store import SearchEventStore
         from telegram_bot.services.user_service import UserService
 
-        bot._user_service = UserService(pool=bot._pg_pool)
-        favorites_service = FavoritesService(pool=bot._pg_pool)
-        set_bookmarks_ready(bot, service=favorites_service)
+        user_service = UserService(pool=pool)
+        favorites_service = FavoritesService(pool=pool)
+        search_event_store = SearchEventStore(pool=pool)
         log.info("Favorites service ready")
-        bot._search_event_store = SearchEventStore(pool=bot._pg_pool)
         log.info("Search event store ready")
+
+        # Single commit step (#3440): publish every capability field only
+        # after pool, schema, and all constructors succeeded.
+        bot._pg_pool = pool
+        bot._user_service = user_service
+        bot._search_event_store = search_event_store
+        set_bookmarks_ready(bot, service=favorites_service)
         log.info("Bookmarks capability: enabled (PostgreSQL connection validated)")
 
     except Exception:
+        # Atomic rollback (#3440): fail the capability closed, drop every
+        # partially published field, and close the pool so no half-built
+        # connection pool or service survives the degraded path.
         set_bookmarks_ready(bot, service=None)
+        bot._pg_pool = None
+        bot._user_service = None
+        bot._search_event_store = None
+        if pool is not None:
+            try:
+                await pool.close()
+            except Exception:
+                log.warning(
+                    "PostgreSQL pool close failed during degraded cleanup",
+                    exc_info=True,
+                )
         log.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
         startup_report.add(
             StartupSignal(
