@@ -492,6 +492,217 @@ async def test_embedding_error_emits_single_dependency_error_search_outcome() ->
     assert cache.semantic_stores == []
 
 
+# ---------------------------------------------------------------------------
+# #3478 — a Qdrant retrieval backend failure is a terminal dependency outcome,
+# not an ordinary empty successful search.
+# ---------------------------------------------------------------------------
+
+
+def _backend_error_rag_result(*, rewrite_count: int = 0) -> dict[str, Any]:
+    """Shape produced by rag_pipeline/_assemble_context on a Qdrant failure.
+
+    The backend returns empty results flagged with backend_error metadata;
+    rag_pipeline preserves them as retrieval_backend_error/retrieval_error_type
+    (src/runtime/pipeline/_retrieve.py::_assemble_context).
+    """
+    return {
+        "documents": [],
+        "query": "тестовый вопрос",
+        "original_query": "тестовый вопрос",
+        "cache_hit": False,
+        "embeddings_cache_hit": False,
+        "search_cache_hit": False,
+        "search_results_count": 0,
+        "rerank_applied": False,
+        "rerank_cache_hit": False,
+        "grade_confidence": 0.0,
+        "rewrite_count": rewrite_count,
+        "query_type": "GENERAL",
+        "query_embedding": [0.1] * 8,
+        "cache_key_embedding": [0.1] * 8,
+        "latency_stages": {},
+        "retrieved_context": [],
+        "retrieval_backend_error": True,
+        "retrieval_error_type": "ConnectError",
+        "topic_hint": None,
+        "score_gap_confident": False,
+        "missing_evidence_constraints": [],
+        "embedding_error": False,
+        "embedding_error_type": None,
+    }
+
+
+class _RecordingTelemetry:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict[str, Any]]] = []
+
+    def log_event(self, event: str, **fields: Any) -> None:
+        self.events.append((event, dict(fields)))
+
+
+async def _run_backend_error_case(
+    monkeypatch,
+    *,
+    rewrite_count: int,
+    cache: Any,
+    telemetry: _RecordingTelemetry,
+    generate_calls: list[Any],
+) -> AssistantResult:
+    from src.core import AssistantRequest, CoreDependencies, UserContext
+    from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
+
+    async def fake_rag_pipeline(**kwargs):
+        return _backend_error_rag_result(rewrite_count=rewrite_count)
+
+    async def recording_generate_answer(_request):
+        generate_calls.append(_request)
+        return GenerationResult(
+            payload={"response": "answered without evidence", "usage_details": {}}
+        )
+
+    classify_mod = types.ModuleType("src.runtime.routing.classify")
+    classify_mod.classify_query = lambda _: "GENERAL"
+    monkeypatch.setitem(sys.modules, "src.runtime.routing.classify", classify_mod)
+    monkeypatch.setattr(
+        "src.runtime.pipeline.assistant_pipeline.rag_pipeline",
+        fake_rag_pipeline,
+    )
+    monkeypatch.setattr(
+        "src.runtime.pipeline.assistant_pipeline.generate_answer",
+        recording_generate_answer,
+    )
+
+    return await run_assistant_pipeline(
+        AssistantRequest(
+            query="тестовый вопрос",
+            user_context=UserContext(user_id="42", session_id="s"),
+            request_id="req-3478",
+        ),
+        dependencies=CoreDependencies(
+            cache=cache,
+            embeddings=object(),
+            sparse_embeddings=object(),
+            qdrant=object(),
+            config=object(),
+            telemetry=telemetry,
+        ),
+    )
+
+
+# Required characterization (#3478): with documents=[] plus
+# retrieval_backend_error=True / retrieval_error_type='ConnectError' and
+# recording generation/cache dependencies, the audited source proceeds to
+# generation; the fixed source must return a terminal dependency_error result.
+async def test_retrieval_backend_error_is_terminal_dependency_failure(monkeypatch) -> None:
+    cache = _cache_store_mocks()
+    telemetry = _RecordingTelemetry()
+    generate_calls: list[Any] = []
+
+    result = await _run_backend_error_case(
+        monkeypatch,
+        rewrite_count=0,
+        cache=cache,
+        telemetry=telemetry,
+        generate_calls=generate_calls,
+    )
+
+    # Nonempty controlled service-unavailable response with a typed category.
+    assert result.response_text
+    assert result.route == "dependency_error"
+    assert result.error_type == "ConnectError"
+    assert result.cache_hit is False
+    assert result.documents_count == 0
+
+    # No answer generation and no semantic cache store after the failure.
+    assert generate_calls == []
+    cache.store_semantic.assert_not_awaited()
+
+    # Exactly one truthful search outcome — the dependency error. No
+    # rag_search success for the failed request (#3479 pattern).
+    search_events = [fields for name, fields in telemetry.events if name == "search_completed"]
+    assert [fields.get("route") for fields in search_events] == ["dependency_error"]
+    assert search_events[0]["error_type"] == "ConnectError"
+    assert not [fields for name, fields in telemetry.events if name == "llm_completed"]
+
+
+# Failure discovered after a query-rewrite retry stays terminal: it must not
+# be downgraded to an ordinary empty successful search.
+async def test_retrieval_backend_error_after_rewrite_stays_terminal(monkeypatch) -> None:
+    cache = _cache_store_mocks()
+    telemetry = _RecordingTelemetry()
+    generate_calls: list[Any] = []
+
+    result = await _run_backend_error_case(
+        monkeypatch,
+        rewrite_count=1,
+        cache=cache,
+        telemetry=telemetry,
+        generate_calls=generate_calls,
+    )
+
+    assert result.route == "dependency_error"
+    assert result.error_type == "ConnectError"
+    assert result.response_text
+    assert generate_calls == []
+    cache.store_semantic.assert_not_awaited()
+    search_events = [fields for name, fields in telemetry.events if name == "search_completed"]
+    assert [fields.get("route") for fields in search_events] == ["dependency_error"]
+
+
+# Healthy zero-hit searches are a distinct case: without the backend-error
+# flags the request keeps its ordinary rag_search behavior (generation runs).
+async def test_healthy_empty_retrieval_still_follows_normal_search_path(monkeypatch) -> None:
+    from src.core import AssistantRequest, CoreDependencies, UserContext
+    from src.runtime.pipeline.assistant_pipeline import run_assistant_pipeline
+
+    generate_calls: list[Any] = []
+
+    async def fake_rag_pipeline(**kwargs):
+        result = _backend_error_rag_result()
+        result["retrieval_backend_error"] = False
+        result["retrieval_error_type"] = None
+        return result
+
+    async def recording_generate_answer(_request):
+        generate_calls.append(_request)
+        return GenerationResult(payload={"response": "answer", "usage_details": {}})
+
+    classify_mod = types.ModuleType("src.runtime.routing.classify")
+    classify_mod.classify_query = lambda _: "GENERAL"
+    monkeypatch.setitem(sys.modules, "src.runtime.routing.classify", classify_mod)
+    monkeypatch.setattr(
+        "src.runtime.pipeline.assistant_pipeline.rag_pipeline",
+        fake_rag_pipeline,
+    )
+    monkeypatch.setattr(
+        "src.runtime.pipeline.assistant_pipeline.generate_answer",
+        recording_generate_answer,
+    )
+
+    telemetry = _RecordingTelemetry()
+    result = await run_assistant_pipeline(
+        AssistantRequest(
+            query="тестовый вопрос",
+            user_context=UserContext(user_id="42", session_id="s"),
+            request_id="req-3478-healthy-empty",
+        ),
+        dependencies=CoreDependencies(
+            cache=object(),
+            embeddings=object(),
+            sparse_embeddings=object(),
+            qdrant=object(),
+            config=object(),
+            telemetry=telemetry,
+        ),
+    )
+
+    assert generate_calls, "healthy empty search must keep its normal path"
+    assert result.route == "rag_search"
+    assert result.error_type is None
+    search_events = [fields for name, fields in telemetry.events if name == "search_completed"]
+    assert [fields.get("route") for fields in search_events] == ["rag_search"]
+
+
 # Regression #3320: grounding policy must be computed BEFORE the semantic
 # cache read so strict requests require safe-reuse evidence.
 async def test_strict_grounding_policy_reaches_cache_read(monkeypatch) -> None:
