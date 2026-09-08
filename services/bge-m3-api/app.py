@@ -4,6 +4,7 @@ Multi-vector embeddings: dense + sparse + colbert
 Pinned hash-verified ONNX artifact (philipchung/bge-m3-onnx @ 92465a6c, fp32)
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -244,6 +245,31 @@ def get_model():
 # Encode limits
 ENCODE_MAX_ITEMS: int = 64  # Max texts per encode request (unbounded → OOM/DoS on CPU-ONNX)
 
+# Bounded inference concurrency (#3492): blocking model inference (tokenize +
+# session.run) is executed off the event loop via asyncio.to_thread and gated
+# by a semaphore with this bound. The bound is 1 — inference stays serialized
+# exactly as the event loop serialized it before off-loading: the ONNX session
+# and tokenizer were never exercised concurrently, and parallel session.run
+# calls would compete with intra-op parallelism (settings.NUM_THREADS) for CPU.
+# Raising the bound requires proof of thread-safe concurrent encode.
+ENCODE_INFERENCE_CONCURRENCY: int = 1
+
+# Per-running-loop gate: asyncio primitives bind to the loop on first use, and
+# tests may run the ASGI app under several loops. In production each worker
+# process has exactly one loop, so the bound holds where it matters.
+_inference_gate: tuple[asyncio.AbstractEventLoop, asyncio.Semaphore] | None = None
+
+
+def _get_inference_gate() -> asyncio.Semaphore:
+    """Return this loop's inference semaphore (created lazily per loop)."""
+    global _inference_gate
+    loop = asyncio.get_running_loop()
+    gate = _inference_gate
+    if gate is None or gate[0] is not loop:
+        gate = (loop, asyncio.Semaphore(ENCODE_INFERENCE_CONCURRENCY))
+        _inference_gate = gate
+    return gate[1]
+
 
 # Pydantic models
 class EncodeRequest(BaseModel):
@@ -417,13 +443,17 @@ async def _run_encode(
 
     if valid_indices:
         valid_texts = [request.texts[i] for i in valid_indices]
-        embeddings = model.encode(
-            valid_texts,
-            max_length=request.max_length,
-            return_dense=return_dense,
-            return_sparse=return_sparse,
-            return_colbert_vecs=return_colbert_vecs,
-        )
+        # Blocking inference (tokenize + ONNX session.run) runs off the event
+        # loop under the bounded gate so health/readiness stay served (#3492).
+        async with _get_inference_gate():
+            embeddings = await asyncio.to_thread(
+                model.encode,
+                valid_texts,
+                max_length=request.max_length,
+                return_dense=return_dense,
+                return_sparse=return_sparse,
+                return_colbert_vecs=return_colbert_vecs,
+            )
 
         if return_dense:
             valid_dense = embeddings["dense_vecs"].tolist()
@@ -614,22 +644,25 @@ async def rerank(request: RerankRequest):
         model = get_model()
         start_time = time.time()
 
-        # Encode query and documents with ColBERT
+        # Encode query and documents with ColBERT — off the event loop (#3492)
         all_texts = [query, *documents]
-        embeddings = model.encode(
-            all_texts,
-            max_length=request.max_length,
-            return_dense=False,
-            return_sparse=False,
-            return_colbert_vecs=True,
-        )
+        async with _get_inference_gate():
+            embeddings = await asyncio.to_thread(
+                model.encode,
+                all_texts,
+                max_length=request.max_length,
+                return_dense=False,
+                return_sparse=False,
+                return_colbert_vecs=True,
+            )
 
         colbert_vecs = embeddings["colbert_vecs"]
         query_vecs = colbert_vecs[0]  # First is query
         doc_vecs_list = colbert_vecs[1:]  # Rest are documents
 
-        # Compute MaxSim scores (pure numpy, no FlagEmbedding dependency)
-        scores = compute_maxsim_scores(query_vecs, doc_vecs_list)
+        # Compute MaxSim scores (pure numpy, no FlagEmbedding dependency) —
+        # CPU-bound, so also off the event loop.
+        scores = await asyncio.to_thread(compute_maxsim_scores, query_vecs, doc_vecs_list)
 
         # Sort by score descending and take top_k
         indexed_scores = [(i, s) for i, s in enumerate(scores)]

@@ -13,6 +13,8 @@ Gate test (no fastapi required):
 import asyncio
 import logging
 import sys
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -847,7 +849,10 @@ class TestEncodeMaxLengthValidation:
     """
 
     _PATHS = (
-        "/encode/dense", "/encode/sparse", "/encode/colbert", "/encode/hybrid",
+        "/encode/dense",
+        "/encode/sparse",
+        "/encode/colbert",
+        "/encode/hybrid",
     )
 
     @pytest.mark.parametrize("path", _PATHS)
@@ -860,9 +865,13 @@ class TestEncodeMaxLengthValidation:
         # Spy installed AFTER fixture setup/warmup: counts only this request.
         encode = MagicMock(wraps=fake_model.encode)
         monkeypatch.setattr(fake_model, "encode", encode)
-        response = await client.post(path, json={
-            "texts": ["audit"], "max_length": max_length,
-        })
+        response = await client.post(
+            path,
+            json={
+                "texts": ["audit"],
+                "max_length": max_length,
+            },
+        )
         assert response.status_code == 422
         encode.assert_not_called()
 
@@ -899,3 +908,224 @@ class TestEncodeMaxLengthValidation:
         assert max_length_schema["minimum"] == 1
         assert max_length_schema["maximum"] == settings_max_length
         assert max_length_schema["default"] == settings_max_length
+
+
+# ── Event-loop responsiveness tests (#3492) ──────────────────────────────────
+#
+# Audit reproduction method: while a stub model.encode() blocks synchronously
+# for 150 ms inside the endpoint, a 20 ms asyncio timer measured on the same
+# loop must still fire on schedule (budget: 100 ms). Before the fix the worker
+# loop is blocked for the whole inference and the timer lands at ~170 ms —
+# exactly the false health/readiness-timeout defect.
+
+_ENCODE_BLOCK_S = 0.150  # stub inference duration (audit reproduction)
+_TIMER_DELAY_S = 0.020  # asyncio timer that must stay on schedule
+_LOOP_BUDGET_S = 0.100  # timer must fire well before the stub block ends
+
+
+def _blocking_encode_stub(block_seconds: float):
+    """Return a model.encode() that blocks the calling thread like a real ONNX run."""
+
+    def encode(
+        texts,
+        *,
+        max_length=2048,
+        return_dense=False,
+        return_sparse=False,
+        return_colbert_vecs=False,
+    ):
+        time.sleep(block_seconds)
+        n = len(texts)
+        result = {}
+        if return_dense:
+            result["dense_vecs"] = np.zeros((n, _DENSE_DIM), dtype=np.float32)
+        if return_sparse:
+            result["lexical_weights"] = [{"indices": [], "values": []} for _ in range(n)]
+        if return_colbert_vecs:
+            result["colbert_vecs"] = [
+                np.zeros((1, _COLBERT_DIM), dtype=np.float32) for _ in range(n)
+            ]
+        return result
+
+    return encode
+
+
+def _ordered_encode_stub():
+    """Deterministic encode(): output row i is filled with the value i.
+
+    Maps batch position → vector content, so response order can be asserted
+    through the HTTP boundary (input order must be preserved).
+    """
+
+    def encode(
+        texts,
+        *,
+        max_length=2048,
+        return_dense=False,
+        return_sparse=False,
+        return_colbert_vecs=False,
+    ):
+        n = len(texts)
+        result = {}
+        if return_dense:
+            result["dense_vecs"] = np.tile(
+                np.arange(n, dtype=np.float32).reshape(n, 1), (1, _DENSE_DIM)
+            )
+        if return_sparse:
+            result["lexical_weights"] = [{"indices": [i], "values": [float(i)]} for i in range(n)]
+        if return_colbert_vecs:
+            result["colbert_vecs"] = [
+                np.full((1, _COLBERT_DIM), i, dtype=np.float32) for i in range(n)
+            ]
+        return result
+
+    return encode
+
+
+class _ConcurrencyTrackingStub:
+    """encode() stub recording the peak number of concurrent in-flight calls."""
+
+    def __init__(self, block_seconds: float) -> None:
+        self._block_seconds = block_seconds
+        self._active = 0
+        self.max_active = 0
+        self._lock = threading.Lock()
+
+    def encode(
+        self,
+        texts,
+        *,
+        max_length=2048,
+        return_dense=False,
+        return_sparse=False,
+        return_colbert_vecs=False,
+    ):
+        with self._lock:
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+        time.sleep(self._block_seconds)
+        with self._lock:
+            self._active -= 1
+        return {"dense_vecs": np.zeros((len(texts), _DENSE_DIM), dtype=np.float32)}
+
+
+class TestEventLoopResponsiveness:
+    """#3492 — synchronous model inference must not stall the ASGI event loop.
+
+    Timer method (audit): start a stub encode() that blocks the loop for 150 ms,
+    then measure a 20 ms asyncio.sleep on the same loop. It must complete on
+    time (< 100 ms). Health/readiness coroutines are served by that same loop.
+    """
+
+    async def test_dense_encode_keeps_loop_timer_responsive(self, client, bge_app, monkeypatch):
+        """A 20 ms asyncio timer fires on schedule during a 150 ms stub encode."""
+        monkeypatch.setattr(bge_app["fake_model"], "encode", _blocking_encode_stub(_ENCODE_BLOCK_S))
+
+        async def fire_encode():
+            resp = await client.post("/encode/dense", json={"texts": ["block the old loop"]})
+            assert resp.status_code == 200
+
+        encode_task = asyncio.create_task(fire_encode())
+        # Start measuring BEFORE yielding: the encode task's next step enters
+        # the synchronous block, so the 20 ms deadline elapses while the loop
+        # is (or is not) being blocked by model.encode.
+        timer_start = time.perf_counter()
+        await asyncio.sleep(_TIMER_DELAY_S)
+        timer_elapsed = time.perf_counter() - timer_start
+        await encode_task
+
+        assert timer_elapsed < _LOOP_BUDGET_S, (
+            f"{_TIMER_DELAY_S * 1000:.0f}ms asyncio timer fired after "
+            f"{timer_elapsed * 1000:.0f}ms — synchronous model.encode blocked "
+            "the event loop (#3492)"
+        )
+
+    async def test_health_responds_while_encode_in_flight(self, client, bge_app, monkeypatch):
+        """GET /health completes promptly while a stub encode is in flight.
+
+        The health request runs as a concurrent task and stamps its own
+        completion time: with a blocking encode the loop only reaches the
+        health task after inference finishes (~150 ms); with off-loop
+        inference it is served immediately.
+        """
+        monkeypatch.setattr(bge_app["fake_model"], "encode", _blocking_encode_stub(_ENCODE_BLOCK_S))
+
+        health_done_at: list[float] = []
+
+        async def fire_health():
+            resp = await client.get("/health")
+            health_done_at.append(time.perf_counter())
+            return resp
+
+        encode_task = asyncio.create_task(
+            client.post("/encode/dense", json={"texts": ["in flight"]})
+        )
+        health_start = time.perf_counter()
+        health_task = asyncio.create_task(fire_health())
+        encode_resp = await encode_task
+        health_resp = await health_task
+
+        assert encode_resp.status_code == 200
+        assert health_resp.status_code == 200
+        health_elapsed = health_done_at[0] - health_start
+        assert health_elapsed < _LOOP_BUDGET_S, (
+            f"/health only completed {health_elapsed * 1000:.0f}ms after being "
+            f"requested while a {_ENCODE_BLOCK_S * 1000:.0f}ms encode was in "
+            "flight — event loop blocked by synchronous model.encode (#3492)"
+        )
+
+
+class TestBatchSemanticsPreserved:
+    """Ordering / partial-failure / bounded-concurrency contracts at the HTTP
+    boundary, guarded across the #3492 off-loop change."""
+
+    async def test_hybrid_batch_order_and_partial_failures(self, client, bge_app, monkeypatch):
+        """Response slot i always corresponds to request text i; invalid slots
+        keep their sentinels even when the model runs off the event loop."""
+        monkeypatch.setattr(bge_app["fake_model"], "encode", _ordered_encode_stub())
+
+        texts = ["alpha", "", "   ", "beta"]
+        resp = await client.post(
+            "/encode/hybrid",
+            json={"texts": texts},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # Partial failures report exactly the two invalid indices, in order.
+        assert [f["index"] for f in data["partial_failures"]] == [1, 2]
+
+        # Dense: valid slots carry their batch position, invalid slots sentinels.
+        assert data["dense_vecs"][0][0] == 0.0
+        assert data["dense_vecs"][3][0] == 1.0
+        assert all(v == 0.0 for v in data["dense_vecs"][1])
+        assert all(v == 0.0 for v in data["dense_vecs"][2])
+
+        # Sparse: same mapping through the Qdrant passthrough format.
+        assert data["lexical_weights"][0] == {"indices": [0], "values": [0.0]}
+        assert data["lexical_weights"][3] == {"indices": [1], "values": [1.0]}
+        assert data["lexical_weights"][1] == {"indices": [], "values": []}
+        assert data["lexical_weights"][2] == {"indices": [], "values": []}
+
+        # ColBERT: same mapping, single-token zero sentinel for invalid slots.
+        assert data["colbert_vecs"][0][0][0] == 0.0
+        assert data["colbert_vecs"][3][0][0] == 1.0
+        assert len(data["colbert_vecs"][1]) == 1
+        assert all(v == 0.0 for v in data["colbert_vecs"][1][0])
+
+    async def test_concurrent_encodes_respect_documented_bound(self, client, bge_app, monkeypatch):
+        """In-flight model.encode calls never exceed ENCODE_INFERENCE_CONCURRENCY."""
+        from app import ENCODE_INFERENCE_CONCURRENCY
+
+        stub = _ConcurrencyTrackingStub(0.05)
+        monkeypatch.setattr(bge_app["fake_model"], "encode", stub.encode)
+
+        responses = await asyncio.gather(
+            *(client.post("/encode/dense", json={"texts": [f"text {i}"]}) for i in range(3))
+        )
+
+        assert all(r.status_code == 200 for r in responses)
+        assert stub.max_active <= ENCODE_INFERENCE_CONCURRENCY, (
+            f"peak concurrent encode calls {stub.max_active} exceeded the "
+            f"documented bound {ENCODE_INFERENCE_CONCURRENCY}"
+        )
