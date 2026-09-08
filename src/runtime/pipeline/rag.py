@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from src.core.contracts import DEFAULT_REQUEST_LANGUAGE
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from src.runtime.config import GraphConfig
 from src.runtime.pipeline._cache_stage import (
@@ -282,6 +283,7 @@ async def _resolve_cache_stage(
     state_contract: PipelineContext | None,
     grounding_mode: str | None = None,
     require_safe_reuse: bool = False,
+    language: str = DEFAULT_REQUEST_LANGUAGE,
 ) -> tuple[dict[str, Any], bool]:
     """Run cache stage: fast-path from state_contract or full _cache_check.
 
@@ -321,6 +323,7 @@ async def _resolve_cache_stage(
         semantic_cache_filter_signature=semantic_cache_filter_signature,
         grounding_mode=grounding_mode,
         require_safe_reuse=require_safe_reuse,
+        language=language,
     )
     return result, semantic_cache_prechecked
 
@@ -360,6 +363,7 @@ async def rag_pipeline(
     skip_rewrite: bool = False,
     grounding_mode: str | None = None,
     require_safe_reuse: bool = False,
+    language: str = DEFAULT_REQUEST_LANGUAGE,
 ) -> dict[str, Any]:
     """Execute RAG pipeline: cache → retrieve → grade → rerank → rewrite loop → cache_store.
 
@@ -372,6 +376,8 @@ async def rag_pipeline(
             Used as the semantic cache key so repeated user queries hit the cache
             even when the agent reformulates them differently. Falls back to query
             when empty (voice path, direct calls).
+        language: Canonical request locale (#3491) forwarded to the semantic
+            cache read so entries stay isolated per language.
     """
     config = _graph_config_from_env()
 
@@ -417,6 +423,7 @@ async def rag_pipeline(
         state_contract=state_contract,
         grounding_mode=grounding_mode,
         require_safe_reuse=require_safe_reuse,
+        language=language,
     )
     semantic_cache_already_checked = semantic_cache_prechecked
     # Unpack typed fields from cache_result

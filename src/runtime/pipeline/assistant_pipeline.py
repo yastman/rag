@@ -25,6 +25,7 @@ from src.core.contracts import (
     AssistantResult,
     CoreDependencies,
     UserContext,
+    normalize_request_language,
 )
 from src.core.telemetry import emit_product_event
 from src.retrieval.topic_classifier import get_query_topic_hint
@@ -60,6 +61,9 @@ async def run_assistant_pipeline(
     started = time.perf_counter()
     rid = request.request_id
     ctx = request.user_context or UserContext()
+    # One canonical locale code (#3491): prompt building and the semantic
+    # cache read/store below always observe the same normalized value.
+    language = normalize_request_language(ctx.language)
 
     try:
         from src.runtime.routing.classify import classify_query
@@ -158,6 +162,7 @@ async def run_assistant_pipeline(
             state_contract=state_contract,
             grounding_mode=grounding_mode,
             require_safe_reuse=require_safe_reuse,
+            language=language,
         )
 
         documents = _as_document_list(rag_result.get("documents"))
@@ -230,6 +235,7 @@ async def run_assistant_pipeline(
                 grounding_mode=grounding_mode,
                 grade_confidence=grade_confidence,
                 config=dependencies.config,
+                language=language,
             ),
         )
         generation_result = generation.payload
@@ -273,6 +279,7 @@ async def run_assistant_pipeline(
             legal_answer_safe=legal_answer_safe,
             semantic_cache_safe_reuse=semantic_cache_safe_reuse,
             generation_result=generation_result,
+            language=language,
         )
 
         return AssistantResult(
@@ -341,6 +348,7 @@ async def _store_semantic_cache(
     legal_answer_safe: bool | None,
     semantic_cache_safe_reuse: bool | None,
     generation_result: dict[str, Any],
+    language: str,
 ) -> None:
     """Store the generated response in the semantic cache when eligible.
 
@@ -391,6 +399,7 @@ async def _store_semantic_cache(
             decision=decision,
             agent_role=ctx.role or None,
             filter_signature=resolve_semantic_cache_signature(filters=filters),
+            language=language,
         )
     except Exception as exc:
         # Cache errors must never lose the response (#524).

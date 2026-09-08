@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.chat_action import ChatActionSender
 
+from src.core import SUPPORTED_REQUEST_LANGUAGES, normalize_request_language
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.pipeline.streaming import (
     _new_draft_id,
@@ -42,14 +43,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 logger = logging.getLogger(__name__)
-
-# Maps Fluent locale code -> language label used in system prompt {{language}} variable.
-# Moved here from the removed ``telegram_bot.agents`` facade (#3216).
-LOCALE_TO_LANGUAGE: dict[str, str] = {
-    "ru": "русском языке",
-    "en": "English",
-    "uk": "українською мовою",
-}
 
 
 async def handle_query(
@@ -360,7 +353,13 @@ async def _handle_query_supervisor(
     user_id = message.from_user.id
     session_id = make_session_id("chat", message.chat.id)
     role = await bot._resolve_user_role(user_id)
-    language = LOCALE_TO_LANGUAGE.get(locale, bot.config.domain_language)
+    # Canonical locale code (#3491): the core consumes transport-neutral
+    # codes, not display labels. A Fluent locale outside the supported set
+    # falls back to the configured domain language, then to the canonical
+    # default inside ``normalize_request_language``.
+    language = normalize_request_language(
+        locale if locale in SUPPORTED_REQUEST_LANGUAGES else str(bot.config.domain_language)
+    )
 
     rag_result_store: dict[str, Any] = {}
     user_text = message.text or ""

@@ -14,6 +14,7 @@ import asyncio
 import logging
 from typing import Any
 
+from src.core.contracts import DEFAULT_REQUEST_LANGUAGE
 from src.runtime.domain_defaults import _REWRITE_PROMPT
 from src.runtime.domain_defaults import BLOCKED_RESPONSE as BLOCKED_RESPONSE  # re-export
 from src.runtime.services.cache_policy import is_contextual_query
@@ -297,6 +298,7 @@ async def check_semantic_cache(
     filter_signature: str | None = None,
     grounding_mode: str | None = None,
     require_safe_reuse: bool = False,
+    language: str = DEFAULT_REQUEST_LANGUAGE,
 ) -> tuple[bool, str | None]:
     """Check semantic cache for a given query vector.
 
@@ -312,6 +314,8 @@ async def check_semantic_cache(
             reads only match entries stored under the same mode (#3320).
         require_safe_reuse: When True, only entries carrying explicit
             safe-reuse evidence may hit (#3320).
+        language: Canonical request locale (#3491); forwarded so reads only
+            match entries stored for the same language.
 
     Returns:
         Tuple of (hit, response).
@@ -332,6 +336,7 @@ async def check_semantic_cache(
         filter_signature=filter_signature,
         grounding_mode=grounding_mode,
         require_safe_reuse=require_safe_reuse,
+        language=language,
     )
 
     if cached:
