@@ -3,13 +3,14 @@
 
 Closes #1402.
 
-Problem reproduced: ``docker/postgres/init/`` contains eight SQL bootstrap
-scripts (00, 02, 03, 04, 05, 06, 07, 08) that the Compose stack mounts into
+Problem reproduced: ``docker/postgres/init/`` contains the SQL bootstrap
+scripts (currently 00, 05, 08) that the Compose stack mounts into
 ``/docker-entrypoint-initdb.d/`` for first-boot Postgres initialization. The
 K8s ConfigMap at ``archive/k8s/base/configmaps/postgres-init.yaml`` previously
-embedded only 00, 02, 03 — leaving voice transcripts (04), real-estate CRM
-(05), lead scoring (06), nurturing analytics (07) and user favorites (08)
-schemas uncreated on K8s-deployed Postgres pods.
+embedded only a subset — leaving real-estate CRM (05) and user favorites (08)
+schemas uncreated on K8s-deployed Postgres pods. Archived surfaces (voice
+transcripts, lead scoring, nurturing analytics) were removed from the docker
+init set by ARCH-12 and #3450, so fresh bootstraps create only live schemas.
 
 This contract pins three things:
 
@@ -18,13 +19,13 @@ This contract pins three things:
 2. Every ``*.sql`` file in ``docker/postgres/init/`` has a corresponding
    ``data:`` key in the ConfigMap (so kubelet projects it into the init
    directory at the same filename).
-3. For the scripts synchronized by issue #1402 (04 through 08), the
+3. For the scripts synchronized by issue #1402 (05 and 08), the
    ConfigMap value is byte-identical to the docker source — they MUST be
    copied verbatim so the K8s and Compose paths produce the same schema.
 
-The pre-existing keys 00/02/03 are NOT enforced byte-identical here because
-they have intentional K8s-only divergence (e.g. an additional ``mlflow``
-database) that pre-dates this issue and is out of scope for the sync.
+The pre-existing key 00 is NOT enforced byte-identical here because it has
+intentional K8s-only divergence (e.g. an additional ``mlflow`` database)
+that pre-dates this issue and is out of scope for the sync.
 """
 
 from __future__ import annotations
@@ -39,13 +40,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKER_INIT_DIR = REPO_ROOT / "docker" / "postgres" / "init"
 K8S_CONFIGMAP = REPO_ROOT / "archive" / "k8s" / "base" / "configmaps" / "postgres-init.yaml"
 
-# Scripts explicitly synchronized by issue #1402. Their ConfigMap value
-# must be byte-identical to the docker source.
+# Scripts explicitly synchronized by issue #1402 that still exist in the
+# docker init set. Their ConfigMap value must be byte-identical to the
+# docker source. (04/06/07 were archived: ARCH-12, #3450.)
 SYNCED_SCRIPTS = (
-    "04-voice-schema.sql",
     "05-realestate-schema.sql",
-    "06-lead-scoring-sync.sql",
-    "07-nurturing-funnel-analytics.sql",
     "08-user-favorites.sql",
 )
 
@@ -88,7 +87,7 @@ def test_every_docker_init_script_has_a_configmap_key() -> None:
 
 @pytest.mark.parametrize("script_name", SYNCED_SCRIPTS)
 def test_synced_script_content_matches_docker(script_name: str) -> None:
-    """Newly-synced scripts (04-08) must be byte-identical to docker.
+    """Newly-synced scripts (05, 08) must be byte-identical to docker.
 
     These scripts are pure SQL with no shell or env interpolation, so the
     Compose path runs the file directly while the K8s path runs the
