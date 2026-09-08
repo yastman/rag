@@ -239,12 +239,3 @@ class TestRepr:
             assert "Settings(" in result
             assert "api_provider=openai" in result
             assert "search_engine=" in result
-
-        # NOTE (#1515 D6): BotConfig (telegram_bot) settings tests live in
-        # tests/unit/config/test_bot_config_settings.py — the canonical home.
-        # The byte-identical duplicates that used to live here
-        # (`test_config_bool_fields_parse_env_strings`,
-        # `test_config_get_collection_name`) were removed to tighten the
-        # duplicate-name ratchet (`tests/data/known_duplicate_test_names.json`).
-        # See `tests/contract/test_issue_1515_dedupe_bot_config_contract.py`
-        # for the drift guard.

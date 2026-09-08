@@ -225,9 +225,8 @@ MyPy, Semgrep, lockfile, compose-config); pytest suites are local/manual.
 | Chaos / Load / Regression / Characterization | resp. dirs | selective | resilience, throughput, golden snapshots |
 | Baseline | `tests/baseline/` | — | **empty** (Langfuse metrics removed) — removable |
 
-Test-hygiene is itself guarded by contract tests (`test_no_new_duplicate_test_names`,
-`test_no_cross_lane_markers_under_unit`, `test_no_misleading_test_prefix_contract`,
-`test_dedupe_test_files_1996_contract`).
+Test-hygiene is itself guarded by contract tests (`test_no_cross_lane_markers_under_unit`,
+`test_no_misleading_test_prefix_contract`).
 
 **Audit-flagged test debt (in-flight):** ~40 orphan unit tests exercising already-dead code;
 live-spine tests trapped in the dead `agents/` dir (`agents/test_rag_pipeline.py` 85k must be
