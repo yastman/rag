@@ -54,14 +54,14 @@ class TestBotConfigIsPydanticSettings:
 
     def test_config_bool_fields_parse_env_strings(self, monkeypatch):
         """Bool fields should parse 'true'/'false' strings from env."""
-        monkeypatch.setenv("USE_HYDE", "true")
-        monkeypatch.setenv("MMR_ENABLED", "false")
+        monkeypatch.setenv("VOICE_ENABLED", "true")
+        monkeypatch.setenv("CONTENT_FILTER_ENABLED", "false")
 
         from telegram_bot.config import BotConfig
 
         config = BotConfig()
-        assert config.use_hyde is True
-        assert config.mmr_enabled is False
+        assert config.voice_enabled is True
+        assert config.content_filter_enabled is False
 
     def test_manager_ids_empty_env_does_not_crash(self, monkeypatch):
         """Empty MANAGER_IDS should be treated as no managers, not JSON parse error."""
@@ -146,3 +146,81 @@ class TestBotConfigIsPydanticSettings:
 
         cfg = BotConfig(_env_file=env_file)
         assert cfg.redis_url == "redis://:dotenv_secret@localhost:6379"
+
+
+class TestBotConfigLiveSchemaDefaults:
+    """Serialization/default snapshot of the live BotConfig schema (#3350).
+
+    Pins every field the Telegram runtime actually reads, with its default.
+    Ignored knobs removed in #3350 must not reappear here; their removal is
+    asserted by test_bot_config_removed_knobs_3350.py.
+    """
+
+    EXPECTED_DEFAULTS: dict[str, object] = {
+        # Telegram
+        "telegram_token": "",
+        # Services
+        "bge_m3_url": "http://localhost:8000",
+        "redis_password": "",
+        "redis_url": "redis://localhost:6379",
+        "qdrant_url": "http://localhost:6333",
+        "qdrant_api_key": None,
+        "qdrant_collection": "gdrive_documents_bge",
+        # LLM
+        "llm_api_key": "",
+        "llm_base_url": "",
+        "llm_model": "gpt-4o-mini",
+        # Search / rerank (live surface preserved by #3350)
+        "search_top_k": 40,
+        "rerank_provider": "colbert",
+        "qdrant_timeout": 30,
+        "qdrant_quantization_mode": "off",
+        # Admin / domain
+        "admin_ids": [],
+        "domain": "недвижимость",
+        "domain_language": "ru",
+        # Voice
+        "voice_enabled": False,
+        "show_transcription": True,
+        "voice_language": "ru",
+        "stt_model": "whisper",
+        "voice_timeout": 30,
+        # Content filter
+        "content_filter_enabled": True,
+        "guard_mode": "hard",
+        # Apartment extraction
+        "apartment_extraction_model": "gpt-4o-mini",
+        # CRM database
+        "realestate_database_url": "",
+        # Managers
+        "manager_ids": [],
+        # Handoff
+        "handoff_enabled": False,
+        "managers_group_id": None,
+        "handoff_ttl_hours": 72,
+        "handoff_summary_min_messages": 3,
+        "business_hours_start": 9,
+        "business_hours_end": 18,
+        "business_hours_tz": "Europe/Sofia",
+    }
+
+    def test_live_fields_keep_defaults(self):
+        """Every live field must keep its documented default."""
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        for field, expected in self.EXPECTED_DEFAULTS.items():
+            actual = getattr(cfg, field)
+            if field == "redis_password":
+                actual = actual.get_secret_value()
+            assert actual == expected, f"{field}: expected {expected!r}, got {actual!r}"
+
+    def test_no_untracked_schema_growth(self):
+        """BotConfig must not grow fields outside the pinned live schema."""
+        from telegram_bot.config import BotConfig
+
+        unexpected = set(BotConfig.model_fields) - set(self.EXPECTED_DEFAULTS)
+        assert not unexpected, (
+            "BotConfig grew fields beyond the live schema; either the runtime "
+            f"reads them (pin them here with defaults) or remove them: {sorted(unexpected)}"
+        )

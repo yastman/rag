@@ -56,7 +56,6 @@ services:
     profiles: ["bot", "full"]
     environment:
       RERANK_PROVIDER: colbert
-      RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
       COLBERT_TIMEOUT: "${COLBERT_TIMEOUT:-120}"
 
   ingestion:

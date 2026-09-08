@@ -159,7 +159,6 @@ services:
       BGE_M3_URL: http://bge-m3:8000
       BGE_M3_TIMEOUT: "${BGE_M3_TIMEOUT:-120}"
       GENERATE_MAX_TOKENS: "${GENERATE_MAX_TOKENS:-2048}"
-      RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
       # Services
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       QDRANT_URL: http://qdrant:6333
