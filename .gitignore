@@ -140,7 +140,7 @@ logs/
 data/embeddings/
 data/evaluation/
 data/gold_set*.jsonl
-# evaluation/results/ and langfuse_logs/ point at archived surfaces (voice, Mini App, trace validation)
+# evaluation/results/ points at archived surfaces (voice, Mini App, trace validation)
 evaluation/results/
 evaluation/evaluation/
 *.tar.gz
@@ -179,9 +179,6 @@ data/demo/*.xlsx
 # MLflow
 mlruns/
 .mlflow
-
-# Langfuse (archived surface)
-langfuse_logs/
 
 # Qdrant
 qdrant_storage/
@@ -233,11 +230,6 @@ test_output*.txt
 coverage.json
 .test_durations
 =*
-
-# k8s secrets (never commit)
-k8s/secrets/*
-!k8s/secrets/README.md
-!k8s/secrets/.env.example
 
 # Validation reports (generated, not committed)
 !docs/reports/
@@ -300,16 +292,7 @@ compose.vps.yml
 renovate.json
 .release-please-manifest.json
 .env.local.example
-docker/rclone/
-scripts/swarm/
 .kiro/
-scripts/no-commit-to-main.sh
-scripts/local_pre_push.sh
-scripts/monitor-workers.sh
-scripts/tmux_orch_identity.py
-scripts/deploy-vps.sh
-scripts/qdrant_backup.sh
-scripts/qdrant_restore.sh
 
 # Additional public-repo hardening
 .direnv/
@@ -334,22 +317,14 @@ scripts/qdrant_restore.sh
 *:Zone.Identifier
 
 # Local one-off audit/research artifacts
-SWARM_AUDIT_REPORT.md
 rockfresh-autoresearch-summary-and-implementation-prompt.md
 
 # codeindexer local config
 .indexer.toml
 .agents/
 
-# Post-archival layout: Mini App frontend build artifacts (archived surface)
-archive/mini_app/frontend/node_modules/
-archive/mini_app/frontend/dist/
-
 # Voice test fixture (archived surface — voice archival #2598)
 data/test/voice_note_sample.ogg
-
-# local swarm skills (not committed)
-skills/
 
 # Windows GPU driver artifact
 NVIDIA Corporation/
