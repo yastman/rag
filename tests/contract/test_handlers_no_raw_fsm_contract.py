@@ -7,8 +7,7 @@ migration was delivered across three child issues plus one explicit
 design exception:
 
 * ``handlers/crm_callbacks.py`` — migrated in #2053 (now drives
-  ``crm_quick_actions_dialog``; pinned by
-  ``tests/contract/test_crm_quick_actions_fsm_migration_contract.py``).
+  ``crm_quick_actions_dialog``).
 * ``handlers/demo_handler.py`` — migrated in #2054 (now drives
   ``demo_dialog``).
 * ``handlers/phone_collector.py`` — **documented design exception**
