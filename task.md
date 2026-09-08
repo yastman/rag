@@ -309,3 +309,32 @@ Baseline-блокеры: `make test-unit` на чистом `origin/dev` @ `7f5b
 Короткая команда следующему исполнителю:
 
 > Прочитай task.md от 2026-09-06 и актуальные пакеты выбранных Issues. Выполни только этот дневной DAG, используй superpowers:dispatching-parallel-agents для независимых workers. Подготовь отдельные Draft PR и остановись перед формальным ревью/merge. Приёмку и hooks не ослабляй; Issue вручную не закрывай.
+
+## Выполнение — 2026-09-08 (base `7f5b0eceb` → `7b783c651`)
+
+Полный цикл доставки: Main-оркестратор + параллельные суб-агенты-исполнители (`superpowers:dispatching-parallel-agents`, TDD/verification у воркеров) в изолированных worktrees от свежего `origin/dev`; Main владел ревью полных diff'ов, пушем через pre-push hooks (core pytest + bandit), PR, хостед-гейтами (Candidate Gate + CodeQL) и merge. Слиты все 27 PR этого цикла, включая семь Draft'ов 2026-09-07 (#3500–#3507); `origin/dev` = `7b783c651`. Issue закрыты (авто-`Closes` или вручную с доказательством приёмки): #3486, #3490, #3494, #3479, #3483, #3430, #3426, #3425, #3484, #3489, #3493, #3491, #3487, #3478, #3477, #3488, #3452, #3446, #3481, #3335, #3350, #3429, #3340, #3339. Вычищены все задачные ветки/worktree; pre-existing регрессия #3513 (дубликат имени теста на contract-lane) поймана локальным гейтом и починена #3514.
+
+| Issue | PR | HEAD | Суть / LOC | Gates | Итог |
+|---|---|---|---|---|---|
+| #3494 | [#3508](https://github.com/yastman/rag/pull/3508) | `6a73a3d8b` | preflight api-key per-request | red→green; 48/169/328 | `Closes` |
+| #3479 | [#3509](https://github.com/yastman/rag/pull/3509) | `014419235` | один truthful search outcome | red→green; 14/42/329 | `Closes` |
+| #3483 | [#3510](https://github.com/yastman/rag/pull/3510) | `0eeefb990` | LiteLLM boundary owns classification | 43/331/953 | `Closes` |
+| #3430 | [#3511](https://github.com/yastman/rag/pull/3511) | `94dc5f874` | −292 дубль middleware-сьют | 17-строчная матрица; 22/75 | `Closes` |
+| #3426 | [#3512](https://github.com/yastman/rag/pull/3512) | `eeb67139e` | −214 VPS-тесты; 31 skip→0 | 17 passed | `Closes` |
+| #3425 | [#3513](https://github.com/yastman/rag/pull/3513) | `4c869b7a4` | −125 AST-ратчат; +64-byte тест | 126 passed | `Closes` |
+| — | [#3514](https://github.com/yastman/rag/pull/3514) | `3cf918cef` | rename-фикс регрессии #3513 | ratchet green | merged |
+| #3491 | [#3515](https://github.com/yastman/rag/pull/3515) | `e9972d222` | locale → prompt + cache read/store | red→green; 36/335 | `Closes` |
+| #3487 | [#3516](https://github.com/yastman/rag/pull/3516) | `c1edd7b60` | stale topic mappings + guard delete | red→green; 26/121/332 | `Closes` |
+| #3478 | [#3517](https://github.com/yastman/rag/pull/3517) | `6bafca513` | Qdrant failure terminal | red→green; 336/180 | `Closes` |
+| #3477 | [#3518](https://github.com/yastman/rag/pull/3518) | `249a112b3` | leads: notify gated + dedup | 13 red→35/107 | `Closes` |
+| #3488 | [#3519](https://github.com/yastman/rag/pull/3519) | `128c983f8` | handoff recovery, fault-таблицы | 9 red→14/135/340/1238 | `Closes` |
+| #3452 | [#3520](https://github.com/yastman/rag/pull/3520) | `cfa643a2b` | metadata/ignore prune −51 | 75 passed; check-ignore | `Closes` |
+| #3446 | [#3521](https://github.com/yastman/rag/pull/3521) | `4dfbaf0a8` | PEP 440 python matrix | red 4→20 passed | `Closes` |
+| #3481 | [#3522](https://github.com/yastman/rag/pull/3522) | `89cd986bb` | −728/+168 streaming surface | zero-owners proof; 336/954 | `Closes` |
+| #3335 | [#3523](https://github.com/yastman/rag/pull/3523) | `b26b7a358` | extras dedupe; lock без версий | 1007 passed | `Closes` |
+| #3350 | [#3524](https://github.com/yastman/rag/pull/3524) | `ae87d6f79` | −39 мёртвых BotConfig knobs | red→green; 336/1232/975 | `Closes` |
+| #3429 | [#3525](https://github.com/yastman/rag/pull/3525) | `b71f90f12` | −704 HyDE-остров; parity-тесты | 409/373/966; import-linter ✓ | `Closes` |
+| #3340 | [#3526](https://github.com/yastman/rag/pull/3526) | `b4ace0572` | −987 tombstone-контракты | collect 5280 ✓; 829 | `Closes` (floor 989→985: дрейф файла до задачи, задокументирован) |
+| #3339 | [#3527](https://github.com/yastman/rag/pull/3527) | `31ca7a3d3` | −817 false dedupe-ratchet | collect 5200 ✓; 814 | `Closes` |
+
+Остаток фронтера (59 открытых Issues): (а) DAG-блокировка на открытых корнях — #3333 (SPEC qdrant; держит #3443/#3461/#3457/#3379), #3392-эпик deps (держит #3445/#3400-…), #3353, #3379 (держит #3423/#3444/#3427), #3328 (держит остаток #3482), #3350-наследник #3387, #3412–#3422 e2e-полосы; (б) `verify:local-runtime` — требуется Docker-рантайм (daemon на машине не запущен): #3492, #3442, #3440–#3443, #3450/#3451/#3453 (цепочка #3449/#3454), #3458, #3460/#3462, e2e-полосы; (в) `manual-control`: #3459-эпик, #3480. Исполнимых без рантайма/корней Issues на момент остановки не осталось; следующий исполнимый шаг — закрытие корней #3333/#3379/#3392 их владельцами либо подъём Docker-стека для local-runtime полосы.
