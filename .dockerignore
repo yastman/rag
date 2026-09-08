@@ -110,7 +110,6 @@ coverage.json
 coverage_report_final.txt
 
 # Infrastructure (not needed in app images)
-k8s/
 drive-sync/
 
 # Build/CI config (not needed in images)
@@ -119,8 +118,3 @@ release-please-config.json
 .pre-commit-config.yaml
 Makefile
 Dockerfile*
-
-# Standalone scripts (not part of app)
-debug_chunks.py
-simple_index_test.py
-test_cache.py
