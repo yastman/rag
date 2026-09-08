@@ -1,4 +1,4 @@
-"""Dependency split contracts for the core runtime and optional extras (#2484, #2640)."""
+"""Dependency split contracts for the core runtime and optional extras (#2484, #2640, #3335)."""
 
 from __future__ import annotations
 
@@ -87,19 +87,36 @@ def test_archived_extras_removed_from_pyproject() -> None:
     )
 
 
-def test_all_extra_includes_every_kept_runtime_surface() -> None:
-    """`uv sync --all-extras` should cover all kept surfaces after archival (#2640, #3235)."""
-    all_extra = " ".join(_project()["project"]["optional-dependencies"]["all"])
+def test_core_and_all_extras_removed() -> None:
+    """The redundant `core` and `all` extras must stay removed (#3335).
 
-    for name in ["core", "telegram"]:
-        assert name in all_extra, f"'all' extra must include '{name}'"
-    assert "docling-native" not in all_extra, (
-        "'all' extra must not include the removed docling-native surface (#3235)"
+    Plain base dependencies are the core authority and `uv sync` installs them;
+    lanes select `telegram` or `bge-extras` directly. `uv sync --all-extras`
+    (uv CLI flag used by Makefile lanes) keeps working over the kept extras.
+    """
+    extras = _project()["project"]["optional-dependencies"]
+
+    assert "core" not in extras, (
+        "The `core` extra duplicated the base dependencies; plain base is the "
+        "core authority (#3335)."
+    )
+    assert "all" not in extras, (
+        "The uncalled `all` umbrella extra was removed by #3335; select "
+        "`telegram` or `bge-extras` directly instead."
     )
 
-    for name in ARCHIVED_EXTRAS:
-        assert name not in all_extra, (
-            f"'all' extra must not include archived extra '{name}' (#2640)"
+
+def test_extras_do_not_duplicate_base_dependencies() -> None:
+    """Extras must add only new packages, never re-declare base ones (#3335)."""
+    project = _project()
+    base = _dep_names(project["project"]["dependencies"])
+    extras = project["project"]["optional-dependencies"]
+
+    for name, deps in extras.items():
+        overlap = _dep_names(deps) & base
+        assert not overlap, (
+            f"Extra '{name}' re-declares base dependencies: {sorted(overlap)}. "
+            "Base is the single authority for those packages (#3335)."
         )
 
 
