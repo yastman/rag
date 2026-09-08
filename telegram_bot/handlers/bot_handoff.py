@@ -252,6 +252,21 @@ async def _complete_handoff(
 
 async def _close_handoff(bot: PropertyBot, handoff: HandoffData) -> None:
     """Manager sends /close — return client to bot (#730)."""
+    # Guarded state cleanup first (#3487): the handoff snapshot may be stale —
+    # if the client's session has already moved to a newer topic, do not close
+    # it, notify the client, or reset the active FSM state.
+    if bot._handoff_state is not None:
+        deleted = await bot._handoff_state.delete(
+            handoff.client_id, expected_topic_id=handoff.topic_id
+        )
+        if not deleted:
+            logger.info(
+                "Handoff close skipped: client %s session moved out of topic %s (#3487)",
+                handoff.client_id,
+                handoff.topic_id,
+            )
+            return
+
     # Notify topic.
     if bot._forum_bridge is not None:
         await bot._forum_bridge.send_to_topic(
@@ -266,9 +281,6 @@ async def _close_handoff(bot: PropertyBot, handoff: HandoffData) -> None:
         text="Диалог с менеджером завершён.\n\n🤖 Вы снова общаетесь с ботом. Задавайте вопросы — помогу!",
     )
 
-    # Cleanup Redis + FSM state.
-    if bot._handoff_state is not None:
-        await bot._handoff_state.delete(handoff.client_id)
     # Clear client's FSM state from group context via storage key.
     from aiogram.fsm.storage.base import StorageKey
 

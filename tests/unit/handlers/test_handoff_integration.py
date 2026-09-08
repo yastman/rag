@@ -144,6 +144,130 @@ async def test_start_qualification_without_goal():
     assert call_args.args[0] is HandoffSG.goal
 
 
+# --- stale topic guard (#3487) ---
+
+
+@pytest.mark.asyncio
+async def test_close_from_replaced_topic_does_not_close_new_session(mock_redis):
+    """A /close from old topic A must not act on the new topic B session (#3487)."""
+    from telegram_bot.handlers.bot_handoff import _handle_group_message
+
+    state = HandoffState(mock_redis, ttl_hours=24)
+    # Client was handed off in topic 111, then re-handed-off into topic 222.
+    await state.set(HandoffData(client_id=999, topic_id=111, mode="human_waiting"))
+    await state.set(HandoffData(client_id=999, topic_id=222, mode="human_waiting"))
+
+    bot = AsyncMock()
+    bot._handoff_state = state
+    bot._bot_user_id = 100
+    bot._forum_bridge = None
+    bot.bot.id = 100
+    storage = AsyncMock()
+    bot.dp.storage = storage
+
+    message = AsyncMock()
+    message.message_thread_id = 111
+    message.text = "/close"
+    message.from_user = MagicMock()
+    message.from_user.id = 555
+
+    await _handle_group_message(bot, message)
+
+    bot.bot.send_message.assert_not_awaited()
+    storage.set_state.assert_not_awaited()
+    kept = await state.get_by_client(999)
+    assert kept is not None
+    assert kept.topic_id == 222
+
+
+@pytest.mark.asyncio
+async def test_message_from_replaced_topic_is_not_relayed(mock_redis):
+    """A manager message in old topic A must not be relayed to the client (#3487)."""
+    from telegram_bot.handlers.bot_handoff import _handle_group_message
+
+    state = HandoffState(mock_redis, ttl_hours=24)
+    await state.set(HandoffData(client_id=999, topic_id=111, mode="human_waiting"))
+    await state.set(HandoffData(client_id=999, topic_id=222, mode="human_waiting"))
+
+    bot = AsyncMock()
+    bot._handoff_state = state
+    bot._bot_user_id = 100
+    bot._forum_bridge = None
+
+    message = AsyncMock()
+    message.message_thread_id = 111
+    message.text = "Привет, есть новости?"
+    message.from_user = MagicMock()
+    message.from_user.id = 555
+    message.from_user.full_name = "Менеджер"
+
+    await _handle_group_message(bot, message)
+
+    bot.bot.send_message.assert_not_awaited()
+    kept = await state.get_by_client(999)
+    assert kept is not None
+    assert kept.mode == "human_waiting"
+
+
+@pytest.mark.asyncio
+async def test_close_handoff_with_stale_snapshot_spares_replaced_session(mock_redis):
+    """Concurrent replace+close: a stale close must not notify or reset FSM (#3487)."""
+    from telegram_bot.handlers.bot_handoff import _close_handoff
+
+    state = HandoffState(mock_redis, ttl_hours=24)
+    await state.set(HandoffData(client_id=999, topic_id=111, mode="human"))
+    handoff = await state.get_by_topic(111)
+    assert handoff is not None
+
+    # Concurrent replacement lands between the manager snapshot and the close.
+    await state.set(HandoffData(client_id=999, topic_id=222, mode="human_waiting"))
+
+    bot = AsyncMock()
+    bot._handoff_state = state
+    bot._forum_bridge = None
+    bot.bot.id = 100
+    storage = AsyncMock()
+    bot.dp.storage = storage
+
+    await _close_handoff(bot, handoff)
+
+    bot.bot.send_message.assert_not_awaited()
+    storage.set_state.assert_not_awaited()
+    kept = await state.get_by_client(999)
+    assert kept is not None
+    assert kept.topic_id == 222
+
+
+@pytest.mark.asyncio
+async def test_close_from_active_topic_still_closes_session(mock_redis):
+    """/close from the current topic still closes it and resets FSM (no regression)."""
+    from telegram_bot.handlers.bot_handoff import _handle_group_message
+
+    state = HandoffState(mock_redis, ttl_hours=24)
+    await state.set(HandoffData(client_id=999, topic_id=222, mode="human_waiting"))
+
+    bot = AsyncMock()
+    bot._handoff_state = state
+    bot._bot_user_id = 100
+    bot._forum_bridge = None
+    bot.bot.id = 100
+    storage = AsyncMock()
+    bot.dp.storage = storage
+
+    message = AsyncMock()
+    message.message_thread_id = 222
+    message.text = "/close"
+    message.from_user = MagicMock()
+    message.from_user.id = 555
+
+    await _handle_group_message(bot, message)
+
+    bot.bot.send_message.assert_awaited_once()
+    storage.set_state.assert_awaited_once()
+    assert await state.get_by_client(999) is None
+    assert await state.get_by_topic(222) is None
+
+
 @pytest.mark.asyncio
 async def test_start_qualification_fallback_without_dialog_manager():
     """start_qualification sends plain text when dialog_manager is None."""
