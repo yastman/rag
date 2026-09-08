@@ -109,48 +109,14 @@ class BotConfig(BaseSettings):
         default="gpt-4o-mini", validation_alias=AliasChoices("llm_model", "LLM_MODEL")
     )
 
-    # RAG settings
-    top_k: int = 5
-    min_score: float = 0.3
-
-    # Search Configuration
+    # Search Configuration (live knobs; retrieval tuning lives in GraphConfig)
     search_top_k: int = Field(
         default=40, validation_alias=AliasChoices("search_top_k", "SEARCH_TOP_K")
-    )
-    rerank_top_k: int = Field(
-        default=7, validation_alias=AliasChoices("rerank_top_k", "RERANK_TOP_K")
-    )
-    rerank_candidates_max: int = Field(
-        default=10,
-        validation_alias=AliasChoices("rerank_candidates_max", "RERANK_CANDIDATES_MAX"),
-    )
-
-    # CESC Configuration
-    cesc_enabled: bool = Field(
-        default=True, validation_alias=AliasChoices("cesc_enabled", "CESC_ENABLED")
-    )
-    cesc_extraction_frequency: int = Field(
-        default=3,
-        validation_alias=AliasChoices("cesc_extraction_frequency", "CESC_EXTRACTION_FREQUENCY"),
-    )
-    user_context_ttl: int = Field(
-        default=30 * 24 * 3600,
-        validation_alias=AliasChoices("user_context_ttl", "USER_CONTEXT_TTL"),
     )
 
     # Rerank provider (colbert | none)
     rerank_provider: str = Field(
         default="colbert", validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER")
-    )
-
-    # Hybrid Search Configuration
-    hybrid_dense_weight: float = Field(
-        default=0.6,
-        validation_alias=AliasChoices("hybrid_dense_weight", "HYBRID_DENSE_WEIGHT"),
-    )
-    hybrid_sparse_weight: float = Field(
-        default=0.4,
-        validation_alias=AliasChoices("hybrid_sparse_weight", "HYBRID_SPARSE_WEIGHT"),
     )
 
     # Qdrant Connection
@@ -159,68 +125,10 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("qdrant_timeout", "QDRANT_TIMEOUT"),
     )
 
-    # Score Boosting Configuration
-    freshness_boost_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("freshness_boost_enabled", "FRESHNESS_BOOST"),
-    )
-    freshness_field: str = Field(
-        default="created_at",
-        validation_alias=AliasChoices("freshness_field", "FRESHNESS_FIELD"),
-    )
-    freshness_scale_days: int = Field(
-        default=30,
-        validation_alias=AliasChoices("freshness_scale_days", "FRESHNESS_SCALE_DAYS"),
-    )
-
-    # MMR Diversity Configuration
-    mmr_enabled: bool = Field(
-        default=False, validation_alias=AliasChoices("mmr_enabled", "MMR_ENABLED")
-    )
-    mmr_lambda: float = Field(
-        default=0.7, validation_alias=AliasChoices("mmr_lambda", "MMR_LAMBDA")
-    )
-
-    # Qdrant Quantization Configuration
+    # Qdrant Quantization Configuration (single live selector)
     qdrant_quantization_mode: str = Field(
         default="off",
         validation_alias=AliasChoices("qdrant_quantization_mode", "QDRANT_QUANTIZATION_MODE"),
-    )
-    qdrant_use_quantization: bool = Field(
-        default=True,
-        validation_alias=AliasChoices("qdrant_use_quantization", "QDRANT_USE_QUANTIZATION"),
-    )
-    qdrant_quantization_rescore: bool = Field(
-        default=True,
-        validation_alias=AliasChoices("qdrant_quantization_rescore", "QDRANT_QUANTIZATION_RESCORE"),
-    )
-    qdrant_quantization_oversampling: float = Field(
-        default=2.0,
-        validation_alias=AliasChoices(
-            "qdrant_quantization_oversampling", "QDRANT_QUANTIZATION_OVERSAMPLING"
-        ),
-    )
-    qdrant_quantization_always_ram: bool = Field(
-        default=True,
-        validation_alias=AliasChoices(
-            "qdrant_quantization_always_ram", "QDRANT_QUANTIZATION_ALWAYS_RAM"
-        ),
-    )
-
-    # HyDE (Hypothetical Document Embeddings)
-    use_hyde: bool = Field(default=False, validation_alias=AliasChoices("use_hyde", "USE_HYDE"))
-    hyde_min_words: int = Field(
-        default=5, validation_alias=AliasChoices("hyde_min_words", "HYDE_MIN_WORDS")
-    )
-
-    # Semantic cache tuning
-    semantic_cache_threshold: float = Field(
-        default=0.10,
-        validation_alias=AliasChoices("semantic_cache_threshold", "SEMANTIC_CACHE_THRESHOLD"),
-    )
-    semantic_cache_ttl_default: int = Field(
-        default=3600,
-        validation_alias=AliasChoices("semantic_cache_ttl_default", "SEMANTIC_CACHE_TTL_DEFAULT"),
     )
 
     # Admin user IDs (comma-separated Telegram user IDs)
@@ -276,104 +184,17 @@ class BotConfig(BaseSettings):
         default="hard",
         validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),
     )
-    # Guardrails
-    enable_confidence_scoring: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("enable_confidence_scoring", "ENABLE_CONFIDENCE_SCORING"),
-    )
-    enable_off_topic_detection: bool = Field(
-        default=True,
-        validation_alias=AliasChoices("enable_off_topic_detection", "ENABLE_OFF_TOPIC_DETECTION"),
-    )
-    low_confidence_threshold: float = Field(
-        default=0.3,
-        validation_alias=AliasChoices("low_confidence_threshold", "LOW_CONFIDENCE_THRESHOLD"),
-    )
 
-    # Small-to-big context expansion
-    small_to_big_mode: str = Field(
-        default="off",
-        validation_alias=AliasChoices("small_to_big_mode", "SMALL_TO_BIG_MODE"),
-    )
-    small_to_big_window_before: int = Field(
-        default=1,
-        validation_alias=AliasChoices("small_to_big_window_before", "SMALL_TO_BIG_WINDOW_BEFORE"),
-    )
-    small_to_big_window_after: int = Field(
-        default=1,
-        validation_alias=AliasChoices("small_to_big_window_after", "SMALL_TO_BIG_WINDOW_AFTER"),
-    )
-    max_expanded_chunks: int = Field(
-        default=10,
-        validation_alias=AliasChoices("max_expanded_chunks", "MAX_EXPANDED_CHUNKS"),
-    )
-    max_context_tokens: int = Field(
-        default=8000,
-        validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
-    )
-
-    # Supervisor routing model (#240, #310 — supervisor-only since v3.3)
-    supervisor_model: str = Field(
-        default="gpt-4o-mini",
-        validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),
-    )
+    # Apartment extraction model (#240, #310)
     apartment_extraction_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("apartment_extraction_model", "APARTMENT_EXTRACTION_MODEL"),
-    )
-    supervisor_max_tokens: int = Field(
-        default=1024,
-        validation_alias=AliasChoices(
-            "supervisor_max_tokens",
-            "SUPERVISOR_MAX_TOKENS",
-        ),
-    )
-
-    # Call limits (#374)
-    max_llm_calls: int = Field(
-        default=5,
-        ge=1,
-        validation_alias=AliasChoices("max_llm_calls", "MAX_LLM_CALLS"),
-    )
-    max_tool_calls: int = Field(
-        default=5,
-        ge=1,
-        validation_alias=AliasChoices("max_tool_calls", "MAX_TOOL_CALLS"),
-    )
-
-    # LLM-as-a-Judge online sampling
-    judge_sample_rate: float = Field(
-        default=0.0,
-        validation_alias=AliasChoices("JUDGE_SAMPLE_RATE", "judge_sample_rate"),
-        description="Fraction of queries to evaluate with LLM-as-a-Judge (0.0 = off, 0.2 = 20%)",
-    )
-    judge_model: str = Field(
-        default="gpt-4o-mini-cerebras-glm",
-        validation_alias=AliasChoices("JUDGE_MODEL", "judge_model"),
-        description="LLM model for judge evaluation",
-    )
-
-    # Sliding window for agent history (#519)
-    agent_max_history_messages: int = Field(
-        default=15,
-        ge=1,
-        validation_alias=AliasChoices("agent_max_history_messages", "AGENT_MAX_HISTORY_MESSAGES"),
     )
 
     # Real Estate Database (realestate DB in shared Postgres)
     realestate_database_url: str = Field(
         default="",
         validation_alias=AliasChoices("realestate_database_url", "REALESTATE_DATABASE_URL"),
-    )
-
-    # i18n
-    supported_locales: list[str] = Field(
-        default=["ru", "en", "uk"],
-        validation_alias=AliasChoices("supported_locales", "SUPPORTED_LOCALES"),
-    )
-    default_locale: str = Field(
-        default="ru",
-        validation_alias=AliasChoices("default_locale", "DEFAULT_LOCALE"),
     )
 
     # Manager IDs (comma-separated Telegram user IDs)
