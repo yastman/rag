@@ -10,6 +10,7 @@ from typing import Any
 
 from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
 from src.runtime.services.metrics import record_pipeline_event
+from src.runtime.services.query_preprocessor import get_rrf_weights
 
 
 logger = logging.getLogger(__name__)
@@ -25,12 +26,6 @@ def _bge_m3_query_bundle_cls() -> Any:
     from src.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
     return BgeM3QueryVectorBundle
-
-
-def _new_query_preprocessor() -> Any:
-    from src.runtime.services.query_preprocessor import QueryPreprocessor
-
-    return QueryPreprocessor()
 
 
 @dataclass(frozen=True)
@@ -300,7 +295,7 @@ def _compute_retrieval_filters(
     initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
     final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
 
-    dense_weight, sparse_weight = _new_query_preprocessor().get_rrf_weights(query)
+    dense_weight, sparse_weight = get_rrf_weights(query)
 
     if prefer_faq_doc_type and topic_hint:
         active_filters = dict(topic_filters)

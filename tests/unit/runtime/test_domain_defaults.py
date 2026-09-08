@@ -21,22 +21,6 @@ def test_domain_defaults_exports_city_pattern() -> None:
     assert _CITY_RE.search("квартира в Несебре")
 
 
-def test_domain_defaults_exports_translit_map() -> None:
-    """TRANSLIT_MAP must come from domain_defaults."""
-    from src.runtime.domain_defaults import TRANSLIT_MAP
-
-    assert isinstance(TRANSLIT_MAP, dict)
-    assert "Nesebar" in TRANSLIT_MAP
-
-
-def test_domain_defaults_exports_hyde_system_prompt() -> None:
-    """HYDE_SYSTEM_PROMPT must come from domain_defaults."""
-    from src.runtime.domain_defaults import HYDE_SYSTEM_PROMPT
-
-    assert isinstance(HYDE_SYSTEM_PROMPT, str)
-    assert len(HYDE_SYSTEM_PROMPT) > 0
-
-
 def test_domain_defaults_exports_blocked_response() -> None:
     """BLOCKED_RESPONSE must come from domain_defaults."""
     from src.runtime.domain_defaults import BLOCKED_RESPONSE

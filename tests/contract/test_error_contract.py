@@ -33,9 +33,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "src/runtime/pipeline/_cache_stage.py": ["ERROR"],
     "src/runtime/pipeline/_grade_rerank.py": ["ERROR"],
     "src/runtime/pipeline/_rewrite_cache.py": ["ERROR"],
-    # SDK-native query preprocessor — ERROR spans on the HyDE generation
-    # API-failure paths (CORE-023 move from telegram_bot.services).
-    "src/runtime/services/query_preprocessor.py": ["ERROR"],
     # SDK-native generation service — ERROR span on the LLM-failure fallback
     # path (CORE-004 split). Bot-local generate_response.py removed in #3222.
     "src/runtime/generation/service.py": ["ERROR"],

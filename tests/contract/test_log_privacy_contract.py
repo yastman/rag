@@ -1,11 +1,10 @@
 """Log privacy contract (#3356).
 
 Raw or generated user-derived text — queries, deterministic expansions,
-hypothetical documents, transliterations, injection excerpts, generated
-rewrites — must never reach the runtime logs. A unique canary (e-mail,
-phone, or passport) is sent through the rewrite, preprocessing, semantic
-cache, and guard paths and must not appear in any captured log record,
-at any level, or inside exception text.
+injection excerpts, generated rewrites — must never reach the runtime logs.
+A unique canary (e-mail, phone, or passport) is sent through the rewrite,
+semantic cache, and guard paths and must not appear in any captured log
+record, at any level, or inside exception text.
 """
 
 from __future__ import annotations
@@ -16,11 +15,7 @@ from typing import Any
 import pytest
 
 from src.runtime.safety.guard import guard_node
-from src.runtime.services.query_preprocessor import (
-    _SHORT_FINANCE_QUERY_EXPANSIONS,
-    HyDEGenerator,
-    QueryPreprocessor,
-)
+from src.runtime.services.query_preprocessor import _SHORT_FINANCE_QUERY_EXPANSIONS
 
 
 pytestmark = pytest.mark.contract
@@ -99,38 +94,6 @@ async def test_rewrite_expansion_log_hides_user_text(
     assert expansion_key not in log_capture.text
     assert result["rewritten_query"] not in log_capture.text
     assert "deterministic expansion applied" in log_capture.text
-
-
-@pytest.mark.parametrize("canary", _CANARIES, ids=_ids)
-async def test_hyde_log_hides_user_text(log_capture: pytest.LogCaptureFixture, canary: str) -> None:
-    """The HyDE log records document size, not the query or document text."""
-    from types import SimpleNamespace
-
-    generator = HyDEGenerator()
-
-    class _StubClient:
-        async def completion(self, **_kwargs: Any) -> Any:
-            return SimpleNamespace(
-                choices=[SimpleNamespace(message=SimpleNamespace(content=f"{canary} doc"))]
-            )
-
-    generator.client = _StubClient()
-    result = await generator.generate_hypothetical_document(f"квартира {canary}")
-
-    assert result.endswith("doc")  # behavior unchanged
-    assert canary not in log_capture.text
-    assert "квартира" not in log_capture.text
-
-
-@pytest.mark.parametrize("canary", _CANARIES, ids=_ids)
-def test_translit_log_hides_user_text(log_capture: pytest.LogCaptureFixture, canary: str) -> None:
-    """The transliteration log records no source or normalized text."""
-    preprocessor = QueryPreprocessor()
-    result = preprocessor.normalize_translit(f"Sunny Beach {canary}")
-
-    assert result.endswith(canary)  # behavior unchanged
-    assert canary not in log_capture.text
-    assert "Sunny Beach" not in log_capture.text
 
 
 @pytest.mark.parametrize("canary", _CANARIES, ids=_ids)

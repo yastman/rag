@@ -3,7 +3,6 @@
 Verifies that:
 1. context.py price formatting uses narrow ValueError (not broad Exception)
 2. small_to_big.py logs error_type on Qdrant scroll failure
-3. query_preprocessor.py logs error_type on unexpected HyDE failure
 """
 
 from __future__ import annotations
@@ -100,32 +99,3 @@ class TestSmallToBigLogsErrorType:
         # The log must include the error type name
         log_str = str(call_args)
         assert "CustomQdrantError" in log_str or "error_type" in log_str.lower()
-
-
-class TestQueryPreprocessorLogsErrorType:
-    """HyDEGenerator logs error_type on unexpected fallback exception."""
-
-    @pytest.mark.asyncio
-    @patch("src.runtime.services.query_preprocessor.logger")
-    @patch("src.runtime.services.query_preprocessor.create_llm_client")
-    async def test_hyde_unexpected_exception_logs_error_type(self, mock_create_client, mock_logger):
-        """Unexpected exception in HyDE generation logs error_type."""
-        from src.runtime.services.query_preprocessor import HyDEGenerator
-
-        class UnexpectedError(Exception):
-            pass
-
-        mock_client = MagicMock()
-        mock_client.completion = AsyncMock(side_effect=UnexpectedError("unexpected failure"))
-        mock_create_client.return_value = mock_client
-
-        gen = HyDEGenerator(model="test-model")
-
-        result = await gen.generate_hypothetical_document("test query")
-
-        assert result == "test query"  # Falls back to original query
-        mock_logger.error.assert_called()
-        # The second error call (broad except) should log error_type
-        calls = mock_logger.error.call_args_list
-        last_call_str = str(calls[-1])
-        assert "UnexpectedError" in last_call_str or "error_type" in last_call_str.lower()
