@@ -71,7 +71,16 @@ class HandoffState:
     async def set(self, data: HandoffData) -> None:
         key = f"{_PREFIX}:{data.client_id}"
         rev_key = f"{_TOPIC_PREFIX}:{data.topic_id}"
+        current = await self.get_by_client(data.client_id)
         pipe = self._redis.pipeline()
+        if current is not None and current.topic_id != data.topic_id:
+            # Topic replace (#3487): drop the old reverse key in the same batch
+            # so the old topic never resolves to the new session. Skip the
+            # delete when another client has taken the old topic over.
+            stale_rev_key = f"{_TOPIC_PREFIX}:{current.topic_id}"
+            mapped = await self._redis.get(stale_rev_key)
+            if mapped is None or int(mapped) == data.client_id:
+                pipe.delete(stale_rev_key)
         pipe.hset(key, mapping=data.to_redis_dict())
         pipe.expire(key, self._ttl)
         pipe.set(rev_key, str(data.client_id), ex=self._ttl)
@@ -87,7 +96,12 @@ class HandoffState:
         client_id = await self._redis.get(f"{_TOPIC_PREFIX}:{topic_id}")
         if not client_id:
             return None
-        return await self.get_by_client(int(client_id))
+        data = await self.get_by_client(int(client_id))
+        if data is None or data.topic_id != topic_id:
+            # Stale/garbage reverse key: the client's current session lives in
+            # another topic, so this topic must not resolve to it (#3487).
+            return None
+        return data
 
     async def update_mode(self, client_id: int, mode: str) -> None:
         data = await self.get_by_client(client_id)
@@ -98,11 +112,27 @@ class HandoffState:
             data.manager_joined_at = time.time()
         await self.set(data)
 
-    async def delete(self, client_id: int) -> None:
+    async def delete(self, client_id: int, *, expected_topic_id: int | None = None) -> bool:
+        """Remove a session plus its reverse mapping; return whether it was removed.
+
+        With ``expected_topic_id`` the delete acts as a guarded snapshot close
+        (#3487): when the client's current session has moved to a different
+        topic, the newer session is preserved untouched and ``False`` is
+        returned instead of destroying it.
+        """
         data = await self.get_by_client(client_id)
         if not data:
-            return
+            return False
+        if expected_topic_id is not None and data.topic_id != expected_topic_id:
+            logger.info(
+                "Handoff delete skipped: client %s moved from topic %s to %s (#3487)",
+                client_id,
+                expected_topic_id,
+                data.topic_id,
+            )
+            return False
         pipe = self._redis.pipeline()
         pipe.delete(f"{_PREFIX}:{client_id}")
         pipe.delete(f"{_TOPIC_PREFIX}:{data.topic_id}")
         await pipe.execute()
+        return True
