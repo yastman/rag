@@ -19,6 +19,7 @@ from aiogram.exceptions import TelegramBadRequest
 from telegram_bot.handlers import bot_handoff
 from tests.unit._bot_config_factory import make_bot_config
 
+
 _FALSE_PROMISE_MARKERS = ("скоро свяжется", "менеджер скоро")
 
 
@@ -32,7 +33,13 @@ def _capability_bot(
     from telegram_bot.bot import PropertyBot
 
     bot = PropertyBot.__new__(PropertyBot)
-    bot.config = make_bot_config(handoff_enabled=handoff_enabled, managers_group_id=-100123)
+    # Handoff is a Redis-durable feature: it requires a mode that allows
+    # durable capabilities (#3362). single_instance keeps the legacy default.
+    bot.config = make_bot_config(
+        redis_mode="single_instance",
+        handoff_enabled=handoff_enabled,
+        managers_group_id=-100123,
+    )
     bot._forum_bridge = bridge
     bot._handoff_state = handoff_state
     return bot
@@ -77,15 +84,11 @@ def test_capability_requires_all_three_conditions():
 
 @pytest.mark.asyncio
 async def test_handle_manager_capability_on_starts_qualification():
-    bot = _capability_bot(
-        handoff_enabled=True, bridge=MagicMock(), handoff_state=MagicMock()
-    )
+    bot = _capability_bot(handoff_enabled=True, bridge=MagicMock(), handoff_state=MagicMock())
     message = _message()
     state = _state()
 
-    with patch.object(
-        bot_handoff, "start_qualification", new_callable=AsyncMock
-    ) as mock_qual:
+    with patch.object(bot_handoff, "start_qualification", new_callable=AsyncMock) as mock_qual:
         await bot_handoff._handle_manager(bot, message, state=state)
 
     mock_qual.assert_awaited_once()

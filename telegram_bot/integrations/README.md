@@ -18,7 +18,7 @@ External service wrappers and adapters for the Telegram bot. Provides focused ad
 
 - Adapters only: business logic lives in [`../services/`](../services/).
 - Does not own Qdrant search algorithms; see [`../../src/retrieval/`](../../src/retrieval/).
-- Redis connection config is owned by [`../config.py`](../config.py) and [`../../src/config/`](../../src/config/).
+- Redis connection config is owned by [`../config.py`](../config.py).
 
 ## Focused Checks
 
@@ -30,5 +30,4 @@ uv run pytest tests/unit/ -k "cache|embeddings|prompt" -q
 
 - [`../README.md`](../README.md) — Telegram transport layer
 - [`../services/README.md`](../services/README.md) — Business logic services
-- [`../../src/config/`](../../src/config/) — Shared settings
 - [`../../docs/LOCAL-DEVELOPMENT.md`](../../docs/LOCAL-DEVELOPMENT.md) — Local setup

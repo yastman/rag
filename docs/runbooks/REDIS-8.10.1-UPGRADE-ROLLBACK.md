@@ -9,7 +9,7 @@ references available until the new version has soaked.
 | Variant | New (8.10.1) | Old (8.6.3) |
 |---|---|---|
 | `compose.yml` (dev/prod stack) | `redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5` | `redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529` |
-| `compose.core.yml` / `starter/compose.yml` (alpine) | `redis:8.10.1-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576` | `redis:8.6.3-alpine@sha256:c25154ff5e2e6d0820a0268abd9dd3bc84f48fddd40396fb1f4de5b3dcc2182a` |
+| `compose.core.yml` (alpine) | `redis:8.10.1-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576` | `redis:8.6.3-alpine@sha256:c25154ff5e2e6d0820a0268abd9dd3bc84f48fddd40396fb1f4de5b3dcc2182a` |
 
 Notes:
 
@@ -85,7 +85,7 @@ containers/volumes; the shared `dev` stack was not touched.
 | Probe | Result |
 |---|---|
 | Pull both new pins by digest (`linux/arm64/v8` host) | pass |
-| `docker compose config` renders new pins (`compose.yml` + ci env, `compose.core.yml`, `starter/compose.yml`) | pass |
+| `docker compose config` renders new pins (`compose.yml` + ci env, `compose.core.yml`; the `starter/compose.yml` variant was also verified then, removed by #3399) | pass |
 | Fresh volume up, healthcheck → `healthy`, `redis-server v=8.10.1` (debian and alpine variants) | pass |
 | Preflight redis probes (`tests/smoke/test_preflight.py -k redis`) | 5 passed, 1 expected skip (no semantic index on fresh volume) |
 | LFU eviction/load (`tests/load/test_load_redis_eviction.py`): policy, maxmemory, 19 660 keys / 192 MB pressure → 8 956 evictions, Zipf hit rate 100 % | pass |

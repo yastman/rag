@@ -54,6 +54,22 @@ def _require_qdrant_collection() -> bool:
     return os.getenv("REQUIRE_QDRANT_COLLECTION", "0") == "1"
 
 
+def _safe_status_summary(qdrant_ok: bool, redis_ok: bool, status: str) -> dict:
+    """Build a console-safe summary from literal statuses the script assigns.
+
+    Printed output and assertion messages must never carry credential-derived
+    data (CodeQL py/clear-text-logging-sensitive-data): the raw report, whose
+    Redis URL embeds the password, is written only to reports/preflight.json.
+    The summary holds status scalars only -- never URLs, hosts, keys, or
+    error strings.
+    """
+    return {
+        "qdrant": "green" if qdrant_ok else "red",
+        "redis": "green" if redis_ok else "red",
+        "status": status,
+    }
+
+
 @pytest.fixture(scope="module")
 def qdrant_url():
     if not _check_tcp("localhost", 6333):
@@ -227,6 +243,48 @@ class TestPreflightRedis:
                 pytest.skip(f"JSON not available (set REQUIRE_REDIS_JSON=1 for strict): {e}")
 
 
+class TestSafeStatusSummary:
+    """Printed/asserted preflight output must be credential-free.
+
+    Regression lock for CodeQL alert py/clear-text-logging-sensitive-data:
+    console/assert output is a summary of literal status scalars only; the
+    raw report (with the Redis password in its URL) is written only to
+    reports/preflight.json.
+    """
+
+    def test_summary_contains_statuses_only(self):
+        summary = _safe_status_summary(qdrant_ok=True, redis_ok=True, status="PASS")
+
+        assert summary == {"qdrant": "green", "redis": "green", "status": "PASS"}
+
+    def test_summary_reflects_failed_services(self):
+        summary = _safe_status_summary(qdrant_ok=False, redis_ok=False, status="FAIL")
+
+        assert summary == {"qdrant": "red", "redis": "red", "status": "FAIL"}
+
+    def test_summary_has_no_url_host_or_credential_fields(self):
+        summary = _safe_status_summary(qdrant_ok=True, redis_ok=False, status="FAIL")
+
+        assert set(summary) == {"qdrant", "redis", "status"}
+        assert set(summary.values()) <= {"green", "red", "PASS", "FAIL"}
+
+    def test_printed_summary_is_credential_free(self, capsys):
+        summary = _safe_status_summary(qdrant_ok=True, redis_ok=False, status="FAIL")
+
+        print(json.dumps(summary, indent=2))
+
+        out = capsys.readouterr().out
+        assert "url" not in out
+        assert "host" not in out
+        assert "password" not in out
+        assert "redis://" not in out
+        assert "localhost" not in out
+        parsed = json.loads(out)
+        assert parsed["qdrant"] == "green"
+        assert parsed["redis"] == "red"
+        assert parsed["status"] == "FAIL"
+
+
 class TestPreflightReport:
     """Generate preflight report."""
 
@@ -299,7 +357,8 @@ class TestPreflightReport:
         redis_ok = report["redis"].get("maxmemory", 0) > 0 and report["redis"].get(
             "maxmemory_policy", ""
         ) in ("allkeys-lfu", "volatile-lfu")
-        report["status"] = "PASS" if (qdrant_ok and redis_ok) else "FAIL"
+        status = "PASS" if (qdrant_ok and redis_ok) else "FAIL"
+        report["status"] = status
 
         # Save report
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -307,7 +366,12 @@ class TestPreflightReport:
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
 
-        print(f"\nPreflight report saved to: {report_path}")
-        print(json.dumps(report, indent=2))
+        # Console/assert output gets a summary of literal statuses only; the
+        # raw report (Redis URL embeds the password) lives only in
+        # reports/preflight.json.
+        summary = _safe_status_summary(qdrant_ok, redis_ok, status)
 
-        assert report["status"] == "PASS", f"Preflight failed: {report}"
+        print(f"\nPreflight report saved to: {report_path}")
+        print(json.dumps(summary, indent=2))
+
+        assert report["status"] == "PASS", f"Preflight failed: {summary}"

@@ -339,7 +339,10 @@ class TestHandleCtaCallback:
 
     async def test_manager_with_forum_bridge_starts_qualification(self):
         # Capability on (#3239): HANDOFF_ENABLED + bridge + Redis state.
-        config = _make_config(handoff_enabled=True, managers_group_id=-100123)
+        # Handoff is Redis-durable, so it needs a durable-capable mode (#3362).
+        config = _make_config(
+            redis_mode="single_instance", handoff_enabled=True, managers_group_id=-100123
+        )
         bot = _create_bot(config)
         bot._forum_bridge = MagicMock()
         bot._handoff_state = MagicMock()

@@ -2,9 +2,9 @@
 
 The Telegram runtime never reads or forwards these 39 fields; the A02 audit
 found zero typed reads from BotConfig for the whole set. Live behaviour for
-retrieval/quantization/small-to-big knobs is owned by ``src.runtime.config.GraphConfig``
-and legacy ``src.config.settings.Settings``, which read the same env keys
-themselves. The operator-facing BotConfig schema must not re-advertise them.
+retrieval/quantization/small-to-big knobs is owned by ``src.runtime.config.GraphConfig``,
+which reads the same env keys itself. The operator-facing BotConfig schema must
+not re-advertise them.
 """
 
 from telegram_bot.config import BotConfig
