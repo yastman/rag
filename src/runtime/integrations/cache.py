@@ -121,10 +121,18 @@ def _create_semantic_cache(
     """Create RedisVL SemanticCache instance. Returns None on failure.
 
     When ``async_redis_client`` is provided it is installed on the created
-    RedisVL cache so the cache reuses our already-connected client. RedisVL
-    0.17 exposes this on BaseCache but SemanticCache does not forward the
-    constructor argument, so set it explicitly to avoid the deprecated lazy
-    ``RedisConnectionFactory.get_async_redis_connection`` path (#2277).
+    RedisVL cache so the cache reuses our already-connected client and never
+    takes the deprecated lazy ``RedisConnectionFactory.get_async_redis_connection``
+    path (#2277).
+
+    This narrow post-construction write stays despite #3389 because locked
+    RedisVL 0.26.x exposes no public async-client attachment on the cache:
+    ``SemanticCache.__init__`` forwards only the sync ``redis_client`` to
+    ``BaseCache.__init__`` (an ``async_redis_client`` kwarg is swallowed by
+    its ``**kwargs``), and ``set_client`` exists only on search indexes and is
+    deprecated there. Pinned by the compatibility test
+    ``test_redisvl_locked_api_has_no_public_async_client_attachment`` — when a
+    redisvl bump makes that test fail, replace this write with the public API.
     """
     try:
         from redisvl.extensions.cache.llm import SemanticCache
@@ -273,10 +281,10 @@ class CacheLayerManager:
 
         # Lazy import vectorizer for semantic cache
         try:
-            from src.services.vectorizers import BgeM3CacheVectorizer
+            from src.services.vectorizers import create_bge_m3_cache_vectorizer
 
             bge_url = os.getenv("BGE_M3_URL", "http://bge-m3:8000")
-            vectorizer = BgeM3CacheVectorizer(base_url=bge_url)
+            vectorizer = create_bge_m3_cache_vectorizer(base_url=bge_url)
 
             default_threshold = self.cache_thresholds.get("GENERAL", 0.08)
             default_ttl = self.cache_ttl.get("GENERAL", 3600)

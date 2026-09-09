@@ -1,12 +1,14 @@
-"""Tests for custom vectorizers.
+"""Tests for the semantic-cache vectorizer module.
 
-UserBaseVectorizer (deepvk/USER2-base) was removed — see src/services/vectorizers.py.
-Tests for the active BgeM3CacheVectorizer live in tests/unit/services/.
+The custom BgeM3CacheVectorizer subclass was replaced by the official RedisVL
+CustomVectorizer factory in #3389. Behavior-level characterization lives in
+tests/unit/services/test_bge_m3_cache_vectorizer.py; this module pins the
+import surface.
 """
 
 
 def test_vectorizers_module_importable() -> None:
-    """Active vectorizer module imports without error."""
-    from src.services.vectorizers import BgeM3CacheVectorizer
+    """Active vectorizer factory is importable without error."""
+    from src.services.vectorizers import create_bge_m3_cache_vectorizer
 
-    assert BgeM3CacheVectorizer is not None
+    assert create_bge_m3_cache_vectorizer is not None

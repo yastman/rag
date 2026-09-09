@@ -152,6 +152,37 @@ class TestCacheLayerManagerInitialize:
         assert cache._async_redis_client is mock_async_client
         assert cache._owns_redis_client is False
 
+    def test_redisvl_locked_api_has_no_public_async_client_attachment(self):
+        """#3389 compatibility pin on the locked redisvl 0.26.x API.
+
+        SemanticCache.__init__ (0.26.0) calls BaseCache.__init__ with an
+        explicit argument list that forwards only the sync ``redis_client``;
+        an ``async_redis_client`` kwarg lands in **kwargs and is silently
+        dropped, and BaseCache/SemanticCache expose no ``set_client``
+        (``set_client`` exists only on search indexes and is deprecated
+        there). Until upstream exposes a public async-client attachment on
+        the cache, ``_create_semantic_cache`` must keep the narrow
+        post-construction attachment. If this test fails after a locked
+        redisvl bump, the constructor path became public and the workaround
+        must be replaced by it.
+        """
+        from redisvl.extensions.cache.llm import SemanticCache
+        from redisvl.utils.vectorize.base import BaseVectorizer
+
+        mock_async_client = AsyncMock()
+        with patch("redisvl.extensions.cache.llm.semantic.SearchIndex", return_value=MagicMock()):
+            cache = SemanticCache(
+                name="probe3389",
+                redis_url="redis://localhost:6379",
+                ttl=3600,
+                vectorizer=BaseVectorizer(model="probe", dims=3),
+                async_redis_client=mock_async_client,
+                create_index=False,
+            )
+        assert cache._async_redis_client is None
+        assert cache._owns_redis_client is True
+        assert not hasattr(cache, "set_client")
+
     async def test_initialize_passes_redis_client_to_semantic_cache(self):
         """CacheLayerManager.initialize wires its connected client into the
         semantic cache (so the deprecated lazy connection path is never taken)."""
@@ -165,7 +196,9 @@ class TestCacheLayerManagerInitialize:
                 "src.runtime.integrations.cache._create_semantic_cache", return_value=None
             ) as mock_create,
             patch("src.runtime.integrations.cache._create_embed_cache", return_value=None),
-            patch("src.services.vectorizers.BgeM3CacheVectorizer", return_value=MagicMock()),
+            patch(
+                "src.services.vectorizers.create_bge_m3_cache_vectorizer", return_value=MagicMock()
+            ),
         ):
             await mgr.initialize()
 
