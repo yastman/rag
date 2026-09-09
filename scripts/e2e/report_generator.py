@@ -19,20 +19,12 @@ class TestResult:
     bot_response: str
     response_time_ms: int
     judge_result: JudgeResult
-    trace_id: str | None = None
-    observability_ok: bool | None = None
-    missing_spans: list[str] | None = None
-    missing_scores: list[str] | None = None
     error: str | None = None
 
     @property
     def passed(self) -> bool:
         """Check if test passed."""
-        if not self.judge_result or not self.judge_result.passed:
-            return False
-        if self.observability_ok is None:
-            return True
-        return self.observability_ok
+        return bool(self.judge_result and self.judge_result.passed)
 
 
 @dataclass
@@ -254,19 +246,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="label-tag">Deterministic Checks:</div>
                     <div class="response">{{ result.judge_result.check_details | tojson }}</div>
                     {% endif %}
-                    {% if result.observability_ok is not none %}
-                    <div class="label-tag">Langfuse Trace:</div>
-                    <div class="response">
-                        Trace ID: {{ result.trace_id or "N/A" }} |
-                        Observability OK: {{ result.observability_ok }}
-                        {% if result.missing_spans %}
-                        <br/>Missing spans: {{ result.missing_spans }}
-                        {% endif %}
-                        {% if result.missing_scores %}
-                        <br/>Missing scores: {{ result.missing_scores }}
-                        {% endif %}
-                    </div>
-                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -314,12 +293,6 @@ class ReportGenerator:
                     "bot_response": r.bot_response,
                     "response_time_ms": r.response_time_ms,
                     "passed": r.passed,
-                    "langfuse": {
-                        "trace_id": r.trace_id,
-                        "observability_ok": r.observability_ok,
-                        "missing_spans": r.missing_spans or [],
-                        "missing_scores": r.missing_scores or [],
-                    },
                     "judge_result": {
                         "total_score": r.judge_result.total_score,
                         "relevance": asdict(r.judge_result.relevance),

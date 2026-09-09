@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import io
+import json
 import sys
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
@@ -17,6 +18,7 @@ from rich.console import Console
 
 from scripts.e2e.claude_judge import CriterionScore, JudgeResult, PassthroughJudge
 from scripts.e2e.config import E2EConfig
+from scripts.e2e.report_generator import ReportGenerator
 from scripts.e2e.report_generator import TestReport as E2EReport
 from scripts.e2e.report_generator import TestResult as E2EResult
 from scripts.e2e.scenarios import (
@@ -407,15 +409,6 @@ class TestGateExitCode:
 
         assert exit_code(self._make_report([]), GATING_POLICY) == 1
 
-    def test_blocked_scenario_exit_nonzero(self):
-        """A blocked (observability-failed) result is not a pass for the gate."""
-        from scripts.e2e.runner import GATING_POLICY, exit_code
-
-        report = self._make_report([True])
-        report.results[0].observability_ok = False
-        assert report.results[0].passed is False
-        assert exit_code(report, GATING_POLICY) == 1
-
     def test_gating_policy_has_no_threshold_knob(self):
         """The gating policy exposes no tunable percentage field."""
         from scripts.e2e.runner import GatingPolicy
@@ -553,6 +546,71 @@ class TestSummaryRedactedReport:
 
         assert "1.2" in out
         assert "СЕКРЕТНОЕ_СОДЕРЖИМОЕ_90000" not in out
+
+
+# ---------------------------------------------------------------------------
+# Report characterization (JSON + HTML schema)
+# ---------------------------------------------------------------------------
+
+
+class TestReportCharacterization:
+    """Generated reports contain only state the runner populates.
+
+    Langfuse trace fields were removed (#3383): reports carry judge results,
+    route proof, and errors — no observability block.
+    """
+
+    def _make_report(self) -> E2EReport:
+        s1 = get_scenario_by_id("1.1")
+        s2 = get_scenario_by_id("1.2")
+        assert s1 is not None and s2 is not None
+        results = [
+            _make_test_result(s1, passed=True),
+            _make_test_result(s2, passed=False),
+        ]
+        return E2EReport(
+            timestamp=datetime.now(),
+            bot_username="@testbot",
+            judge_provider="passthrough",
+            judge_mode="no-judge",
+            litellm_route_proof={"alias": "judge", "route_model": None, "info_url": "http://x"},
+            results=results,
+            total_duration_ms=1000,
+        )
+
+    def test_json_report_has_no_langfuse_block_and_keeps_judge_state(self, tmp_path):
+        """JSON results carry judge/route state; the retired langfuse block is gone."""
+        json_path, _html_path = ReportGenerator(str(tmp_path)).generate(self._make_report())
+
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+        assert data["litellm_route_proof"]["alias"] == "judge"
+        passed, failed = data["results"]
+        for result in (passed, failed):
+            assert "langfuse" not in result
+            assert set(result["judge_result"]) >= {
+                "relevance",
+                "completeness",
+                "filter_accuracy",
+                "tone_format",
+                "no_hallucination",
+                "summary",
+            }
+        assert passed["passed"] is True
+        assert passed["judge_result"]["total_score"] == 8.0
+        assert failed["passed"] is False
+        assert failed["judge_result"]["total_score"] == 2.0
+
+    def test_html_report_omits_observability_block(self, tmp_path):
+        """HTML renders judge/scenario state and no Langfuse trace section."""
+        _json_path, html_path = ReportGenerator(str(tmp_path)).generate(self._make_report())
+
+        html = html_path.read_text(encoding="utf-8")
+        assert "Langfuse" not in html
+        assert "Observability" not in html
+        assert "Missing spans" not in html
+        assert "Missing scores" not in html
+        assert "1.1" in html  # scenario identity stays rendered
+        assert "ok" in html  # judge summary stays rendered
 
 
 # ---------------------------------------------------------------------------
