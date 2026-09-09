@@ -666,7 +666,19 @@ class TestPinCli:
 
         artifact, pin = make_pinned_artifact(tmp_path)
         assert verify_main(["--dir", str(artifact), "--expected-manifest", str(pin)]) == 0
-        assert "ARTIFACT VERIFIED" in capsys.readouterr().out
+        # Output contract: constant banner + counts only — nothing manifest-
+        # derived (revision, file names, hashes) may be echoed (#3366 CodeQL).
+        pin_manifest = json.loads(pin.read_text(encoding="utf-8"))
+        expected = (
+            "ARTIFACT VERIFIED "
+            f"(revision pinned; {len(pin_manifest['files'])} files, "
+            f"{sum(entry['bytes'] for entry in pin_manifest['files'])} bytes total)"
+        )
+        out = capsys.readouterr().out
+        assert expected in out
+        assert "a" * 40 not in out, "pinned revision must not be echoed"
+        assert "sha256" not in out, "per-file hashes must not be echoed"
+        assert "model.onnx" not in out, "manifest file names must not be echoed"
 
     def test_cli_expected_manifest_rejects_resigned_artifact(self, tmp_path: Path, capsys) -> None:
         from verify_artifact import main as verify_main

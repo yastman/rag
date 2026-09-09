@@ -314,11 +314,12 @@ def main(argv: list[str] | None = None) -> int:
     except (FileNotFoundError, ArtifactIntegrityError) as exc:
         print(f"ARTIFACT VERIFICATION FAILED: {exc}", file=sys.stderr)
         return 1
-    source = manifest["source"]
-    print(f"revision: {source.get('revision', '?')}")
-    for entry in manifest["files"]:
-        print(f"  ok {entry['name']} ({entry['bytes']} bytes, sha256 {entry['sha256'][:12]}…)")
-    print("ARTIFACT VERIFIED")
+    # Pinned revision lives in the repo manifest (source of truth) — print counts only.
+    total_bytes = sum(int(entry["bytes"]) for entry in manifest["files"])
+    print(
+        "ARTIFACT VERIFIED "
+        f"(revision pinned; {len(manifest['files'])} files, {total_bytes} bytes total)"
+    )
     return 0
 
 
