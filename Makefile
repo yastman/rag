@@ -72,7 +72,8 @@ PYTEST_TELEGRAM_ADAPTER_PATHS := \
 	tests/unit/services/test_catalog_rendering.py \
 	tests/unit/services/test_catalog_session.py \
 	tests/unit/services/test_draft_streamer_removed.py \
-	tests/unit/services/test_favorites_service.py
+	tests/unit/services/test_favorites_service.py \
+	tests/unit/services/test_voice_transcription.py
 PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_*bot*.py \
 	tests/unit/test_bot*.py \

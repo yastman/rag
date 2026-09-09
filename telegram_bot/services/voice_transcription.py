@@ -52,9 +52,11 @@ async def transcribe_voice(message: Message, *, config: Any = None) -> str | Non
     LiteLLM Docker proxy has been removed and the in-process LiteLLM chat
     client exposes no transcription API.
 
-    Text-fallback safe: Telegram download failures, provider errors, and
-    timeouts are logged and returned as ``None`` — this helper never raises,
-    so dialogs can offer typed input instead of blocking.
+    Text-fallback safe: a missing key, Telegram download failures, provider
+    errors, and timeouts are logged and returned as ``None`` — this helper
+    never raises, so dialogs can offer typed input instead of blocking. A
+    missing key fails before any network call or client construction; the
+    official ``AsyncOpenAI`` client is opened and closed per request (#3388).
     """
     bot = getattr(message, "bot", None)
     voice = getattr(message, "voice", None)
@@ -67,8 +69,16 @@ async def transcribe_voice(message: Message, *, config: Any = None) -> str | Non
         str(getattr(config, "llm_api_key", "") or "").strip()
         or os.getenv("OPENAI_API_KEY")
         or os.getenv("LLM_API_KEY")
-        or "sk-dev"
     )
+    if not api_key:
+        # No fake key: constructing a client without a credential would only
+        # mask the configuration error (#3388). Fail before any network call
+        # so the dialog falls back to typed input instead.
+        logger.warning(
+            "Voice transcription unavailable: no STT API key configured; "
+            "falling back to typed input"
+        )
+        return None
     try:
         timeout_seconds = float(getattr(config, "voice_timeout", None) or 30)
     except (TypeError, ValueError):
@@ -82,14 +92,17 @@ async def transcribe_voice(message: Message, *, config: Any = None) -> str | Non
         data.name = "voice.ogg"  # type: ignore[attr-defined]
 
         # Direct official OpenAI transcription (#3240 keeps this strategy).
+        # The client lifecycle is scoped to this request via the async
+        # context manager so underlying HTTP resources close on success,
+        # provider failure, timeout, and cancellation (#3388).
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=api_key)
-        transcript = await client.audio.transcriptions.create(
-            model=stt_model,
-            file=data,
-            language=voice_language,
-        )
+        async with AsyncOpenAI(api_key=api_key) as client:
+            transcript = await client.audio.transcriptions.create(
+                model=stt_model,
+                file=data,
+                language=voice_language,
+            )
         return transcript.text or None  # type: ignore[no-any-return]
 
     try:

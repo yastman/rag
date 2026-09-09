@@ -140,6 +140,8 @@ class TestTranscribeVoice:
         def _factory(*args, **kwargs):
             created["kwargs"] = kwargs
             client = MagicMock()
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
             client.audio.transcriptions.create = create
             return client
 
@@ -175,9 +177,9 @@ class TestTranscribeVoice:
 
         def _factory(*args, **kwargs):
             client = MagicMock()
-            client.audio.transcriptions.create = AsyncMock(
-                side_effect=RuntimeError("provider 500")
-            )
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            client.audio.transcriptions.create = AsyncMock(side_effect=RuntimeError("provider 500"))
             return client
 
         monkeypatch.setattr(openai, "AsyncOpenAI", _factory)
@@ -196,6 +198,8 @@ class TestTranscribeVoice:
 
         def _factory(*args, **kwargs):
             client = MagicMock()
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
 
             async def _slow(*_a, **_k):
                 await asyncio.sleep(5)
