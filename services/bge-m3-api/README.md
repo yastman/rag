@@ -35,13 +35,13 @@ cd services/bge-m3-api
 uv run python fetch_artifact.py --dest ../../logs/bge_m3_onnx_int8
 ```
 
-This downloads every manifest-listed file from the immutable revision and verifies sizes + SHA-256 before declaring success. The default destination matches `BGE_M3_ONNX_MODEL_HOST_DIR` in `.env.example`; `logs/` is gitignored — never commit artifacts, caches, or tokenizers.
+This downloads every manifest-listed file from the immutable revision — tokenizer files from their upstream root paths recorded as `remote` in the manifest — keeping files already present with the expected byte size (an interrupted earlier run resumes without re-downloading), and verifies sizes + SHA-256 before declaring success. The final verification runs against the repository-committed manifest as the trusted pin: the manifest copy inside the download folder is compared against it, never trusted as its own authority. The default destination matches `BGE_M3_ONNX_MODEL_HOST_DIR` in `.env.example`; `logs/` is gitignored — never commit artifacts, caches, or tokenizers.
 
 ## Verification layers (all three must pass)
 
-1. **Fetch**: `fetch_artifact.py` verifies after download.
-2. **Docker build**: `Dockerfile` runs `verify_artifact.py` against the `bge_m3_onnx_model` build context before baking — the tiny dummy fixtures in `tests/fixtures/bge_m3_onnx_model/` are render-only and fail the build with an actionable error. `make docker-full-up` therefore cannot silently substitute them.
-3. **Runtime startup**: `get_model()` re-verifies the baked manifest (missing files, missing shards, size/hash mismatches fail before the ONNX session exists), then loads the tokenizer from `/models/artifact/tokenizer` with `local_files_only=True` under `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`.
+1. **Fetch**: `fetch_artifact.py` verifies after download against the repository pin.
+2. **Docker build**: `Dockerfile` copies the repository-committed `artifact_manifest.json` from the build context as the trusted expected manifest and runs `verify_artifact.py --expected-manifest` against the `bge_m3_onnx_model` build context — the artifact folder's own manifest must equal the pin, and replacing model bytes together with a re-signed folder manifest fails the build (#3366 audit blocker). The tiny dummy fixtures in `tests/fixtures/bge_m3_onnx_model/` are render-only and fail the build with an actionable error; `make docker-full-up` therefore cannot silently substitute them. The baked `/models/artifact/artifact_manifest.json` is the repository pin copy, which runtime re-verification then uses.
+3. **Runtime startup**: `get_model()` re-verifies the baked pin manifest (missing files, missing shards, size/hash mismatches fail before the ONNX session exists), then loads the tokenizer from `/models/artifact/tokenizer` with `local_files_only=True` under `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`.
 
 ## Docker
 
@@ -61,7 +61,8 @@ BGE_M3_ONNX_MODEL_HOST_DIR=./logs/bge_m3_onnx_int8 \
 
 # network-disabled smoke: no ports, no volumes, fresh empty HF cache layer.
 # Prints "OFFLINE SMOKE PASS" and exits 0 only when dense+sparse+ColBERT all
-# pass dimension/cardinality checks on RU/BG/EN fixtures.
+# pass dimension/cardinality/finiteness checks (NaN/Infinity rejected) on
+# RU/BG/EN fixtures with no partial failures.
 docker run --rm --network none --no-healthcheck --memory 6g \
   "$(docker compose -f compose.yml -f compose.dev.yml config bge-m3 | awk '/^    image:/{print $2; exit}')" \
   python /app/smoke_offline.py
