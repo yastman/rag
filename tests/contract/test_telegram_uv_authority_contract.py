@@ -45,6 +45,10 @@ def _dep_name(spec: str) -> str:
 # Dependencies declared by the retired telegram_bot/pyproject.toml at
 # removal time (#3210). fluent-compiler was declared directly by the bot
 # because telegram_bot/middlewares/i18n.py imports it directly.
+#
+# aiohttp left this guard in #3280: nothing in the repo imports it directly,
+# so the root manifest no longer declares it; the Telegram runtime keeps it
+# in the lock transitively (aiogram/litellm both require it).
 RETIRED_BOT_DEPENDENCIES: tuple[str, ...] = (
     "aiogram",
     "aiogram-dialog",
@@ -63,7 +67,6 @@ RETIRED_BOT_DEPENDENCIES: tuple[str, ...] = (
     "fluent-compiler",
     "asyncpg",
     "phonenumbers",
-    "aiohttp",
 )
 
 
@@ -119,12 +122,9 @@ def test_bot_dockerfile_resolves_from_frozen_root_lock() -> None:
         )
     # The retired nested authority must not be referenced by any
     # functional (non-comment) instruction.
-    functional = "\n".join(
-        line for line in text.splitlines() if not line.lstrip().startswith("#")
-    )
+    functional = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
     assert (
-        "telegram_bot/pyproject.toml" not in functional
-        and "telegram_bot/uv.lock" not in functional
+        "telegram_bot/pyproject.toml" not in functional and "telegram_bot/uv.lock" not in functional
     ), (
         "telegram_bot/Dockerfile must not reference the retired nested "
         "manifest/lock in any instruction (#3210)."

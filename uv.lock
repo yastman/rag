@@ -537,7 +537,6 @@ name = "contextual-rag"
 version = "2.14.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "aiohttp" },
     { name = "httpx" },
     { name = "litellm" },
     { name = "numpy" },
@@ -550,9 +549,7 @@ dependencies = [
     { name = "qdrant-client" },
     { name = "redis" },
     { name = "redisvl" },
-    { name = "requests" },
     { name = "tenacity" },
-    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -572,7 +569,6 @@ telegram = [
 [package.dev-dependencies]
 dev = [
     { name = "bandit" },
-    { name = "click" },
     { name = "deptry" },
     { name = "fakeredis" },
     { name = "import-linter" },
@@ -590,15 +586,16 @@ dev = [
     { name = "pytest-xdist" },
     { name = "radon" },
     { name = "ruff" },
-    { name = "telethon" },
     { name = "vulture" },
+]
+e2e = [
+    { name = "telethon" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "aiogram", marker = "extra == 'telegram'", specifier = ">=3.31.0" },
     { name = "aiogram-dialog", marker = "extra == 'telegram'", specifier = "==2.6.0" },
-    { name = "aiohttp", specifier = ">=3.14.1" },
     { name = "asyncpg", marker = "extra == 'telegram'", specifier = ">=0.31.0" },
     { name = "cachetools", marker = "extra == 'telegram'", specifier = ">=5.0.0" },
     { name = "fastapi", marker = "extra == 'bge-extras'", specifier = ">=0.141.1" },
@@ -616,9 +613,7 @@ requires-dist = [
     { name = "qdrant-client", specifier = ">=1.19.0" },
     { name = "redis", specifier = ">=7.1.0,<8" },
     { name = "redisvl", specifier = ">=0.26.0,<0.27" },
-    { name = "requests", specifier = ">=2.34.2" },
     { name = "tenacity", specifier = ">=8.2.0" },
-    { name = "typing-extensions", specifier = ">=4.0.0" },
     { name = "uvloop", marker = "sys_platform != 'win32' and extra == 'telegram'", specifier = ">=0.21.0" },
 ]
 provides-extras = ["telegram", "bge-extras"]
@@ -626,7 +621,6 @@ provides-extras = ["telegram", "bge-extras"]
 [package.metadata.requires-dev]
 dev = [
     { name = "bandit", specifier = ">=1.7.9" },
-    { name = "click", specifier = ">=8.1.7" },
     { name = "deptry", specifier = ">=0.23.0" },
     { name = "fakeredis", specifier = ">=2.26.0" },
     { name = "import-linter", specifier = ">=2.14" },
@@ -644,9 +638,9 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "radon", specifier = ">=6.0.1" },
     { name = "ruff", specifier = ">=0.16.6" },
-    { name = "telethon", specifier = ">=1.42.0" },
     { name = "vulture", specifier = ">=2.11" },
 ]
+e2e = [{ name = "telethon", specifier = ">=1.42.0" }]
 
 [[package]]
 name = "coverage"

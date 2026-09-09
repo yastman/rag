@@ -19,15 +19,11 @@ dependencies = [
     # OpenAI 3.x / openai-agents are intentionally out of scope for this pair.
     "litellm==1.98.0",
     "python-dotenv",
-    "typing-extensions>=4.0.0",
     "numpy>=2.4.6",
-    # aiohttp and requests: version-control safety pins (#2710 audit).
-    # Neither is imported directly by src/ runtime code; both are pulled
-    # transitively (aiohttp by litellm/openai; requests by mkdocs-material).
-    # Declaring them explicitly prevents resolver surprises
-    # when optional extras are co-installed.
-    "aiohttp>=3.14.1",
-    "requests>=2.34.2",
+    # #3280: unused direct declarations (typing-extensions, aiohttp, requests)
+    # were removed — none is imported directly by production code. aiohttp and
+    # typing-extensions remain in the lock transitively (aiogram/litellm); do
+    # not re-add them without a direct import.
     "phonenumbers>=9.0.30",
 ]
 
@@ -78,9 +74,7 @@ dev = [
     "pytest-httpx>=0.35.0",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
-    "click>=8.1.7",
     "pre-commit>=3.8.0",
-    "telethon>=1.42.0",
     "pytest-split>=0.11.0",
     "fakeredis>=2.26.0",
     # Code-quality audit layer (added per tooling-enhancement plan)
@@ -89,6 +83,14 @@ dev = [
     "import-linter>=2.14",
     "radon>=6.0.1",
     "interrogate>=1.7.0",
+]
+
+# E2E operator tooling (#3280): telethon is imported only by scripts/e2e
+# (Telegram userbot client, demo gate). It stays out of the default dev
+# install; sync it explicitly via `uv sync --group e2e` (make e2e-install)
+# or `uv run --group e2e ...` (e2e-telegram-test / e2e-test-group / demo-gate).
+e2e = [
+    "telethon>=1.42.0",
 ]
 
 # =============================================================================
@@ -486,14 +488,15 @@ exclude_lines = [
 #   namespace packages (not PyPI packages), so DEP001 on intra-repo imports
 #   is a false positive suppressed by this flag.
 # - extend_exclude: archived/reference code and non-package support trees
-#   should not gate the production lint.
+#   should not gate the production lint. services/bge-m3-api is a nested
+#   package that owns its own manifest/lock; the retired starter/ tree was
+#   deleted outright by #3399, so no starter-specific exclusion exists (#3280).
 # - per_rule_ignores DEP001: remaining optional/conditional imports that are
 #   not declared in pyproject.toml because they live in optional extras or
 #   archived CRM paths (fluent_compiler).
-# - per_rule_ignores DEP002: packages declared as optional extras that are not
-#   imported in the scoped src/+telegram_bot/ scan (aiohttp and requests are
-#   intentional safety-pins per #2710; docs extras are not used in the
-#   production path being scanned).
+# - per_rule_ignores DEP002: packages declared in pyproject.toml that deptry
+#   cannot see used inside the src/+telegram_bot/ scan scope (see the inline
+#   reason on the DEP002 entry).
 
 [tool.deptry]
 experimental_namespace_package = true
@@ -509,12 +512,11 @@ extend_exclude = [
 DEP001 = [
     "fluent_compiler",
 ]
-# Optional extras not imported in the production src/+telegram_bot/ scan
+# fastapi (bge-extras) is imported by services/bge-m3-api/app.py — a nested
+# package that owns its own manifest — and by the root-venv
+# tests/unit/test_bge_m3_endpoints.py + test_bge_m3_rerank.py, which import
+# that app. Both the importer and the caller sit in extend_exclude trees, so
+# the usage is invisible to this scan (#3280).
 DEP002 = [
-    "aiohttp",
-    "requests",
-    "mkdocs",
-    "mkdocs-material",
-    "mkdocstrings",
-    "contextual-rag",
+    "fastapi",
 ]

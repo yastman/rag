@@ -62,13 +62,15 @@ the rehearsal log. Reference the variable *name* only. The userbot session file
 ### 1.3 Python environment
 
 ```bash
-uv sync --python 3.12             # core + dev tools
-uv sync --python 3.12 --extra telegram   # adds aiogram — REQUIRED by the demo gate
+uv sync --python 3.12                                 # core + dev tools
+uv sync --python 3.12 --extra telegram --group e2e    # aiogram (gate) + telethon (userbot client) — REQUIRED
 ```
 
 The gate imports `telegram_bot.keyboards` (single sources of truth for the frozen
-button labels). Without the `telegram` extra it fails with
-`ModuleNotFoundError: No module named 'aiogram'` (verified on the authoring host).
+button labels) and drives the bot through the Telethon userbot client
+(`scripts/e2e`, the `e2e` dependency group, #3280). Without the `telegram`
+extra or the `e2e` group it fails with `ModuleNotFoundError: No module named
+'aiogram'` / `'telethon'` (verified on the authoring host).
 
 ## 2. One-time preparation (clean-checkout path)
 
@@ -76,7 +78,7 @@ button labels). Without the `telegram` extra it fails with
 git clone https://github.com/yastman/rag.git rag && cd rag     # or your fork/checkout
 git checkout <FINAL_SHA>                                       # pin the exact SHA (see §7)
 git status --porcelain --untracked-files=no                    # must print NOTHING
-uv sync --python 3.12 && uv sync --python 3.12 --extra telegram
+uv sync --python 3.12 --extra telegram --group e2e
 ```
 
 The gate's `git` probe fails on a dirty tracked tree by design: the artifact must
@@ -304,7 +306,7 @@ ids, single-send counts, result counts, `total_duration_ms` vs
 | `BGE-M3 service unreachable at .../health` | service down | `make local-up`; re-check `make local-service-health` |
 | `LLM is not configured: set LLM_API_KEY...` | no provider key | set `LLM_MODEL` + a provider key in `.env` |
 | `redis: ... polling lock key ... exists WITHOUT a TTL` | stale permanent lease | `make release-polling-lock` (§5) |
-| `ModuleNotFoundError: No module named 'aiogram'` (import time) | `telegram` extra not installed | `uv sync --extra telegram` (§1.3) |
+| `ModuleNotFoundError: No module named 'aiogram'` / `'telethon'` (import time) | `telegram` extra or `e2e` group not installed | `uv sync --extra telegram --group e2e` (§1.3) |
 
 ### 8.2 Journey steps (gate fails mid-story; fix, restart the bot, rerun the whole gate)
 

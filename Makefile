@@ -454,7 +454,7 @@ MODE ?=
 
 demo-gate: ## Run the automated five-minute real-estate Telegram demo gate (#3205)
 	@echo "$(BLUE)Running demo gate (#3205) $(MODE)...$(NC)"
-	$(ENV_LOAD) $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) python -m scripts.e2e.demo_gate $(MODE)
+	$(ENV_LOAD) uv run --group e2e --python $(PYTHON_VERSION) python -m scripts.e2e.demo_gate $(MODE)
 	@echo "$(GREEN)✓ Demo gate complete$(NC)"
 
 .PHONY: demo-gate
@@ -1008,11 +1008,11 @@ e2e-core-live-real-llm: ## Run simplification core live golden path with real LL
 
 e2e-telegram-test: operator-env-exists ## Run Telegram userbot E2E runner (Telethon + judge; explicit operator env #3367)
 	@echo "$(BLUE)Running Telegram E2E runner...$(NC)"
-	uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py
+	uv run --group e2e --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py
 	@echo "$(GREEN)✓ Telegram E2E runner complete$(NC)"
 
 e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=filters)
-	uv run python scripts/e2e/runner.py --group $(GROUP)
+	uv run --group e2e python scripts/e2e/runner.py --group $(GROUP)
 
 e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
