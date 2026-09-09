@@ -130,7 +130,7 @@ telegram_bot*, *Core contracts layer is import-independent*, *src must not impor
 | `services/apartment/` | Domain: filter extraction, catalog rendering, apartments service |
 | `services/crm/` | Kommo CRM — **dead**, P26 |
 | `services/generation/` | Response formatting, streaming, session summary |
-| `services/observability/` | Redis monitor, funnel analytics; `nurturing_scheduler.py` (**dead**, apscheduler) |
+| `services/observability/` | Redis monitor, search-event store (funnel/nurturing analytics deleted, #3346) |
 | `agents/` | **Entire dir dead** — LangGraph supervisor + CRM/manager/apartment tools (P26 removal) |
 | `pipelines/` | Client-direct pipeline entrypoints (`client.py`) + pre-agent state contract |
 | `middlewares/` | i18n (fluentogram), throttling (cachetools TTLCache), error handler, fsm_cancel |

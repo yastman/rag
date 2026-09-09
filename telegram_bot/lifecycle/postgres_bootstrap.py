@@ -65,15 +65,6 @@ REALESTATE_SCHEMA_STATEMENTS: tuple[str, ...] = (
     )
     """,
     """
-    CREATE TABLE IF NOT EXISTS funnel_events (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id),
-        event_type VARCHAR(50) NOT NULL,
-        metadata JSONB DEFAULT '{}',
-        created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-    """,
-    """
     CREATE TABLE IF NOT EXISTS user_favorites (
         id BIGSERIAL PRIMARY KEY,
         telegram_id BIGINT NOT NULL,
@@ -115,47 +106,12 @@ REALESTATE_SCHEMA_STATEMENTS: tuple[str, ...] = (
         UNIQUE (lead_id)
     )
     """,
-    """
-    CREATE TABLE IF NOT EXISTS nurturing_jobs (
-        id BIGSERIAL PRIMARY KEY,
-        lead_score_id BIGINT NOT NULL REFERENCES lead_scores(id) ON DELETE CASCADE,
-        user_id BIGINT,
-        scheduled_for TIMESTAMPTZ NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending'
-            CHECK (status IN ('pending', 'running', 'sent', 'failed', 'skipped')),
-        channel TEXT NOT NULL DEFAULT 'telegram',
-        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-        attempt_count INTEGER NOT NULL DEFAULT 0,
-        last_error TEXT,
-        sent_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        UNIQUE (lead_score_id, scheduled_for)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS funnel_metrics_daily (
-        id BIGSERIAL PRIMARY KEY,
-        metric_date DATE NOT NULL,
-        stage_name TEXT NOT NULL,
-        entered_count INTEGER NOT NULL DEFAULT 0,
-        converted_count INTEGER NOT NULL DEFAULT 0,
-        dropoff_count INTEGER NOT NULL DEFAULT 0,
-        conversion_rate NUMERIC(6,4) NOT NULL DEFAULT 0,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        UNIQUE (metric_date, stage_name)
-    )
-    """,
-    "ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT",
     "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
     "CREATE INDEX IF NOT EXISTS idx_leads_user_id ON leads(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage)",
-    "CREATE INDEX IF NOT EXISTS idx_funnel_events_user_id ON funnel_events(user_id)",
-    "CREATE INDEX IF NOT EXISTS idx_funnel_events_created ON funnel_events(created_at DESC)",
-    "CREATE INDEX IF NOT EXISTS idx_funnel_events_created_stage ON funnel_events (created_at DESC, stage_name)",
     "CREATE INDEX IF NOT EXISTS idx_user_favorites_telegram_id ON user_favorites (telegram_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_favorites_created_at ON user_favorites (created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_search_events_user ON search_events (user_id, created_at DESC)",
-    "CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending ON nurturing_jobs (status, scheduled_for ASC)",
 )
 
 

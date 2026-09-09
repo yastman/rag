@@ -1,8 +1,9 @@
 """Contract: truly orphaned scheduler/voice state stays absent from kept code.
 
-Pins ARCH-11 (#2608) for dead surfaces only. Live CRM/handoff/funnel tables
-(lead_scores, nurturing_jobs, funnel_metrics_daily) are owned by bootstrap
-again and must remain available to production readers/writers.
+Pins ARCH-11 (#2608) for dead surfaces only. The live lead_scores table is
+owned by bootstrap and must remain available to production readers/writers.
+The nurturing/funnel analytics tables (nurturing_jobs, funnel_metrics_daily,
+funnel_events) were deleted with their unwired services by #3346.
 
 Orphaned Postgres tables (no kept writers/readers):
   - lead_score_sync_audit
@@ -39,12 +40,8 @@ ORPHANED_TABLES = (
     "call_transcripts",
 )
 
-# Live tables owned by bootstrap for CRM/nurturing/funnel features.
-LIVE_BOOTSTRAP_TABLES = (
-    "lead_scores",
-    "nurturing_jobs",
-    "funnel_metrics_daily",
-)
+# Live tables owned by bootstrap for lead scoring (#3331 owns its wiring).
+LIVE_BOOTSTRAP_TABLES = ("lead_scores",)
 
 
 def test_orphaned_tables_absent_from_bootstrap() -> None:
@@ -58,7 +55,7 @@ def test_orphaned_tables_absent_from_bootstrap() -> None:
 
 
 def test_live_crm_funnel_tables_present_in_bootstrap() -> None:
-    """Bootstrap owns minimal live lead_scores / nurturing / funnel tables."""
+    """Bootstrap owns the live lead_scores table (nurturing/funnel deleted, #3346)."""
     ddl = BOOTSTRAP.read_text(encoding="utf-8").lower()
     missing = [t for t in LIVE_BOOTSTRAP_TABLES if f"create table if not exists {t}" not in ddl]
     assert not missing, (
