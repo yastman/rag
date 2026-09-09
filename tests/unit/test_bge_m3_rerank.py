@@ -90,6 +90,113 @@ class TestRerankEndpoint:
         assert all(isinstance(s, float) for s in scores)
 
 
+# ── Endpoint-level index preservation — deterministic fake model ───────────────
+
+
+class _DeterministicColbertModel:
+    """Fake BGEM3 model returning fixed ColBERT vectors for known texts.
+
+    Deterministic MaxSim scores against query "alpha or beta":
+    "alpha" → 1.0, "beta" → 0.5, unknown texts → 0.0.
+    """
+
+    def __init__(self) -> None:
+        self._vec_by_text = {
+            "alpha or beta": np.array([[1, 0], [0, 1]], dtype=np.float32),
+            "alpha": np.array([[1, 0]], dtype=np.float32),
+            "beta": np.array([[0, 0.5]], dtype=np.float32),
+        }
+
+    def encode(self, texts, **_kwargs):
+        zero = np.zeros((1, 2), dtype=np.float32)
+        return {"colbert_vecs": [self._vec_by_text.get(t, zero) for t in texts]}
+
+
+@pytest.fixture
+def bge_rerank_endpoint(bge_rerank_app, monkeypatch):
+    """Install the deterministic fake model into the mocked service app module."""
+    import app as app_module
+
+    monkeypatch.setattr(
+        app_module, "get_model", MagicMock(return_value=_DeterministicColbertModel())
+    )
+    return app_module
+
+
+class TestRerankOriginalIndexPreservation:
+    """Rerank response indexes must reference the original request array (#3377).
+
+    Empty documents are filtered before scoring, but the response `index`
+    must keep pointing at positions in the ORIGINAL request documents list,
+    across leading/interleaved/trailing empties and ranking reorder.
+    """
+
+    async def test_rerank_preserves_original_indexes_with_leading_empty(self, bge_rerank_endpoint):
+        """[empty, beta, alpha] → alpha is original index 2, beta original index 1."""
+        from app import RerankRequest, rerank
+
+        resp = await rerank(
+            RerankRequest(query="alpha or beta", documents=["", "beta", "alpha"], top_k=3)
+        )
+
+        assert [r.index for r in resp.results] == [2, 1]
+        assert resp.results[0].score > resp.results[1].score
+
+    async def test_rerank_preserves_original_indexes_with_interleaved_empties(
+        self, bge_rerank_endpoint
+    ):
+        """[beta, empty, alpha] → alpha is original index 2, beta original index 0."""
+        from app import RerankRequest, rerank
+
+        resp = await rerank(
+            RerankRequest(query="alpha or beta", documents=["beta", "", "alpha"], top_k=3)
+        )
+
+        assert [r.index for r in resp.results] == [2, 0]
+        assert resp.results[0].score > resp.results[1].score
+
+    async def test_rerank_preserves_original_indexes_with_trailing_empty(self, bge_rerank_endpoint):
+        """[alpha, beta, empty] → alpha is original index 0, beta original index 1."""
+        from app import RerankRequest, rerank
+
+        resp = await rerank(
+            RerankRequest(query="alpha or beta", documents=["alpha", "beta", ""], top_k=3)
+        )
+
+        assert [r.index for r in resp.results] == [0, 1]
+        assert resp.results[0].score > resp.results[1].score
+
+    async def test_rerank_maps_single_kept_document_to_original_index(self, bge_rerank_endpoint):
+        """[empty, alpha] → the kept document must be reported at index 1, not 0."""
+        from app import RerankRequest, rerank
+
+        resp = await rerank(RerankRequest(query="alpha or beta", documents=["", "alpha"]))
+
+        assert [r.index for r in resp.results] == [1]
+        assert resp.results[0].score == pytest.approx(1.0)
+
+    async def test_rerank_scores_sorted_descending_with_filtered_documents(
+        self, bge_rerank_endpoint
+    ):
+        """Scores stay descending after filtering; indexes stay in request range."""
+        from app import RerankRequest, rerank
+
+        documents = ["beta", "", "alpha", "   ", "beta"]
+        resp = await rerank(RerankRequest(query="alpha or beta", documents=documents, top_k=5))
+
+        scores = [r.score for r in resp.results]
+        assert scores == sorted(scores, reverse=True)
+        assert all(0 <= r.index < len(documents) for r in resp.results)
+
+    async def test_rerank_all_empty_documents_returns_empty_results(self, bge_rerank_endpoint):
+        """All-empty request → explicit empty results, no model call artifacts."""
+        from app import RerankRequest, rerank
+
+        resp = await rerank(RerankRequest(query="alpha or beta", documents=["", "   "], top_k=3))
+
+        assert resp.results == []
+
+
 # ── Mock-httpx rerank tests — no fastapi required ──────────────────────────────
 
 

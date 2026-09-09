@@ -636,8 +636,12 @@ async def rerank(request: RerankRequest):
     if not query:
         raise HTTPException(400, "Query must be non-empty")
 
-    documents = [d for d in (doc.strip() for doc in request.documents) if d]
-    if not documents:
+    # Filter empty documents but carry (original_index, text) so response
+    # indexes keep referencing the original request array (#3377).
+    indexed_documents: list[tuple[int, str]] = [
+        (i, stripped) for i, doc in enumerate(request.documents) if (stripped := doc.strip())
+    ]
+    if not indexed_documents:
         return RerankResponse(results=[], processing_time=0.0)
 
     try:
@@ -645,7 +649,7 @@ async def rerank(request: RerankRequest):
         start_time = time.time()
 
         # Encode query and documents with ColBERT — off the event loop (#3492)
-        all_texts = [query, *documents]
+        all_texts = [query, *(text for _, text in indexed_documents)]
         async with _get_inference_gate():
             embeddings = await asyncio.to_thread(
                 model.encode,
@@ -664,8 +668,11 @@ async def rerank(request: RerankRequest):
         # CPU-bound, so also off the event loop.
         scores = await asyncio.to_thread(compute_maxsim_scores, query_vecs, doc_vecs_list)
 
-        # Sort by score descending and take top_k
-        indexed_scores = [(i, s) for i, s in enumerate(scores)]
+        # Sort by score descending and take top_k; indexes are original request
+        # positions, not positions within the filtered list (#3377).
+        indexed_scores = [
+            (idx, score) for (idx, _), score in zip(indexed_documents, scores, strict=True)
+        ]
         indexed_scores.sort(key=lambda x: x[1], reverse=True)
         top_k = min(request.top_k, len(indexed_scores))
         top_results = indexed_scores[:top_k]
