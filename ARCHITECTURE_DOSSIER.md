@@ -113,7 +113,7 @@ telegram_bot*, *Core contracts layer is import-independent*, *src must not impor
 | `src/ingestion/unified/` | `flow.py` (stateless scan→parse→embed→upsert), `qdrant_writer.py` (27k), `config.py`, `manifest.py`, `commands.py`, `colbert_backfill.py` |
 | `src/models/apartment.py` | Domain model (HardFilters etc.); `embedding_model.py` (**dead** in-process singletons) |
 | `src/security/pii_redaction.py` | `PIIRedactor` — query PII redaction (on the hot path) |
-| `src/config/` | `settings.py`, `constants.py`, `services.yaml` |
+| `src/config/` | `qdrant_policy.py`, `services.yaml` |
 | `src/observability/` | **no-op** `@observe` shims (Langfuse removed, #2844) + structured-log helpers |
 | `src/contextualization/` | anthropic/groq/openai contextualizers — **dead** (providers extra emptied #2893) |
 
