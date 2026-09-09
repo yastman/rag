@@ -44,19 +44,23 @@ RUN groupadd -g 1001 appgroup && \
     mkdir -p /models/hf /models/artifact && \
     chown -R appuser:appgroup /models
 
-# Verify the pinned artifact (manifest presence, byte sizes, SHA-256) BEFORE
-# anything is baked: the 41-byte dummy fixtures and corrupted artifacts fail
-# the build here instead of silently becoming the runtime model (#3366).
+# Verify the pinned artifact BEFORE anything is baked: the expected manifest
+# is the repository-committed pin copied from THIS build context — the
+# manifest shipped inside the artifact folder is input to compare, never its
+# own authority (#3366). Replacing model bytes together with a re-signed
+# folder manifest fails the build here instead of silently becoming the
+# runtime model. The repository pin is then baked as the runtime manifest.
 COPY verify_artifact.py /tmp/verify_artifact.py
+COPY artifact_manifest.json /tmp/repository_artifact_manifest.json
 RUN --mount=type=bind,from=bge_m3_onnx_model,target=/tmp/bge-m3-onnx,readonly \
     python /tmp/verify_artifact.py --dir /tmp/bge-m3-onnx \
-      --manifest /tmp/bge-m3-onnx/artifact_manifest.json && \
+      --expected-manifest /tmp/repository_artifact_manifest.json && \
     mkdir -p /models/artifact/tokenizer && \
     cp /tmp/bge-m3-onnx/model.onnx /tmp/bge-m3-onnx/model.onnx_data /models/artifact/ && \
     cp -r /tmp/bge-m3-onnx/tokenizer/. /models/artifact/tokenizer/ && \
-    cp /tmp/bge-m3-onnx/artifact_manifest.json /models/artifact/ && \
+    cp /tmp/repository_artifact_manifest.json /models/artifact/artifact_manifest.json && \
     chown -R appuser:appgroup /models/artifact && \
-    rm /tmp/verify_artifact.py
+    rm /tmp/verify_artifact.py /tmp/repository_artifact_manifest.json
 
 WORKDIR /app
 

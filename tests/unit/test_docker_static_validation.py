@@ -288,6 +288,27 @@ def test_bge_m3_dockerfile_bakes_verified_artifact_from_build_context() -> None:
     assert "cp -r /tmp/bge-m3-onnx/tokenizer/" in dockerfile, "tokenizer assets must be baked"
 
 
+def test_bge_m3_dockerfile_verifies_against_repository_pin_manifest() -> None:
+    """The expected manifest at the build boundary must be the repository's
+    committed artifact_manifest.json, never the artifact-folder's own manifest:
+    replacing model bytes together with their folder manifest must fail the
+    build (#3366 audit blocker)."""
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text(encoding="utf-8")
+    assert "COPY artifact_manifest.json /tmp/repository_artifact_manifest.json" in dockerfile, (
+        "the trusted pin manifest must be copied from the repository build context"
+    )
+    assert "--expected-manifest /tmp/repository_artifact_manifest.json" in dockerfile, (
+        "verification must run in pin mode against the repository manifest"
+    )
+    assert "--manifest /tmp/bge-m3-onnx/artifact_manifest.json" not in dockerfile, (
+        "the artifact-folder manifest must not be its own verification authority"
+    )
+    assert (
+        "cp /tmp/repository_artifact_manifest.json /models/artifact/artifact_manifest.json"
+        in dockerfile
+    ), "the baked runtime manifest must be the repository pin copy, not the artifact folder's"
+
+
 def test_bge_m3_dockerfile_sets_offline_env() -> None:
     """Runtime must be strictly offline: hub access disabled, tokenizer local."""
     dockerfile = Path("services/bge-m3-api/Dockerfile").read_text(encoding="utf-8")
