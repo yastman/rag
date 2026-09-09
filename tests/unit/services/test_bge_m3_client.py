@@ -276,27 +276,35 @@ class TestBGEM3Client:
         assert len(result.lexical_weights) == 1
 
     async def test_encode_dense_batching(self, client):
-        """batch_size is passed as server hint in a single request."""
+        """batch_size is applied client-side (#3375): 5 texts at batch_size=2 → requests of 2,2,1."""
         from src.services.bge_m3_client import BGEM3Client
 
         small_client = BGEM3Client(base_url="http://localhost:8000", batch_size=2)
+        texts = ["t0", "t1", "t2", "t3", "t4"]
+        captured_sizes: list[int] = []
 
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {"dense_vecs": [[0.1] * 1024] * 5}
+        def _post(url, json=None, **_kwargs):
+            captured_sizes.append(len(json["texts"]))
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.json.return_value = {
+                "dense_vecs": [[float(t[1:])] * 1024 for t in json["texts"]],
+                "processing_time": 0.05,
+            }
+            return mock_resp
 
         mock_http = AsyncMock()
-        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.post = AsyncMock(side_effect=_post)
         mock_http.is_closed = False
         small_client._client = mock_http
 
-        result = await small_client.encode_dense(["a", "b", "c", "d", "e"])
+        result = await small_client.encode_dense(texts)
 
+        assert captured_sizes == [2, 2, 1]
         assert len(result.vectors) == 5
-        mock_http.post.assert_called_once()
+        assert [int(v[0]) for v in result.vectors] == [0, 1, 2, 3, 4]
         call_json = mock_http.post.call_args[1]["json"]
-        assert call_json["texts"] == ["a", "b", "c", "d", "e"]
         assert call_json["batch_size"] == 2
 
 
@@ -407,29 +415,33 @@ class TestBGEM3SyncClient:
                 sync_client.encode_hybrid(["hello"])
 
     def test_encode_hybrid_batches_large_input(self, sync_client):
-        """batch_size is passed as server hint in a single request."""
+        """batch_size is applied client-side (#3375): 3 texts at batch_size=2 → requests of 2,1."""
         sync_client.batch_size = 2
-        texts = ["a", "b", "c"]
+        texts = ["t0", "t1", "t2"]
+        captured_sizes: list[int] = []
 
-        mock_resp = mock.MagicMock()
-        mock_resp.json.return_value = {
-            "dense_vecs": [[0.1] * 1024] * 3,
-            "lexical_weights": [{"indices": [1], "values": [0.5]}] * 3,
-            "colbert_vecs": [[[0.1] * 1024] * 5] * 3,
-            "processing_time": 0.1,
-        }
-        mock_resp.raise_for_status = lambda: None
+        def _post(url, json=None, **_kwargs):
+            captured_sizes.append(len(json["texts"]))
+            chunk = json["texts"]
+            mock_resp = mock.MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.raise_for_status = lambda: None
+            mock_resp.json.return_value = {
+                "dense_vecs": [[float(t[1:])] * 1024 for t in chunk],
+                "lexical_weights": [{"indices": [int(t[1:])], "values": [1.0]} for t in chunk],
+                "colbert_vecs": [[[float(t[1:])] * 1024] for t in chunk],
+                "processing_time": 0.1,
+            }
+            return mock_resp
 
-        with mock.patch.object(sync_client._client, "post", return_value=mock_resp) as mock_post:
+        with mock.patch.object(sync_client._client, "post", side_effect=_post):
             result = sync_client.encode_hybrid(texts)
 
-        mock_post.assert_called_once()
-        call_json = mock_post.call_args[1]["json"]
-        assert call_json["texts"] == ["a", "b", "c"]
-        assert call_json["batch_size"] == 2
+        assert captured_sizes == [2, 1]
         assert len(result.dense_vecs) == 3
         assert len(result.lexical_weights) == 3
         assert len(result.colbert_vecs) == 3
+        assert [int(v[0]) for v in result.dense_vecs] == [0, 1, 2]
 
 
 class TestSharedParseHelpers:
@@ -985,3 +997,280 @@ class TestBGERetryPolicy:
 
         assert len(result.vectors) == 1
         assert mock_http.post.call_count == 3
+
+
+# ── Issue #3375: client batch_size is real and every request is capped at 64 ──
+
+
+BGE_REQUEST_CAP = 64  # sidecar ENCODE_MAX_ITEMS: >64 texts per request → 422
+
+
+def _marker(text: str) -> int:
+    """Global input index encoded in fixture texts shaped ``t<index>``."""
+    return int(text[1:])
+
+
+def _chunk_response(chunk: list[str], families: tuple[str, ...]) -> MagicMock:
+    """Build a sidecar response echoing each text's global index per vector family."""
+    data: dict = {"processing_time": 0.01}
+    if "dense" in families:
+        data["dense_vecs"] = [[float(_marker(t))] * 1024 for t in chunk]
+    if "sparse" in families:
+        data["lexical_weights"] = [{"indices": [_marker(t)], "values": [1.0]} for t in chunk]
+    if "colbert" in families:
+        data["colbert_vecs"] = [[[float(_marker(t))] * 1024] for t in chunk]
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.raise_for_status = MagicMock()
+    resp.json.return_value = data
+    return resp
+
+
+def _capture_async_http(captured_sizes: list[int], families: tuple[str, ...]) -> AsyncMock:
+    """AsyncMock httpx client recording per-request text counts (issue #3375)."""
+    mock_http = AsyncMock()
+    mock_http.is_closed = False
+
+    def _post(url, json=None, **_kwargs):
+        chunk = json["texts"]
+        captured_sizes.append(len(chunk))
+        return _chunk_response(chunk, families)
+
+    mock_http.post = AsyncMock(side_effect=_post)
+    return mock_http
+
+
+def _capture_sync_http(captured_sizes: list[int], families: tuple[str, ...]) -> MagicMock:
+    """Sync MagicMock httpx client recording per-request text counts (issue #3375)."""
+    mock_http = MagicMock()
+
+    def _post(url, json=None, **_kwargs):
+        chunk = json["texts"]
+        captured_sizes.append(len(chunk))
+        return _chunk_response(chunk, families)
+
+    mock_http.post = MagicMock(side_effect=_post)
+    return mock_http
+
+
+class TestClientSideBatching:
+    """Client splits arbitrary input into requests of min(batch_size, 64) texts.
+
+    The sidecar rejects >64 texts per encode request (ENCODE_MAX_ITEMS → 422),
+    so every sync/async encode method must send sequential bounded requests,
+    preserve order/cardinality, map partial-failure indexes back to global
+    input positions, and perform zero requests for empty input (#3375).
+    """
+
+    @pytest.mark.parametrize(
+        ("count", "expected_sizes"),
+        [
+            (65, [32, 32, 1]),
+            (129, [32, 32, 32, 32, 1]),
+            (300, [32] * 9 + [12]),
+        ],
+    )
+    async def test_encode_dense_splits_large_input_into_bounded_requests(
+        self, client, count, expected_sizes
+    ):
+        texts = [f"t{i}" for i in range(count)]
+        captured_sizes: list[int] = []
+        mock_http = _capture_async_http(captured_sizes, ("dense",))
+        client._client = mock_http
+
+        result = await client.encode_dense(texts)
+
+        assert captured_sizes == expected_sizes
+        assert max(captured_sizes) <= BGE_REQUEST_CAP
+        assert len(result.vectors) == count
+        assert [int(v[0]) for v in result.vectors] == list(range(count))
+
+    @pytest.mark.parametrize(
+        ("count", "expected_sizes"),
+        [
+            (65, [32, 32, 1]),
+            (129, [32, 32, 32, 32, 1]),
+            (300, [32] * 9 + [12]),
+        ],
+    )
+    def test_encode_dense_sync_splits_large_input_into_bounded_requests(
+        self, sync_client, count, expected_sizes
+    ):
+        texts = [f"t{i}" for i in range(count)]
+        captured_sizes: list[int] = []
+        sync_client._client = _capture_sync_http(captured_sizes, ("dense",))
+
+        result = sync_client.encode_dense(texts)
+
+        assert captured_sizes == expected_sizes
+        assert max(captured_sizes) <= BGE_REQUEST_CAP
+        assert len(result.vectors) == count
+        assert [int(v[0]) for v in result.vectors] == list(range(count))
+
+    async def test_async_batch_size_above_sidecar_cap_is_capped_at_64(self, client):
+        """min(configured_batch_size, 64): batch_size=100 still sends ≤64 texts per request."""
+        from src.services.bge_m3_client import BGEM3Client
+
+        big_client = BGEM3Client(base_url="http://localhost:8000", batch_size=100)
+        texts = [f"t{i}" for i in range(129)]
+        captured_sizes: list[int] = []
+        big_client._client = _capture_async_http(captured_sizes, ("dense",))
+
+        result = await big_client.encode_dense(texts)
+
+        assert captured_sizes == [64, 64, 1]
+        assert [int(v[0]) for v in result.vectors] == list(range(129))
+
+    def test_sync_batch_size_above_sidecar_cap_is_capped_at_64(self, sync_client):
+        """min(configured_batch_size, 64): batch_size=100 still sends ≤64 texts per request."""
+        sync_client.batch_size = 100
+        texts = [f"t{i}" for i in range(129)]
+        captured_sizes: list[int] = []
+        sync_client._client = _capture_sync_http(captured_sizes, ("dense",))
+
+        result = sync_client.encode_dense(texts)
+
+        assert captured_sizes == [64, 64, 1]
+        assert [int(v[0]) for v in result.vectors] == list(range(129))
+
+    @pytest.mark.parametrize("method", ["encode_sparse", "encode_hybrid", "encode_colbert"])
+    async def test_async_encode_methods_split_and_preserve_order(self, client, method):
+        count = 65
+        texts = [f"t{i}" for i in range(count)]
+        captured_sizes: list[int] = []
+        families = {
+            "encode_sparse": ("sparse",),
+            "encode_hybrid": ("dense", "sparse", "colbert"),
+            "encode_colbert": ("colbert",),
+        }[method]
+        client._client = _capture_async_http(captured_sizes, families)
+
+        result = await getattr(client, method)(texts)
+
+        assert captured_sizes == [32, 32, 1]
+        primary_attr = {
+            "encode_sparse": "weights",
+            "encode_hybrid": "dense_vecs",
+            "encode_colbert": "colbert_vecs",
+        }[method]
+        assert len(getattr(result, primary_attr)) == count
+        if method == "encode_sparse":
+            assert [w["indices"][0] for w in result.weights] == list(range(count))
+        elif method == "encode_hybrid":
+            assert [int(v[0]) for v in result.dense_vecs] == list(range(count))
+            assert [w["indices"][0] for w in result.lexical_weights] == list(range(count))
+            assert result.colbert_vecs is not None
+            assert [int(tv[0][0]) for tv in result.colbert_vecs] == list(range(count))
+        else:
+            assert [int(tv[0][0]) for tv in result.colbert_vecs] == list(range(count))
+
+    @pytest.mark.parametrize("method", ["encode_sparse", "encode_hybrid", "encode_colbert"])
+    def test_sync_encode_methods_split_and_preserve_order(self, sync_client, method):
+        count = 65
+        texts = [f"t{i}" for i in range(count)]
+        captured_sizes: list[int] = []
+        families = {
+            "encode_sparse": ("sparse",),
+            "encode_hybrid": ("dense", "sparse", "colbert"),
+            "encode_colbert": ("colbert",),
+        }[method]
+        sync_client._client = _capture_sync_http(captured_sizes, families)
+
+        result = getattr(sync_client, method)(texts)
+
+        assert captured_sizes == [32, 32, 1]
+        primary_attr = {
+            "encode_sparse": "weights",
+            "encode_hybrid": "dense_vecs",
+            "encode_colbert": "colbert_vecs",
+        }[method]
+        assert len(getattr(result, primary_attr)) == count
+        if method == "encode_sparse":
+            assert [w["indices"][0] for w in result.weights] == list(range(count))
+        elif method == "encode_hybrid":
+            assert [int(v[0]) for v in result.dense_vecs] == list(range(count))
+            assert [w["indices"][0] for w in result.lexical_weights] == list(range(count))
+            assert result.colbert_vecs is not None
+            assert [int(tv[0][0]) for tv in result.colbert_vecs] == list(range(count))
+        else:
+            assert [int(tv[0][0]) for tv in result.colbert_vecs] == list(range(count))
+
+    async def test_async_empty_input_performs_zero_requests(self, client):
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock()
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        assert (await client.encode_dense([])).vectors == []
+        assert (await client.encode_sparse([])).weights == []
+        assert (await client.encode_hybrid([])).dense_vecs == []
+        assert (await client.encode_colbert([])).colbert_vecs == []
+        mock_http.post.assert_not_awaited()
+
+    def test_sync_empty_input_performs_zero_requests(self, sync_client):
+        mock_http = MagicMock()
+        mock_http.post = MagicMock()
+        sync_client._client = mock_http
+
+        assert sync_client.encode_dense([]).vectors == []
+        assert sync_client.encode_sparse([]).weights == []
+        assert sync_client.encode_hybrid([]).dense_vecs == []
+        assert sync_client.encode_colbert([]).colbert_vecs == []
+        mock_http.post.assert_not_called()
+
+    async def test_async_partial_failure_indexes_map_to_global_positions(self, client):
+        """Per-chunk partial-failure indexes are offset by the chunk's global start."""
+        client.batch_size = 2
+        texts = ["t0", "t1", "t2", "t3", "t4"]
+
+        responses = []
+        for chunk, failures in (
+            (["t0", "t1"], [{"index": 1, "error": "boom-1"}]),
+            (["t2", "t3"], [{"index": 0, "error": "boom-2"}]),
+            (["t4"], [{"index": 0, "error": "boom-4"}]),
+        ):
+            resp = _chunk_response(chunk, ("dense",))
+            resp.json.return_value["partial_failures"] = failures
+            responses.append(resp)
+
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(side_effect=responses)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_dense(texts)
+
+        assert [(f["index"], f["error"]) for f in result.partial_failures] == [
+            (1, "boom-1"),
+            (2, "boom-2"),
+            (4, "boom-4"),
+        ]
+        assert len(result.vectors) == 5
+
+    def test_sync_hybrid_partial_failure_indexes_map_to_global_positions(self, sync_client):
+        """Per-chunk partial-failure indexes are offset by the chunk's global start."""
+        sync_client.batch_size = 2
+        texts = ["t0", "t1", "t2", "t3", "t4"]
+
+        responses = []
+        for chunk, failures in (
+            (["t0", "t1"], [{"index": 0, "error": "boom-0"}]),
+            (["t2", "t3"], []),
+            (["t4"], [{"index": 0, "error": "boom-4"}]),
+        ):
+            resp = _chunk_response(chunk, ("dense", "sparse"))
+            resp.json.return_value["partial_failures"] = failures
+            responses.append(resp)
+
+        mock_http = MagicMock()
+        mock_http.post = MagicMock(side_effect=responses)
+        sync_client._client = mock_http
+
+        result = sync_client.encode_hybrid(texts)
+
+        assert [(f["index"], f["error"]) for f in result.partial_failures] == [
+            (0, "boom-0"),
+            (4, "boom-4"),
+        ]
+        assert len(result.dense_vecs) == 5
+        assert len(result.lexical_weights) == 5

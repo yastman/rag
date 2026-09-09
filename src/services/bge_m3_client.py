@@ -25,6 +25,25 @@ DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_MAX_LENGTH = 512
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
+# Hard per-request text bound enforced by the sidecar (ENCODE_MAX_ITEMS): a
+# larger encode request is rejected with 422. The client therefore splits any
+# input into requests of at most min(configured_batch_size, MAX_REQUEST_TEXTS)
+# texts (#3375).
+MAX_REQUEST_TEXTS = 64
+
+
+def _request_chunks(texts: list[str], batch_size: int) -> list[tuple[int, list[str]]]:
+    """Split texts into sequential request chunks of at most ``min(batch_size, 64)``.
+
+    The single shared batching helper for the sync and async encode methods
+    (#3375). Each chunk carries its global start offset in the original input
+    so per-request partial-failure indexes can be mapped back to global
+    positions. A non-positive ``batch_size`` is clamped to 1 so chunking
+    always makes progress; values above ``MAX_REQUEST_TEXTS`` are capped at
+    the sidecar's per-request bound.
+    """
+    size = max(1, min(batch_size, MAX_REQUEST_TEXTS))
+    return [(start, texts[start : start + size]) for start in range(0, len(texts), size)]
 
 
 def _build_payload(
@@ -196,12 +215,26 @@ class BGEM3Client:
         if not texts:
             return DenseResult(vectors=[])
         client = await self._get_client()
-        resp = await client.post(
-            f"{self.base_url}/encode/dense",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        vectors: list[list[float]] = []
+        partial_failures: list[dict[str, Any]] = []
+        total_time: float | None = None
+        for offset, chunk in _request_chunks(texts, self.batch_size):
+            resp = await client.post(
+                f"{self.base_url}/encode/dense",
+                json=_build_payload(chunk, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            parsed = _parse_dense_response(resp.json())
+            vectors.extend(parsed.vectors)
+            if parsed.processing_time is not None:
+                total_time = (total_time or 0.0) + parsed.processing_time
+            partial_failures.extend(
+                {**failure, "index": failure["index"] + offset}
+                for failure in parsed.partial_failures
+            )
+        return DenseResult(
+            vectors=vectors, processing_time=total_time, partial_failures=partial_failures
         )
-        resp.raise_for_status()
-        return _parse_dense_response(resp.json())
 
     @bge_retry
     async def encode_sparse(self, texts: list[str]) -> SparseResult:
@@ -209,25 +242,68 @@ class BGEM3Client:
         if not texts:
             return SparseResult(weights=[])
         client = await self._get_client()
-        resp = await client.post(
-            f"{self.base_url}/encode/sparse",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        weights: list[dict[str, Any]] = []
+        partial_failures: list[dict[str, Any]] = []
+        total_time: float | None = None
+        for offset, chunk in _request_chunks(texts, self.batch_size):
+            resp = await client.post(
+                f"{self.base_url}/encode/sparse",
+                json=_build_payload(chunk, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            parsed = _parse_sparse_response(resp.json())
+            weights.extend(parsed.weights)
+            if parsed.processing_time is not None:
+                total_time = (total_time or 0.0) + parsed.processing_time
+            partial_failures.extend(
+                {**failure, "index": failure["index"] + offset}
+                for failure in parsed.partial_failures
+            )
+        return SparseResult(
+            weights=weights, processing_time=total_time, partial_failures=partial_failures
         )
-        resp.raise_for_status()
-        return _parse_sparse_response(resp.json())
 
     @bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
-        """Encode texts to dense + sparse (+ optional ColBERT) via /encode/hybrid (single call)."""
+        """Encode texts to dense + sparse (+ optional ColBERT) via /encode/hybrid.
+
+        One hybrid request per chunk of at most ``min(batch_size, 64)`` texts;
+        a single request when the input already fits (#3375).
+        """
         if not texts:
             return HybridResult(dense_vecs=[], lexical_weights=[])
         client = await self._get_client()
-        resp = await client.post(
-            f"{self.base_url}/encode/hybrid",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        dense_vecs: list[list[float]] = []
+        lexical_weights: list[dict[str, Any]] = []
+        colbert_vecs: list[list[list[float]]] | None = None
+        partial_failures: list[dict[str, Any]] = []
+        total_time: float | None = None
+        for offset, chunk in _request_chunks(texts, self.batch_size):
+            resp = await client.post(
+                f"{self.base_url}/encode/hybrid",
+                json=_build_payload(chunk, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            parsed = _parse_hybrid_response(resp.json())
+            dense_vecs.extend(parsed.dense_vecs)
+            lexical_weights.extend(parsed.lexical_weights)
+            if parsed.colbert_vecs is not None:
+                if colbert_vecs is None:
+                    colbert_vecs = []
+                colbert_vecs.extend(parsed.colbert_vecs)
+            if parsed.processing_time is not None:
+                total_time = (total_time or 0.0) + parsed.processing_time
+            partial_failures.extend(
+                {**failure, "index": failure["index"] + offset}
+                for failure in parsed.partial_failures
+            )
+        return HybridResult(
+            dense_vecs=dense_vecs,
+            lexical_weights=lexical_weights,
+            colbert_vecs=colbert_vecs,
+            processing_time=total_time,
+            partial_failures=partial_failures,
         )
-        resp.raise_for_status()
-        return _parse_hybrid_response(resp.json())
 
     @bge_retry
     async def rerank(self, query: str, documents: list[str], top_k: int = 5) -> RerankResult:
@@ -258,12 +334,28 @@ class BGEM3Client:
         if not texts:
             return ColbertResult(colbert_vecs=[])
         client = await self._get_client()
-        resp = await client.post(
-            f"{self.base_url}/encode/colbert",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        colbert_vecs: list[list[list[float]]] = []
+        partial_failures: list[dict[str, Any]] = []
+        total_time: float | None = None
+        for offset, chunk in _request_chunks(texts, self.batch_size):
+            resp = await client.post(
+                f"{self.base_url}/encode/colbert",
+                json=_build_payload(chunk, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            parsed = _parse_colbert_response(resp.json())
+            colbert_vecs.extend(parsed.colbert_vecs)
+            if parsed.processing_time is not None:
+                total_time = (total_time or 0.0) + parsed.processing_time
+            partial_failures.extend(
+                {**failure, "index": failure["index"] + offset}
+                for failure in parsed.partial_failures
+            )
+        return ColbertResult(
+            colbert_vecs=colbert_vecs,
+            processing_time=total_time,
+            partial_failures=partial_failures,
         )
-        resp.raise_for_status()
-        return _parse_colbert_response(resp.json())
 
     async def aclose(self) -> None:
         """Close the underlying httpx client.
@@ -301,52 +393,123 @@ class BGEM3SyncClient:
         """Encode texts to dense vectors (sync)."""
         if not texts:
             return DenseResult(vectors=[])
-        resp = self._client.post(
-            f"{self.base_url}/encode/dense",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        vectors: list[list[float]] = []
+        partial_failures: list[dict[str, Any]] = []
+        total_time: float | None = None
+        for offset, chunk in _request_chunks(texts, self.batch_size):
+            resp = self._client.post(
+                f"{self.base_url}/encode/dense",
+                json=_build_payload(chunk, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            parsed = _parse_dense_response(resp.json())
+            vectors.extend(parsed.vectors)
+            if parsed.processing_time is not None:
+                total_time = (total_time or 0.0) + parsed.processing_time
+            partial_failures.extend(
+                {**failure, "index": failure["index"] + offset}
+                for failure in parsed.partial_failures
+            )
+        return DenseResult(
+            vectors=vectors, processing_time=total_time, partial_failures=partial_failures
         )
-        resp.raise_for_status()
-        return _parse_dense_response(resp.json())
 
     @bge_retry
     def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors (sync)."""
         if not texts:
             return SparseResult(weights=[])
-        resp = self._client.post(
-            f"{self.base_url}/encode/sparse",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        weights: list[dict[str, Any]] = []
+        partial_failures: list[dict[str, Any]] = []
+        total_time: float | None = None
+        for offset, chunk in _request_chunks(texts, self.batch_size):
+            resp = self._client.post(
+                f"{self.base_url}/encode/sparse",
+                json=_build_payload(chunk, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            parsed = _parse_sparse_response(resp.json())
+            weights.extend(parsed.weights)
+            if parsed.processing_time is not None:
+                total_time = (total_time or 0.0) + parsed.processing_time
+            partial_failures.extend(
+                {**failure, "index": failure["index"] + offset}
+                for failure in parsed.partial_failures
+            )
+        return SparseResult(
+            weights=weights, processing_time=total_time, partial_failures=partial_failures
         )
-        resp.raise_for_status()
-        return _parse_sparse_response(resp.json())
 
     @bge_retry
     def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors (sync)."""
         if not texts:
             return ColbertResult(colbert_vecs=[])
-        resp = self._client.post(
-            f"{self.base_url}/encode/colbert",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        colbert_vecs: list[list[list[float]]] = []
+        partial_failures: list[dict[str, Any]] = []
+        total_time: float | None = None
+        for offset, chunk in _request_chunks(texts, self.batch_size):
+            resp = self._client.post(
+                f"{self.base_url}/encode/colbert",
+                json=_build_payload(chunk, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            parsed = _parse_colbert_response(resp.json())
+            colbert_vecs.extend(parsed.colbert_vecs)
+            if parsed.processing_time is not None:
+                total_time = (total_time or 0.0) + parsed.processing_time
+            partial_failures.extend(
+                {**failure, "index": failure["index"] + offset}
+                for failure in parsed.partial_failures
+            )
+        return ColbertResult(
+            colbert_vecs=colbert_vecs,
+            processing_time=total_time,
+            partial_failures=partial_failures,
         )
-        resp.raise_for_status()
-        return _parse_colbert_response(resp.json())
 
     @bge_retry
     def encode_hybrid(self, texts: list[str]) -> HybridResult:
-        """Encode texts to dense + sparse + colbert in a single /encode/hybrid call.
+        """Encode texts to dense + sparse + colbert via /encode/hybrid.
 
         This is 3x more efficient than calling encode_dense + encode_sparse +
-        encode_colbert separately, as the BGE-M3 model runs one forward pass.
+        encode_colbert separately, as the BGE-M3 model runs one forward pass
+        per request. Inputs larger than ``min(batch_size, 64)`` texts are sent
+        as sequential hybrid requests and merged in order (#3375).
         """
         if not texts:
             return HybridResult(dense_vecs=[], lexical_weights=[])
-        resp = self._client.post(
-            f"{self.base_url}/encode/hybrid",
-            json=_build_payload(texts, self.batch_size, self.max_length),
+        dense_vecs: list[list[float]] = []
+        lexical_weights: list[dict[str, Any]] = []
+        colbert_vecs: list[list[list[float]]] | None = None
+        partial_failures: list[dict[str, Any]] = []
+        total_time: float | None = None
+        for offset, chunk in _request_chunks(texts, self.batch_size):
+            resp = self._client.post(
+                f"{self.base_url}/encode/hybrid",
+                json=_build_payload(chunk, self.batch_size, self.max_length),
+            )
+            resp.raise_for_status()
+            parsed = _parse_hybrid_response(resp.json())
+            dense_vecs.extend(parsed.dense_vecs)
+            lexical_weights.extend(parsed.lexical_weights)
+            if parsed.colbert_vecs is not None:
+                if colbert_vecs is None:
+                    colbert_vecs = []
+                colbert_vecs.extend(parsed.colbert_vecs)
+            if parsed.processing_time is not None:
+                total_time = (total_time or 0.0) + parsed.processing_time
+            partial_failures.extend(
+                {**failure, "index": failure["index"] + offset}
+                for failure in parsed.partial_failures
+            )
+        return HybridResult(
+            dense_vecs=dense_vecs,
+            lexical_weights=lexical_weights,
+            colbert_vecs=colbert_vecs,
+            processing_time=total_time,
+            partial_failures=partial_failures,
         )
-        resp.raise_for_status()
-        return _parse_hybrid_response(resp.json())
 
     def close(self) -> None:
         """Close the underlying httpx client."""
