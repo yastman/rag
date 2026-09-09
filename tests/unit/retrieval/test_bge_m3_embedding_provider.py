@@ -60,6 +60,22 @@ async def test_bge_provider_falls_back_to_colbert_endpoint_when_hybrid_omits_it(
 
 
 @pytest.mark.asyncio
+async def test_bge_provider_empty_colbert_list_falls_back_to_colbert_endpoint() -> None:
+    """An empty colbert_vecs list is falsy, so the fallback endpoint is used (#3403)."""
+    client = AsyncMock()
+    client.encode_hybrid.return_value = HybridResult(
+        dense_vecs=[[0.1]], lexical_weights=[{"indices": [1], "values": [0.5]}], colbert_vecs=[]
+    )
+    client.encode_colbert.return_value = ColbertResult(colbert_vecs=[[[0.7]]])
+    provider = BgeM3EmbeddingProvider(client=client)
+
+    dense, sparse, colbert = await provider.aembed_hybrid_with_colbert("q")
+    assert (dense, sparse, colbert) == ([0.1], {"indices": [1], "values": [0.5]}, [[0.7]])
+    client.encode_hybrid.assert_awaited_once_with(["q"])
+    client.encode_colbert.assert_awaited_once_with(["q"])
+
+
+@pytest.mark.asyncio
 async def test_bge_provider_sparse_helpers_delegate_to_client() -> None:
     client = AsyncMock()
     client.encode_sparse.return_value = SparseResult(weights=[{"indices": [2], "values": [0.8]}])
