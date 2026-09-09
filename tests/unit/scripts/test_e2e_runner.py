@@ -190,12 +190,9 @@ class TestRequestAssembly:
             task_id=task_id,
         )
 
-        mock_client.send_and_wait.assert_awaited_once()
-        call_kwargs = mock_client.send_and_wait.call_args
-        assert (
-            call_kwargs.kwargs.get("query") == "/start" or call_kwargs.args[0] == "/start"
-            if call_kwargs.args
-            else True
+        mock_client.send_and_wait.assert_awaited_once_with(
+            query=scenario.query,
+            response_timeout=scenario.timeout,
         )
         assert result.bot_response == mock_response.text
 
@@ -232,7 +229,9 @@ class TestRequestAssembly:
             task_id=0,
         )
 
-        mock_client.send_voice_and_wait.assert_awaited_once()
+        mock_client.send_voice_and_wait.assert_awaited_once_with(
+            response_timeout=scenario.timeout,
+        )
         assert result.bot_response == mock_response.text
 
 
