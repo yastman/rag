@@ -6,7 +6,6 @@ from typing import Any
 
 from src.runtime.grounding.policy import is_strict_grounding_safe
 from src.runtime.services.coverage_mode import detect_coverage_mode
-from src.runtime.services.metrics import PipelineMetrics
 from src.runtime.services.response_style_detector import ResponseStyleDetector
 
 from .contracts import GenerationRequest
@@ -111,7 +110,6 @@ def _get_dynamic_modules(extra: dict[str, Any] | None = None) -> dict[str, Any]:
         "get_token_limit": get_token_limit,
         "ResponseStyleDetector": ResponseStyleDetector,
         "detect_coverage_mode": detect_coverage_mode,
-        "PipelineMetrics": PipelineMetrics,
     }
     if extra:
         for k in list(modules.keys()):

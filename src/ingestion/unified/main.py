@@ -18,7 +18,6 @@ from src.ingestion.unified.commands import (
     cmd_run,
     cmd_schema_check,
 )
-from src.ingestion.unified.observability import flush_ingestion_traces
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -93,26 +92,20 @@ def main() -> int:
     args = parser.parse_args()
     setup_logging(args.verbose)
 
-    # #2214: ensure buffered ingestion traces are flushed even if a command
-    # raises or exits abruptly (the BatchSpanProcessor only auto-flushes on a
-    # clean atexit). flush_ingestion_traces() is a no-op when tracing is off.
-    try:
-        if args.command == "run":
-            return cmd_run(args)  # type: ignore[no-any-return]
-        if args.command == "preflight":
-            return asyncio.run(cmd_preflight(args))  # type: ignore[no-any-return]
-        if args.command == "bootstrap":
-            return asyncio.run(cmd_bootstrap(args))  # type: ignore[no-any-return]
-        if args.command == "schema-check":
-            return asyncio.run(cmd_schema_check(args))  # type: ignore[no-any-return]
-        if args.command == "coverage-check":
-            return asyncio.run(cmd_coverage_check(args))  # type: ignore[no-any-return]
-        if args.command == "backfill-colbert":
-            return cmd_backfill_colbert(args)
+    if args.command == "run":
+        return cmd_run(args)  # type: ignore[no-any-return]
+    if args.command == "preflight":
+        return asyncio.run(cmd_preflight(args))  # type: ignore[no-any-return]
+    if args.command == "bootstrap":
+        return asyncio.run(cmd_bootstrap(args))  # type: ignore[no-any-return]
+    if args.command == "schema-check":
+        return asyncio.run(cmd_schema_check(args))  # type: ignore[no-any-return]
+    if args.command == "coverage-check":
+        return asyncio.run(cmd_coverage_check(args))  # type: ignore[no-any-return]
+    if args.command == "backfill-colbert":
+        return cmd_backfill_colbert(args)
 
-        return 1
-    finally:
-        flush_ingestion_traces()
+    return 1
 
 
 if __name__ == "__main__":

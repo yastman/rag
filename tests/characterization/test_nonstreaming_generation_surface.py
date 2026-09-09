@@ -89,9 +89,6 @@ def _base_dyn() -> dict[str, Any]:
         "get_prompt_with_object": lambda _n, **_kw: (None, None),
         "build_system_prompt_with_manager": lambda **_kw: "style_sys",
         "get_token_limit": lambda _s, _d: 400,
-        "PipelineMetrics": SimpleNamespace(
-            get=lambda: SimpleNamespace(record=lambda *_a, **_kw: None)
-        ),
     }
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -203,18 +203,3 @@ async def test_warmup_bge_failure_nonfatal():
     finally:
         for mod in _mocked:
             sys.modules.pop(mod, None)
-
-
-# ---------------------------------------------------------------------------
-# #955: Score stubs are no-ops (Langfuse removed in #2844)
-# ---------------------------------------------------------------------------
-
-
-def test_write_scores_is_noop():
-    """write_scores is a no-op — Langfuse removed (#2844)."""
-    from src.scoring import write_scores
-
-    lf = MagicMock()
-    result = {"pipeline_wall_ms": 1500.0, "search_results_count": 20, "latency_stages": {}}
-    write_scores(lf, result, trace_id="t1")
-    lf.create_score.assert_not_called()

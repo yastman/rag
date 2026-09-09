@@ -33,7 +33,6 @@ from typing import TYPE_CHECKING
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 from src.ingestion.unified.manifest import FileManifest, compute_content_hash_from_bytes
-from src.ingestion.unified.observability import try_update_ingestion_trace
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
 
@@ -254,28 +253,9 @@ def run_once(config: UnifiedConfig | None = None) -> IngestionResult:
     global _manifest
     _manifest = FileManifest(config.effective_manifest_dir())
 
-    try_update_ingestion_trace(command="flow-run-once", status="started")
-    try:
-        writer = _build_writer(config)
-        parser = _make_parser(config)
-        result = _ingest_directory(config, writer, parser)
-    except Exception as exc:
-        try_update_ingestion_trace(
-            command="flow-run-once",
-            status="error",
-            metadata={"error_type": type(exc).__name__},
-        )
-        raise
-    try_update_ingestion_trace(
-        command="flow-run-once",
-        status="completed",
-        metadata={
-            "processed": result.processed,
-            "skipped": result.skipped,
-            "errors": result.errors,
-        },
-    )
-    return result
+    writer = _build_writer(config)
+    parser = _make_parser(config)
+    return _ingest_directory(config, writer, parser)
 
 
 def run_watch(
@@ -295,7 +275,6 @@ def run_watch(
         config = _Cfg()
 
     poll = float(getattr(config, "poll_interval_seconds", 60))
-    try_update_ingestion_trace(command="flow-watch", status="started")
     try:
         while True:
             run_once(config)
@@ -303,13 +282,4 @@ def run_watch(
                 break
             time.sleep(poll)
     except KeyboardInterrupt:
-        try_update_ingestion_trace(command="flow-watch", status="interrupted")
         return
-    except Exception as exc:
-        try_update_ingestion_trace(
-            command="flow-watch",
-            status="error",
-            metadata={"error_type": type(exc).__name__},
-        )
-        raise
-    try_update_ingestion_trace(command="flow-watch", status="completed")

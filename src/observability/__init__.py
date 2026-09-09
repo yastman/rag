@@ -3,24 +3,19 @@
 Observability integration removed (#2844, #2969). Structured product logs
 (src/utils/product_events.py) are the canonical observability path.
 
-The only helpers kept here are genuine, non-tracing utilities
-still used by the runtime: ``mask_pii`` (PII masking for safe payloads) and
-the no-op scores stubs (score/write_scores/write_history_scores).
+The only helper kept here is a genuine, non-tracing utility still used by
+the runtime: ``mask_pii`` (PII masking for safe payloads).
 
-No-op shims removed (card_9967cd60fe32):
+No-op shims removed (card_9967cd60fe32, #3331):
   observe, traced_pipeline, get_client, propagate_attributes — confirmed 0
-  prod callers after card_70130e28eadd.
+  prod callers after card_70130e28eadd; score/write_scores/write_history_scores
+  no-op stubs removed with the retired scoring surface in #3331.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from src.observability.scores import (
-    score,
-    write_history_scores,
-    write_scores,
-)
 from src.security.pii_redaction import PIIRedactor
 
 
@@ -35,7 +30,4 @@ def mask_pii(data: Any) -> Any:
 
 __all__ = [
     "mask_pii",
-    "score",
-    "write_history_scores",
-    "write_scores",
 ]
