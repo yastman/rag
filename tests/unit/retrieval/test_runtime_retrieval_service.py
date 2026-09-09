@@ -1,4 +1,5 @@
-"""Tests for the pure runtime retrieval boundary."""
+"""Pure runtime retrieval boundary: sole unit owner for ColBERT/RRF routing,
+exact public arguments, query vectorization, and missing-method fallbacks."""
 
 from __future__ import annotations
 
@@ -162,6 +163,46 @@ async def test_retrieve_vectors_routes_precomputed_colbert_without_generation() 
                 "dense_weight": 0.4,
                 "sparse_weight": 0.6,
                 "colbert_query": [[0.8]],
+            },
+        )
+    ]
+
+
+class RrfOnlyQdrant:
+    """Qdrant gateway that lacks the ColBERT search method."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def hybrid_search_rrf(self, **kwargs):
+        self.calls.append(("rrf", kwargs))
+        return [{"id": "rrf"}]
+
+
+@pytest.mark.asyncio
+async def test_retrieve_vectors_falls_back_to_rrf_when_colbert_method_is_missing() -> None:
+    qdrant = RrfOnlyQdrant()
+    service = RetrievalService(qdrant=qdrant)  # type: ignore[arg-type]
+
+    result = await service.retrieve_vectors(
+        VectorRetrievalRequest(
+            dense_vector=[0.5],
+            sparse_vector={"indices": [5], "values": [0.5]},
+            colbert_query=[[0.6, 0.7]],
+            top_k=4,
+        )
+    )
+
+    assert result == [{"id": "rrf"}]
+    assert qdrant.calls == [
+        (
+            "rrf",
+            {
+                "dense_vector": [0.5],
+                "sparse_vector": {"indices": [5], "values": [0.5]},
+                "filters": None,
+                "top_k": 4,
+                "return_meta": False,
             },
         )
     ]
