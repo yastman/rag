@@ -57,8 +57,14 @@ class TestPropertyBotInit:
         assert bot._apartment_pipeline is not None
 
     def test_redis_monitor_exists(self):
-        bot = _create_bot()
+        # #3362: the Redis health monitor exists only when the mode allows a
+        # client; disabled mode honestly constructs none.
+        bot = _create_bot(_make_config(redis_mode="single_instance"))
         assert bot._redis_monitor is not None
+
+    def test_redis_monitor_absent_in_disabled_mode(self):
+        bot = _create_bot(_make_config(redis_mode="disabled"))
+        assert bot._redis_monitor is None
 
     def test_checkpointer_attributes_are_gone(self):
         """#3218: the no-op checkpointer fields must not come back."""
@@ -111,7 +117,8 @@ def _start_patches(bot):
     stack.enter_context(patch("asyncpg.connect", new_callable=AsyncMock))
     stack.enter_context(patch("asyncpg.create_pool", new_callable=AsyncMock))
     stack.enter_context(patch.object(bot._cache, "initialize", new_callable=AsyncMock))
-    stack.enter_context(patch.object(bot._redis_monitor, "start", new_callable=AsyncMock))
+    if bot._redis_monitor is not None:
+        stack.enter_context(patch.object(bot._redis_monitor, "start", new_callable=AsyncMock))
     stack.enter_context(patch.object(bot.bot, "me", new_callable=AsyncMock, return_value=mock_me))
     stack.enter_context(
         patch.object(bot.bot, "get_me", new_callable=AsyncMock, return_value=mock_me)
@@ -134,7 +141,8 @@ class TestPropertyBotStart:
     """Test the start() method with external services mocked."""
 
     async def test_successful_start_cache_initialized(self):
-        bot = _create_bot()
+        # single_instance start with mocked cache init (#3362 mode contract).
+        bot = _create_bot(_make_config(redis_mode="single_instance"))
         with _start_patches(bot):
             await bot.start()
         assert bot._cache_initialized is True
@@ -157,7 +165,7 @@ class TestPropertyBotStart:
 
     async def test_postgres_unavailable_adds_degraded_signal(self):
         """When preflight marks postgres=False, startup_report gets postgres_runtime DEGRADED signal."""
-        bot = _create_bot()
+        bot = _create_bot(_make_config(redis_mode="single_instance"))
 
         signals: list[StartupSignal] = []
 

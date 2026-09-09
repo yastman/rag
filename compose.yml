@@ -161,6 +161,10 @@ services:
       GENERATE_MAX_TOKENS: "${GENERATE_MAX_TOKENS:-2048}"
       # Services
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+      # Honest Redis mode (#3354): Compose bot defaults explicitly to
+      # single_instance — one process, no distributed polling lock claim.
+      # Set REDIS_MODE=multi_instance for scaled deployments (lock required).
+      REDIS_MODE: ${REDIS_MODE:-single_instance}
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
       # LLM (LiteLLM Python SDK router)

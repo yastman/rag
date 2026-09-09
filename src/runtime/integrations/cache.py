@@ -17,7 +17,9 @@ Tiers:
   + Conversation history (Redis LIST, 20 msgs, 2h TTL)
 
 NOTE: redisvl imports are lazy-loaded in initialize() to avoid heavy import
-overhead (pandas, scipy.stats) during test collection.
+overhead (pandas, scipy.stats) during test collection. The ``redis`` client
+package is lazy-loaded too (#3362): ``disabled`` Redis mode imports neither
+``redis`` nor ``redisvl`` and never attempts a connection.
 """
 
 from __future__ import annotations
@@ -32,10 +34,7 @@ import re
 import time
 from typing import TYPE_CHECKING, Any
 
-import redis.asyncio as redis
-from redis.backoff import ExponentialBackoff
-from redis.retry import Retry
-
+from src.runtime.integrations.redis_mode import RedisCapability, RedisMode
 from src.services.bge_m3_query_bundle import (
     BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
     BGE_M3_QUERY_BUNDLE_MODEL,
@@ -46,6 +45,7 @@ from src.services.bge_m3_query_bundle import (
 
 
 if TYPE_CHECKING:
+    from redis.asyncio import Redis as AsyncRedis
     from redisvl.extensions.cache.embeddings import EmbeddingsCache
     from redisvl.extensions.cache.llm import SemanticCache
 
@@ -85,6 +85,30 @@ def _normalize_query_for_cache(text: str) -> str:
 
 def _redact_redis_credentials(text: str) -> str:
     return _REDIS_URL_CREDENTIALS_RE.sub(r"\1***@", text)
+
+
+def _create_redis_client(redis_url: str) -> AsyncRedis:
+    """Create the async Redis client.
+
+    Seam for tests and the lazy-import boundary (#3362): the ``redis``
+    package is imported here, not at module scope, so ``disabled`` Redis
+    mode never imports it.
+    """
+    import redis.asyncio as redis
+    from redis.backoff import ExponentialBackoff
+    from redis.retry import Retry
+
+    return redis.from_url(
+        redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+        max_connections=int(os.getenv("REDIS_MAX_CONNECTIONS", "50")),
+        socket_connect_timeout=5,
+        socket_timeout=5,
+        retry_on_timeout=True,
+        retry=Retry(ExponentialBackoff(), 3),
+        health_check_interval=30,
+    )
 
 
 def _create_semantic_cache(
@@ -166,9 +190,18 @@ class CacheLayerManager:
         exact_ttls: dict[str, int] | None = None,
         conversation_max_messages: int = 20,
         conversation_ttl: int = 7200,
+        mode: RedisMode = RedisMode.SINGLE_INSTANCE,
     ) -> None:
+        """Create the cache manager.
+
+        ``mode`` is the honest Redis operating mode (#3362, decision
+        #3354). The default preserves the historical single-node fail-open
+        semantics for direct constructions; production wiring always passes
+        the configured mode explicitly (``build_services``).
+        """
         self.redis_url = redis_url
-        self.redis: redis.Redis | None = None
+        self.mode: RedisMode = mode
+        self.redis: AsyncRedis | None = None
         self.semantic_cache: SemanticCache | None = None
         self.embed_cache: EmbeddingsCache | None = None
 
@@ -200,20 +233,33 @@ class CacheLayerManager:
             tier: {"hits": 0, "misses": 0} for tier in _METRIC_TIERS
         }
 
+    @property
+    def capability(self) -> RedisCapability:
+        """Honest capability state of this cache layer (#3354).
+
+        ``enabled`` — connected; ``degraded`` — mode allows a client but
+        the backend is not connected (fail-open miss/no-store);
+        ``disabled`` — Redis mode disabled, no client exists.
+        """
+        if self.mode is RedisMode.DISABLED:
+            return RedisCapability.DISABLED
+        return RedisCapability.ENABLED if self.redis is not None else RedisCapability.DEGRADED
+
     async def initialize(self) -> None:
-        """Connect to Redis and set up semantic cache (lazy imports)."""
-        try:
-            self.redis = redis.from_url(
-                self.redis_url,
-                encoding="utf-8",
-                decode_responses=True,
-                max_connections=int(os.getenv("REDIS_MAX_CONNECTIONS", "50")),
-                socket_connect_timeout=5,
-                socket_timeout=5,
-                retry_on_timeout=True,
-                retry=Retry(ExponentialBackoff(), 3),
-                health_check_interval=30,
+        """Connect to Redis and set up semantic cache (lazy imports).
+
+        Disabled mode performs no Redis import and no connection attempt:
+        the cache layer stays a deterministic miss/no-store with no memory
+        durability substitute (#3354).
+        """
+        if self.mode is RedisMode.DISABLED:
+            logger.info(
+                "Redis mode disabled: cache layer not initialized "
+                "(miss/no-store, no connection attempt)"
             )
+            return
+        try:
+            self.redis = _create_redis_client(self.redis_url)
             await self.redis.ping()  # type: ignore[misc]
             logger.info("Redis connected")
         except Exception as e:

@@ -115,3 +115,36 @@ def test_all_compose_bge_m3_url_consumers_use_container_network() -> None:
         f"Docker/compose drift bug class (#2182, #2188, #2185) where "
         f"BGE-M3 is reachable on a wrong host port."
     )
+
+
+# =============================================================================
+# Redis mode compose contract (#3362, decision #3354)
+# =============================================================================
+
+
+def test_bot_defaults_explicitly_to_single_instance_redis_mode() -> None:
+    """compose.yml bot must default REDIS_MODE to single_instance explicitly.
+
+    Decision #3354: "Defaults: reusable core disabled; Compose bot
+    explicitly single_instance; scaled deployment explicitly multi_instance."
+    """
+    compose = _load_compose()
+    env = compose["services"]["bot"]["environment"]
+
+    assert isinstance(env, dict), "bot environment must be a mapping"
+    assert "REDIS_MODE" in env, "compose.yml bot environment must set REDIS_MODE explicitly (#3354)"
+    assert env["REDIS_MODE"] == "${REDIS_MODE:-single_instance}", (
+        f"compose.yml bot REDIS_MODE must default to single_instance, found: {env['REDIS_MODE']!r}"
+    )
+
+
+def test_env_example_documents_redis_mode() -> None:
+    """.env.example must document REDIS_MODE so native operators see the contract."""
+    env_example = ROOT / ".env.example"
+    content = env_example.read_text(encoding="utf-8")
+    assert "REDIS_MODE=" in content, (
+        ".env.example must document REDIS_MODE (disabled | single_instance | multi_instance)"
+    )
+    assert "single_instance" in content, (
+        ".env.example REDIS_MODE docs must mention the single_instance default"
+    )

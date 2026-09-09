@@ -17,6 +17,12 @@ from pydantic import (
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from src.config.qdrant_policy import resolve_collection_name
+from src.runtime.integrations.redis_mode import (
+    DEFAULT_REDIS_MODE,
+    RedisMode,
+    parse_redis_mode,
+    validate_redis_mode,
+)
 
 
 def _empty_str_to_false(v: object) -> object:
@@ -86,6 +92,13 @@ class BotConfig(BaseSettings):
     redis_url: str = Field(
         default="redis://localhost:6379",
         validation_alias=AliasChoices("redis_url", "REDIS_URL"),
+    )
+    # Honest Redis operating mode (decision #3354). Disabled by default —
+    # no Redis import/client/connection — Compose overrides it explicitly
+    # to ``single_instance``; scaled deployments use ``multi_instance``.
+    redis_mode: RedisMode = Field(
+        default=DEFAULT_REDIS_MODE,
+        validation_alias=AliasChoices("redis_mode", "REDIS_MODE"),
     )
     qdrant_url: str = Field(
         default="http://localhost:6333", validation_alias=AliasChoices("qdrant_url", "QDRANT_URL")
@@ -239,6 +252,12 @@ class BotConfig(BaseSettings):
     def parse_manager_ids(cls, v: object) -> list[int]:
         return _parse_int_id_list(v)
 
+    @field_validator("redis_mode", mode="before")
+    @classmethod
+    def parse_redis_mode_value(cls, v: object) -> RedisMode:
+        """Single parse point for the REDIS_MODE contract (#3362)."""
+        return parse_redis_mode(v)  # type: ignore[arg-type]
+
     @field_validator("telegram_token", mode="after")
     @classmethod
     def validate_telegram_token_format(cls, v: str) -> str:
@@ -258,6 +277,14 @@ class BotConfig(BaseSettings):
         )
         if self.handoff_enabled and self.managers_group_id is None:
             raise ValueError("HANDOFF_ENABLED=true but MANAGERS_GROUP_ID is missing")
+        # Mode invariants from decision #3354: multi_instance requires a
+        # nonempty Redis URL; disabled mode forbids explicitly enabled
+        # Redis-only durable features. Errors surface before polling starts.
+        validate_redis_mode(
+            self.redis_mode,
+            redis_url=self.redis_url,
+            redis_only_feature_enabled=self.handoff_enabled,
+        )
         if not self.llm_api_key:
             import logging as _logging
 

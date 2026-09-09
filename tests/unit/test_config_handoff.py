@@ -14,6 +14,8 @@ def test_handoff_enabled_defaults_to_false(monkeypatch):
 
 
 def test_handoff_enabled_reads_env(monkeypatch):
+    # Handoff is Redis-durable: needs a durable-capable Redis mode (#3362).
+    monkeypatch.setenv("REDIS_MODE", "single_instance")
     monkeypatch.setenv("HANDOFF_ENABLED", "true")
     monkeypatch.setenv("MANAGERS_GROUP_ID", "-1001234567890")
     cfg = BotConfig(telegram_bot_token=FAKE_TELEGRAM_BOT_TOKEN, _env_file=None)
@@ -31,6 +33,7 @@ def test_handoff_enabled_requires_managers_group_id(monkeypatch):
 
 
 def test_handoff_enabled_allows_valid_managers_group_id(monkeypatch):
+    monkeypatch.setenv("REDIS_MODE", "single_instance")
     monkeypatch.setenv("HANDOFF_ENABLED", "true")
     monkeypatch.setenv("MANAGERS_GROUP_ID", "-1001234567890")
 
@@ -74,6 +77,7 @@ def test_handoff_config_defaults(monkeypatch):
 
 def test_handoff_config_from_env(monkeypatch):
     """Handoff config reads from environment variables."""
+    monkeypatch.setenv("REDIS_MODE", "single_instance")
     monkeypatch.setenv("HANDOFF_ENABLED", "true")
     monkeypatch.setenv("MANAGERS_GROUP_ID", "-1001234567890")
     monkeypatch.setenv("HANDOFF_TTL_HOURS", "12")
