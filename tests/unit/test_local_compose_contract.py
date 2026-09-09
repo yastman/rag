@@ -40,9 +40,10 @@ def test_local_dev_docker_targets_use_local_compose_override() -> None:
 
 def test_docker_core_help_describes_default_unprofiled_stack() -> None:
     text = MAKEFILE.read_text(encoding="utf-8")
-    assert "docker-core-up: ## Start default local compose stack (unprofiled services)" in text, (
-        "docker-core-up help text must describe the default unprofiled local compose stack"
-    )
+    assert (
+        "docker-core-up: operator-env-check ## Start default local compose stack "
+        "(unprofiled services; env-validated #3367)" in text
+    ), "docker-core-up help text must describe the default unprofiled local compose stack"
 
 
 def test_docker_docs_default_stack_omits_mini_app_services() -> None:
@@ -51,17 +52,22 @@ def test_docker_docs_default_stack_omits_mini_app_services() -> None:
     assert "- `mini-app-frontend`" not in text
 
 
-def test_local_compose_cmd_uses_env_file_fallback() -> None:
+def test_local_compose_cmd_uses_explicit_operator_env() -> None:
+    """#3367: local compose commands require the explicit operator env file.
+
+    Real build/up commands must never fall back to tests/fixtures/compose.ci.env
+    when .env is absent — silent dummy credentials made failing stacks look up.
+    """
     text = MAKEFILE.read_text(encoding="utf-8")
     assert "LOCAL_COMPOSE_CMD" in text
     assert "--env-file" in text, (
-        "Makefile LOCAL_COMPOSE_CMD must specify --env-file so local compose commands "
-        "can render config even when .env is absent"
+        "Makefile LOCAL_COMPOSE_CMD must specify --env-file for the operator env"
     )
-    assert "compose.ci.env" in text, (
-        "Makefile must fall back to tests/fixtures/compose.ci.env when .env is absent"
+    assert "compose.ci.env" not in text, (
+        "Makefile must not reference tests/fixtures/compose.ci.env: the CI "
+        "fixture is confined to named CI/static-validation targets (#3367)"
     )
-    assert (
-        "$$([ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)" in text
-        or "[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env" in text
-    ), "Makefile must evaluate the env-file fallback at recipe runtime"
+    local_cmd = next(line for line in text.splitlines() if line.startswith("LOCAL_COMPOSE_CMD :="))
+    assert "$(OPERATOR_ENV)" in local_cmd, (
+        "LOCAL_COMPOSE_CMD must pass the explicit operator env file"
+    )

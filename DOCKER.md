@@ -132,6 +132,46 @@ make core-up      # start sidecars
 make run-bot      # run bot natively
 ```
 
+## Operator Env Gate (#3367)
+
+Real build/up commands (`make docker-full-up`, `docker-core-up`,
+`docker-bot-up`, `docker-ai-up`, `docker-ingest-up`, `local-up`,
+`local-up-ingest`, `local-build`) require an **explicit operator env file**
+(`.env` by default, override with `OPERATOR_ENV=/path/to/env`). When it is
+missing the command exits nonzero with an actionable message — it never falls
+back to the CI Compose fixture (dummy credentials and an intentionally invalid
+BGE context live there; it is reserved for named CI/static-validation targets
+such as the hosted `compose-config` job).
+
+Before Compose runs, every build/up target executes the gate:
+
+```bash
+make operator-env-check                 # validate .env (the OPERATOR_ENV default)
+make operator-env-check OPERATOR_ENV=/path/to/env
+```
+
+The gate validates, before any image build:
+
+- **File existence** — missing `.env` is a hard, nonzero failure.
+- **Required secret presence/shape** — `TELEGRAM_BOT_TOKEN`,
+  `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `ENCRYPTION_KEY` (64-hex), `SALT`,
+  `NEXTAUTH_SECRET`, `BGE_M3_ONNX_MODEL_HOST_DIR`, and at least one of
+  `CEREBRAS_API_KEY` / `GROQ_API_KEY` / `OPENAI_API_KEY` / `LLM_API_KEY`.
+  CI dummy values and `<change-me>` placeholders are rejected.
+- **Native host path semantics** — WSL paths (`/mnt/c/...`) and other
+  POSIX-absolute paths fail on native Windows; Windows drive-letter paths
+  fail on POSIX hosts; every configured host path must exist.
+- **BGE-M3 artifact pin** — the artifact directory is hash-verified against
+  `services/bge-m3-api/artifact_manifest.json` (#3366), so an invalid or
+  substituted model fails before `docker compose build` can consume it.
+
+Failure behavior: each problem is reported as `- KEY: reason` on stderr and
+the process exits nonzero. Secret values are never printed — only variable
+names, path locations, and remediation hints.
+
+`GDRIVE_SYNC_DIR` is optional (Compose falls back to an empty repo-relative
+directory) but is validated the same way when it is set.
+
 ## Required Environment Variables
 
 Copy `.env.example` to `.env` and fill in at minimum:
@@ -144,6 +184,13 @@ Copy `.env.example` to `.env` and fill in at minimum:
 | `BGE_M3_ONNX_MODEL_HOST_DIR` | `bge-m3` build | Path to ONNX INT8 model dir; baked into image at build time |
 | `GDRIVE_SYNC_DIR` | `ingest` profile | Shared host directory containing exported Drive files |
 | `CEREBRAS_API_KEY` / `GROQ_API_KEY` / `OPENAI_API_KEY` | LLM calls | At least one required |
+
+Native path examples (the operator gate rejects non-native forms):
+
+| Variable | Linux / macOS | Windows Docker Desktop |
+|---|---|---|
+| `BGE_M3_ONNX_MODEL_HOST_DIR` | `/srv/rag-fresh/models/bge_m3_onnx_int8` | `C:/models/bge_m3_onnx_int8` |
+| `GDRIVE_SYNC_DIR` | `/srv/rag-fresh/drive-sync` | `C:/Users/you/Documents/drive-sync` |
 
 ## BGE-M3 Build Requirement
 
