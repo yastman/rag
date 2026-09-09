@@ -11,15 +11,12 @@ dependencies = [
     "fastapi==0.141.1",
     "starlette>=1.6.0",  # CVE-2026-48817/48818 SSRF fix
     "uvicorn[standard]==0.52.4",
-    "python-multipart==0.0.32",
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
     # Monitoring & Metrics
     "prometheus-client==0.26.0",
     # Utilities
     "numpy==2.5.2",
-    "scipy==1.18.1",
-    "lxml>=6.1.0",
 ]
 
 [project.optional-dependencies]
