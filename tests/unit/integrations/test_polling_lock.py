@@ -1,3 +1,11 @@
+"""Unit owner for the shared polling lock (src/runtime/integrations/polling_lock.py).
+
+The busy path must raise PollingLockBusy carrying owner + pttl/ttl diagnostics so
+operators get actionable messages without the deleted preflight probe (#2189, #3099).
+tests/unit/runtime/test_polling_lock.py merged into this suite in #3404; the
+telegram_bot module is a re-export shim of the same implementation.
+"""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
