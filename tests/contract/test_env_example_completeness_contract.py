@@ -170,9 +170,6 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "MANIFEST_DIR": "GDrive ingestion manifest dir; doc TBD",
     "EXPERT_TOPICS_ENABLED": "Expert topics feature flag; doc TBD",
     "GOOGLE_SERVICE_ACCOUNT_KEY": "GDrive ingestion credentials; doc TBD",
-    "RUNTIME_EVENTS_DIR": "Runtime events JSONL dir; doc TBD",
-    "RUNTIME_EVENTS_ENABLED": "Runtime events toggle; doc TBD",
-    "RUNTIME_EVENTS_MAX_AGE_DAYS": "Runtime events retention; doc TBD",
     "SCORE_IMPROVEMENT_DELTA": "Lead score improvement delta; doc TBD",
     # --- Swarm / Kiro CI controls ------------------------------------------
     "KIRO_STRICT_REPORT": "Swarm worker report contract flag; gates legacy JSON validators in scripts/, not an operator .env.example setting",

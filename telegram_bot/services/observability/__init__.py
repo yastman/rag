@@ -1,1 +1,1 @@
-"""Observability services: search event store, funnel analytics, nurturing, Redis monitor."""
+"""Observability services: search event store, Redis monitor."""
