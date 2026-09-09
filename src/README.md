@@ -29,7 +29,7 @@ kernel lives in `src/runtime/` and does not import `telegram_bot.*`.
 | `models/` | Embedding model singletons + domain models |
 | `observability/` | Structured-logging helpers + no-op `@observe` shim (Langfuse removed) |
 | `retrieval/` | Reranking + topic classification (benchmark/eval strategies) |
-| `runtime/` | Shared runtime engine: graph, pipeline, generation, qdrant, retrieval, grounding, llm |
+| `runtime/` | Shared runtime engine: pipeline, generation, qdrant, retrieval, grounding, llm |
 | `security/` | PII redaction and security utilities |
 | `services/` | Shared service clients (BGE-M3, Kommo, handoff state) |
 | `utils/` | Shared helpers |
