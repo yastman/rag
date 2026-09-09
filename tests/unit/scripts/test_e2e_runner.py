@@ -6,9 +6,14 @@ Mocks TelegramClient entirely — no real credentials needed.
 
 from __future__ import annotations
 
+import dataclasses
+import io
+import sys
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from rich.console import Console
 
 from scripts.e2e.claude_judge import CriterionScore, JudgeResult, PassthroughJudge
 from scripts.e2e.config import E2EConfig
@@ -157,8 +162,8 @@ class TestRequestAssembly:
         assert s.delivery == "text"
 
     @pytest.mark.asyncio
-    async def test_run_single_test_calls_send_and_wait_for_text(self):
-        """run_single_test calls client.send_and_wait for text delivery."""
+    async def test_run_single_test_sends_exact_query_and_configured_timeout(self):
+        """run_single_test calls client.send_and_wait with exact query/timeout kwargs."""
         from scripts.e2e.runner import run_single_test
 
         scenario = Scenario(
@@ -167,6 +172,7 @@ class TestRequestAssembly:
             query="/start",
             group=ScenarioGroup.COMMANDS,
             expected_keywords=["привет"],
+            timeout=7,
         )
 
         mock_response = MagicMock()
@@ -190,12 +196,9 @@ class TestRequestAssembly:
             task_id=task_id,
         )
 
-        mock_client.send_and_wait.assert_awaited_once()
-        call_kwargs = mock_client.send_and_wait.call_args
-        assert (
-            call_kwargs.kwargs.get("query") == "/start" or call_kwargs.args[0] == "/start"
-            if call_kwargs.args
-            else True
+        mock_client.send_and_wait.assert_awaited_once_with(
+            query="/start",
+            response_timeout=7,
         )
         assert result.bot_response == mock_response.text
 
@@ -360,16 +363,22 @@ class TestJudgeVerdict:
 
 
 # ---------------------------------------------------------------------------
-# Exit code
+# Gate exit code (pure policy owner)
 # ---------------------------------------------------------------------------
 
 
-class TestExitCode:
-    """TestReport.pass_rate drives exit code: ≥80% → 0, <80% → 1."""
+class TestGateExitCode:
+    """exit_code(report, GATING_POLICY) requires 100% of selected scenarios.
 
-    def _make_report(self, results: list[E2EResult]) -> E2EReport:
-        from datetime import datetime
+    The gate is green only when the selection is non-empty and every
+    selected scenario passed. Tests assert against the real policy owner —
+    they never restate the policy expression locally.
+    """
 
+    def _make_report(self, passed_flags: list[bool]) -> E2EReport:
+        scenario = get_scenario_by_id("1.1")
+        assert scenario is not None
+        results = [_make_test_result(scenario, passed=p) for p in passed_flags]
         return E2EReport(
             timestamp=datetime.now(),
             bot_username="@testbot",
@@ -380,63 +389,170 @@ class TestExitCode:
             total_duration_ms=1000,
         )
 
-    def test_all_pass_report_exit_zero(self):
-        """All tests pass → pass_rate == 100% ≥ 80 → exit 0."""
-        scenario = get_scenario_by_id("1.1")
-        assert scenario is not None
-        results = [_make_test_result(scenario, passed=True) for _ in range(5)]
-        report = self._make_report(results)
-        assert report.pass_rate == 100.0
-        expected_exit = 0 if report.pass_rate >= 80 else 1
-        assert expected_exit == 0
+    def test_all_selected_pass_exit_zero(self):
+        """5/5 selected scenarios pass → exit 0."""
+        from scripts.e2e.runner import GATING_POLICY, exit_code
 
-    def test_all_fail_report_exit_nonzero(self):
-        """All tests fail → pass_rate == 0% < 80 → exit 1."""
-        scenario = get_scenario_by_id("1.1")
-        assert scenario is not None
-        results = [_make_test_result(scenario, passed=False) for _ in range(5)]
-        report = self._make_report(results)
-        assert report.pass_rate == 0.0
-        expected_exit = 0 if report.pass_rate >= 80 else 1
-        assert expected_exit == 1
+        assert exit_code(self._make_report([True] * 5), GATING_POLICY) == 0
 
-    def test_mixed_pass_rate_below_80_exits_nonzero(self):
-        """3 fail + 2 pass = 40% pass rate → exit 1."""
-        scenario = get_scenario_by_id("1.1")
-        assert scenario is not None
+    def test_one_failure_in_five_exit_nonzero(self):
+        """4 passed / 1 failed must be red — no pass-rate threshold survives."""
+        from scripts.e2e.runner import GATING_POLICY, exit_code
+
+        assert exit_code(self._make_report([True, True, True, True, False]), GATING_POLICY) == 1
+
+    def test_empty_selection_exit_nonzero(self):
+        """An empty selected set can never be green."""
+        from scripts.e2e.runner import GATING_POLICY, exit_code
+
+        assert exit_code(self._make_report([]), GATING_POLICY) == 1
+
+    def test_blocked_scenario_exit_nonzero(self):
+        """A blocked (observability-failed) result is not a pass for the gate."""
+        from scripts.e2e.runner import GATING_POLICY, exit_code
+
+        report = self._make_report([True])
+        report.results[0].observability_ok = False
+        assert report.results[0].passed is False
+        assert exit_code(report, GATING_POLICY) == 1
+
+    def test_gating_policy_has_no_threshold_knob(self):
+        """The gating policy exposes no tunable percentage field."""
+        from scripts.e2e.runner import GatingPolicy
+
+        assert dataclasses.fields(GatingPolicy) == ()
+
+
+# ---------------------------------------------------------------------------
+# main() exit wiring (real CLI boundary)
+# ---------------------------------------------------------------------------
+
+
+class TestMainExitWiring:
+    """Real main() wiring: selection, exact client kwargs, gate exit codes.
+
+    E2ETelegramClient is replaced with an async mock so no credentials or
+    network are needed; everything else (selection, run loop, judge,
+    report generation, gate) is the real runner path.
+    """
+
+    OK_RESPONSE = "Привет! Чем могу помочь с недвижимостью в Болгарии?"
+    FAIL_RESPONSE = "СЕКРЕТНОЕ_СОДЕРЖИМОЕ_90000"
+
+    def _run_main(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+        responses: list[str],
+        scenario_ids: list[str],
+    ) -> tuple[AsyncMock, str, int]:
+        from scripts.e2e import runner as runner_module
+
+        mock_responses = []
+        for text in responses:
+            response = MagicMock()
+            response.text = text
+            response.response_time_ms = 100
+            mock_responses.append(response)
+
+        client = AsyncMock()
+        client.send_and_wait = AsyncMock(side_effect=mock_responses)
+        client.__aenter__.return_value = client
+
+        monkeypatch.setattr(runner_module, "E2ETelegramClient", MagicMock(return_value=client))
+        monkeypatch.setattr(
+            runner_module,
+            "E2EConfig",
+            lambda: _make_config(between_tests_delay=0, reports_dir=str(tmp_path / "reports")),
+        )
+        captured = io.StringIO()
+        monkeypatch.setattr(runner_module, "console", Console(file=captured, width=240))
+
+        argv = ["runner.py"]
+        for sid in scenario_ids:
+            argv.extend(["--scenario", sid])
+        argv.append("--no-judge")
+        monkeypatch.setattr(sys, "argv", argv)
+
+        with pytest.raises(SystemExit) as excinfo:
+            runner_module.main()
+        return client, captured.getvalue(), excinfo.value.code
+
+    def test_main_four_of_five_selected_exits_nonzero(self, monkeypatch, tmp_path):
+        """4 passed / 1 failed (80% pass rate) must exit nonzero through main()."""
+        client, _out, code = self._run_main(
+            monkeypatch,
+            tmp_path,
+            responses=[self.OK_RESPONSE] * 4 + [self.FAIL_RESPONSE],
+            scenario_ids=["1.1", "1.1", "1.1", "1.1", "1.2"],
+        )
+        assert client.send_and_wait.await_count == 5
+        assert code == 1
+
+    def test_main_all_selected_pass_exits_zero_with_exact_kwargs(self, monkeypatch, tmp_path):
+        """5/5 → exit 0, and the bot client got the exact query/timeout kwargs."""
+        client, _out, code = self._run_main(
+            monkeypatch,
+            tmp_path,
+            responses=[self.OK_RESPONSE],
+            scenario_ids=["1.1"],
+        )
+        assert code == 0
+        expected_timeout = get_scenario_by_id("1.1").timeout
+        client.send_and_wait.assert_awaited_once_with(
+            query="/start",
+            response_timeout=expected_timeout,
+        )
+
+    def test_main_gate_failure_names_failed_ids_without_response_content(
+        self, monkeypatch, tmp_path
+    ):
+        """A red gate names the failed scenario IDs and never echoes bot responses."""
+        _client, out, code = self._run_main(
+            monkeypatch,
+            tmp_path,
+            responses=[self.OK_RESPONSE, self.FAIL_RESPONSE],
+            scenario_ids=["1.1", "1.2"],
+        )
+        assert code == 1
+        assert "E2E gate failed" in out
+        assert "1.2" in out
+        assert self.FAIL_RESPONSE not in out
+
+
+# ---------------------------------------------------------------------------
+# Summary report redaction
+# ---------------------------------------------------------------------------
+
+
+class TestSummaryRedactedReport:
+    """print_summary names failed/blocked scenario IDs without echoing content."""
+
+    def test_failed_ids_listed_without_responses(self, monkeypatch):
+        from scripts.e2e import runner as runner_module
+
         results = [
-            _make_test_result(scenario, passed=False),
-            _make_test_result(scenario, passed=False),
-            _make_test_result(scenario, passed=False),
-            _make_test_result(scenario, passed=True),
-            _make_test_result(scenario, passed=True),
+            _make_test_result(get_scenario_by_id("1.1"), passed=True),
+            _make_test_result(get_scenario_by_id("1.2"), passed=False),
         ]
-        report = self._make_report(results)
-        assert report.pass_rate == 40.0
-        expected_exit = 0 if report.pass_rate >= 80 else 1
-        assert expected_exit == 1
+        results[1].bot_response = "СЕКРЕТНОЕ_СОДЕРЖИМОЕ_90000"
+        report = E2EReport(
+            timestamp=datetime.now(),
+            bot_username="@testbot",
+            judge_provider="passthrough",
+            judge_mode="no-judge",
+            litellm_route_proof=None,
+            results=results,
+            total_duration_ms=1000,
+        )
 
-    def test_exactly_80_percent_exits_zero(self):
-        """Exactly 4/5 pass = 80% → exit 0."""
-        scenario = get_scenario_by_id("1.1")
-        assert scenario is not None
-        results = [
-            _make_test_result(scenario, passed=True),
-            _make_test_result(scenario, passed=True),
-            _make_test_result(scenario, passed=True),
-            _make_test_result(scenario, passed=True),
-            _make_test_result(scenario, passed=False),
-        ]
-        report = self._make_report(results)
-        assert report.pass_rate == 80.0
-        expected_exit = 0 if report.pass_rate >= 80 else 1
-        assert expected_exit == 0
+        captured = io.StringIO()
+        monkeypatch.setattr(runner_module, "console", Console(file=captured, width=240))
+        runner_module.print_summary(report)
+        out = captured.getvalue()
 
-    def test_empty_report_no_crash(self):
-        """An empty report doesn't divide by zero."""
-        report = self._make_report([])
-        assert report.pass_rate == 0.0
-        assert report.total_tests == 0
+        assert "1.2" in out
+        assert "СЕКРЕТНОЕ_СОДЕРЖИМОЕ_90000" not in out
 
 
 # ---------------------------------------------------------------------------
