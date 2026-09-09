@@ -113,9 +113,9 @@ def test_phase1_shims_re_export_from_canonical_src() -> None:
             continue
 
         # Derive the expected ``from src.<module>`` prefix from the src path.
-        # e.g. src/scoring.py -> src.scoring; src/services/content_loader.py
-        # -> src.services.content_loader; src/observability/__init__.py
-        # -> src.observability (strip trailing .__init__ for packages)
+        # e.g. src/services/content_loader.py -> src.services.content_loader;
+        # src/observability/__init__.py -> src.observability (strip trailing
+        # .__init__ for packages)
         rel = src_path[len("src/") :]
         rel = rel.removesuffix(".py")
         expected_module = ("src." + rel.replace("/", ".")).removesuffix(".__init__")

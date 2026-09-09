@@ -610,80 +610,40 @@ class TestCmdRun:
         mock_run_watch.assert_called_once_with(config)
 
     # -------------------------------------------------------------------
-    # One-shot exit-code / terminal-trace contract (#3489)
+    # One-shot exit-code contract (#3489)
     # -------------------------------------------------------------------
 
     @staticmethod
-    def _run_one_shot(run_once_return):
+    def _run_one_shot(run_once_return) -> int:
         """Invoke the real cmd_run in one-shot mode with a scripted run_once."""
         config = _make_config()
         with (
             patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
             patch("src.ingestion.unified.flow.run_once", return_value=run_once_return),
-            patch("src.ingestion.unified.commands.try_update_ingestion_trace") as trace,
         ):
-            exit_code = cmd_run(argparse.Namespace(watch=False))
+            return cmd_run(argparse.Namespace(watch=False))
 
-        return exit_code, trace
-
-    @staticmethod
-    def _trace_statuses(trace) -> list[str]:
-        return [call.kwargs["status"] for call in trace.call_args_list]
-
-    def test_partial_failure_exits_1_with_error_trace(self):
+    def test_partial_failure_exits_1(self):
         """A finished one-shot with per-file errors must fail the command (#3489)."""
         result = IngestionResult(processed=2, skipped=1, errors=1, error_details=["broken.md"])
 
-        exit_code, trace = self._run_one_shot(result)
+        assert self._run_one_shot(result) == 1
 
-        assert exit_code == 1
-        trace.assert_any_call(
-            command="run",
-            status="error",
-            metadata={"watch": False, "processed": 2, "skipped": 1, "errors": 1},
-        )
-        # The error status is terminal: no trailing "completed" after it.
-        assert self._trace_statuses(trace) == ["started", "error"]
-
-    def test_successful_run_exits_0_with_counters_in_trace(self):
+    def test_successful_run_exits_0(self):
         result = IngestionResult(processed=2, skipped=0, errors=0)
 
-        exit_code, trace = self._run_one_shot(result)
+        assert self._run_one_shot(result) == 0
 
-        assert exit_code == 0
-        trace.assert_any_call(
-            command="run",
-            status="completed",
-            metadata={"watch": False, "processed": 2, "skipped": 0, "errors": 0},
-        )
-        assert self._trace_statuses(trace) == ["started", "completed"]
+    def test_bare_result_exits_0(self):
+        assert self._run_one_shot(IngestionResult()) == 0
 
-    def test_bare_result_exits_0_with_zero_counters(self):
-        exit_code, trace = self._run_one_shot(IngestionResult())
-
-        assert exit_code == 0
-        trace.assert_any_call(
-            command="run",
-            status="completed",
-            metadata={"watch": False, "processed": 0, "skipped": 0, "errors": 0},
-        )
-        assert self._trace_statuses(trace) == ["started", "completed"]
-
-    def test_noop_only_skipped_exits_0_with_counters(self):
+    def test_noop_only_skipped_exits_0(self):
         result = IngestionResult(processed=0, skipped=3, errors=0)
 
-        exit_code, trace = self._run_one_shot(result)
+        assert self._run_one_shot(result) == 0
 
-        assert exit_code == 0
-        trace.assert_any_call(
-            command="run",
-            status="completed",
-            metadata={"watch": False, "processed": 0, "skipped": 3, "errors": 0},
-        )
-        assert self._trace_statuses(trace) == ["started", "completed"]
-
-    def test_run_once_exception_reraises_with_error_trace(self):
-        """Unexpected exceptions keep the error trace and are re-raised."""
+    def test_run_once_exception_reraises(self):
+        """Unexpected exceptions are re-raised, not swallowed into an exit code."""
         config = _make_config()
         with (
             patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
@@ -691,18 +651,11 @@ class TestCmdRun:
                 "src.ingestion.unified.flow.run_once",
                 MagicMock(side_effect=RuntimeError("boom")),
             ),
-            patch("src.ingestion.unified.commands.try_update_ingestion_trace") as trace,
             pytest.raises(RuntimeError, match="boom"),
         ):
             cmd_run(argparse.Namespace(watch=False))
 
-        trace.assert_any_call(
-            command="run",
-            status="error",
-            metadata={"watch": False, "error_type": "RuntimeError"},
-        )
-
-    def test_watch_mode_calls_only_run_watch_and_keeps_result(self):
+    def test_watch_mode_calls_only_run_watch_and_exits_0(self):
         config = _make_config()
         mock_run_watch = MagicMock()
         mock_run_once = MagicMock()
@@ -711,15 +664,12 @@ class TestCmdRun:
             patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
             patch("src.ingestion.unified.flow.run_watch", mock_run_watch),
             patch("src.ingestion.unified.flow.run_once", mock_run_once),
-            patch("src.ingestion.unified.commands.try_update_ingestion_trace") as trace,
         ):
             exit_code = cmd_run(argparse.Namespace(watch=True))
 
         assert exit_code == 0
         mock_run_watch.assert_called_once_with(config)
         mock_run_once.assert_not_called()
-        assert self._trace_statuses(trace) == ["started", "completed"]
-        assert trace.call_args_list[-1].kwargs["metadata"] == {"watch": True}
 
 
 # ---------------------------------------------------------------------------
@@ -1062,43 +1012,3 @@ class TestMainDispatch:
             main()
 
         mock_logging.assert_called_once_with(True)
-
-
-# ---------------------------------------------------------------------------
-# main() lifecycle flush (#2214)
-# ---------------------------------------------------------------------------
-
-
-class TestMainFlushesIngestionTraces:
-    """main() must flush buffered ingestion traces in a finally block (#2214).
-
-    The BatchSpanProcessor only auto-flushes on a clean atexit; a command that
-    raises (or an abrupt exit) would otherwise drop buffered ingestion spans.
-    """
-
-    def test_main_flushes_on_success(self):
-        from src.ingestion.unified import main as ingestion_main
-
-        with (
-            patch.object(ingestion_main, "cmd_run", return_value=0) as mock_cmd,
-            patch.object(ingestion_main, "flush_ingestion_traces") as mock_flush,
-            patch("sys.argv", ["unified", "run"]),
-        ):
-            result = ingestion_main.main()
-
-        assert result == 0
-        mock_cmd.assert_called_once()
-        mock_flush.assert_called_once_with()
-
-    def test_main_flushes_even_when_command_raises(self):
-        from src.ingestion.unified import main as ingestion_main
-
-        with (
-            patch.object(ingestion_main, "cmd_run", side_effect=RuntimeError("boom")),
-            patch.object(ingestion_main, "flush_ingestion_traces") as mock_flush,
-            patch("sys.argv", ["unified", "run"]),
-            pytest.raises(RuntimeError, match="boom"),
-        ):
-            ingestion_main.main()
-
-        mock_flush.assert_called_once_with()

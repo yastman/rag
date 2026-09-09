@@ -18,9 +18,6 @@ from src.ingestion.unified.colbert_backfill import (
     compute_colbert_coverage,
     inspect_collection_schema,
 )
-from src.ingestion.unified.observability import (
-    try_update_ingestion_trace,
-)
 
 
 logger = logging.getLogger(__name__)
@@ -53,48 +50,20 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     Returns 0 only when the finished one-shot batch reports no per-file
     errors; any ``errors > 0`` in the orchestrator result fails the command
-    with exit code 1 and a terminal ``error`` trace (#3489).
+    with exit code 1 (#3489). Watch mode returns 0 when the loop exits.
     """
     from src.ingestion.unified.config import UnifiedConfig
     from src.ingestion.unified.flow import run_once, run_watch
 
     config = UnifiedConfig()
-    watch_mode = bool(args.watch)
-    try_update_ingestion_trace(command="run", status="started", metadata={"watch": watch_mode})
 
-    try:
-        if watch_mode:
-            logging.info("Starting watch mode via new orchestrator path")
-            run_watch(config)
-            result = None
-        else:
-            result = run_once(config)
-    except Exception as exc:
-        try_update_ingestion_trace(
-            command="run",
-            status="error",
-            metadata={"watch": watch_mode, "error_type": type(exc).__name__},
-        )
-        raise
-
-    if result is None:
-        # Watch mode keeps its previous terminal shape (#3489 keeps it as-is).
-        try_update_ingestion_trace(
-            command="run", status="completed", metadata={"watch": watch_mode}
-        )
+    if bool(args.watch):
+        logging.info("Starting watch mode via new orchestrator path")
+        run_watch(config)
         return 0
 
-    metadata = {
-        "watch": False,
-        "processed": result.processed,
-        "skipped": result.skipped,
-        "errors": result.errors,
-    }
-    status = "error" if result.errors > 0 else "completed"
-    exit_code = 1 if result.errors > 0 else 0
-    try_update_ingestion_trace(command="run", status=status, metadata=metadata)
-
-    return exit_code
+    result = run_once(config)
+    return 1 if result.errors > 0 else 0
 
 
 async def cmd_preflight(args: argparse.Namespace) -> int:
@@ -104,7 +73,6 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     from src.ingestion.unified.config import UnifiedConfig
 
     config = UnifiedConfig()
-    try_update_ingestion_trace(command="preflight", status="started")
     timeout = httpx.Timeout(float(os.getenv("BGE_M3_TIMEOUT", "60")))
     results: dict[str, bool] = {}
     sync_info = _inspect_sync_dir(config.sync_dir, config.supported_extensions)
@@ -191,11 +159,6 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     total = len(results)
     all_ok = ok == total
     print(f"\nPreflight: {ok}/{total} checks passed {'— READY' if all_ok else '— NOT READY'}")
-    try_update_ingestion_trace(
-        command="preflight",
-        status="completed" if all_ok else "failed",
-        metadata={"checks_passed": ok, "checks_total": total},
-    )
     return 0 if all_ok else 1
 
 

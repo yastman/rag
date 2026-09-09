@@ -493,7 +493,6 @@ def _base_dyn() -> dict:
         "get_prompt_with_object": lambda _n, **_kw: (None, None),
         "build_system_prompt_with_manager": lambda **_kw: "style_sys_golden",
         "get_token_limit": lambda _s, _d: 512,
-        "PipelineMetrics": MagicMock(get=MagicMock(return_value=MagicMock(record=MagicMock()))),
     }
 
 

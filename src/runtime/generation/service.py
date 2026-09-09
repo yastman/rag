@@ -15,6 +15,7 @@ from typing import Any
 
 from src.adapters.llm.base import LLMConnectionError
 from src.runtime.grounding.policy import should_safe_fallback
+from src.runtime.services.metrics import record_pipeline_latency
 
 from .contracts import GenerationCallable, GenerationRequest, GenerationResult
 from .messages import (
@@ -97,7 +98,7 @@ async def generate_answer(
     ):
         elapsed = time.monotonic() - t0
         with contextlib.suppress(Exception):
-            dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
+            record_pipeline_latency("generate", elapsed)
         answer = extra.get("build_fallback_response", _build_fallback_response)(docs)
         current_latency = request.latency_stages or {}
         return GenerationResult(
@@ -211,7 +212,7 @@ async def generate_answer(
 
     elapsed = time.monotonic() - t0
     with contextlib.suppress(Exception):
-        dyn["PipelineMetrics"].get().record("generate", elapsed * 1000)
+        record_pipeline_latency("generate", elapsed)
 
     llm_tps: float | None = None
     if ttft_ms > 0 and completion_tokens is not None:

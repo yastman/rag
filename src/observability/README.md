@@ -8,16 +8,16 @@ Observability helpers for the `src/` layer. **Langfuse and OpenTelemetry were fu
 
 | File | Purpose |
 |------|---------|
-| [`__init__.py`](./__init__.py) | Public helpers + no-op tracing shims |
-| [`scores.py`](./scores.py) | `score`, `write_scores`, `write_history_scores`, `compute_checkpointer_overhead_proxy_ms` |
+| [`__init__.py`](./__init__.py) | `mask_pii` — the single retained helper |
 
 ## What's real vs. shim
 
-- **Real utilities:** `mask_pii` (PII masking for safe payloads), `propagate_attributes`
-  (context-propagation seam), and everything in `scores.py`.
-- **No-op shims kept for import compatibility only:** `observe` (both `@observe` and
-  `@observe(name=...)` forms), `traced_pipeline`, `get_client` (returns `None`). They exist so
-  callers that still wrap code in these constructs keep working — they do **not** trace.
+- **Real utility:** `mask_pii` (PII masking for safe payloads).
+- **No shims remain.** The former no-op tracing shims (`observe`, `traced_pipeline`,
+  `get_client`, `propagate_attributes`) and the no-op scoring stubs (`score`, `write_scores`,
+  `write_history_scores`; #3331) were removed once they had no production callers. Do not
+  reintroduce compatibility no-ops here; if telemetry returns it belongs at a real backend
+  boundary.
 
 ## Boundaries
 

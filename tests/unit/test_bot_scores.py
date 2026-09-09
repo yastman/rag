@@ -158,35 +158,6 @@ async def _run_handle_query(
         await bot.handle_query(message)  # type: ignore[attr-defined]
 
 
-class TestCreateScoreNoBarId:
-    """Regression guard: create_score must use score_id=, never id= (#480)."""
-
-    def test_no_bare_id_kwarg_in_create_score_calls(self):
-        """All create_score() calls use score_id= for idempotency, not id=."""
-        import ast
-        from pathlib import Path
-
-        targets = [
-            Path("telegram_bot/scoring.py"),
-            Path("telegram_bot/bot.py"),
-        ]
-        violations = []
-        for path in targets:
-            if not path.exists():
-                continue
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                func = node.func
-                # Match *.create_score(...) calls
-                if isinstance(func, ast.Attribute) and func.attr == "create_score":
-                    for kw in node.keywords:
-                        if kw.arg == "id":
-                            violations.append(f"{path}:{node.lineno}")
-        assert violations == []
-
-
 class TestTextPathFeedbackButtons:
     """Test feedback buttons and source attribution in text path (#426)."""
 

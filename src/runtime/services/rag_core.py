@@ -4,7 +4,7 @@ Extracted to avoid ~300 LOC duplication between the pipeline adapters and
   the query helpers (now in src/runtime/routing and src/runtime/safety,
   formerly src/runtime/graph/nodes).
 
-Core functions are pure computation (no spans, no PipelineMetrics).
+Core functions are pure computation (no spans, no metrics).
 Adapters (pipeline / nodes) handle metrics and state wrapping.
 """
 
@@ -131,7 +131,7 @@ async def perform_rerank(
         - rerank_cache_hit: True if result came from cache
 
     Notes:
-        Callers are responsible for span tracking, PipelineMetrics,
+        Callers are responsible for latency recording
         and fallback logic when reranker raises an exception.
         When no reranker is provided, returns all documents unmodified (no sort).
         Callers should sort/trim on the no-reranker path if needed.

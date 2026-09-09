@@ -5,19 +5,19 @@ as part of the reverse-layering fix (#2047 / #2049). This module remains
 so that existing ``from telegram_bot.services.metrics import …`` imports
 across ``telegram_bot/``, ``tests/``, and the rest of the repo continue
 to work unchanged.
+
+The legacy ``record_counter_metric`` shim and ``PipelineMetrics`` singleton
+proxy were removed with the no-op scoring surface (#3331); only the retained
+canonical event/latency helpers are re-exported here.
 """
 
 from src.runtime.services.metrics import (
-    PipelineMetrics,
-    record_counter_metric,
     record_pipeline_event,
     record_pipeline_latency,
 )
 
 
 __all__ = [
-    "PipelineMetrics",
-    "record_counter_metric",
     "record_pipeline_event",
     "record_pipeline_latency",
 ]
