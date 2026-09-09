@@ -6,6 +6,7 @@ import asyncio
 import logging
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -196,6 +197,8 @@ def print_summary(report: TestReport):
     table.add_row("Duration", f"{report.total_duration_ms / 1000:.1f}s")
     table.add_row("Bot Target", report.bot_username)
     table.add_row("Judge", f"{report.judge_provider} ({report.judge_mode})")
+    if report.failed_tests:
+        table.add_row("Failed Scenarios", ", ".join(failed_scenario_ids(report)))
     if report.litellm_route_proof:
         table.add_row(
             "LiteLLM Route",
@@ -206,6 +209,33 @@ def print_summary(report: TestReport):
         )
 
     console.print(table)
+
+
+@dataclass(frozen=True)
+class GatingPolicy:
+    """E2E gate policy: 100% of selected scenarios must pass.
+
+    The gate is green only when the selected set is non-empty and every
+    selected scenario result passed (judge verdict, no timeout/error, and
+    no observability block). An empty selection can never be green.
+    """
+
+    def is_satisfied(self, report: TestReport) -> bool:
+        """True only when at least one scenario ran and all of them passed."""
+        return report.total_tests > 0 and all(result.passed for result in report.results)
+
+
+GATING_POLICY = GatingPolicy()
+
+
+def exit_code(report: TestReport, policy: GatingPolicy = GATING_POLICY) -> int:
+    """Pure exit-code owner for the gate: 0 only when the policy is satisfied."""
+    return 0 if policy.is_satisfied(report) else 1
+
+
+def failed_scenario_ids(report: TestReport) -> list[str]:
+    """IDs of selected scenarios that did not pass (failed or blocked)."""
+    return [result.scenario.id for result in report.results if not result.passed]
 
 
 def main():
@@ -330,8 +360,14 @@ def main():
     console.print(f"  JSON: {json_path}")
     console.print(f"  HTML: {html_path}")
 
-    # Exit code based on pass rate
-    sys.exit(0 if report.pass_rate >= 80 else 1)
+    # Gate on 100% of selected scenarios: any failure or block turns the gate red.
+    code = exit_code(report, GATING_POLICY)
+    if code != 0:
+        console.print(
+            f"[red]E2E gate failed:[/] {report.failed_tests} of {report.total_tests} "
+            f"selected scenarios did not pass: {', '.join(failed_scenario_ids(report))}"
+        )
+    sys.exit(code)
 
 
 if __name__ == "__main__":
