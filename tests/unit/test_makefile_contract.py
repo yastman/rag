@@ -277,17 +277,18 @@ def test_e2e_trace_targets_use_runtime_env_file() -> None:
         )
 
 
-def test_runtime_env_file_has_safe_fallback() -> None:
-    """RAG_RUNTIME_ENV_FILE must have a safe CI-fallback *and* be exported so recipes
-    receive it even when the shell environment does not set it."""
+def test_runtime_env_file_defaults_to_explicit_operator_env() -> None:
+    """RAG_RUNTIME_ENV_FILE must default to the explicit operator env (#3367)
+    *and* be exported so recipes receive it even when the shell does not set it."""
     text = _makefile_text()
     assert "RAG_RUNTIME_ENV_FILE" in text, "RAG_RUNTIME_ENV_FILE not found in Makefile"
-    assert "tests/fixtures/compose.ci.env" in text, (
-        "Makefile must reference tests/fixtures/compose.ci.env as the safe fallback"
+    assert "tests/fixtures/compose.ci.env" not in text, (
+        "Makefile must not reference the CI fixture anywhere (#3367): real runtime "
+        "commands never fall back to dummy credentials"
     )
     assert "export RAG_RUNTIME_ENV_FILE" in text, (
         "Makefile must export RAG_RUNTIME_ENV_FILE so recipe shells "
-        "receive the Make-defined fallback even when the environment does not set it"
+        "receive the Make-defined default even when the environment does not set it"
     )
 
 
@@ -301,7 +302,10 @@ def test_runtime_env_file_resolves_before_export() -> None:
         "RAG_RUNTIME_ENV_FILE is exported to recipe shells, so it must resolve "
         "to a concrete env-file path before export, not a deferred shell expression"
     )
-    assert "$(shell " in value
+    assert "$(shell " not in value
+    assert "$(OPERATOR_ENV)" in value, (
+        "RAG_RUNTIME_ENV_FILE must default to the explicit operator env file (#3367)"
+    )
 
 
 # --- Local all-test entrypoint contract tests ---

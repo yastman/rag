@@ -32,7 +32,12 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
     assert "cp .env.example .env" in local_dev
     assert "Copy `.env.example` to `.env`" in docker_doc
     assert 'env_file=".env"' in bot_config
-    assert "RAG_RUNTIME_ENV_FILE ?= $(shell [ -f .env ]" in makefile
+    assert "RAG_RUNTIME_ENV_FILE ?= $(OPERATOR_ENV)" in makefile
+    assert "OPERATOR_ENV ?= .env" in makefile
+    assert "compose.ci.env" not in makefile, (
+        "the CI fixture must stay out of the Makefile (#3367): the operator env "
+        "is explicit and never falls back to CI dummy credentials"
+    )
     assert "local-redis-recreate" in makefile
     assert "make local-redis-recreate" in env_example
     assert "Tunables live in " in local_dev

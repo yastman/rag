@@ -1,8 +1,9 @@
 # compose.dev.yml — Development overrides: ports, colbert reranking, ML profile-gating.
 # Usage: docker compose -f compose.yml -f compose.dev.yml up -d
 #
-# Docker credentials must come from .env or an explicit --env-file. The make
-# targets fall back to tests/fixtures/compose.ci.env when .env is absent.
+# Docker credentials must come from an explicit operator env file (.env or
+# OPERATOR_ENV=...). Build/up targets validate it first and never fall back to
+# test fixtures (#3367); CI static rendering passes --env-file explicitly.
 
 services:
   postgres:
