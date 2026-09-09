@@ -921,6 +921,11 @@ class TestBotLifecycle:
 
     async def test_start_starts_polling_lock_heartbeat_when_redis_available(self, mock_config):
         """start() should create a polling lock heartbeat scheduler after acquiring the lock."""
+        # #3362: the distributed polling lock is a multi_instance behavior;
+        # single_instance starts without a lock claim.
+        from src.runtime.integrations.redis_mode import RedisMode
+
+        mock_config.redis_mode = RedisMode.MULTI_INSTANCE
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
@@ -1117,9 +1122,7 @@ class TestBotLifecycle:
         bot._i18n_hub = create_translator_hub()
         bot._user_service = MagicMock()
 
-        with patch(
-            "telegram_bot.middlewares.i18n.setup_i18n_middleware"
-        ) as setup_i18n_middleware:
+        with patch("telegram_bot.middlewares.i18n.setup_i18n_middleware") as setup_i18n_middleware:
             setup_workflow_data(bot)
 
         setup_i18n_middleware.assert_called_once_with(bot.dp, bot._i18n_hub, bot._user_service)

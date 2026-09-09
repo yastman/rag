@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import httpx
 import pytest
 
+from src.runtime.integrations.redis_mode import RedisMode
 from telegram_bot.preflight import (
     CACHE_KEY_PREFIXES,
     CRITICAL_RETRIES,
@@ -91,6 +92,7 @@ def _ready_qdrant_client(
 def _make_config(**overrides) -> MagicMock:
     """Create a minimal mock BotConfig with sensible defaults."""
     cfg = MagicMock()
+    cfg.redis_mode = overrides.get("redis_mode", RedisMode.SINGLE_INSTANCE)
     cfg.redis_url = overrides.get("redis_url", "redis://localhost:6379")
     cfg.qdrant_url = overrides.get("qdrant_url", "http://localhost:6333")
     cfg.qdrant_api_key = overrides.get("qdrant_api_key")
@@ -580,7 +582,9 @@ class TestCheckDependencies:
         assert "langfuse" not in results  # removed in #2969
 
     async def test_critical_failure_raises_preflight_error(self):
-        config = _make_config()
+        # #3362: redis failure is fatal only in multi_instance mode
+        # ("Redis required at startup"); single_instance degrades instead.
+        config = _make_config(redis_mode=RedisMode.MULTI_INSTANCE)
 
         async def fake_critical(name, cfg, client, **_kwargs):
             return name != "redis"
@@ -637,7 +641,7 @@ class TestCheckDependencies:
         assert call_counts["qdrant"] == 2  # retried once
 
     async def test_redis_cache_skipped_when_redis_fails(self):
-        config = _make_config()
+        config = _make_config(redis_mode=RedisMode.MULTI_INSTANCE)
 
         async def fake_critical(name, cfg, client, **_kwargs):
             return name != "redis"

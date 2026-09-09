@@ -13,6 +13,7 @@ from src.runtime.integrations.cache import (
     CACHE_VERSION,
     SEMANTIC_CACHE_VERSION,
     CacheLayerManager,
+    _create_redis_client,
     _create_semantic_cache,
     _normalize_query_for_cache,
 )
@@ -159,7 +160,7 @@ class TestCacheLayerManagerInitialize:
         mock_redis.ping = AsyncMock(return_value=True)
 
         with (
-            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_redis_client", return_value=mock_redis),
             patch(
                 "src.runtime.integrations.cache._create_semantic_cache", return_value=None
             ) as mock_create,
@@ -172,18 +173,12 @@ class TestCacheLayerManagerInitialize:
         assert mock_create.call_args.kwargs.get("async_redis_client") is mock_redis
 
     async def test_initialize_uses_hardened_connection_params(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-
+        # #3362: connection params live in the _create_redis_client seam now.
         mock_redis = AsyncMock()
         mock_redis.ping = AsyncMock(return_value=True)
 
-        with (
-            patch(
-                "src.runtime.integrations.cache.redis.from_url", return_value=mock_redis
-            ) as mock_from_url,
-            patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
-        ):
-            await mgr.initialize()
+        with patch("redis.asyncio.from_url", return_value=mock_redis) as mock_from_url:
+            _create_redis_client("redis://localhost:6379")
 
         call_kwargs = mock_from_url.call_args[1]
         assert call_kwargs["socket_timeout"] == 5
@@ -202,7 +197,7 @@ class TestCacheLayerManagerInitialize:
         mock_redis.ping = AsyncMock(return_value=True)
 
         with (
-            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_redis_client", return_value=mock_redis),
             patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
         ):
             await mgr.initialize()
@@ -214,7 +209,7 @@ class TestCacheLayerManagerInitialize:
         mgr = CacheLayerManager(redis_url="redis://bad:6379")
 
         with patch(
-            "src.runtime.integrations.cache.redis.from_url",
+            "src.runtime.integrations.cache._create_redis_client",
             side_effect=ConnectionError("refused"),
         ):
             await mgr.initialize()
@@ -227,7 +222,7 @@ class TestCacheLayerManagerInitialize:
         mock_redis = AsyncMock()
         mock_redis.ping = AsyncMock(side_effect=ConnectionError("pool exhausted"))
 
-        with patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis):
+        with patch("src.runtime.integrations.cache._create_redis_client", return_value=mock_redis):
             await mgr.initialize()
 
         assert mgr.redis is None
@@ -238,7 +233,7 @@ class TestCacheLayerManagerInitialize:
         mock_redis.ping = AsyncMock(return_value=True)
 
         with (
-            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_redis_client", return_value=mock_redis),
             patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
             caplog.at_level("INFO", logger="src.runtime.integrations.cache"),
         ):
@@ -254,7 +249,7 @@ class TestCacheLayerManagerInitialize:
         mock_redis.ping = AsyncMock(return_value=True)
 
         with (
-            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_redis_client", return_value=mock_redis),
             patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
             caplog.at_level("INFO", logger="src.runtime.integrations.cache"),
         ):
@@ -748,7 +743,7 @@ class TestEmbeddingsCacheSDK:
         mock_embed_cache = MagicMock()
 
         with (
-            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_redis_client", return_value=mock_redis),
             patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
             patch(
                 "src.runtime.integrations.cache._create_embed_cache",
@@ -1242,17 +1237,18 @@ class TestRedisPoolConfig:
     """Redis pool has explicit connection limit."""
 
     async def test_redis_pool_has_max_connections(self):
-        """CacheLayerManager sets max_connections on Redis pool."""
-        with patch("src.runtime.integrations.cache.redis") as mock_redis:
-            mock_client = AsyncMock()
-            mock_client.ping = AsyncMock()
-            mock_redis.from_url.return_value = mock_client
+        """CacheLayerManager sets max_connections on Redis pool.
 
-            cache = CacheLayerManager(redis_url="redis://localhost:6379")
-            with patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None):
-                await cache.initialize()
+        #3362: the client construction moved into the _create_redis_client
+        seam; the pool contract is asserted against that seam directly.
+        """
+        mock_client = AsyncMock()
+        mock_client.ping = AsyncMock()
 
-            call_kwargs = mock_redis.from_url.call_args[1]
+        with patch("redis.asyncio.from_url", return_value=mock_client) as mock_from_url:
+            _create_redis_client("redis://localhost:6379")
+
+            call_kwargs = mock_from_url.call_args[1]
             assert "max_connections" in call_kwargs
             assert call_kwargs["max_connections"] == 50
 

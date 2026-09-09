@@ -26,6 +26,8 @@ from typing import TYPE_CHECKING, Any
 from pydantic import AliasChoices, BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.runtime.integrations.redis_mode import DEFAULT_REDIS_MODE, RedisMode, parse_redis_mode
+
 
 # ---------------------------------------------------------------------------
 # Sub-config models (pydantic BaseModel — validated, no env-loading)
@@ -78,6 +80,9 @@ class RetrievalConfig(BaseModel):
     search_top_k: int = 40
     rerank_top_k: int = 7
     redis_url: str = "redis://redis:6379"
+    # Honest Redis operating mode (decision #3354). The reusable core
+    # defaults to ``disabled``; the bot/Compose layer overrides explicitly.
+    redis_mode: RedisMode = DEFAULT_REDIS_MODE
     max_rewrite_attempts: int = 1
     # RRF score scale: 1/(rank+k), k=60 default. Top-1 = ~0.016, Top-20 last = ~0.012.
     # skip_rerank_threshold >= 0.018 means top-1 result already has very high rank — safe to skip
@@ -243,6 +248,10 @@ class _GraphEnvSettings(BaseSettings):
         default="redis://redis:6379",
         validation_alias=AliasChoices("redis_url", "REDIS_URL"),
     )
+    redis_mode: str = Field(
+        default="",
+        validation_alias=AliasChoices("redis_mode", "REDIS_MODE"),
+    )
     max_rewrite_attempts: int = Field(
         default=1,
         validation_alias=AliasChoices("max_rewrite_attempts", "MAX_REWRITE_ATTEMPTS"),
@@ -363,6 +372,7 @@ _FLAT_KWARGS: dict[str, tuple[str, str]] = {
     "search_top_k": ("retrieval", "search_top_k"),
     "rerank_top_k": ("retrieval", "rerank_top_k"),
     "redis_url": ("retrieval", "redis_url"),
+    "redis_mode": ("retrieval", "redis_mode"),
     "max_rewrite_attempts": ("retrieval", "max_rewrite_attempts"),
     "skip_rerank_threshold": ("retrieval", "skip_rerank_threshold"),
     "relevance_threshold_rrf": ("retrieval", "relevance_threshold_rrf"),
@@ -456,6 +466,7 @@ class GraphConfig:
         search_top_k: int
         rerank_top_k: int
         redis_url: str
+        redis_mode: RedisMode
         max_rewrite_attempts: int
         skip_rerank_threshold: float
         relevance_threshold_rrf: float
@@ -554,6 +565,7 @@ class GraphConfig:
                 search_top_k=e.search_top_k,
                 rerank_top_k=e.rerank_top_k,
                 redis_url=e.redis_url,
+                redis_mode=parse_redis_mode(e.redis_mode),
                 max_rewrite_attempts=e.max_rewrite_attempts,
                 skip_rerank_threshold=e.skip_rerank_threshold,
                 relevance_threshold_rrf=e.relevance_threshold_rrf,

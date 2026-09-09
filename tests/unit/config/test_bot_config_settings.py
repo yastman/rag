@@ -163,6 +163,8 @@ class TestBotConfigLiveSchemaDefaults:
         "bge_m3_url": "http://localhost:8000",
         "redis_password": "",
         "redis_url": "redis://localhost:6379",
+        # Honest Redis mode (#3362): reusable-core default is disabled.
+        "redis_mode": "disabled",
         "qdrant_url": "http://localhost:6333",
         "qdrant_api_key": None,
         "qdrant_collection": "gdrive_documents_bge",

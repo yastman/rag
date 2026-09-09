@@ -26,12 +26,16 @@ from telegram_bot.startup_status import StartupReport, StartupSeverity, StartupS
 
 def _make_bot_stub() -> MagicMock:
     """Minimal bot stub satisfying start_bot's duck-typed expectations."""
+    from src.runtime.integrations.redis_mode import RedisMode
+
     bot = MagicMock()
     bot.dp = MagicMock()
     bot.dp.start_polling = AsyncMock()
     bot._polling_lock_task = None
     bot._cache = MagicMock()
     bot._cache.redis = None  # skip polling-lock and handoff sections
+    # Disabled Redis mode honestly reports OK with no cache backend (#3362).
+    bot.config.redis_mode = RedisMode.DISABLED
     bot._hybrid = MagicMock()
     bot._redis_monitor = MagicMock()
     bot._redis_monitor.start = AsyncMock()

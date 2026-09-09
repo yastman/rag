@@ -10,6 +10,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
+from src.runtime.integrations.redis_mode import RedisMode, parse_redis_mode
 from telegram_bot.preflight.remediation import (
     COLBERT_COVERAGE_WARN_THRESHOLD,  # noqa: F401 — re-exported for tests
     _exception_message_with_type,
@@ -46,6 +47,8 @@ class DepLevel(StrEnum):
 # Dependency classification:
 #   CRITICAL — bot cannot function, fail startup after retries
 #   OPTIONAL — bot can degrade gracefully, warn and continue
+# Redis entries are the BASE levels; the effective level is resolved per
+# REDIS_MODE by :func:`_effective_dep_level` (#3362, decision #3354).
 DEP_CLASSIFICATION: dict[str, DepLevel] = {
     "redis": DepLevel.CRITICAL,
     "redis_cache": DepLevel.CRITICAL,
@@ -53,6 +56,89 @@ DEP_CLASSIFICATION: dict[str, DepLevel] = {
     "bge_m3": DepLevel.CRITICAL,
     "postgres": DepLevel.OPTIONAL,
 }
+
+_REDIS_DEPS = ("redis", "redis_cache")
+
+
+def _effective_dep_level(dep_name: str, mode: RedisMode | None) -> DepLevel | None:
+    """Resolve the per-mode dependency level (#3354).
+
+    - ``disabled``: redis checks are skipped entirely (``None``) — no
+      import, no connection attempt.
+    - ``single_instance``: probed, but a failure is OPTIONAL-severity
+      (DEGRADED start; "cache may fail open").
+    - ``multi_instance``: CRITICAL — Redis is required at startup.
+    """
+    base = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+    if dep_name not in _REDIS_DEPS or mode is None:
+        return base
+    if mode is RedisMode.DISABLED:
+        return None
+    if mode is RedisMode.SINGLE_INSTANCE:
+        return DepLevel.OPTIONAL
+    return DepLevel.CRITICAL
+
+
+def _redis_mode_signal(mode: RedisMode, results: dict[str, bool]) -> StartupSignal:
+    """Expose the selected mode and capability state in the report (#3354)."""
+    redis_ok = results.get("redis")
+
+    if mode is RedisMode.DISABLED:
+        return StartupSignal(
+            source="redis_mode",
+            severity=StartupSeverity.OK,
+            summary=(
+                "Redis mode disabled: no connection attempted; cache miss/no-store; "
+                "durable Redis capabilities unavailable; no distributed polling lock"
+            ),
+            remediation=(
+                "set REDIS_MODE=single_instance (Compose default) or multi_instance "
+                "to enable Redis capabilities"
+            ),
+        )
+    if mode is RedisMode.SINGLE_INSTANCE:
+        if redis_ok:
+            return StartupSignal(
+                source="redis_mode",
+                severity=StartupSeverity.OK,
+                summary=(
+                    "Redis mode single_instance: Redis reachable; durable Redis "
+                    "capabilities enabled; cache fail-open; no distributed polling "
+                    "lock — run exactly one process"
+                ),
+            )
+        return StartupSignal(
+            source="redis_mode",
+            severity=StartupSeverity.DEGRADED,
+            summary=(
+                "Redis mode single_instance: Redis unavailable — durable Redis "
+                "capabilities unavailable; cache will fail open (miss/no-store)"
+            ),
+            remediation=(
+                "start Redis and verify REDIS_URL/REDIS_PASSWORD, or set REDIS_MODE=disabled"
+            ),
+        )
+    # multi_instance
+    if redis_ok:
+        return StartupSignal(
+            source="redis_mode",
+            severity=StartupSeverity.OK,
+            summary=(
+                "Redis mode multi_instance: Redis reachable (required); durable Redis "
+                "capabilities enabled; distributed polling lock will be acquired "
+                "before polling"
+            ),
+        )
+    return StartupSignal(
+        source="redis_mode",
+        severity=StartupSeverity.FAILED,
+        summary="Redis mode multi_instance: Redis is REQUIRED at startup but unreachable",
+        remediation=(
+            "start Redis and verify REDIS_URL/REDIS_PASSWORD before starting a "
+            "multi_instance deployment"
+        ),
+    )
+
 
 _DEP_REMEDIATION: dict[str, str] = {
     "redis": "start Redis and verify REDIS_PASSWORD / redis_url",
@@ -106,13 +192,17 @@ class PreflightError(SystemExit):
 
 
 def _build_dependency_report(
-    results: dict[str, bool], failures: dict[str, str] | None = None
+    results: dict[str, bool],
+    failures: dict[str, str] | None = None,
+    redis_mode: RedisMode | None = None,
 ) -> StartupReport:
     report = StartupReport()
     for dep_name, passed in results.items():
         if passed:
             continue
-        level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+        level = _effective_dep_level(dep_name, redis_mode)
+        if level is None:
+            continue  # skipped by mode — never reported as unavailable
         severity = (
             StartupSeverity.FAILED if level == DepLevel.CRITICAL else StartupSeverity.DEGRADED
         )
@@ -433,8 +523,11 @@ async def check_dependencies(
 ) -> DependencyCheckResult:
     """Check all bot dependencies with retry logic for CRITICAL ones.
 
-    CRITICAL deps (redis, qdrant, bge_m3) are retried up to CRITICAL_RETRIES
-    times with CRITICAL_RETRY_DELAY between attempts.
+    Effective criticality is resolved per REDIS_MODE (#3362, #3354):
+    redis/redis_cache are skipped entirely in ``disabled`` mode, DEGRADED
+    (non-fatal) in ``single_instance``, and CRITICAL in ``multi_instance``.
+    Remaining CRITICAL deps (qdrant, bge_m3) are retried up to
+    CRITICAL_RETRIES times with CRITICAL_RETRY_DELAY between attempts.
 
     OPTIONAL deps are checked once — failures are logged
     as warnings but do not block startup.
@@ -452,6 +545,9 @@ async def check_dependencies(
     results: dict[str, bool] = {}
     timeout = httpx.Timeout(10.0)
 
+    # Selected Redis mode — typed once, consumed everywhere (#3362).
+    redis_mode = parse_redis_mode(getattr(config, "redis_mode", None))
+
     # Order matters: redis_cache depends on redis
     dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres"]
 
@@ -459,7 +555,15 @@ async def check_dependencies(
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for dep_name in dep_order:
-            level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+            level = _effective_dep_level(dep_name, redis_mode)
+
+            # Disabled Redis mode: no import, no connection attempt (#3354).
+            if level is None:
+                logger.info(
+                    "Preflight SKIP: %s (REDIS_MODE=disabled — no connection attempt)",
+                    dep_name,
+                )
+                continue
 
             # redis_cache depends on redis — skip if redis failed
             if dep_name == "redis_cache" and not results.get("redis"):
@@ -489,11 +593,13 @@ async def check_dependencies(
 
     # Log per-dependency status
     for dep_name, passed in results.items():
-        level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+        level = _effective_dep_level(dep_name, redis_mode)
         status = "OK" if passed else "FAIL"
-        logger.info("Preflight %s: %s [%s]", status, dep_name, level.value)
+        logger.info("Preflight %s: %s [%s]", status, dep_name, level.value if level else "SKIP")
 
-    report = _build_dependency_report(results, failures=failure_reasons)
+    report = _build_dependency_report(results, failures=failure_reasons, redis_mode=redis_mode)
+    # Selected mode + capability state, first in the report (#3354).
+    report.signals.insert(0, _redis_mode_signal(redis_mode, results))
     if log_summary:
         if report.final_severity is StartupSeverity.FAILED:
             logger.error(report.render())
@@ -506,7 +612,7 @@ async def check_dependencies(
     critical_failures = [
         name
         for name, passed in results.items()
-        if not passed and DEP_CLASSIFICATION.get(name) == DepLevel.CRITICAL
+        if not passed and _effective_dep_level(name, redis_mode) == DepLevel.CRITICAL
     ]
     if critical_failures:
         raise PreflightError(critical_failures, report=report)

@@ -56,9 +56,9 @@ def build_services(config: BotConfig) -> Services:
     from src.runtime.config import GraphConfig
     from src.runtime.integrations.cache import CacheLayerManager
     from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
+    from src.runtime.integrations.redis_mode import redis_mode_policy
     from src.runtime.services.qdrant import QdrantService
     from telegram_bot.services.apartment.apartments_service import ApartmentsService
-    from telegram_bot.services.observability.redis_monitor import RedisHealthMonitor
 
     graph_config = GraphConfig(
         llm_base_url=config.llm_base_url,
@@ -69,11 +69,12 @@ def build_services(config: BotConfig) -> Services:
         qdrant_collection=config.qdrant_collection,
         search_top_k=config.search_top_k,
         redis_url=config.redis_url,
+        redis_mode=config.redis_mode,
         domain=config.domain,
         domain_language=config.domain_language,
     )
 
-    cache = CacheLayerManager(redis_url=config.redis_url)
+    cache = CacheLayerManager(redis_url=config.redis_url, mode=config.redis_mode)
 
     hybrid = BGEM3HybridEmbeddings(
         base_url=config.bge_m3_url,
@@ -127,7 +128,14 @@ def build_services(config: BotConfig) -> Services:
         redis=cache.redis,
     )
 
-    redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
+    # Disabled Redis mode constructs no health monitor at all: the monitor
+    # module imports the redis client package, and disabled mode must not
+    # import or connect (#3362, decision #3354).
+    redis_monitor = None
+    if redis_mode_policy(config.redis_mode).allows_client:
+        from telegram_bot.services.observability.redis_monitor import RedisHealthMonitor
+
+        redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
 
     i18n_hub = None
     try:

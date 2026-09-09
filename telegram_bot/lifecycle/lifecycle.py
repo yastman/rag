@@ -53,6 +53,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only
 
 __all__ = (
     "polling_lock_heartbeat_tick",
+    "redis_capability_signal",
     "setup_bot_commands",
     "setup_bot_identity",
     "setup_cache",
@@ -352,6 +353,12 @@ def setup_handoff_services(bot: Any) -> None:
 
     log = logging.getLogger(__name__)
     if bot._cache.redis is None:
+        # Honest degraded reporting (#3354): no silent substitution — the
+        # durable Redis-backed handoff state and lead sink simply don't run.
+        log.warning(
+            "Handoff/lead-sink durable Redis state unavailable "
+            "(cache backend not connected) — running without it"
+        )
         return
     bot._handoff_state = HandoffState(
         bot._cache.redis,
@@ -480,16 +487,49 @@ async def setup_bot_commands(bot: Any) -> None:
 
 
 async def setup_polling_lock(bot: Any) -> None:
-    """Acquire Redis polling lock and start heartbeat task."""
+    """Acquire Redis polling lock per the selected Redis mode (#3362/#3354).
+
+    - ``disabled``: no client, no distributed-lock claim — the operator
+      runs exactly one process.
+    - ``single_instance``: exactly one process, **no distributed-lock
+      claim** even when Redis is connected.
+    - ``multi_instance``: a live Redis backend and an acquired lock are
+      REQUIRED before polling; a busy lock raises :class:`PollingLockBusy`
+      (main exits 2), and a missing backend is a hard startup error.
+    """
     import asyncio
     import os
     import socket
 
     from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY, RedisPollingLock
+    from src.runtime.integrations.redis_mode import redis_mode_policy
 
     log = logging.getLogger(__name__)
-    if bot._cache.redis is None:
+    mode = bot.config.redis_mode
+    policy = redis_mode_policy(mode)
+
+    if not policy.allows_client:
+        log.info(
+            "Redis mode %s: starting without a distributed polling lock — "
+            "operator must run exactly one bot process",
+            mode.value,
+        )
         return
+    if not policy.polling_lock_required:
+        log.info(
+            "Redis mode %s: no distributed polling lock claim — "
+            "run exactly ONE bot process (multiple pollers will conflict)",
+            mode.value,
+        )
+        return
+
+    if bot._cache.redis is None:
+        msg = (
+            f"Redis mode {mode.value} requires a live Redis connection for the "
+            "distributed polling lock; refusing to poll without a valid lock"
+        )
+        raise RuntimeError(msg)
+
     bot._polling_lock = RedisPollingLock(
         redis=bot._cache.redis,
         key=POLLING_LOCK_KEY,
@@ -512,6 +552,64 @@ async def setup_polling_lock(bot: Any) -> None:
     )
 
 
+def redis_capability_signal(bot: Any) -> Any:
+    """Build the honest ``redis_capabilities`` startup signal (#3362/#3354).
+
+    Distinguishes enabled, degraded, and disabled capability state from
+    the selected Redis mode and the actual cache-layer connection.
+    """
+    from src.runtime.integrations.redis_mode import redis_mode_policy
+    from telegram_bot.startup_status import StartupSeverity, StartupSignal
+
+    mode = bot.config.redis_mode
+    policy = redis_mode_policy(mode)
+    cache = getattr(bot, "_cache", None)
+    connected = getattr(cache, "redis", None) is not None
+
+    if not policy.allows_client:
+        return StartupSignal(
+            source="redis_capabilities",
+            severity=StartupSeverity.OK,
+            summary=(
+                f"Redis mode {mode.value}: cache disabled (miss/no-store); "
+                "durable Redis capabilities unavailable; no distributed polling "
+                "lock — operator must run exactly one process"
+            ),
+            remediation=(
+                "set REDIS_MODE=single_instance (or multi_instance for scaled "
+                "deployments) to enable Redis capabilities"
+            ),
+        )
+    if connected:
+        lock_note = (
+            "distributed polling lock required"
+            if policy.polling_lock_required
+            else "no distributed polling lock — run exactly one process"
+        )
+        return StartupSignal(
+            source="redis_capabilities",
+            severity=StartupSeverity.OK,
+            summary=(
+                f"Redis mode {mode.value}: cache connected; durable Redis "
+                f"capabilities enabled; {lock_note}"
+            ),
+        )
+    lock_note = (
+        "; distributed polling lock will be required before polling"
+        if policy.polling_lock_required
+        else ""
+    )
+    return StartupSignal(
+        source="redis_capabilities",
+        severity=StartupSeverity.DEGRADED,
+        summary=(
+            f"Redis mode {mode.value}: Redis unavailable — cache miss/no-store; "
+            f"durable Redis capabilities unavailable{lock_note}"
+        ),
+        remediation="start Redis and verify REDIS_URL/REDIS_PASSWORD, or set REDIS_MODE=disabled",
+    )
+
+
 async def start_bot(bot: Any) -> None:
     """Full startup sequence for PropertyBot.
 
@@ -527,6 +625,9 @@ async def start_bot(bot: Any) -> None:
 
     preflight_result, startup_report = await setup_preflight(bot)
     await setup_cache(bot)
+    # Honest capability reporting: selected mode + actual connection state
+    # (#3362, decision #3354).
+    startup_report.add(redis_capability_signal(bot))
     await setup_postgres(bot, preflight_result, startup_report)
     await setup_bot_identity(bot)
     setup_handoff_services(bot)
@@ -534,7 +635,8 @@ async def start_bot(bot: Any) -> None:
     setup_dialogs(bot)
     await setup_bot_commands(bot)
 
-    await bot._redis_monitor.start()
+    if bot._redis_monitor is not None:
+        await bot._redis_monitor.start()
     await warmup_bge_pool(bot._hybrid, log=log)
 
     if startup_report.final_severity is StartupSeverity.FAILED:
@@ -580,7 +682,8 @@ async def stop_bot(bot: Any) -> None:
         finally:
             bot._polling_lock = None
             bot._polling_lock_owner = None
-    await bot._redis_monitor.stop()
+    if bot._redis_monitor is not None:
+        await bot._redis_monitor.stop()
     await bot._cache.close()
     await bot._qdrant.close()
     if hasattr(bot._embeddings, "aclose"):
