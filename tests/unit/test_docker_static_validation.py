@@ -123,6 +123,87 @@ def test_compose_dev_config_renders_with_full_profile() -> None:
     )
 
 
+# ---- Compose security invariants consolidated from manual scanners (#3402) ----
+
+
+@pytest.mark.parametrize("env_var", ["POSTGRES_PASSWORD", "REDIS_PASSWORD"])
+def test_compose_password_vars_are_required_not_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    env_var: str,
+) -> None:
+    """POSTGRES_PASSWORD/REDIS_PASSWORD must be required Compose variables.
+
+    Rendering without the variable must fail naming it; a hardcoded ``:-``
+    fallback would let ``docker compose config`` succeed without any secret
+    (#3402). The Compose engine is the authority here — it interpolates every
+    service in both compose.yml and compose.dev.yml, unlike the regex scanner
+    this replaces, which only inspected compose.dev.yml.
+    """
+    monkeypatch.delenv(env_var, raising=False)
+    env_lines = [
+        line
+        for line in COMPOSE_CI_ENV.read_text(encoding="utf-8").splitlines(keepends=True)
+        if not line.startswith(f"{env_var}=")
+    ]
+    env_file = tmp_path / "compose.ci.no-password.env"
+    env_file.write_text("".join(env_lines), encoding="utf-8")
+
+    result = _run_docker_command(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(env_file),
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            "config",
+            "--quiet",
+        ],
+    )
+    assert result.returncode != 0, (
+        f"{env_var} must be a required Compose variable; a ':-' fallback "
+        "let config rendering succeed without it"
+    )
+    assert env_var in (result.stderr or ""), (
+        f"rendering without {env_var} must report the missing required "
+        f"variable by name, got: {result.stderr}"
+    )
+
+
+def test_compose_redis_renders_with_required_password() -> None:
+    """The merged redis service must render with --requirepass auth enforced (#3402)."""
+    result = _run_docker_command(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(COMPOSE_CI_ENV),
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            "config",
+            "redis",
+        ],
+    )
+    assert result.returncode == 0, f"Compose redis config failed:\n{result.stderr}"
+
+    import yaml
+
+    rendered = yaml.safe_load(result.stdout)
+    redis = rendered["services"]["redis"]
+    command = redis["command"]
+    assert isinstance(command, list) and "--requirepass" in command, (
+        "redis service command must enforce authentication via --requirepass"
+    )
+    assert redis["environment"].get("REDIS_PASSWORD"), (
+        "redis service environment must receive REDIS_PASSWORD"
+    )
+
+
 def test_compose_ci_telegram_token_is_sdk_valid() -> None:
     """Fallback env must let `make bot` reach runtime startup, not fail token parsing."""
     values = dict(
