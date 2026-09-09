@@ -21,6 +21,12 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 | Rehearse / present the five-minute demo | [`FIVE-MINUTE-DEMO.md`](FIVE-MINUTE-DEMO.md) (gate: `make demo-gate`) |
 | Record rehearsal evidence | [`DEMO-REHEARSAL-LOG.md`](DEMO-REHEARSAL-LOG.md) |
 
+## Local workstation recovery
+
+| Task | Runbook |
+|---|---|
+| Docker Desktop fails to start (stale AI inference socket) | [`DOCKER-DESKTOP-STALE-SOCKET-RECOVERY.md`](DOCKER-DESKTOP-STALE-SOCKET-RECOVERY.md) |
+
 ## Production / VPS
 
 | Task | Command / asset |
