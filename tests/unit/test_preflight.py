@@ -1,5 +1,6 @@
 """Unit tests for telegram_bot/preflight.py — dependency preflight checks."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -106,6 +107,38 @@ def _make_config(**overrides) -> MagicMock:
         "realestate_database_url", "postgresql://postgres:postgres@localhost:5432/realestate"
     )
     return cfg
+
+
+def _hybrid_warmup_payload(count: int = 3) -> dict:
+    """Valid /encode/hybrid response body for ``count`` texts (#3373 completeness contract)."""
+    return {
+        "dense_vecs": [[0.1] * 4 for _ in range(count)],
+        "lexical_weights": [{"indices": [10, 20], "values": [0.5, 0.3]} for _ in range(count)],
+        "colbert_vecs": [[[0.2] * 4] * 2 for _ in range(count)],
+        "processing_time": 0.42,
+    }
+
+
+def _bge_m3_client(
+    health_status: int = 200,
+    hybrid_status: int = 200,
+    hybrid_payload: dict | None = None,
+    hybrid_json_error: Exception | None = None,
+) -> AsyncMock:
+    """Mock httpx client serving /health and the /encode/hybrid warmup response."""
+    health_resp = MagicMock()
+    health_resp.status_code = health_status
+    hybrid_resp = MagicMock()
+    hybrid_resp.status_code = hybrid_status
+    if hybrid_json_error is not None:
+        hybrid_resp.json = MagicMock(side_effect=hybrid_json_error)
+    else:
+        hybrid_resp.json = MagicMock(return_value=hybrid_payload)
+
+    client = AsyncMock(spec=httpx.AsyncClient)
+    client.get = AsyncMock(return_value=health_resp)
+    client.post = AsyncMock(return_value=hybrid_resp)
+    return client
 
 
 # ===========================================================================
@@ -489,48 +522,84 @@ class TestCheckSingleDep:
 
         assert result is False
 
-    async def test_bge_m3_health_ok(self):
+    async def test_bge_m3_valid_multilingual_hybrid_warmup_passes(self):
+        """One valid multilingual /encode/hybrid response proves readiness (#3442)."""
         config = _make_config()
-        health_resp = MagicMock()
-        health_resp.status_code = 200
-        warmup_resp = MagicMock()
-        warmup_resp.status_code = 200
-        warmup_resp.json = MagicMock(return_value={"processing_time": 0.5})
-
-        client = AsyncMock(spec=httpx.AsyncClient)
-        client.get = AsyncMock(return_value=health_resp)
-        client.post = AsyncMock(return_value=warmup_resp)
+        client = _bge_m3_client(hybrid_payload=_hybrid_warmup_payload())
 
         result = await _check_single_dep("bge_m3", config, client)
 
         assert result is True
         client.get.assert_awaited_once_with(f"{config.bge_m3_url}/health")
         client.post.assert_awaited_once()
+        assert client.post.await_args.args[0] == f"{config.bge_m3_url}/encode/hybrid"
+        texts = client.post.await_args.kwargs["json"]["texts"]
+        assert any(t.isascii() for t in texts), "warmup must cover Latin script"
+        assert any(not t.isascii() for t in texts), "warmup must cover non-Latin scripts"
 
     async def test_bge_m3_non_200_fails(self):
         config = _make_config()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 503
-        client = AsyncMock(spec=httpx.AsyncClient)
-        client.get = AsyncMock(return_value=mock_resp)
+        client = _bge_m3_client(health_status=503)
 
         result = await _check_single_dep("bge_m3", config, client)
         assert result is False
 
-    async def test_bge_m3_warmup_failure_still_passes(self):
-        """Warmup encode failure is non-fatal — health check already passed."""
+    async def test_bge_m3_warmup_encode_500_fails(self):
+        """health=200 + hybrid encode 500 blocks startup — /health alone is not ready (#3442)."""
         config = _make_config()
-        health_resp = MagicMock()
-        health_resp.status_code = 200
-        warmup_resp = MagicMock()
-        warmup_resp.status_code = 500
-
-        client = AsyncMock(spec=httpx.AsyncClient)
-        client.get = AsyncMock(return_value=health_resp)
-        client.post = AsyncMock(return_value=warmup_resp)
+        client = _bge_m3_client(hybrid_status=500)
 
         result = await _check_single_dep("bge_m3", config, client)
-        assert result is True
+        assert result is False
+
+    async def test_bge_m3_warmup_malformed_json_fails(self):
+        """A 200 hybrid response with malformed JSON blocks startup (#3442)."""
+        config = _make_config()
+        client = _bge_m3_client(
+            hybrid_json_error=json.JSONDecodeError("Expecting value", "<html>", 0)
+        )
+
+        result = await _check_single_dep("bge_m3", config, client)
+        assert result is False
+
+    @pytest.mark.parametrize(
+        ("mutate", "family"),
+        [
+            pytest.param(
+                lambda p: p.update(dense_vecs=p["dense_vecs"][:1]),
+                "dense_vecs",
+                id="dense-short",
+            ),
+            pytest.param(lambda p: p.update(dense_vecs=[]), "dense_vecs", id="dense-empty"),
+            pytest.param(lambda p: p.pop("dense_vecs"), "dense_vecs", id="dense-missing"),
+            pytest.param(
+                lambda p: p.update(lexical_weights=p["lexical_weights"][:1]),
+                "lexical_weights",
+                id="sparse-short",
+            ),
+            pytest.param(
+                lambda p: p.update(lexical_weights=[]),
+                "lexical_weights",
+                id="sparse-empty",
+            ),
+            pytest.param(
+                lambda p: p.pop("lexical_weights"),
+                "lexical_weights",
+                id="sparse-missing",
+            ),
+            pytest.param(lambda p: p.update(colbert_vecs=[]), "colbert_vecs", id="colbert-empty"),
+            pytest.param(lambda p: p.pop("colbert_vecs"), "colbert_vecs", id="colbert-missing"),
+        ],
+    )
+    async def test_bge_m3_warmup_incomplete_hybrid_family_fails(self, mutate, family):
+        """Count mismatch or missing/empty dense, sparse, or ColBERT blocks startup (#3442)."""
+        config = _make_config()
+        payload = _hybrid_warmup_payload()
+        mutate(payload)
+        client = _bge_m3_client(hybrid_payload=payload)
+
+        result = await _check_single_dep("bge_m3", config, client)
+        assert result is False, f"empty/missing {family} must not pass preflight"
 
     def test_litellm_proxy_is_not_a_preflight_dependency(self):
         assert "litellm" not in DEP_CLASSIFICATION
@@ -1031,6 +1100,17 @@ class TestQdrantRemediationHint:
         assert "make demo-bootstrap" in _DEP_REMEDIATION["qdrant"].lower(), (
             "Qdrant remediation should mention 'make demo-bootstrap', "
             f"got: {_DEP_REMEDIATION['qdrant']}"
+        )
+
+
+class TestBgeM3RemediationHint:
+    """BGE-M3 remediation names the hybrid encode contract (#3442)."""
+
+    def test_bge_m3_remediation_mentions_hybrid_encode(self):
+        from telegram_bot.preflight import _DEP_REMEDIATION
+
+        assert "encode/hybrid" in _DEP_REMEDIATION["bge_m3"], (
+            f"BGE-M3 remediation should mention 'encode/hybrid', got: {_DEP_REMEDIATION['bge_m3']}"
         )
 
 

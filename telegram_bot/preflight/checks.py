@@ -11,6 +11,12 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
 from src.runtime.integrations.redis_mode import RedisMode, parse_redis_mode
+from src.services.bge_m3_client import (
+    BGEHybridResponseError,
+    _build_payload,
+    _parse_hybrid_response,
+    _validate_hybrid_families,
+)
 from telegram_bot.preflight.remediation import (
     COLBERT_COVERAGE_WARN_THRESHOLD,  # noqa: F401 — re-exported for tests
     _exception_message_with_type,
@@ -147,7 +153,10 @@ _DEP_REMEDIATION: dict[str, str] = {
         "Run `make demo-bootstrap` to create both product collections and ingest "
         "the shipped demo data (idempotent, never drops populated collections)"
     ),
-    "bge_m3": "start the repo-local BGE-M3 service and verify /health and /encode/dense",
+    "bge_m3": (
+        "start the repo-local BGE-M3 service and verify /health and the "
+        "/encode/hybrid multilingual warmup (dense + sparse + ColBERT)"
+    ),
     "postgres": (
         "optional: start PostgreSQL (docker compose --profile postgres up -d) and restart "
         "the bot to enable the bookmarks capability, or keep running without user features"
@@ -384,8 +393,30 @@ async def _check_dep_qdrant(
             await fallback_client.close()
 
 
+# One real multilingual hybrid encode proves dense + sparse + ColBERT output
+# across scripts before the bot may report ready (#3442). Fixed non-secret
+# constants — never log user or document text here.
+_WARMUP_TEXTS: tuple[str, ...] = (
+    "preflight warmup encode",
+    "прогрев перед запуском",
+    "启动预热编码检查",
+)
+_WARMUP_ENCODE_TIMEOUT = 120.0
+
+
 async def _check_dep_bge_m3(config: BotConfig, client: httpx.AsyncClient) -> bool:
-    """BGE-M3 health + warmup encode check."""
+    """BGE-M3 health + one valid multilingual hybrid encode (#3442).
+
+    ``/health`` alone is not readiness: the warmup POSTs a fixed multilingual
+    batch to ``/encode/hybrid`` through the shared BGE client boundary —
+    the same payload builder, response parser, and completeness contract the
+    runtime ``encode_hybrid`` enforces (#3373): dense_vecs, lexical_weights,
+    and colbert_vecs with exactly one entry per requested text. Any non-200,
+    malformed, or incomplete response returns ``False`` so failure flows into
+    the existing CRITICAL retry and startup verdict. Retry timing stays owned
+    by ``_check_single_dep`` — this check deliberately adds no second retry
+    layer.
+    """
     url_valid, url_error = _validate_bge_m3_url(config.bge_m3_url)
     if not url_valid:
         logger.error("Preflight FAIL: BGE-M3 URL guardrail — %s", url_error)
@@ -397,21 +428,31 @@ async def _check_dep_bge_m3(config: BotConfig, client: httpx.AsyncClient) -> boo
         return False
 
     warmup_resp = await client.post(
-        f"{config.bge_m3_url}/encode/dense",
-        json={"texts": ["preflight warmup"], "max_length": 64, "batch_size": 1},
-        timeout=120.0,
+        f"{config.bge_m3_url}/encode/hybrid",
+        json=_build_payload(list(_WARMUP_TEXTS), 1, 64),
+        timeout=_WARMUP_ENCODE_TIMEOUT,
     )
-    if warmup_resp.status_code == 200:
-        data = warmup_resp.json()
-        logger.info(
-            "Preflight BGE-M3 repo-local warmup OK (%.3fs)",
-            data.get("processing_time", 0),
-        )
-    else:
-        logger.warning(
-            "Preflight BGE-M3 repo-local warmup failed: %s",
+    if warmup_resp.status_code != 200:
+        logger.error(
+            "Preflight FAIL: BGE-M3 hybrid warmup encode — HTTP %s",
             warmup_resp.status_code,
         )
+        return False
+
+    try:
+        parsed = _parse_hybrid_response(warmup_resp.json())
+        _validate_hybrid_families(parsed, len(_WARMUP_TEXTS), 0)
+    except (BGEHybridResponseError, KeyError, TypeError, ValueError) as exc:
+        logger.error(
+            "Preflight FAIL: BGE-M3 hybrid warmup response incomplete — %s",
+            _exception_message_with_type(exc),
+        )
+        return False
+
+    logger.info(
+        "Preflight BGE-M3 multilingual hybrid warmup OK (%.3fs; dense+sparse+colbert)",
+        parsed.processing_time or 0.0,
+    )
     return True
 
 
