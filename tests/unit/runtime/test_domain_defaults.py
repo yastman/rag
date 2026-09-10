@@ -1,81 +1,62 @@
-"""Tests that domain-specific defaults are isolated in domain_defaults.py.
+"""Behavior coverage for runtime domain defaults (#2949, #3406).
 
-Issue: #2949 — domain logic isolation from generic runtime.
+The #2949 structure ratchets (module-exists import check, per-constant
+export/type checks, compatibility import-location asserts) were replaced by
+one behavior table that probes each constant the way its consumers use it,
+plus the live filter-signal detection test. Consumer-side compat is owned by
+test_assistant_pipeline.py (CHITCHAT_RESPONSES) and
+tests/contract/test_bot_no_private_runtime_internals_contract.py
+(BLOCKED_RESPONSE via rag_core).
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 
-def test_domain_defaults_module_exists() -> None:
-    """domain_defaults module must be importable from src.runtime."""
-    from src.runtime import domain_defaults  # noqa: F401
+import pytest
 
-
-def test_domain_defaults_exports_city_pattern() -> None:
-    """_CITY_RE must come from domain_defaults, not be redefined in query_filter_signal."""
-    import re
-
-    from src.runtime.domain_defaults import _CITY_RE
-
-    assert isinstance(_CITY_RE, re.Pattern)
-    assert _CITY_RE.search("квартира в Несебре")
+from src.runtime import domain_defaults as dd
+from src.runtime.services.query_filter_signal import (
+    QueryFilterSignal,
+    detect_filter_sensitive_query,
+)
 
 
-def test_domain_defaults_exports_blocked_response() -> None:
-    """BLOCKED_RESPONSE must come from domain_defaults."""
-    from src.runtime.domain_defaults import BLOCKED_RESPONSE
+@pytest.mark.parametrize(
+    ("constant", "probe"),
+    [
+        ("_CITY_RE", lambda: dd._CITY_RE.search("квартира в Несебре") is not None),
+        ("BLOCKED_RESPONSE", lambda: dd.BLOCKED_RESPONSE.strip() != ""),
+        (
+            "_REWRITE_PROMPT",
+            lambda: "студия у моря" in dd._REWRITE_PROMPT.format(query="студия у моря"),
+        ),
+        (
+            "CHITCHAT_RESPONSES",
+            lambda: any(text.strip() for text in dd.CHITCHAT_RESPONSES.get("greeting", [])),
+        ),
+        (
+            "OFF_TOPIC_RESPONSES",
+            lambda: any(text.strip() for text in dd.OFF_TOPIC_RESPONSES),
+        ),
+    ],
+    ids=[
+        "city_pattern_matches_city_query",
+        "blocked_response_is_user_facing",
+        "rewrite_prompt_renders_query",
+        "chitchat_greeting_available",
+        "off_topic_responses_available",
+    ],
+)
+def test_domain_default_serves_its_consumer(constant: str, probe: Callable[[], bool]) -> None:
+    """Each domain default must satisfy the consumer contract listed in its row."""
+    assert probe(), f"domain default {constant} no longer serves its consumers"
 
-    assert isinstance(BLOCKED_RESPONSE, str)
-    assert len(BLOCKED_RESPONSE) > 0
 
-
-def test_domain_defaults_exports_rewrite_prompt() -> None:
-    """_REWRITE_PROMPT must come from domain_defaults."""
-    from src.runtime.domain_defaults import _REWRITE_PROMPT
-
-    assert isinstance(_REWRITE_PROMPT, str)
-    assert "{query}" in _REWRITE_PROMPT
-
-
-def test_domain_defaults_exports_chitchat_responses() -> None:
-    """CHITCHAT_RESPONSES must come from domain_defaults."""
-    from src.runtime.domain_defaults import CHITCHAT_RESPONSES
-
-    assert isinstance(CHITCHAT_RESPONSES, dict)
-    assert "greeting" in CHITCHAT_RESPONSES
-
-
-def test_domain_defaults_exports_off_topic_responses() -> None:
-    """OFF_TOPIC_RESPONSES must come from domain_defaults."""
-    from src.runtime.domain_defaults import OFF_TOPIC_RESPONSES
-
-    assert isinstance(OFF_TOPIC_RESPONSES, list)
-    assert len(OFF_TOPIC_RESPONSES) > 0
-
-
-def test_query_filter_signal_still_works_after_refactor() -> None:
-    """detect_filter_sensitive_query must still work (imports from domain_defaults)."""
-    from src.runtime.services.query_filter_signal import (
-        QueryFilterSignal,
-        detect_filter_sensitive_query,
-    )
-
+def test_detect_filter_sensitive_query_detects_city_price_rooms_currency() -> None:
+    """Filter-sensitive detection keeps working through the domain_defaults import."""
     signal = detect_filter_sensitive_query("студия в Несебре до 80000 евро")
     assert signal == QueryFilterSignal(
         is_filter_sensitive=True,
         reasons=("city", "price", "rooms", "currency"),
     )
-
-
-def test_classify_node_chitchat_responses_still_importable() -> None:
-    """CHITCHAT_RESPONSES must remain importable from classify for compat."""
-    from src.runtime.routing.classify import CHITCHAT_RESPONSES
-
-    assert "greeting" in CHITCHAT_RESPONSES
-
-
-def test_rag_core_blocked_response_still_importable() -> None:
-    """BLOCKED_RESPONSE must remain importable from rag_core for compat."""
-    from src.runtime.services.rag_core import BLOCKED_RESPONSE
-
-    assert isinstance(BLOCKED_RESPONSE, str)

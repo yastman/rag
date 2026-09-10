@@ -1,7 +1,9 @@
 """Tests for issue #2693: broad exception handling triage in runtime hot paths.
 
 Verifies that:
-1. context.py price formatting uses narrow ValueError (not broad Exception)
+1. context.py price formatting keeps the ValueError scope narrow and
+   propagates unexpected errors (#3406 replaced the AST source inspection
+   with a direct TypeError propagation test)
 2. small_to_big.py logs error_type on Qdrant scroll failure
 """
 
@@ -35,43 +37,31 @@ class TestContextPriceFormattingExceptionScope:
         result = _format_context_for_mode(docs, sources_enabled=False)
         assert "по договору€" in result
 
-    def test_format_context_exception_is_value_error_not_broad(self):
-        """The except clause in price formatting must only catch ValueError, not all exceptions.
+    def test_format_context_propagates_type_error_from_price(self):
+        """A TypeError from price formatting must propagate, not be swallowed (#3406).
 
-        This test imports the module and inspects that a TypeError from within
-        the try block (simulated via monkeypatching) would NOT be silently swallowed
-        once the exception is narrowed to ValueError.
+        The except clause is narrowed to ValueError. A numeric price whose
+        grouped formatting fails with TypeError (replacing a broad-Exception
+        catch) must escape _format_context_for_mode instead of degrading into
+        the string fallback path.
         """
-        import ast
-        import inspect
 
-        import src.runtime.generation.context as ctx_module
+        from src.runtime.generation.context import _format_context_for_mode
 
-        source = inspect.getsource(ctx_module._format_context_for_mode)
-        tree = ast.parse(source)
+        class GroupFormatFailurePrice(float):
+            """Float whose ',' grouped formatting fails with TypeError."""
 
-        # Find all ExceptHandler nodes
-        except_handlers = [node for node in ast.walk(tree) if isinstance(node, ast.ExceptHandler)]
+            def __format__(self, spec: str) -> str:
+                if "," in spec:
+                    raise TypeError("grouped format unsupported")
+                return str(float(self))
 
-        # There should be exactly one except handler
-        assert len(except_handlers) == 1, "Expected one except handler in _format_context_for_mode"
+        docs = [
+            {"text": "apt", "metadata": {"price": GroupFormatFailurePrice(150000)}, "score": 0.9}
+        ]
 
-        handler = except_handlers[0]
-        # Must NOT be a bare except (type is None) or broad Exception
-        assert handler.type is not None, "except clause must not be bare"
-
-        # Get the exception type(s) being caught
-        caught_types: list[str] = []
-        if isinstance(handler.type, ast.Tuple):
-            caught_types = [
-                (n.id if isinstance(n, ast.Name) else ast.dump(n)) for n in handler.type.elts
-            ]
-        elif isinstance(handler.type, ast.Name):
-            caught_types = [handler.type.id]
-
-        assert "Exception" not in caught_types, (
-            f"Price formatting except must not catch broad Exception; caught: {caught_types}"
-        )
+        with pytest.raises(TypeError, match="grouped format unsupported"):
+            _format_context_for_mode(docs, sources_enabled=False)
 
 
 class TestSmallToBigLogsErrorType:

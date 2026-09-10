@@ -515,18 +515,6 @@ class TestHybridEncodingRegression:
         mock_bge_client.encode_sparse.assert_not_called()
         mock_bge_client.encode_colbert.assert_not_called()
 
-    def test_writer_has_no_voyage_attribute(self, writer):
-        """QdrantHybridWriter must not have a voyage attribute after #2631."""
-        assert not hasattr(writer, "voyage"), (
-            "QdrantHybridWriter must not have a .voyage attribute; Voyage path removed in #2631"
-        )
-
-    def test_writer_has_no_use_local_embeddings_attribute(self, writer):
-        """QdrantHybridWriter must not have use_local_embeddings after #2631."""
-        assert not hasattr(writer, "use_local_embeddings"), (
-            "use_local_embeddings flag removed in #2631; BGE-M3 is the only path"
-        )
-
 
 # ---------------------------------------------------------------------------
 # max_length fix — card_3b628029eafd
