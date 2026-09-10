@@ -436,7 +436,10 @@ async def _expand_small_to_big(
     """Expand final_docs in-place with neighbor chunks via Small-to-Big service.
 
     Fetches window_before/window_after sibling chunks per doc from the same
-    Qdrant document, replaces each doc's ``text`` with expanded context.
+    Qdrant document and replaces each doc's ``text`` with expanded context.
+    ``expand_context`` returns exactly one ExpandedChunk per input doc, in
+    input order, so every original hit survives with its metadata and score;
+    only the added neighbors are bounded by the expansion budget (#3441).
     Failures are logged but never crash the pipeline.
     """
     from src.runtime.services.small_to_big import SmallToBigMode, SmallToBigService

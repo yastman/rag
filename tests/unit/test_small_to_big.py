@@ -11,6 +11,19 @@ from src.runtime.services.small_to_big import (
 )
 
 
+def _point(point_id: str, doc_id: str, order: int, text: str) -> MagicMock:
+    """Build a mock Qdrant point as returned by scroll."""
+    return MagicMock(
+        id=point_id,
+        payload={"page_content": text, "metadata": {"doc_id": doc_id, "order": order}},
+    )
+
+
+def _center_order(kwargs) -> int:
+    """Extract the excluded center order from the scroll filter kwargs."""
+    return kwargs["scroll_filter"].must_not[0].match.value
+
+
 class TestSmallToBigMode:
     """Test SmallToBigMode enum."""
 
@@ -139,60 +152,197 @@ class TestSmallToBigService:
         # Check neighbor chunks
         assert len(expanded.neighbor_chunks) == 2
 
-    async def test_expand_context_respects_max_chunks_limit(self, service, mock_client):
-        """Test that expansion stops when max_expanded_chunks is reached."""
-        service._max_expanded_chunks = 2
-
-        # Create 5 chunks
+    async def test_adjacent_original_hits_not_repeated_as_neighbors(self, service, mock_client):
+        """Adjacent original hits must not reappear as each other's neighbors (#3441)."""
         chunks = [
-            {"text": f"chunk {i}", "metadata": {"doc_id": "doc1", "order": i}} for i in range(5)
+            {
+                "id": "p5",
+                "text": "chunk five",
+                "metadata": {"doc_id": "doc1", "order": 5},
+                "score": 0.9,
+            },
+            {
+                "id": "p6",
+                "text": "chunk six",
+                "metadata": {"doc_id": "doc1", "order": 6},
+                "score": 0.8,
+            },
         ]
 
-        # Mock empty neighbors (simplifies test)
-        mock_client.scroll.return_value = ([], None)
-
-        result = await service.expand_context(chunks)
-
-        # Should only expand first 2 chunks
-        assert len(result) == 2
-
-    async def test_expand_context_respects_token_limit(self, service, mock_client):
-        """Test that expansion stops when max_context_tokens is reached."""
-        service._max_context_tokens = 50  # ~200 characters
-
-        # Create chunks with ~100 chars each
-        chunks = [{"text": "A" * 100, "metadata": {"doc_id": "doc1", "order": i}} for i in range(5)]
-
-        mock_client.scroll.return_value = ([], None)
-
-        result = await service.expand_context(chunks)
-
-        # Should stop after ~2 chunks (200 chars = 50 tokens)
-        assert len(result) <= 3
-
-    async def test_expand_context_deduplicates(self, service, mock_client):
-        """Test that duplicate chunks are removed across expansions."""
-        # Two adjacent chunks that would fetch overlapping neighbors
-        chunks = [
-            {"text": "chunk1", "metadata": {"doc_id": "doc1", "order": 5}},
-            {"text": "chunk2", "metadata": {"doc_id": "doc1", "order": 6}},
-        ]
-
-        # First call returns neighbor at order 6
-        # Second call returns neighbor at order 5
         def scroll_side_effect(*args, **kwargs):
-            filter_obj = kwargs.get("scroll_filter")
-            if filter_obj:
-                # Return empty to simplify - dedup logic is tested via seen_chunk_ids
-                return ([], None)
-            return ([], None)
+            center = _center_order(kwargs)
+            if center == 5:
+                return ([_point("p6", "doc1", 6, "chunk six")], None)
+            return ([_point("p5", "doc1", 5, "chunk five")], None)
+
+        mock_client.scroll.side_effect = scroll_side_effect
+
+        result = await service.expand_context(chunks)
+
+        assert [ec.original_chunk for ec in result] == chunks
+        # The other hit is never re-added as a neighbor: each expansion is
+        # exactly the original text, occurring only once.
+        assert result[0].expanded_text == "chunk five"
+        assert result[1].expanded_text == "chunk six"
+        assert all(ec.neighbor_chunks == [] for ec in result)
+
+    async def test_all_original_hits_preserved_in_stable_order(self, service, mock_client):
+        """Every original hit survives in input order with metadata and score."""
+        chunks = [
+            {
+                "id": f"p{i}",
+                "text": f"hit {i}",
+                "metadata": {"doc_id": f"doc{i}", "order": i},
+                "score": 0.5 + i / 10,
+            }
+            for i in range(4)
+        ]
+        mock_client.scroll.return_value = ([], None)
+
+        result = await service.expand_context(chunks)
+
+        assert [ec.original_chunk for ec in result] == chunks
+        assert [ec.original_chunk["score"] for ec in result] == [c["score"] for c in chunks]
+        assert [ec.original_chunk["metadata"] for ec in result] == [c["metadata"] for c in chunks]
+
+    async def test_added_neighbors_stay_within_expansion_budget(self, mock_client):
+        """Count and token budgets cap added neighbor text, never the originals."""
+        service = SmallToBigService(
+            client=mock_client,
+            collection_name="test_collection",
+            max_expanded_chunks=5,
+            max_context_tokens=50,
+        )
+        chunks = [
+            {"id": f"c{i}", "text": f"original {i}", "metadata": {"doc_id": "doc1", "order": i}}
+            for i in range(3)
+        ]
+
+        def scroll_side_effect(*args, **kwargs):
+            center = _center_order(kwargs)
+            neighbors = [
+                # 80 chars = ~20 estimated tokens each
+                _point(f"n{center}-{k}", "doc1", center + 10 + k, "N" * 80)
+                for k in range(3)
+            ]
+            return (neighbors, None)
+
+        mock_client.scroll.side_effect = scroll_side_effect
+
+        result = await service.expand_context(chunks)
+
+        assert len(result) == 3  # every original survives the budget
+        added = [n for ec in result for n in ec.neighbor_chunks]
+        assert len(added) == 2  # 3rd added neighbor would exceed the 50-token budget
+        total_added_tokens = sum(len(n["text"]) // 4 for n in added)
+        assert total_added_tokens <= 50
+
+    async def test_zero_and_oversized_originals_do_not_drop_tail(self, mock_client):
+        """Zero-length and oversized originals stay; the tail is never removed."""
+        service = SmallToBigService(
+            client=mock_client,
+            collection_name="test_collection",
+            max_expanded_chunks=10,
+            max_context_tokens=50,
+        )
+        chunks = [
+            {"id": "z", "text": "", "metadata": {"doc_id": "doc1", "order": 1}},
+            {"id": "big", "text": "B" * 10_000, "metadata": {"doc_id": "doc1", "order": 2}},
+            {"id": "tail", "text": "tail chunk", "metadata": {"doc_id": "doc1", "order": 3}},
+        ]
+        mock_client.scroll.return_value = ([], None)
+
+        result = await service.expand_context(chunks)
+
+        assert [ec.original_chunk["id"] for ec in result] == ["z", "big", "tail"]
+        assert result[1].expanded_text == "B" * 10_000
+        assert result[2].expanded_text == "tail chunk"
+
+    async def test_max_expanded_chunks_limits_added_neighbors_not_originals(self, mock_client):
+        """The count budget caps added neighbors; one result per original remains."""
+        service = SmallToBigService(
+            client=mock_client,
+            collection_name="test_collection",
+            max_expanded_chunks=2,
+            max_context_tokens=8000,
+        )
+        chunks = [
+            {"id": f"c{i}", "text": f"chunk {i}", "metadata": {"doc_id": "doc1", "order": i}}
+            for i in range(5)
+        ]
+
+        def scroll_side_effect(*args, **kwargs):
+            center = _center_order(kwargs)
+            return ([_point(f"n{center}", "doc1", center + 10, f"neighbor {center}")], None)
+
+        mock_client.scroll.side_effect = scroll_side_effect
+
+        result = await service.expand_context(chunks)
+
+        assert len(result) == 5  # one result per original hit
+        assert len(result[0].neighbor_chunks) == 1
+        assert len(result[1].neighbor_chunks) == 1
+        assert all(len(ec.neighbor_chunks) == 0 for ec in result[2:])
+
+    async def test_max_context_tokens_limits_added_neighbor_tokens(self, mock_client):
+        """The token budget caps added neighbor tokens across the whole call."""
+        service = SmallToBigService(
+            client=mock_client,
+            collection_name="test_collection",
+            max_expanded_chunks=10,
+            max_context_tokens=50,
+        )
+        chunks = [
+            {"id": f"c{i}", "text": "A" * 100, "metadata": {"doc_id": "doc1", "order": i}}
+            for i in range(5)
+        ]
+
+        def scroll_side_effect(*args, **kwargs):
+            center = _center_order(kwargs)
+            neighbors = [
+                _point(f"n{center}a", "doc1", center + 10, "N" * 100),
+                _point(f"n{center}b", "doc1", center + 11, "N" * 100),
+            ]
+            return (neighbors, None)
+
+        mock_client.scroll.side_effect = scroll_side_effect
+
+        result = await service.expand_context(chunks)
+
+        assert len(result) == 5
+        added = [n for ec in result for n in ec.neighbor_chunks]
+        total_added_tokens = sum(len(n["text"]) // 4 for n in added)
+        assert total_added_tokens <= 50
+
+    async def test_expand_context_deduplicates_overlapping_neighbors(self, service, mock_client):
+        """Overlapping neighbors appear once; originals are never re-added."""
+        chunks = [
+            {"id": "p5", "text": "chunk five", "metadata": {"doc_id": "doc1", "order": 5}},
+            {"id": "p6", "text": "chunk six", "metadata": {"doc_id": "doc1", "order": 6}},
+        ]
+
+        def scroll_side_effect(*args, **kwargs):
+            center = _center_order(kwargs)
+            if center == 5:
+                # The other original hit plus a genuinely shared neighbor.
+                return (
+                    [
+                        _point("p6", "doc1", 6, "chunk six"),
+                        _point("shared", "doc1", 7, "shared neighbor"),
+                    ],
+                    None,
+                )
+            return ([_point("shared", "doc1", 7, "shared neighbor")], None)
 
         mock_client.scroll.side_effect = scroll_side_effect
 
         result = await service.expand_context(chunks, deduplicate=True)
 
-        assert len(result) == 2
-        # Both should be expanded but no duplicates in final context
+        added_first = [n["id"] for n in result[0].neighbor_chunks]
+        added_second = [n["id"] for n in result[1].neighbor_chunks]
+        assert "p6" not in added_first  # original hit not re-added as neighbor
+        assert "shared" in added_first
+        assert added_second == []  # shared neighbor admitted only once
 
     async def test_fetch_neighbors_builds_correct_filter(self, service, mock_client):
         """Test that _fetch_neighbors builds correct Qdrant filter."""
@@ -358,3 +508,69 @@ class TestRagPipelineSmallToBig:
         # Confirm identity has changed (new dictionary created)
         assert final_docs[0] is not doc_1_orig
         assert final_docs[1] is not doc_2_orig
+
+    async def test_expand_small_to_big_runs_live_service(self):
+        """Pipeline helper executes the live _expand_small_to_big service path (#3441)."""
+        from src.runtime.pipeline.rag import _expand_small_to_big
+
+        mock_qdrant = MagicMock()
+        mock_qdrant.client = AsyncMock()
+        mock_qdrant.collection_name = "test_collection"
+
+        mock_config = MagicMock()
+        mock_config.small_to_big_mode = "on"
+        mock_config.max_expanded_chunks = 10
+        mock_config.max_context_tokens = 8000
+        mock_config.small_to_big_window_before = 1
+        mock_config.small_to_big_window_after = 1
+
+        final_docs = [
+            {
+                "id": "p1",
+                "text": "hit one",
+                "metadata": {"doc_id": "doc1", "order": 1},
+                "score": 0.9,
+            },
+            {
+                "id": "p2",
+                "text": "hit two",
+                "metadata": {"doc_id": "doc1", "order": 2},
+                "score": 0.8,
+            },
+        ]
+
+        def scroll_side_effect(*args, **kwargs):
+            center = _center_order(kwargs)
+            if center == 1:
+                return (
+                    [
+                        _point("n1", "doc1", 0, "before one"),
+                        _point("p2", "doc1", 2, "hit two"),
+                    ],
+                    None,
+                )
+            return (
+                [
+                    _point("n2", "doc1", 3, "after two"),
+                    _point("p1", "doc1", 1, "hit one"),
+                ],
+                None,
+            )
+
+        mock_qdrant.client.scroll.side_effect = scroll_side_effect
+
+        await _expand_small_to_big(final_docs, qdrant=mock_qdrant, config=mock_config)
+
+        assert len(final_docs) == 2
+        # Original rank order, metadata, and score are stable.
+        assert final_docs[0]["id"] == "p1"
+        assert final_docs[0]["metadata"] == {"doc_id": "doc1", "order": 1}
+        assert final_docs[0]["score"] == 0.9
+        assert final_docs[1]["id"] == "p2"
+        assert final_docs[1]["metadata"] == {"doc_id": "doc1", "order": 2}
+        assert final_docs[1]["score"] == 0.8
+        # Expanded text keeps each hit once and only admits non-duplicate neighbors.
+        assert final_docs[0]["text"] == "before one\n\nhit one"
+        assert final_docs[1]["text"] == "hit two\n\nafter two"
+        assert final_docs[0]["_expanded"] is True
+        assert final_docs[1]["_expanded"] is True
