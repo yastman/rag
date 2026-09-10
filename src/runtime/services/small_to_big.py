@@ -22,6 +22,52 @@ from qdrant_client import AsyncQdrantClient, models
 
 logger = logging.getLogger(__name__)
 
+# Identity namespaces keep Qdrant point ids distinct from canonical
+# (doc_id, order) pairs inside the deduplication set.
+_PointIdentity = tuple[str, str]
+_DocIdentity = tuple[str, str, Any]
+
+
+def _chunk_doc_id(chunk: dict[str, Any]) -> Any:
+    """Return the document identifier from chunk metadata, if any."""
+    metadata = chunk.get("metadata") or {}
+    return metadata.get("doc_id") or metadata.get("document_name")
+
+
+def _chunk_order(chunk: dict[str, Any]) -> Any:
+    """Return the chunk order from metadata, tolerating either key and order 0."""
+    metadata = chunk.get("metadata") or {}
+    order = metadata.get("order")
+    if order is None:
+        order = metadata.get("chunk_order")
+    return order
+
+
+def _chunk_sort_key(chunk: dict[str, Any]) -> Any:
+    """Sort key ordering chunks by document position, defaults last."""
+    order = _chunk_order(chunk)
+    if order is None:
+        order = 0
+    return order
+
+
+def _chunk_identities(chunk: dict[str, Any]) -> set[_PointIdentity | _DocIdentity]:
+    """Return identity keys for a retrieved hit or a fetched neighbor point.
+
+    Uses the Qdrant point id when present plus the canonical ``(doc_id, order)``
+    pair from metadata, so an original hit and a fetched neighbor pointing at
+    the same stored chunk compare equal (#3441).
+    """
+    identities: set[_PointIdentity | _DocIdentity] = set()
+    point_id = chunk.get("id") or chunk.get("point_id")
+    if point_id:
+        identities.add(("point", str(point_id)))
+    doc_id = _chunk_doc_id(chunk)
+    order = _chunk_order(chunk)
+    if doc_id and order is not None:
+        identities.add(("doc", str(doc_id), order))
+    return identities
+
 
 class SmallToBigMode(StrEnum):
     """Small-to-big expansion mode."""
@@ -67,8 +113,10 @@ class SmallToBigService:
         Args:
             client: Async Qdrant client
             collection_name: Target collection name
-            max_expanded_chunks: Maximum chunks after expansion
-            max_context_tokens: Maximum estimated tokens in expanded context
+            max_expanded_chunks: Expansion budget: maximum added neighbor
+                chunks across one expand_context call
+            max_context_tokens: Expansion budget: maximum estimated tokens of
+                added neighbor text across one expand_context call
         """
         self._client = client
         self._collection_name = collection_name
@@ -84,6 +132,18 @@ class SmallToBigService:
     ) -> list[ExpandedChunk]:
         """Expand chunks by fetching neighbors from same document.
 
+        Returns exactly one ``ExpandedChunk`` per input chunk, in input order:
+        original hits are never dropped (#3441). The constructor limits form
+        the expansion budget and apply only to added neighbor chunks —
+        ``max_expanded_chunks`` caps the number of added neighbors and
+        ``max_context_tokens`` caps the estimated tokens of added neighbor
+        text across the whole call. An expansion budget cap at the generation
+        boundary, if required, is a separate concern.
+
+        When ``deduplicate`` is enabled, the seen-identity set is seeded with
+        every original hit (point id or canonical ``(doc_id, order)``) so a
+        retrieved hit is never re-added as another hit's neighbor.
+
         Args:
             chunks: Search results (list of dicts with text, metadata)
             window_before: Number of chunks to fetch before each result
@@ -91,80 +151,55 @@ class SmallToBigService:
             deduplicate: Remove duplicate chunks across expansions
 
         Returns:
-            List of ExpandedChunk with original and neighbor chunks
+            One ExpandedChunk per input chunk; neighbors admitted within the
+            expansion budget.
         """
         if not chunks:
             return []
 
         expanded_results: list[ExpandedChunk] = []
-        seen_chunk_ids = set()
-        total_tokens = 0
+        # Expansion budget counters track added neighbor chunks only.
+        added_neighbor_count = 0
+        added_neighbor_tokens = 0
+        seen_identities: set[_PointIdentity | _DocIdentity] = set()
+        if deduplicate:
+            for chunk in chunks:
+                seen_identities.update(_chunk_identities(chunk))
 
         for chunk in chunks:
-            if total_tokens >= self._max_context_tokens:
-                logger.info(f"Stopping expansion: reached {total_tokens} tokens limit")
-                break
+            doc_id = _chunk_doc_id(chunk)
+            chunk_order = _chunk_order(chunk)
 
-            if len(expanded_results) >= self._max_expanded_chunks:
-                logger.info(f"Stopping expansion: reached {len(expanded_results)} chunks limit")
-                break
-
-            # Get document info
-            metadata = chunk.get("metadata", {})
-            doc_id = metadata.get("doc_id") or metadata.get("document_name")
-            chunk_order = metadata.get("chunk_order") or metadata.get("order")
-
+            neighbors: list[dict[str, Any]] = []
             if doc_id is None or chunk_order is None:
                 # Can't expand without document/order info
-                logger.warning(f"Chunk missing doc_id or order: {metadata}")
-                expanded_results.append(
-                    ExpandedChunk(
-                        original_chunk=chunk,
-                        expanded_text=chunk.get("text", ""),
-                        neighbor_chunks=[],
-                        total_tokens_estimate=len(chunk.get("text", "")) // 4,
-                    )
+                logger.warning(f"Chunk missing doc_id or order: {chunk.get('metadata', {})}")
+            else:
+                fetched = await self._fetch_neighbors(
+                    doc_id=doc_id,
+                    center_order=chunk_order,
+                    window_before=window_before,
+                    window_after=window_after,
                 )
-                continue
-
-            # Fetch neighbor chunks
-            neighbors = await self._fetch_neighbors(
-                doc_id=doc_id,
-                center_order=chunk_order,
-                window_before=window_before,
-                window_after=window_after,
-            )
-
-            # Deduplicate if enabled
-            if deduplicate:
-                unique_neighbors = []
-                for n in neighbors:
-                    n_id = n.get("id", "")
-                    if n_id not in seen_chunk_ids:
-                        seen_chunk_ids.add(n_id)
-                        unique_neighbors.append(n)
-                neighbors = unique_neighbors
+                fetched.sort(key=_chunk_sort_key)
+                for neighbor in fetched:
+                    if deduplicate and _chunk_identities(neighbor) & seen_identities:
+                        continue
+                    if added_neighbor_count >= self._max_expanded_chunks:
+                        break  # count budget exhausted
+                    neighbor_tokens = len(neighbor.get("text", "")) // 4
+                    if added_neighbor_tokens + neighbor_tokens > self._max_context_tokens:
+                        continue  # does not fit; a smaller later neighbor may
+                    if deduplicate:
+                        seen_identities.update(_chunk_identities(neighbor))
+                    added_neighbor_count += 1
+                    added_neighbor_tokens += neighbor_tokens
+                    neighbors.append(neighbor)
 
             # Build expanded text (sorted by order)
-            all_chunks = [chunk, *neighbors]
-            all_chunks.sort(
-                key=lambda c: (
-                    c.get("metadata", {}).get("order", 0)
-                    or c.get("metadata", {}).get("chunk_order", 0)
-                )
-            )
-
+            all_chunks = sorted([chunk, *neighbors], key=_chunk_sort_key)
             expanded_text = "\n\n".join(c.get("text", "") for c in all_chunks)
             tokens_estimate = len(expanded_text) // 4
-
-            # Check token limit
-            if total_tokens + tokens_estimate > self._max_context_tokens:
-                # Try without neighbors
-                expanded_text = chunk.get("text", "")
-                tokens_estimate = len(expanded_text) // 4
-                neighbors = []
-
-            total_tokens += tokens_estimate
 
             expanded_results.append(
                 ExpandedChunk(
@@ -176,7 +211,11 @@ class SmallToBigService:
             )
 
         logger.info(
-            f"Expanded {len(chunks)} chunks to {len(expanded_results)} with ~{total_tokens} tokens"
+            "Expanded %d chunks with %d added neighbors (~%d/%d expansion budget tokens)",
+            len(chunks),
+            added_neighbor_count,
+            added_neighbor_tokens,
+            self._max_context_tokens,
         )
         return expanded_results
 
