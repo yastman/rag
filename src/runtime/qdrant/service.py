@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from qdrant_client import AsyncQdrantClient, models
 
 from src.config.qdrant_policy import resolve_collection_name
+from src.runtime.qdrant import contracts
 from src.runtime.services.metrics import record_pipeline_event
 
 
@@ -136,8 +137,12 @@ class QdrantService:
         self._collection_validated = False
         logger.info(f"QdrantService: switched to {self._collection_name} (mode={mode})")
 
-    async def _apply_strict_mode(self) -> None:
-        """Apply conservative strict mode limits to the current collection.
+    async def apply_strict_mode(self) -> None:
+        """Apply conservative strict-mode limits to the current collection.
+
+        Explicit, idempotent bootstrap operation (#3333): called by collection
+        setup, never by read paths — a read-only credential can search without
+        collection-update permission.
 
         Sets server-side guardrails to prevent runaway queries:
           - max_query_limit=100  — caps result set size per query
@@ -145,105 +150,28 @@ class QdrantService:
           - search_max_hnsw_ef=512 — caps HNSW graph traversal depth
           - search_max_batchsize=10 — caps batch searches to the configured batch size
           - max_resident_memory_percent=80 — rejects writes before memory exhaustion
-        Called after ensure_collection() during initialization. Non-blocking:
-        if the server does not support StrictModeConfig (older version or error),
-        a warning is logged and startup continues.
         """
-        try:
-            strict_config = models.StrictModeConfig(
-                enabled=True,
-                max_query_limit=100,
-                max_timeout=30,
-                search_max_hnsw_ef=512,
-                search_max_batchsize=10,
-                max_resident_memory_percent=80,
-            )
-            await self._client.update_collection(
-                collection_name=self._collection_name,
-                strict_mode_config=strict_config,
-            )
-            logger.info(
-                "QdrantService: strict mode applied to '%s' "
-                "(max_query_limit=100, max_timeout=30, search_max_hnsw_ef=512, "
-                "search_max_batchsize=10, max_resident_memory_percent=80)",
-                self._collection_name,
-            )
-        except Exception as exc:
-            logger.warning(
-                "QdrantService: strict mode not applied to '%s': %s",
-                self._collection_name,
-                exc,
-            )
-
-    async def _ensure_alias(self) -> None:
-        """Ensure the collection alias '{name}_active' points to the current collection.
-
-        Creates or updates alias '{collection_name}_active' → current collection name.
-
-        Blue/green cutover pattern: to cut over to a new collection without downtime,
-        call update_collection_aliases() to atomically switch the alias from the old
-        collection to the new one. Bot reads via alias after the switch.
-
-        Called after ensure_collection() during initialization. Non-blocking:
-        alias creation failure is logged as a warning and does not block startup.
-        """
-        alias_name = f"{self._collection_name}_active"
-        try:
-            aliases = await self._client.get_aliases()
-            current_target = next(
-                (
-                    alias.collection_name
-                    for alias in aliases.aliases
-                    if alias.alias_name == alias_name
-                ),
-                None,
-            )
-
-            if current_target == self._collection_name:
-                logger.info(
-                    "QdrantService: alias '%s' already points to '%s'",
-                    alias_name,
-                    self._collection_name,
-                )
-                return
-
-            operations: list[
-                models.CreateAliasOperation
-                | models.DeleteAliasOperation
-                | models.RenameAliasOperation
-            ] = []
-            if current_target is not None:
-                operations.append(
-                    models.DeleteAliasOperation(
-                        delete_alias=models.DeleteAlias(alias_name=alias_name)
-                    )
-                )
-            operations.append(
-                models.CreateAliasOperation(
-                    create_alias=models.CreateAlias(
-                        collection_name=self._collection_name,
-                        alias_name=alias_name,
-                    )
-                )
-            )
-            await self._client.update_collection_aliases(change_aliases_operations=operations)
-            logger.info(
-                "QdrantService: alias '%s' → '%s' ensured",
-                alias_name,
-                self._collection_name,
-            )
-        except Exception as exc:
-            logger.warning(
-                "QdrantService: alias '%s' creation failed: %s",
-                alias_name,
-                exc,
-            )
+        strict_config = contracts.strict_mode_config()
+        await self._client.update_collection(
+            collection_name=self._collection_name,
+            strict_mode_config=strict_config,
+        )
+        logger.info(
+            "QdrantService: strict mode applied to '%s' "
+            "(max_query_limit=100, max_timeout=30, search_max_hnsw_ef=512, "
+            "search_max_batchsize=10, max_resident_memory_percent=80)",
+            self._collection_name,
+        )
 
     async def ensure_collection(self) -> None:
         """Ensure the configured collection exists and signal quantization fallback.
 
-        A missing scalar/binary collection uses the base collection during a blue/green
-        reindex, but emits a metric and exposes ``quantization_degraded`` for health.
+        Read-side validation only (#3333): no strict-mode PATCH, no alias
+        writes — explicit bootstrap owns those mutations.
+
+        A missing scalar/binary collection uses the base collection during a
+        blue/green reindex, but emits a metric and exposes ``quantization_degraded``
+        for health.
         """
 
         if self._collection_validated:
@@ -262,8 +190,6 @@ class QdrantService:
         if self._collection_name in names:
             self._collection_validated = True
             await self._refresh_collection_capabilities()
-            await self._apply_strict_mode()
-            await self._ensure_alias()
             return
 
         # Fallback: use base collection if it exists.
@@ -279,8 +205,6 @@ class QdrantService:
             record_pipeline_event("qdrant.quantization_fallback")
             self._collection_validated = True
             await self._refresh_collection_capabilities()
-            await self._apply_strict_mode()
-            await self._ensure_alias()
             return
 
         raise RuntimeError(

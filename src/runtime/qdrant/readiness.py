@@ -13,8 +13,11 @@ distinct, actionable failures — never a silent degrade.
 
 The module is transport-neutral (stdlib + ``qdrant_client`` only) so both the
 bot preflight and the out-of-process ``scripts/demo_bootstrap.py`` share one
-source of truth. It never imports from ``telegram_bot`` (layering ratchet,
-#1948) and never mutates data: validation is read-only.
+source of truth. Schema, identity, and filter definitions are consumed from
+:mod:`src.runtime.qdrant.contracts` — the one authority (#3333); this module
+owns readiness *validation* on top of them. It never imports from
+``telegram_bot`` (layering ratchet, #1948) and never mutates data: validation
+is read-only.
 """
 
 from __future__ import annotations
@@ -24,16 +27,19 @@ import uuid
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from qdrant_client import AsyncQdrantClient, models
+from qdrant_client import AsyncQdrantClient
+
+from src.runtime.qdrant import contracts
 
 
 logger = logging.getLogger(__name__)
 
-#: BGE-M3 dense dimensionality — the canonical embedding width for both roles.
-BGEM3_DENSE_DIM = 1024
+#: BGE-M3 dense dimensionality — canonical value lives in
+#: :mod:`src.runtime.qdrant.contracts`; re-exported for consumers of this module.
+BGEM3_DENSE_DIM = contracts.BGEM3_DENSE_DIM
 
-#: Hard-coded apartments collection name (mirrors apartments_service/runner).
-APARTMENTS_COLLECTION = "apartments"
+#: Hard-coded apartments collection name — canonical value in contracts.
+APARTMENTS_COLLECTION = contracts.APARTMENTS_COLLECTION
 
 # ---------------------------------------------------------------------------
 # Failure kinds — callers branch on these to give actionable remediation.
@@ -167,50 +173,14 @@ class CollectionReadiness:
 # Canonical contracts
 # ---------------------------------------------------------------------------
 
-# Knowledge payload-index contract: mirrors scripts/qdrant_audit_indexes.py
-# (GDRIVE_PAYLOAD_INDEX_FIELDS) and the indexes `make ingest-unified-bootstrap`
-# creates, so audited, bootstrapped, and readiness-checked surfaces agree.
-_KNOWLEDGE_KEYWORD_INDEXES = (
-    "file_id",
-    "metadata.file_id",
-    "metadata.doc_id",
-    "metadata.source",
-    "metadata.file_name",
-    "metadata.mime_type",
-    "metadata.topic",
-    "metadata.doc_type",
-)
-_KNOWLEDGE_INTEGER_INDEXES = ("metadata.order", "metadata.chunk_id")
-
-# Apartments payload-index contract: mirrors APARTMENT_PAYLOAD_INDEX_FIELDS in
-# scripts/_qdrant_collection_setup.py (the schema scripts/apartments/ creates).
-_APARTMENTS_KEYWORD_INDEXES = (
-    "complex_name",
-    "city",
-    "section",
-    "apartment_number",
-    "view_primary",
-    "view_tags",
-)
-_APARTMENTS_INTEGER_INDEXES = ("rooms", "floor")
-_APARTMENTS_FLOAT_INDEXES = ("price_eur", "area_m2")
-_APARTMENTS_BOOL_INDEXES = ("is_furnished", "is_promotion")
-
 
 def _indexes(
-    keyword: tuple[str, ...] = (),
-    integer: tuple[str, ...] = (),
-    float_: tuple[str, ...] = (),
-    bool_: tuple[str, ...] = (),
+    index_map: tuple[tuple[str, tuple[str, ...]], ...],
 ) -> tuple[PayloadIndexExpectation, ...]:
+    """Lift a canonical payload-index map into readiness expectations."""
     return tuple(
-        PayloadIndexExpectation(field_name=name, schema_type=schema)
-        for schema, names in (
-            ("keyword", keyword),
-            ("integer", integer),
-            ("float", float_),
-            ("bool", bool_),
-        )
+        PayloadIndexExpectation(field_name=name, schema_type=schema_type)
+        for schema_type, names in index_map
         for name in names
     )
 
@@ -221,14 +191,16 @@ def knowledge_contract(collection_name: str) -> CollectionContract:
         role="knowledge",
         collection_name=collection_name,
         dense_vectors=(
-            VectorExpectation(name="dense", kind="dense", size=BGEM3_DENSE_DIM),
-            VectorExpectation(name="colbert", kind="dense", size=BGEM3_DENSE_DIM, required=False),
+            VectorExpectation(name=contracts.DENSE_VECTOR, kind="dense", size=BGEM3_DENSE_DIM),
+            VectorExpectation(
+                name=contracts.COLBERT_VECTOR,
+                kind="dense",
+                size=BGEM3_DENSE_DIM,
+                required=False,
+            ),
         ),
-        sparse_vectors=(VectorExpectation(name="bm42", kind="sparse"),),
-        payload_indexes=_indexes(
-            keyword=_KNOWLEDGE_KEYWORD_INDEXES,
-            integer=_KNOWLEDGE_INTEGER_INDEXES,
-        ),
+        sparse_vectors=(VectorExpectation(name=contracts.SPARSE_VECTOR, kind="sparse"),),
+        payload_indexes=_indexes(contracts.KNOWLEDGE_PAYLOAD_INDEXES),
         min_points=1,
     )
 
@@ -239,16 +211,16 @@ def apartments_contract() -> CollectionContract:
         role="apartments",
         collection_name=APARTMENTS_COLLECTION,
         dense_vectors=(
-            VectorExpectation(name="dense", kind="dense", size=BGEM3_DENSE_DIM),
-            VectorExpectation(name="colbert", kind="dense", size=BGEM3_DENSE_DIM, required=False),
+            VectorExpectation(name=contracts.DENSE_VECTOR, kind="dense", size=BGEM3_DENSE_DIM),
+            VectorExpectation(
+                name=contracts.COLBERT_VECTOR,
+                kind="dense",
+                size=BGEM3_DENSE_DIM,
+                required=False,
+            ),
         ),
-        sparse_vectors=(VectorExpectation(name="bm42", kind="sparse"),),
-        payload_indexes=_indexes(
-            keyword=_APARTMENTS_KEYWORD_INDEXES,
-            integer=_APARTMENTS_INTEGER_INDEXES,
-            float_=_APARTMENTS_FLOAT_INDEXES,
-            bool_=_APARTMENTS_BOOL_INDEXES,
-        ),
+        sparse_vectors=(VectorExpectation(name=contracts.SPARSE_VECTOR, kind="sparse"),),
+        payload_indexes=_indexes(contracts.APARTMENTS_PAYLOAD_INDEXES),
         min_points=1,
     )
 
@@ -285,7 +257,9 @@ def knowledge_demo_probes() -> tuple[DemoProbe, ...]:
 
     The first probe anchors on :data:`DEMO_CORPUS_ANCHOR_DOC_ID` — the
     document a corpus-grounded question must be able to find in the prepared
-    data. A semantic (embedding-backed) proof of the live #3200 known-corpus
+    data. Probes filter ``metadata.doc_id`` — the canonical indexed knowledge
+    identifier (#3333) — so a passing probe also proves filter/index agreement.
+    A semantic (embedding-backed) proof of the live #3200 known-corpus
     question is a separate live-probe concern, not part of this gate.
     """
     ordered = (
@@ -295,7 +269,7 @@ def knowledge_demo_probes() -> tuple[DemoProbe, ...]:
     return tuple(
         DemoProbe(
             name=f"demo-corpus:{doc_id}",
-            filters={"metadata.id": doc_id},
+            filters={"metadata.doc_id": doc_id},
         )
         for doc_id in ordered
     )
@@ -306,37 +280,31 @@ def knowledge_demo_probes() -> tuple[DemoProbe, ...]:
 # ---------------------------------------------------------------------------
 
 
-def apartment_demo_point_id(complex_name: str, section: str, apartment_number: str) -> str:
-    """Deterministic point id for a shipped apartment row.
-
-    Mirrors ``src.ingestion.apartments.flow.generate_point_id`` (same namespace
-    and key shape) without importing the ingestion package.
-    """
-    return str(uuid.uuid5(DEMO_NAMESPACE, f"{complex_name}::{section}::{apartment_number}"))
-
-
 def apartment_demo_probes(rows: list[dict[str, Any]]) -> tuple[DemoProbe, ...]:
-    """Build one probe per shipped apartment row plus a no-result probe.
+    """Build one probe per distinct advertised filter shape plus a no-result probe.
 
-    Each row probe asserts the advertised query shapes (rooms + city/complex +
-    price bounds) match at least one real prepared listing through the
-    production filter path. The final probe is an intentionally impossible
+    Rows are collapsed to their production filter shape (rooms + city/complex
+    name): 300 shipped rows advertise only 15 distinct query shapes, so one
+    probe per shape exercises the same filter/index path without redundant
+    count round-trips (#3333). The final probe is an intentionally impossible
     query proving a legitimate no-result search is distinguishable from
     missing/empty data.
     """
     probes: list[DemoProbe] = []
+    seen: set[tuple[tuple[str, Any], ...]] = set()
     for row in rows:
         record_filters: dict[str, Any] = {"rooms": int(row["rooms"])}
         if row.get("city"):
             record_filters["city"] = str(row["city"])
         else:
             record_filters["complex_name"] = str(row["complex_name"])
+        shape = tuple(sorted(record_filters.items()))
+        if shape in seen:
+            continue
+        seen.add(shape)
         probes.append(
             DemoProbe(
-                name=(
-                    f"shipped-listing:{row['complex_name']}:"
-                    f"{row['section']}:{row['apartment_number']}"
-                ),
+                name="shipped-shape:" + ":".join(f"{k}={v}" for k, v in shape),
                 filters=record_filters,
             )
         )
@@ -389,32 +357,6 @@ def _index_data_type(schema: Any) -> str | None:
 def _vector_size(params: Any) -> int | None:
     size = getattr(params, "size", None)
     return size if isinstance(size, int) else None
-
-
-def build_probe_filter(filters: dict[str, Any]) -> models.Filter | None:
-    """Build a Qdrant filter from the production filter-dict shape.
-
-    Mirrors ``telegram_bot.services.apartment.apartments_service.
-    _build_apartment_filter`` semantics without importing ``telegram_bot``:
-    exact match, ``gte/lte`` range dicts, and MatchAny lists.
-    """
-    if not filters:
-        return None
-    conditions: list[models.Condition] = []
-    for key, value in filters.items():
-        if isinstance(value, list):
-            conditions.append(models.FieldCondition(key=key, match=models.MatchAny(any=value)))
-        elif isinstance(value, bool):
-            conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
-        elif isinstance(value, dict):
-            range_params = {op: value[op] for op in ("lt", "lte", "gt", "gte") if op in value}
-            if range_params:
-                conditions.append(
-                    models.FieldCondition(key=key, range=models.Range(**range_params))
-                )
-        else:
-            conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
-    return models.Filter(must=conditions) if conditions else None
 
 
 async def validate_collection(
@@ -559,7 +501,7 @@ async def run_demo_probes(
     for probe in probes:
         count = await client.count(
             collection_name=collection_name,
-            count_filter=build_probe_filter(probe.filters),
+            count_filter=contracts.build_payload_filter(probe.filters),
             exact=True,
         )
         matched = int(count.count)

@@ -4,7 +4,6 @@ import logging
 from types import SimpleNamespace
 
 import pytest
-from qdrant_client.models import MatchAny, MatchValue, Range
 
 from src.runtime.qdrant.readiness import (
     APARTMENTS_COLLECTION,
@@ -15,10 +14,8 @@ from src.runtime.qdrant.readiness import (
     KIND_PROBE_MISMATCH,
     KIND_SCHEMA_INCOMPATIBLE,
     KNOWLEDGE_DEMO_DOC_IDS,
-    apartment_demo_point_id,
     apartment_demo_probes,
     apartments_contract,
-    build_probe_filter,
     knowledge_contract,
     knowledge_demo_point_id,
     knowledge_demo_probes,
@@ -377,37 +374,6 @@ class TestDemoProbes:
         assert len(client.count_calls) == len(probes)
 
 
-class TestProbeFilterBuilder:
-    """build_probe_filter mirrors the production apartment filter semantics."""
-
-    def test_empty_filters_return_none(self):
-        assert build_probe_filter({}) is None
-
-    def test_exact_match_uses_match_value(self):
-        f = build_probe_filter({"city": "Бургас"})
-        cond = f.must[0]
-        assert cond.key == "city"
-        assert isinstance(cond.match, MatchValue)
-        assert cond.match.value == "Бургас"
-
-    def test_range_dict_uses_range(self):
-        f = build_probe_filter({"price_eur": {"gte": 1000, "lte": 200000}})
-        cond = f.must[0]
-        assert cond.key == "price_eur"
-        assert isinstance(cond.range, Range)
-        assert cond.range.gte == 1000
-        assert cond.range.lte == 200000
-
-    def test_list_uses_match_any(self):
-        f = build_probe_filter({"view_tags": ["sea", "pool"]})
-        assert isinstance(f.must[0].match, MatchAny)
-        assert f.must[0].match.any == ["sea", "pool"]
-
-    def test_bool_uses_match_value(self):
-        f = build_probe_filter({"is_furnished": True})
-        assert f.must[0].match.value is True
-
-
 # ---------------------------------------------------------------------------
 # Shipped demo fixtures
 # ---------------------------------------------------------------------------
@@ -422,14 +388,7 @@ class TestShippedDemoFixtures:
             KNOWLEDGE_DEMO_DOC_IDS
         )
 
-    def test_apartment_demo_point_ids_match_ingestion_flow(self):
-        from src.ingestion.apartments.flow import generate_point_id
-
-        assert apartment_demo_point_id("Sample Sea Residence", "A", "101") == generate_point_id(
-            "Sample Sea Residence", "A", "101"
-        )
-
-    def test_knowledge_probes_anchor_on_shipped_corpus_document(self):
+    def test_knowledge_probes_filter_the_indexed_identifier(self):
         from src.runtime.qdrant.readiness import DEMO_CORPUS_ANCHOR_DOC_ID
 
         probes = knowledge_demo_probes()
@@ -438,13 +397,39 @@ class TestShippedDemoFixtures:
         # retrieval stub and not part of the shipped Qdrant data.
         assert DEMO_CORPUS_ANCHOR_DOC_ID == "article_115"
         assert probes[0].name == f"demo-corpus:{DEMO_CORPUS_ANCHOR_DOC_ID}"
-        assert probes[0].filters == {"metadata.id": DEMO_CORPUS_ANCHOR_DOC_ID}
+        # metadata.doc_id is the canonical indexed knowledge identifier (#3333):
+        # the unified writer writes it, bootstrap declares its keyword index.
+        assert probes[0].filters == {"metadata.doc_id": DEMO_CORPUS_ANCHOR_DOC_ID}
         assert all(p.expect_results for p in probes)
 
-    def test_apartment_probes_cover_every_shipped_row(self):
+    def test_apartment_probes_cover_every_distinct_shipped_shape(self):
         probes = apartment_demo_probes(_demo_rows())
         row_probes = probes[:-1]
-        assert len(row_probes) == len(_demo_rows())
+        # One probe per distinct advertised (rooms, city) shape — not per row (#3333).
+        assert len(row_probes) == 2
         assert row_probes[0].filters == {"rooms": 2, "city": "Бургас"}
+        assert row_probes[0].name == "shipped-shape:city=Бургас:rooms=2"
         assert probes[-1].name == "intentional-no-result"
         assert probes[-1].filters == {"price_eur": {"lte": 1}}
+        assert probes[-1].expect_results is False
+
+    def test_apartment_probes_deduplicate_filter_shapes(self):
+        row_a = {
+            "complex_name": "Sample Sea Residence",
+            "section": "A",
+            "apartment_number": "101",
+            "rooms": 2,
+            "city": "Бургас",
+        }
+        duplicate_shape = {**row_a, "section": "B", "apartment_number": "202"}
+        row_b = {
+            "complex_name": "Sample Garden Residence",
+            "section": "B",
+            "apartment_number": "12",
+            "rooms": 1,
+            "city": "Варна",
+        }
+        probes = apartment_demo_probes([row_a, duplicate_shape, row_b])
+        shapes = [tuple(sorted((k, str(v)) for k, v in p.filters.items())) for p in probes[:-1]]
+        assert len(shapes) == len(set(shapes))
+        assert len(probes) == 3  # two distinct shapes + the no-result probe

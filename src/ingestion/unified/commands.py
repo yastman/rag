@@ -277,7 +277,12 @@ def _resolve_quantization_config(
 
 
 async def cmd_bootstrap(args: argparse.Namespace) -> int:
-    """Create Qdrant collection if it doesn't exist."""
+    """Create Qdrant collection if it doesn't exist.
+
+    Idempotent bootstrap owns the explicit schema mutations (#3333): vectors
+    and payload indexes come from the canonical contracts, and strict mode is
+    applied here at creation — never by read paths.
+    """
     from qdrant_client import QdrantClient
     from qdrant_client.http.exceptions import UnexpectedResponse
     from qdrant_client.models import (
@@ -293,10 +298,15 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
     )
 
     from src.ingestion.unified.config import UnifiedConfig
+    from src.runtime.qdrant.contracts import (
+        BGEM3_DENSE_DIM,
+        KNOWLEDGE_PAYLOAD_INDEXES,
+        strict_mode_config,
+    )
 
     config = UnifiedConfig()
     collection_name = config.collection_name
-    dense_dimension = 1024
+    dense_dimension = BGEM3_DENSE_DIM
 
     print(f"\n=== Bootstrap: {collection_name} ===")
 
@@ -377,40 +387,27 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
         ),
     )
 
-    # Create payload indexes
+    # Create payload indexes — the canonical knowledge index map (#3333)
     print("  Creating payload indexes...")
-    for field in [
-        "file_id",
-        "metadata.file_id",
-        "metadata.doc_id",
-        "metadata.source",
-        "metadata.file_name",
-        "metadata.mime_type",
-        "metadata.source_type",
-        "metadata.topic",
-        "metadata.doc_type",
-        "metadata.jurisdiction",
-        "metadata.audience",
-        "metadata.language",
-    ]:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
+    for schema_type, fields in KNOWLEDGE_PAYLOAD_INDEXES:
+        for field in fields:
+            try:
+                client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name=field,
+                    field_schema=PayloadSchemaType(schema_type),
+                )
+            except Exception as e:
+                print(f"  Warning: Could not create index {field}: {e}")
 
-    for field in ["metadata.order", "metadata.chunk_id"]:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema=PayloadSchemaType.INTEGER,
-            )
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
+    # Strict mode is a bootstrap-owned mutation (#3333): read paths stay
+    # side-effect-free, so a read-only credential can search without
+    # collection-update permission.
+    print("  Applying strict mode guardrails...")
+    client.update_collection(
+        collection_name=collection_name,
+        strict_mode_config=strict_mode_config(),
+    )
 
     if getattr(args, "require_colbert", False):
         info = client.get_collection(collection_name)

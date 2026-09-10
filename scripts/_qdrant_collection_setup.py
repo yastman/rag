@@ -1,4 +1,9 @@
-"""Shared Qdrant client and payload-index setup primitives."""
+"""Shared Qdrant client and payload-index setup primitives.
+
+The payload-index field maps below are lifted from the canonical contracts in
+``src.runtime.qdrant.contracts`` (#3333) — setup, readiness, bootstrap, and
+the index audit all consume the same definitions.
+"""
 
 import os
 from collections.abc import Iterable
@@ -7,41 +12,27 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import PayloadSchemaType
 
+from src.runtime.qdrant.contracts import (
+    APARTMENTS_PAYLOAD_INDEXES,
+    KNOWLEDGE_PAYLOAD_INDEXES,
+)
+
 
 PayloadIndexFields = Iterable[tuple[PayloadSchemaType, Iterable[str]]]
-GDRIVE_PAYLOAD_INDEX_FIELDS = (
-    (
-        PayloadSchemaType.KEYWORD,
-        (
-            "file_id",
-            "metadata.file_id",
-            "metadata.doc_id",
-            "metadata.source",
-            "metadata.file_name",
-            "metadata.mime_type",
-            "metadata.topic",
-            "metadata.doc_type",
-        ),
-    ),
-    (PayloadSchemaType.INTEGER, ("metadata.order", "metadata.chunk_id")),
-)
 
-APARTMENT_PAYLOAD_INDEX_FIELDS = (
-    (
-        PayloadSchemaType.KEYWORD,
-        (
-            "complex_name",
-            "city",
-            "section",
-            "apartment_number",
-            "view_primary",
-            "view_tags",
-        ),
-    ),
-    (PayloadSchemaType.INTEGER, ("rooms", "floor")),
-    (PayloadSchemaType.FLOAT, ("price_eur", "area_m2")),
-    (PayloadSchemaType.BOOL, ("is_furnished", "is_promotion")),
-)
+
+def _to_field_map(
+    index_map: tuple[tuple[str, tuple[str, ...]], ...],
+) -> tuple[tuple[PayloadSchemaType, tuple[str, ...]], ...]:
+    """Lift a canonical ``(schema_type, fields)`` map into SDK schema types."""
+    return tuple(
+        (PayloadSchemaType(schema_type), tuple(fields)) for schema_type, fields in index_map
+    )
+
+
+GDRIVE_PAYLOAD_INDEX_FIELDS = _to_field_map(KNOWLEDGE_PAYLOAD_INDEXES)
+
+APARTMENT_PAYLOAD_INDEX_FIELDS = _to_field_map(APARTMENTS_PAYLOAD_INDEXES)
 
 PAYLOAD_INDEX_FIELDS_BY_COLLECTION = {
     "gdrive_documents_bge": GDRIVE_PAYLOAD_INDEX_FIELDS,
