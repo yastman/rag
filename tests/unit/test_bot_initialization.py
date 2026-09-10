@@ -28,6 +28,32 @@ def _create_bot(config: BotConfig | None = None):
         return PropertyBot(config)
 
 
+def _create_bot_with_constructor_spies(config: BotConfig | None = None):
+    """Real construction path with the concrete constructors spied.
+
+    Only constructor-wiring assertions use this variant (moved here from the
+    handler suite by #3345); the default subject of this suite stays on the
+    unmodified real path via ``_create_bot``.
+    """
+    if config is None:
+        config = _make_config()
+    spies: dict[str, MagicMock] = {}
+    with (
+        patch("telegram_bot.bot.Bot") as spies["bot"],
+        patch("src.runtime.integrations.cache.CacheLayerManager") as spies["cache"],
+        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings") as spies["hybrid"],
+        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings") as spies["sparse"],
+        patch("src.runtime.services.qdrant.QdrantService") as spies["qdrant"],
+        patch("src.runtime.config.GraphConfig.create_llm"),
+        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
+        patch("telegram_bot.bot.setup_throttling_middleware") as spies["throttle_mw"],
+        patch("telegram_bot.bot.setup_error_handler") as spies["error_mw"],
+    ):
+        from telegram_bot.bot import PropertyBot
+
+        return PropertyBot(config), spies
+
+
 class TestPropertyBotInit:
     """Verify __init__ creates all expected attributes."""
 
@@ -95,6 +121,36 @@ class TestPropertyBotInit:
     def test_cache_initialized_is_false(self):
         bot = _create_bot()
         assert bot._cache_initialized is False
+
+    def test_init_creates_services(self):
+        """Initialization constructs each service exactly once (moved by #3345)."""
+        config = _make_config()
+        bot, spies = _create_bot_with_constructor_spies(config)
+
+        assert bot.config == config
+        spies["cache"].assert_called_once()
+        spies["hybrid"].assert_called_once()
+        spies["sparse"].assert_called_once()
+        assert spies["qdrant"].call_count == 2  # main + apartments collection
+
+    def test_init_passes_qdrant_timeout(self):
+        """PropertyBot should pass configured timeout to QdrantService."""
+        config = _make_config(qdrant_timeout=7)
+        _, spies = _create_bot_with_constructor_spies(config)
+
+        # First call is main collection (with timeout), second is apartments
+        assert spies["qdrant"].call_args_list[0].kwargs["timeout"] == 7
+
+
+class TestSetupMiddlewares:
+    """Test middleware setup wiring on init (moved by #3345)."""
+
+    def test_middlewares_configured(self):
+        """Test that middlewares are configured on init."""
+        _, spies = _create_bot_with_constructor_spies()
+
+        spies["throttle_mw"].assert_called_once()
+        spies["error_mw"].assert_called_once()
 
 
 def _start_patches(bot):

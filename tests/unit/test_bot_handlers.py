@@ -15,7 +15,7 @@ class AIMessageChunk:
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.bot import PropertyBot, make_session_id
+from telegram_bot.bot import make_session_id
 from telegram_bot.config import BotConfig
 from telegram_bot.handlers.command_handlers import (
     cmd_clear,
@@ -28,6 +28,7 @@ from telegram_bot.handlers.command_handlers import (
 from telegram_bot.preflight import PreflightError
 from telegram_bot.services.util.error_utils import walk_traceback_frames
 from telegram_bot.startup_status import DependencyCheckResult, StartupReport
+from tests.unit._property_bot_factory import make_property_bot
 
 
 @pytest.fixture
@@ -48,59 +49,6 @@ def mock_config(monkeypatch):
         realestate_database_url="postgresql://postgres:postgres@127.0.0.1:1/realestate",
         rerank_provider="none",
     )
-
-
-def _create_bot(mock_config):
-    """Create PropertyBot with all deps mocked. Returns (bot, patches_dict)."""
-    # Unit conftest may stub aiogram CallbackData / BaseMiddleware as MagicMock.
-    # Patch filter + middleware setup at the actual lookup sites used during init.
-    _cb_filter = MagicMock(name="CallbackData.filter")
-    patches = {}
-    with (
-        patch("telegram_bot.bot.Bot") as mock_bot,
-        patch("src.runtime.integrations.cache.CacheLayerManager") as mock_cache,
-        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings") as mock_emb,
-        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
-        patch("src.runtime.services.qdrant.QdrantService") as mock_qdrant,
-        patch("src.runtime.config.GraphConfig.create_llm") as mock_llm,
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
-        patch("telegram_bot.bot.setup_throttling_middleware") as mock_throttle_mw,
-        patch("telegram_bot.bot.setup_error_handler") as mock_error_mw,
-        patch("telegram_bot.bot.FSMCancelMiddleware", MagicMock()),
-        patch(
-            "telegram_bot.handlers.demo_handler.DemoCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch("telegram_bot.bot.FeedbackCB.filter", create=True, return_value=_cb_filter),
-        patch(
-            "telegram_bot.bot.FeedbackReasonCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch(
-            "telegram_bot.handlers.favorites_callbacks.FavoriteCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch(
-            "telegram_bot.handlers.results_callbacks.ResultsCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-    ):
-        patches = {
-            "bot": mock_bot,
-            "cache": mock_cache,
-            "embeddings": mock_emb,
-            "sparse": mock_sparse,
-            "qdrant": mock_qdrant,
-            "llm": mock_llm,
-            "throttle_mw": mock_throttle_mw,
-            "error_mw": mock_error_mw,
-        }
-        bot = PropertyBot(mock_config)
-    return bot, patches
 
 
 def _make_text_message(text="test", user_id=12345, chat_id=12345):
@@ -214,25 +162,7 @@ class TestErrorUtils:
 
 
 class TestPropertyBotInit:
-    """Test PropertyBot initialization."""
-
-    def test_init_creates_services(self, mock_config):
-        """Test that initialization creates all services."""
-        bot, patches = _create_bot(mock_config)
-
-        assert bot.config == mock_config
-        patches["cache"].assert_called_once()
-        patches["embeddings"].assert_called_once()
-        patches["sparse"].assert_called_once()
-        assert patches["qdrant"].call_count == 2  # main + apartments collection
-
-    def test_init_passes_qdrant_timeout(self, mock_config):
-        """PropertyBot should pass configured timeout to QdrantService."""
-        mock_config.qdrant_timeout = 7
-        _, patches = _create_bot(mock_config)
-
-        # First call is main collection (with timeout), second is apartments
-        assert patches["qdrant"].call_args_list[0].kwargs["timeout"] == 7
+    """Test build_services wiring details (#3490)."""
 
     def test_init_keeps_colbert_runtime_server_side(self, mock_config):
         """colbert provider keeps client-side reranker unset (server-side path)."""
@@ -362,7 +292,7 @@ class TestCommandHandlers:
 
     async def test_cmd_start_sends_reply_keyboard(self, mock_config):
         """Test /start sends ReplyKeyboard with greeting (#628)."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message()
 
         await cmd_start(bot, message)
@@ -380,7 +310,7 @@ class TestCommandHandlers:
         """Test /start sends welcome with user's first_name via i18n."""
         from unittest.mock import MagicMock
 
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message()
         i18n = MagicMock()
         i18n.get.return_value = "Привет, Test! 👋"
@@ -392,7 +322,7 @@ class TestCommandHandlers:
 
     async def test_cmd_help(self, mock_config):
         """Test /help produces expected response text."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message()
 
         await cmd_help(bot, message)
@@ -404,7 +334,7 @@ class TestCommandHandlers:
 
     async def test_cmd_help_includes_all_commands(self, mock_config):
         """Test /help lists /history, /metrics, /clearcache (#864)."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message()
 
         await cmd_help(bot, message)
@@ -416,7 +346,7 @@ class TestCommandHandlers:
     async def test_cmd_help_metrics_port_default_is_9092(self, mock_config, monkeypatch):
         """/help points metrics at JSON logs; Prometheus endpoint removed."""
         monkeypatch.delenv("TELEGRAM_BOT_METRICS_PORT", raising=False)
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message()
 
         await cmd_help(bot, message)
@@ -429,7 +359,7 @@ class TestCommandHandlers:
     async def test_cmd_help_metrics_port_respects_env_override(self, mock_config, monkeypatch):
         """Prometheus port env no longer surfaces in /help; command still works."""
         monkeypatch.setenv("TELEGRAM_BOT_METRICS_PORT", "9099")
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message()
 
         await cmd_help(bot, message)
@@ -441,13 +371,13 @@ class TestCommandHandlers:
 
     def test_no_handle_promotions_method(self, mock_config):
         """_handle_promotions removed as dead code (#863)."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         assert not hasattr(bot, "_handle_promotions")
 
     async def test_cmd_start_manager_receives_manager_menu(self, mock_config):
         """Manager user still gets client root menu (CRM manager menu removed)."""
         mock_config.manager_ids = [12345]
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message(user_id=12345)
         dialog_manager = AsyncMock()
 
@@ -459,7 +389,7 @@ class TestCommandHandlers:
     async def test_resolve_user_role_prefers_config_manager_ids_on_db_client(self, mock_config):
         """manager_ids fallback should elevate manager even when DB returns client (#388)."""
         mock_config.manager_ids = [12345]
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._user_service = AsyncMock()
         bot._user_service.get_role = AsyncMock(return_value="client")
 
@@ -469,7 +399,7 @@ class TestCommandHandlers:
 
     async def test_cmd_clear(self, mock_config):
         """Test /clear command handler."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         message = _make_text_message()
@@ -482,7 +412,7 @@ class TestCommandHandlers:
 
     async def test_cmd_clear_deletes_qdrant_history_when_service_available(self, mock_config):
         """History service removed; /clear still clears conversation cache."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         bot._history_service = AsyncMock()
@@ -498,7 +428,7 @@ class TestCommandHandlers:
 
     async def test_cmd_clear_reports_partial_failure_when_history_delete_fails(self, mock_config):
         """History service removed; /clear ignores history_service and reports full clear."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         bot._history_service = AsyncMock()
@@ -516,7 +446,7 @@ class TestCommandHandlers:
         """#1454: /clear must reset any active aiogram-dialog stack so the next
         free-text message is routed back to the supervisor / RAG path
         (e.g. user is no longer stuck inside DemoSG.search)."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         message = _make_text_message()
@@ -536,7 +466,7 @@ class TestCommandHandlers:
 
     async def test_cmd_clear_clears_fsm_state_without_active_dialog(self, mock_config):
         """#1454: when no aiogram-dialog stack is active, /clear still clears FSM."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         message = _make_text_message()
@@ -553,7 +483,7 @@ class TestCommandHandlers:
     async def test_cmd_clear_handles_dialog_reset_failure_gracefully(self, mock_config):
         """#1454: a failure inside reset_stack must NOT raise; it surfaces as a
         partial-success message so the user knows to fall back to /start."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         message = _make_text_message()
@@ -571,7 +501,7 @@ class TestCommandHandlers:
 
     async def test_cmd_clear_works_without_state_or_manager(self, mock_config):
         """Backward-compat: /clear must still work when state/dialog_manager are not injected."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         message = _make_text_message()
@@ -583,7 +513,7 @@ class TestCommandHandlers:
 
     async def test_cmd_stats(self, mock_config):
         """Test /stats command handler."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.get_metrics.return_value = {
             "semantic": {"hit_rate": 80.0, "hits": 40, "total": 50},
@@ -600,7 +530,7 @@ class TestCommandHandlers:
 
     async def test_cmd_stats_uses_hits_plus_misses_denominator(self, mock_config):
         """Test /stats command uses hits + misses as denominator (not 'total')."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.get_metrics.return_value = {
             "semantic": {"hit_rate": 75.0, "hits": 30, "misses": 10},
@@ -616,7 +546,7 @@ class TestCommandHandlers:
 
     async def test_cmd_metrics(self, mock_config):
         """Test /metrics points operators at structured JSON logs."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message()
 
         await cmd_metrics(bot, message)
@@ -650,7 +580,7 @@ class TestHandleQuery:
     """Test handle_query orchestration — assistant core path."""
 
     async def test_handle_query_invokes_core(self, mock_config):
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -669,7 +599,7 @@ class TestHandleQuery:
         message.answer.assert_awaited()
 
     async def test_handle_query_sends_typing(self, mock_config):
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -687,7 +617,7 @@ class TestHandleQuery:
         message.bot.send_chat_action.assert_called_once_with(chat_id=12345, action="typing")
 
     async def test_handle_query_updates_root_trace_metadata(self, mock_config):
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         meta = {}
         message = _make_text_message("квартиры")
         with (
@@ -706,7 +636,7 @@ class TestHandleQuery:
         assert "e2e_latency_ms" in meta
 
     async def test_handle_query_builds_user_context_for_core(self, mock_config):
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -731,7 +661,7 @@ class TestHandleQuery:
         assert ctx.role == "client"
 
     async def test_handle_query_splits_long_response_for_telegram_limit(self, mock_config):
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         long_response = "x" * 10050
 
         with (
@@ -759,7 +689,7 @@ class TestPreAgentGuard:
     async def test_clean_query_reaches_core(self, mock_config):
         mock_config.content_filter_enabled = True
         mock_config.guard_mode = "hard"
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -779,7 +709,7 @@ class TestPreAgentGuard:
 
     async def test_guard_disabled_skips_check(self, mock_config):
         mock_config.content_filter_enabled = False
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -800,7 +730,7 @@ class TestPreAgentGuard:
     async def test_soft_mode_does_not_block(self, mock_config):
         mock_config.content_filter_enabled = True
         mock_config.guard_mode = "soft"
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -827,7 +757,7 @@ class TestBotLifecycle:
 
     async def test_start_initializes_cache(self, mock_config):
         """Test that start() initializes cache."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
         bot.dp = MagicMock()
@@ -846,7 +776,7 @@ class TestBotLifecycle:
 
     async def test_start_skips_reinit_if_already_initialized(self, mock_config):
         """Test that start() skips cache init if already done."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
         bot._cache_initialized = True
@@ -865,7 +795,7 @@ class TestBotLifecycle:
 
     async def test_start_aborts_before_redis_init_when_critical_preflight_fails(self, mock_config):
         """Critical preflight must run before cache startup work."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
         bot.dp = MagicMock()
@@ -893,7 +823,7 @@ class TestBotLifecycle:
 
     async def test_start_logs_one_final_startup_summary(self, mock_config, caplog):
         """Startup should emit one final verdict block for degraded startup."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
         bot._cache.redis = MagicMock()
@@ -926,7 +856,7 @@ class TestBotLifecycle:
         from src.runtime.integrations.redis_mode import RedisMode
 
         mock_config.redis_mode = RedisMode.MULTI_INSTANCE
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
         bot._cache.redis = MagicMock()
@@ -970,7 +900,7 @@ class TestBotLifecycle:
 
     async def test_start_skips_postgres_pool_when_preflight_already_failed(self, mock_config):
         """Startup should not probe Postgres again after authoritative preflight failure."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
         bot._cache.redis = MagicMock()
@@ -1003,7 +933,7 @@ class TestBotLifecycle:
 
     async def test_stop_closes_services(self, mock_config):
         """Test that stop() closes all services."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.close = AsyncMock()
         bot._qdrant = MagicMock()
@@ -1028,7 +958,7 @@ class TestBotLifecycle:
 
     async def test_stop_has_no_checkpointer_teardown(self, mock_config):
         """#3218: stop() completes without checkpointer teardown — the fields are gone."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.close = AsyncMock()
         bot._qdrant = MagicMock()
@@ -1051,7 +981,7 @@ class TestBotLifecycle:
 
     async def test_stop_releases_polling_lock(self, mock_config):
         """stop() releases the polling lock when the current instance owns it."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.close = AsyncMock()
         bot._qdrant = MagicMock()
@@ -1076,7 +1006,7 @@ class TestBotLifecycle:
 
     async def test_polling_lock_heartbeat_retries_transient_failures(self, mock_config):
         """One transient refresh failure must not stop polling immediately."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._polling_lock = AsyncMock()
         bot._polling_lock.ttl_sec = 3
         bot._polling_lock.refresh = AsyncMock(side_effect=RuntimeError("redis lost"))
@@ -1091,7 +1021,7 @@ class TestBotLifecycle:
 
     async def test_polling_lock_heartbeat_stops_before_lease_can_expire(self, mock_config):
         """Two missed refreshes must stop polling before a third interval can expire the lease."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._polling_lock = AsyncMock()
         bot._polling_lock.ttl_sec = 3
         bot._polling_lock.refresh = AsyncMock(side_effect=RuntimeError("redis lost"))
@@ -1118,7 +1048,7 @@ class TestBotLifecycle:
         from telegram_bot.lifecycle.lifecycle import setup_workflow_data
         from telegram_bot.middlewares.i18n import create_translator_hub
 
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot._i18n_hub = create_translator_hub()
         bot._user_service = MagicMock()
 
@@ -1126,17 +1056,6 @@ class TestBotLifecycle:
             setup_workflow_data(bot)
 
         setup_i18n_middleware.assert_called_once_with(bot.dp, bot._i18n_hub, bot._user_service)
-
-
-class TestSetupMiddlewares:
-    """Test middleware setup."""
-
-    def test_middlewares_configured(self, mock_config):
-        """Test that middlewares are configured on init."""
-        _bot, patches = _create_bot(mock_config)
-
-        patches["throttle_mw"].assert_called_once()
-        patches["error_mw"].assert_called_once()
 
 
 class TestRegisterHandlers:
@@ -1148,7 +1067,7 @@ class TestRegisterHandlers:
     )
     def test_handler_registered(self, mock_config, handler_name):
         """Test that expected handler is registered on init."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         assert hasattr(bot, handler_name)
 
     def test_command_handlers_available_as_standalone(self, mock_config):
@@ -1286,7 +1205,7 @@ class TestClearCacheCommand:
 
     async def test_cmd_clearcache_sends_keyboard(self, mock_config):
         """cmd_clearcache replies with an InlineKeyboardMarkup for admins."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot.config.admin_ids = [12345]
         message = _make_text_message("/clearcache")
 
@@ -1311,7 +1230,7 @@ class TestClearCacheCommand:
 
     async def test_handle_clearcache_semantic(self, mock_config):
         """handle_clearcache_callback calls clear_semantic_cache for cc:semantic."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot.config.admin_ids = [12345]
         bot._cache.clear_semantic_cache = AsyncMock(return_value=5)
 
@@ -1327,7 +1246,7 @@ class TestClearCacheCommand:
 
     async def test_handle_clearcache_embeddings(self, mock_config):
         """handle_clearcache_callback calls clear_by_tier for cc:embeddings."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot.config.admin_ids = [12345]
         bot._cache.clear_by_tier = AsyncMock(return_value=12)
 
@@ -1342,7 +1261,7 @@ class TestClearCacheCommand:
 
     async def test_handle_clearcache_all(self, mock_config):
         """handle_clearcache_callback calls clear_all_caches for cc:all."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot.config.admin_ids = [12345]
         bot._cache.clear_all_caches = AsyncMock(
             return_value={
@@ -1366,7 +1285,7 @@ class TestClearCacheCommand:
 
     async def test_handle_clearcache_error(self, mock_config):
         """handle_clearcache_callback shows error message on exception."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot.config.admin_ids = [12345]
         bot._cache.clear_by_tier = AsyncMock(side_effect=Exception("Redis down"))
 
@@ -1383,7 +1302,7 @@ class TestHandleAsk:
 
     async def test_handle_ask_sends_inline_keyboard(self, mock_config):
         """Test 💬 Задать вопрос shows FAQ inline menu."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message(text="💬 Задать вопрос")
 
         await bot._handle_ask(message)
@@ -1396,7 +1315,7 @@ class TestHandleAsk:
 
     async def test_handle_ask_inline_keyboard_has_4_buttons(self, mock_config):
         """Test FAQ inline menu contains exactly 4 questions."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         message = _make_text_message(text="💬 Задать вопрос")
 
         await bot._handle_ask(message)
@@ -1409,7 +1328,7 @@ class TestHandleAsk:
 
     async def test_handle_ask_callback_triggers_query(self, mock_config):
         """Test ask:docs callback sends query to RAG pipeline."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot.handle_menu_action_text = AsyncMock()
 
         callback = AsyncMock()
@@ -1424,7 +1343,7 @@ class TestHandleAsk:
 
     async def test_handle_ask_callback_unknown_data_is_noop(self, mock_config):
         """Test ask:unknown callback does nothing."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         bot.handle_menu_action_text = AsyncMock()
 
         callback = AsyncMock()
@@ -1441,7 +1360,7 @@ class TestLegacyCallbackRoutes:
     """Ensure legacy callback payloads remain routable after CallbackData migration."""
 
     def test_registers_feedback_done_legacy_route(self, mock_config):
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
 
         # Handlers may live on root dp or included routers depending on stub shape.
         handlers = list(getattr(bot.dp.callback_query, "handlers", []) or [])
@@ -1453,7 +1372,7 @@ class TestLegacyCallbackRoutes:
         )
 
     def test_registers_favorite_viewing_all_legacy_route(self, mock_config):
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
 
         assert hasattr(bot, "handle_favorite_callback") or hasattr(bot, "handle_fav_viewing_all")
 
@@ -1468,11 +1387,11 @@ class TestPropertyBotApartmentPipeline:
 
     def test_init_creates_apartment_pipeline(self, mock_config):
         """PropertyBot.__init__ creates _apartment_pipeline (not None)."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         assert hasattr(bot, "_apartment_pipeline")
         assert bot._apartment_pipeline is not None
 
     def test_init_falls_back_when_apartment_llm_extractor_unavailable(self, mock_config):
         """Missing optional apartment LLM deps should not crash bot initialization."""
-        bot, _ = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         assert bot._apartment_pipeline is not None

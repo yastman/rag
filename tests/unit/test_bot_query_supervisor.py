@@ -9,8 +9,8 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.config import BotConfig
 from tests.unit._bot_config_factory import make_bot_config as _make_config
+from tests.unit._property_bot_factory import make_property_bot
 
 
 @asynccontextmanager
@@ -27,23 +27,6 @@ def _fake_llm_response(text: str, model: str = "gpt-test") -> MagicMock:
     resp.usage = usage
     resp.model = model
     return resp
-
-
-def _create_bot(config: BotConfig | None = None):
-    if config is None:
-        config = _make_config()
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("src.runtime.integrations.cache.CacheLayerManager"),
-        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("src.runtime.services.qdrant.QdrantService"),
-        patch("src.runtime.config.GraphConfig.create_llm"),
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
-    ):
-        from telegram_bot.bot import PropertyBot
-
-        return PropertyBot(config)
 
 
 def _make_message(text="test query"):
@@ -85,7 +68,7 @@ class TestQuerySupervisorHandoffMode:
 
     async def test_handoff_human_mode_relays_and_returns(self):
         """Handoff mode='human' relays message and returns without RAG processing."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("hello")
 
         from telegram_bot.services.handoff_state import HandoffData
@@ -112,7 +95,7 @@ class TestQuerySupervisorHandoffMode:
 
     async def test_handoff_human_waiting_relays_and_continues(self):
         """Handoff mode='human_waiting' relays AND continues with RAG."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("hello")
 
         from telegram_bot.services.handoff_state import HandoffData
@@ -152,7 +135,7 @@ class TestQuerySupervisorHandoffMode:
 
         from telegram_bot.services.handoff_state import HandoffData
 
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("hello")
 
         handoff_data = HandoffData(client_id=12345, topic_id=999, mode="human")
@@ -186,7 +169,7 @@ class TestQuerySupervisorHandoffMode:
 
         from telegram_bot.services.handoff_state import HandoffData
 
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("hello")
 
         handoff_data = HandoffData(client_id=12345, topic_id=999, mode="human_waiting")
@@ -215,7 +198,7 @@ class TestQuerySupervisorHandoffMode:
 
     async def test_no_handoff_proceeds_normally(self):
         """No handoff state proceeds directly to _handle_query_supervisor."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("hello")
         bot._handoff_state = None
 
@@ -243,7 +226,7 @@ class TestQuerySupervisorSemanticCache:
     async def test_cache_lookup_not_performed_by_telegram(self):
         """Telegram never calls check_semantic; the core owns the cache stage."""
         config = _make_config(content_filter_enabled=False)
-        bot = _create_bot(config)
+        bot = make_property_bot(config)
         message = _make_message("What is the deposit amount?")
 
         with (
@@ -282,7 +265,7 @@ class TestQuerySupervisorCoreEntrypoint:
     async def test_core_entrypoint_called_and_agent_bypassed(self, monkeypatch):
         """Assistant core is the text path: invoke assistant core request and bypass legacy agent."""
         config = _make_config(content_filter_enabled=False)
-        bot = _create_bot(config)
+        bot = make_property_bot(config)
         message = _make_message("What is the cost of Sunny Beach studio?")
 
         from src.core import AssistantResult
@@ -338,7 +321,7 @@ class TestQuerySupervisorCoreEntrypoint:
         configured domain language.
         """
         config = _make_config(content_filter_enabled=False)
-        bot = _create_bot(config)
+        bot = make_property_bot(config)
         message = _make_message("What is included in the complex?")
 
         with (
@@ -381,7 +364,25 @@ class TestQuerySupervisorCoreEntrypoint:
         ``BotConfig`` and the request dies with ``dependency_failed`` before
         any LLM call.
         """
-        bot = _create_bot()
+        from src.runtime.config import GraphConfig
+
+        config = _make_config()
+        # The real generation chain reads string fields off the runtime config,
+        # so this test injects a real GraphConfig instead of the factory mock.
+        graph_config = GraphConfig(
+            llm_base_url=config.llm_base_url,
+            llm_api_key=config.llm_api_key,
+            llm_model=config.llm_model,
+            bge_m3_url=config.bge_m3_url,
+            qdrant_url=config.qdrant_url,
+            qdrant_collection=config.qdrant_collection,
+            search_top_k=config.search_top_k,
+            redis_url=config.redis_url,
+            redis_mode=config.redis_mode,
+            domain=config.domain,
+            domain_language=config.domain_language,
+        )
+        bot = make_property_bot(config, service_overrides={"graph_config": graph_config})
         message = _make_message("Подскажите варианты студии у моря")
 
         async def fake_rag_pipeline(**_kwargs):
@@ -444,7 +445,7 @@ class TestQuerySupervisorConvergence:
 
     async def test_single_core_call_no_telegram_classify_embed_cache(self):
         config = _make_config(content_filter_enabled=False)
-        bot = _create_bot(config)
+        bot = make_property_bot(config)
         message = _make_message("Сколько стоит студия в Sunny Beach?")
 
         with (
@@ -481,7 +482,7 @@ class TestQuerySupervisorConvergence:
     async def test_filters_propagate_into_core_user_context(self):
         """Deterministic filter extraction still feeds the core request (#3208)."""
         config = _make_config(content_filter_enabled=False)
-        bot = _create_bot(config)
+        bot = make_property_bot(config)
         message = _make_message("Двухкомнатные квартиры в Несебре до 80000 евро")
 
         with (
@@ -509,7 +510,7 @@ class TestQuerySupervisorConvergence:
     async def test_cache_hit_result_presented_once(self):
         """Core cache-hit results flow through the same single presentation path."""
         config = _make_config(content_filter_enabled=False)
-        bot = _create_bot(config)
+        bot = make_property_bot(config)
         message = _make_message("What is the deposit amount?")
 
         cached_result = _core_result("Cached: deposit is 10%")
@@ -542,7 +543,7 @@ class TestQuerySupervisorConvergence:
     async def test_trace_metadata_is_truthful_not_hardcoded(self):
         """Grounding/safety trace fields mirror the core result (#3208)."""
         config = _make_config(content_filter_enabled=False)
-        bot = _create_bot(config)
+        bot = make_property_bot(config)
         message = _make_message("Что-то Спросить?")
 
         core_result = _core_result("ответ")

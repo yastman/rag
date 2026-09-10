@@ -6,29 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.bot import PropertyBot
-from telegram_bot.lifecycle.services import Services
-from tests.unit._bot_config_factory import make_full_bot_config as _make_config
-
-
-def _create_bot() -> PropertyBot:
-    config = _make_config()
-    services = Services(
-        graph_config=MagicMock(),
-        cache=MagicMock(),
-        hybrid=MagicMock(),
-        embeddings=MagicMock(),
-        sparse=MagicMock(),
-        qdrant=MagicMock(),
-        qdrant_apartments=MagicMock(),
-        apartments_service=MagicMock(),
-        reranker=None,
-        llm=MagicMock(),
-        apartment_pipeline=MagicMock(),
-        redis_monitor=MagicMock(),
-        i18n_hub=None,
-    )
-    return PropertyBot(config, _services=services)
+from tests.unit._property_bot_factory import make_property_bot
 
 
 def _make_callback() -> MagicMock:
@@ -51,7 +29,7 @@ def _make_state(data: dict) -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_results_more_stale_compat_does_not_call_scroll_with_filters() -> None:
-    bot = _create_bot()
+    bot = make_property_bot()
     bot._apartments_service = MagicMock()
     bot._apartments_service.scroll_with_filters = AsyncMock()
     state = _make_state(

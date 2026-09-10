@@ -6,22 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.bot import PropertyBot
 from tests.unit._bot_config_factory import make_full_bot_config as _make_config
-
-
-def _create_bot() -> PropertyBot:
-    config = _make_config()
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("src.runtime.integrations.cache.CacheLayerManager"),
-        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("src.runtime.services.qdrant.QdrantService"),
-        patch("src.runtime.config.GraphConfig.create_llm"),
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
-    ):
-        return PropertyBot(config)
+from tests.unit._property_bot_factory import make_property_bot
 
 
 def _make_callback(data: str, user_id: int = 12345) -> MagicMock:
@@ -70,7 +56,7 @@ def _sample_result(property_id: str = "prop-42") -> dict:
 
 async def test_card_viewing_starts_phone_collection() -> None:
     """card:viewing:{id} → start_phone_collection with service_key=viewing."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state({"apartment_results": [_sample_result("prop-42")]})
     callback = _make_callback("card:viewing:prop-42")
 
@@ -86,7 +72,7 @@ async def test_card_viewing_starts_phone_collection() -> None:
 
 async def test_card_ask_starts_phone_collection_manager_question() -> None:
     """card:ask:{id} → start_phone_collection with service_key=manager_question."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state({"apartment_results": [_sample_result("prop-42")]})
     callback = _make_callback("card:ask:prop-42")
 
@@ -102,7 +88,7 @@ async def test_card_ask_starts_phone_collection_manager_question() -> None:
 
 async def test_card_callback_no_results_in_state() -> None:
     """card:viewing with no results in state → viewing_objects is None or []."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state({})
     callback = _make_callback("card:viewing:prop-42")
 
@@ -117,7 +103,7 @@ async def test_card_callback_no_results_in_state() -> None:
 
 async def test_card_callback_fallbacks_to_favorites_when_state_missing() -> None:
     """card:viewing uses favorites data when apartment_results is absent."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     bot._favorites_service = MagicMock()
     bot._favorites_service.list = AsyncMock(
         return_value=[
@@ -147,7 +133,7 @@ async def test_card_callback_fallbacks_to_favorites_when_state_missing() -> None
 
 async def test_card_callback_uses_catalog_runtime_results() -> None:
     """Dialog-owned catalog flow should preserve viewing metadata for card callbacks."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state({"catalog_runtime": {"results": [_sample_result("prop-42")]}})
     callback = _make_callback("card:viewing:prop-42")
 
@@ -161,7 +147,7 @@ async def test_card_callback_uses_catalog_runtime_results() -> None:
 
 async def test_card_callback_unknown_action_answers_empty() -> None:
     """card:unknown:{id} → just answer() without crash."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state({})
     callback = _make_callback("card:unknown:prop-42")
 
@@ -175,7 +161,7 @@ async def test_card_callback_unknown_action_answers_empty() -> None:
 
 async def test_card_callback_malformed_data_answers_empty() -> None:
     """card (no parts) → answer() without crash."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state({})
     callback = _make_callback("card")
 
@@ -189,7 +175,7 @@ async def test_card_viewing_starts_dialog_with_edit_mode() -> None:
     """card:viewing should start ViewingSG with ShowMode.DELETE_AND_SEND."""
     from aiogram_dialog import ShowMode
 
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state({"apartment_results": [_sample_result("prop-42")]})
     callback = _make_callback("card:viewing:prop-42")
     dialog_manager = AsyncMock()
@@ -203,7 +189,7 @@ async def test_card_viewing_starts_dialog_with_edit_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_card_viewing_deletes_catalog_control_message_when_runtime_present() -> None:
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state(
         {
             "catalog_runtime": {
