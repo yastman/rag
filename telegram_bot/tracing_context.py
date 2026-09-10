@@ -5,14 +5,10 @@ continue to work without changes.
 """
 
 from telegram_bot.observability.context import (
-    classify_action as classify_action,
-)
-from telegram_bot.observability.context import (
     make_session_id as make_session_id,
 )
 
 
 __all__ = [
-    "classify_action",
     "make_session_id",
 ]
