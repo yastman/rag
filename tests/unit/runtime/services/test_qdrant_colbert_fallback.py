@@ -19,7 +19,7 @@ behavior directly:
 * the helper unwraps both ``return_meta`` shapes (list and ``(list, meta)``);
 * fallback results are returned as ``(raw_fallback, flat_results)`` so the
   caller can preserve its return shape AND inspect the flat list (the
-  existing ``colbert_empty`` post-hook needs that to disable ColBERT).
+  ``colbert_empty`` caller uses that for per-query diagnostics).
 
 We avoid touching the integration tests around ``hybrid_search_rrf_colbert``
 itself (covered by ``tests/integration/test_colbert_backfill.py``) —

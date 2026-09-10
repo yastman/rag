@@ -834,8 +834,8 @@ class TestQdrantServiceHybridSearchColbert:
         assert meta["backend_error"] is False
         service.hybrid_search_rrf.assert_awaited_once()
 
-    async def test_colbert_empty_results_falls_back_and_disables_feature(self, service):
-        """Empty ColBERT result set should fallback to RRF and disable ColBERT runtime path."""
+    async def test_colbert_empty_result_falls_back_without_capability_mutation(self, service):
+        """Empty ColBERT result falls back to RRF for that query but never mutates capability (#3443)."""
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         service.hybrid_search_rrf = AsyncMock(
             return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
@@ -851,8 +851,36 @@ class TestQdrantServiceHybridSearchColbert:
 
         assert len(results) == 1
         assert results[0]["id"] == "fallback_1"
-        assert service._colbert_available is False
+        # Per-query fallback only: an empty result set is not proof of a missing capability.
+        assert service._colbert_available is True
         service.hybrid_search_rrf.assert_awaited_once()
+
+    async def test_colbert_empty_result_does_not_disable_next_query(self, service):
+        """After an empty ColBERT result the next query still reranks with ColBERT (#3443)."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
+        service.hybrid_search_rrf = AsyncMock(
+            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
+        )
+
+        search_kwargs = {
+            "dense_vector": [0.1] * 1024,
+            "colbert_query": [[0.1] * 1024] * 3,
+            "top_k": 5,
+        }
+
+        # First query: empty ColBERT result, non-empty RRF fallback.
+        await service.hybrid_search_rrf_colbert(**search_kwargs)
+        assert service._colbert_available is True
+
+        # Second query: ColBERT path is still attempted and can return reranked docs.
+        service._client.query_points.return_value = MagicMock(
+            points=[_make_mock_point(id="doc_1", score=85.5)]
+        )
+        results = await service.hybrid_search_rrf_colbert(**search_kwargs)
+
+        assert service._client.query_points.await_count == 2
+        assert service._client.query_points.await_args.kwargs["using"] == "colbert"
+        assert results[0]["id"] == "doc_1"
 
     async def test_colbert_empty_results_counts_rerank_empty_metric(self, service, caplog):
         """Empty ColBERT results count rerank-empty and fallback metrics (#2056)."""
@@ -926,6 +954,16 @@ class TestQdrantServiceHybridSearchColbert:
         assert service._colbert_available is False
         service._client.query_points.assert_awaited_once()
         service.hybrid_search_rrf.assert_awaited_once()
+
+        # Sticky downgrade: the next query skips the ColBERT round-trip entirely.
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=colbert_query,
+            top_k=5,
+        )
+
+        service._client.query_points.assert_awaited_once()
+        assert service.hybrid_search_rrf.await_count == 2
 
     async def test_colbert_skipped_when_capability_disabled(self, service):
         """When capability is disabled, method should bypass ColBERT query call."""
@@ -1320,10 +1358,11 @@ class TestHybridSearchRrfColbertFallbacks:
         assert result == fallback_results
 
     async def test_branch_c_empty_colbert_result_rrf_empty_colbert_not_disabled(self, service):
-        """Branch C without disable: empty ColBERT + empty RRF → colbert_available stays True.
+        """Branch C: empty ColBERT + empty RRF → colbert_available stays True.
 
-        When ColBERT returns [] AND fallback RRF also returns [] the code does NOT
-        set _colbert_available=False (only non-empty RRF triggers the disable).
+        Neither an empty ColBERT result set nor an empty RRF fallback may
+        mutate the cached capability (#3443): capability changes only on
+        schema inspection or a concrete missing-vector failure.
         """
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         service.hybrid_search_rrf = AsyncMock(return_value=[])

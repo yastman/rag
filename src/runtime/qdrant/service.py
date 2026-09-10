@@ -552,13 +552,17 @@ class QdrantService:
             )
             results = self._format_results(result.points)
             if not results:
+                # Empty result is query-specific (e.g. no point-level ColBERT vectors
+                # matched this filter set): fall back for this query only and never
+                # mutate the cached capability (#3443). Capability changes belong to
+                # schema inspection or the missing-vector failure path below.
                 record_pipeline_event("colbert_rerank_empty")
                 logger.warning(
                     "Qdrant ColBERT returned 0 docs for collection %s, falling back to RRF",
                     self._collection_name,
                 )
                 record_pipeline_event("colbert_fallback_to_rrf")
-                fallback, fallback_results = await self._colbert_fallback_to_rrf(
+                fallback, _ = await self._colbert_fallback_to_rrf(
                     dense_vector=dense_vector,
                     sparse_vector=sparse_vector,
                     filters=filters,
@@ -569,14 +573,6 @@ class QdrantService:
                     return_meta=return_meta,
                     fallback_reason="colbert_empty",
                 )
-                if fallback_results:
-                    self._colbert_available = False
-                    logger.info(
-                        "Qdrant ColBERT disabled for collection %s: no point-level "
-                        "ColBERT vectors detected (RRF returned %d docs)",
-                        self._collection_name,
-                        len(fallback_results),
-                    )
                 return fallback
             if return_meta:
                 return results, ok_meta
