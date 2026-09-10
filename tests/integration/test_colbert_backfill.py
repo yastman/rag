@@ -168,9 +168,10 @@ async def test_backfill_enables_server_side_colbert_search(tmp_path):
         colbert_query=[[0.3, 0.6]],
         top_k=5,
     )
-    # No point-level ColBERT vectors yet: service falls back to RRF and disables ColBERT path.
+    # No point-level ColBERT vectors yet: this query falls back to RRF, but ColBERT
+    # stays enabled (#3443) — capability is schema-derived, never result-derived.
     assert len(before) > 0
-    assert service._colbert_available is False
+    assert service._colbert_available is True
 
     stats = backfill.run(batch_size=10)
     assert stats.processed == 1
