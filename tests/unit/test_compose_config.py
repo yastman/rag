@@ -1,8 +1,11 @@
 """Tests for Docker Compose configuration correctness.
 
 Covers three issues (M7, M8, M9):
-  M7 - bot/postgres startup topology (evolved by #3241: PostgreSQL is an
-       opt-in profile service, the bot no longer waits for it and degrades
+  M7 - bot/postgres startup topology (#3241: PostgreSQL is an opt-in profile
+       service, evolved by #3361: inside the postgres/full profiles the bot
+       WAITS for a healthy PostgreSQL via a ``required: false`` dependency so
+       the bookmarks capability setup never races a cold database; without
+       those profiles the dependency is skipped and the bot still degrades
        gracefully — bookmarks capability disabled — without it)
   M8 - Makefile docker-ai-up target must use a profile that exists in dev compose
   M9 - base compose must define the x-security-defaults anchor overlays reuse
@@ -51,20 +54,35 @@ def dev() -> dict:
 
 
 class TestBotDependsOnPostgres:
-    """M7 (#3241): the core demo topology starts without PostgreSQL.
+    """M7 (#3241, evolved by #3361): PostgreSQL stays opt-in but is waited for.
 
-    PostgreSQL moved behind the ``postgres``/``full`` profiles and the bot no
-    longer declares a depends_on on it: the preflight treats postgres as
-    OPTIONAL and the bookmarks capability stays disabled until it is reachable.
+    PostgreSQL lives behind the ``postgres``/``full`` profiles. The bot
+    declares a ``required: false`` dependency on it with
+    ``condition: service_healthy`` (#3361): whenever PostgreSQL is active
+    (full profile, or ``--profile postgres``) the bot's capability setup runs
+    only after the database is healthy, so cold fresh-volume starts never
+    leave bookmarks permanently degraded by a startup race. Without those
+    profiles the dependency is skipped entirely and the preflight treats
+    postgres as OPTIONAL — the non-full semantics are unchanged.
     """
 
-    def test_dev_bot_does_not_depend_on_postgres(self, dev: dict) -> None:
-        """bot in dev compose must not gate its startup on postgres."""
+    def test_dev_bot_depends_on_postgres_conditionally(self, dev: dict) -> None:
+        """bot must wait for a healthy postgres only when postgres is active."""
         bot = dev["services"]["bot"]
         depends = bot.get("depends_on") or {}
-        assert "postgres" not in depends, (
-            "bot.depends_on must not include postgres (#3241): the core demo "
-            "topology starts without PostgreSQL and the bot degrades gracefully"
+        postgres_dep = depends.get("postgres")
+        assert isinstance(postgres_dep, dict), (
+            "bot.depends_on must declare postgres as a mapping (#3361): in the "
+            "full profile the bot must wait for a healthy PostgreSQL before "
+            "capability setup; in non-full profiles the dependency is skipped"
+        )
+        assert postgres_dep.get("condition") == "service_healthy", (
+            "bot.depends_on.postgres must use condition: service_healthy so the "
+            "bookmarks capability setup never races a cold PostgreSQL (#3361)"
+        )
+        assert postgres_dep.get("required") is False, (
+            "bot.depends_on.postgres must set required: false (#3361): "
+            "PostgreSQL stays optional outside the postgres/full profiles (#3241)"
         )
 
     def test_dev_bot_still_depends_on_core_services_healthy(self, dev: dict) -> None:

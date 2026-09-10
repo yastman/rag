@@ -79,7 +79,9 @@ make docker-bot-up
 # Core + ingestion (lean Markdown-only ingestion pipeline)
 make docker-ingest-up
 
-# Full stack (all profiles)
+# Full stack (all profiles). `make docker-full-up` returns success only after
+# all six services are healthy; on failure it exits nonzero and prints the
+# failing containers' names/statuses (bounded wait: FULL_UP_WAIT_TIMEOUT=600s).
 make docker-full-up
 
 # Status
@@ -271,6 +273,33 @@ a separate Redis DB). Any future key added to Redis must follow this policy.
 All services declare health checks. Dependent services use `condition:
 service_healthy`. On first start, `bge-m3` has a 420 s start period (cold
 model load).
+
+Full-profile startup is ordered, waited, and failure-honest (#3361):
+
+- **Ordered** — the `bot` declares `postgres` with
+  `condition: service_healthy, required: false`: inside the `postgres`/`full`
+  profiles it waits for a healthy database (bookmarks capability setup never
+  races a cold PostgreSQL); without those profiles the dependency is skipped
+  and PostgreSQL stays optional (#3241). `ingestion` starts only after
+  Qdrant and BGE-M3 are healthy.
+- **Waited** — `make docker-full-up` runs `docker compose up -d --wait
+  --wait-timeout 600` (override: `FULL_UP_WAIT_TIMEOUT`), so success means
+  every one of the six services reports healthy — process presence alone is
+  never sufficient.
+- **Failure-honest** — a failed wait exits nonzero and prints the project's
+  container names/statuses (`compose ps -a`), naming the service that broke
+  the start. Secret values are never printed.
+- **Capability-honest probes** — the `bot` healthcheck verifies its CRITICAL
+  dependencies (Redis, Qdrant, BGE-M3) still serve from inside the bot's
+  network namespace (PostgreSQL is deliberately not probed — optional
+  capability); the `ingestion` healthcheck verifies Qdrant readiness and that
+  the BGE-M3 model is actually loaded (`model_loaded`), cold-start-safe on a
+  fresh volume where the collection does not exist yet.
+
+Recovery recomputes capability state: whenever the bot (re)starts — including
+`docker compose restart bot` after bringing PostgreSQL up late —
+`setup_postgres` re-runs and re-enables the bookmarks capability after a
+validated connection.
 
 ## Volumes
 
