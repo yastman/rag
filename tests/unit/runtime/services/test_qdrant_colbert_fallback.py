@@ -28,7 +28,8 @@ this file targets the extracted seam only.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -94,8 +95,17 @@ async def test_colbert_fallback_unwraps_return_meta_tuple(monkeypatch: pytest.Mo
         fallback_reason="empty_colbert_query",
     )
 
-    assert fallback == (flat_results, raw_meta)
+    # #3461: fallback meta reports the truth — results identity preserved,
+    # backend meta preserved, application fact and cause merged on top.
     assert flat is flat_results
+    assert fallback == (
+        flat_results,
+        {
+            "backend_error": False,
+            "colbert_applied": False,
+            "fallback_reason": "empty_colbert_query",
+        },
+    )
 
 
 @pytest.mark.asyncio
@@ -143,3 +153,140 @@ async def test_colbert_fallback_handles_empty_results(monkeypatch: pytest.Monkey
     )
 
     assert flat == []
+
+
+# ---------------------------------------------------------------------------
+# Truthful fallback facts (#3461)
+# ---------------------------------------------------------------------------
+# A successful RRF fallback must return documents with meta facts that say
+# ColBERT was NOT applied (``colbert_applied=False``) plus a stable
+# ``fallback_reason``, while keeping backend-error semantics distinct
+# (``backend_error=False`` for a successful degraded retrieval). A genuine
+# non-empty ColBERT success reports ``colbert_applied=True`` and no
+# fallback reason.
+
+
+def _make_capability_service() -> QdrantService:
+    """Service shell able to run ``hybrid_search_rrf_colbert`` without a backend."""
+    service = QdrantService.__new__(QdrantService)
+    service._collection_name = "unit-collection"
+    service._quantization_mode = "binary"
+    service._colbert_available = True
+    service._collection_validated = True
+    service._dense_vector_name = "dense"
+    service._sparse_vector_name = "sparse"
+    service._client = AsyncMock()
+    return service
+
+
+def _rrf_success() -> tuple[list[dict], dict[str, Any]]:
+    return (
+        [{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}],
+        {"backend_error": False, "error_type": None, "error_message": None},
+    )
+
+
+class TestColbertFallbackTruthfulness:
+    """``hybrid_search_rrf_colbert`` meta facts per ColBERT success/fallback branch."""
+
+    @pytest.fixture
+    def service(self) -> QdrantService:
+        return _make_capability_service()
+
+    @pytest.mark.asyncio
+    async def test_exception_fallback_reports_not_applied_with_reason(
+        self, service: QdrantService
+    ) -> None:
+        """ColBERT exception + successful RRF: documents, no backend error, not applied."""
+        service._client.query_points = AsyncMock(side_effect=RuntimeError("colbert unavailable"))
+        service.hybrid_search_rrf = AsyncMock(return_value=_rrf_success())
+
+        results, meta = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 8,
+            colbert_query=[[0.2] * 8] * 3,
+            top_k=5,
+            return_meta=True,
+        )
+
+        assert [doc["id"] for doc in results] == ["fallback_1"]
+        assert meta["backend_error"] is False
+        assert meta["colbert_applied"] is False
+        assert meta["fallback_reason"] == "colbert_error:RuntimeError"
+
+    @pytest.mark.asyncio
+    async def test_empty_result_fallback_reports_not_applied_with_reason(
+        self, service: QdrantService
+    ) -> None:
+        """Empty ColBERT result + successful RRF: not applied, reason ``colbert_empty``."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
+        service.hybrid_search_rrf = AsyncMock(return_value=_rrf_success())
+
+        results, meta = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 8,
+            colbert_query=[[0.2] * 8] * 3,
+            top_k=5,
+            return_meta=True,
+        )
+
+        assert [doc["id"] for doc in results] == ["fallback_1"]
+        assert meta["backend_error"] is False
+        assert meta["colbert_applied"] is False
+        assert meta["fallback_reason"] == "colbert_empty"
+
+    @pytest.mark.asyncio
+    async def test_unavailable_capability_reports_not_applied_with_reason(
+        self, service: QdrantService
+    ) -> None:
+        """Missing ColBERT vector + successful RRF: not applied, reason ``colbert_unavailable``."""
+        service._colbert_available = False
+        service.hybrid_search_rrf = AsyncMock(return_value=_rrf_success())
+
+        results, meta = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 8,
+            colbert_query=[[0.2] * 8] * 3,
+            top_k=5,
+            return_meta=True,
+        )
+
+        assert [doc["id"] for doc in results] == ["fallback_1"]
+        assert meta["backend_error"] is False
+        assert meta["colbert_applied"] is False
+        assert meta["fallback_reason"] == "colbert_unavailable"
+
+    @pytest.mark.asyncio
+    async def test_empty_colbert_query_reports_not_applied_with_reason(
+        self, service: QdrantService
+    ) -> None:
+        """Empty ColBERT query vectors + successful RRF: not applied, stable reason."""
+        service.hybrid_search_rrf = AsyncMock(return_value=_rrf_success())
+
+        results, meta = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 8,
+            colbert_query=[],
+            top_k=5,
+            return_meta=True,
+        )
+
+        assert [doc["id"] for doc in results] == ["fallback_1"]
+        assert meta["backend_error"] is False
+        assert meta["colbert_applied"] is False
+        assert meta["fallback_reason"] == "empty_colbert_query"
+
+    @pytest.mark.asyncio
+    async def test_successful_colbert_reports_applied_without_fallback_reason(
+        self, service: QdrantService
+    ) -> None:
+        """Non-empty ColBERT result: ``colbert_applied=True`` and no fallback reason."""
+        point = MagicMock(id="doc_1", score=85.5, payload={"page_content": "hit", "metadata": {}})
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[point]))
+
+        results, meta = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 8,
+            colbert_query=[[0.2] * 8] * 3,
+            top_k=5,
+            return_meta=True,
+        )
+
+        assert [doc["id"] for doc in results] == ["doc_1"]
+        assert meta["colbert_applied"] is True
+        assert "fallback_reason" not in meta

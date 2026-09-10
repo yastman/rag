@@ -361,7 +361,7 @@ class TestHybridRetrieveGolden:
                 return_value=MagicMock(
                     results=_FIXTURE_CORPUS,
                     search_meta={},
-                    colbert_search_used=False,
+                    colbert_applied=False,
                     final_filters=None,
                     qdrant_search_attempts=1,
                     retrieval_relaxed_from_topic_filter=False,
@@ -396,7 +396,7 @@ class TestHybridRetrieveGolden:
                 return_value=MagicMock(
                     results=_FIXTURE_CORPUS,
                     search_meta={},
-                    colbert_search_used=False,
+                    colbert_applied=False,
                     final_filters=None,
                     qdrant_search_attempts=1,
                     retrieval_relaxed_from_topic_filter=False,
@@ -434,7 +434,7 @@ class TestHybridRetrieveGolden:
                 return_value=MagicMock(
                     results=_FIXTURE_CORPUS,
                     search_meta={},
-                    colbert_search_used=False,
+                    colbert_applied=False,
                     final_filters=None,
                     qdrant_search_attempts=1,
                     retrieval_relaxed_from_topic_filter=False,

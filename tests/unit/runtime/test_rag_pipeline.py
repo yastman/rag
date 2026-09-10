@@ -423,7 +423,12 @@ async def test_hybrid_retrieve_applies_exact_query_rrf_weights_to_colbert(mock_c
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"text": "корпус 5", "score": 0.9, "metadata": {}}],
-            {"backend_error": False, "error_type": None, "error_message": None},
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": True,
+            },
         )
     )
 
@@ -536,7 +541,12 @@ async def test_hybrid_retrieve_emits_topic_relax_trace_markers(mock_cache, mock_
         side_effect=[
             (
                 [{"text": "narrow", "score": 0.9, "metadata": {"topic": "legal"}}],
-                {"backend_error": False, "error_type": None, "error_message": None},
+                {
+                    "backend_error": False,
+                    "error_type": None,
+                    "error_message": None,
+                    "colbert_applied": True,
+                },
             ),
             (
                 [
@@ -544,7 +554,12 @@ async def test_hybrid_retrieve_emits_topic_relax_trace_markers(mock_cache, mock_
                     {"text": "broad-2", "score": 0.85, "metadata": {}},
                     {"text": "broad-3", "score": 0.75, "metadata": {}},
                 ],
-                {"backend_error": False, "error_type": None, "error_message": None},
+                {
+                    "backend_error": False,
+                    "error_type": None,
+                    "error_message": None,
+                    "colbert_applied": True,
+                },
             ),
         ]
     )
@@ -1588,7 +1603,12 @@ async def test_hybrid_retrieve_recomputes_colbert_after_rewrite(mock_cache, mock
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
-            {"backend_error": False, "error_type": None, "error_message": None},
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": True,
+            },
         )
     )
 
@@ -1630,7 +1650,12 @@ async def test_hybrid_retrieve_uses_colbert_search(mock_cache, mock_sparse):
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
-            {"backend_error": False, "error_type": None, "error_message": None},
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": True,
+            },
         )
     )
     mock_qdrant.hybrid_search_rrf = AsyncMock()
@@ -1695,7 +1720,12 @@ async def test_rag_pipeline_uses_colbert_search(mock_cache, mock_sparse):
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
-            {"backend_error": False, "error_type": None, "error_message": None},
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": True,
+            },
         )
     )
 
@@ -1739,7 +1769,12 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"id": "1", "score": 0.008, "text": "doc", "metadata": {}}],
-            {"backend_error": False, "error_type": None, "error_message": None},
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": True,
+            },
         )
     )
 
@@ -1762,6 +1797,100 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
         )
 
     mock_rerank_fn.assert_not_called()
+    assert result["rerank_applied"] is True
+
+
+async def test_hybrid_retrieve_reports_rerank_not_applied_on_colbert_fallback(
+    mock_cache, mock_sparse
+):
+    """#3461: ColBERT fallback to RRF publishes rerank_applied=False, not True."""
+    from src.runtime.pipeline.rag import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"id": "rrf-1", "score": 0.9, "text": "doc", "metadata": {}}],
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": False,
+                "fallback_reason": "colbert_error:RuntimeError",
+            },
+        )
+    )
+
+    result = await _hybrid_retrieve(
+        "test",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        colbert_query=[[0.2] * 1024] * 4,
+        latency_stages={},
+    )
+
+    assert len(result["documents"]) == 1
+    assert result["rerank_applied"] is False
+
+
+async def test_pipeline_runs_injected_reranker_when_colbert_falls_back_to_rrf(
+    mock_cache, mock_sparse, mock_reranker
+):
+    """#3461: the injected fallback reranker is NOT suppressed on ColBERT fallback.
+
+    The qdrant double returns the meta a real QdrantService produces on the
+    ``colbert_error`` fallback branch (documents recovered via RRF,
+    ``colbert_applied=False``). The pipeline must run the injected reranker
+    over the RRF documents and report its application in ``rerank_applied``.
+    """
+    from src.runtime.pipeline.rag import rag_pipeline
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(
+            [0.1] * 1024,
+            {"indices": [1], "values": [0.5]},
+            [[0.2] * 1024] * 4,
+        )
+    )
+    mock_embeddings.aembed_hybrid = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]})
+    )
+    mock_embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.2] * 1024] * 4)
+
+    mock_qdrant = AsyncMock()
+    # Scores between relevance_threshold (0.005) and skip_rerank_threshold
+    # (0.012) so the grade stage does not skip reranking.
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [
+                {"id": "rrf-1", "score": 0.008, "text": "doc one", "metadata": {}},
+                {"id": "rrf-2", "score": 0.007, "text": "doc two", "metadata": {}},
+            ],
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": False,
+                "fallback_reason": "colbert_error:RuntimeError",
+            },
+        )
+    )
+
+    result = await rag_pipeline(
+        "test query",
+        user_id=1,
+        session_id="s1",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=mock_reranker,
+    )
+
+    mock_reranker.rerank.assert_awaited_once()
     assert result["rerank_applied"] is True
 
 
@@ -2078,7 +2207,12 @@ async def test_hybrid_retrieve_counts_colbert_rerank_attempted(mock_cache, mock_
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
-            {"backend_error": False, "error_type": None, "error_message": None},
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": True,
+            },
         )
     )
 
@@ -2479,7 +2613,12 @@ async def test_hybrid_retrieve_uses_bundle_after_rewrite(mock_cache, mock_sparse
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
-            {"backend_error": False, "error_type": None, "error_message": None},
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": True,
+            },
         )
     )
 
@@ -2513,7 +2652,12 @@ async def test_hybrid_retrieve_stores_bundle_after_hybrid_colbert(mock_cache, mo
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
-            {"backend_error": False, "error_type": None, "error_message": None},
+            {
+                "backend_error": False,
+                "error_type": None,
+                "error_message": None,
+                "colbert_applied": True,
+            },
         )
     )
 

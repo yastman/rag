@@ -413,7 +413,7 @@ async def _hybrid_retrieve(
     )
     results = outcome.results
     search_meta = outcome.search_meta
-    colbert_search_used = outcome.colbert_search_used
+    colbert_applied = outcome.colbert_applied
     final_filters = outcome.final_filters
     qdrant_search_attempts = outcome.qdrant_search_attempts
     retrieval_relaxed_from_topic_filter = outcome.retrieval_relaxed_from_topic_filter
@@ -446,7 +446,7 @@ async def _hybrid_retrieve(
         "retrieval_backend_error": search_meta.get("backend_error", False),
         "retrieval_error_type": search_meta.get("error_type"),
         "retrieved_context": result_ctx,
-        "rerank_applied": colbert_search_used,
+        "rerank_applied": colbert_applied,
         "colbert_query": colbert_query,
         "qdrant_search_attempts": qdrant_search_attempts,
         "initial_filters": initial_filters,
