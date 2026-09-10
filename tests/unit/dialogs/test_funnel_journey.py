@@ -1,4 +1,8 @@
-"""E2E flow tests for funnel — simulate full user paths through handlers."""
+"""Funnel journey unit tests — full user paths through funnel handler callbacks.
+
+Every step is an in-process direct call with a mocked DialogManager (#3411);
+no services, no network, no deployed boundaries — not an E2E suite.
+"""
 
 from __future__ import annotations
 

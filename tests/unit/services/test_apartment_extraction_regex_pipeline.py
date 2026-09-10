@@ -1,4 +1,5 @@
-"""E2E integration tests for the full extraction pipeline (no LLM mocking)."""
+"""Regex-only pipeline unit tests — the full extraction pipeline driven by the
+real regex extractor in-process (no LLM, no Redis) (#3411)."""
 
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ def pipeline() -> ApartmentExtractionPipeline:
     return ApartmentExtractionPipeline(regex_extractor=ApartmentFilterExtractor())
 
 
-class TestE2ERegexOnlyPipeline:
+class TestRegexOnlyPipeline:
     """Full pipeline with regex extractor only (no LLM, no Redis)."""
 
     async def test_sunny_beach_2rooms_price_range(
