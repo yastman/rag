@@ -172,6 +172,36 @@ class TestResultsCB:
             assert unpacked.action == original.action
 
 
+class TestDemoCB:
+    """DemoCB pack/unpack/filter (#3411, moved from the mislabeled demo E2E suite)."""
+
+    def test_apartments_pack_unpack(self):
+        from telegram_bot.callback_data import DemoCB
+
+        cb = DemoCB(action="apartments")
+        packed = cb.pack()
+        assert packed.startswith("demo:")
+        unpacked = DemoCB.unpack(packed)
+        assert unpacked.action == "apartments"
+        assert unpacked.idx == 0
+
+    def test_example_pack_unpack_with_idx(self):
+        from telegram_bot.callback_data import DemoCB
+
+        cb = DemoCB(action="example", idx=2)
+        packed = cb.pack()
+        unpacked = DemoCB.unpack(packed)
+        assert unpacked.action == "example"
+        assert unpacked.idx == 2
+
+    def test_filter_matches(self):
+        """DemoCB.filter() creates a valid aiogram filter."""
+        from telegram_bot.callback_data import DemoCB
+
+        filt = DemoCB.filter()
+        assert filt is not None
+
+
 class TestParseFeedbackCallbackNewFormat:
     """Tests for parse_feedback_callback with new CallbackData format."""
 
