@@ -9,7 +9,7 @@ for import compatibility; observability is through structured logs.
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Re-exports `src.observability` shims (`observe`, `traced_pipeline`, `get_client`, `mask_pii`, `propagate_attributes`) + `create_callback_handler` (no-op) |
-| [`context.py`](./context.py) | `make_session_id`, `classify_action` |
+| [`context.py`](./context.py) | `make_session_id` |
 | [`trace.py`](./trace.py) | `_build_trace_metadata` |
 | [`bot_observability.py`](./bot_observability.py) | Bot-scoped observability helpers |
 | [`state_helpers.py`](./state_helpers.py) | State/observability helpers |

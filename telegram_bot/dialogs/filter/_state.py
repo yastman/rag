@@ -143,16 +143,6 @@ def _snapshot_filter_context(manager: DialogManager) -> dict[str, Any]:
     )
 
 
-def _trace_filter_output(
-    manager: DialogManager,
-    *,
-    action: str,
-    **extra: Any,
-) -> dict[str, Any]:
-    payload = {"action": action, **extra, "context": _snapshot_filter_context(manager)}
-    return cast(dict[str, Any], mask_pii(payload))
-
-
 def _start_filter_observation(
     *,
     name: str,

@@ -198,14 +198,6 @@ def rows_to_csv(rows: list[dict[str, str]]) -> str:
     return buffer.getvalue()
 
 
-def _load_rows(csv_path: Path) -> list[dict[str, str]]:
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        if reader.fieldnames != CSV_COLUMNS:
-            raise SystemExit(f"Unexpected CSV columns in {csv_path}: {reader.fieldnames}")
-        return list(reader)
-
-
 def validate_rows(rows: list[dict[str, str]]) -> None:
     """Check the structural truthfulness invariants of the catalog.
 

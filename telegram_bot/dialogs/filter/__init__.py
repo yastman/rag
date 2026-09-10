@@ -13,7 +13,6 @@ from telegram_bot.dialogs.filter._state import (
     _snapshot_filter_context,
     _start_filter_observation,
     _state_name,
-    _trace_filter_output,
     _update_filter_observation,
 )
 from telegram_bot.dialogs.filter.dialog import filter_dialog
@@ -60,7 +59,6 @@ __all__ = [
     "_snapshot_filter_context",
     "_start_filter_observation",
     "_state_name",
-    "_trace_filter_output",
     "_update_filter_observation",
     "filter_dialog",
     "get_area_data",

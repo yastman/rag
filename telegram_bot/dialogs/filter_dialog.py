@@ -18,7 +18,6 @@ from telegram_bot.dialogs.filter import (  # noqa: F401
     _snapshot_filter_context,
     _start_filter_observation,
     _state_name,
-    _trace_filter_output,
     _update_filter_observation,
     filter_dialog,
     get_area_data,

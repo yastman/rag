@@ -1,11 +1,9 @@
-"""Coverage-mode detection and result capping for RAG retrieval."""
+"""Coverage-mode detection for RAG retrieval."""
 
 from __future__ import annotations
 
 import re
-from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -54,36 +52,3 @@ def detect_coverage_mode(query: str) -> CoverageDecision:
             return CoverageDecision(True, f"regex:{label}")
 
     return CoverageDecision(False, None)
-
-
-def cap_results_per_doc(
-    results: list[dict[str, Any]],
-    *,
-    max_per_doc: int = 2,
-    metadata_key: str = "doc_id",
-) -> list[dict[str, Any]]:
-    """Cap the number of result chunks returned per source document.
-
-    Args:
-        results: Flat list of retrieval result dicts, each optionally containing
-            a ``metadata`` sub-dict and/or a top-level ``id`` field.
-        max_per_doc: Maximum chunks to keep for any single document key.
-        metadata_key: Metadata field used to group chunks by document identity.
-
-    Returns:
-        A filtered list preserving original order, with at most ``max_per_doc``
-        entries per unique document key.
-
-    """
-    counts: dict[str, int] = defaultdict(int)
-    capped: list[dict[str, Any]] = []
-
-    for doc in results:
-        metadata = doc.get("metadata", {}) or {}
-        doc_key = str(metadata.get(metadata_key) or doc.get("id") or "")
-        if counts[doc_key] >= max_per_doc:
-            continue
-        counts[doc_key] += 1
-        capped.append(doc)
-
-    return capped

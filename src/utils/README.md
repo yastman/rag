@@ -2,9 +2,8 @@
 
 ## Purpose
 
-Utility functions for document processing and serialization.
-Owns small, shared utility helpers used by RAG and ingestion code.
-Keeps document-structure parsing and JSON serialization helpers isolated from pipeline logic.
+Utility helpers used by RAG and ingestion code.
+Keeps small, shared utility helpers isolated from pipeline logic.
 
 ## Files
 
@@ -12,22 +11,11 @@ Keeps document-structure parsing and JSON serialization helpers isolated from pi
 |------|---------|
 | [`__init__.py`](./__init__.py) | Utility exports |
 | [`product_events.py`](./product_events.py) | Product / telemetry event payload helpers (used by `src.core.telemetry`) |
-| [`serialization.py`](./serialization.py) | NumPy-to-Python type conversion helpers |
 
 ## Product Events
 
 `product_events.py` builds structured product / telemetry event payloads emitted by
 `src.core.telemetry` (answer served, retrieval outcome, …). Keep it dependency-light.
-
-## Serialization
-
-Converts NumPy values into JSON-serializable Python types:
-
-```python
-from src.utils.serialization import convert_to_python_types
-
-clean = convert_to_python_types({"vector": np.array([1.0, 2.0])})
-```
 
 ## Boundaries
 
