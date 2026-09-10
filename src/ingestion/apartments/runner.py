@@ -48,11 +48,18 @@ class IncrementalApartmentIngester:
         qdrant_url: str = "http://localhost:6333",
         bge_url: str = "http://localhost:8000",
         state_path: str = ".apartments_ingestion_state.json",
+        collection_name: str | None = None,
+        qdrant_api_key: str | None = None,
     ) -> None:
         self.csv_path = csv_path
         self.qdrant_url = qdrant_url
         self.bge_url = bge_url
         self.state_path = state_path
+        # Selected collection and supplied credentials reach EVERY Qdrant
+        # operation (#3460): an isolated bootstrap run must never fall back to
+        # the shared default collection or an unauthenticated client.
+        self.collection_name = collection_name if collection_name is not None else COLLECTION
+        self.qdrant_api_key = qdrant_api_key
 
     def _load_state(self) -> dict[str, str]:
         """Load previous ingestion state from JSON file."""
@@ -136,12 +143,15 @@ class IncrementalApartmentIngester:
         if not point_ids:
             return 0
 
-        client = QdrantClient(url=self.qdrant_url)
-        client.delete(
-            collection_name=COLLECTION,
-            points_selector=PointIdsList(points=point_ids),
-            wait=True,
-        )
+        client = QdrantClient(url=self.qdrant_url, api_key=self.qdrant_api_key)
+        try:
+            client.delete(
+                collection_name=self.collection_name,
+                points_selector=PointIdsList(points=point_ids),
+                wait=True,
+            )
+        finally:
+            client.close()
         logger.info("Deleted %d removed apartments from Qdrant.", len(point_ids))
         return len(point_ids)
 
@@ -156,7 +166,7 @@ class IncrementalApartmentIngester:
             return
 
         bge = BGEM3SyncClient(base_url=self.bge_url)
-        client = QdrantClient(url=self.qdrant_url)
+        client = QdrantClient(url=self.qdrant_url, api_key=self.qdrant_api_key)
         try:
             descriptions = [format_apartment_text(r) for r in records]
 
@@ -178,12 +188,13 @@ class IncrementalApartmentIngester:
             ]
             for i in range(0, len(points), 20):
                 batch = points[i : i + 20]
-                client.upsert(collection_name=COLLECTION, points=batch, wait=True)
+                client.upsert(collection_name=self.collection_name, points=batch, wait=True)
                 logger.info("Upserted %d/%d", min(i + 20, len(points)), len(points))
 
             logger.info("Done. %d apartments upserted.", len(points))
         finally:
             bge.close()
+            client.close()
 
 
 if __name__ == "__main__":
@@ -200,6 +211,7 @@ if __name__ == "__main__":
         csv_path=os.getenv("APARTMENTS_CSV", "data/apartments.csv"),
         qdrant_url=os.getenv("QDRANT_URL", "http://localhost:6333"),
         bge_url=os.getenv("BGE_M3_URL", "http://localhost:8000"),
+        qdrant_api_key=os.getenv("QDRANT_API_KEY"),
     )
 
     if args.incremental:

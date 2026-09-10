@@ -204,10 +204,14 @@ class TestIngestApartmentsDemo:
                 "http://localhost:6333",
                 "http://localhost:8000",
                 state_path=".state.json",
+                collection_name="audit_3460_apartments",
+                qdrant_api_key="test-api-key-3460",
             )
 
         assert stats == {"total": 2, "changed": 2}
         assert factory.call_args.kwargs["state_path"] == ".state.json"
+        assert factory.call_args.kwargs["collection_name"] == "audit_3460_apartments"
+        assert factory.call_args.kwargs["qdrant_api_key"] == "test-api-key-3460"
         runner.run_incremental.assert_called_once_with(force_full=True)
 
 
@@ -268,6 +272,29 @@ class TestVerifyReady:
             ]
             assert enforced == []
 
+    async def test_verify_uses_selected_collection_and_supplied_api_key(self):
+        """#3460 pin: readiness counts target the selected collection with the
+        supplied credentials (auth + collection isolation on the verify path)."""
+        namespace = SimpleNamespace(
+            knowledge_collection="i3202-knowledge",
+            apartments_collection="audit_3460_apartments",
+            apartments_csv="data/apartments.csv",
+            qdrant_url="https://qdrant.example",
+            qdrant_api_key="test-api-key-3460",
+        )
+        with (
+            patch("qdrant_client.AsyncQdrantClient") as MockAsync,
+            patch.object(db, "validate_collection", _fake_validate),
+        ):
+            client = MockAsync.return_value
+            client.count = AsyncMock(return_value=SimpleNamespace(count=0))
+            client.close = AsyncMock()
+            await db.verify_ready(namespace)
+
+        MockAsync.assert_called_once_with(url="https://qdrant.example", api_key="test-api-key-3460")
+        count_targets = {c.kwargs["collection_name"] for c in client.count.call_args_list}
+        assert count_targets == {"i3202-knowledge", "audit_3460_apartments"}
+
 
 # ---------------------------------------------------------------------------
 # main()
@@ -320,6 +347,39 @@ class TestMain:
         create_a.assert_called_once()
         ingest_k.assert_called_once()
         ingest_a.assert_called_once()
+
+    def test_fresh_bootstrap_passes_selected_collection_and_api_key_to_ingest(self):
+        """#3460 regression: the selected isolated collection and the supplied
+        Qdrant credentials must reach the writer, not just the schema check."""
+        client = MagicMock()
+        client.get_collection.side_effect = [None, None, None, None]
+        results = [
+            _ready_readiness("i3202-knowledge"),
+            _ready_readiness("audit_3460_apartments"),
+        ]
+        argv = [
+            "--knowledge-collection",
+            "i3202-knowledge",
+            "--apartments-collection",
+            "audit_3460_apartments",
+            "--qdrant-api-key",
+            "test-api-key-3460",
+            "--apartments-csv",
+            "data/apartments.csv",
+        ]
+        with (
+            patch.object(db, "QdrantClient", return_value=client),
+            patch.object(db, "verify_ready", AsyncMock(return_value=results)),
+            patch.object(db, "create_knowledge_collection_schema"),
+            patch.object(db, "create_apartments_collection_schema"),
+            patch.object(db, "ingest_knowledge_demo"),
+            patch.object(db, "ingest_apartments_demo", return_value={}) as ingest_a,
+        ):
+            code = db.main(argv)
+
+        assert code == 0
+        assert ingest_a.call_args.kwargs["collection_name"] == "audit_3460_apartments"
+        assert ingest_a.call_args.kwargs["qdrant_api_key"] == "test-api-key-3460"
 
     def test_populated_bootstrap_preserves_data(self):
         """Populated-upgrade case: populated collections are left untouched."""

@@ -1,10 +1,14 @@
 """Tests for incremental apartment ingestion runner."""
 
 import csv
+import json
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from src.ingestion.apartments.runner import IncrementalApartmentIngester
+from src.runtime.qdrant.contracts import APARTMENTS_COLLECTION
 from src.services.bge_m3_client import HybridResult
 
 
@@ -215,3 +219,134 @@ class TestHybridEncoding:
             mock_bge.encode_dense.assert_not_called()
             mock_bge.encode_sparse.assert_not_called()
             mock_bge.encode_colbert.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Collection and credential propagation (#3460)
+# ---------------------------------------------------------------------------
+
+
+SELECTED_COLLECTION = "audit_3460_apartments"
+SELECTED_API_KEY = "test-api-key-3460"
+
+
+def _hybrid_for_row_count(rows: int) -> HybridResult:
+    return HybridResult(
+        dense_vecs=[[0.1] * 1024] * rows,
+        lexical_weights=[{"indices": [1], "values": [0.5]}] * rows,
+        colbert_vecs=[[[0.1] * 1024] * 5] * rows,
+    )
+
+
+class TestCollectionAndCredentialPropagation:
+    """#3460: the selected collection and supplied API key must reach every
+    Qdrant client and every delete/upsert call — never a literal fallback."""
+
+    def _ingester(self, tmp_path: Path, **overrides) -> IncrementalApartmentIngester:
+        csv_path = tmp_path / "apt.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        defaults: dict = {
+            "csv_path": str(csv_path),
+            "qdrant_url": "https://qdrant.example",
+            "qdrant_api_key": SELECTED_API_KEY,
+            "collection_name": SELECTED_COLLECTION,
+            "state_path": str(tmp_path / ".state.json"),
+        }
+        defaults.update(overrides)
+        return IncrementalApartmentIngester(**defaults)
+
+    def test_init_stores_collection_name_and_api_key(self, tmp_path: Path) -> None:
+        ingester = self._ingester(tmp_path)
+
+        assert ingester.collection_name == SELECTED_COLLECTION
+        assert ingester.qdrant_api_key == SELECTED_API_KEY
+
+    def test_default_collection_is_canonical_default(self, tmp_path: Path) -> None:
+        """Standalone runner without an override keeps the canonical collection."""
+        ingester = self._ingester(tmp_path, collection_name=None, qdrant_api_key=None)
+
+        assert ingester.collection_name == APARTMENTS_COLLECTION
+        assert ingester.qdrant_api_key is None
+
+    def test_upsert_targets_selected_collection_with_supplied_api_key(self, tmp_path: Path) -> None:
+        ingester = self._ingester(tmp_path)
+
+        with (
+            patch("src.services.bge_m3_client.BGEM3SyncClient") as MockBGE,
+            patch("qdrant_client.QdrantClient") as MockQdrant,
+        ):
+            MockBGE.return_value.encode_hybrid.return_value = _hybrid_for_row_count(1)
+            ingester.run_incremental(force_full=True)
+
+        # Authenticated client construction — protected HTTPS endpoints.
+        MockQdrant.assert_called_once_with(url="https://qdrant.example", api_key=SELECTED_API_KEY)
+        client = MockQdrant.return_value
+        assert client.upsert.call_count >= 1
+        for call in client.upsert.call_args_list:
+            assert call.kwargs["collection_name"] == SELECTED_COLLECTION
+            assert call.kwargs["wait"] is True
+        client.close.assert_called_once()
+
+    def test_delete_targets_selected_collection_with_supplied_api_key(self, tmp_path: Path) -> None:
+        csv_path = tmp_path / "apt.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        state_path = tmp_path / ".state.json"
+        state_path.write_text(json.dumps({"Gone Complex::B-2::999": "deadhash"}), encoding="utf-8")
+        ingester = IncrementalApartmentIngester(
+            csv_path=str(csv_path),
+            qdrant_url="https://qdrant.example",
+            qdrant_api_key=SELECTED_API_KEY,
+            collection_name=SELECTED_COLLECTION,
+            state_path=str(state_path),
+        )
+
+        with (
+            patch.object(ingester, "_embed_and_upsert"),
+            patch("qdrant_client.QdrantClient") as MockQdrant,
+        ):
+            stats = ingester.run_incremental()
+
+        MockQdrant.assert_called_once_with(url="https://qdrant.example", api_key=SELECTED_API_KEY)
+        client = MockQdrant.return_value
+        delete_kwargs = client.delete.call_args.kwargs
+        assert delete_kwargs["collection_name"] == SELECTED_COLLECTION
+        assert delete_kwargs["wait"] is True
+        client.close.assert_called_once()
+        assert stats["removed"] == 1
+
+    def test_upsert_client_closed_when_upsert_fails(self, tmp_path: Path) -> None:
+        """Sync Qdrant clients are explicitly closed on failure too."""
+        ingester = self._ingester(tmp_path)
+
+        with (
+            patch("src.services.bge_m3_client.BGEM3SyncClient") as MockBGE,
+            patch("qdrant_client.QdrantClient") as MockQdrant,
+            pytest.raises(RuntimeError, match="upsert boom"),
+        ):
+            MockBGE.return_value.encode_hybrid.return_value = _hybrid_for_row_count(1)
+            MockQdrant.return_value.upsert.side_effect = RuntimeError("upsert boom")
+            ingester.run_incremental(force_full=True)
+
+        MockQdrant.return_value.close.assert_called_once()
+
+    def test_delete_client_closed_when_delete_fails(self, tmp_path: Path) -> None:
+        csv_path = tmp_path / "apt.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        state_path = tmp_path / ".state.json"
+        state_path.write_text(json.dumps({"Gone Complex::B-2::999": "deadhash"}), encoding="utf-8")
+        ingester = IncrementalApartmentIngester(
+            csv_path=str(csv_path),
+            qdrant_api_key=SELECTED_API_KEY,
+            collection_name=SELECTED_COLLECTION,
+            state_path=str(state_path),
+        )
+
+        with (
+            patch.object(ingester, "_embed_and_upsert"),
+            patch("qdrant_client.QdrantClient") as MockQdrant,
+            pytest.raises(RuntimeError, match="delete boom"),
+        ):
+            MockQdrant.return_value.delete.side_effect = RuntimeError("delete boom")
+            ingester.run_incremental()
+
+        MockQdrant.return_value.close.assert_called_once()
