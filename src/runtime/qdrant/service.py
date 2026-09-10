@@ -410,6 +410,12 @@ class QdrantService:
             the caller can run post-fallback hooks (e.g., disabling
             ColBERT for the collection on a non-empty fallback) without
             re-doing the ``isinstance`` dance.
+
+            When ``return_meta`` is True the returned meta reports the
+            fallback truthfully (#3461): ``colbert_applied=False`` plus the
+            caller-supplied ``fallback_reason`` merged over the RRF meta, so
+            ``backend_error`` keeps distinguishing a failed backend from a
+            successful degraded retrieval.
         """
         fallback: SearchReturn = await self.hybrid_search_rrf(
             dense_vector=dense_vector,
@@ -422,6 +428,15 @@ class QdrantService:
             return_meta=return_meta,
         )
         fallback_results = fallback[0] if isinstance(fallback, tuple) else fallback
+        if isinstance(fallback, tuple):
+            fallback = (
+                fallback_results,
+                {
+                    **fallback[1],
+                    "colbert_applied": False,
+                    "fallback_reason": fallback_reason,
+                },
+            )
         return fallback, fallback_results
 
     async def hybrid_search_rrf_colbert(
@@ -458,7 +473,15 @@ class QdrantService:
             return_meta: If True, return (results, meta) tuple
 
         Returns:
-            Reranked results (ColBERT MaxSim scores).
+            Reranked results (ColBERT MaxSim scores). With ``return_meta``
+            the meta carries truthful application facts (#3461):
+            ``colbert_applied=True`` and no ``fallback_reason`` after a
+            non-empty ColBERT result; ``colbert_applied=False`` plus a stable
+            ``fallback_reason`` (``colbert_unavailable``,
+            ``empty_colbert_query``, ``colbert_empty``,
+            ``colbert_error:<ExcType>``) when the query was answered by the
+            RRF fallback. ``backend_error`` keeps its existing meaning and
+            stays False for a successful degraded retrieval.
         """
         await self.ensure_collection()
         if self._colbert_available is False:
@@ -575,7 +598,10 @@ class QdrantService:
                 )
                 return fallback
             if return_meta:
-                return results, ok_meta
+                # #3461: report application as a fact — a non-empty result means
+                # ColBERT MaxSim reranking produced this ordering. No
+                # ``fallback_reason`` on the success path.
+                return results, {**ok_meta, "colbert_applied": True}
             return results
         except Exception as e:
             if self._is_missing_vector_error(e):

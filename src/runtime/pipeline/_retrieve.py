@@ -44,7 +44,7 @@ class _RetrievalFilterPlan:
 class _RetrievalOutcome:
     results: list[dict[str, Any]]
     search_meta: dict[str, Any]
-    colbert_search_used: bool
+    colbert_applied: bool
     final_filters: dict[str, Any] | None
     initial_results_count: int
     qdrant_search_attempts: int
@@ -87,8 +87,6 @@ async def _execute_qdrant_retrieval(
     dense_weight: float,
     sparse_weight: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
-    has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
-    colbert_used = bool(colbert_query and has_colbert_search)
     retrieval = RetrievalService(qdrant=qdrant)
     result = await retrieval.retrieve_vectors(
         VectorRetrievalRequest(
@@ -108,7 +106,11 @@ async def _execute_qdrant_retrieval(
     else:
         results = result
         search_meta = {"backend_error": False, "error_type": None, "error_message": None}
-    return results, search_meta, colbert_used
+    # #3461: ColBERT application is a service-reported fact, never inferred
+    # from method/query availability — a ColBERT attempt that fell back to
+    # RRF must not reach the pipeline as "reranking applied".
+    colbert_applied = bool(search_meta.get("colbert_applied", False))
+    return results, search_meta, colbert_applied
 
 
 async def _run_initial_retrieval(
@@ -348,7 +350,7 @@ async def _retrieve_with_relaxation(
     base_filters = plan.base_filters
     dense_weight, sparse_weight = plan.dense_weight, plan.sparse_weight
 
-    colbert_search_used = False
+    colbert_applied = False
     qdrant_search_attempts = 0
     retrieval_relaxed_from_topic_filter = False
     retrieval_relax_stage: str | None = None
@@ -356,7 +358,7 @@ async def _retrieve_with_relaxation(
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
         record_pipeline_event("colbert_rerank_attempted")
 
-    results, search_meta, colbert_used = await _run_initial_retrieval(
+    results, search_meta, attempt_applied = await _run_initial_retrieval(
         qdrant=qdrant,
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
@@ -366,7 +368,7 @@ async def _retrieve_with_relaxation(
         dense_weight=dense_weight,
         sparse_weight=sparse_weight,
     )
-    colbert_search_used = colbert_search_used or colbert_used
+    colbert_applied = colbert_applied or attempt_applied
     qdrant_search_attempts += 1
     initial_results_count = len(results)
     final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
@@ -383,7 +385,7 @@ async def _retrieve_with_relaxation(
             )
         else:
             retrieval_relax_stage = "topic_to_user_filters" if fallback_filters else "topic_to_none"
-        results, search_meta, colbert_used = await _run_relaxed_retrieval(
+        results, search_meta, attempt_applied = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
@@ -393,7 +395,7 @@ async def _retrieve_with_relaxation(
             dense_weight=dense_weight,
             sparse_weight=sparse_weight,
         )
-        colbert_search_used = colbert_search_used or colbert_used
+        colbert_applied = colbert_applied or attempt_applied
         qdrant_search_attempts += 1
         final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
 
@@ -401,7 +403,7 @@ async def _retrieve_with_relaxation(
         retrieval_relax_stage = (
             "topic_to_user_filters" if base_filters is not None else "topic_to_none"
         )
-        results, search_meta, colbert_used = await _run_relaxed_retrieval(
+        results, search_meta, attempt_applied = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
@@ -411,14 +413,14 @@ async def _retrieve_with_relaxation(
             dense_weight=dense_weight,
             sparse_weight=sparse_weight,
         )
-        colbert_search_used = colbert_search_used or colbert_used
+        colbert_applied = colbert_applied or attempt_applied
         qdrant_search_attempts += 1
         final_filters = dict(base_filters) if isinstance(base_filters, dict) else None
 
     return _RetrievalOutcome(
         results=results,
         search_meta=search_meta,
-        colbert_search_used=colbert_search_used,
+        colbert_applied=colbert_applied,
         final_filters=final_filters,
         initial_results_count=initial_results_count,
         qdrant_search_attempts=qdrant_search_attempts,
