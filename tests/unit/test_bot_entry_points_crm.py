@@ -6,83 +6,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.bot import PropertyBot
-from telegram_bot.config import BotConfig
+from tests.unit._bot_config_factory import make_full_bot_config as _make_config
+from tests.unit._property_bot_factory import make_property_bot
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _make_config() -> BotConfig:
-    return BotConfig(
-        _env_file=None,
-        telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
-        llm_api_key="llm-key",
-        llm_base_url="https://api.example.com/v1",
-        llm_model="gpt-4o-mini",
-        qdrant_url="http://localhost:6333",
-        qdrant_api_key="qdrant-key",
-        qdrant_collection="test_collection",
-        redis_url="redis://localhost:6379",
-        realestate_database_url="postgresql://postgres:postgres@127.0.0.1:1/realestate",
-        rerank_provider="none",
-    )
-
-
-def _create_bot() -> PropertyBot:
-    """Create PropertyBot with deps mocked at actual lookup sites."""
-    # Unit conftest may stub aiogram CallbackData / BaseMiddleware as MagicMock.
-    # Patch filter + middleware setup at the actual lookup sites used during init.
-    # Prefer the _services DI seam so build_services is not exercised here.
-    from telegram_bot.lifecycle.services import Services
-
-    config = _make_config()
-    services = Services(
-        graph_config=MagicMock(),
-        cache=MagicMock(),
-        hybrid=MagicMock(),
-        embeddings=MagicMock(),
-        sparse=MagicMock(),
-        qdrant=MagicMock(),
-        qdrant_apartments=MagicMock(),
-        apartments_service=MagicMock(),
-        reranker=None,
-        llm=MagicMock(),
-        apartment_pipeline=MagicMock(),
-        redis_monitor=MagicMock(),
-        i18n_hub=None,
-    )
-    _cb_filter = MagicMock(name="CallbackData.filter")
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("telegram_bot.bot.setup_throttling_middleware"),
-        patch("telegram_bot.bot.setup_error_handler"),
-        patch("telegram_bot.bot.FSMCancelMiddleware", MagicMock()),
-        patch(
-            "telegram_bot.handlers.demo_handler.DemoCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch("telegram_bot.bot.FeedbackCB.filter", create=True, return_value=_cb_filter),
-        patch(
-            "telegram_bot.bot.FeedbackReasonCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch(
-            "telegram_bot.handlers.favorites_callbacks.FavoriteCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch(
-            "telegram_bot.handlers.results_callbacks.ResultsCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-    ):
-        return PropertyBot(config, _services=services)
 
 
 def _make_message(text: str = "test") -> MagicMock:
@@ -123,8 +53,8 @@ def _make_favorite(property_id: str, **data: object) -> SimpleNamespace:
     )
 
 
-def _fav_bot(favorites: list | None = None) -> PropertyBot:
-    bot = _create_bot()
+def _fav_bot(favorites: list | None = None):
+    bot = make_property_bot(_make_config())
     bot._favorites_service = MagicMock()
     bot._favorites_service.list = AsyncMock(return_value=favorites or [])
     bot._favorites_service.add = AsyncMock(return_value={"id": 1, "property_id": "prop-0"})
@@ -145,7 +75,7 @@ async def test_handle_viewing_starts_dialog_when_manager_available() -> None:
 
     from telegram_bot.dialogs.states import ViewingSG
 
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state()
     msg = _make_message()
     dialog_manager = AsyncMock()
@@ -158,7 +88,7 @@ async def test_handle_viewing_starts_dialog_when_manager_available() -> None:
 
 async def test_handle_viewing_fallback_without_dialog_manager() -> None:
     """_handle_viewing sends fallback message when dialog_manager is None (#719)."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state()
     msg = _make_message()
 
@@ -176,7 +106,7 @@ async def test_handle_viewing_fallback_without_dialog_manager() -> None:
 
 async def test_cta_manager_starts_phone_collection() -> None:
     """cta:manager -> start_phone_collection called with service_key='manager'."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state()
     cb = _make_callback("cta:manager")
 
@@ -196,7 +126,7 @@ async def test_cta_manager_starts_phone_collection() -> None:
 
 async def test_cta_get_offer_passes_service_key() -> None:
     """cta:get_offer:installment -> start_phone_collection(service_key='installment')."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     state = _make_state()
     cb = _make_callback("cta:get_offer:installment")
 
@@ -216,7 +146,7 @@ async def test_cta_get_offer_passes_service_key() -> None:
 
 async def test_results_viewing_is_stale_compat_only() -> None:
     """results:viewing should no longer invoke phone collection from legacy callbacks."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     results = [
         {
             "id": f"prop-{i}",

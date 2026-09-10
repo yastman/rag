@@ -5,29 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.bot import PropertyBot
-from telegram_bot.lifecycle.services import Services
-from tests.unit._bot_config_factory import make_full_bot_config as _make_config
-
-
-def _create_bot() -> PropertyBot:
-    config = _make_config()
-    services = Services(
-        graph_config=MagicMock(),
-        cache=MagicMock(),
-        hybrid=MagicMock(),
-        embeddings=MagicMock(),
-        sparse=MagicMock(),
-        qdrant=MagicMock(),
-        qdrant_apartments=MagicMock(),
-        apartments_service=MagicMock(),
-        reranker=None,
-        llm=MagicMock(),
-        apartment_pipeline=MagicMock(),
-        redis_monitor=MagicMock(),
-        i18n_hub=None,
-    )
-    return PropertyBot(config, _services=services)
+from tests.unit._property_bot_factory import make_property_bot
 
 
 def _sample_result(property_id: str = "prop-1") -> dict:
@@ -60,7 +38,7 @@ def _sample_result(property_id: str = "prop-1") -> dict:
 )
 async def test_send_property_card_calls_format_and_answer(_mock_photos: MagicMock) -> None:
     """_send_property_card sends photo album then text card with inline actions."""
-    bot = _create_bot()
+    bot = make_property_bot()
     bot._favorites_service = MagicMock()
     bot._favorites_service.is_favorited = AsyncMock(return_value=False)
 
@@ -88,7 +66,7 @@ async def test_send_property_card_calls_format_and_answer(_mock_photos: MagicMoc
 )
 async def test_send_property_card_favorited_shows_remove(_mock_photos: MagicMock) -> None:
     """If property is favorited, button shows fav:remove."""
-    bot = _create_bot()
+    bot = make_property_bot()
     bot._favorites_service = MagicMock()
     bot._favorites_service.is_favorited = AsyncMock(return_value=True)
 
@@ -116,7 +94,7 @@ async def test_send_property_card_no_favorites_service(_mock_photos: MagicMock) 
     Bookmarks are a capability: no service means no misleading favourite UI —
     the manager and viewing actions stay on the card.
     """
-    bot = _create_bot()
+    bot = make_property_bot()
     # Ensure no favorites service
     if hasattr(bot, "_favorites_service"):
         del bot._favorites_service
@@ -147,7 +125,7 @@ async def test_send_property_card_includes_section_and_apartment_number(
     _mock_photos: MagicMock,
 ) -> None:
     """_send_property_card includes section and apartment_number in card text."""
-    bot = _create_bot()
+    bot = make_property_bot()
     bot._favorites_service = MagicMock()
     bot._favorites_service.is_favorited = AsyncMock(return_value=False)
 

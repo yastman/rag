@@ -2,27 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from telegram_bot.config import BotConfig
 from tests.unit._bot_config_factory import make_bot_config as _make_config
-
-
-def _create_bot(config: BotConfig | None = None):
-    if config is None:
-        config = _make_config()
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("src.runtime.integrations.cache.CacheLayerManager"),
-        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("src.runtime.services.qdrant.QdrantService"),
-        patch("src.runtime.config.GraphConfig.create_llm"),
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
-    ):
-        from telegram_bot.bot import PropertyBot
-
-        return PropertyBot(config)
+from tests.unit._property_bot_factory import make_property_bot
 
 
 def _make_callback(data="fb:done"):
@@ -48,7 +31,7 @@ class TestHandleFeedback:
 
     async def test_callback_data_done_answers_and_returns(self):
         """FeedbackCB action='done' answers callback and returns immediately."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback()
 
         callback_data = MagicMock()
@@ -61,7 +44,7 @@ class TestHandleFeedback:
 
     async def test_callback_data_dislike_shows_reason_keyboard(self):
         """FeedbackCB action='dislike' shows the reason keyboard."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback()
 
         callback_data = MagicMock()
@@ -78,7 +61,7 @@ class TestHandleFeedback:
 
     async def test_callback_data_like_answers_and_confirms(self):
         """FeedbackCB action='like' answers thanks and shows confirmation keyboard."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback()
 
         callback_data = MagicMock()
@@ -92,7 +75,7 @@ class TestHandleFeedback:
 
     async def test_legacy_fb_done_answers_and_returns(self):
         """Legacy 'fb:done' data answers and returns without score writing."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback(data="fb:done")
 
         await bot.handle_feedback(callback, callback_data=None)
@@ -101,7 +84,7 @@ class TestHandleFeedback:
 
     async def test_legacy_fb_dislike_no_reason_shows_keyboard(self):
         """Legacy 'fb:0:traceid' without reason shows reason keyboard."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback(data="fb:0:trace123abc")
 
         await bot.handle_feedback(callback, callback_data=None)
@@ -111,6 +94,3 @@ class TestHandleFeedback:
         markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
         # Dislike reason keyboard has 3 rows of 2 buttons
         assert len(markup.inline_keyboard) == 3
-
-
-

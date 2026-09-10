@@ -11,22 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.bot import PropertyBot
 from tests.unit._bot_config_factory import make_full_bot_config as _make_config
-
-
-def _create_bot() -> PropertyBot:
-    config = _make_config()
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("src.runtime.integrations.cache.CacheLayerManager"),
-        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("src.runtime.services.qdrant.QdrantService"),
-        patch("src.runtime.config.GraphConfig.create_llm"),
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
-    ):
-        return PropertyBot(config)
+from tests.unit._property_bot_factory import make_property_bot
 
 
 def _make_callback(data: str, user_id: int = 12345) -> MagicMock:
@@ -83,9 +69,9 @@ def _make_favorite(property_id: str, **data: object) -> SimpleNamespace:
     )
 
 
-def _fav_bot(favorites: list | None = None) -> PropertyBot:
+def _fav_bot(favorites: list | None = None):
     """Create bot with favorites_service mock pre-wired."""
-    bot = _create_bot()
+    bot = make_property_bot(_make_config())
     bot._favorites_service = MagicMock()
     bot._favorites_service.add = AsyncMock(return_value={"id": 1, "property_id": "prop-0"})
     bot._favorites_service.remove = AsyncMock()
@@ -102,7 +88,7 @@ class TestLegacyResultsCompat:
     """Legacy results buttons should only show stale compatibility guidance."""
 
     async def test_results_more_is_stale_when_results_exist(self) -> None:
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         bot._send_property_card = AsyncMock()
         state = _make_state({"apartment_results": _make_results(12), "apartment_offset": 0})
         cb = _make_callback("results:more")
@@ -116,7 +102,7 @@ class TestLegacyResultsCompat:
         bot._send_property_card.assert_not_awaited()
 
     async def test_results_more_is_stale_at_end_of_legacy_state(self) -> None:
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         bot._send_property_card = AsyncMock()
         state = _make_state({"apartment_results": _make_results(12), "apartment_offset": 10})
         cb = _make_callback("results:more")
@@ -129,7 +115,7 @@ class TestLegacyResultsCompat:
         bot._send_property_card.assert_not_awaited()
 
     async def test_results_more_is_stale_without_results(self) -> None:
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         state = _make_state({"apartment_results": None, "apartment_offset": 0})
         cb = _make_callback("results:more")
 
@@ -164,18 +150,6 @@ class TestRefineStaleButton:
             "\u0414\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e \u0432 \u0437\u0430\u043a\u043b\u0430\u0434\u043a\u0438"
         )
 
-    async def test_refine_clears_then_more_fails_gracefully(self) -> None:
-        """After refine, stale more button still gets compat guidance, not old pagination."""
-        bot = _create_bot()
-        state = _make_state({"apartment_results": None, "apartment_offset": 0})
-        cb = _make_callback("results:more")
-
-        await bot.handle_results_callback(cb, state)
-
-        cb.message.answer.assert_awaited_once_with(
-            "Это устаревшая кнопка. Используйте актуальное меню ниже."
-        )
-
 
 # ---------------------------------------------------------------------------
 # 3. Callback-flow: viewing -> phone collector contract
@@ -187,7 +161,7 @@ class TestViewingDialog:
 
     async def test_results_viewing_starts_dialog(self) -> None:
         """results:viewing should no longer enter ViewingSG."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         state = _make_state()
         cb = _make_callback("results:viewing")
         dialog_manager = AsyncMock()
@@ -201,7 +175,7 @@ class TestViewingDialog:
 
     async def test_results_viewing_fallback_no_dialog_manager(self) -> None:
         """results:viewing without dialog_manager should not reach phone_collector anymore."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         state = _make_state()
         cb = _make_callback("results:viewing")
 
@@ -355,7 +329,7 @@ class TestFooterContract:
         total: int,
         offset: int,
     ) -> None:
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         bot._send_property_card = AsyncMock()
         results = _make_results(total)
         state = _make_state({"apartment_results": results, "apartment_offset": offset})
@@ -369,7 +343,7 @@ class TestFooterContract:
         bot._send_property_card.assert_not_awaited()
 
     async def test_results_more_does_not_emit_partial_page_cards(self) -> None:
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         bot._send_property_card = AsyncMock()
         state = _make_state({"apartment_results": _make_results(7), "apartment_offset": 0})
         cb = _make_callback("results:more")
@@ -379,7 +353,7 @@ class TestFooterContract:
         assert bot._send_property_card.await_args_list == []
 
     async def test_single_result_legacy_button_uses_stale_guidance(self) -> None:
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         bot._send_property_card = AsyncMock()
         state = _make_state({"apartment_results": _make_results(1), "apartment_offset": 0})
         cb = _make_callback("results:more")

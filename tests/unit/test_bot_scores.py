@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from telegram_bot.config import BotConfig
+from tests.unit._property_bot_factory import make_property_bot
 
 
 @pytest.fixture
@@ -26,48 +27,6 @@ def mock_config(monkeypatch):
         redis_url="redis://localhost:6379",
         rerank_provider="none",
     )
-
-
-def _create_bot(mock_config):
-    """Create PropertyBot with deps + CallbackData.filter lookup sites mocked."""
-    from telegram_bot.bot import PropertyBot
-
-    # Unit conftest may stub aiogram CallbackData / BaseMiddleware as MagicMock.
-    _cb_filter = MagicMock(name="CallbackData.filter")
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("src.runtime.integrations.cache.CacheLayerManager"),
-        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("src.runtime.services.qdrant.QdrantService"),
-        patch("src.runtime.config.GraphConfig.create_llm"),
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
-        patch("telegram_bot.bot.setup_throttling_middleware"),
-        patch("telegram_bot.bot.setup_error_handler"),
-        patch("telegram_bot.bot.FSMCancelMiddleware", MagicMock()),
-        patch(
-            "telegram_bot.handlers.demo_handler.DemoCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch("telegram_bot.bot.FeedbackCB.filter", create=True, return_value=_cb_filter),
-        patch(
-            "telegram_bot.bot.FeedbackReasonCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch(
-            "telegram_bot.handlers.favorites_callbacks.FavoriteCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-        patch(
-            "telegram_bot.handlers.results_callbacks.ResultsCB.filter",
-            create=True,
-            return_value=_cb_filter,
-        ),
-    ):
-        return PropertyBot(mock_config)
 
 
 def _make_message(text="квартиры до 100000 евро", user_id=123456789, chat_id=987654321):
@@ -163,7 +122,7 @@ class TestTextPathFeedbackButtons:
 
     async def test_text_response_has_feedback_keyboard(self, mock_config):
         """Text response should include feedback inline keyboard."""
-        bot = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         _wire_cache(bot)
         message = _make_message()
 
@@ -176,7 +135,7 @@ class TestTextPathFeedbackButtons:
 
     async def test_text_response_has_markdown_parse_mode(self, mock_config):
         """Text response should use HTML parse_mode (Telegram HTML path)."""
-        bot = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         _wire_cache(bot)
         message = _make_message()
 
@@ -189,7 +148,7 @@ class TestTextPathFeedbackButtons:
 
     async def test_chitchat_response_no_feedback_keyboard(self, mock_config):
         """CHITCHAT response should NOT include feedback keyboard."""
-        bot = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         _wire_cache(bot)
         message = _make_message()
 
@@ -202,7 +161,7 @@ class TestTextPathFeedbackButtons:
 
     async def test_response_without_query_type_has_no_feedback_keyboard(self, mock_config):
         """Response without query_type should NOT include feedback keyboard."""
-        bot = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         _wire_cache(bot)
         message = _make_message()
 
@@ -218,7 +177,7 @@ class TestTextPathNoSemanticCacheStore:
     """Semantic-cache storage is core-owned after #3208 — Telegram must not store."""
 
     async def test_telegram_path_never_stores_semantic_cache(self, mock_config):
-        bot = _create_bot(mock_config)
+        bot = make_property_bot(mock_config)
         cache = _wire_cache(bot)
         message = _make_message("какие документы нужны для покупки квартиры")
 

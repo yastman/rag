@@ -6,25 +6,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.config import BotConfig
 from tests.unit._bot_config_factory import make_bot_config as _make_config
-
-
-def _create_bot(config: BotConfig | None = None):
-    if config is None:
-        config = _make_config()
-    with (
-        patch("telegram_bot.bot.Bot"),
-        patch("src.runtime.integrations.cache.CacheLayerManager"),
-        patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
-        patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("src.runtime.services.qdrant.QdrantService"),
-        patch("src.runtime.config.GraphConfig.create_llm"),
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
-    ):
-        from telegram_bot.bot import PropertyBot
-
-        return PropertyBot(config)
+from tests.unit._property_bot_factory import make_property_bot
 
 
 def _make_message(text="test"):
@@ -70,7 +53,7 @@ class TestHandleMenuButton:
     """Test handle_menu_button dispatch routing."""
 
     async def test_search_dispatches_to_handle_search(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("search")
         state = _make_state()
 
@@ -87,7 +70,7 @@ class TestHandleMenuButton:
         mock_search.assert_awaited_once_with(bot, message, None)
 
     async def test_services_dispatches_to_handle_services(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("services")
         state = _make_state()
 
@@ -104,7 +87,7 @@ class TestHandleMenuButton:
         mock_svc.assert_awaited_once_with(bot, message, i18n=None)
 
     async def test_viewing_dispatches_to_handle_viewing(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("viewing")
         state = _make_state()
 
@@ -121,7 +104,7 @@ class TestHandleMenuButton:
         mock_viewing.assert_awaited_once_with(bot, message, state, None)
 
     async def test_bookmarks_dispatches_to_handle_bookmarks(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("bookmarks")
         state = _make_state()
 
@@ -138,7 +121,7 @@ class TestHandleMenuButton:
         mock_bm.assert_awaited_once_with(bot, message, state)
 
     async def test_ask_dispatches_to_handle_ask(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("ask")
         state = _make_state()
 
@@ -159,7 +142,7 @@ class TestHandleMenuButton:
         )
 
     async def test_manager_dispatches_to_handle_manager(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("manager")
         state = _make_state()
 
@@ -176,7 +159,7 @@ class TestHandleMenuButton:
         mock_mgr.assert_awaited_once_with(bot, message, i18n=None, state=state, dialog_manager=None)
 
     async def test_none_action_returns_early(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("unknown")
         state = _make_state()
 
@@ -186,7 +169,7 @@ class TestHandleMenuButton:
         # No handler should have been called
 
     async def test_clears_phone_collector_state(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("search")
         state = _make_state(current_state="PhoneCollectorStates:waiting_phone")
 
@@ -201,7 +184,7 @@ class TestHandleMenuButton:
         state.clear.assert_awaited_once()
 
     async def test_does_not_clear_non_phone_collection_state(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         message = _make_message("search")
         state = _make_state(current_state="SomeOtherState:step")
 
@@ -225,7 +208,7 @@ class TestHandleServiceCallback:
     """Test handle_service_callback actions."""
 
     async def test_action_back_deletes_message(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback("svc:back")
 
         with patch(
@@ -238,7 +221,7 @@ class TestHandleServiceCallback:
         callback.answer.assert_awaited_once()
 
     async def test_action_menu_edits_message(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback("svc:menu")
 
         with (
@@ -257,7 +240,7 @@ class TestHandleServiceCallback:
         callback.answer.assert_awaited_once()
 
     async def test_action_service_with_valid_param(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback("svc:service:insurance")
 
         with (
@@ -280,7 +263,7 @@ class TestHandleServiceCallback:
         callback.answer.assert_awaited_once()
 
     async def test_unparseable_data_answers_callback(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback("garbage")
 
         with patch(
@@ -294,7 +277,7 @@ class TestHandleServiceCallback:
         callback.message.delete.assert_not_awaited()
 
     async def test_unknown_action_answers_callback(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback("svc:unknown")
 
         with patch(
@@ -317,7 +300,7 @@ class TestHandleCtaCallback:
     """Test handle_cta_callback actions."""
 
     async def test_get_offer_starts_phone_collection(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback("cta:get_offer:insurance")
         state = _make_state()
 
@@ -343,7 +326,7 @@ class TestHandleCtaCallback:
         config = _make_config(
             redis_mode="single_instance", handoff_enabled=True, managers_group_id=-100123
         )
-        bot = _create_bot(config)
+        bot = make_property_bot(config)
         bot._forum_bridge = MagicMock()
         bot._handoff_state = MagicMock()
         callback = _make_callback("cta:manager")
@@ -365,7 +348,7 @@ class TestHandleCtaCallback:
 
     async def test_manager_with_bridge_but_capability_off_starts_phone_collection(self):
         """Bridge present but HANDOFF_ENABLED unset — no forum handoff (#3239)."""
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         bot._forum_bridge = MagicMock()
         bot._handoff_state = MagicMock()
         callback = _make_callback("cta:manager")
@@ -391,7 +374,7 @@ class TestHandleCtaCallback:
         mock_phone.assert_awaited_once_with(callback, state, service_key="manager")
 
     async def test_manager_without_forum_bridge_starts_phone_collection(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         bot._forum_bridge = None
         callback = _make_callback("cta:manager")
         state = _make_state()
@@ -413,7 +396,7 @@ class TestHandleCtaCallback:
         assert call_kwargs.kwargs.get("service_key") == "manager"
 
     async def test_none_unparseable_answers_callback(self):
-        bot = _create_bot()
+        bot = make_property_bot(_make_config())
         callback = _make_callback("garbage")
         state = _make_state()
 
