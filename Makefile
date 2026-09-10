@@ -981,7 +981,7 @@ deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scri
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-core-live e2e-core-live-real-llm e2e-test-group e2e-telegram-test e2e-setup test-e2e-infra
+.PHONY: e2e-install e2e-core-live e2e-core-live-real-llm e2e-test-group e2e-telegram-test e2e-setup test-e2e-infra test-e2e-redis-live
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -1021,6 +1021,13 @@ e2e-setup: e2e-install ## Full E2E setup on canonical collection
 test-e2e-infra: ## Run live infrastructure E2E: ingestion + Redis + Qdrant (#2771, #3235)
 	$(UV_RUN_NO_SYNC) pytest tests/e2e/test_infra_ingestion_redis_qdrant.py -v --tb=short -m "e2e and requires_services"
 	@echo "$(GREEN)✓ Infra E2E complete$(NC)"
+
+# Strict lane (#3368): each test starts its own disposable authenticated Redis
+# container (Docker required); a missing daemon FAILS instead of skipping.
+# Environment: uv sync --frozen --extra telegram --extra redis
+test-e2e-redis-live: ## Run live Redis mode + two-owner polling-lock E2E (#3368; Docker, redis extra)
+	E2E_REDIS_STRICT=1 $(UV_RUN_NO_SYNC) pytest tests/e2e/test_redis_modes_live.py -v --tb=short -m "e2e and requires_services"
+	@echo "$(GREEN)✓ Redis modes + polling-lock live E2E complete$(NC)"
 
 # =============================================================================
 # BASELINE & OBSERVABILITY
