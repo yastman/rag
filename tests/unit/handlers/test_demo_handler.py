@@ -86,6 +86,8 @@ class TestDemoRouterRegistration:
         """The router must NOT register message handlers anymore — the
         dialog's MessageInput widgets handle text and voice."""
         router = create_demo_router()
+        # Router name preserved from the retired mock-only E2E surface file (#3343).
+        assert router.name == "demo"
         assert router.message.handlers == [], (
             "demo_handler.create_demo_router() must not register message handlers; "
             "free-text and voice input now flow through demo_dialog's MessageInput."
@@ -175,9 +177,7 @@ class TestTranscribeVoice:
 
         def _factory(*args, **kwargs):
             client = MagicMock()
-            client.audio.transcriptions.create = AsyncMock(
-                side_effect=RuntimeError("provider 500")
-            )
+            client.audio.transcriptions.create = AsyncMock(side_effect=RuntimeError("provider 500"))
             return client
 
         monkeypatch.setattr(openai, "AsyncOpenAI", _factory)
