@@ -24,9 +24,9 @@ remain on the class as thin delegates so:
 
 Module-level imports are kept to stdlib + the small set of
 ``telegram_bot`` helpers each handler reaches for; the heavier
-``langchain``/``langgraph`` imports stay inside ``bot.py``. The
-per-extraction contract (no aiogram-removal, no behaviour drift) is
-pinned by ``tests/contract/test_bot_feedback_handlers_extraction_contract.py``.
+``langchain``/``langgraph`` imports stay inside ``bot.py``. Feedback
+callback behavior is pinned by ``tests/unit/test_bot_feedback_integration.py``
+and ``tests/unit/test_feedback_handler.py``.
 """
 
 from __future__ import annotations

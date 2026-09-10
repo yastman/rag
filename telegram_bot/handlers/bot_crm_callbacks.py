@@ -5,8 +5,8 @@ function so it can be tested without instantiating the full bot stack.
 
 Module-level imports are stdlib and typing only; heavy dependencies
 (aiogram, langgraph, qdrant_client, fastapi) are imported lazily inside
-function bodies. This is pinned by the contract test
-``tests/contract/test_bot_crm_callbacks_extraction_contract.py``.
+function bodies. Routing of the ``cc:`` prefix is pinned by the direct
+dispatch test ``tests/unit/handlers/test_callback_router_dispatch.py``.
 """
 
 from __future__ import annotations
