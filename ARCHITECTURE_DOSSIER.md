@@ -213,7 +213,7 @@ version bump.
 ## 9. Test topology
 
 ~230 test files across a 12-tier pyramid. CI runs **static/lint guardrails only** (Ruff,
-MyPy, Semgrep, lockfile, compose-config); pytest suites are local/manual.
+MyPy, lockfile, compose-config); pytest suites are local/manual.
 
 | Tier | Dir | Gate command | Runs |
 |---|---|---|---|

@@ -221,6 +221,10 @@ select = [
     "RUF",   # Ruff-specific rules - NEW 2025
     "FURB",  # refurb (modernize Python idioms) - NEW 2025
     "ASYNC", # flake8-async (async/await best practices) - NEW 2025
+    # #3448: naive-UTC constructors stay blocked natively after the removed
+    # Semgrep python.no-datetime-utcnow contract (flake8-datetimez subset).
+    "DTZ003", # datetime.utcnow() (naive UTC)
+    "DTZ004", # datetime.utcfromtimestamp() (naive UTC)
 ]
 
 # Ignore specific rules

@@ -176,16 +176,6 @@ def test_workflow_change_with_policy_test_passes() -> None:
     assert failures == []
 
 
-def test_workflow_change_with_semgrep_policy_test_passes() -> None:
-    failures = validate(
-        _pr("ci: add semgrep workflow", "Checks run: pytest semgrep policy tests"),
-        [".github/workflows/ci.yml", "tests/unit/test_semgrep_guardrails.py"],
-        large_threshold=25,
-    )
-
-    assert failures == []
-
-
 def test_compose_change_with_compose_runtime_policy_test_passes() -> None:
     failures = validate(
         _pr(
@@ -216,7 +206,7 @@ def test_duplicate_process_wording_without_disposition_does_not_require_bug_clas
             "ci: add project guardrail",
             "This keeps project-specific duplicate/root-cause logic in Python.",
         ),
-        [".github/workflows/ci.yml", "tests/unit/test_semgrep_guardrails.py"],
+        [".github/workflows/ci.yml", "tests/unit/test_compose_runtime_contract.py"],
         large_threshold=25,
     )
 

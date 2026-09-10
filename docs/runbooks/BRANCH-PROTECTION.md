@@ -15,7 +15,6 @@ configuration; the GitHub API is authoritative for its current settings.
 | Lint | CI | Ruff lint and format |
 | Lockfile Check | CI | Lock consistency |
 | Secret Scan | CI | Gitleaks |
-| Semgrep | CI | Project guardrails |
 
 See [ci.yml](../../.github/workflows/ci.yml) and
 [codeql.yml](../../.github/workflows/codeql.yml) for execution. Candidate Gate covers
