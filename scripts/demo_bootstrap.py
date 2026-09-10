@@ -242,8 +242,19 @@ def ingest_knowledge_demo(
     return len(points)
 
 
-def ingest_apartments_demo(csv_path: str, qdrant_url: str, bge_url: str, state_path: str) -> dict:
-    """Ingest the shipped apartments CSV via the incremental runner."""
+def ingest_apartments_demo(
+    csv_path: str,
+    qdrant_url: str,
+    bge_url: str,
+    state_path: str,
+    collection_name: str = APARTMENTS_COLLECTION,
+    qdrant_api_key: str | None = None,
+) -> dict:
+    """Ingest the shipped apartments CSV via the incremental runner.
+
+    Writes go only to ``collection_name`` using the supplied Qdrant
+    credentials (#3460) — never to the shared default collection.
+    """
     from src.ingestion.apartments.runner import IncrementalApartmentIngester
 
     ingester = IncrementalApartmentIngester(
@@ -251,6 +262,8 @@ def ingest_apartments_demo(csv_path: str, qdrant_url: str, bge_url: str, state_p
         qdrant_url=qdrant_url,
         bge_url=bge_url,
         state_path=state_path,
+        collection_name=collection_name,
+        qdrant_api_key=qdrant_api_key,
     )
     return ingester.run_incremental(force_full=True)
 
@@ -441,7 +454,12 @@ def _bootstrap_apartments(
         print(f"  [..] Apartments collection '{args.apartments_collection}' is empty; ingesting")
         try:
             stats = ingest_apartments_demo(
-                args.apartments_csv, args.qdrant_url, args.bge_url, _state_path(args)
+                args.apartments_csv,
+                args.qdrant_url,
+                args.bge_url,
+                _state_path(args),
+                collection_name=args.apartments_collection,
+                qdrant_api_key=args.qdrant_api_key,
             )
             print(f"  [OK] Apartments ingest stats: {stats}")
         except Exception as exc:
