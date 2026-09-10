@@ -9,49 +9,13 @@ from uuid import UUID
 from qdrant_client import models
 
 from src.runtime.domain_defaults import DEMO_CITY_PROMPT_FORMS
+from src.runtime.qdrant.contracts import build_payload_filter
 from src.runtime.services.qdrant import QdrantService
 
 
 logger = logging.getLogger(__name__)
 
 _ESCALATION_MIN_SPREAD = 0.002
-
-
-def _build_apartment_filter(filters: dict | None) -> models.Filter | None:
-    """Build Qdrant filter for apartments (top-level fields, no metadata. prefix).
-
-    Supports:
-    - Exact match: {"rooms": 2, "complex_name": "Premier Fort Beach"}
-    - Range: {"price_eur": {"gte": 100000, "lte": 200000}}
-    - MatchAny: {"view_tags": ["sea", "pool"]}
-    """
-    if not filters:
-        return None
-
-    conditions: list[models.Condition] = []
-
-    for key, value in filters.items():
-        if isinstance(value, list):
-            # MatchAny for tags
-            conditions.append(
-                models.FieldCondition(
-                    key=key,
-                    match=models.MatchAny(any=value),
-                )
-            )
-        elif isinstance(value, bool):
-            # Explicit bool check BEFORE dict/int — isinstance(True, int) is True in Python
-            conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
-        elif isinstance(value, dict):
-            range_params = {op: value[op] for op in ("lt", "lte", "gt", "gte") if op in value}
-            if range_params:
-                conditions.append(
-                    models.FieldCondition(key=key, range=models.Range(**range_params))
-                )
-        else:
-            conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
-
-    return models.Filter(must=conditions) if conditions else None
 
 
 def check_escalation(
@@ -114,7 +78,7 @@ class ApartmentsService:
 
         Returns: (results, returned_count)
         """
-        qdrant_filter = _build_apartment_filter(filters)
+        qdrant_filter = build_payload_filter(filters)
 
         # Build sparse vector
         sparse_v = None
@@ -196,7 +160,7 @@ class ApartmentsService:
         Uses OrderBy.start_from for pagination (offset incompatible with order_by).
         Returns: (results, total_count, next_start_from, page_ids)
         """
-        qdrant_filter = _build_apartment_filter(filters)
+        qdrant_filter = build_payload_filter(filters)
 
         # Дедупликация: исключить уже показанные ID на границе цены
         if exclude_ids:
@@ -220,7 +184,7 @@ class ApartmentsService:
 
         count_result = await self._qdrant.client.count(
             collection_name=self._qdrant.collection_name,
-            count_filter=_build_apartment_filter(filters),  # без exclude_ids
+            count_filter=build_payload_filter(filters),  # без exclude_ids
             exact=True,
         )
 
@@ -238,7 +202,7 @@ class ApartmentsService:
 
     async def count_with_filters(self, filters: dict | None = None) -> int:
         """Count apartments matching payload filters (no vector search)."""
-        qdrant_filter = _build_apartment_filter(filters)
+        qdrant_filter = build_payload_filter(filters)
         result = await self._qdrant.client.count(
             collection_name=self._qdrant.collection_name,
             count_filter=qdrant_filter,

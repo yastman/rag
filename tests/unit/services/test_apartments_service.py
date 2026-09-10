@@ -8,58 +8,69 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from qdrant_client import models
 
+from src.runtime.qdrant.contracts import build_payload_filter
 from telegram_bot.services.apartment.apartments_service import (
     ApartmentsService,
-    _build_apartment_filter,
     check_escalation,
 )
 
 
 class TestBuildApartmentFilter:
-    """Test filter construction without metadata. prefix."""
+    """Filter construction without metadata. prefix — canonical builder (#3333).
+
+    The production service delegates to the same function, proven by the
+    identity test below; semantics are pinned once in test_contracts.py and
+    re-asserted here against the production import.
+    """
+
+    def test_service_uses_the_canonical_builder(self) -> None:
+        from src.runtime.qdrant import contracts
+        from telegram_bot.services.apartment import apartments_service
+
+        assert apartments_service.build_payload_filter is contracts.build_payload_filter
 
     def test_exact_match(self) -> None:
-        f = _build_apartment_filter({"rooms": 2, "complex_name": "Premier Fort Beach"})
+        f = build_payload_filter({"rooms": 2, "complex_name": "Premier Fort Beach"})
         assert f is not None
         assert len(f.must) == 2
 
     def test_range_filter(self) -> None:
-        f = _build_apartment_filter({"price_eur": {"gte": 100000, "lte": 200000}})
+        f = build_payload_filter({"price_eur": {"gte": 100000, "lte": 200000}})
         assert f is not None
         assert len(f.must) == 1
 
     def test_view_tags_match_any(self) -> None:
-        f = _build_apartment_filter({"view_tags": ["sea", "pool"]})
+        f = build_payload_filter({"view_tags": ["sea", "pool"]})
         assert f is not None
         # Should use MatchAny, not MatchValue
         condition = f.must[0]
         assert hasattr(condition, "match")
 
     def test_empty_returns_none(self) -> None:
-        assert _build_apartment_filter({}) is None
-        assert _build_apartment_filter(None) is None
+        assert build_payload_filter({}) is None
+        assert build_payload_filter(None) is None
 
     def test_no_metadata_prefix(self) -> None:
-        f = _build_apartment_filter({"rooms": 2})
+        f = build_payload_filter({"rooms": 2})
         # Key should be "rooms" not "metadata.rooms"
         assert f.must[0].key == "rooms"
 
     def test_build_filter_is_furnished_true(self) -> None:
-        f = _build_apartment_filter({"is_furnished": True})
+        f = build_payload_filter({"is_furnished": True})
         assert f is not None
         assert len(f.must) == 1
         assert f.must[0].key == "is_furnished"
         assert f.must[0].match.value is True
 
     def test_build_filter_is_furnished_false(self) -> None:
-        f = _build_apartment_filter({"is_furnished": False})
+        f = build_payload_filter({"is_furnished": False})
         assert f is not None
         assert len(f.must) == 1
         assert f.must[0].key == "is_furnished"
         assert f.must[0].match.value is False
 
     def test_build_filter_is_promotion_true(self) -> None:
-        f = _build_apartment_filter({"is_promotion": True})
+        f = build_payload_filter({"is_promotion": True})
         assert f is not None
         assert len(f.must) == 1
         assert f.must[0].key == "is_promotion"
@@ -67,7 +78,7 @@ class TestBuildApartmentFilter:
 
     def test_build_filter_combined_bool_and_range(self) -> None:
         """Bool must use MatchValue, not Range — isinstance(True, int) == True in Python."""
-        f = _build_apartment_filter({"is_furnished": True, "price_eur": {"gte": 50000}})
+        f = build_payload_filter({"is_furnished": True, "price_eur": {"gte": 50000}})
         assert f is not None
         assert len(f.must) == 2
         # Bool condition should use MatchValue, not Range
@@ -79,7 +90,7 @@ class TestBuildApartmentFilter:
 
     def test_string_keyword_exact_match(self) -> None:
         """String values (like section) create MatchValue keyword conditions."""
-        f = _build_apartment_filter({"section": "D-1"})
+        f = build_payload_filter({"section": "D-1"})
         assert f is not None
         assert len(f.must) == 1
         cond = f.must[0]
@@ -88,7 +99,7 @@ class TestBuildApartmentFilter:
 
     def test_combined_three_condition_types(self) -> None:
         """Verify 3 different condition types build as separate must clauses."""
-        f = _build_apartment_filter(
+        f = build_payload_filter(
             {
                 "city": "Элените",
                 "rooms": 3,

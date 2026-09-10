@@ -127,7 +127,7 @@ class TestQdrantCollectionSafety:
 
     async def test_strict_mode_serializes_qdrant_1_18_guardrails(self, service):
         """SDK config carries the new server-side batch and memory limits."""
-        await service._apply_strict_mode()
+        await service.apply_strict_mode()
 
         strict_config = service._client.update_collection.await_args.kwargs["strict_mode_config"]
 

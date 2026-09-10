@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import scripts.demo_bootstrap as db
+from src.runtime.qdrant import contracts
 from src.runtime.qdrant.readiness import (
     CollectionReadiness,
     knowledge_demo_point_id,
@@ -106,6 +107,29 @@ class TestSchemaCompatible:
 
 
 # ---------------------------------------------------------------------------
+# Explicit bootstrap mutations (strict mode owned by setup, not reads — #3333)
+# ---------------------------------------------------------------------------
+
+
+class TestExplicitBootstrapMutations:
+    def test_knowledge_schema_creation_applies_strict_mode(self):
+        client = MagicMock()
+        db.create_knowledge_collection_schema(client, "i3202-knowledge")
+        client.update_collection.assert_called_once_with(
+            collection_name="i3202-knowledge",
+            strict_mode_config=contracts.strict_mode_config(),
+        )
+
+    def test_apartments_schema_creation_applies_strict_mode(self):
+        client = MagicMock()
+        db.create_apartments_collection_schema(client, "i3202-apartments")
+        client.update_collection.assert_called_once_with(
+            collection_name="i3202-apartments",
+            strict_mode_config=contracts.strict_mode_config(),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Knowledge demo ingest
 # ---------------------------------------------------------------------------
 
@@ -147,7 +171,10 @@ class TestIngestKnowledgeDemo:
             knowledge_demo_point_id("article_115"),
             knowledge_demo_point_id("article_185"),
         ]
-        assert points[0].payload["metadata"]["id"] == "article_115"
+        # metadata.doc_id is the canonical indexed knowledge identifier (#3333);
+        # the unindexed metadata.id alias is gone.
+        assert points[0].payload["metadata"]["doc_id"] == "article_115"
+        assert "id" not in points[0].payload["metadata"]
         assert "page_content" in points[0].payload
         assert "dense" in points[0].vector and "bm42" in points[0].vector
 
@@ -208,7 +235,8 @@ class TestVerifyReady:
         knowledge_probes = readiness[0].probe_results
         assert "demo-corpus:article_115" in knowledge_probes
         apartments_probes = readiness[1].probe_results
-        assert any(name.startswith("shipped-listing:") for name in apartments_probes)
+        # One probe per distinct advertised shape, not per row (#3333).
+        assert any(name.startswith("shipped-shape:") for name in apartments_probes)
         assert (
             apartments_probes.get("intentional-no-result") is None
         )  # no-result probe is expect_results=False
@@ -236,7 +264,7 @@ class TestVerifyReady:
             enforced = [
                 name
                 for name in item.probe_results
-                if name.startswith(("demo-corpus", "shipped-listing"))
+                if name.startswith(("demo-corpus", "shipped-shape"))
             ]
             assert enforced == []
 

@@ -811,6 +811,62 @@ class TestCmdBootstrap:
         output = capsys.readouterr().out
         assert "Bootstrap completed" in output
 
+    async def test_creates_canonical_payload_indexes_and_strict_mode(self, args):
+        """Bootstrap consumes the canonical index map and applies strict mode (#3333)."""
+        from qdrant_client.http.exceptions import UnexpectedResponse
+
+        from src.runtime.qdrant.contracts import (
+            KNOWLEDGE_PAYLOAD_INDEXES,
+            flat_payload_indexes,
+            strict_mode_config,
+        )
+
+        config = _make_config(collection_name="new_col")
+        client = MagicMock()
+        client.get_collections.return_value = MagicMock()
+        client.get_collection.side_effect = UnexpectedResponse(
+            status_code=404, reason_phrase="Not found", content=b"", headers={}
+        )
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("qdrant_client.QdrantClient", return_value=client),
+        ):
+            from src.ingestion.unified.cli import cmd_bootstrap
+
+            result = await cmd_bootstrap(args)
+
+        assert result == 0
+        created: dict[str, str] = {}
+        for call in client.create_payload_index.call_args_list:
+            created[call.kwargs["field_name"]] = call.kwargs["field_schema"].value
+        assert created == dict(flat_payload_indexes(KNOWLEDGE_PAYLOAD_INDEXES))
+
+        # Strict mode is owned by explicit bootstrap, never by read paths (#3333).
+        client.update_collection.assert_called_once_with(
+            collection_name="new_col",
+            strict_mode_config=strict_mode_config(),
+        )
+
+    async def test_existing_collection_is_not_repatched(self, args):
+        """Existing collections are not mutated by an idempotent bootstrap run."""
+        config = _make_config(collection_name="existing_col")
+        client = MagicMock()
+        client.get_collections.return_value = MagicMock()
+        client.get_collection.return_value = MagicMock()  # exists
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("qdrant_client.QdrantClient", return_value=client),
+        ):
+            from src.ingestion.unified.cli import cmd_bootstrap
+
+            result = await cmd_bootstrap(args)
+
+        assert result == 0
+        client.update_collection.assert_not_called()
+        client.create_payload_index.assert_not_called()
+
     @patch.dict("os.environ", {"QDRANT_QUANTIZATION_MODE": "scalar"})
     async def test_bootstrap_scalar_quantization(self, args, capsys):
         from qdrant_client.http.exceptions import UnexpectedResponse

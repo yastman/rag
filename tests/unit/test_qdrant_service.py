@@ -98,8 +98,6 @@ class TestQdrantServiceQuantizationMode:
             return_value=MagicMock(collections=[base_collection])
         )
         service._refresh_collection_capabilities = AsyncMock()
-        service._apply_strict_mode = AsyncMock()
-        service._ensure_alias = AsyncMock()
         service._client.query_points = AsyncMock(
             return_value=MagicMock(points=[_make_mock_point()])
         )
@@ -1054,143 +1052,64 @@ class TestQdrantApiKeySafety:
 
 
 # ===========================================================================
-# _apply_strict_mode
+# Read-path side-effect freedom and explicit mutations (#3333)
 # ===========================================================================
 
 
-class TestApplyStrictMode:
-    """Tests for QdrantService._apply_strict_mode()."""
+class TestEnsureCollectionSideEffectFree:
+    """Read/search validation never mutates the collection (#3333).
 
-    async def test_apply_strict_mode_calls_update_collection(self):
-        """Strict mode calls update_collection with StrictModeConfig."""
+    ``ensure_collection`` is reached from search/read methods; it must not
+    PATCH strict mode or write aliases — a read-only credential can search.
+    """
+
+    async def test_ensure_collection_is_side_effect_free(self):
+        svc = _make_service()
+        svc._client = AsyncMock()
+        existing = MagicMock()
+        existing.name = "test_collection"
+        svc._client.get_collections = AsyncMock(return_value=MagicMock(collections=[existing]))
+        svc._client.get_collection = AsyncMock(return_value=MagicMock())
+
+        await svc.ensure_collection()
+
+        svc._client.update_collection.assert_not_awaited()
+        svc._client.update_collection_aliases.assert_not_awaited()
+        svc._client.get_aliases.assert_not_awaited()
+
+    async def test_quantization_fallback_is_side_effect_free(self):
+        svc = _make_service()
+        svc._client = AsyncMock()
+        base_collection = MagicMock()
+        base_collection.name = "test_collection"
+        svc._client.get_collections = AsyncMock(
+            return_value=MagicMock(collections=[base_collection])
+        )
+        svc._client.get_collection = AsyncMock(return_value=MagicMock())
+
+        await svc.ensure_collection()
+
+        svc._client.update_collection.assert_not_awaited()
+        svc._client.update_collection_aliases.assert_not_awaited()
+
+    async def test_no_unused_alias_framework_remains(self):
+        """The unused '{collection}_active' alias mutation is deleted (#3333)."""
+        assert not hasattr(QdrantService, "_ensure_alias")
+        assert not hasattr(QdrantService, "ensure_alias")
+
+    async def test_strict_mode_is_an_explicit_bootstrap_operation(self, caplog):
+        """apply_strict_mode is public and idempotent — bootstrap calls it (#3333)."""
         svc = _make_service(validated=True)
         svc._client.update_collection = AsyncMock()
 
-        await svc._apply_strict_mode()
+        with caplog.at_level(logging.INFO):
+            await svc.apply_strict_mode()
 
         svc._client.update_collection.assert_awaited_once()
         call_kwargs = svc._client.update_collection.call_args.kwargs
         assert call_kwargs["collection_name"] == svc._collection_name
-        strict_cfg = call_kwargs["strict_mode_config"]
-        assert strict_cfg is not None
-        assert strict_cfg.enabled is True
-        assert strict_cfg.max_query_limit == 100
-        assert strict_cfg.max_timeout == 30
-        assert strict_cfg.search_max_hnsw_ef == 512
-
-    async def test_apply_strict_mode_logs_on_success(self, caplog):
-        """Strict mode logs INFO message when successfully applied."""
-        import logging
-
-        svc = _make_service(validated=True)
-        svc._client.update_collection = AsyncMock()
-
-        with caplog.at_level(logging.INFO):
-            await svc._apply_strict_mode()
-
+        assert call_kwargs["strict_mode_config"].enabled is True
         assert "strict mode" in caplog.text.lower()
-
-    async def test_apply_strict_mode_warns_on_error(self, caplog):
-        """Strict mode catches exceptions and logs WARNING (non-blocking)."""
-        import logging
-
-        svc = _make_service(validated=True)
-        svc._client.update_collection = AsyncMock(side_effect=Exception("unsupported"))
-
-        with caplog.at_level(logging.WARNING):
-            await svc._apply_strict_mode()  # Must not raise
-
-        assert "strict mode not applied" in caplog.text.lower()
-
-
-# ===========================================================================
-# _ensure_alias
-# ===========================================================================
-
-
-class TestEnsureAlias:
-    """Tests for QdrantService._ensure_alias()."""
-
-    async def test_ensure_alias_calls_update_aliases(self):
-        """_ensure_alias creates alias '{collection}_active' via update_collection_aliases."""
-        svc = _make_service(validated=True)
-        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
-        svc._client.update_collection_aliases = AsyncMock()
-
-        await svc._ensure_alias()
-
-        svc._client.update_collection_aliases.assert_awaited_once()
-        ops = svc._client.update_collection_aliases.call_args.kwargs["change_aliases_operations"]
-        assert len(ops) == 1
-        op = ops[0]
-        assert op.create_alias.collection_name == svc._collection_name
-        assert op.create_alias.alias_name == f"{svc._collection_name}_active"
-
-    async def test_ensure_alias_replaces_existing_alias_atomically(self):
-        """Existing alias is switched via delete+create in one aliases update call."""
-        svc = _make_service(validated=True)
-        alias_name = f"{svc._collection_name}_active"
-        svc._client.get_aliases = AsyncMock(
-            return_value=MagicMock(
-                aliases=[
-                    MagicMock(alias_name=alias_name, collection_name="old_collection"),
-                ]
-            )
-        )
-        svc._client.update_collection_aliases = AsyncMock()
-
-        await svc._ensure_alias()
-
-        svc._client.update_collection_aliases.assert_awaited_once()
-        ops = svc._client.update_collection_aliases.call_args.kwargs["change_aliases_operations"]
-        assert len(ops) == 2
-        assert ops[0].delete_alias.alias_name == alias_name
-        assert ops[1].create_alias.alias_name == alias_name
-        assert ops[1].create_alias.collection_name == svc._collection_name
-
-    async def test_ensure_alias_skips_when_already_pointing_to_target(self, caplog):
-        """No-op when alias already points to current collection."""
-        svc = _make_service(validated=True)
-        alias_name = f"{svc._collection_name}_active"
-        svc._client.get_aliases = AsyncMock(
-            return_value=MagicMock(
-                aliases=[
-                    MagicMock(alias_name=alias_name, collection_name=svc._collection_name),
-                ]
-            )
-        )
-        svc._client.update_collection_aliases = AsyncMock()
-
-        with caplog.at_level(logging.INFO):
-            await svc._ensure_alias()
-
-        svc._client.update_collection_aliases.assert_not_awaited()
-        assert "already points" in caplog.text.lower()
-
-    async def test_ensure_alias_logs_on_success(self, caplog):
-        """_ensure_alias logs INFO on successful alias creation."""
-        svc = _make_service(validated=True)
-        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
-        svc._client.update_collection_aliases = AsyncMock()
-
-        with caplog.at_level(logging.INFO):
-            await svc._ensure_alias()
-
-        assert "alias" in caplog.text.lower()
-
-    async def test_ensure_alias_warns_on_error(self, caplog):
-        """_ensure_alias catches exceptions and logs WARNING (non-blocking)."""
-        svc = _make_service(validated=True)
-        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
-        svc._client.update_collection_aliases = AsyncMock(
-            side_effect=Exception("permission denied")
-        )
-
-        with caplog.at_level(logging.WARNING):
-            await svc._ensure_alias()  # Must not raise
-
-        assert "alias" in caplog.text.lower()
-        assert "failed" in caplog.text.lower()
 
 
 # ===========================================================================

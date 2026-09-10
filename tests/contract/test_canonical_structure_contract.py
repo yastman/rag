@@ -107,7 +107,14 @@ def test_src_adapters_does_not_import_src_runtime() -> None:
 
 
 def test_src_ingestion_does_not_import_src_runtime() -> None:
-    """src/ingestion must not import src/runtime (ingestion is parallel to runtime)."""
+    """src/ingestion must not import src/runtime (ingestion is parallel to runtime).
+
+    Single accepted exception (#3333): ``src.runtime.qdrant.contracts`` — the
+    pure-data Qdrant schema/identity/filter authority. Ingestion consumes the
+    same point-id function as readiness and search; no runtime behaviour is
+    reachable through it.
+    """
+    allowed_modules = {"src.runtime.qdrant.contracts"}
     violations: dict[str, list[str]] = {}
     ingestion_root = REPO_ROOT / "src" / "ingestion"
     for path in _py_files(ingestion_root):
@@ -117,18 +124,22 @@ def test_src_ingestion_does_not_import_src_runtime() -> None:
         except SyntaxError:
             continue
         for node in ast.walk(tree):
+            checked: list[str] = []
             if isinstance(node, ast.ImportFrom):
-                mod = node.module or ""
-                if mod == "src.runtime" or mod.startswith("src.runtime."):
-                    bad.append(mod)
+                checked.append(node.module or "")
             elif isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name == "src.runtime" or alias.name.startswith("src.runtime."):
-                        bad.append(alias.name)
+                checked.extend(alias.name for alias in node.names)
+            for mod in checked:
+                if mod != "src.runtime" and not mod.startswith("src.runtime."):
+                    continue
+                if mod not in allowed_modules:
+                    bad.append(mod)
         if bad:
             violations[path.relative_to(REPO_ROOT).as_posix()] = bad
 
     assert not violations, (
         "#2633: src/ingestion must not import src/runtime — ingestion is a "
-        f"parallel infrastructure layer. Violations: {violations}"
+        "parallel infrastructure layer. Only src.runtime.qdrant.contracts (pure "
+        "data, #3333) may be imported. Violations: "
+        f"{violations}"
     )

@@ -14,9 +14,9 @@ and the bot preflight) can pass:
    ``data/apartments.csv`` catalog (requires the BGE-M3 service). Populated
    collections are preserved untouched.
 3. **Verify** — run the readiness contracts plus deterministic demo probes:
-   every shipped apartment row must be reachable through the production filter
-   path, the shipped demo corpus documents (anchor ``article_115``) must be
-   present, and the
+   every distinct advertised (rooms, city) query shape must be reachable
+   through the production filter path, the shipped demo corpus documents
+   (anchor ``article_115``) must be present, and the
    intentional no-result probe must stay empty — proving advertised queries
    against the exact prepared data without needing the embedding service.
 
@@ -45,11 +45,11 @@ from scripts._qdrant_collection_setup import (
     GDRIVE_PAYLOAD_INDEX_FIELDS,
     create_payload_indexes,
 )
+from src.runtime.qdrant.contracts import BGEM3_DENSE_DIM, apartment_point_id, strict_mode_config
 from src.runtime.qdrant.readiness import (
     APARTMENTS_COLLECTION,
     KNOWLEDGE_DEMO_DOC_IDS,
     CollectionReadiness,
-    apartment_demo_point_id,
     apartment_demo_probes,
     apartments_contract,
     knowledge_contract,
@@ -99,7 +99,7 @@ def create_knowledge_collection_schema(client: QdrantClient, collection_name: st
         collection_name=collection_name,
         vectors_config={
             "dense": VectorParams(
-                size=1024,
+                size=BGEM3_DENSE_DIM,
                 distance=Distance.COSINE,
                 hnsw_config=HnswConfigDiff(m=16, ef_construct=200, on_disk=False),
                 quantization_config=BinaryQuantization(
@@ -108,7 +108,7 @@ def create_knowledge_collection_schema(client: QdrantClient, collection_name: st
                 on_disk=True,
             ),
             "colbert": VectorParams(
-                size=1024,
+                size=BGEM3_DENSE_DIM,
                 distance=Distance.COSINE,
                 multivector_config=MultiVectorConfig(comparator=MultiVectorComparator.MAX_SIM),
                 hnsw_config=HnswConfigDiff(m=0),
@@ -124,6 +124,11 @@ def create_knowledge_collection_schema(client: QdrantClient, collection_name: st
         ),
     )
     create_payload_indexes(client, collection_name, GDRIVE_PAYLOAD_INDEX_FIELDS)
+    # Strict mode is a bootstrap-owned mutation (#3333); read paths never PATCH.
+    client.update_collection(
+        collection_name=collection_name,
+        strict_mode_config=strict_mode_config(),
+    )
     print(f"  [OK] Created knowledge collection '{collection_name}' with contract schema")
 
 
@@ -145,7 +150,7 @@ def create_apartments_collection_schema(client: QdrantClient, collection_name: s
         collection_name=collection_name,
         vectors_config={
             "dense": VectorParams(
-                size=1024,
+                size=BGEM3_DENSE_DIM,
                 distance=Distance.COSINE,
                 hnsw_config=HnswConfigDiff(m=16, ef_construct=200, on_disk=False),
                 quantization_config=BinaryQuantization(
@@ -154,7 +159,7 @@ def create_apartments_collection_schema(client: QdrantClient, collection_name: s
                 on_disk=True,
             ),
             "colbert": VectorParams(
-                size=1024,
+                size=BGEM3_DENSE_DIM,
                 distance=Distance.COSINE,
                 multivector_config=MultiVectorConfig(comparator=MultiVectorComparator.MAX_SIM),
                 hnsw_config=HnswConfigDiff(m=0),
@@ -166,6 +171,11 @@ def create_apartments_collection_schema(client: QdrantClient, collection_name: s
         },
     )
     create_payload_indexes(client, collection_name, APARTMENT_PAYLOAD_INDEX_FIELDS)
+    # Strict mode is a bootstrap-owned mutation (#3333); read paths never PATCH.
+    client.update_collection(
+        collection_name=collection_name,
+        strict_mode_config=strict_mode_config(),
+    )
     print(f"  [OK] Created apartments collection '{collection_name}' with contract schema")
 
 
@@ -214,7 +224,9 @@ def ingest_knowledge_demo(
                 payload={
                     "page_content": doc["content"],
                     "metadata": {
-                        "id": doc["id"],
+                        # metadata.doc_id is the canonical indexed knowledge
+                        # identifier (#3333) — probes filter exactly this field.
+                        "doc_id": doc["id"],
                         "title": doc["title"],
                         **doc.get("metadata", {}),
                     },
@@ -320,7 +332,7 @@ async def verify_ready(args: argparse.Namespace) -> list[CollectionReadiness]:
         if apartments_readiness.ok:
             rows = _shipped_apartment_rows(args.apartments_csv)
             shipped_ids = [
-                apartment_demo_point_id(r["complex_name"], r["section"], r["apartment_number"])
+                apartment_point_id(r["complex_name"], r["section"], r["apartment_number"])
                 for r in rows
             ]
             if await _shipped_ids_present(async_client, args.apartments_collection, shipped_ids):

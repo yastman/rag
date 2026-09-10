@@ -27,9 +27,9 @@ from src.ingestion.apartments.flow import (
     COLLECTION,
     build_ingestion_batch,
     format_apartment_text,
-    generate_point_id,
 )
 from src.ingestion.apartments.source import read_apartments_csv
+from src.runtime.qdrant.contracts import apartment_point_id
 
 
 if TYPE_CHECKING:
@@ -131,7 +131,7 @@ class IncrementalApartmentIngester:
             except ValueError:
                 logger.warning("Skipping malformed state key: %s", unique_key)
                 continue
-            point_ids.append(generate_point_id(complex_name, section, apartment_number))
+            point_ids.append(apartment_point_id(complex_name, section, apartment_number))
 
         if not point_ids:
             return 0

@@ -10,7 +10,7 @@ the [RAG VPS v2 proposal](RAG_VPS_V2_PROPOSED.md) is a separate future design.
 | src/core | Transport-free API, request/result and dependency contracts, app assembly | [assistant.py](../../src/core/assistant.py), [contracts.py](../../src/core/contracts.py), [app.py](../../src/core/app.py) |
 | src/runtime/pipeline | Procedural request routing and RAG orchestration | [assistant_pipeline.py](../../src/runtime/pipeline/assistant_pipeline.py), [rag.py](../../src/runtime/pipeline/rag.py) |
 | src/runtime/generation | Prompts, answer generation, output policy | [service.py](../../src/runtime/generation/service.py) |
-| src/runtime/qdrant | Search and collection readiness | [service.py](../../src/runtime/qdrant/service.py), [readiness.py](../../src/runtime/qdrant/readiness.py) |
+| src/runtime/qdrant | Canonical collection contracts (schema/identity/filter) plus search and readiness | [contracts.py](../../src/runtime/qdrant/contracts.py), [service.py](../../src/runtime/qdrant/service.py), [readiness.py](../../src/runtime/qdrant/readiness.py) |
 | src/runtime/retrieval | Retrieval composition | [runtime guide](../../src/runtime/README.md) |
 | src/runtime/integrations | Cache/embedding/prompt integrations | [runtime guide](../../src/runtime/README.md) |
 | src/runtime/config.py | Runtime GraphConfig; its name does not imply a graph framework | [config.py](../../src/runtime/config.py) |
@@ -56,6 +56,9 @@ This intentional relationship is not a strictly one-way package hierarchy.
 - Active src code must not import archive.
 - Provider adapters stay below orchestration: do not add imports from src/runtime into
   src/adapters modules.
+- src/ingestion must not import src/runtime, with one accepted exception (#3333):
+  `src.runtime.qdrant.contracts`, the pure-data Qdrant schema/identity/filter
+  authority that ingestion, readiness, setup, and search all consume.
 - Ingestion owns writes and identity/manifest handling. Query retrieval is read-oriented;
   setup/readiness scripts have separate operational responsibilities.
 

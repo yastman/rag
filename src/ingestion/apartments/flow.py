@@ -2,22 +2,19 @@
 
 Formats hybrid text and builds Qdrant-ready point payloads.
 Used by incremental runner.
+
+Point identity comes from the canonical authority
+``src.runtime.qdrant.contracts.apartment_point_id`` (#3333) so ingestion,
+readiness, and the shipped demo catalog address identical points.
 """
 
 from __future__ import annotations
 
-import uuid
-
 from src.models.apartment import ApartmentRecord
+from src.runtime.qdrant.contracts import APARTMENTS_COLLECTION, apartment_point_id
 
 
-COLLECTION = "apartments"
-NAMESPACE = uuid.UUID("7ba7b810-9dad-11d1-80b4-00c04fd430c8")
-
-
-def generate_point_id(complex_name: str, section: str, apartment_number: str) -> str:
-    """Deterministic UUID5 from complex + section + apartment number."""
-    return str(uuid.uuid5(NAMESPACE, f"{complex_name}::{section}::{apartment_number}"))
+COLLECTION = APARTMENTS_COLLECTION
 
 
 def format_apartment_text(record: ApartmentRecord) -> str:
@@ -44,7 +41,7 @@ def build_ingestion_batch(
     for rec, dense, sparse, colbert in zip(
         records, dense_vecs, sparse_weights, colbert_vecs, strict=True
     ):
-        point_id = generate_point_id(rec.complex_name, rec.section, rec.apartment_number)
+        point_id = apartment_point_id(rec.complex_name, rec.section, rec.apartment_number)
         vector_dict: dict = {
             "dense": dense,
             "bm42": SparseVector(indices=sparse["indices"], values=sparse["values"]),
