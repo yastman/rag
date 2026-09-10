@@ -62,6 +62,10 @@ class QdrantHybridWriter:
     Vector Names:
     - dense: BGE-M3 1024-dim
     - bm42: BGE-M3 sparse (named 'bm42' for backward compat with existing collection)
+    - colbert: BGE-M3 multivector (late-interaction reranking)
+
+    All three named vectors are mandatory per point (#3373): incomplete
+    responses are rejected before the first Qdrant mutation.
     """
 
     BGE_M3_BATCH_SIZE = 32
@@ -272,6 +276,49 @@ class QdrantHybridWriter:
             f"for {source_path}"
         )
 
+    @staticmethod
+    def _validate_point_vectors(points: list[PointStruct], *, source_path: str) -> None:
+        """Reject incomplete points before the first Qdrant mutation (#3373).
+
+        Every upserted point must carry the full named-vector set with exact
+        cardinality: a non-empty ``dense`` row, a ``bm42`` sparse vector with
+        equal-length non-empty indices/values, and a non-empty ``colbert``
+        multivector with non-empty token rows. Any violation raises before
+        ``_upsert_points_in_batches`` so an invalid BGE hybrid response
+        performs zero writes instead of silently persisting partial vectors.
+        """
+        problems: list[str] = []
+        for i, point in enumerate(points):
+            vectors = point.vector if isinstance(point.vector, dict) else {}
+            dense = vectors.get("dense")
+            sparse = vectors.get("bm42")
+            colbert = vectors.get("colbert")
+
+            point_problems: list[str] = []
+            if not isinstance(dense, (list, tuple)) or not dense:
+                point_problems.append("dense missing/empty")
+            if (
+                not isinstance(sparse, SparseVector)
+                or not sparse.indices
+                or not sparse.values
+                or len(sparse.indices) != len(sparse.values)
+            ):
+                point_problems.append("bm42 missing/empty/mismatched")
+            if (
+                not isinstance(colbert, (list, tuple))
+                or not colbert
+                or any(not isinstance(row, (list, tuple)) or not row for row in colbert)
+            ):
+                point_problems.append("colbert missing/empty")
+            if point_problems:
+                problems.append(f"point {i}: {'; '.join(point_problems)}")
+
+        if problems:
+            raise ValueError(
+                "Incomplete BGE hybrid vectors; refusing any Qdrant write for "
+                f"{source_path} ({'; '.join(problems)})"
+            )
+
     def _upsert_points_in_batches(
         self,
         *,
@@ -469,6 +516,11 @@ class QdrantHybridWriter:
                 )
                 points.append(point)
                 new_ids.append(point_id)
+
+            # Step 3.5: Completeness gate — every point must carry dense, bm42
+            # and colbert with exact cardinality. Runs before the first upsert
+            # so an invalid BGE hybrid response performs zero writes (#3373).
+            self._validate_point_vectors(points, source_path=source_path)
 
             # Step 4: Upsert replacement points first.
             stats.points_upserted = self._upsert_points_in_batches(

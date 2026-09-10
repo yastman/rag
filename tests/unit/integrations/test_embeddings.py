@@ -147,6 +147,7 @@ class TestBGEM3HybridEmbeddings:
         hybrid_response = {
             "dense_vecs": [[0.1, 0.2, 0.3]],
             "lexical_weights": [{"indices": [1, 5], "values": [0.1, 0.5]}],
+            "colbert_vecs": [[[0.2] * 1024] * 3],
         }
         mock_response = httpx.Response(
             200,
@@ -163,6 +164,7 @@ class TestBGEM3HybridEmbeddings:
         hybrid_response = {
             "dense_vecs": [[0.1]],
             "lexical_weights": [{"indices": [1], "values": [0.1]}],
+            "colbert_vecs": [[[0.2] * 1024]],
         }
         mock_response = httpx.Response(
             200,
@@ -183,6 +185,7 @@ class TestBGEM3HybridEmbeddings:
         hybrid_response = {
             "dense_vecs": [[0.1]],
             "lexical_weights": [{"indices": [1], "values": [0.1]}],
+            "colbert_vecs": [[[0.2] * 1024]],
         }
         mock_response = httpx.Response(
             200,
@@ -205,6 +208,7 @@ class TestBGEM3HybridEmbeddings:
         hybrid_response = {
             "dense_vecs": [[0.1, 0.2]],
             "lexical_weights": [{"indices": [1], "values": [0.5]}],
+            "colbert_vecs": [[[0.3] * 1024] * 2],
         }
         mock_response = httpx.Response(
             200,
@@ -305,7 +309,11 @@ class TestBGEM3HybridRetry:
         """Retries on transient transport errors and succeeds on second attempt."""
         ok_response = httpx.Response(
             200,
-            json={"dense_vecs": [[0.1, 0.2]], "lexical_weights": [{"1": 0.5}]},
+            json={
+                "dense_vecs": [[0.1, 0.2]],
+                "lexical_weights": [{"1": 0.5}],
+                "colbert_vecs": [[[0.3] * 1024] * 2],
+            },
             request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
         )
         call_count = 0

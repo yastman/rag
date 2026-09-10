@@ -3,7 +3,7 @@
 Single internal SDK layer for all BGE-M3 interactions:
 - /encode/dense  — dense embeddings (1024-dim)
 - /encode/sparse — sparse embeddings (lexical_weights)
-- /encode/hybrid — combined dense + sparse (+ optional ColBERT) in one call
+- /encode/hybrid — dense + sparse + ColBERT in one call (completeness-validated, #3373)
 - /encode/colbert — ColBERT multivectors
 - /rerank        — ColBERT MaxSim reranking
 
@@ -93,6 +93,41 @@ def _parse_hybrid_response(data: dict[str, Any]) -> HybridResult:
     )
 
 
+class BGEHybridResponseError(ValueError):
+    """A raw /encode/hybrid response violated the completeness contract (#3373).
+
+    Every hybrid response must carry dense_vecs, lexical_weights, and
+    colbert_vecs with exactly one entry per requested text. Missing, empty,
+    and cardinality-mismatched families are protocol errors so ingestion
+    never receives an incomplete vector set and no partial ingestion can be
+    persisted.
+    """
+
+
+def _validate_hybrid_families(parsed: HybridResult, chunk_len: int, offset: int) -> None:
+    """Reject incomplete /encode/hybrid responses before callers see them (#3373).
+
+    ``offset`` is the chunk's global start position in the original input
+    (#3375), so batched requests report the failing global text range.
+    """
+    expected = f"expected {chunk_len} entries for global texts [{offset}, {offset + chunk_len})"
+    if len(parsed.dense_vecs) != chunk_len:
+        raise BGEHybridResponseError(
+            f"/encode/hybrid incomplete response: dense_vecs {expected}, "
+            f"got {len(parsed.dense_vecs)}"
+        )
+    if len(parsed.lexical_weights) != chunk_len:
+        raise BGEHybridResponseError(
+            f"/encode/hybrid incomplete response: lexical_weights {expected}, "
+            f"got {len(parsed.lexical_weights)}"
+        )
+    if parsed.colbert_vecs is None or len(parsed.colbert_vecs) != chunk_len:
+        got = "missing" if parsed.colbert_vecs is None else str(len(parsed.colbert_vecs))
+        raise BGEHybridResponseError(
+            f"/encode/hybrid incomplete response: colbert_vecs {expected}, got {got}"
+        )
+
+
 @dataclass
 class DenseResult:
     """Result from /encode/dense."""
@@ -113,7 +148,12 @@ class SparseResult:
 
 @dataclass
 class HybridResult:
-    """Result from /encode/hybrid (dense + sparse + optional ColBERT)."""
+    """Result from /encode/hybrid (dense + sparse + colbert).
+
+    ``colbert_vecs`` is typed optional for the raw-parse layer only; the
+    ``encode_hybrid`` methods enforce complete three-family responses and
+    raise :class:`BGEHybridResponseError` otherwise (#3373).
+    """
 
     dense_vecs: list[list[float]]
     lexical_weights: list[dict[str, Any]]
@@ -265,17 +305,21 @@ class BGEM3Client:
 
     @bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
-        """Encode texts to dense + sparse (+ optional ColBERT) via /encode/hybrid.
+        """Encode texts to dense + sparse + colbert via /encode/hybrid.
 
         One hybrid request per chunk of at most ``min(batch_size, 64)`` texts;
-        a single request when the input already fits (#3375).
+        a single request when the input already fits (#3375). Each raw
+        response must be complete — dense_vecs, lexical_weights, and
+        colbert_vecs with exactly ``len(chunk)`` entries — and any missing,
+        empty, or mismatched family raises :class:`BGEHybridResponseError`
+        so callers fail before persisting partial vectors (#3373).
         """
         if not texts:
             return HybridResult(dense_vecs=[], lexical_weights=[])
         client = await self._get_client()
         dense_vecs: list[list[float]] = []
         lexical_weights: list[dict[str, Any]] = []
-        colbert_vecs: list[list[list[float]]] | None = None
+        colbert_vecs: list[list[list[float]]] = []
         partial_failures: list[dict[str, Any]] = []
         total_time: float | None = None
         for offset, chunk in _request_chunks(texts, self.batch_size):
@@ -285,12 +329,10 @@ class BGEM3Client:
             )
             resp.raise_for_status()
             parsed = _parse_hybrid_response(resp.json())
+            _validate_hybrid_families(parsed, len(chunk), offset)
             dense_vecs.extend(parsed.dense_vecs)
             lexical_weights.extend(parsed.lexical_weights)
-            if parsed.colbert_vecs is not None:
-                if colbert_vecs is None:
-                    colbert_vecs = []
-                colbert_vecs.extend(parsed.colbert_vecs)
+            colbert_vecs.extend(parsed.colbert_vecs or [])
             if parsed.processing_time is not None:
                 total_time = (total_time or 0.0) + parsed.processing_time
             partial_failures.extend(
@@ -475,13 +517,17 @@ class BGEM3SyncClient:
         This is 3x more efficient than calling encode_dense + encode_sparse +
         encode_colbert separately, as the BGE-M3 model runs one forward pass
         per request. Inputs larger than ``min(batch_size, 64)`` texts are sent
-        as sequential hybrid requests and merged in order (#3375).
+        as sequential hybrid requests and merged in order (#3375). Each raw
+        response must be complete — dense_vecs, lexical_weights, and
+        colbert_vecs with exactly ``len(chunk)`` entries — and any missing,
+        empty, or mismatched family raises :class:`BGEHybridResponseError`
+        so ingestion fails before any Qdrant write (#3373).
         """
         if not texts:
             return HybridResult(dense_vecs=[], lexical_weights=[])
         dense_vecs: list[list[float]] = []
         lexical_weights: list[dict[str, Any]] = []
-        colbert_vecs: list[list[list[float]]] | None = None
+        colbert_vecs: list[list[list[float]]] = []
         partial_failures: list[dict[str, Any]] = []
         total_time: float | None = None
         for offset, chunk in _request_chunks(texts, self.batch_size):
@@ -491,12 +537,10 @@ class BGEM3SyncClient:
             )
             resp.raise_for_status()
             parsed = _parse_hybrid_response(resp.json())
+            _validate_hybrid_families(parsed, len(chunk), offset)
             dense_vecs.extend(parsed.dense_vecs)
             lexical_weights.extend(parsed.lexical_weights)
-            if parsed.colbert_vecs is not None:
-                if colbert_vecs is None:
-                    colbert_vecs = []
-                colbert_vecs.extend(parsed.colbert_vecs)
+            colbert_vecs.extend(parsed.colbert_vecs or [])
             if parsed.processing_time is not None:
                 total_time = (total_time or 0.0) + parsed.processing_time
             partial_failures.extend(

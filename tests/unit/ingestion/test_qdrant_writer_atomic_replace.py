@@ -23,6 +23,7 @@ import pytest
 from qdrant_client.models import HasIdCondition
 
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
+from src.services.bge_m3_client import HybridResult
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +122,29 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
 
         assert stats.errors is not None
         assert "Qdrant upsert failed" in stats.errors[0]
+        mock_qdrant_client.delete.assert_not_called()
+
+    def test_incomplete_hybrid_vectors_perform_zero_mutations(
+        self, writer_local, mock_qdrant_client, mock_bge_client
+    ):
+        """A hybrid response missing colbert (#3373) must not upsert NOR sweep.
+
+        The validation gate runs before the first upsert, so the atomic-replace
+        sequence never starts: existing points stay completely untouched.
+        """
+        mock_qdrant_client.count.return_value = MagicMock(count=3)
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.2] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=None,
+        )
+
+        chunk = _make_chunk()
+        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+
+        assert stats.errors is not None
+        assert stats.points_upserted == 0
+        mock_qdrant_client.upsert.assert_not_called()
         mock_qdrant_client.delete.assert_not_called()
 
 
