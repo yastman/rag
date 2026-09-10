@@ -2,7 +2,9 @@
 # Telegram Bot — single uv authority (#3210)
 #
 # Dependency resolution uses the repo-root pyproject.toml + uv.lock
-# (`--extra telegram`) — the ONLY authority for the Telegram runtime.
+# (`--extra telegram --extra redis`) — the ONLY authority for the
+# Redis-enabled Telegram runtime (#3365: base declares no Redis package;
+# the bot image opts in via the explicit `redis` extra).
 # The former telegram_bot/pyproject.toml + telegram_bot/uv.lock nested
 # authority drifted from root (LiteLLM 1.88.1 vs 1.98.0, OpenAI 2.37.0
 # vs 2.54.0, redisvl 0.18.2 vs 0.23.0) and was retired by #3210.
@@ -26,14 +28,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --locked --no-dev --extra telegram --no-install-project
+    uv sync --locked --no-dev --extra telegram --extra redis --no-install-project
 
 # Manifest layer (busts cache when the root manifest/lock changes)
 COPY pyproject.toml uv.lock ./
 
 # Reconcile .venv with the exact root lock after a manifest change
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --extra telegram
+    uv sync --locked --no-dev --extra telegram --extra redis
 
 # ====== RUNTIME STAGE ======
 FROM python:3.13-slim-bookworm@sha256:e4fa1f978c539608a10cdf74700ac32a3f719dfc6e8b6b6001da82deb36302a2 AS runtime

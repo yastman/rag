@@ -16,7 +16,7 @@ and [`README.md`](README.md) for the documentation map.
 
 ```bash
 cp .env.example .env     # fill in credentials (Telegram token, API keys)
-uv sync --frozen --extra telegram # root lock owns application + bot dependencies
+uv sync --frozen --extra telegram --extra redis # root lock owns app + bot deps; redis extra = Redis-enabled bot runtime (#3365)
 make setup-hooks         # install commit and push hooks
 ```
 
@@ -25,7 +25,7 @@ make setup-hooks         # install commit and push hooks
 ```powershell
 uv python install 3.12
 Copy-Item .env.example .env        # fill in credentials
-uv sync --frozen --extra telegram # application + bot dependencies
+uv sync --frozen --extra telegram --extra redis # app + bot deps; redis extra = Redis-enabled bot runtime (#3365)
 uv run pre-commit install
 uv run pre-commit install --hook-type pre-push
 # Preflight validation:

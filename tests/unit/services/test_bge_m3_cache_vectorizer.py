@@ -23,6 +23,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 
 BGE_DENSE_DIMS = 1024
 
@@ -37,7 +39,12 @@ def _make_vectorizer() -> Any:
 
     Single construction point so the pre/post-refactor parity run asserts the
     identical behavior list against both implementations.
+
+    #3365: the module under test imports redisvl, which lives in the optional
+    ``redis`` extra — skip this characterization in the lean base+dev lane;
+    it runs wherever the redis extra is installed.
     """
+    pytest.importorskip("redisvl")
     from src.services.vectorizers import create_bge_m3_cache_vectorizer
 
     return create_bge_m3_cache_vectorizer(base_url="http://bge-m3:8000")

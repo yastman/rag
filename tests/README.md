@@ -12,6 +12,7 @@ Run from the repository root in an isolated worktree. Use Python 3.12 and the fr
 ```bash
 uv sync --frozen                    # Base + dev; exact check-frozen environment
 uv sync --frozen --extra telegram   # When exercising Telegram owners
+uv sync --frozen --extra redis      # Redis client cohort (redis-py + RedisVL, #3365)
 uv sync --frozen --extra bge-extras # FastAPI endpoint tests, not the BGE model environment
 ```
 

@@ -547,14 +547,16 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "qdrant-client" },
-    { name = "redis" },
-    { name = "redisvl" },
     { name = "tenacity" },
 ]
 
 [package.optional-dependencies]
 bge-extras = [
     { name = "fastapi" },
+]
+redis = [
+    { name = "redis" },
+    { name = "redisvl" },
 ]
 telegram = [
     { name = "aiogram" },
@@ -611,12 +613,12 @@ requires-dist = [
     { name = "python-dotenv" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "qdrant-client", specifier = ">=1.19.0" },
-    { name = "redis", specifier = ">=7.1.0,<8" },
-    { name = "redisvl", specifier = ">=0.26.0,<0.27" },
+    { name = "redis", marker = "extra == 'redis'", specifier = ">=7.1.0,<8" },
+    { name = "redisvl", marker = "extra == 'redis'", specifier = ">=0.26.0,<0.27" },
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "uvloop", marker = "sys_platform != 'win32' and extra == 'telegram'", specifier = ">=0.21.0" },
 ]
-provides-extras = ["telegram", "bge-extras"]
+provides-extras = ["telegram", "redis", "bge-extras"]
 
 [package.metadata.requires-dev]
 dev = [
