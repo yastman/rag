@@ -1,7 +1,9 @@
 """Incremental apartment ingestion runner.
 
-Tracks row-level changes via SHA-256 hash of mutable fields. Only re-embeds
-and upserts rows that changed since last run. State persisted to JSON file.
+Tracks row-level changes via a fingerprint of the full observable snapshot
+(canonical payload + embedding text, #3371). Only re-embeds and upserts rows
+that changed since last run; removed rows are deleted from Qdrant. State
+persisted to JSON file and committed only after Qdrant success.
 
 Usage:
     # Full re-index (first run or force)
@@ -81,18 +83,21 @@ class IncrementalApartmentIngester:
         """Run ingestion and return stats.
 
         By default, compares against persisted state (incremental mode).
-        When ``force_full`` is True, treats all rows as changed without mutating
-        state in dry-run mode.
+        When ``force_full`` is True, every current row is re-embedded while the
+        prior state is still retained for the deletion diff, so points whose
+        rows vanished from the CSV are removed (#3371).
         """
         rows = read_apartments_csv(self.csv_path)
-        prev_state = {} if force_full else self._load_state()
+        # Prior state is retained in BOTH modes (#3371): force_full must still
+        # delete stale points for rows that vanished from the CSV source.
+        prev_state = self._load_state()
 
         changed: list[ApartmentRecord] = []
         new_state: dict[str, str] = {}
 
         for unique_key, change_key, record in rows:
             new_state[unique_key] = change_key
-            if prev_state.get(unique_key) != change_key:
+            if force_full or prev_state.get(unique_key) != change_key:
                 changed.append(record)
 
         removed_keys = set(prev_state) - set(new_state)
@@ -118,6 +123,8 @@ class IncrementalApartmentIngester:
             logger.info("Dry-run mode: skipping upsert/delete and state update")
             return stats
 
+        # State commits only AFTER the Qdrant upsert and delete succeed (#3371):
+        # a failed write must leave the prior diff state intact for retry.
         if changed:
             self._embed_and_upsert(changed)
         if removed_keys:

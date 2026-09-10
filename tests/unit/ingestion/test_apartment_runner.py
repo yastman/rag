@@ -167,11 +167,14 @@ class TestIncrementalIngester:
         delete_mock.assert_called_once()
         assert stats["removed"] == 1
 
-    def test_force_full_dry_run_keeps_existing_state_file(self, tmp_path: Path) -> None:
+    def test_force_full_dry_run_reports_removal_diff_without_mutating_state(
+        self, tmp_path: Path
+    ) -> None:
+        """#3371: force_full retains prior state for the deletion diff even in
+        dry-run — vanished state keys are reported and the file is untouched."""
         csv_path = tmp_path / "apartments.csv"
         _write_csv([SAMPLE_ROW], csv_path)
         state_path = tmp_path / ".ingestion_state.json"
-        original_state = {"legacy::row::1": "oldhash"}
         state_path.write_text('{"legacy::row::1": "oldhash"}', encoding="utf-8")
 
         ingester = IncrementalApartmentIngester(
@@ -182,9 +185,47 @@ class TestIncrementalIngester:
         stats = ingester.run_incremental(dry_run=True, force_full=True)
 
         assert stats["changed"] == 1
-        assert stats["removed"] == 0
+        assert stats["removed"] == 1
         assert state_path.exists()
-        assert ingester._load_state() == original_state
+        assert ingester._load_state() == {"legacy::row::1": "oldhash"}
+
+    def test_force_full_reembeds_current_rows_and_deletes_vanished(self, tmp_path: Path) -> None:
+        """#3371: force_full re-embeds every current row even when its hash is
+        unchanged, while the retained prior state still drives deletion of the
+        points whose rows vanished from the CSV."""
+        csv_path = tmp_path / "apartments.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        state_path = tmp_path / ".ingestion_state.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "Test Complex::A-1::101": "stalehash",
+                    "Gone Complex::B-2::999": "deadhash",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        ingester = IncrementalApartmentIngester(
+            csv_path=str(csv_path),
+            qdrant_url="http://localhost:6333",
+            bge_url="http://localhost:8000",
+            state_path=str(state_path),
+        )
+
+        with (
+            patch.object(ingester, "_embed_and_upsert") as embed_mock,
+            patch.object(ingester, "_delete_removed_points") as delete_mock,
+        ):
+            stats = ingester.run_incremental(dry_run=False, force_full=True)
+
+        embed_mock.assert_called_once()
+        reembedded = embed_mock.call_args.args[0]
+        assert [record.apartment_number for record in reembedded] == ["101"]
+        delete_mock.assert_called_once()
+        assert delete_mock.call_args.args[0] == {"Gone Complex::B-2::999"}
+        assert stats == {"total": 1, "changed": 1, "unchanged": 0, "removed": 1}
+        assert set(ingester._load_state()) == {"Test Complex::A-1::101"}
 
 
 class TestHybridEncoding:
@@ -350,3 +391,52 @@ class TestCollectionAndCredentialPropagation:
             ingester.run_incremental()
 
         MockQdrant.return_value.close.assert_called_once()
+
+
+class TestStateCommitOnlyAfterQdrantSuccess:
+    """#3371: the state file must commit only after the Qdrant upsert AND
+    delete succeed, so a failed write leaves the prior diff state intact."""
+
+    _ORIGINAL_STATE = {
+        "Test Complex::A-1::101": "stalehash",
+        "Gone Complex::B-2::999": "deadhash",
+    }
+
+    def _ingester_with_prior_state(self, tmp_path: Path) -> IncrementalApartmentIngester:
+        csv_path = tmp_path / "apt.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        state_path = tmp_path / ".state.json"
+        state_path.write_text(json.dumps(self._ORIGINAL_STATE), encoding="utf-8")
+        return IncrementalApartmentIngester(
+            csv_path=str(csv_path),
+            qdrant_url="http://localhost:6333",
+            bge_url="http://localhost:8000",
+            state_path=str(state_path),
+        )
+
+    def test_state_not_committed_when_upsert_fails(self, tmp_path: Path) -> None:
+        ingester = self._ingester_with_prior_state(tmp_path)
+
+        with (
+            patch("src.services.bge_m3_client.BGEM3SyncClient") as MockBGE,
+            patch("qdrant_client.QdrantClient") as MockQdrant,
+            pytest.raises(RuntimeError, match="upsert boom"),
+        ):
+            MockBGE.return_value.encode_hybrid.return_value = _hybrid_for_row_count(1)
+            MockQdrant.return_value.upsert.side_effect = RuntimeError("upsert boom")
+            ingester.run_incremental()
+
+        assert ingester._load_state() == self._ORIGINAL_STATE
+
+    def test_state_not_committed_when_delete_fails(self, tmp_path: Path) -> None:
+        ingester = self._ingester_with_prior_state(tmp_path)
+
+        with (
+            patch.object(ingester, "_embed_and_upsert"),
+            patch("qdrant_client.QdrantClient") as MockQdrant,
+            pytest.raises(RuntimeError, match="delete boom"),
+        ):
+            MockQdrant.return_value.delete.side_effect = RuntimeError("delete boom")
+            ingester.run_incremental()
+
+        assert ingester._load_state() == self._ORIGINAL_STATE
