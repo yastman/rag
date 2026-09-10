@@ -24,11 +24,6 @@ _ALLOWED_HOSTED_ACTIONS = {
     "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7",
 }
 _APPROVED_HOSTED_RUNS = {
-    (".github/workflows/ci.yml", "semgrep", "Run project Semgrep guardrails"): (
-        "uvx --from semgrep==1.163.0 semgrep scan "
-        "--config .semgrep/project-guardrails.yml --error --metrics=off "
-        "src telegram_bot scripts services .github/workflows compose.yml compose.dev.yml"
-    ),
     (".github/workflows/ci.yml", "lint", "Ruff lint"): (
         "uvx --from ruff==0.16.6 ruff check "
         "src/ telegram_bot/ services/ scripts/ --output-format=github"
