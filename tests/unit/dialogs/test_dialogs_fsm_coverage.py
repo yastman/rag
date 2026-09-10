@@ -1,16 +1,13 @@
-"""FSM coverage tests for ``telegram_bot.dialogs.states`` (issue #1093).
+"""FSM coverage tests for ``telegram_bot/dialogs/states`` (#3390).
 
-These tests enforce three contracts that the dialog backlog called out:
+These tests enforce two contracts:
 
-1. **State enum coverage** — every documented ``StatesGroup`` exposes the
+1. **State enum coverage** — every live ``StatesGroup`` exposes the
    expected ``State`` attributes. Catches accidental rename / removal.
-2. **Wizard step ordering** — multi-step wizards (funnel, create lead,
-   create contact, create task) reference their states in the source
-   files in the documented order. Catches re-ordering bugs that would
-   silently skip a step.
-3. **No dead states** — every ``State`` declared in ``states.py`` is
-   referenced by at least one dialog module via ``state=<group>.<name>``.
-   Dead states usually mean a refactor left a step orphaned.
+2. **No dead states** — every ``State`` declared in ``states.py`` is
+   referenced by at least one production module via ``<Group>.<state>``.
+   There is no allowlist: a state that loses its owner must be deleted
+   from ``states.py``, not grandfathered (issue #3390).
 
 The tests parse files as text/AST and never import the aiogram-dialog
 runtime, so they run on the fast ``test-unit`` lane without optional
@@ -51,9 +48,8 @@ _NOISE_PARTS: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 
 
-# (StatesGroup class name, expected state attribute names) — locked from #1093
+# (StatesGroup class name, expected state attribute names) — live groups only.
 EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
-    # Live dialog groups
     "ClientMenuSG": ("main",),
     "SettingsSG": ("main", "language"),
     "FunnelSG": (
@@ -88,27 +84,6 @@ EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "CatalogSG": ("results", "empty", "details"),
     "DemoSG": ("intro", "results"),
-    # Archived compatibility stubs (kept for ImportError safety, not on active path)
-    "AIAdvisorSG": ("main", "loading", "result"),
-    "CrmQuickActionSG": (
-        "waiting_note",
-        "waiting_task",
-        "edit_task_choose_field",
-        "edit_task_text",
-        "edit_task_date",
-    ),
-    "ContactsMenuSG": ("main",),
-    "CreateContactSG": ("name", "phone", "email", "confirm"),
-    "SearchContactsSG": ("query", "results"),
-    "LeadsMenuSG": ("main",),
-    "CRMMenuSG": ("main",),
-    "ManagerMenuSG": ("main",),
-    "CreateLeadSG": ("name", "phone", "budget", "confirm"),
-    "SearchSG": ("query", "results"),
-    "CreateNoteSG": ("text", "confirm"),
-    "CreateTaskSG": ("title", "due_date", "confirm"),
-    "MyTasksSG": ("main", "task_detail"),
-    "TasksMenuSG": ("main",),
 }
 
 
@@ -116,18 +91,27 @@ EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
 def test_states_group_exposes_expected_states(
     group_name: str, expected_states: tuple[str, ...]
 ) -> None:
-    """Each StatesGroup must define the documented State attributes (#1093)."""
+    """Each live StatesGroup must define the documented State attributes."""
     cls = getattr(states_module, group_name, None)
-    assert cls is not None, f"telegram_bot.dialogs.states must expose {group_name!r} (issue #1093)."
+    assert cls is not None, f"telegram_bot.dialogs.states must expose {group_name!r}."
     assert inspect.isclass(cls) and issubclass(cls, StatesGroup), (
         f"{group_name!r} must be a StatesGroup subclass."
     )
     for state_name in expected_states:
         attr = getattr(cls, state_name, None)
-        assert attr is not None, f"{group_name}.{state_name} must be defined (issue #1093)."
+        assert attr is not None, f"{group_name}.{state_name} must be defined."
         assert isinstance(attr, State), (
             f"{group_name}.{state_name} must be a State instance, got {type(attr)!r}."
         )
+
+
+def _declared_state_groups() -> dict[str, type]:
+    """Every ``StatesGroup`` subclass declared in ``telegram_bot/dialogs/states.py``."""
+    return {
+        name: value
+        for name, value in inspect.getmembers(states_module, inspect.isclass)
+        if issubclass(value, StatesGroup) and value is not StatesGroup
+    }
 
 
 def test_no_unexpected_states_groups_are_silently_dropped() -> None:
@@ -135,17 +119,13 @@ def test_no_unexpected_states_groups_are_silently_dropped() -> None:
     captured by the EXPECTED_STATE_GROUPS contract above. This test fails
     *forward* — it nudges the author to lock in the new group's states.
     """
-    declared = {
-        name
-        for name, value in inspect.getmembers(states_module, inspect.isclass)
-        if issubclass(value, StatesGroup) and value is not StatesGroup
-    }
+    declared = set(_declared_state_groups())
     missing = declared - set(EXPECTED_STATE_GROUPS.keys())
     assert not missing, (
         "New StatesGroup(s) found in telegram_bot/dialogs/states.py that are "
         f"not yet pinned by tests/unit/dialogs/test_dialogs_fsm_coverage.py: "
         f"{sorted(missing)!r}. Add their expected State names to "
-        "EXPECTED_STATE_GROUPS so transitions stay covered (#1093)."
+        "EXPECTED_STATE_GROUPS so transitions stay covered."
     )
 
 
@@ -161,51 +141,18 @@ def _extract_state_references(file_path: Path, group_name: str) -> list[str]:
     return pattern.findall(text)
 
 
-# No multi-step wizards with documented step order remain after CRM removal.
-# FunnelSG windows are defined in funnel/_windows.py and follow the state
-# declaration order; no external ordering contract exists for it.
-WIZARD_STEP_FILES: dict[str, tuple[Path, tuple[str, ...]]] = {}
-
-
-@pytest.mark.parametrize("group_name", list(WIZARD_STEP_FILES.keys()))
-def test_wizard_steps_appear_in_documented_order(group_name: str) -> None:
-    """Wizard handlers must register state windows in the documented order."""
-    file_path, expected_order = WIZARD_STEP_FILES[group_name]
-    assert file_path.exists(), f"Expected dialog file {file_path} to exist"
-    refs = _extract_state_references(file_path, group_name)
-
-    # Ignore router-style references (e.g. start dialog at first step) by
-    # de-duplicating consecutive repeats and keeping first appearance only.
-    seen: list[str] = []
-    for ref in refs:
-        if ref in seen:
-            continue
-        if ref in expected_order:
-            seen.append(ref)
-
-    expected_subset = [s for s in expected_order if s in refs]
-    assert seen == expected_subset, (
-        f"{group_name} wizard step order in {file_path.name!r} drifted from "
-        f"the documented sequence.\n  expected (first-appearance order): {expected_subset!r}\n"
-        f"  actual: {seen!r}"
-    )
-
-
 # ---------------------------------------------------------------------------
-# 3. No dead states — every declared State must be referenced by a dialog
+# 3. No dead states — every declared State must be referenced by a
+#    production module (positive contract, no allowlist — issue #3390)
 # ---------------------------------------------------------------------------
-
-
-def _all_dialog_files() -> list[Path]:
-    return sorted(p for p in DIALOGS_DIR.glob("*.py") if p.name not in {"__init__.py", "states.py"})
 
 
 def _all_production_files() -> list[Path]:
-    """Return every ``.py`` under ``telegram_bot/`` except dialog states/init.
+    """Return every ``.py`` under ``telegram_bot/`` except dialog states.
 
     States can legitimately be wired by handler modules (e.g. raw aiogram FSM
-    in ``telegram_bot/handlers/crm_callbacks.py``) or by the top-level bot
-    module, not only by dialog windows.
+    in ``telegram_bot/handlers/catalog.py``) or by dialog window modules, not
+    only by one of them.
 
     We filter out third-party / cache directories so a stray virtualenv at
     ``telegram_bot/.venv/`` (gitignored but easy to create accidentally with
@@ -226,78 +173,31 @@ def _state_is_referenced(group_name: str, state_name: str, dialog_sources: str) 
     return bool(pattern.search(dialog_sources))
 
 
-# Known-dead states that pre-date #1093 and are tracked separately.
-# - ``SearchSG`` was superseded by ``SearchLeadsSG``/``SearchContactsSG`` in #697
-#   but the enum is still imported by ``tests/unit/dialogs/test_crm_foundation.py``.
-# - ``CrmSubmenuSG`` was kept "for backward compatibility" per its docstring and
-#   is superseded by ``CRMMenuSG``.
-# Removing them is out of scope for #1093 — flagged here so the contract is
-# explicit and a future cleanup PR can drop the allowlist + the unused classes.
-# Archived CRM states are kept as compatibility stubs in states.py but are NOT
-# referenced by any production dialog/handler. They are grandfathered here so
-# test_every_declared_state_is_referenced_by_a_dialog does not flag them.
-_EXTERNALLY_REFERENCED_ALLOWLIST: set[tuple[str, str]] = {
-    # Archived -- not on active production path
-    ("AIAdvisorSG", "main"),
-    ("AIAdvisorSG", "loading"),
-    ("AIAdvisorSG", "result"),
-    ("CrmQuickActionSG", "waiting_note"),
-    ("CrmQuickActionSG", "waiting_task"),
-    ("CrmQuickActionSG", "edit_task_choose_field"),
-    ("CrmQuickActionSG", "edit_task_text"),
-    ("CrmQuickActionSG", "edit_task_date"),
-    ("ContactsMenuSG", "main"),
-    ("CreateContactSG", "name"),
-    ("CreateContactSG", "phone"),
-    ("CreateContactSG", "email"),
-    ("CreateContactSG", "confirm"),
-    ("SearchContactsSG", "query"),
-    ("SearchContactsSG", "results"),
-    ("LeadsMenuSG", "main"),
-    ("CRMMenuSG", "main"),
-    ("ManagerMenuSG", "main"),
-    ("CreateLeadSG", "name"),
-    ("CreateLeadSG", "phone"),
-    ("CreateLeadSG", "budget"),
-    ("CreateLeadSG", "confirm"),
-    ("SearchSG", "query"),
-    ("SearchSG", "results"),
-    ("CreateNoteSG", "text"),
-    ("CreateNoteSG", "confirm"),
-    ("CreateTaskSG", "title"),
-    ("CreateTaskSG", "due_date"),
-    ("CreateTaskSG", "confirm"),
-    ("MyTasksSG", "main"),
-    ("MyTasksSG", "task_detail"),
-    ("TasksMenuSG", "main"),
-}
+def _declared_states(group_cls: type) -> list[str]:
+    """State attribute names declared on a StatesGroup subclass."""
+    return [name for name, value in inspect.getmembers(group_cls) if isinstance(value, State)]
 
 
 def test_every_declared_state_is_referenced_by_a_dialog() -> None:
-    """No dead State definitions — each must be referenced as ``state=...``.
+    """No dead State definitions — each must be referenced as ``<Group>.<state>``.
 
-    Helps catch refactors that leave a State enum behind after the window
-    was removed. Search scope is the whole ``telegram_bot/`` package because
-    a few groups are still wired through raw aiogram FSM in
-    ``telegram_bot/handlers/`` (e.g. the phone collector handler) rather
-    than through aiogram-dialog windows. ``CrmQuickActionSG`` was migrated
-
-
+    Positive contract (#3390): the scan covers every ``StatesGroup`` declared
+    in ``states.py`` and carries no allowlist. A State that is no longer
+    wired by any dialog/handler module must be deleted from ``states.py``,
+    not exempted here.
     """
     sources = "\n".join(p.read_text(encoding="utf-8") for p in _all_production_files())
 
-    orphaned: list[tuple[str, str]] = []
-    for group_name, expected_states in EXPECTED_STATE_GROUPS.items():
-        for state_name in expected_states:
-            if (group_name, state_name) in _EXTERNALLY_REFERENCED_ALLOWLIST:
-                continue
+    orphaned: list[str] = []
+    for group_name, group_cls in sorted(_declared_state_groups().items()):
+        for state_name in _declared_states(group_cls):
             if not _state_is_referenced(group_name, state_name, sources):
-                orphaned.append((group_name, state_name))
+                orphaned.append(f"{group_name}.{state_name}")
 
     assert not orphaned, (
         "Orphaned States found — declared in states.py but never referenced "
         "by any production module under telegram_bot/. Either wire them into "
-        f"a dialog/handler or remove them.\n  Orphans: {orphaned!r}"
+        f"a dialog/handler or delete them (issue #3390).\n  Orphans: {orphaned!r}"
     )
 
 
