@@ -29,15 +29,20 @@ def _dep_names(deps: list[str]) -> set[str]:
 
 
 def test_base_dependencies_are_core_only() -> None:
-    """Heavy adapters should not be installed by the default runtime install."""
-    base = _dep_names(_project()["project"]["dependencies"])
+    """Heavy adapters should not be installed by the default runtime install.
+
+    #3365: the Redis client cohort (redis-py, RedisVL) left the base
+    dependencies for the explicit ``redis`` extra — base declares no Redis
+    package; the Redis-enabled Telegram image opts in via
+    ``--extra telegram --extra redis``.
+    """
+    project = _project()
+    base = _dep_names(project["project"]["dependencies"])
 
     expected_core = {
         "litellm",
         "openai",
         "qdrant-client",
-        "redis",
-        "redisvl",
         "pydantic-settings",
         "httpx",
         "tenacity",
@@ -47,6 +52,8 @@ def test_base_dependencies_are_core_only() -> None:
         "aiogram",
         "aiogram-dialog",
         "fluentogram",
+        "redis",
+        "redisvl",
         "anthropic",
         "groq",
         "instructor",
@@ -65,6 +72,10 @@ def test_base_dependencies_are_core_only() -> None:
 
     assert expected_core.issubset(base)
     assert base.isdisjoint(forbidden)
+
+    # #3365: the redis extra is the single authority for the client cohort.
+    extras = project["project"]["optional-dependencies"]
+    assert {"redis", "redisvl"}.issubset(_dep_names(extras["redis"]))
 
 
 def test_optional_extras_cover_platform_surfaces() -> None:

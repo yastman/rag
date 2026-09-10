@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -140,7 +141,9 @@ class TestSinglePollerOwnership:
         bot.dp.stop_polling = AsyncMock()
 
         for expected in range(1, POLLING_LOCK_MAX_REFRESH_FAILURES + 1):
-            await polling_lock_heartbeat_tick(bot, max_refresh_failures=POLLING_LOCK_MAX_REFRESH_FAILURES)
+            await polling_lock_heartbeat_tick(
+                bot, max_refresh_failures=POLLING_LOCK_MAX_REFRESH_FAILURES
+            )
             assert bot._polling_lock_consecutive_failures == expected
             assert bot.dp.stop_polling.await_count == (
                 1 if expected == POLLING_LOCK_MAX_REFRESH_FAILURES else 0
@@ -149,17 +152,19 @@ class TestSinglePollerOwnership:
     async def test_transient_refresh_failure_recovers_without_stopping(self) -> None:
         bot = MagicMock()
         bot._polling_lock = MagicMock()
-        bot._polling_lock.refresh = AsyncMock(
-            side_effect=[ConnectionError("blip"), None, None]
-        )
+        bot._polling_lock.refresh = AsyncMock(side_effect=[ConnectionError("blip"), None, None])
         bot._polling_lock_consecutive_failures = 0
         bot.dp.stop_polling = AsyncMock()
 
-        await polling_lock_heartbeat_tick(bot, max_refresh_failures=POLLING_LOCK_MAX_REFRESH_FAILURES)
+        await polling_lock_heartbeat_tick(
+            bot, max_refresh_failures=POLLING_LOCK_MAX_REFRESH_FAILURES
+        )
         assert bot._polling_lock_consecutive_failures == 1
         bot.dp.stop_polling.assert_not_awaited()
 
-        await polling_lock_heartbeat_tick(bot, max_refresh_failures=POLLING_LOCK_MAX_REFRESH_FAILURES)
+        await polling_lock_heartbeat_tick(
+            bot, max_refresh_failures=POLLING_LOCK_MAX_REFRESH_FAILURES
+        )
         assert bot._polling_lock_consecutive_failures == 0
         bot.dp.stop_polling.assert_not_awaited()
 
@@ -169,8 +174,46 @@ class TestSinglePollerOwnership:
 # ---------------------------------------------------------------------------
 
 
+def _ensure_redisvl_filter_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``redisvl.query.filter.Tag`` importable when the redis extra is absent.
+
+    #3365 moved redisvl out of the base dependencies, so the lean base+dev lane
+    no longer ships it. The fail-open characterization below runs against mocked
+    caches; the stub keeps exercising the real ``check_semantic`` code path
+    (filter construction → acheck → hit/miss contract) without the library.
+    The redis-enabled lane exercises the real Tag filter via
+    tests/unit/integrations/test_cache_layers.py.
+    """
+    try:
+        import redisvl.query.filter  # noqa: F401
+
+        return
+    except ModuleNotFoundError:
+        pass
+
+    redisvl_mod = sys.modules.get("redisvl") or ModuleType("redisvl")
+    query_mod = ModuleType("redisvl.query")
+    filter_mod = ModuleType("redisvl.query.filter")
+
+    class StubTag:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def __eq__(self, other: object) -> MagicMock:
+            return MagicMock()
+
+    filter_mod.Tag = StubTag  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "redisvl", redisvl_mod)
+    monkeypatch.setitem(sys.modules, "redisvl.query", query_mod)
+    monkeypatch.setitem(sys.modules, "redisvl.query.filter", filter_mod)
+
+
 class TestFailOpenCaches:
     """Cache index/read failures and misses degrade to the uncached path."""
+
+    @pytest.fixture
+    def _redisvl_filter_stub(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _ensure_redisvl_filter_stub(monkeypatch)
 
     async def test_cache_index_failure_degrades_to_uncached(
         self, caplog: pytest.LogCaptureFixture
@@ -218,7 +261,9 @@ class TestFailOpenCaches:
         assert await mgr.get_exact("search", "i3199-key") is None
         assert mgr._metrics["search"]["misses"] == 1
 
-    async def test_semantic_error_returns_none_not_fabricated_value(self) -> None:
+    async def test_semantic_error_returns_none_not_fabricated_value(
+        self, _redisvl_filter_stub: None
+    ) -> None:
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = MagicMock()
         mgr.semantic_cache.acheck = AsyncMock(side_effect=RuntimeError("index gone"))
@@ -233,7 +278,9 @@ class TestFailOpenCaches:
         )
         assert mgr._metrics["semantic"]["misses"] == 1
 
-    async def test_semantic_hit_returns_only_previously_stored_response(self) -> None:
+    async def test_semantic_hit_returns_only_previously_stored_response(
+        self, _redisvl_filter_stub: None
+    ) -> None:
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = MagicMock()
         mgr.semantic_cache.acheck = AsyncMock(

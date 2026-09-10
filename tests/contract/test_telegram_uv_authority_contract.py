@@ -11,6 +11,9 @@ drift (at removal time: LiteLLM 1.88.1 vs 1.98.0, OpenAI 2.37.0 vs
 retired. ``telegram_bot/Dockerfile`` now resolves the bot image with
 ``uv sync --locked --no-dev --extra telegram`` from the root lock, the
 same frozen lock local development and CI (``uv lock --locked``) verify.
+Since #3365 the Redis client cohort (redis-py, RedisVL) lives in its own
+``redis`` extra, so the Redis-enabled production image resolves with
+``--extra telegram --extra redis``.
 
 This contract encodes three invariants so the decision cannot silently
 drift:
@@ -24,7 +27,8 @@ drift:
    ``tests/unit/test_telegram_bot_pyproject_deps.py``, which guarded
    aiogram-dialog and asyncpg).
 3. ``telegram_bot/Dockerfile`` installs from the frozen root lock with
-   ``--extra telegram`` (never a nested manifest or unfrozen resolution).
+   ``--extra telegram --extra redis`` (never a nested manifest or unfrozen
+   resolution) — the Redis-enabled production bot image (#3365).
 """
 
 from __future__ import annotations
@@ -99,7 +103,7 @@ def test_root_telegram_authority_covers_retired_bot_dependencies() -> None:
 
 
 def test_bot_dockerfile_resolves_from_frozen_root_lock() -> None:
-    """The bot image must sync the root lock with the telegram extra, frozen."""
+    """The bot image must sync the root lock with the telegram+redis extras, frozen."""
     dockerfile = REPO / "telegram_bot" / "Dockerfile"
     assert dockerfile.is_file(), "telegram_bot/Dockerfile not found"
     text = dockerfile.read_text(encoding="utf-8")
@@ -114,11 +118,13 @@ def test_bot_dockerfile_resolves_from_frozen_root_lock() -> None:
         "telegram_bot/Dockerfile must COPY the root pyproject.toml and uv.lock "
         "so manifest changes bust the deps cache (#3210)."
     )
-    # Frozen resolution against that lock, with the telegram extra.
-    for fragment in ("uv sync --locked", "--extra telegram", "--no-dev"):
+    # Frozen resolution against that lock, with the telegram + redis extras
+    # (#3365: base declares no Redis package; the Redis-enabled image opts in).
+    for fragment in ("uv sync --locked", "--extra telegram", "--extra redis", "--no-dev"):
         assert fragment in text, (
             f"telegram_bot/Dockerfile must contain {fragment!r}: the bot image "
-            "resolves from the frozen root lock with the telegram extra (#3210)."
+            "resolves from the frozen root lock with the telegram + redis extras "
+            "(#3210, #3365)."
         )
     # The retired nested authority must not be referenced by any
     # functional (non-comment) instruction.

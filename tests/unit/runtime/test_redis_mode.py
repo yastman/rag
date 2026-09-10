@@ -176,7 +176,12 @@ class TestGraphConfigRedisMode:
 
 
 class TestImportIsolation:
-    """Disabled mode must run with the redis client packages absent."""
+    """Disabled mode must run with the redis client packages absent.
+
+    Since #3365 the redis/redisvl packages are not base dependencies at all
+    (one explicit ``redis`` extra), so these subprocess proofs block the
+    modules the way a base/``--no-dev`` environment without the extra does.
+    """
 
     def test_redis_mode_module_imports_without_redis(self) -> None:
         code = (
@@ -186,6 +191,52 @@ class TestImportIsolation:
             "sys.modules['redisvl'] = None\n"
             "from src.runtime.integrations.redis_mode import RedisMode\n"
             "assert RedisMode.DISABLED.value == 'disabled'\n"
+            "print('OK')\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result.returncode == 0, f"stderr:\n{result.stderr}"
+        assert "OK" in result.stdout
+
+    def test_core_entrypoint_imports_without_redis(self) -> None:
+        """Base/disabled core imports with the Redis packages absent (#3365)."""
+        code = (
+            "import sys\n"
+            "sys.modules['redis'] = None\n"
+            "sys.modules['redis.asyncio'] = None\n"
+            "sys.modules['redisvl'] = None\n"
+            "import src.core.assistant\n"
+            "import src.runtime.integrations.cache\n"
+            "from src.runtime.config import GraphConfig\n"
+            "from src.runtime.integrations.redis_mode import RedisMode\n"
+            "assert GraphConfig(redis_mode=RedisMode.DISABLED).redis_mode is RedisMode.DISABLED\n"
+            "print('OK')\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result.returncode == 0, f"stderr:\n{result.stderr}"
+        assert "OK" in result.stdout
+
+    def test_disabled_bot_config_validation_imports_without_redis(self) -> None:
+        """Disabled/base+telegram config validation imports without Redis packages (#3365)."""
+        code = (
+            "import sys\n"
+            "sys.modules['redis'] = None\n"
+            "sys.modules['redis.asyncio'] = None\n"
+            "sys.modules['redisvl'] = None\n"
+            "from telegram_bot.config import BotConfig\n"
+            "config = BotConfig(_env_file=None, redis_mode='disabled')\n"
+            "assert config.redis_mode.value == 'disabled'\n"
             "print('OK')\n"
         )
         result = subprocess.run(

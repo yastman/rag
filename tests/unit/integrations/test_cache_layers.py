@@ -7,7 +7,24 @@ from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationError
+
+
+try:
+    # #3365: redisvl lives in the optional `redis` extra, so the lean base+dev
+    # lane does not ship it. The mock-based cache contracts below run without
+    # it; tests that need the real library importorskip explicitly.
+    from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationError
+except ModuleNotFoundError:
+
+    class RedisSearchError(Exception):  # type: ignore[no-redef]
+        """Stub for redisvl.exceptions.RedisSearchError (redis extra absent)."""
+
+    class RedisVLError(Exception):  # type: ignore[no-redef]
+        """Stub for redisvl.exceptions.RedisVLError (redis extra absent)."""
+
+    class SchemaValidationError(Exception):  # type: ignore[no-redef]
+        """Stub for redisvl.exceptions.SchemaValidationError (redis extra absent)."""
+
 
 from src.runtime.integrations.cache import (
     CACHE_VERSION,
@@ -85,6 +102,7 @@ class TestCacheLayerManagerInitialize:
     """Test async initialization."""
 
     def test_create_semantic_cache_declares_filter_signature_tag(self):
+        pytest.importorskip("redisvl")
         fake_cache = MagicMock()
 
         with patch(
@@ -106,6 +124,7 @@ class TestCacheLayerManagerInitialize:
         """#2277: store async_redis_client on the RedisVL cache instance so it
         reuses our client instead of lazily calling the deprecated
         RedisConnectionFactory.get_async_redis_connection."""
+        pytest.importorskip("redisvl")
         fake_cache = MagicMock()
         mock_async_client = MagicMock()
 
@@ -131,6 +150,7 @@ class TestCacheLayerManagerInitialize:
         retain that client before any async cache operation asks RedisVL for one."""
         import warnings
 
+        pytest.importorskip("redisvl")
         from redisvl.utils.vectorize.base import BaseVectorizer
 
         mock_async_client = AsyncMock()
@@ -166,6 +186,7 @@ class TestCacheLayerManagerInitialize:
         redisvl bump, the constructor path became public and the workaround
         must be replaced by it.
         """
+        pytest.importorskip("redisvl")
         from redisvl.extensions.cache.llm import SemanticCache
         from redisvl.utils.vectorize.base import BaseVectorizer
 
@@ -186,6 +207,9 @@ class TestCacheLayerManagerInitialize:
     async def test_initialize_passes_redis_client_to_semantic_cache(self):
         """CacheLayerManager.initialize wires its connected client into the
         semantic cache (so the deprecated lazy connection path is never taken)."""
+        # The wiring target src.services.vectorizers imports redisvl, so this
+        # contract needs the redis extra (#3365); it runs in redis-enabled lanes.
+        pytest.importorskip("redisvl")
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mock_redis = AsyncMock()
         mock_redis.ping = AsyncMock(return_value=True)
@@ -423,7 +447,9 @@ class TestSemanticCache:
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
 
-    async def test_semantic_check_includes_query_type_scope_role_filters(self):
+    async def test_semantic_check_includes_query_type_scope_role_filters(
+        self, _ensure_redisvl_filter_mock
+    ):
         """check_semantic composes Tag filters for query_type/language/scope/role."""
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
@@ -1003,7 +1029,9 @@ class TestScopeRoleIsolation:
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
 
-    async def test_check_semantic_rag_scope_requires_ok_eligible_current_schema(self):
+    async def test_check_semantic_rag_scope_requires_ok_eligible_current_schema(
+        self, _ensure_redisvl_filter_mock
+    ):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
         mgr.semantic_cache.acheck = AsyncMock(
