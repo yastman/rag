@@ -124,6 +124,7 @@ class TestBGEM3Client:
         mock_resp.json.return_value = {
             "dense_vecs": [[0.1] * 1024],
             "lexical_weights": [{"indices": [1], "values": [0.5]}],
+            "colbert_vecs": [[[0.2] * 1024] * 4],
             "processing_time": 0.1,
         }
 
@@ -136,6 +137,7 @@ class TestBGEM3Client:
 
         assert len(result.dense_vecs) == 1
         assert len(result.lexical_weights) == 1
+        assert result.colbert_vecs is not None
         assert result.processing_time == 0.1
         assert "/encode/hybrid" in mock_http.post.call_args[0][0]
 
@@ -252,8 +254,15 @@ class TestBGEM3Client:
         assert len(result.colbert_vecs) == 1
         assert len(result.colbert_vecs[0]) == 4
 
-    async def test_encode_hybrid_colbert_vecs_optional(self, client):
-        """encode_hybrid works when response has no colbert_vecs (backward compat)."""
+    async def test_encode_hybrid_missing_colbert_raises(self, client):
+        """A raw hybrid response without colbert_vecs is a protocol error (#3373).
+
+        Reverses the pre-#3373 backward-compat contract (colbert_vecs optional):
+        ingestion must never receive optional ColBERT, so the client rejects
+        the incomplete response before any caller can persist it.
+        """
+        from src.services.bge_m3_client import BGEHybridResponseError
+
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status = MagicMock()
@@ -268,12 +277,8 @@ class TestBGEM3Client:
         mock_http.is_closed = False
         client._client = mock_http
 
-        result = await client.encode_hybrid(["hello"])
-
-        assert result.colbert_vecs is None
-        # Existing fields still work
-        assert len(result.dense_vecs) == 1
-        assert len(result.lexical_weights) == 1
+        with pytest.raises(BGEHybridResponseError):
+            await client.encode_hybrid(["hello"])
 
     async def test_encode_dense_batching(self, client):
         """batch_size is applied client-side (#3375): 5 texts at batch_size=2 → requests of 2,2,1."""
@@ -715,6 +720,7 @@ class TestEncodeShapes:
         mock_resp.json.return_value = {
             "dense_vecs": [[0.2] * 1024],
             "lexical_weights": [{"indices": [1, 2], "values": [0.5, 0.3]}],
+            "colbert_vecs": [[[0.3] * 1024] * 4],
             "processing_time": 0.05,
         }
         mock_http = AsyncMock()
@@ -956,6 +962,7 @@ class TestBGERetryPolicy:
         ok.json.return_value = {
             "dense_vecs": [[0.1] * 1024],
             "lexical_weights": [{"indices": [1], "values": [0.5]}],
+            "colbert_vecs": [[[0.1] * 1024] * 3],
         }
         sync_client._client = MagicMock()
         sync_client._client.post = MagicMock(side_effect=[_failing_resp(429), ok])
@@ -1258,7 +1265,7 @@ class TestClientSideBatching:
             (["t2", "t3"], []),
             (["t4"], [{"index": 0, "error": "boom-4"}]),
         ):
-            resp = _chunk_response(chunk, ("dense", "sparse"))
+            resp = _chunk_response(chunk, ("dense", "sparse", "colbert"))
             resp.json.return_value["partial_failures"] = failures
             responses.append(resp)
 
@@ -1274,3 +1281,191 @@ class TestClientSideBatching:
         ]
         assert len(result.dense_vecs) == 5
         assert len(result.lexical_weights) == 5
+
+
+# ── Issue #3373: raw /encode/hybrid responses must be complete ────────────────
+
+
+def _hybrid_data(count: int, families: tuple[str, ...]) -> dict:
+    """Build a hybrid payload echoing the given families for ``count`` texts."""
+    data: dict = {"processing_time": 0.01}
+    if "dense" in families:
+        data["dense_vecs"] = [[0.1] * 1024 for _ in range(count)]
+    if "sparse" in families:
+        data["lexical_weights"] = [{"indices": [i], "values": [1.0]} for i in range(count)]
+    if "colbert" in families:
+        data["colbert_vecs"] = [[[0.2] * 1024] for _ in range(count)]
+    return data
+
+
+def _mock_response(data: dict) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.raise_for_status = MagicMock()
+    resp.json.return_value = data
+    return resp
+
+
+def _async_http_with(responses: list[MagicMock]) -> AsyncMock:
+    mock_http = AsyncMock()
+    mock_http.post = AsyncMock(side_effect=responses)
+    mock_http.is_closed = False
+    return mock_http
+
+
+class TestHybridResponseCompleteness:
+    """A raw /encode/hybrid response incomplete in any family is a protocol error (#3373).
+
+    Every hybrid response must carry dense_vecs, lexical_weights, and
+    colbert_vecs with exactly one entry per requested text. Missing, empty,
+    and cardinality-mismatched families must raise — so ingestion fails
+    explicitly and performs zero Qdrant writes — and the error must reference
+    the failing chunk's global input range (#3375 index preservation).
+    """
+
+    async def test_missing_colbert_vecs_raises(self, client):
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        client._client = _async_http_with([_mock_response(_hybrid_data(1, ("dense", "sparse")))])
+
+        with pytest.raises(BGEHybridResponseError):
+            await client.encode_hybrid(["hello"])
+
+    async def test_empty_colbert_vecs_raises(self, client):
+        """colbert_vecs=[] for 1 text is an empty family: cardinality 0 != 1."""
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        data = _hybrid_data(1, ("dense", "sparse", "colbert"))
+        data["colbert_vecs"] = []
+        client._client = _async_http_with([_mock_response(data)])
+
+        with pytest.raises(BGEHybridResponseError):
+            await client.encode_hybrid(["hello"])
+
+    async def test_short_dense_vecs_raises(self, client):
+        """2 texts but 1 dense vector: cardinality mismatch."""
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        data = _hybrid_data(2, ("dense", "sparse", "colbert"))
+        data["dense_vecs"] = data["dense_vecs"][:1]
+        client._client = _async_http_with([_mock_response(data)])
+
+        with pytest.raises(BGEHybridResponseError):
+            await client.encode_hybrid(["hello", "world"])
+
+    async def test_extra_dense_vecs_raises(self, client):
+        """1 text but 2 dense vectors: cardinality mismatch (surplus)."""
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        data = _hybrid_data(1, ("dense", "sparse", "colbert"))
+        data["dense_vecs"] = data["dense_vecs"] * 2
+        client._client = _async_http_with([_mock_response(data)])
+
+        with pytest.raises(BGEHybridResponseError):
+            await client.encode_hybrid(["hello"])
+
+    async def test_short_lexical_weights_raises(self, client):
+        """2 texts but 1 sparse vector: cardinality mismatch."""
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        data = _hybrid_data(2, ("dense", "sparse", "colbert"))
+        data["lexical_weights"] = data["lexical_weights"][:1]
+        client._client = _async_http_with([_mock_response(data)])
+
+        with pytest.raises(BGEHybridResponseError):
+            await client.encode_hybrid(["hello", "world"])
+
+    async def test_complete_response_passes_and_carries_all_families(self, client):
+        client._client = _async_http_with(
+            [_mock_response(_hybrid_data(1, ("dense", "sparse", "colbert")))]
+        )
+
+        result = await client.encode_hybrid(["hello"])
+
+        assert len(result.dense_vecs) == 1
+        assert len(result.lexical_weights) == 1
+        assert result.colbert_vecs is not None
+        assert len(result.colbert_vecs) == 1
+
+    async def test_incomplete_second_chunk_raises_with_global_offset(self, client):
+        """A batched request failing in chunk 2 reports the failing global range."""
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        client.batch_size = 2
+        responses = [
+            _mock_response(_hybrid_data(2, ("dense", "sparse", "colbert"))),
+            _mock_response(_hybrid_data(2, ("dense", "sparse"))),
+        ]
+        mock_http = _async_http_with(responses)
+        client._client = mock_http
+
+        with pytest.raises(BGEHybridResponseError) as excinfo:
+            await client.encode_hybrid(["t0", "t1", "t2", "t3"])
+
+        assert "[2, 4)" in str(excinfo.value), (
+            "Error must reference the failing chunk's global text range (#3375)"
+        )
+        assert mock_http.post.call_count == 2
+
+    async def test_protocol_error_is_not_retried(self, client):
+        """An incomplete hybrid response is deterministic: fail fast, no retries."""
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        mock_http = _async_http_with([_mock_response(_hybrid_data(1, ("dense", "sparse")))])
+        client._client = mock_http
+
+        with pytest.raises(BGEHybridResponseError):
+            await client.encode_hybrid(["hello"])
+
+        assert mock_http.post.call_count == 1
+
+    def test_sync_missing_colbert_vecs_raises(self, sync_client):
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(
+            return_value=_mock_response(_hybrid_data(1, ("dense", "sparse")))
+        )
+
+        with pytest.raises(BGEHybridResponseError):
+            sync_client.encode_hybrid(["hello"])
+
+    def test_sync_empty_colbert_vecs_raises(self, sync_client):
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        data = _hybrid_data(1, ("dense", "sparse", "colbert"))
+        data["colbert_vecs"] = []
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(return_value=_mock_response(data))
+
+        with pytest.raises(BGEHybridResponseError):
+            sync_client.encode_hybrid(["hello"])
+
+    def test_sync_short_dense_vecs_raises(self, sync_client):
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        data = _hybrid_data(2, ("dense", "sparse", "colbert"))
+        data["dense_vecs"] = data["dense_vecs"][:1]
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(return_value=_mock_response(data))
+
+        with pytest.raises(BGEHybridResponseError):
+            sync_client.encode_hybrid(["hello", "world"])
+
+    def test_sync_incomplete_second_chunk_raises_with_global_offset(self, sync_client):
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        sync_client.batch_size = 2
+        responses = [
+            _mock_response(_hybrid_data(2, ("dense", "sparse", "colbert"))),
+            _mock_response(_hybrid_data(2, ("dense", "sparse"))),
+        ]
+        mock_http = MagicMock()
+        mock_http.post = MagicMock(side_effect=responses)
+        sync_client._client = mock_http
+
+        with pytest.raises(BGEHybridResponseError) as excinfo:
+            sync_client.encode_hybrid(["t0", "t1", "t2", "t3"])
+
+        assert "[2, 4)" in str(excinfo.value)
+        assert mock_http.post.call_count == 2

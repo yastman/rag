@@ -13,7 +13,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from qdrant_client.models import Filter, FilterSelector, PointStruct, SparseVector
+from qdrant_client.models import Filter, FilterSelector, PointStruct
 
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 from src.services.bge_m3_client import HybridResult
@@ -363,10 +363,15 @@ class TestUpsertChunksSyncBehavior:
 class TestUpsertChunksSyncEdgeCases:
     """Verify edge cases: empty sparse indices, batching, error handling."""
 
-    def test_sparse_with_empty_indices_creates_valid_sparse_vector(
+    def test_empty_sparse_indices_rejected_before_any_write(
         self, writer, mock_qdrant_client, mock_bge_client
     ):
-        """SparseVector with empty indices/values must not raise an error."""
+        """An empty bm42 row without a poison flag is an empty vector family (#3373).
+
+        Pre-#3373 this was silently accepted and upserted; now the point is
+        rejected before the first Qdrant mutation so no incomplete point is
+        ever persisted.
+        """
         mock_qdrant_client.count.return_value = MagicMock(count=0)
         mock_bge_client.encode_hybrid.return_value = HybridResult(
             dense_vecs=[[0.1] * 1024],
@@ -377,12 +382,9 @@ class TestUpsertChunksSyncEdgeCases:
         chunk = _make_chunk()
         stats = writer.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
 
-        assert stats.errors is None
-        points = mock_qdrant_client.upsert.call_args.kwargs["points"]
-        sparse_vec = points[0].vector["bm42"]
-        assert isinstance(sparse_vec, SparseVector)
-        assert sparse_vec.indices == []
-        assert sparse_vec.values == []
+        assert stats.errors is not None
+        assert stats.points_upserted == 0
+        mock_qdrant_client.upsert.assert_not_called()
 
     def test_qdrant_exception_captured_in_error_stats(
         self, writer, mock_qdrant_client, mock_bge_client
@@ -543,3 +545,133 @@ class TestWriterMaxLength:
             f"Expected max_length=1024, got {kwargs.get('max_length')!r}. "
             "Contextualized chunks can exceed 512 tokens."
         )
+
+
+# ---------------------------------------------------------------------------
+# Issue #3373 — incomplete hybrid vectors are rejected before any Qdrant write
+# ---------------------------------------------------------------------------
+
+
+class TestIncompleteHybridVectorsRejectedBeforeWrite:
+    """Every written point needs dense, bm42 and colbert with exact cardinality (#3373).
+
+    An invalid BGE hybrid response must fail explicitly with zero upserts and
+    zero destructive deletes: the validation gate runs after points are built
+    but before the first ``client.upsert`` call, so even a request-size
+    multi-batch upsert writes nothing when any point is incomplete.
+    """
+
+    def test_hybrid_without_colbert_performs_zero_upserts(
+        self, writer, mock_qdrant_client, mock_bge_client
+    ):
+        """A dense+sparse-only hybrid result is invalid: no upsert, no delete."""
+        mock_qdrant_client.count.return_value = MagicMock(count=2)
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=None,
+        )
+
+        chunk = _make_chunk()
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+
+        assert stats.errors is not None
+        assert "colbert" in stats.errors[0]
+        assert stats.points_upserted == 0
+        mock_qdrant_client.upsert.assert_not_called()
+        mock_qdrant_client.delete.assert_not_called()
+
+    def test_mismatched_dense_cardinality_performs_zero_upserts(
+        self, writer, mock_qdrant_client, mock_bge_client
+    ):
+        """2 chunks but 1 dense vector: cardinality mismatch, zero upserts."""
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}] * 2,
+            colbert_vecs=[[[0.1] * 128] * 5] * 2,
+        )
+
+        chunks = [_make_chunk(text="a", order=0), _make_chunk(text="b", order=1)]
+        stats = writer.upsert_chunks_sync(chunks, "f", "/p", {}, "col")
+
+        assert stats.errors is not None
+        assert stats.points_upserted == 0
+        mock_qdrant_client.upsert.assert_not_called()
+        mock_qdrant_client.delete.assert_not_called()
+
+    def test_one_invalid_row_rejects_all_request_size_batches(
+        self, writer, mock_qdrant_client, mock_bge_client
+    ):
+        """One empty bm42 row refuses the whole file before the FIRST upsert.
+
+        The 3 points would normally be split into 2 request-size upsert
+        batches; validation must still run before any of them (#3373).
+        """
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024] * 3,
+            lexical_weights=[
+                {"indices": [1], "values": [0.5]},
+                {"indices": [], "values": []},
+                {"indices": [3], "values": [0.7]},
+            ],
+            colbert_vecs=[[[0.1] * 128] * 5] * 3,
+        )
+
+        chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(3)]
+        with (
+            patch.object(
+                QdrantHybridWriter,
+                "_estimate_point_request_bytes",
+                side_effect=[300, 300, 300],
+            ),
+            patch(
+                "src.ingestion.unified.qdrant_writer.QDRANT_UPSERT_MAX_REQUEST_BYTES",
+                700,
+            ),
+        ):
+            stats = writer.upsert_chunks_sync(chunks, "f", "/p", {}, "col")
+
+        assert stats.errors is not None
+        assert stats.points_upserted == 0
+        assert mock_qdrant_client.upsert.call_count == 0
+        mock_qdrant_client.delete.assert_not_called()
+
+    def test_client_protocol_error_surfaces_in_stats_with_zero_writes(
+        self, writer, mock_qdrant_client, mock_bge_client
+    ):
+        """The client protocol error propagates as an explicit stats error."""
+        from src.services.bge_m3_client import BGEHybridResponseError
+
+        mock_qdrant_client.count.return_value = MagicMock(count=3)
+        mock_bge_client.encode_hybrid.side_effect = BGEHybridResponseError(
+            "/encode/hybrid incomplete response: colbert_vecs expected 1 entry, got missing"
+        )
+
+        chunk = _make_chunk()
+        stats = writer.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
+
+        assert stats.errors is not None
+        assert "colbert_vecs" in stats.errors[0]
+        assert stats.points_upserted == 0
+        mock_qdrant_client.upsert.assert_not_called()
+        mock_qdrant_client.delete.assert_not_called()
+
+    def test_valid_complete_hybrid_result_still_upserts(
+        self, writer, mock_qdrant_client, mock_bge_client
+    ):
+        """Control: a complete hybrid result passes the gate and upserts."""
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
+        )
+
+        chunk = _make_chunk()
+        stats = writer.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
+
+        assert stats.errors is None
+        assert stats.points_upserted == 1
+        mock_qdrant_client.upsert.assert_called_once()
