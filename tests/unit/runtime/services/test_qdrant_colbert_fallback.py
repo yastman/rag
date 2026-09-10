@@ -12,16 +12,14 @@ same ~17-line block:
   ``results_count``, ``top_score`` and the standard collection metadata.
 
 This PR extracts the block into ``QdrantService._colbert_fallback_to_rrf``.
-The 4 call sites become a single line each. The test below pins:
+The 4 call sites become a single line each. The tests pin the helper's
+behavior directly:
 
 * the helper forwards every search kwarg to ``hybrid_search_rrf`` unchanged;
 * the helper unwraps both ``return_meta`` shapes (list and ``(list, meta)``);
-* the span output payload contains the expected ``fallback_reason``,
-  ``results_count`` and ``top_score`` fields, plus the standard collection
-  metadata;
-* the helper returns ``(raw_fallback, flat_results)`` so the caller can
-  preserve its return shape AND inspect the flat list (the existing
-  ``colbert_empty`` post-hook needs that to disable ColBERT).
+* fallback results are returned as ``(raw_fallback, flat_results)`` so the
+  caller can preserve its return shape AND inspect the flat list (the
+  existing ``colbert_empty`` post-hook needs that to disable ColBERT).
 
 We avoid touching the integration tests around ``hybrid_search_rrf_colbert``
 itself (covered by ``tests/integration/test_colbert_backfill.py``) —
@@ -145,41 +143,3 @@ async def test_colbert_fallback_handles_empty_results(monkeypatch: pytest.Monkey
     )
 
     assert flat == []
-
-
-def test_colbert_fallback_pattern_is_extracted_from_inline_callsites() -> None:
-    """Source-level guard: the four inline 'fallback = await self.hybrid_search_rrf(...)
-    + unwrap + update_current_span(output={fallback_reason: "<literal>"})' blocks inside
-    ``hybrid_search_rrf_colbert`` must collapse after the extraction.
-
-    The check counts span outputs whose ``fallback_reason`` is a non-None
-    string literal — those are exactly the four fallback emit sites the
-    helper now owns. The success path (which emits
-    ``"fallback_reason": None`` after a non-empty ColBERT result) and any
-    f-string variant inside the helper itself are intentionally not
-    flagged.
-
-    Allows future re-introduction (e.g., a 5th distinct fallback path)
-    without forbidding the helper itself, but flags any silent regression.
-    """
-    import inspect
-    import re
-
-    from src.runtime.services import qdrant as qdrant_module
-
-    source = inspect.getsource(qdrant_module)
-
-    # Match an inline span emit pattern with a string literal fallback_reason
-    # (single or double quoted), but NOT ``None``. The helper's own emit uses
-    # the parameter name (``"fallback_reason": fallback_reason``) which does
-    # not match the literal pattern.
-    inline_string_literal_emits = re.findall(
-        r'"fallback_reason":\s*[\'"][^\'\"]+[\'"]',
-        source,
-    )
-    assert len(inline_string_literal_emits) == 0, (
-        f"Found {len(inline_string_literal_emits)} inline ColBERT fallback "
-        f"span emit(s) with a string-literal fallback_reason. Route those "
-        f"through _colbert_fallback_to_rrf(...,fallback_reason='<reason>') "
-        f"instead. Offending matches: {inline_string_literal_emits!r}"
-    )

@@ -989,6 +989,34 @@ class TestMainDispatch:
         assert result == 0
         mock_cmd.assert_awaited_once()
 
+    @patch("src.ingestion.unified.main.cmd_coverage_check", new_callable=AsyncMock, return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
+    def test_main_dispatches_coverage_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["cli", "coverage-check"])
+
+        from src.ingestion.unified.cli import main
+
+        result = main()
+        assert result == 0
+        mock_cmd.assert_awaited_once()
+
+    @patch("src.ingestion.unified.main.cmd_backfill_colbert", return_value=0)
+    @patch("src.ingestion.unified.main.setup_logging")
+    @patch("src.ingestion.unified.main.load_dotenv")
+    def test_main_dispatches_backfill_colbert(
+        self, mock_dotenv, mock_logging, mock_cmd, monkeypatch
+    ):
+        monkeypatch.setattr("sys.argv", ["cli", "backfill-colbert", "--dry-run"])
+
+        from src.ingestion.unified.cli import main
+
+        result = main()
+        assert result == 0
+        mock_cmd.assert_called_once()
+        called_args = mock_cmd.call_args.args[0]
+        assert called_args.dry_run is True
+
     @patch("src.ingestion.unified.main.setup_logging")
     @patch("src.ingestion.unified.main.load_dotenv")
     def test_main_calls_load_dotenv(self, mock_dotenv, mock_logging, monkeypatch):

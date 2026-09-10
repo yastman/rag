@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -260,46 +260,13 @@ class TestColbertBackfillRunner:
             runner.run(batch_size=1)
 
 
-class TestColbertCliDispatch:
-    @patch("src.ingestion.unified.main.cmd_backfill_colbert", return_value=0)
-    @patch("src.ingestion.unified.main.setup_logging")
-    @patch("src.ingestion.unified.main.load_dotenv")
-    def test_main_dispatches_backfill_colbert(
-        self, mock_dotenv, mock_logging, mock_cmd, monkeypatch
-    ):
-        monkeypatch.setattr("sys.argv", ["cli", "backfill-colbert", "--dry-run"])
+class TestCmdBackfillColbert:
+    """Wiring of the backfill-colbert command.
 
-        from src.ingestion.unified.cli import main
-
-        result = main()
-        assert result == 0
-        mock_cmd.assert_called_once()
-        called_args = mock_cmd.call_args.args[0]
-        assert called_args.dry_run is True
-
-    @patch("src.ingestion.unified.main.cmd_schema_check", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.main.setup_logging")
-    @patch("src.ingestion.unified.main.load_dotenv")
-    def test_main_dispatches_schema_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
-        monkeypatch.setattr("sys.argv", ["cli", "schema-check", "--require-colbert"])
-
-        from src.ingestion.unified.cli import main
-
-        result = main()
-        assert result == 0
-        mock_cmd.assert_awaited_once()
-
-    @patch("src.ingestion.unified.main.cmd_coverage_check", new_callable=AsyncMock, return_value=0)
-    @patch("src.ingestion.unified.main.setup_logging")
-    @patch("src.ingestion.unified.main.load_dotenv")
-    def test_main_dispatches_coverage_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
-        monkeypatch.setattr("sys.argv", ["cli", "coverage-check"])
-
-        from src.ingestion.unified.cli import main
-
-        result = main()
-        assert result == 0
-        mock_cmd.assert_awaited_once()
+    ``main()`` dispatch behavior (backfill-colbert, schema-check,
+    coverage-check) lives in test_unified_cli.py::TestMainDispatch (#3406
+    removed the duplicate dispatch block from this file).
+    """
 
     def test_cmd_backfill_colbert_wires_runner(self):
         from src.ingestion.unified.cli import cmd_backfill_colbert

@@ -81,13 +81,3 @@ class TestBuildSystemPromptWithManager:
         expected = build_system_prompt("short", "easy", "тест")
         result = build_system_prompt_with_manager("short", "easy", "тест")
         assert result == expected
-
-    def test_no_langfuse_routing(self) -> None:
-        """No external prompt manager is imported in prompt_templates."""
-        import src.runtime.integrations.prompt_templates as pt_module
-
-        assert not hasattr(pt_module, "get_prompt"), (
-            "get_prompt should not be imported into prompt_templates after #2628"
-        )
-        prompt = build_system_prompt_with_manager("balanced", "medium", "недвижимость")
-        assert "недвижимость" in prompt

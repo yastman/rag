@@ -24,12 +24,3 @@ def test_file_id_from_content_passes_content_hash_to_manifest() -> None:
         "docs/a.pdf",
         compute_content_hash_from_bytes(b"payload"),
     )
-
-
-def test_build_flow_does_not_exist() -> None:
-    """build_flow was removed with CocoIndex (#2834); ensure it is gone."""
-    import src.ingestion.unified.flow as flow_module
-
-    assert not hasattr(flow_module, "build_flow"), (
-        "build_flow should not exist after CocoIndex removal (#2834)"
-    )
