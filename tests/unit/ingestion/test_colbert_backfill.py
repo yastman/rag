@@ -244,6 +244,142 @@ class TestColbertBackfillRunner:
         assert len(bge.calls) == 1
         assert "batch update failed" in stats.errors[0]
 
+    def test_failed_page_pins_checkpoint_and_resume_retries_it(self, tmp_path: Path):
+        """Two-run regression (#599): a failed page must be retried on --resume.
+
+        Run 1: the only page fails after retries are exhausted; the checkpoint
+        must stay at the failed page (not advance past it) and must not be
+        cleared. Run 2 with --resume retries that page and only clears the
+        checkpoint once the work is complete.
+        """
+        from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
+
+        checkpoint = tmp_path / "checkpoint.json"
+        checkpoint.write_text(json.dumps({"next_offset": 0}), encoding="utf-8")
+
+        page = (
+            [
+                _record("p1", page_content="doc one"),
+                _record("p2", page_content="doc two"),
+            ],
+            None,
+        )
+
+        qdrant_1 = _StubQdrantClient(pages=[page])
+        bge_1 = _StubBGEClient(responses=[RuntimeError("bge down")])
+        runner_1 = ColbertBackfillRunner(
+            qdrant_client=qdrant_1,
+            bge_client=bge_1,
+            collection_name="test_col",
+            checkpoint_path=checkpoint,
+            retry_attempts=1,
+            retry_backoff_seconds=0.0,
+        )
+        stats_1 = runner_1.run(batch_size=2)
+        runner_1.close()
+
+        assert stats_1.failed == 2
+        assert stats_1.processed == 0
+        assert checkpoint.exists()
+        saved = json.loads(checkpoint.read_text(encoding="utf-8"))
+        assert saved["next_offset"] == 0
+
+        qdrant_2 = _StubQdrantClient(pages=[page])
+        bge_2 = _StubBGEClient(responses=[[[[0.1, 0.2]], [[0.5, 0.6]]]])
+        runner_2 = ColbertBackfillRunner(
+            qdrant_client=qdrant_2,
+            bge_client=bge_2,
+            collection_name="test_col",
+            checkpoint_path=checkpoint,
+            retry_attempts=1,
+            retry_backoff_seconds=0.0,
+        )
+        stats_2 = runner_2.run(batch_size=2, resume=True)
+        runner_2.close()
+
+        assert qdrant_2.scroll_calls[0] == 0
+        assert bge_2.calls == [["doc one", "doc two"]]
+        assert stats_2.failed == 0
+        assert stats_2.processed == 2
+        assert not checkpoint.exists()
+
+    def test_resume_after_failed_page_does_not_skip_failed_points(self, tmp_path: Path):
+        """Two-run regression (#599): resume must retry p1, not scroll past it."""
+        from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
+
+        checkpoint = tmp_path / "checkpoint.json"
+
+        qdrant_1 = _StubQdrantClient(pages=[([_record("p1", page_content="doc one")], 2)])
+        bge_1 = _StubBGEClient(responses=[RuntimeError("bge down")])
+        runner_1 = ColbertBackfillRunner(
+            qdrant_client=qdrant_1,
+            bge_client=bge_1,
+            collection_name="test_col",
+            checkpoint_path=checkpoint,
+            retry_attempts=1,
+            retry_backoff_seconds=0.0,
+        )
+        stats_1 = runner_1.run(batch_size=1, limit=1)
+        runner_1.close()
+
+        assert stats_1.failed == 1
+        assert stats_1.processed == 0
+        assert not checkpoint.exists()
+
+        qdrant_2 = _StubQdrantClient(
+            pages=[
+                ([_record("p1", page_content="doc one")], 2),
+                ([_record("p2", page_content="doc two")], None),
+            ]
+        )
+        bge_2 = _StubBGEClient(responses=[[[[0.1, 0.2]]], [[[0.3, 0.4]]]])
+        runner_2 = ColbertBackfillRunner(
+            qdrant_client=qdrant_2,
+            bge_client=bge_2,
+            collection_name="test_col",
+            checkpoint_path=checkpoint,
+            retry_attempts=1,
+            retry_backoff_seconds=0.0,
+        )
+        stats_2 = runner_2.run(batch_size=1, resume=True)
+        runner_2.close()
+
+        assert qdrant_2.scroll_calls[0] is None
+        assert qdrant_2.scroll_calls[1] == 2
+        assert bge_2.calls == [["doc one"], ["doc two"]]
+        assert stats_2.processed == 2
+        assert stats_2.failed == 0
+        assert not checkpoint.exists()
+
+    def test_missing_text_failure_pins_checkpoint_at_failed_page(self, tmp_path: Path):
+        """A point without text fails the page: the checkpoint stays at its start."""
+        from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
+
+        checkpoint = tmp_path / "checkpoint.json"
+        checkpoint.write_text(json.dumps({"next_offset": 0}), encoding="utf-8")
+
+        qdrant = _StubQdrantClient(
+            pages=[([_record("p1"), _record("p2", page_content="doc two")], None)]
+        )
+        bge = _StubBGEClient(responses=[[[[0.3, 0.4]]]])
+        runner = ColbertBackfillRunner(
+            qdrant_client=qdrant,
+            bge_client=bge,
+            collection_name="test_col",
+            checkpoint_path=checkpoint,
+            retry_attempts=1,
+            retry_backoff_seconds=0.0,
+        )
+        stats = runner.run(batch_size=2)
+        runner.close()
+
+        assert stats.failed == 1
+        assert stats.processed == 1
+        assert qdrant.update_vectors_calls[0][0].id == "p2"
+        assert checkpoint.exists()
+        saved = json.loads(checkpoint.read_text(encoding="utf-8"))
+        assert saved["next_offset"] == 0
+
     def test_backfill_fails_fast_when_colbert_schema_missing(self, tmp_path: Path):
         from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
 

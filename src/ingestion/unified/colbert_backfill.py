@@ -185,6 +185,7 @@ class ColbertBackfillRunner:
             stats.batches += 1
             ids_to_update: list[str | int | uuid.UUID] = []
             texts: list[str] = []
+            page_failed = False
 
             for record in records:
                 stats.scanned += 1
@@ -195,6 +196,7 @@ class ColbertBackfillRunner:
                 text = self._extract_text(record)
                 if not text:
                     stats.failed += 1
+                    page_failed = True
                     self._append_error(
                         stats,
                         f"point_id={record.id}: missing payload.page_content/payload.text",
@@ -246,7 +248,21 @@ class ColbertBackfillRunner:
                         stats.processed += len(points)
                     except Exception as exc:
                         stats.failed += len(ids_to_update)
+                        page_failed = True
                         self._append_error(stats, f"batch update failed: {exc}")
+
+            if page_failed:
+                # Never advance the checkpoint past failed work (#599): the
+                # checkpoint stays at this page's start offset so a later
+                # --resume retries the failed page (already completed points
+                # are idempotent skips) instead of skipping it.
+                self._log_progress(stats=stats, target_total=target_total)
+                logger.warning(
+                    "ColBERT backfill: %d point(s) failed on the current page; "
+                    "stopping before checkpoint advance so --resume retries them",
+                    stats.failed,
+                )
+                break
 
             self._save_checkpoint(next_offset=next_offset, last_point_id=records[-1].id)
             self._log_progress(stats=stats, target_total=target_total)
@@ -256,7 +272,7 @@ class ColbertBackfillRunner:
                 break
             offset = next_offset
 
-        if exhausted_collection:
+        if exhausted_collection and stats.failed == 0:
             self._clear_checkpoint()
 
         return stats
