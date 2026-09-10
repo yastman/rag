@@ -283,9 +283,9 @@ class QdrantHybridWriter:
         Every upserted point must carry the full named-vector set with exact
         cardinality: a non-empty ``dense`` row, a ``bm42`` sparse vector with
         equal-length non-empty indices/values, and a non-empty ``colbert``
-        multivector with non-empty token rows. Any violation raises before
-        ``_upsert_points_in_batches`` so an invalid BGE hybrid response
-        performs zero writes instead of silently persisting partial vectors.
+        multivector with non-empty token rows. Any violation raises before the
+        first ``client.upsert`` so an invalid BGE hybrid response performs zero
+        writes instead of silently persisting partial vectors.
         """
         problems: list[str] = []
         for i, point in enumerate(points):
@@ -319,65 +319,31 @@ class QdrantHybridWriter:
                 f"{source_path} ({'; '.join(problems)})"
             )
 
-    def _upsert_points_in_batches(
+    def _upsert_replacement_points(
         self,
         *,
         collection_name: str,
         points: list[PointStruct],
         source_path: str,
     ) -> int:
-        """Upsert points in request-size-safe batches."""
+        """Upsert the complete replacement generation in ONE request (#1602).
+
+        The caller has already gated on the complete serialized replacement
+        fitting ``QDRANT_UPSERT_MAX_REQUEST_BYTES``. A single request is the
+        atomic visibility unit: either the whole new generation becomes
+        queryable or none of it does, so a later batch can never commit after
+        an earlier one and expose a partial generation next to the old one.
+        """
         if not points:
             return 0
 
-        total_upserted = 0
-        batch: list[PointStruct] = []
-        batch_bytes = 2  # JSON array brackets
-        batch_index = 1
-
-        for point in points:
-            point_bytes = self._estimate_point_request_bytes(point)
-            if point_bytes > QDRANT_UPSERT_MAX_REQUEST_BYTES:
-                raise ValueError(
-                    f"Single point request {point_bytes / 1024 / 1024:.1f}MB exceeds "
-                    f"safe Qdrant limit {QDRANT_UPSERT_MAX_REQUEST_BYTES / 1024 / 1024:.0f}MB "
-                    f"for {source_path}"
-                )
-
-            separator_bytes = 1 if batch else 0
-            if (
-                batch
-                and batch_bytes + separator_bytes + point_bytes > QDRANT_UPSERT_MAX_REQUEST_BYTES
-            ):
-                self.client.upsert(collection_name=collection_name, points=batch)
-                logger.info(
-                    "Upserted batch %d for %s: %d points (~%.1fMB)",
-                    batch_index,
-                    source_path,
-                    len(batch),
-                    batch_bytes / 1024 / 1024,
-                )
-                total_upserted += len(batch)
-                batch = [point]
-                batch_bytes = 2 + point_bytes
-                batch_index += 1
-                continue
-
-            batch.append(point)
-            batch_bytes += separator_bytes + point_bytes
-
-        if batch:
-            self.client.upsert(collection_name=collection_name, points=batch)
-            logger.info(
-                "Upserted batch %d for %s: %d points (~%.1fMB)",
-                batch_index,
-                source_path,
-                len(batch),
-                batch_bytes / 1024 / 1024,
-            )
-            total_upserted += len(batch)
-
-        return total_upserted
+        self.client.upsert(collection_name=collection_name, points=points)
+        logger.info(
+            "Upserted %d points for %s in a single atomic request",
+            len(points),
+            source_path,
+        )
+        return len(points)
 
     def delete_file_sync(self, file_id: str, collection_name: str) -> int:
         """Sync version of delete_file.
@@ -450,9 +416,13 @@ class QdrantHybridWriter:
     ) -> WriteStats:
         """Sync atomic-replace counterpart of ``upsert_chunks`` (#1602).
 
-        Build replacement points first, upsert them with deterministic IDs,
-        and only delete stale orphan IDs after the upsert succeeds. If any
-        step before the stale-id sweep fails, no destructive delete runs.
+        Replacement has atomic visibility: the complete serialized generation
+        is measured before any mutation and must fit ONE bounded Qdrant
+        request; an oversize document is rejected up front with an actionable
+        split-document error. A fitting generation is committed as a single
+        request and stale orphan ids are swept only afterwards. If any step
+        before the sweep fails, nothing was written and the previous
+        generation stays fully queryable.
         """
         stats = WriteStats()
 
@@ -522,8 +492,27 @@ class QdrantHybridWriter:
             # so an invalid BGE hybrid response performs zero writes (#3373).
             self._validate_point_vectors(points, source_path=source_path)
 
-            # Step 4: Upsert replacement points first.
-            stats.points_upserted = self._upsert_points_in_batches(
+            # Step 3.6: Atomic-visibility gate (#1602). Measure the complete
+            # serialized replacement BEFORE any mutation. If it cannot fit one
+            # bounded atomic request, splitting it into several upsert batches
+            # could expose a partial new generation next to the old one when a
+            # later batch fails — refuse the replacement up front instead.
+            total_request_bytes = 2 + sum(
+                self._estimate_point_request_bytes(point) for point in points
+            )
+            if total_request_bytes > QDRANT_UPSERT_MAX_REQUEST_BYTES:
+                raise ValueError(
+                    f"Replacement for {source_path} needs "
+                    f"{total_request_bytes / 1024 / 1024:.1f}MB in a single atomic "
+                    f"Qdrant request ({len(points)} points) which exceeds the safe "
+                    f"limit {QDRANT_UPSERT_MAX_REQUEST_BYTES / 1024 / 1024:.0f}MB. No "
+                    "points were written and the previous generation remains fully "
+                    "queryable; split the document into smaller files or sections "
+                    "before re-ingesting it."
+                )
+
+            # Step 4: Commit the new generation as ONE atomic request.
+            stats.points_upserted = self._upsert_replacement_points(
                 collection_name=collection_name,
                 points=points,
                 source_path=source_path,
@@ -542,7 +531,19 @@ class QdrantHybridWriter:
             )
 
         except Exception as e:
-            stats.errors = [str(e)]
+            if stats.points_upserted:
+                # The single upsert request already returned, so the new
+                # generation is fully visible. Error stats must not present a
+                # committed replacement as a plain failed write (#1602).
+                stats.errors = [
+                    f"Replacement committed for {source_path}: "
+                    f"{stats.points_upserted} new-generation points are live in "
+                    f"{collection_name}, but the stale-id sweep failed: {e}. Some "
+                    "points of the previous generation may remain queryable; do "
+                    "not treat this document as fully replaced."
+                ]
+            else:
+                stats.errors = [str(e)]
             logger.error(f"Error upserting chunks: {e}", exc_info=True)
 
         return stats

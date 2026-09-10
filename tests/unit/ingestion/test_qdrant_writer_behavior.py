@@ -426,10 +426,16 @@ class TestUpsertChunksSyncEdgeCases:
         assert stats.points_upserted == 0
         mock_qdrant_client.upsert.assert_not_called()
 
-    def test_upsert_is_split_into_multiple_requests_when_batch_is_too_large(
+    def test_oversize_replacement_is_rejected_not_split(
         self, writer, mock_qdrant_client, mock_bge_client
     ):
-        """Request-size batching should split points into multiple upsert() calls."""
+        """A replacement above the single-request bound is rejected, never split.
+
+        Splitting into multiple upsert requests let a later-batch failure
+        expose batch 1 of the new generation next to the old one (#1602). The
+        complete serialized replacement must fit one atomic request; otherwise
+        the writer fails before the first upsert with a split-document error.
+        """
         mock_qdrant_client.count.return_value = MagicMock(count=0)
         mock_bge_client.encode_hybrid.return_value = HybridResult(
             dense_vecs=[[0.1] * 1024] * 3,
@@ -451,13 +457,11 @@ class TestUpsertChunksSyncEdgeCases:
         ):
             stats = writer.upsert_chunks_sync(chunks, "f", "/split.md", {}, "col")
 
-        assert stats.errors is None
-        assert stats.points_upserted == 3
-        assert mock_qdrant_client.upsert.call_count == 2
-        first_points = mock_qdrant_client.upsert.call_args_list[0].kwargs["points"]
-        second_points = mock_qdrant_client.upsert.call_args_list[1].kwargs["points"]
-        assert len(first_points) == 2
-        assert len(second_points) == 1
+        assert stats.errors is not None
+        assert "exceeds" in stats.errors[0]
+        assert "split" in stats.errors[0].lower()
+        assert stats.points_upserted == 0
+        assert mock_qdrant_client.upsert.call_count == 0
 
     def test_single_point_larger_than_request_limit_is_rejected(
         self, writer, mock_qdrant_client, mock_bge_client
@@ -557,8 +561,8 @@ class TestIncompleteHybridVectorsRejectedBeforeWrite:
 
     An invalid BGE hybrid response must fail explicitly with zero upserts and
     zero destructive deletes: the validation gate runs after points are built
-    but before the first ``client.upsert`` call, so even a request-size
-    multi-batch upsert writes nothing when any point is incomplete.
+    but before the first ``client.upsert`` call, so the atomic-replace
+    sequence never starts and an incomplete point is never persisted.
     """
 
     def test_hybrid_without_colbert_performs_zero_upserts(
@@ -605,8 +609,9 @@ class TestIncompleteHybridVectorsRejectedBeforeWrite:
     ):
         """One empty bm42 row refuses the whole file before the FIRST upsert.
 
-        The 3 points would normally be split into 2 request-size upsert
-        batches; validation must still run before any of them (#3373).
+        Even when the serialized points would exceed the single-request bound,
+        vector validation runs before the atomic-visibility size gate, so an
+        invalid response writes nothing (#3373).
         """
         mock_qdrant_client.count.return_value = MagicMock(count=0)
         mock_bge_client.encode_hybrid.return_value = HybridResult(
