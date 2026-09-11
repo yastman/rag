@@ -153,6 +153,107 @@ def test_modified_file_keeps_old_chunks_when_replacement_fails(tmp_path: Path) -
     assert result.errors == 1
 
 
+def test_changed_file_becoming_empty_removes_prior_points(tmp_path: Path) -> None:
+    """Nonempty-to-empty commits an empty replacement (#3370).
+
+    A successful parse yielding zero chunks is an empty success, not a skip:
+    the prior searchable generation for this source must be removed, otherwise
+    stale points stay queryable forever.
+    """
+    (tmp_path / "doc.md").write_text("", encoding="utf-8")
+    config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
+    writer = _make_writer()
+    writer.client.scroll.side_effect = [
+        ([], None),  # _already_indexed: the empty content has no point yet
+        ([{"payload": {"metadata": {"file_id": "old-file-id"}}}], None),  # source snapshot
+    ]
+    parser = MagicMock()
+    parser.chunk_file_sync.return_value = []  # empty-but-successful parse
+    parser.to_ingestion_chunks.return_value = []
+
+    with (
+        patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
+    ):
+        from src.ingestion.unified.flow import run_once
+
+        result = run_once(config)
+
+    writer.upsert_chunks_sync.assert_not_called()
+    writer.delete_file_sync.assert_called_once_with(
+        file_id="old-file-id", collection_name=config.collection_name
+    )
+    assert result.processed == 1
+    assert result.errors == 0
+
+
+def test_parse_failure_keeps_old_points_and_reports_error(tmp_path: Path) -> None:
+    """A parse/read failure is non-destructive (#3370).
+
+    When the parser raises (unreadable bytes, missing file), the flow must not
+    delete anything: the last-good points stay searchable and the pass records
+    an error.
+    """
+    (tmp_path / "doc.md").write_text("# changed", encoding="utf-8")
+    config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
+    writer = _make_writer()
+    writer.client.scroll.side_effect = [
+        ([], None),  # dedup miss: content changed
+        ([{"payload": {"metadata": {"file_id": "old-file-id"}}}], None),
+    ]
+    parser = MagicMock()
+    parser.chunk_file_sync.side_effect = UnicodeDecodeError(
+        "utf-8", b"\xff", 0, 1, "invalid start byte"
+    )
+
+    with (
+        patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
+    ):
+        from src.ingestion.unified.flow import run_once
+
+        result = run_once(config)
+
+    writer.upsert_chunks_sync.assert_not_called()
+    writer.delete_file_sync.assert_not_called()
+    assert result.errors == 1
+
+
+def test_repeated_empty_replacement_is_idempotent(tmp_path: Path) -> None:
+    """A repeated empty replacement deletes nothing further and never errors (#3370).
+
+    After the first empty replacement the collection holds no points for the
+    source, so a second pass must be a no-op mutation with a clean result.
+    """
+    (tmp_path / "doc.md").write_text("", encoding="utf-8")
+    config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
+    writer = _make_writer()
+    writer.client.scroll.side_effect = [
+        ([], None),  # pass 1: dedup miss
+        ([{"payload": {"metadata": {"file_id": "old-file-id"}}}], None),  # pass 1 snapshot
+        ([], None),  # pass 2: dedup miss
+        ([], None),  # pass 2 snapshot: collection emptied by pass 1
+    ]
+    parser = MagicMock()
+    parser.chunk_file_sync.return_value = []
+    parser.to_ingestion_chunks.return_value = []
+
+    with (
+        patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
+    ):
+        from src.ingestion.unified.flow import run_once
+
+        first = run_once(config)
+        second = run_once(config)
+
+    assert first.errors == 0
+    assert second.errors == 0
+    writer.delete_file_sync.assert_called_once_with(
+        file_id="old-file-id", collection_name=config.collection_name
+    )
+
+
 def test_concurrent_replacements_serialize_same_source(tmp_path: Path) -> None:
     """The next replacement cannot sweep another replacement before it lands."""
     from src.ingestion.unified.flow import _ingest_directory

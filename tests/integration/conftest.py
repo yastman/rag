@@ -10,7 +10,18 @@ _mocked: list[str] = []
 
 
 def pytest_configure(config):
-    """Mock optional heavy deps for integration test collection."""
+    """Mock optional heavy deps for integration test collection.
+
+    #3414: in harness required mode (``E2E_HARNESS_REQUIRED=1``) this lane
+    never injects fake packages into ``sys.modules`` — a required capability
+    must not pass because a MagicMock stood in for a real client. Lean-venv
+    import errors then surface honestly instead of being papered over.
+    """
+    import os
+
+    if os.environ.get("E2E_HARNESS_REQUIRED", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return
+
     _aiogram_real = "aiogram" in sys.modules and not isinstance(sys.modules["aiogram"], MagicMock)
     if not _aiogram_real:
         _mods = [

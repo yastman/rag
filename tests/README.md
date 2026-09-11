@@ -37,6 +37,7 @@ model/image dependencies are separate from root endpoint-test extras.
 | `make candidate-check` | Required local delivery gate | Exact base+dev environment |
 | `make test-full` | Full manual suite, parallel-safe then stateful/live lanes | All extras/groups; required services/credentials |
 | `make e2e-core-live` | Real known-corpus core ingestion/answer path | Qdrant, BGE-M3, provider configuration |
+| `make e2e-harness` | Canonical hermetic live harness (#3414): run-owned Compose project, per-worker namespaced resources, required mode with zero service skips | `OPERATOR_ENV` operator env (validated #3367), Docker daemon, BGE artifact fetched via `services/bge-m3-api/fetch_artifact.py`; `--extra telegram --extra redis` |
 | `make test-e2e-redis-live` | Redis modes (disabled/single/multi) and two-owner polling lock against real Redis (#3368); strict: missing Docker fails, never skips | Docker daemon, `--extra telegram --extra redis`; containers are disposable |
 | `make demo-gate` | Operator demo readiness and Telegram journey | Configured stack, test account/credentials |
 

@@ -10,9 +10,10 @@ and the bot preflight) can pass:
    collections are never dropped or rewritten: an incompatible schema is
    reported as a failure with rollback guidance instead.
 2. **Ingest** — when a collection is empty, load the shipped demo data:
-   ``data/test/sample_articles.json`` (knowledge corpus) and the shipped
-   ``data/apartments.csv`` catalog (requires the BGE-M3 service). Populated
-   collections are preserved untouched.
+   the shipped Markdown knowledge corpus ``data/test/*.md`` (parsed by the
+   production Markdown parser, ``src.ingestion.markdown.MarkdownParser``) and
+   the shipped ``data/apartments.csv`` catalog (requires the BGE-M3 service).
+   Populated collections are preserved untouched.
 3. **Verify** — run the readiness contracts plus deterministic demo probes:
    every distinct advertised (rooms, city) query shape must be reachable
    through the production filter path, the shipped demo corpus documents
@@ -31,7 +32,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import os
 import sys
 from pathlib import Path
@@ -59,7 +59,7 @@ from src.runtime.qdrant.readiness import (
 )
 
 
-KNOWLEDGE_DEMO_JSON = Path("data/test/sample_articles.json")
+KNOWLEDGE_DEMO_CORPUS_DIR = Path("data/test")
 APARTMENTS_DEMO_CSV = Path("data/apartments.csv")
 DEFAULT_QDRANT_URL = "http://localhost:6333"
 DEFAULT_BGE_URL = "http://localhost:8000"
@@ -187,19 +187,43 @@ def create_apartments_collection_schema(client: QdrantClient, collection_name: s
 def ingest_knowledge_demo(
     client: QdrantClient,
     collection_name: str,
-    json_path: Path,
+    corpus_dir: Path,
     bge_url: str,
 ) -> int:
-    """Embed and upsert the shipped demo knowledge corpus. Returns point count."""
+    """Embed and upsert the shipped demo knowledge corpus. Returns point count.
+
+    The corpus is the shipped Markdown corpus (``corpus_dir/*.md``), parsed by
+    the production Markdown parser — the bootstrap runs no private parser and
+    no JSON loading. Each document keeps its stable source identity: the file
+    stem is the ``doc_id`` the readiness probes filter (``article_115`` …),
+    and each shipped document stays a single chunk so one point per document
+    remains the deterministic addressable unit.
+    """
     from qdrant_client.models import PointStruct, SparseVector
 
+    from src.ingestion.markdown import MarkdownParser
     from src.services.bge_m3_client import BGEM3SyncClient
 
-    documents = json.loads(json_path.read_text(encoding="utf-8"))["documents"]
-    if not documents:
-        raise ValueError(f"demo knowledge corpus is empty: {json_path}")
+    parser = MarkdownParser()
+    documents: list[tuple[str, str, str, str]] = []
+    for path in sorted(corpus_dir.glob("*.md")):
+        chunks = parser.chunk_file_sync(path)
+        if not chunks:
+            raise ValueError(f"demo knowledge document produced no chunks: {path}")
+        if len(chunks) != 1:
+            raise ValueError(
+                f"demo knowledge document must parse to exactly one chunk "
+                f"(got {len(chunks)}): {path} — shipped corpus documents stay "
+                "one point per document so readiness probes address them by doc_id"
+            )
+        doc_id = path.stem
+        title = chunks[0].headings[-1] if chunks[0].headings else doc_id
+        documents.append((doc_id, title, chunks[0].text, str(path)))
 
-    texts = [doc["content"] for doc in documents]
+    if not documents:
+        raise ValueError(f"demo knowledge corpus is empty: {corpus_dir}")
+
+    texts = [text for _, _, text, _ in documents]
     bge = BGEM3SyncClient(base_url=bge_url)
     try:
         hybrid = bge.encode_hybrid(texts)
@@ -211,6 +235,7 @@ def ingest_knowledge_demo(
     for doc, dense, sparse in zip(
         documents, hybrid.dense_vecs, hybrid.lexical_weights, strict=True
     ):
+        doc_id, title, text, source = doc
         vector: dict[str, Any] = {
             "dense": dense,
             "bm42": SparseVector(indices=sparse["indices"], values=sparse["values"]),
@@ -219,16 +244,16 @@ def ingest_knowledge_demo(
             vector["colbert"] = colbert_vecs[len(points)]
         points.append(
             PointStruct(
-                id=knowledge_demo_point_id(doc["id"]),
+                id=knowledge_demo_point_id(doc_id),
                 vector=vector,
                 payload={
-                    "page_content": doc["content"],
+                    "page_content": text,
                     "metadata": {
                         # metadata.doc_id is the canonical indexed knowledge
                         # identifier (#3333) — probes filter exactly this field.
-                        "doc_id": doc["id"],
-                        "title": doc["title"],
-                        **doc.get("metadata", {}),
+                        "doc_id": doc_id,
+                        "title": title,
+                        "source": source,
                     },
                 },
             )
@@ -237,7 +262,7 @@ def ingest_knowledge_demo(
     client.upsert(collection_name=collection_name, points=points, wait=True)
     print(
         f"  [OK] Ingested {len(points)} shipped demo documents into "
-        f"'{collection_name}' from {json_path}"
+        f"'{collection_name}' from {corpus_dir}"
     )
     return len(points)
 
@@ -426,7 +451,7 @@ def _bootstrap_knowledge(
         print(f"  [..] Knowledge collection '{args.knowledge_collection}' is empty; ingesting")
         try:
             ingest_knowledge_demo(
-                client, args.knowledge_collection, Path(args.knowledge_json), args.bge_url
+                client, args.knowledge_collection, Path(args.knowledge_corpus), args.bge_url
             )
         except Exception as exc:
             failures.append(
@@ -487,7 +512,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--knowledge-collection", default=None)
     parser.add_argument("--apartments-collection", default=APARTMENTS_COLLECTION)
     parser.add_argument("--apartments-csv", default=str(APARTMENTS_DEMO_CSV))
-    parser.add_argument("--knowledge-json", default=str(KNOWLEDGE_DEMO_JSON))
+    parser.add_argument("--knowledge-corpus", default=str(KNOWLEDGE_DEMO_CORPUS_DIR))
     parser.add_argument("--bge-url", default=os.getenv("BGE_M3_URL", DEFAULT_BGE_URL))
     args = parser.parse_args(argv)
     if args.knowledge_collection is None:
