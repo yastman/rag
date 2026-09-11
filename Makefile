@@ -7,7 +7,7 @@
 	operator-env-exists operator-env-check core-min-up docker-core-up docker-bot-up docker-full-up \
 	local-up local-service-health local-up-ingest local-down local-logs local-ps local-build \
 	local-redis-recreate release-polling-lock run-bot bot bot-logs-tail bot-logs-errors bot-logs-startup \
-	e2e-core-live e2e-core-live-real-llm e2e-telegram-test test-e2e-infra test-e2e-redis-live \
+	e2e-core-live e2e-core-live-real-llm e2e-telegram-test test-e2e-redis-live \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified \
 	qdrant-ensure-indexes demo-bootstrap demo-verify verify-compose-images \
 	docker-clean-orphan-worktree-volumes
@@ -555,7 +555,7 @@ local-redis-recreate:  ## Recreate local Redis container after REDIS_PASSWORD/.e
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-core-live e2e-core-live-real-llm e2e-telegram-test test-e2e-infra test-e2e-redis-live
+.PHONY: e2e-core-live e2e-core-live-real-llm e2e-telegram-test test-e2e-redis-live
 
 e2e-core-live: ## Run simplification core live golden path (Qdrant + BGE-M3)
 	@echo "$(BLUE)Running simplification core live E2E golden path...$(NC)"
@@ -579,10 +579,6 @@ e2e-telegram-test: operator-env-exists ## Run Telegram userbot E2E runner (Telet
 	@echo "$(BLUE)Running Telegram E2E runner...$(NC)"
 	uv run --group e2e --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py
 	@echo "$(GREEN)вњ“ Telegram E2E runner complete$(NC)"
-
-test-e2e-infra: ## Run live infrastructure E2E: ingestion + Redis + Qdrant (#2771, #3235)
-	$(UV_RUN_NO_SYNC) pytest tests/e2e/test_infra_ingestion_redis_qdrant.py -v --tb=short -m "e2e and requires_services"
-	@echo "$(GREEN)вњ“ Infra E2E complete$(NC)"
 
 # Strict lane (#3368): each test starts its own disposable authenticated Redis
 # container (Docker required); a missing daemon FAILS instead of skipping.
