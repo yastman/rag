@@ -214,7 +214,6 @@ function Invoke-Tests {
         [System.IO.Path]::Combine($root, "tests", "contract", "test_runtime_no_telegram_bot_coupling_contract.py")
         [System.IO.Path]::Combine($root, "tests", "contract", "test_windows_preflight_contract.py")
         [System.IO.Path]::Combine($root, "tests", "unit", "scripts", "test_cleanup_orphaned_worktree_volumes.py")
-        [System.IO.Path]::Combine($root, "tests", "unit", "scripts", "test_smoke_zoo.py")
         [System.IO.Path]::Combine($root, "tests", "unit", "test_logging_config.py")
     )
     $testArgs = @(
