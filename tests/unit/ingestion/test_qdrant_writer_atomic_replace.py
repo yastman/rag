@@ -44,7 +44,7 @@ def _make_chunk(
     chunk.text = text
     chunk.order = order
     chunk.extra_metadata = extra_metadata or {}
-    chunk.document_name = "test.pdf"
+    chunk.document_name = "test.md"
     chunk.page_range = None
     chunk.section = None
     chunk.chunk_id = order

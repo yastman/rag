@@ -27,8 +27,15 @@ Synthetic, PII-free apartment catalog for the demo Telegram bot.
 Ingest into a local Qdrant with
 `python -m src.ingestion.apartments.runner` (see [`docs/INGESTION.md`](../docs/INGESTION.md)).
 
-## `test/`, `demo/`
+## `test/` — shipped knowledge corpus
 
-Synthetic/local-only fixtures for pipeline verification. See
-[`data/demo/README.md`](demo/README.md) for the safety rules that apply to
-everything in this directory.
+Synthetic, PII-free Markdown documents (`article_*.md`, Ukrainian legal-code
+samples) that `make demo-bootstrap` ingests into the demo knowledge collection
+through the production Markdown parser
+([`src/ingestion/markdown.py`](../src/ingestion/markdown.py)). The file stem is
+the stable `doc_id` the readiness probes filter — rename files only together
+with [`src/runtime/qdrant/readiness.py`](../src/runtime/qdrant/readiness.py)
+(`KNOWLEDGE_DEMO_DOC_IDS`). See
+[Local Development](../docs/LOCAL-DEVELOPMENT.md) for the demo data readiness
+gate. Knowledge ingestion is Markdown-only: nothing in this directory promises
+DOCX/CSV/PDF knowledge ingestion.

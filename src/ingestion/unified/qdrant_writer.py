@@ -121,26 +121,21 @@ class QdrantHybridWriter:
         """Get stable chunk location from chunk metadata or fallback.
 
         Priority:
-        1. Legacy docling meta with page/offset (pre-#3235 points)
-        2. chunk_order written by the Markdown parser
+        1. chunk_order written by the production Markdown parser
+        2. Generic order attribute
         3. Fallback: chunk_{index}
+
+        The location strings (``seq_{n}``, ``order_{n}``, ``chunk_{i}``) are
+        point-id inputs: they must never change, or existing points would be
+        orphaned on re-ingest.
         """
-        # Check for legacy docling metadata (pre-#3235 points)
+        # Priority 1: parser-written sequence metadata (Markdown parser)
         extra = getattr(chunk, "extra_metadata", {}) or {}
-        docling_meta = extra.get("docling_meta", {})
-
-        # Priority 1: Page + offset from legacy docling meta
-        if "page" in docling_meta or "page_start" in docling_meta:
-            page = docling_meta.get("page") or docling_meta.get("page_start", 0)
-            offset = docling_meta.get("offset", index)
-            return f"page_{page}_offset_{offset}"
-
-        # Priority 2: seq_no from docling
-        if hasattr(chunk, "extra_metadata") and extra.get("chunk_order") is not None:
+        if extra.get("chunk_order") is not None:
             return f"seq_{extra['chunk_order']}"
 
-        # Priority 3: Use order if available
-        if hasattr(chunk, "order") and chunk.order is not None:
+        # Priority 2: generic order attribute
+        if getattr(chunk, "order", None) is not None:
             return f"order_{chunk.order}"
 
         # Fallback
