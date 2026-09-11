@@ -97,7 +97,7 @@ def classify_doc_type(source_path: str, mime_type: str) -> DocType:
     """Infer document type from source path and mime type."""
     source_lower = source_path.lower()
     mime_lower = mime_type.lower()
-    if "faq" in source_lower or "services.yaml" in source_lower:
+    if "faq" in source_lower:
         return DocType.FAQ
     if any(token in source_lower for token in ("checklist", "check-list", "steps")):
         return DocType.CHECKLIST
