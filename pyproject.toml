@@ -17,7 +17,7 @@ dependencies = [
     "pyyaml>=6.0.0",
     # #3227: frozen on the stable 1.98.0 line (requires openai>=2.20,<3).
     # OpenAI 3.x / openai-agents are intentionally out of scope for this pair.
-    "litellm==1.98.0",
+    "litellm==1.100.0",
     "python-dotenv",
     "numpy>=2.4.6",
     # #3280: unused direct declarations (typing-extensions, aiohttp, requests)
