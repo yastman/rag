@@ -1,6 +1,9 @@
 """Conftest for ingestion unit tests.
 
-Mocks heavy ML dependencies (fastembed) before test collection.
+Mocks heavy ML dependencies (fastembed) before test collection and owns the
+shared QdrantHybridWriter fixtures (#3407): the payload, behavior, and
+atomic-replace suites all consume the fixtures defined here, so each fixture
+has exactly one owner.
 """
 
 import sys
@@ -9,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
+from src.services.bge_m3_client import HybridResult
 
 
 _MOCKED_MODULES: list[str] = []
@@ -52,7 +56,7 @@ def mock_bge_client():
     )
     client.encode_colbert.return_value = MagicMock(colbert_vecs=[[[0.1] * 128] * 5])
     client.encode_dense.return_value = MagicMock(vectors=[[0.2] * 1024])
-    client.encode_hybrid.return_value = MagicMock(
+    client.encode_hybrid.return_value = HybridResult(
         dense_vecs=[[0.2] * 1024],
         lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
         colbert_vecs=[[[0.1] * 128] * 5],
@@ -61,7 +65,7 @@ def mock_bge_client():
 
 
 @pytest.fixture
-def writer_local(mock_qdrant_client, mock_bge_client):
+def writer(mock_qdrant_client, mock_bge_client):
     """QdrantHybridWriter using local BGE-M3 for all embeddings."""
     with (
         patch(

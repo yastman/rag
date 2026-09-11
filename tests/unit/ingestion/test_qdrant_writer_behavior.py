@@ -1,7 +1,13 @@
 # tests/unit/ingestion/test_qdrant_writer_behavior.py
 """Behavior tests for QdrantHybridWriter sync methods.
 
+Single behavior/fixture owner for the writer (#3407): payload contract,
+delete/upsert business logic, and vector construction. Shared fixtures live
+in this package's conftest.
+
 Tests the actual business logic:
+- build_payload / identity helpers: required fields, grounding metadata,
+  chunk_location and point_id stability
 - delete_file_sync: filter structure, count before delete, skip delete when empty
 - upsert_chunks_sync: payload contract, vector construction, atomic-replace order,
   sparse edge cases, colbert presence, error handling
@@ -43,59 +49,114 @@ def _make_chunk(
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# build_payload / identity helpers — payload contract (#3407 merge)
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def mock_qdrant_client():
-    """Mock sync QdrantClient."""
-    client = MagicMock()
-    client.count.return_value = MagicMock(count=0)
-    client.delete = MagicMock()
-    client.upsert = MagicMock()
-    # Default: no orphan points exist for the file_id, so the post-upsert
-    # stale-id sweep finds nothing to delete (#1602 atomic-replace).
-    client.scroll.return_value = ([], None)
-    return client
+class TestBuildPayloadContract:
+    """build_payload and identity helpers meet the bot-facing payload contract."""
 
+    def _rich_chunk(self) -> MagicMock:
+        chunk = MagicMock()
+        chunk.text = "Test content"
+        chunk.chunk_id = 0
+        chunk.order = 0
+        chunk.document_name = "test.md"
+        chunk.section = "Introduction"
+        chunk.page_range = (1, 2)
+        chunk.extra_metadata = {"headings": ["Title"], "chunk_order": 0}
+        return chunk
 
-@pytest.fixture
-def mock_bge_client():
-    """Mock BGEM3SyncClient for sparse/dense/colbert embeddings."""
-    client = MagicMock()
-    client.encode_sparse.return_value = MagicMock(
-        weights=[{"indices": [1, 2], "values": [0.5, 0.3]}]
-    )
-    client.encode_colbert.return_value = MagicMock(colbert_vecs=[[[0.1] * 128] * 5])
-    client.encode_dense.return_value = MagicMock(vectors=[[0.2] * 1024])
-    client.encode_hybrid.return_value = HybridResult(
-        dense_vecs=[[0.2] * 1024],
-        lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
-        colbert_vecs=[[[0.1] * 128] * 5],
-    )
-    return client
-
-
-@pytest.fixture
-def writer(mock_qdrant_client, mock_bge_client):
-    """QdrantHybridWriter using BGE-M3 (sole embedding path)."""
-    with (
-        patch(
-            "src.ingestion.unified.qdrant_writer.QdrantClient",
-            return_value=mock_qdrant_client,
-        ),
-        patch(
-            "src.services.bge_m3_client.BGEM3SyncClient",
-            return_value=mock_bge_client,
-        ),
-    ):
-        w = QdrantHybridWriter(
-            qdrant_url="http://localhost:6333",
+    def test_payload_has_required_fields(self, writer):
+        """Payload must have page_content, metadata dict, and flat file_id."""
+        payload = writer.build_payload(
+            chunk=self._rich_chunk(),
+            file_id="file123",
+            source_path="docs/test.md",
+            chunk_location="seq_0",
+            file_metadata={
+                "file_name": "test.md",
+                "mime_type": "text/markdown",
+                "modified_time": "2026-02-03T12:00:00Z",
+                "content_hash": "abc123",
+            },
         )
-    w.client = mock_qdrant_client
-    w._bge_client = mock_bge_client
-    yield w
+
+        assert payload["page_content"] == "Test content"
+        assert isinstance(payload["metadata"], dict)
+        assert payload["file_id"] == "file123"  # Flat for fast delete
+
+        # Required metadata fields (for small-to-big)
+        assert payload["metadata"]["file_id"] == "file123"
+        assert payload["metadata"]["doc_id"] == "file123"
+        assert payload["metadata"]["order"] == 0
+        assert payload["metadata"]["chunk_order"] == 0
+        assert payload["metadata"]["source"] == "docs/test.md"
+        assert payload["metadata"]["topic"] == "general"
+        assert payload["metadata"]["doc_type"] == "article"
+
+    def test_payload_has_grounding_metadata_fields(self, writer):
+        """Optional file metadata flows into the payload for grounding."""
+        chunk = self._rich_chunk()
+        chunk.text = "Документы для ВНЖ в Болгарии"
+        chunk.page_range = None
+        chunk.extra_metadata = {"headings": ["Title"], "chunk_order": 0}
+
+        payload = writer.build_payload(
+            chunk=chunk,
+            file_id="file123",
+            source_path="gdrive/legal-ru.md",
+            chunk_location="seq_0",
+            file_metadata={
+                "file_name": "legal-ru.md",
+                "mime_type": "text/markdown",
+                "language": "ru",
+                "jurisdiction": "bg",
+            },
+        )
+
+        assert payload["metadata"]["jurisdiction"] == "bg"
+        assert payload["metadata"]["language"] == "ru"
+        assert payload["metadata"]["source_type"] == "gdrive"
+        assert payload["metadata"]["audience"] == "client"
+
+    def test_chunk_location_stability(self):
+        """chunk_location should be stable for same input."""
+        chunk1 = MagicMock()
+        chunk1.extra_metadata = {"chunk_order": 3}
+
+        chunk2 = MagicMock()
+        chunk2.extra_metadata = {"chunk_order": 3}
+
+        loc1 = QdrantHybridWriter.get_chunk_location(chunk1, 0)
+        loc2 = QdrantHybridWriter.get_chunk_location(chunk2, 0)
+
+        assert loc1 == loc2
+        assert loc1 == "seq_3"
+
+    def test_fallback_chunk_location(self):
+        """Should fallback gracefully when no parser metadata is present."""
+        # No metadata
+        chunk = MagicMock()
+        chunk.extra_metadata = None
+        chunk.order = None
+
+        loc = QdrantHybridWriter.get_chunk_location(chunk, 5)
+        assert loc == "chunk_5"
+
+        # With order
+        chunk.order = 3
+        loc = QdrantHybridWriter.get_chunk_location(chunk, 5)
+        assert loc == "order_3"
+
+    def test_point_id_deterministic(self):
+        """point_id should be deterministic for same file_id + chunk_location."""
+        id1 = QdrantHybridWriter.generate_point_id("file123", "seq_0")
+        id2 = QdrantHybridWriter.generate_point_id("file123", "seq_0")
+        id3 = QdrantHybridWriter.generate_point_id("file123", "seq_1")
+
+        assert id1 == id2  # Same input = same output
+        assert id1 != id3  # Different chunk_location = different ID
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +276,8 @@ class TestUpsertChunksSyncBehavior:
         assert "dense" in points[0].vector
         assert "bm42" in points[0].vector
         assert "colbert" in points[0].vector
+        # The colbert multivectors pass through unchanged.
+        assert points[0].vector["colbert"] == [[0.1] * 128] * 5
 
     def test_payload_contains_page_content(self, writer, mock_qdrant_client, mock_bge_client):
         """Payload must include page_content with the chunk text."""

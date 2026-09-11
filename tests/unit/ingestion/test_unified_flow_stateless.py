@@ -1,10 +1,12 @@
 """Behaviour tests for the stateless unified ingestion flow.
 
-``run_once`` must scan ``sync_dir``, parse+embed+upsert each supported file,
-and skip files whose ``(file_id, content_hash, source)`` already has a point
-in Qdrant — with no external state database. Manifest paths are reconciled
-against the live scan listing before identity allocation (#3369), so a
-renamed file reuses its identity and a copy stays distinct.
+Single unit owner for flow behavior (#3407): ``run_once`` must scan
+``sync_dir``, parse+embed+upsert each supported file, and skip files whose
+``(file_id, content_hash, source)`` already has a point in Qdrant — with no
+external state database. Manifest paths are reconciled against the live scan
+listing before identity allocation (#3369), so a renamed file reuses its
+identity and a copy stays distinct. Live-service flow scenarios belong to the
+strict E2E suite (#3416), not this unit lane.
 """
 
 from __future__ import annotations
@@ -583,3 +585,24 @@ class TestManifestPathReconciliation:
             ("id", "a.md"),
             ("id", str((sub / "b.md").relative_to(tmp_path))),
         ]
+
+
+def test_file_id_from_content_passes_content_hash_to_manifest() -> None:
+    """flow.file_id_from_content delegates identity to the manifest with the content hash."""
+    import src.ingestion.unified.flow as flow_module
+
+    original = flow_module._manifest
+    manifest = MagicMock()
+    manifest.get_or_create_id.return_value = "stable-id"
+
+    try:
+        flow_module._manifest = manifest
+        result = flow_module.file_id_from_content("docs/a.md", b"payload")
+    finally:
+        flow_module._manifest = original
+
+    assert result == "stable-id"
+    manifest.get_or_create_id.assert_called_once_with(
+        "docs/a.md",
+        compute_content_hash_from_bytes(b"payload"),
+    )

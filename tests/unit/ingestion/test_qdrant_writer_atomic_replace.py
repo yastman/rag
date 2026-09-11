@@ -66,14 +66,14 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
     """
 
     def test_bge_m3_embedding_failure_does_not_call_delete(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """When hybrid embedding raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=5)
         mock_bge_client.encode_hybrid.side_effect = RuntimeError("BGE-M3 embedding failed")
 
         chunk = _make_chunk()
-        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
         assert "BGE-M3 embedding failed" in stats.errors[0]
@@ -84,14 +84,14 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
         mock_qdrant_client.upsert.assert_not_called()
 
     def test_sparse_embedding_failure_does_not_call_delete(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """When BGE-M3 hybrid encode raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
         mock_bge_client.encode_hybrid.side_effect = RuntimeError("BGE-M3 timeout")
 
         chunk = _make_chunk()
-        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
         assert "BGE-M3 timeout" in stats.errors[0]
@@ -99,36 +99,34 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
         mock_qdrant_client.upsert.assert_not_called()
 
     def test_local_hybrid_failure_does_not_call_delete(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """When local BGE-M3 hybrid encode raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=7)
         mock_bge_client.encode_hybrid.side_effect = RuntimeError("hybrid encode failed")
 
         chunk = _make_chunk()
-        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
         assert "hybrid encode failed" in stats.errors[0]
         mock_qdrant_client.delete.assert_not_called()
         mock_qdrant_client.upsert.assert_not_called()
 
-    def test_upsert_failure_does_not_call_delete(
-        self, writer_local, mock_qdrant_client, mock_bge_client
-    ):
+    def test_upsert_failure_does_not_call_delete(self, writer, mock_qdrant_client, mock_bge_client):
         """When the upsert call to Qdrant raises, delete must not have been called."""
         mock_qdrant_client.count.return_value = MagicMock(count=4)
         mock_qdrant_client.upsert.side_effect = RuntimeError("Qdrant upsert failed")
 
         chunk = _make_chunk()
-        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
         assert "Qdrant upsert failed" in stats.errors[0]
         mock_qdrant_client.delete.assert_not_called()
 
     def test_incomplete_hybrid_vectors_perform_zero_mutations(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """A hybrid response missing colbert (#3373) must not upsert NOR sweep.
 
@@ -143,7 +141,7 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
         )
 
         chunk = _make_chunk()
-        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
         assert stats.points_upserted == 0
@@ -159,7 +157,7 @@ class TestSuccessPathOrderingIsUpsertThenDelete:
     """
 
     def test_upsert_called_before_delete_on_success(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """Calls to client.upsert must precede client.delete in time."""
         call_order: list[str] = []
@@ -176,7 +174,7 @@ class TestSuccessPathOrderingIsUpsertThenDelete:
         mock_qdrant_client.upsert.side_effect = lambda **_: call_order.append("upsert")
 
         chunk = _make_chunk()
-        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is None
         # Upsert must come before any delete
@@ -194,12 +192,12 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
 
     This is the structural guard against re-introducing the original bug.
     A whole-file ``Filter(must=[FieldCondition(metadata.file_id ...)])``
-    delete is exactly what #1602 forbids — even if it runs after upsert,
+    delete is exactly what #1602 forbids вЂ” even if it runs after upsert,
     a future refactor must not blindly drop the whole file.
     """
 
     def test_stale_delete_uses_id_based_selector_when_orphans_exist(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """When stale chunks exist (old ids not in the new batch), delete uses HasId."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
@@ -218,7 +216,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         )
 
         chunk = _make_chunk(text="text 0", order=0)
-        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is None
         assert stats.points_upserted == 1
@@ -250,7 +248,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         assert new_chunk_id not in deleted_ids
 
     def test_no_stale_delete_when_every_old_id_is_replaced(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """If every existing point is replaced by an upsert with the same id, skip delete."""
         mock_qdrant_client.count.return_value = MagicMock(count=2)
@@ -268,7 +266,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         )
 
         chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(2)]
-        stats = writer_local.upsert_chunks_sync(chunks, "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync(chunks, "file_1", "/p", {}, "col")
 
         assert stats.errors is None
         assert stats.points_upserted == 2
@@ -281,7 +279,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
 
 
 class TestAtomicGenerationVisibility:
-    """A replacement is fully visible or not visible — never partial (#1602).
+    """A replacement is fully visible or not visible вЂ” never partial (#1602).
 
     The audited production failure: the writer upserted the replacement in
     several request-size batches, and an exception on a later batch was
@@ -293,7 +291,7 @@ class TestAtomicGenerationVisibility:
     """
 
     def test_oversize_replacement_rejected_before_first_upsert_keeps_old_generation_queryable(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """Batch-1-commits/batch-2-throws must be impossible: zero upsert calls."""
         old_generation_ids = [
@@ -326,7 +324,7 @@ class TestAtomicGenerationVisibility:
             ),
             patch("src.ingestion.unified.qdrant_writer.QDRANT_UPSERT_MAX_REQUEST_BYTES", 700),
         ):
-            stats = writer_local.upsert_chunks_sync(chunks, "file_new", "/doc.md", {}, "col")
+            stats = writer.upsert_chunks_sync(chunks, "file_new", "/doc.md", {}, "col")
 
         # The failure must be the pre-mutation split-document rejection,
         # not the injected second-batch exception.
@@ -340,7 +338,7 @@ class TestAtomicGenerationVisibility:
         mock_qdrant_client.delete.assert_not_called()
 
     def test_fitting_replacement_goes_out_as_one_request_with_all_points(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """A replacement that fits the bound is exactly one atomic upsert request."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
@@ -359,7 +357,7 @@ class TestAtomicGenerationVisibility:
             ),
             patch("src.ingestion.unified.qdrant_writer.QDRANT_UPSERT_MAX_REQUEST_BYTES", 700),
         ):
-            stats = writer_local.upsert_chunks_sync(chunks, "file_new", "/doc.md", {}, "col")
+            stats = writer.upsert_chunks_sync(chunks, "file_new", "/doc.md", {}, "col")
 
         assert stats.errors is None
         assert stats.points_upserted == 3
@@ -368,7 +366,7 @@ class TestAtomicGenerationVisibility:
         assert len(points) == 3
 
     def test_stale_sweep_failure_reports_committed_replacement_not_failed_write(
-        self, writer_local, mock_qdrant_client, mock_bge_client
+        self, writer, mock_qdrant_client, mock_bge_client
     ):
         """Error stats must not present a committed replacement as a failed write.
 
@@ -380,13 +378,9 @@ class TestAtomicGenerationVisibility:
         mock_qdrant_client.scroll.side_effect = RuntimeError("scroll boom")
 
         chunk = _make_chunk()
-        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is not None
         assert "committed" in stats.errors[0].lower()
         assert "scroll boom" in stats.errors[0]
         assert stats.points_upserted == 1
-
-
-# Reuse fixtures from the sibling behavior test module
-pytest_plugins = ["tests.unit.ingestion.test_qdrant_writer_behavior"]
