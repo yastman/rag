@@ -181,15 +181,19 @@ def _ingest_directory(
                 continue
 
             parsed_chunks = parser.chunk_file_sync(path)
-            if not parsed_chunks:
-                logger.warning("No chunks from: %s", rel)
-                result.skipped += 1
-                continue
 
-            chunks = parser.to_ingestion_chunks(
-                parsed_chunks,
-                source=rel,
-                source_type=path.suffix.lstrip("."),
+            # An empty-but-successful parse (#3370) is an empty replacement,
+            # not a skip: ``chunks=[]`` must reach the replace path below so
+            # prior searchable points are removed. A parse/read failure raises
+            # instead and never reaches any mutation.
+            chunks = (
+                parser.to_ingestion_chunks(
+                    parsed_chunks,
+                    source=rel,
+                    source_type=path.suffix.lstrip("."),
+                )
+                if parsed_chunks
+                else []
             )
             file_metadata = {
                 "file_name": path.name,
@@ -205,20 +209,36 @@ def _ingest_directory(
             # other's new ids.
             with _lock_for_source(rel):
                 old_file_ids = _file_ids_for_source(writer.client, collection, rel)
-                stats = writer.upsert_chunks_sync(
-                    chunks=chunks,
-                    file_id=file_id,
-                    source_path=rel,
-                    file_metadata=file_metadata,
-                    collection_name=collection,
-                )
-                if stats.errors:
-                    raise RuntimeError("; ".join(stats.errors))
-                for old_file_id in old_file_ids - {file_id}:
+                if chunks:
+                    stats = writer.upsert_chunks_sync(
+                        chunks=chunks,
+                        file_id=file_id,
+                        source_path=rel,
+                        file_metadata=file_metadata,
+                        collection_name=collection,
+                    )
+                    if stats.errors:
+                        raise RuntimeError("; ".join(stats.errors))
+                    stale_file_ids = old_file_ids - {file_id}
+                else:
+                    # Empty success (#3370): the committed generation is empty,
+                    # so every point still stored for this source is stale and
+                    # its removal IS the empty-generation commit. A failure
+                    # raises and preserves the old searchable points for retry.
+                    stale_file_ids = old_file_ids
+
+                for old_file_id in stale_file_ids:
                     writer.delete_file_sync(file_id=old_file_id, collection_name=collection)
 
             result.processed += 1
-            logger.info("Indexed %s (%d chunks)", rel, stats.points_upserted)
+            if chunks:
+                logger.info("Indexed %s (%d chunks)", rel, stats.points_upserted)
+            else:
+                logger.info(
+                    "Indexed %s as an empty replacement (removed %d stale file ids)",
+                    rel,
+                    len(stale_file_ids),
+                )
         except Exception as exc:  # one bad file must not abort the whole pass
             logger.error("Failed %s: %s", rel, exc, exc_info=True)
             result.errors += 1
