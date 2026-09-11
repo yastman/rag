@@ -67,6 +67,11 @@ class FileManifest:
        distinct.  Prevents copy-collapse (#1603).
     4. Genuinely new file — generate fresh UUID.
 
+    Before each scan pass the flow calls :meth:`reconcile_paths` with the
+    live listing (#3369): stale path entries are dropped and the
+    one-active-path-per-file_id invariant is enforced, so rename/copy
+    decisions above are made against the paths that actually exist.
+
     Stores three mappings:
     - key_to_id: ``path:content_hash`` → file_id (includes copy entries)
     - hash_to_id: content_hash → file_id  (first-seen / rename-stable anchor)
@@ -221,6 +226,64 @@ class FileManifest:
                 del self._path_to_hash[path]
                 self.save()
                 logger.debug("Manifest: removed path=%s", path)
+
+    def reconcile_paths(self, active_paths: set[str]) -> None:
+        """Reconcile tracked paths against the live scan listing (#3369).
+
+        Production scans never call ``remove()`` when a file is renamed: the
+        stale path simply stops appearing in the listing. Called by the flow
+        BEFORE identity allocation for the pass, this method:
+
+        1. Drops ``path_to_hash`` entries whose path is absent from the scan,
+           together with their ``path:content_hash`` composite key, so the
+           same content at a new path is recognised as a rename (identity
+           reuse) instead of a copy (new identity).
+        2. Restores the one-active-path-per-file_id invariant: if a historic
+           manifest collapsed several active paths onto one id (pre-#1603
+           state), the first active path (sorted) keeps the id and the others
+           are re-minted, so copies never regress to a shared identity.
+
+        Deterministic and idempotent: the decisions depend only on the sorted
+        listing, and an unchanged listing performs no write. The
+        ``hash_to_id`` anchor is never rewritten, so identities survive an
+        interrupted or incomplete scan.
+        """
+        with self._lock:
+            changed = False
+
+            # 1. Drop entries for paths absent from the current scan.
+            for path in sorted(set(self._path_to_hash) - set(active_paths)):
+                content_hash = self._path_to_hash.pop(path)
+                self._key_to_id.pop(f"{path}:{content_hash}", None)
+                changed = True
+                logger.info("Manifest: reconciled stale path=%s", path)
+
+            # 2. Repair collapsed ids among the remaining (active) paths.
+            seen_ids: dict[str, str] = {}
+            for path in sorted(self._path_to_hash):
+                content_hash = self._path_to_hash[path]
+                composite_key = f"{path}:{content_hash}"
+                file_id = self._key_to_id.get(composite_key)
+                if file_id is None:
+                    # Composite resolved at allocation time (get_or_create_id).
+                    continue
+                if file_id in seen_ids:
+                    new_id = uuid.uuid4().hex[:16]
+                    self._key_to_id[composite_key] = new_id
+                    changed = True
+                    logger.info(
+                        "Manifest: re-minted file_id=%s for path=%s "
+                        "(was collapsed onto %s held by %s)",
+                        new_id,
+                        path,
+                        file_id,
+                        seen_ids[file_id],
+                    )
+                else:
+                    seen_ids[file_id] = path
+
+            if changed:
+                self.save()
 
 
 def compute_content_hash_from_bytes(content: bytes) -> str:
