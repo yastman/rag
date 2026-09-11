@@ -71,3 +71,69 @@ def test_local_compose_cmd_uses_explicit_operator_env() -> None:
     assert "$(OPERATOR_ENV)" in local_cmd, (
         "LOCAL_COMPOSE_CMD must pass the explicit operator env file"
     )
+
+
+# =============================================================================
+# Full-stack startup: ordered, waited, failure-honest (#3361)
+# =============================================================================
+
+
+def test_docker_full_up_waits_with_bounded_timeout() -> None:
+    """docker-full-up must wait for health with a bounded timeout (#3361).
+
+    Plain `up -d` returns as soon as containers are created — a false green
+    while services are still starting or crash-looping. `up --wait` returns
+    success only when every started service is running|healthy, and
+    `--wait-timeout` bounds the wait instead of hanging forever.
+    """
+    block = _target_block("docker-full-up")
+    assert "up -d --wait --wait-timeout $(FULL_UP_WAIT_TIMEOUT)" in block, (
+        "docker-full-up must use `up -d --wait --wait-timeout "
+        "$(FULL_UP_WAIT_TIMEOUT)` so success means the full stack is healthy "
+        "and the wait is bounded (#3361)"
+    )
+    assert re.search(
+        r"^FULL_UP_WAIT_TIMEOUT \?= \d+$", MAKEFILE.read_text(encoding="utf-8"), re.MULTILINE
+    ), (
+        "FULL_UP_WAIT_TIMEOUT must be defined with a numeric ?= default so "
+        "operators can override the bound (#3361)"
+    )
+
+
+def test_docker_full_up_failure_is_honest_names_services_and_leaks_no_secrets() -> None:
+    """A failed full-stack wait must exit nonzero, name failing services, print no secrets.
+
+    #3361 test-first: "Force each dependency unhealthy; command is nonzero,
+    names the service and prints no secret." The failure handler lists the
+    project's containers with statuses (`docker compose ps -a` — container
+    names and states only) and propagates the compose exit code.
+    """
+    block = _target_block("docker-full-up")
+
+    assert "exit $$status" in block, (
+        "docker-full-up must propagate the compose exit status on failure (nonzero exit, #3361)"
+    )
+    assert "ps -a" in block, (
+        "docker-full-up must print the failed stack's container statuses "
+        "(compose ps -a names the unhealthy services) so the operator learns "
+        "which dependency broke the wait (#3361)"
+    )
+    for secret_sink in ("ENV_LOAD", 'cat "$(OPERATOR_ENV)"', "cat .env", "set -a"):
+        assert secret_sink not in block, (
+            f"docker-full-up must not source or dump the operator env ({secret_sink!r}): "
+            "failure output prints service names and statuses, never secret values (#3367/#3361)"
+        )
+
+
+def test_docker_core_up_wait_is_bounded() -> None:
+    """docker-core-up already waits; the wait must be bounded (#3361)."""
+    text = MAKEFILE.read_text(encoding="utf-8")
+    block = _target_block("docker-core-up")
+    assert "up -d --wait --wait-timeout $(CORE_UP_WAIT_TIMEOUT)" in block, (
+        "docker-core-up must bound its `up --wait` with --wait-timeout "
+        "$(CORE_UP_WAIT_TIMEOUT) so a never-healthy service fails the command "
+        "instead of hanging it forever (#3361)"
+    )
+    assert re.search(r"^CORE_UP_WAIT_TIMEOUT \?= \d+$", text, re.MULTILINE), (
+        "CORE_UP_WAIT_TIMEOUT must be defined with a numeric ?= default (#3361)"
+    )

@@ -537,6 +537,12 @@ CORE_MIN_COMPOSE_FILE := -f compose.core.yml
 # context). That fixture is confined to named CI/static-validation targets
 # (pytest lanes, .github/workflows/ci.yml compose-config).
 OPERATOR_ENV ?= .env
+# Bounded compose waits (#3361): bge-m3 declares a 420s cold-load start
+# period, so the full-stack bound must exceed start_period + healthcheck
+# retries (~420s + 3x30s). Override per run, e.g.
+#   make docker-full-up FULL_UP_WAIT_TIMEOUT=900
+FULL_UP_WAIT_TIMEOUT ?= 600
+CORE_UP_WAIT_TIMEOUT ?= 300
 # Local dev: explicit -f flags instead of colon COMPOSE_FILE
 LOCAL_COMPOSE_CMD := docker compose -f compose.yml -f compose.dev.yml --env-file $(OPERATOR_ENV)
 # Runtime env for native-run bot commands and E2E trace gates: the same
@@ -708,8 +714,8 @@ core-min-up: ## Start minimal core services only (qdrant + redis)
 core-up: docker-core-up ## Start the full default local compose core
 
 docker-core-up: operator-env-check ## Start default local compose stack (unprofiled services; env-validated #3367)
-	@echo "$(BLUE)Starting core services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) up -d --wait
+	@echo "$(BLUE)Starting core services (bounded wait: $(CORE_UP_WAIT_TIMEOUT)s, #3361)...$(NC)"
+	$(LOCAL_COMPOSE_CMD) up -d --wait --wait-timeout $(CORE_UP_WAIT_TIMEOUT)
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
 docker-bot-up: operator-env-check ## Start core + bot services (bot; env-validated #3367)
@@ -727,10 +733,18 @@ docker-ingest-up: operator-env-check ## Start core + ingestion service (env-vali
 	$(LOCAL_COMPOSE_CMD) --profile ingest up -d
 	@echo "$(GREEN)✓ Ingestion service started$(NC)"
 
-docker-full-up: operator-env-check ## Start all services (full stack; env-validated before build #3367)
-	@echo "$(BLUE)Starting full stack...$(NC)"
-	$(LOCAL_COMPOSE_CMD) --profile full up -d
-	@echo "$(GREEN)✓ Full stack started$(NC)"
+docker-full-up: operator-env-check ## Start all services and wait: exit 0 only when all six are healthy; honest failure names them (full stack #3361)
+	@echo "$(BLUE)Starting full stack (bounded wait: $(FULL_UP_WAIT_TIMEOUT)s)...$(NC)"
+	@if $(LOCAL_COMPOSE_CMD) --profile full up -d --wait --wait-timeout $(FULL_UP_WAIT_TIMEOUT); then \
+		echo "$(GREEN)✓ Full stack started: 6/6 services healthy (postgres redis qdrant bge-m3 bot ingestion)$(NC)"; \
+	else \
+		status=$$?; \
+		echo "$(RED)✗ Full stack failed to become healthy (exit $$status). Container statuses:$(NC)" >&2; \
+		$(LOCAL_COMPOSE_CMD) --profile full ps -a >&2 || true; \
+		echo "$(YELLOW)  Above: service names and statuses only — secrets are never printed.$(NC)" >&2; \
+		echo "$(YELLOW)  Diagnose the named service: docker compose logs <service> (or make local-logs).$(NC)" >&2; \
+		exit $$status; \
+	fi
 
 docker-up: docker-core-up ## Alias for docker-core-up (backward compat)
 

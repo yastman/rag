@@ -247,6 +247,77 @@ def test_compose_dev_postgres_renders_with_dev_only_capabilities() -> None:
     }
 
 
+def _render_compose_config(*extra_args: str) -> subprocess.CompletedProcess[str]:
+    """Render the merged compose config (engine is the merge authority)."""
+    return _run_docker_command(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(COMPOSE_CI_ENV),
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            *extra_args,
+            "config",
+        ],
+    )
+
+
+def test_compose_full_profile_renders_exactly_six_healthy_capable_services() -> None:
+    """Full-profile success means exactly six services, each with a healthcheck.
+
+    #3361: "Success means exactly six expected services are healthy" — the
+    rendered full profile must contain exactly postgres, redis, qdrant,
+    bge-m3, bot, ingestion, and every one of them must declare a healthcheck
+    so `up --wait` gates on real health rather than process presence.
+    """
+    result = _render_compose_config("--profile", "full")
+    assert result.returncode == 0, f"Compose full-profile config failed:\n{result.stderr}"
+
+    import yaml
+
+    services = yaml.safe_load(result.stdout)["services"]
+    expected = {"postgres", "redis", "qdrant", "bge-m3", "bot", "ingestion"}
+    assert set(services) == expected, (
+        f"full profile must render exactly {sorted(expected)}, got {sorted(services)} (#3361)"
+    )
+    missing_healthcheck = sorted(
+        name for name, svc in services.items() if not (svc.get("healthcheck") or {}).get("test")
+    )
+    assert not missing_healthcheck, (
+        f"every full-profile service must declare a healthcheck so `up --wait` "
+        f"gates on real health; missing: {missing_healthcheck} (#3361)"
+    )
+
+
+def test_compose_bot_profile_keeps_postgres_optional() -> None:
+    """Non-full profile retains optional PostgreSQL semantics (#3361/#3241).
+
+    Rendering `--profile bot` must not pull in postgres, and the rendered bot
+    dependency on postgres must be ``required: false`` so Compose skips it
+    when postgres is not part of the active profiles.
+    """
+    result = _render_compose_config("--profile", "bot")
+    assert result.returncode == 0, f"Compose bot-profile config failed:\n{result.stderr}"
+
+    import yaml
+
+    services = yaml.safe_load(result.stdout)["services"]
+    assert "bot" in services, "bot profile must render the bot service"
+    assert "postgres" not in services, (
+        "the bot profile must not include postgres: non-full profiles keep "
+        "PostgreSQL optional (#3241, #3361)"
+    )
+    postgres_dep = services["bot"]["depends_on"]["postgres"]
+    assert postgres_dep.get("required") is False, (
+        "rendered bot.depends_on.postgres must be required: false so Compose "
+        "skips the dependency when postgres is not active (#3361)"
+    )
+    assert postgres_dep.get("condition") == "service_healthy"
+
+
 @pytest.mark.parametrize("dockerfile", _LANGFUSE_RUNTIME_DOCKERFILES)
 def test_langfuse_dockerfile_does_not_use_python314(dockerfile: str) -> None:
     """Langfuse SDK uses Pydantic v1 compatibility that crashes under Python 3.14.

@@ -191,8 +191,15 @@ services:
       # gracefully (bookmarks capability disabled) when PostgreSQL is absent.
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
     depends_on:
-      # No postgres dependency (#3241): PostgreSQL is an opt-in profile service;
-      # the bot's preflight treats it as OPTIONAL and degrades without it.
+      # Full-profile ordering (#3361): required: false keeps PostgreSQL
+      # OPTIONAL outside the postgres/full profiles (#3241) — Compose skips
+      # the dependency entirely when postgres is not active. When postgres IS
+      # active (full stack), the bot waits for a healthy database so the
+      # bookmarks capability setup never races a cold PostgreSQL and full
+      # fresh-volume starts never come up permanently degraded.
+      postgres:
+        condition: service_healthy
+        required: false
       redis:
         condition: service_healthy
       qdrant:
@@ -200,9 +207,14 @@ services:
       bge-m3:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'telegram_bot.main' || exit 1"]
+      # Capability-honest health (#3361): process alive AND the CRITICAL
+      # dependencies still serving from the bot's network namespace — a bot
+      # whose Redis/Qdrant/BGE-M3 went dark must report unhealthy, not green.
+      # PostgreSQL is deliberately not probed: it stays an optional capability
+      # (#3241), so a degraded-but-working bot remains healthy.
+      test: ["CMD-SHELL", "pgrep -f 'telegram_bot.main' >/dev/null || exit 1; python -c \"import httpx, socket; c = httpx.Client(timeout=5); q = c.get('http://qdrant:6333/readyz'); b = c.get('http://bge-m3:8000/health'); c.close(); s = socket.create_connection(('redis', 6379), timeout=5); s.close(); exit(0 if q.status_code == 200 and b.status_code == 200 else 1)\""]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
       start_period: 30s
     deploy:
@@ -225,6 +237,13 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
+    # The image entrypoint starts as root and drops to the fixed non-root
+    # `ingestion` user via gosu (setuid/setgid) after chowning the manifest
+    # volume. Under cap_drop: [ALL] that switch fails with EPERM and the
+    # container crash-loops, so a cold full-profile start can never reach six
+    # healthy services (#3361 cold start). Grant exactly what the entrypoint
+    # needs; the dropped-to process runs as uid 1000 without them.
+    cap_add: ["CHOWN", "SETGID", "SETUID"]
     environment:
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - QDRANT_URL=http://qdrant:6333
@@ -244,14 +263,20 @@ services:
           create_host_path: true
       - ingestion-manifest:/data/manifest
     depends_on:
+      # Qdrant/BGE precede ingestion (#3361): writes and embeddings require
+      # both to serve before the pipeline starts polling the sync directory.
       qdrant:
         condition: service_healthy
       bge-m3:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'src.ingestion.unified.cli' || exit 1"]
+      # Capability-honest health (#3361): process alive AND Qdrant ready AND
+      # the BGE-M3 model actually loaded. Cold-start-safe: probes readiness,
+      # not collection existence (a fresh volume has no collection until the
+      # first ingest), and does not contend with running encode batches.
+      test: ["CMD-SHELL", "pgrep -f 'src.ingestion.unified.cli' >/dev/null || exit 1; python -c \"import httpx; c = httpx.Client(timeout=10); q = c.get('http://qdrant:6333/readyz'); b = c.get('http://bge-m3:8000/health'); c.close(); exit(0 if q.status_code == 200 and b.status_code == 200 and b.json().get('model_loaded') is True else 1)\""]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
       start_period: 60s
     deploy:

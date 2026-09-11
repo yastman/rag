@@ -138,6 +138,87 @@ def test_bot_defaults_explicitly_to_single_instance_redis_mode() -> None:
     )
 
 
+# =============================================================================
+# Capability-honest healthchecks (#3361)
+# =============================================================================
+
+
+def _healthcheck_command(service: str) -> str:
+    """Return the rendered healthcheck test command for one compose service."""
+    healthcheck = _load_compose()["services"][service].get("healthcheck")
+    assert healthcheck, f"compose.yml {service} must declare a healthcheck (#3361)"
+    test = healthcheck["test"]
+    assert isinstance(test, list), f"{service} healthcheck test must be a list"
+    return " ".join(str(part) for part in test)
+
+
+def test_bot_healthcheck_probes_capability_not_only_process() -> None:
+    """bot healthcheck must probe real dependency capability, not just pgrep.
+
+    #3361: "process-only checks are insufficient" — a bot whose Redis, Qdrant,
+    or BGE-M3 dependency became unreachable must report unhealthy instead of
+    green. The probe covers the three CRITICAL dependencies; PostgreSQL is
+    deliberately absent because it stays an optional capability (#3241).
+    """
+    command = _healthcheck_command("bot")
+
+    assert "pgrep" in command, "bot healthcheck must still prove the process is alive"
+    assert "qdrant:6333" in command, (
+        "bot healthcheck must probe Qdrant capability (http://qdrant:6333/readyz)"
+    )
+    assert "bge-m3:8000" in command, (
+        "bot healthcheck must probe BGE-M3 capability (http://bge-m3:8000/health)"
+    )
+    assert "redis" in command, "bot healthcheck must probe Redis reachability"
+    assert "postgres" not in command, (
+        "bot healthcheck must not require PostgreSQL: it stays an optional "
+        "capability and a degraded-but-working bot is still healthy (#3241)"
+    )
+
+
+def test_ingestion_healthcheck_probes_capability_not_only_process() -> None:
+    """ingestion healthcheck must probe Qdrant and BGE-M3 capability, not just pgrep.
+
+    #3361: "process-only checks are insufficient". The probe must stay
+    cold-start-safe: it checks Qdrant readiness and the BGE-M3 model-loaded
+    capability without requiring the collection to exist (a fresh volume has
+    no collection until the first ingest runs).
+    """
+    command = _healthcheck_command("ingestion")
+
+    assert "pgrep" in command, "ingestion healthcheck must still prove the process is alive"
+    assert "qdrant:6333/readyz" in command, (
+        "ingestion healthcheck must probe Qdrant readiness "
+        "(http://qdrant:6333/readyz), not a collection that may not exist yet"
+    )
+    assert "bge-m3:8000/health" in command, (
+        "ingestion healthcheck must probe the BGE-M3 health capability"
+    )
+    assert "model_loaded" in command, (
+        "ingestion healthcheck must assert the BGE-M3 model is actually loaded "
+        "(model_loaded), not merely that the endpoint answers"
+    )
+
+
+def test_ingestion_keeps_caps_required_by_gosu_entrypoint() -> None:
+    """ingestion must keep the minimal caps its gosu entrypoint needs to start.
+
+    The image entrypoint runs as root and drops to the fixed non-root
+    ``ingestion`` user via gosu (setuid/setgid) after chowning the manifest
+    volume. Under the base ``cap_drop: [ALL]`` hardening the container
+    crash-loops with "failed switching to ingestion: operation not permitted",
+    so a cold full-profile start can never reach six healthy services (#3361
+    cold-start proof). The caps are exactly the entrypoint's needs; the
+    dropped-to python process runs as a non-root user without them.
+    """
+    ingestion = _load_compose()["services"]["ingestion"]
+    caps = set(ingestion.get("cap_add") or [])
+    assert {"CHOWN", "SETGID", "SETUID"} <= caps, (
+        f"ingestion.cap_add must include CHOWN, SETGID, SETUID for the gosu "
+        f"entrypoint under cap_drop: [ALL]; got {sorted(caps)}"
+    )
+
+
 def test_env_example_documents_redis_mode() -> None:
     """.env.example must document REDIS_MODE so native operators see the contract."""
     env_example = ROOT / ".env.example"
