@@ -30,16 +30,16 @@ def test_live_env_uses_explicit_overrides() -> None:
     from tests.e2e_core.live_harness import LiveE2EEnv
 
     env = {
-        "E2E_CORE_QDRANT_URL": "http://qdrant.local:6333",
-        "E2E_CORE_BGE_URL": "http://bge.local:8000",
+        "E2E_CORE_QDRANT_URL": "http://127.0.0.1:6333",
+        "E2E_CORE_BGE_URL": "http://127.0.0.1:8000",
         "QDRANT_API_KEY": "secret",
     }
 
     with mock.patch.dict(os.environ, env, clear=True):
         parsed = LiveE2EEnv.from_env()
 
-    assert parsed.qdrant_url == "http://qdrant.local:6333"
-    assert parsed.bge_m3_url == "http://bge.local:8000"
+    assert parsed.qdrant_url == "http://127.0.0.1:6333"
+    assert parsed.bge_m3_url == "http://127.0.0.1:8000"
     assert parsed.qdrant_api_key == "secret"
 
 
@@ -47,15 +47,15 @@ def test_live_env_falls_back_to_runtime_urls() -> None:
     from tests.e2e_core.live_harness import LiveE2EEnv
 
     env = {
-        "QDRANT_URL": "http://runtime-qdrant:6333",
-        "BGE_M3_URL": "http://runtime-bge:8000",
+        "QDRANT_URL": "http://127.0.0.1:6333",
+        "BGE_M3_URL": "http://127.0.0.1:8000",
     }
 
     with mock.patch.dict(os.environ, env, clear=True):
         parsed = LiveE2EEnv.from_env()
 
-    assert parsed.qdrant_url == "http://runtime-qdrant:6333"
-    assert parsed.bge_m3_url == "http://runtime-bge:8000"
+    assert parsed.qdrant_url == "http://127.0.0.1:6333"
+    assert parsed.bge_m3_url == "http://127.0.0.1:8000"
 
 
 def test_live_env_reads_real_llm_opt_in() -> None:

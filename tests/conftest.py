@@ -1,6 +1,7 @@
 """Shared pytest fixtures for all tests."""
 
 import os
+import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -38,6 +39,16 @@ os.environ.setdefault("LANGFUSE_HOST", "http://localhost:3001")
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 
 
+def pytest_configure(config) -> None:
+    """Pin one harness run id per invocation (#3414).
+
+    Set in the controller process so pytest-xdist workers (spawned after
+    configure) inherit the SAME run id; the canonical `make e2e-harness`
+    entry exports E2E_RUN_ID explicitly, which wins via setdefault.
+    """
+    os.environ.setdefault("E2E_RUN_ID", uuid.uuid4().hex[:12])
+
+
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Apply stable directory-based markers for test tiering."""
     root = Path(__file__).resolve().parent
@@ -57,6 +68,32 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         for directory, marker in path_to_marker.items():
             if directory in item_path.parents:
                 item.add_marker(getattr(pytest.mark, marker))
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call):
+    """Required-mode hook (#3414): service lanes never skip to green.
+
+    When ``E2E_HARNESS_REQUIRED=1`` (legacy ``E2E_CORE_STRICT=1``), a test
+    marked ``requires_services`` that ends up SKIPPED is reported as FAILED
+    with its skip reason — a required capability can never become green
+    solely through ``pytest.skip``.
+    """
+    outcome = yield
+    report = outcome.get_result()
+    if not report.skipped:
+        return
+    if item.get_closest_marker("requires_services") is None:
+        return
+    from tests.e2e_core.live_harness import required_mode
+
+    if required_mode():
+        reason = report.longrepr or "service-required test skipped"
+        report.longrepr = (
+            f"REQUIRED MODE (#3414): zero service-related skips allowed; this "
+            f"requires_services test skipped: {reason}"
+        )
+        report.outcome = "failed"
 
 
 # =============================================================================

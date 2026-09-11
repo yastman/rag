@@ -1044,6 +1044,54 @@ test-e2e-redis-live: ## Run live Redis mode + two-owner polling-lock E2E (#3368;
 	@echo "$(GREEN)✓ Redis modes + polling-lock live E2E complete$(NC)"
 
 # =============================================================================
+# CANONICAL HERMETIC LIVE HARNESS (#3414)
+# =============================================================================
+# One run id + one isolated Compose project per invocation; UUID Qdrant
+# collection, Redis prefix/db and PostgreSQL schema per xdist worker; real
+# local Redis/Qdrant/PostgreSQL/BGE with deterministic provider adapters;
+# required mode has ZERO service-related skips; teardown removes only the
+# exact run-owned resources. The old core lane (`make e2e-core-live`) stays
+# read-only until cutover; its consumer drifted from the core API at the
+# base commit, so it is not part of this default lane (successor #3413).
+
+E2E_RUN_ID ?= $(shell python -c "import uuid; print(uuid.uuid4().hex[:12])")
+E2E_HARNESS_STACK_WAIT ?= 900
+E2E_HARNESS_PYTEST_ARGS ?= -n 2 --dist=worksteal
+E2E_HARNESS_PATHS ?= tests/e2e_core/test_live_stack_required_live.py
+# Optional extra compose -f file for hosts where the default loopback ports
+# (5432/6333/6379/8000) are occupied; use `!override` port lists there and
+# pass the matching endpoints via env (QDRANT_URL, BGE_M3_URL, REDIS_URL,
+# POSTGRES_DSN) to the pytest step.
+E2E_HARNESS_EXTRA_COMPOSE ?=
+# -p names the project AND the built image (rag-e2e-<run-id>_bge-m3); the
+# teardown removes exactly those run-owned resources.
+E2E_HARNESS_COMPOSE := docker compose -p rag-e2e-$(E2E_RUN_ID) -f compose.yml -f compose.dev.yml $(E2E_HARNESS_EXTRA_COMPOSE) --env-file $(OPERATOR_ENV)
+
+.PHONY: e2e-harness e2e-harness-down
+
+e2e-harness: operator-env-check ## Canonical hermetic live E2E harness: run-owned compose stack + required no-skip lane (#3414)
+	@echo "$(BLUE)Harness run rag-e2e-$(E2E_RUN_ID): isolated compose project + required lane (zero service skips)$(NC)"
+	@set -e; \
+	$(E2E_HARNESS_COMPOSE) --profile postgres up -d --wait --wait-timeout $(E2E_HARNESS_STACK_WAIT) postgres redis qdrant bge-m3; \
+	status=0; \
+	set -a; . $(OPERATOR_ENV); set +a; \
+	PYTHON_DOTENV_DISABLED=1 E2E_RUN_ID=$(E2E_RUN_ID) E2E_HARNESS_REQUIRED=1 \
+		$(UV_RUN_NO_SYNC) pytest $(E2E_HARNESS_PATHS) -v --tb=short -m "e2e and requires_services" $(E2E_HARNESS_PYTEST_ARGS) || status=$$?; \
+	$(E2E_HARNESS_COMPOSE) --profile postgres down -v --remove-orphans >/dev/null 2>&1 || true; \
+	docker image rm -f rag-e2e-$(E2E_RUN_ID)_bge-m3 >/dev/null 2>&1 || true; \
+	if [ $$status -ne 0 ]; then \
+		echo "$(RED)✗ Harness lane failed (exit $$status); project rag-e2e-$(E2E_RUN_ID) removed$(NC)" >&2; \
+		exit $$status; \
+	fi; \
+	echo "$(GREEN)✓ Hermetic harness run rag-e2e-$(E2E_RUN_ID) complete: stack down, volumes removed$(NC)"
+
+e2e-harness-down: ## Remove a leftover harness compose project (make e2e-harness-down E2E_RUN_ID=<id>)
+	@echo "$(BLUE)Removing harness project rag-e2e-$(E2E_RUN_ID)...$(NC)"
+	@$(E2E_HARNESS_COMPOSE) --profile postgres down -v --remove-orphans
+	@docker image rm -f rag-e2e-$(E2E_RUN_ID)_bge-m3 >/dev/null 2>&1 || true
+	@echo "$(GREEN)✓ Harness project rag-e2e-$(E2E_RUN_ID) removed$(NC)"
+
+# =============================================================================
 # BASELINE & OBSERVABILITY
 # =============================================================================
 
