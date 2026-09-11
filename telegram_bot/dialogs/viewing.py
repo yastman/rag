@@ -88,6 +88,9 @@ async def on_date_selected(
     """Save date range, close dialog, start phone_collector FSM."""
     # Grab FSM state BEFORE done() destroys dialog context.
     state = manager.middleware_data.get("state")
+    # Start data (selected objects) is only readable while the context is
+    # alive — done() below removes it (#3413 live E2E caught this ordering).
+    start_data = manager.start_data if isinstance(manager.start_data, dict) else {}
 
     manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
@@ -104,7 +107,6 @@ async def on_date_selected(
 
     # Store date_range in FSM state so phone_collector includes it in the
     # durable lead record; keep the selected objects too (#3213).
-    start_data = manager.start_data if isinstance(manager.start_data, dict) else {}
     selected_objects = start_data.get("selected_objects") or []
     await state.update_data(date_range=item_id)
 
