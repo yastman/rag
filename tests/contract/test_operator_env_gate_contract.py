@@ -324,8 +324,6 @@ def test_local_compose_cmd_uses_explicit_operator_env() -> None:
     [
         "docker-core-up",
         "docker-bot-up",
-        "docker-ai-up",
-        "docker-ingest-up",
         "docker-full-up",
         "local-up",
         "local-up-ingest",

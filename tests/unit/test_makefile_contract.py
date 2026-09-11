@@ -360,18 +360,10 @@ def test_frontend_test_target_removed_from_required_path() -> None:
     assert "mini_app/frontend" not in text
 
 
-def test_all_local_target_runs_pytest_full_only() -> None:
-    """The explicit all-local gate follows the Python required path only."""
+def test_removed_local_test_entrypoint_targets_stay_removed() -> None:
+    """#3379 removed the test-all-local wrapper; `make test-full` is canonical."""
     text = _makefile_text()
-    block_match = re.search(
-        r"^test-all-local:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert block_match, "test-all-local target not found in Makefile"
-    block = block_match.group(0)
-    assert "make test-full" in block
-    assert "make test-frontend" not in block
+    assert "test-all-local:" not in text
 
 
 def test_local_all_test_target_is_phony() -> None:
@@ -379,7 +371,6 @@ def test_local_all_test_target_is_phony() -> None:
     phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
     combined = " ".join(phony_blocks)
     assert "test-frontend" not in combined
-    assert "test-all-local" in combined
 
 
 # --- #1778 bounded parallelism contract tests ---

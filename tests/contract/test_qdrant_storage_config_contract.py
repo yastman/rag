@@ -6,7 +6,10 @@ bounds.  This contract file is the RED gate that forces the repo to:
 
 1. Ship ``docker/qdrant/config.yaml`` with storage optimisations.
 2. Mount that file into the Qdrant container via ``compose.yml``.
-3. Expose a ``qdrant-cleanup`` target in the ``Makefile`` for operators.
+
+(The #1545 ``qdrant-cleanup`` Make target was removed by #3379 with the
+legacy-collection Make surface; operators use the snapshot/optimiser REST
+calls documented in ``DOCKER.md`` directly.)
 
 All tests here are static (no Docker, no network).  They parse files and
 YAML; they never start services.
@@ -114,15 +117,14 @@ def test_qdrant_compose_mounts_config() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4. Makefile exposes a qdrant-cleanup target
+# 4. Removed legacy Make surface stays removed (#3379)
 # ---------------------------------------------------------------------------
 
 
-def test_makefile_has_qdrant_cleanup_target() -> None:
-    """``Makefile`` must define a ``qdrant-cleanup`` target (#1545)."""
-    assert MAKEFILE.exists(), f"Makefile not found at {MAKEFILE}."
+def test_removed_qdrant_maintenance_targets_stay_removed() -> None:
+    """#3379 removed the legacy-collection Make maintenance targets (#1545/#3074)."""
     content = MAKEFILE.read_text(encoding="utf-8")
-    assert "qdrant-cleanup" in content, (
-        "Makefile is missing the 'qdrant-cleanup' target required by #1545.  "
-        "Add a target that helps operators prune stale Qdrant data."
-    )
+    for target in ("qdrant-cleanup", "qdrant-backup", "qdrant-audit-indexes"):
+        assert f"\n{target}:" not in f"\n{content}", (
+            f"Removed legacy Qdrant target `{target}` reappeared in the Makefile (#3379)"
+        )

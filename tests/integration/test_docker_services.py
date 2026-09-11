@@ -1,7 +1,7 @@
 """Docker service connectivity tests.
 
 Each test gracefully skips if the target service is not available.
-Run with `make docker-up` or `make docker-full-up` first.
+Run with `make docker-core-up` or `make docker-full-up` first.
 """
 
 import pytest

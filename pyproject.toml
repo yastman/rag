@@ -97,8 +97,9 @@ dev = [
 
 # E2E operator tooling (#3280): telethon is imported only by scripts/e2e
 # (Telegram userbot client, demo gate). It stays out of the default dev
-# install; sync it explicitly via `uv sync --group e2e` (make e2e-install)
-# or `uv run --group e2e ...` (e2e-telegram-test / e2e-test-group / demo-gate).
+# install; sync it explicitly via `uv sync --group e2e` (or `make demo-gate`,
+# which syncs the group) and run via `uv run --group e2e ...`
+# (e2e-telegram-test / demo-gate).
 e2e = [
     "telethon>=1.42.0",
 ]
@@ -494,8 +495,7 @@ exclude_lines = [
 # =============================================================================
 # DEPTRY CONFIGURATION — scoped to production code (src/ telegram_bot/)
 # =============================================================================
-# Run via: make deps-audit  (blocking, full audit)
-#       or: make lint-full   (blocking, within the lint-full gate)
+# Run via: make deps-audit  (blocking, full audit; also part of `make audit`)
 #
 # Design notes:
 # - experimental_namespace_package: src/ and telegram_bot/ are in-repo

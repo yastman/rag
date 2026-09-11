@@ -110,7 +110,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Refresh OSV advisory cache (audit-deps-refresh)
+      - name: Refresh OSV advisory cache
         run: uvx pip-audit -s osv --progress-spinner off . > /dev/null 2>&1 || true
 
       - name: CVE gate (critical/high, severity-filtered)

@@ -14,7 +14,7 @@ Linux/POSIX commands; see [Local Development](docs/LOCAL-DEVELOPMENT.md) for Pow
 uv sync --frozen --extra telegram
 cp .env.example .env
 # Fill in credentials and configure the verified BGE model artifact.
-make core-up
+make docker-core-up
 make run-bot
 ```
 

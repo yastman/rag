@@ -14,18 +14,17 @@ surface so future fast-lane targets stay overridable too::
 Targets covered:
 - ``test``               (PR/local fast gate)
 - ``test-unit``          (canonical core unit lane)
-- ``test-unit-loadscope`` (loadscope is intentionally explicit; see note)
-- ``test-fast``
-- ``test-all-fast``
-- ``test-profile``
+- ``test-unit-loadscope`` (removed by #3379; see note)
 - ``test-store-durations``
+
+#3379 removed the duplicate aliases ``test-fast``/``test-all-fast`` and the
+``test-profile`` variant; the surviving fast targets keep the override surface.
 
 The default value of ``PYTEST_PARALLEL_ARGS`` must remain
 ``-n auto --dist=worksteal`` so existing local/CI behaviour is preserved
-out of the box. ``test-unit-loadscope`` is the documented loadscope
-experiment lane — it must keep ``--dist=loadscope`` explicit and is
-therefore exempt from the ``$(PYTEST_PARALLEL_ARGS)`` rule but is still
-required to use ``-n auto`` (or an override).
+out of the box. The #3379-removed ``test-unit-loadscope`` experiment lane was
+the documented loadscope exception; no surviving target may hard-code
+``--dist=loadscope``.
 """
 
 from __future__ import annotations
@@ -48,9 +47,6 @@ OVERRIDABLE_TARGETS = (
     # #3220 retired the legacy graph-path lane; it no longer runs pytest itself.
     "test-contract",
     "test-unit",
-    "test-fast",
-    "test-all-fast",
-    "test-profile",
     "test-store-durations",
 )
 
@@ -62,7 +58,7 @@ def _read_makefile_text() -> str:
 
 def _extract_recipe(makefile_text: str, target: str) -> str:
     pattern = re.compile(
-        rf"^{re.escape(target)}:[^\n]*\n((?:\t.*\n|\n)*?)(?=^[A-Za-z0-9_./%-]+:|^\Z)",
+        rf"^{re.escape(target)}:[^\n]*\n((?:\t.*\n|\n)*?)(?=^[A-Za-z0-9_./%-]+:|^\s*#|^\Z)",
         re.MULTILINE,
     )
     match = pattern.search(makefile_text)
@@ -146,16 +142,15 @@ def test_parallel_args_default_remains_worksteal() -> None:
     )
 
 
-def test_loadscope_target_remains_explicit() -> None:
-    """test-unit-loadscope must keep `--dist=loadscope` explicit.
+def test_no_target_hardcodes_loadscope() -> None:
+    """No surviving Makefile target may hard-code `--dist=loadscope`.
 
-    Per repo convention this is the opt-in loadscope experiment lane and
-    must NOT be folded into $(PYTEST_PARALLEL_ARGS).
+    The #1796 loadscope experiment lane (`test-unit-loadscope`) was removed
+    by #3379; the canonical scheduler everywhere is the overridable
+    `$(PYTEST_PARALLEL_ARGS)` default (worksteal).
     """
     text = _read_makefile_text()
-    recipe = _extract_recipe(text, "test-unit-loadscope")
-    invocation = _pytest_invocation(recipe)
-    assert "--dist=loadscope" in invocation, (
-        "test-unit-loadscope is the documented loadscope experiment lane "
-        "and must keep `--dist=loadscope` explicit even after #1794."
+    assert "--dist=loadscope" not in text, (
+        "No Makefile target may hard-code `--dist=loadscope` after #3379; "
+        "the canonical fast lane is the $(PYTEST_PARALLEL_ARGS) worksteal default."
     )

@@ -8,11 +8,10 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 
 | Task | Command / asset |
 |---|---|
-| Are the sidecars healthy? | `scripts/check_services.sh` |
-| Qdrant/Redis config preflight | `make test-preflight` |
-| Smoke the live stack | `make test-smoke` |
+| Are the sidecars healthy? | `scripts/check_services.sh` (or `make local-service-health`) |
+| Smoke the live stack (incl. config preflight checks) | `make test-smoke` |
 | Prove the bot actually answers | `make bot-response-smoke` |
-| Audit Qdrant payload indexes | `make qdrant-audit-indexes` (`scripts/qdrant_audit_indexes.py`) |
+| Ensure Qdrant payload indexes (both product collections) | `make qdrant-ensure-indexes` |
 
 ## Demo
 
@@ -44,6 +43,6 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 - Compose services, profiles, ports, env: [`../../DOCKER.md`](../../DOCKER.md)
 - Local setup & validation: [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md)
 
-> Working-tree hygiene (isolated git worktrees for non-trivial edits) and the swarm/PR
-> orchestration process live in the Kiro skills (`roadmap-orchestrator`, `gh-pr-review`),
-> not in this repo.
+> Working-tree hygiene (isolated git worktrees for non-trivial edits) is covered in
+> [AGENTS.md](../../AGENTS.md); native task agents are the sole supported agent runtime
+> (the repository-owned Kiro/tmux swarm is retired).

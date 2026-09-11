@@ -25,7 +25,10 @@
 #     collection OR patch it via the REST API:
 #       PATCH http://qdrant:6333/collections/gdrive_documents_bge
 #       {"on_disk_payload": true}
-#   • Use `make qdrant-cleanup` to take a snapshot and prune old segments.
+#   • Snapshots and segment pruning are operator REST calls (the #1545
+#     `qdrant-cleanup` Make target was removed by #3379); see the Qdrant
+#     snapshot/rollback section in DOCKER.md:
+#       POST http://qdrant:6333/collections/{collection}/snapshots
 
 storage:
   # Move non-filtered payloads from RAM to disk (primary fix for #1545).

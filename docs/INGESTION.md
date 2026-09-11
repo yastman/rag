@@ -47,9 +47,9 @@ validation, rollback). Do not silently delete external data.
 ## Run it
 
 ```bash
-make core-up          # BGE-M3 + Qdrant must be up (see ../docs/LOCAL-DEVELOPMENT.md)
+make docker-core-up   # BGE-M3 + Qdrant must be up (see ../docs/LOCAL-DEVELOPMENT.md)
 ```
 
 Ingestion entry points and scripts live under `scripts/` (see
 [`../scripts/README.md`](../scripts/README.md)) and `src/ingestion/`. Qdrant collection
-setup/audit: `make qdrant-audit-indexes`.
+setup/payload indexes: `make qdrant-ensure-indexes`.

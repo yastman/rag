@@ -48,7 +48,7 @@ _APPROVED_HOSTED_RUNS = {
     (
         ".github/workflows/ci.yml",
         "cve-scan",
-        "Refresh OSV advisory cache (audit-deps-refresh)",
+        "Refresh OSV advisory cache",
     ): "uvx pip-audit -s osv --progress-spinner off . > /dev/null 2>&1 || true",
     (".github/workflows/ci.yml", "cve-scan", "CVE gate (critical/high, severity-filtered)"): (
         "uv run --frozen python scripts/ci/cve_gate.py"
@@ -369,7 +369,7 @@ def test_makefile_local_gate_ladder() -> None:
     assert lint_paths
     assert "mini_app/" not in lint_paths.group(1)
     assert re.search(
-        r"^dev-setup:\s+install-dev\s+setup-hooks\s+docker-up\b", makefile, re.MULTILINE
+        r"^dev-setup:\s+install-dev\s+setup-hooks\s+docker-core-up\b", makefile, re.MULTILINE
     )
     assert re.search(
         # #3326: the candidate gate enforces CI's formatting contract before

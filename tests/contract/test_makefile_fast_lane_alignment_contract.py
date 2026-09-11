@@ -39,16 +39,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
 
 # Targets that SHARE the fast/local lane semantics with `test-unit`.
-# `test-profile` and `test-store-durations` measure that same lane, so they
-# must select identically.
+# `test-store-durations` measures that same lane, so it must select
+# identically. (#3379 removed the duplicate aliases test-fast/test-all-fast
+# and the loadscope/profile variants.)
 FAST_LANE_TARGETS = (
     # "test" is a pure orchestrator (test-core + test-no-service-lane) since
     # #3220 retired the legacy graph-path lane; it no longer runs pytest itself.
     "test-unit",
-    "test-unit-loadscope",
-    "test-fast",
-    "test-all-fast",
-    "test-profile",
     "test-store-durations",
 )
 
@@ -64,10 +61,11 @@ def _read_makefile_text() -> str:
 def _extract_recipe(makefile_text: str, target: str) -> str:
     """Return the recipe body for a target.
 
-    A recipe ends at the first blank line or at the next top-level rule.
+    A recipe ends at the first blank line, at the next top-level rule, or at
+    the next section comment header.
     """
     pattern = re.compile(
-        rf"^{re.escape(target)}:[^\n]*\n((?:\t.*\n|\n)*?)(?=^[A-Za-z0-9_./%-]+:|^\Z)",
+        rf"^{re.escape(target)}:[^\n]*\n((?:\t.*\n|\n)*?)(?=^[A-Za-z0-9_./%-]+:|^\s*#|^\Z)",
         re.MULTILINE,
     )
     match = pattern.search(makefile_text)
