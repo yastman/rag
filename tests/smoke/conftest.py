@@ -20,14 +20,21 @@ from src.runtime.services.qdrant import QdrantService
 
 @pytest.fixture(scope="module")
 def require_live_services(qdrant_url, redis_url):
-    """Skip if live services not available. Checks BOTH Qdrant AND Redis."""
+    """Skip if live services not available — FAIL in required mode (#3414).
+
+    Checks BOTH Qdrant AND Redis. Optional developer mode may skip; when
+    ``E2E_HARNESS_REQUIRED=1`` (or legacy ``E2E_CORE_STRICT=1``) is set the
+    same unavailability is a hard failure (never a green-via-skip).
+    """
+    from tests.e2e_core.live_harness import guard_service_skip
+
     # Check Qdrant
     try:
         resp = httpx.get(f"{qdrant_url}/collections", timeout=2)
         if resp.status_code != 200:
-            pytest.skip("Qdrant not available")
+            guard_service_skip("Qdrant not available")
     except Exception:
-        pytest.skip("Qdrant not available")
+        guard_service_skip("Qdrant not available")
 
     # Check Redis
     async def check_redis():
@@ -36,7 +43,7 @@ def require_live_services(qdrant_url, redis_url):
             await client.ping()
             await client.aclose()
         except Exception:
-            pytest.skip("Redis not available")
+            guard_service_skip("Redis not available")
 
     asyncio.run(check_redis())
 

@@ -1,5 +1,5 @@
 # tests/e2e/conftest.py
-"""E2E test configuration.
+"""E2E test configuration (#3414 hermetic harness lane).
 
 Integration conftest installs aiogram MagicMocks at pytest_configure whenever
 the package is not already in sys.modules — even when aiogram is installed.
@@ -10,6 +10,10 @@ DemoCB, …) would otherwise capture polluted MagicMocks.
 Restore real packages in pytest_sessionstart (after every conftest configure,
 before collection). Lean venvs without aiogram keep the absence so
 importorskip still skips.
+
+#3414: the lane additionally FAILS CLOSED on fake SDK packages — provider
+behavior belongs to the harness's deterministic adapters, never to
+MagicMock stand-ins in sys.modules.
 """
 
 from __future__ import annotations
@@ -89,5 +93,13 @@ def pytest_sessionstart(session) -> None:
 
 @pytest.fixture(autouse=True)
 def _ensure_real_aiogram_for_e2e() -> None:
-    """Re-assert real aiogram before each e2e test (FeedbackCB / DemoSG / Message)."""
+    """Re-assert real aiogram and fail closed on fake SDK modules (#3414)."""
     _restore_real_aiogram_stack()
+    from tests.e2e_core.live_harness import no_fake_sdk_modules
+
+    offenders = no_fake_sdk_modules()
+    assert offenders == [], (
+        f"fake SDK packages in sys.modules: {offenders}. The e2e lane runs "
+        "deterministic adapters against real clients — purge mocked SDK "
+        "modules before running e2e tests (#3414)."
+    )
