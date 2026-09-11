@@ -139,7 +139,6 @@ dmypy.json
 logs/
 data/embeddings/
 data/evaluation/
-data/gold_set*.jsonl
 # evaluation/results/ points at archived surfaces (voice, Mini App, trace validation)
 evaluation/results/
 evaluation/evaluation/

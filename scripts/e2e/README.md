@@ -19,7 +19,6 @@ scripts/e2e
 - runner.py
 - scenarios.py
 - telegram_client.py
-- token_audit.py
 
 ## Parent
 - [..](..)
