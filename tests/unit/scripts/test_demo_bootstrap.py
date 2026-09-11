@@ -1,6 +1,5 @@
 """Unit tests for scripts/demo_bootstrap.py — idempotent demo setup (#3202)."""
 
-import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -136,18 +135,22 @@ class TestExplicitBootstrapMutations:
 
 class TestIngestKnowledgeDemo:
     def _write_corpus(self, tmp_path):
-        corpus = {
-            "documents": [
-                {"id": "article_115", "title": "Стаття 115", "content": "умисне вбивство"},
-                {"id": "article_185", "title": "Стаття 185", "content": "крадіжка"},
-            ]
-        }
-        path = tmp_path / "articles.json"
-        path.write_text(json.dumps(corpus), encoding="utf-8")
-        return path
+        corpus = tmp_path / "corpus"
+        corpus.mkdir()
+        (corpus / "article_115.md").write_text(
+            "# Особлива частина\n\n## Злочини проти життя та здоров'я особи\n\n"
+            "### Стаття 115. Умисне вбивство\n\nумисне вбивство\n",
+            encoding="utf-8",
+        )
+        (corpus / "article_185.md").write_text(
+            "# Особлива частина\n\n## Злочини проти власності\n\n"
+            "### Стаття 185. Крадіжка\n\nкрадіжка\n",
+            encoding="utf-8",
+        )
+        return corpus
 
     def test_upserts_deterministic_ids_with_metadata_contract(self, tmp_path):
-        path = self._write_corpus(tmp_path)
+        corpus = self._write_corpus(tmp_path)
         client = MagicMock()
         hybrid = SimpleNamespace(
             dense_vecs=[[0.1] * 1024, [0.2] * 1024],
@@ -158,7 +161,7 @@ class TestIngestKnowledgeDemo:
         fake_bge.encode_hybrid.return_value = hybrid
 
         with patch("src.services.bge_m3_client.BGEM3SyncClient", return_value=fake_bge):
-            count = db.ingest_knowledge_demo(client, "i3202-knowledge", path, "http://bge")
+            count = db.ingest_knowledge_demo(client, "i3202-knowledge", corpus, "http://bge")
 
         assert count == 2
         fake_bge.encode_hybrid.assert_called_once()
@@ -174,15 +177,45 @@ class TestIngestKnowledgeDemo:
         # metadata.doc_id is the canonical indexed knowledge identifier (#3333);
         # the unindexed metadata.id alias is gone.
         assert points[0].payload["metadata"]["doc_id"] == "article_115"
+        assert points[0].payload["metadata"]["title"] == "Стаття 115. Умисне вбивство"
         assert "id" not in points[0].payload["metadata"]
         assert "page_content" in points[0].payload
         assert "dense" in points[0].vector and "bm42" in points[0].vector
+        # The production Markdown parser owns the shipped text: the heading
+        # context line is prepended exactly as in unified ingestion (#3235).
+        assert points[0].payload["page_content"] == (
+            "Особлива частина > Злочини проти життя та здоров'я особи"
+            " > Стаття 115. Умисне вбивство\nумисне вбивство"
+        )
 
     def test_empty_corpus_raises(self, tmp_path):
-        path = tmp_path / "empty.json"
-        path.write_text(json.dumps({"documents": []}), encoding="utf-8")
+        empty = tmp_path / "empty"
+        empty.mkdir()
         with pytest.raises(ValueError, match="empty"):
-            db.ingest_knowledge_demo(MagicMock(), "k", path, "http://bge")
+            db.ingest_knowledge_demo(MagicMock(), "k", empty, "http://bge")
+
+    def test_non_markdown_files_in_corpus_dir_are_ignored(self, tmp_path):
+        corpus = self._write_corpus(tmp_path)
+        (corpus / "article_999.json").write_text("{}", encoding="utf-8")
+        fake_bge = MagicMock()
+        fake_bge.encode_hybrid.return_value = SimpleNamespace(
+            dense_vecs=[[0.1] * 1024, [0.2] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}] * 2,
+            colbert_vecs=None,
+        )
+        with patch("src.services.bge_m3_client.BGEM3SyncClient", return_value=fake_bge):
+            count = db.ingest_knowledge_demo(MagicMock(), "k", corpus, "http://bge")
+        assert count == 2  # the .json file is ignored, never parsed
+
+    def test_multi_chunk_document_is_rejected(self, tmp_path):
+        corpus = tmp_path / "corpus"
+        corpus.mkdir()
+        (corpus / "article_115.md").write_text(
+            "# T\n\n" + ("paragraph text\n\n" * 700), encoding="utf-8"
+        )
+        with patch("src.services.bge_m3_client.BGEM3SyncClient"):
+            with pytest.raises(ValueError, match="exactly one chunk"):
+                db.ingest_knowledge_demo(MagicMock(), "k", corpus, "http://bge")
 
 
 # ---------------------------------------------------------------------------

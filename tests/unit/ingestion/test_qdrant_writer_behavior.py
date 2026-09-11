@@ -35,7 +35,7 @@ def _make_chunk(
     chunk.text = text
     chunk.order = order
     chunk.extra_metadata = extra_metadata or {}
-    chunk.document_name = "test.pdf"
+    chunk.document_name = "test.md"
     chunk.page_range = None
     chunk.section = None
     chunk.chunk_id = order
@@ -172,7 +172,7 @@ class TestUpsertChunksSyncBehavior:
 
     def test_empty_chunks_returns_zero_stats(self, writer):
         """Empty chunk list skips all embedding and upsert work."""
-        stats = writer.upsert_chunks_sync([], "file_1", "/path/file.pdf", {}, "col")
+        stats = writer.upsert_chunks_sync([], "file_1", "/path/file.md", {}, "col")
 
         assert stats.points_upserted == 0
         assert stats.points_deleted == 0
@@ -207,7 +207,7 @@ class TestUpsertChunksSyncBehavior:
         )
 
         chunk = _make_chunk(text="Hello world", order=0)
-        writer.upsert_chunks_sync([chunk], "file_1", "/path/file.pdf", {}, "col")
+        writer.upsert_chunks_sync([chunk], "file_1", "/path/file.md", {}, "col")
 
         points = mock_qdrant_client.upsert.call_args.kwargs["points"]
         assert len(points) == 1
@@ -226,7 +226,7 @@ class TestUpsertChunksSyncBehavior:
         )
 
         chunk = _make_chunk(text="Actual chunk text", order=2)
-        writer.upsert_chunks_sync([chunk], "fid", "/path/doc.pdf", {}, "col")
+        writer.upsert_chunks_sync([chunk], "fid", "/path/doc.md", {}, "col")
 
         points = mock_qdrant_client.upsert.call_args.kwargs["points"]
         assert points[0].payload["page_content"] == "Actual chunk text"
@@ -244,7 +244,7 @@ class TestUpsertChunksSyncBehavior:
 
         chunk = _make_chunk(text="Text", order=3)
         writer.upsert_chunks_sync(
-            [chunk], "file_001", "/path/test.pdf", {"file_name": "test.pdf"}, "col"
+            [chunk], "file_001", "/path/test.md", {"file_name": "test.md"}, "col"
         )
 
         points = mock_qdrant_client.upsert.call_args.kwargs["points"]
@@ -419,7 +419,7 @@ class TestUpsertChunksSyncEdgeCases:
         # Create chunk with oversized text (~40MB)
         huge_text = "x" * (35 * 1024 * 1024)
         chunk = _make_chunk(text=huge_text)
-        stats = writer.upsert_chunks_sync([chunk], "f", "/big.pdf", {}, "col")
+        stats = writer.upsert_chunks_sync([chunk], "f", "/big.md", {}, "col")
 
         assert stats.errors is not None
         assert "exceeds" in stats.errors[0]

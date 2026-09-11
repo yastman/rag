@@ -226,7 +226,7 @@ def apartments_contract() -> CollectionContract:
 
 
 # ---------------------------------------------------------------------------
-# Shipped demo corpus (knowledge) — data/test/sample_articles.json
+# Shipped demo corpus (knowledge) — data/test/*.md
 # ---------------------------------------------------------------------------
 
 #: Point-id namespace so demo corpus points are deterministic and detectable.
@@ -242,7 +242,7 @@ KNOWLEDGE_DEMO_DOC_IDS = ("article_115", "article_185", "article_190")
 #: Beach?" with doc id ``sunny_beach_studio`` — exists only as a retrieval
 #: stub in tests/characterization/test_grounded_qa_acceptance.py and in the
 #: live BGE/Qdrant probe; the shipped Qdrant demo corpus
-#: (data/test/sample_articles.json) does not contain it. These probes prove
+#: (data/test/*.md) does not contain it. These probes prove
 #: the corpus this repo actually ships.
 DEMO_CORPUS_ANCHOR_DOC_ID = "article_115"
 

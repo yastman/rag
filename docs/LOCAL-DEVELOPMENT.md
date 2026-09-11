@@ -145,7 +145,7 @@ enforces schema and counts only**: vector names and dimensions (`dense`/`colbert
 
 The deterministic demo probes — shipped apartment rows reachable through the production
 filter path, the shipped demo corpus documents present (anchor `article_115` from
-`data/test/sample_articles.json`), and an intentional no-result query staying empty — run
+`data/test/*.md`), and an intentional no-result query staying empty — run
 via `make demo-bootstrap` / `make demo-verify`, not at bot startup. Note these corpus
 probes prove the shipped demo data; the live known-corpus question contract-locked by
 #3200 ("Сколько стоит студия у моря в Sunny Beach?", doc `sunny_beach_studio`) is a
@@ -153,7 +153,8 @@ live-probe/fixture concern and is not part of the shipped Qdrant demo corpus.
 
 - **Fresh bootstrap**: `make demo-bootstrap` creates missing collections with the contract
   schema and ingests the shipped demo data (`data/apartments.csv`,
-  `data/test/sample_articles.json`) — the ingest step needs the BGE-M3 service up.
+  `data/test/*.md` through the production Markdown parser) — the ingest step needs the
+  BGE-M3 service up.
 - **Populated environments** are preserved: bootstrap never drops or rewrites data, and
   ingest only runs against an empty collection. Verification skips shipped-data probes when
   the demo points are absent (a populated catalog without the shipped sample rows is valid).
