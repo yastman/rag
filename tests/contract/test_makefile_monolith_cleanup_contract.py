@@ -154,6 +154,8 @@ REMOVED_SCRIPT_PATHS = (
     REPO_ROOT / "scripts" / "benchmark" / "quantization_ab.py",
     REPO_ROOT / "scripts" / "benchmark" / "contextualized_ab.py",
     REPO_ROOT / "scripts" / "audit" / "cost_reconcile.py",
+    # #3382: duplicate quick-health shell deleted (check_services.sh is the owner)
+    REPO_ROOT / "scripts" / "smoke-zoo.sh",
 )
 
 # Test files that must NOT exist after cleanup (they kept archived scripts alive).
@@ -161,6 +163,8 @@ REMOVED_TEST_PATHS = (
     REPO_ROOT / "tests" / "unit" / "test_scripts_lf.py",
     REPO_ROOT / "tests" / "unit" / "scripts" / "test_kommo_seed.py",
     REPO_ROOT / "tests" / "unit" / "scripts" / "test_cost_reconcile.py",
+    # #3382: private test of the deleted duplicate quick-health shell
+    REPO_ROOT / "tests" / "unit" / "scripts" / "test_smoke_zoo.py",
 )
 
 

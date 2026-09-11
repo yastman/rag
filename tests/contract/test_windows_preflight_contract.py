@@ -31,7 +31,6 @@ def test_tests_mode_runs_windows_acceptance_files() -> None:
     source = _source()
     for rel_path in (
         "tests/unit/scripts/test_cleanup_orphaned_worktree_volumes.py",
-        "tests/unit/scripts/test_smoke_zoo.py",
         "tests/unit/test_logging_config.py",
     ):
         assert rel_path.replace("/", '", "') in source

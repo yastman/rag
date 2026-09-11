@@ -70,6 +70,24 @@ def test_no_docling_health_probe_remains() -> None:
     assert "check_http_optional" not in text
 
 
+def test_quick_health_probes_local_stack_services_only() -> None:
+    """The retained quick shell health owner covers exactly the local stack
+    (Qdrant, Redis, BGE-M3, Ingestion); deeper live-service checks belong to
+    the pytest smoke lane (tests/smoke/) (#3382)."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    for service in ("Qdrant", "Redis", "BGE-M3", "Ingestion"):
+        assert service in text, f"quick health must retain the {service} probe"
+
+
+def test_no_retired_bm42_service_probe() -> None:
+    """The retired BM42 service probe (issue #3382) must not migrate into the
+    retained quick health script; ``bm42`` survives only as the Qdrant sparse
+    vector namespace, exercised by the pytest smoke lane, not by this script."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "bm42" not in text.lower()
+    assert "8002" not in text
+
+
 def test_ingestion_health_check_present() -> None:
     """Script contains a Compose-based ingestion health check targeting the actual container."""
     text = SCRIPT.read_text(encoding="utf-8")
