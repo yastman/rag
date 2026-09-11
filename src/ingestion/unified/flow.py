@@ -10,9 +10,19 @@ accepted, parsed by the stdlib :class:`~src.ingestion.markdown.MarkdownParser`.
 Idempotency lives entirely in Qdrant: every point carries
 ``metadata.content_hash`` (written by :class:`QdrantHybridWriter`). Before
 parsing a file we scroll for a point with this file's ``(file_id,
-content_hash)`` — if one exists the file is unchanged and skipped without
-re-parsing/re-embedding. There is no external state database (the Postgres
-``UnifiedStateManager``/``UnifiedIngestionOrchestrator`` were removed).
+content_hash, source)`` — if one exists the file is unchanged and skipped
+without re-parsing/re-embedding. The source condition makes the check
+path-scoped: a renamed file (same id and hash stored under the old path) is
+re-indexed, and because point ids are deterministic on ``(file_id, chunk)``
+the rename replaces the old points in place — the old searchable path
+disappears without delete+recreate churn. There is no external state
+database (the Postgres ``UnifiedStateManager``/``UnifiedIngestionOrchestrator``
+were removed).
+
+Before identity allocation each pass reconciles the manifest's tracked paths
+against the live scan listing (:meth:`FileManifest.reconcile_paths`, #3369):
+stale entries are dropped so a renamed file reuses its identity while a copy
+stays distinct.
 
 ``QdrantHybridWriter.upsert_chunks_sync`` already replaces a file's points
 atomically (deterministic ids overwrite in place, stale chunk ids are swept
@@ -127,8 +137,19 @@ def _make_parser(config: UnifiedConfig) -> MarkdownParser:
     return MarkdownParser(max_tokens=config.max_tokens_per_chunk)
 
 
-def _already_indexed(client: object, collection_name: str, file_id: str, content_hash: str) -> bool:
-    """Return True if Qdrant already holds a point for this (file_id, hash).
+def _already_indexed(
+    client: object,
+    collection_name: str,
+    file_id: str,
+    content_hash: str,
+    source_path: str,
+) -> bool:
+    """Return True if Qdrant already holds a point for this (file_id, hash, source).
+
+    The source condition makes the dedup path-scoped (#3369): points written
+    under a previous path (a rename that reused the file_id) do not satisfy
+    it, so the file is re-indexed under its new path and the deterministic
+    point ids overwrite the old generation in place.
 
     ponytail: any scroll failure (missing collection, transient error) is
     treated as "not indexed" so the file is re-ingested. That is safe because
@@ -144,6 +165,7 @@ def _already_indexed(client: object, collection_name: str, file_id: str, content
                     FieldCondition(
                         key="metadata.content_hash", match=MatchValue(value=content_hash)
                     ),
+                    FieldCondition(key="metadata.source", match=MatchValue(value=source_path)),
                 ]
             ),
             limit=1,
@@ -156,6 +178,15 @@ def _already_indexed(client: object, collection_name: str, file_id: str, content
     return bool(records)
 
 
+def _active_scan_paths(config: UnifiedConfig, listing: list[Path]) -> set[str]:
+    """Return the supported relative paths a scan pass will consider."""
+    return {
+        str(path.relative_to(config.sync_dir))
+        for path in listing
+        if path.is_file() and path.suffix.lower() in config.supported_extensions
+    }
+
+
 def _ingest_directory(
     config: UnifiedConfig,
     writer: QdrantHybridWriter,
@@ -165,7 +196,15 @@ def _ingest_directory(
     result = IngestionResult()
     collection = config.collection_name
 
-    for path in sorted(config.sync_dir.rglob("*")):
+    # Reconcile manifest paths against this listing BEFORE identity
+    # allocation (#3369): entries for files that no longer exist are dropped,
+    # so the same content at a new path resolves as a rename (identity reuse)
+    # while a copy at a second active path stays distinct.
+    listing = sorted(config.sync_dir.rglob("*"))
+    if _manifest is not None:
+        _manifest.reconcile_paths(_active_scan_paths(config, listing))
+
+    for path in listing:
         if not path.is_file() or path.suffix.lower() not in config.supported_extensions:
             continue
 
@@ -175,7 +214,7 @@ def _ingest_directory(
             content_hash = compute_content_hash_from_bytes(content)
             file_id = file_id_from_content(rel, content)
 
-            if _already_indexed(writer.client, collection, file_id, content_hash):
+            if _already_indexed(writer.client, collection, file_id, content_hash, rel):
                 logger.debug("Skipping unchanged: %s", rel)
                 result.skipped += 1
                 continue

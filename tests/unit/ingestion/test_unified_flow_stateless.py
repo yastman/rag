@@ -1,17 +1,21 @@
 """Behaviour tests for the stateless unified ingestion flow.
 
 ``run_once`` must scan ``sync_dir``, parse+embed+upsert each supported file,
-and skip files whose ``(file_id, content_hash)`` already has a point in
-Qdrant — with no external state database.
+and skip files whose ``(file_id, content_hash, source)`` already has a point
+in Qdrant — with no external state database. Manifest paths are reconciled
+against the live scan listing before identity allocation (#3369), so a
+renamed file reuses its identity and a copy stays distinct.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from threading import Event, Thread
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from src.ingestion.unified.config import UnifiedConfig
+from src.ingestion.unified.manifest import compute_content_hash_from_bytes
 
 
 def _make_writer() -> MagicMock:
@@ -28,6 +32,85 @@ def _make_parser() -> MagicMock:
     parser.chunk_file_sync.return_value = [object()]
     parser.to_ingestion_chunks.return_value = [MagicMock()]
     return parser
+
+
+class _FakeQdrantPoints:
+    """In-memory stand-in for Qdrant points keyed by deterministic point ids.
+
+    Mirrors ``QdrantHybridWriter.generate_point_id``: point identity is
+    ``(file_id, chunk_index)``, so re-upserting the same file_id overwrites
+    the points in place — the payload (including ``metadata.source``) moves
+    to the new path without deleting or re-creating the points. Scroll
+    answers honour the filter conditions, including ``metadata.source``.
+    """
+
+    def __init__(self) -> None:
+        self.points: dict[tuple[str, int], dict[str, str]] = {}
+
+    def commit(
+        self, *, file_id: str, source_path: str, content_hash: str, chunks: int
+    ) -> MagicMock:
+        for i in range(chunks):
+            self.points[(file_id, i)] = {
+                "file_id": file_id,
+                "content_hash": content_hash,
+                "source": source_path,
+            }
+        return MagicMock(points_upserted=chunks, points_deleted=0, errors=None)
+
+    def scroll(self, **kwargs: Any) -> tuple[list[Any], None]:
+        flt = kwargs["scroll_filter"]
+        conditions = {
+            condition.key.split(".", 1)[-1]: condition.match.value  # metadata.file_id → file_id
+            for condition in flt.must
+        }
+        if not kwargs.get("with_payload"):
+            # Dedup query: any point satisfying every condition.
+            for record in self.points.values():
+                if all(record.get(key) == value for key, value in conditions.items()):
+                    return [[MagicMock()], None]
+            return [[], None]
+        # Source snapshot query: file ids stored under one source path.
+        source = conditions["source"]
+        matching = [
+            {"payload": {"metadata": {"file_id": record["file_id"]}}}
+            for record in self.points.values()
+            if record["source"] == source
+        ]
+        return [matching, None]
+
+    def sources(self) -> set[str]:
+        return {record["source"] for record in self.points.values()}
+
+    def file_ids(self) -> set[str]:
+        return {record["file_id"] for record in self.points.values()}
+
+
+def _make_store_writer(store: _FakeQdrantPoints) -> MagicMock:
+    writer = _make_writer()
+    writer.client = MagicMock()
+    writer.client.scroll.side_effect = store.scroll
+
+    def upsert(**kwargs: Any) -> MagicMock:
+        return store.commit(
+            file_id=kwargs["file_id"],
+            source_path=kwargs["source_path"],
+            content_hash=kwargs["file_metadata"]["content_hash"],
+            chunks=len(kwargs["chunks"]),
+        )
+
+    writer.upsert_chunks_sync.side_effect = upsert
+    return writer
+
+
+def _run_once(config: UnifiedConfig, writer: MagicMock, parser: MagicMock):
+    with (
+        patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
+        patch("src.ingestion.unified.flow._make_parser", return_value=parser),
+    ):
+        from src.ingestion.unified.flow import run_once
+
+        return run_once(config)
 
 
 def test_run_once_ingests_new_file(tmp_path: Path) -> None:
@@ -334,3 +417,169 @@ def test_run_once_passes_content_hash_to_payload(tmp_path: Path) -> None:
 
     kwargs = writer.upsert_chunks_sync.call_args.kwargs
     assert kwargs["file_metadata"]["content_hash"]
+
+
+class TestManifestPathReconciliation:
+    """Manifest paths reconcile against the live scan (#3369).
+
+    Rename (A.md -> B.md, unchanged bytes) preserves the point identity and
+    removes the old searchable path; a copy (A.md + B.md) keeps a distinct
+    identity; an interrupted scan preserves the last-good state.
+    """
+
+    CONTENT = "# same content"
+
+    def test_rename_reuses_file_id_and_replaces_old_searchable_path(self, tmp_path: Path) -> None:
+        """A.md -> B.md with unchanged content keeps the file_id and point ids.
+
+        The pass must re-index under the new path (metadata.source moves) and
+        the old path must stop being searchable — without a delete+recreate
+        churn of the file's points.
+        """
+        (tmp_path / "A.md").write_text(self.CONTENT, encoding="utf-8")
+        config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
+        store = _FakeQdrantPoints()
+        writer = _make_store_writer(store)
+        parser = _make_parser()
+
+        first = _run_once(config, writer, parser)
+        original_file_id = writer.upsert_chunks_sync.call_args.kwargs["file_id"]
+        assert first.processed == 1
+        assert store.sources() == {"A.md"}
+
+        (tmp_path / "A.md").rename(tmp_path / "B.md")
+        point_ids_before = set(store.points)
+        writer.upsert_chunks_sync.reset_mock()
+
+        second = _run_once(config, writer, parser)
+
+        kwargs = writer.upsert_chunks_sync.call_args.kwargs
+        assert kwargs["file_id"] == original_file_id, (
+            "A rename must reuse the original file_id, not mint a new one."
+        )
+        assert kwargs["source_path"] == "B.md"
+        assert not writer.delete_file_sync.called, (
+            "Rename re-index must not delete+recreate the file's points."
+        )
+        assert set(store.points) == point_ids_before, (
+            "Point ids are deterministic on (file_id, chunk): the rename must "
+            "replace points in place, not churn identity."
+        )
+        assert store.sources() == {"B.md"}, (
+            "The old path must no longer be searchable after the rename."
+        )
+        assert second.processed == 1
+        assert second.skipped == 0
+
+    def test_copy_gets_distinct_file_id(self, tmp_path: Path) -> None:
+        """A.md + B.md with identical content keep distinct file_ids."""
+        (tmp_path / "A.md").write_text(self.CONTENT, encoding="utf-8")
+        config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
+        store = _FakeQdrantPoints()
+        writer = _make_store_writer(store)
+        parser = _make_parser()
+
+        _run_once(config, writer, parser)
+        original_file_id = writer.upsert_chunks_sync.call_args.kwargs["file_id"]
+
+        (tmp_path / "B.md").write_text(self.CONTENT, encoding="utf-8")
+        writer.upsert_chunks_sync.reset_mock()
+
+        second = _run_once(config, writer, parser)
+
+        kwargs = writer.upsert_chunks_sync.call_args.kwargs
+        copy_file_id = kwargs["file_id"]
+        assert copy_file_id != original_file_id, (
+            "A copy at a new path while the original is active must receive its own file_id."
+        )
+        assert kwargs["source_path"] == "B.md"
+        assert store.file_ids() == {original_file_id, copy_file_id}
+        assert store.sources() == {"A.md", "B.md"}
+        assert second.processed == 1
+        assert second.skipped == 1, "The original A.md must still be skipped as unchanged."
+
+    def test_interrupted_scan_preserves_last_good_state(self, tmp_path: Path) -> None:
+        """A failed pass after a rename keeps the old points and heals next run."""
+        (tmp_path / "A.md").write_text(self.CONTENT, encoding="utf-8")
+        config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
+        store = _FakeQdrantPoints()
+        writer = _make_store_writer(store)
+        parser = _make_parser()
+
+        _run_once(config, writer, parser)
+        original_file_id = writer.upsert_chunks_sync.call_args.kwargs["file_id"]
+        content_hash = compute_content_hash_from_bytes(self.CONTENT.encode("utf-8"))
+
+        (tmp_path / "A.md").rename(tmp_path / "B.md")
+        writer.upsert_chunks_sync.side_effect = lambda **_kwargs: MagicMock(
+            points_upserted=0, points_deleted=0, errors=["BGE-M3 unavailable"]
+        )
+
+        interrupted = _run_once(config, writer, parser)
+
+        assert interrupted.errors == 1
+        writer.delete_file_sync.assert_not_called()
+        assert store.sources() == {"A.md"}, (
+            "The interrupted scan must leave the last-good searchable points intact."
+        )
+
+        from src.ingestion.unified.manifest import FileManifest
+
+        manifest = FileManifest(config.effective_manifest_dir())
+        assert "A.md" not in manifest._path_to_hash
+        assert manifest._hash_to_id[content_hash] == original_file_id, (
+            "The identity anchor must survive the interrupted scan."
+        )
+
+        # Next healthy pass heals the rename onto the preserved identity.
+        writer = _make_store_writer(store)
+        healed = _run_once(config, writer, parser)
+
+        kwargs = writer.upsert_chunks_sync.call_args.kwargs
+        assert healed.errors == 0
+        assert kwargs["file_id"] == original_file_id
+        assert kwargs["source_path"] == "B.md"
+        assert store.sources() == {"B.md"}
+
+    def test_reconciliation_precedes_identity_allocation(self, tmp_path: Path) -> None:
+        """_ingest_directory reconciles paths before allocating any identity."""
+        import src.ingestion.unified.flow as flow_module
+
+        (tmp_path / "a.md").write_text("alpha", encoding="utf-8")
+        (tmp_path / "ignore.txt").write_text("skip", encoding="utf-8")
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        (sub / "b.md").write_text("beta", encoding="utf-8")
+        config = UnifiedConfig(sync_dir=tmp_path, manifest_dir=tmp_path)
+
+        calls: list[tuple[str, object]] = []
+        manifest = MagicMock()
+        manifest.reconcile_paths.side_effect = lambda active_paths: calls.append(
+            ("reconcile", set(active_paths))
+        )
+        manifest.get_or_create_id.side_effect = lambda path, _hash: (
+            calls.append(("id", path)) or f"fid-{path}"
+        )
+
+        writer = _make_writer()
+        writer.client.scroll.return_value = ([], None)
+        parser = _make_parser()
+
+        with (
+            patch("src.ingestion.unified.flow.QdrantHybridWriter", return_value=writer),
+            patch("src.ingestion.unified.flow._make_parser", return_value=parser),
+            patch.object(flow_module, "_manifest", manifest),
+        ):
+            flow_module._ingest_directory(config, writer, parser)
+
+        assert calls[0] == (
+            "reconcile",
+            {"a.md", str((sub / "b.md").relative_to(tmp_path))},
+        ), (
+            "Reconciliation must run once per scan with the active supported "
+            "paths, before any identity allocation."
+        )
+        assert calls[1:] == [
+            ("id", "a.md"),
+            ("id", str((sub / "b.md").relative_to(tmp_path))),
+        ]

@@ -14,6 +14,7 @@ old path is no longer active in _path_to_hash. If the original path is still
 active, the new path is a copy and must receive a distinct file_id.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -133,4 +134,149 @@ class TestCopyVsRenameDetection:
         assert id_c != id_b, (
             "When at least one path with the same hash is still active, "
             "a new path is a copy and must receive its own file_id."
+        )
+
+
+class TestScanReconciliation:
+    """Reconcile tracked paths against the live scan listing (#3369).
+
+    Production ``run_once`` never calls ``remove()`` when a file is renamed:
+    the stale path simply stops appearing in the scan. Reconciliation must
+    drop those stale entries (and their composite keys) BEFORE identity
+    allocation, so the same content at a new path is recognised as a rename
+    (identity reuse) rather than a copy (new identity).
+    """
+
+    @pytest.fixture
+    def manifest_dir(self, tmp_path: Path) -> Path:
+        return tmp_path
+
+    @pytest.fixture
+    def manifest(self, manifest_dir: Path) -> GDriveManifest:
+        return GDriveManifest(manifest_dir)
+
+    def test_reconcile_stale_path_makes_new_path_a_rename(self, manifest: GDriveManifest) -> None:
+        """A.md ingested, then only B.md is scanned → B.md reuses A.md's id."""
+        HASH = "0f1e2d3c4b5a6978"
+
+        original_id = manifest.get_or_create_id("A.md", HASH)
+        manifest.reconcile_paths({"B.md"})
+
+        assert "A.md" not in manifest._path_to_hash, (
+            "Reconciliation must drop the path entry for the vanished file."
+        )
+        renamed_id = manifest.get_or_create_id("B.md", HASH)
+        assert renamed_id == original_id, (
+            "After reconciliation removed the stale path, the same content at "
+            "the new path is a rename and must reuse the original file_id."
+        )
+
+    def test_reconcile_keeps_active_copy_distinct(self, manifest: GDriveManifest) -> None:
+        """A.md ingested, then A.md + B.md scanned together → copy gets its own id."""
+        HASH = "1a2b3c4d5e6f7081"
+
+        original_id = manifest.get_or_create_id("A.md", HASH)
+        manifest.reconcile_paths({"A.md", "B.md"})
+
+        copy_id = manifest.get_or_create_id("B.md", HASH)
+        assert copy_id != original_id, (
+            "The original path is still active after reconciliation, so the "
+            "new path is a copy and must receive a distinct file_id."
+        )
+
+    def test_reconcile_prunes_stale_composite_key(self, manifest: GDriveManifest) -> None:
+        """A returning old path is a copy, not a composite-key identity hit."""
+        HASH = "2b3c4d5e6f708192"
+
+        original_id = manifest.get_or_create_id("A.md", HASH)
+        manifest.reconcile_paths({"B.md"})
+        renamed_id = manifest.get_or_create_id("B.md", HASH)
+        assert renamed_id == original_id
+
+        # A.md comes back (e.g. the user copies B.md over the old name): both
+        # paths are now active with the same content, so A.md must be its own
+        # record, not silently share B.md's identity via the stale composite.
+        returning_id = manifest.get_or_create_id("A.md", HASH)
+        assert returning_id != original_id, (
+            "A path that returns after reconciliation is a new copy while the "
+            "renamed path is still active; the pruned composite key must not "
+            "collapse it back onto the reused file_id."
+        )
+
+    def test_reconcile_is_idempotent(self, manifest: GDriveManifest) -> None:
+        """Reconciling twice with the same listing changes nothing further."""
+        HASH = "3c4d5e6f708192a3"
+
+        original_id = manifest.get_or_create_id("A.md", HASH)
+        manifest.reconcile_paths({"B.md"})
+        renamed_id = manifest.get_or_create_id("B.md", HASH)
+        assert renamed_id == original_id
+
+        snapshot = (
+            dict(manifest._path_to_hash),
+            dict(manifest._key_to_id),
+            dict(manifest._hash_to_id),
+        )
+        manifest.reconcile_paths({"B.md"})
+        again = manifest.get_or_create_id("B.md", HASH)
+
+        assert (
+            dict(manifest._path_to_hash),
+            dict(manifest._key_to_id),
+            dict(manifest._hash_to_id),
+        ) == snapshot, "A second reconciliation with the same listing is a no-op."
+        assert again == original_id, "Identity is stable across reconciliations."
+
+    def test_reconcile_result_survives_reload(self, manifest_dir: Path) -> None:
+        """The reconciled rename decision is persisted, not just in-memory."""
+        manifest = GDriveManifest(manifest_dir)
+        HASH = "4d5e6f708192a3b4"
+
+        original_id = manifest.get_or_create_id("A.md", HASH)
+        manifest.reconcile_paths({"B.md"})
+        manifest.get_or_create_id("B.md", HASH)
+
+        reloaded = GDriveManifest(manifest_dir)
+        assert reloaded.get_or_create_id("B.md", HASH) == original_id, (
+            "The rename reuse must survive a manifest reload (process restart)."
+        )
+
+    def test_reconcile_repairs_collapsed_ids_for_active_paths(self, manifest_dir: Path) -> None:
+        """Historic copy-collapse (two active paths, one id) is repaired.
+
+        Deterministic: the first active path (sorted) keeps the original id,
+        later paths are re-minted, and the repair is stable across reloads.
+        """
+        HASH = "5e6f708192a3b4c5"
+        collapsed_id = "aaaaaaaaaaaaaaaa"
+        manifest_path = manifest_dir / ".file_manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "key_to_id": {
+                        "A.md:" + HASH: collapsed_id,
+                        "B.md:" + HASH: collapsed_id,
+                    },
+                    "hash_to_id": {HASH: collapsed_id},
+                    "path_to_hash": {"A.md": HASH, "B.md": HASH},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        manifest = GDriveManifest(manifest_dir)
+        manifest.reconcile_paths({"A.md", "B.md"})
+
+        id_a = manifest.get_or_create_id("A.md", HASH)
+        id_b = manifest.get_or_create_id("B.md", HASH)
+        assert id_a == collapsed_id, "The first active path (sorted) keeps the original file_id."
+        assert id_b != collapsed_id, (
+            "A second active path sharing one file_id is a collapsed copy and "
+            "must be re-minted so each path owns its identity again."
+        )
+
+        reloaded = GDriveManifest(manifest_dir)
+        assert reloaded.get_or_create_id("A.md", HASH) == id_a
+        assert reloaded.get_or_create_id("B.md", HASH) == id_b, (
+            "The repair must be idempotent across reloads."
         )
