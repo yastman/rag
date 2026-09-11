@@ -129,9 +129,11 @@ class TestMakefileAiProfile:
     def _get_docker_up_profiles(self) -> set[str]:
         """Extract --profile values from Makefile docker-*-up target recipes only."""
         content = MAKEFILE.read_text()
-        # Extract only the docker-*-up section (from .PHONY declaration to docker-up alias)
+        # Extract only the docker-*-up section (from docker-core-up to the
+        # dev-setup development-workflow target; #3379 removed the docker-up
+        # alias that previously ended this section).
         section = re.search(
-            r"(docker-core-up:.*?docker-up:.*?##.*?\n)",
+            r"(docker-core-up:.*?dev-setup:)",
             content,
             re.DOTALL,
         )
@@ -149,15 +151,13 @@ class TestMakefileAiProfile:
             f"{sorted(unknown)}. Defined profiles: {sorted(compose_profiles)}"
         )
 
-    def test_docker_ai_up_does_not_use_undefined_ai_profile(self) -> None:
-        """docker-ai-up must not use '--profile ai' since 'ai' is not a compose profile."""
+    def test_removed_docker_up_aliases_stay_removed(self) -> None:
+        """#3379 removed the docker-up/core-up/docker-ai-up/docker-ingest-up aliases."""
         content = MAKEFILE.read_text()
-        match = re.search(r"docker-ai-up:.*?(?=\n[a-zA-Z])", content, re.DOTALL)
-        assert match, "docker-ai-up target not found in Makefile"
-        recipe = match.group(0)
-        assert "--profile ai" not in recipe, (
-            "docker-ai-up still uses '--profile ai' which is not defined in compose"
-        )
+        for target in ("core-up", "docker-up", "docker-ai-up", "docker-ingest-up"):
+            assert not re.search(rf"^{re.escape(target)}:", content, re.MULTILINE), (
+                f"Removed compose alias `{target}` reappeared in the Makefile (#3379)"
+            )
 
 
 # =============================================================================

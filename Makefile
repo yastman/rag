@@ -1,29 +1,21 @@
-.PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
-	deps-audit vuln-audit arch-lint complexity docs-coverage audit \
-	dead-code-check deps-check \
-	test-preflight test-smoke test-load-eviction \
-	test-telegram-adapter test-ingestion test-bge-extras \
-	smoke-fast smoke-zoo \
-	ingest-services \
-	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-logs \
-	lock update update-pkg reinstall setup-hooks \
-	qdrant-audit-indexes qdrant-backup qdrant-cleanup \
-	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
-	docker-clean docker-clean-aggressive
-	test-contract \
-	test-tooling \
-	release-polling-lock \
-	docs-check \
-	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
-	remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
-	remote-bot-up remote-bot-restart remote-bot-logs \
-	remote-local-up remote-local-down remote-local-logs remote-service-health
+.PHONY: help install-dev setup-hooks dev-setup lint format format-check type-check security \
+	deps-audit vuln-audit arch-lint complexity docs-coverage audit docs-check \
+	check check-frozen candidate-check pre-push fix \
+	test test-core test-no-service-lane test-contract test-unit test-unit-full test-unit-extras \
+	test-telegram-adapter test-ingestion test-bge-extras test-full test-cov \
+	test-smoke test-store-durations demo-gate bot-response-smoke \
+	operator-env-exists operator-env-check core-min-up docker-core-up docker-bot-up docker-full-up \
+	local-up local-service-health local-up-ingest local-down local-logs local-ps local-build \
+	local-redis-recreate release-polling-lock run-bot bot bot-logs-tail bot-logs-errors bot-logs-startup \
+	e2e-core-live e2e-core-live-real-llm e2e-telegram-test test-e2e-infra test-e2e-redis-live \
+	ingest-unified-preflight ingest-unified-bootstrap ingest-unified \
+	qdrant-ensure-indexes demo-bootstrap demo-verify verify-compose-images \
+	docker-clean-orphan-worktree-volumes
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev_redis_1
 POLLING_LOCK_KEY ?= telegram-bot:polling
 RELEASE_POLLING_LOCK_FORCE ?= 0
-EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
 LINT_PATHS := src/ telegram_bot/ services/ scripts/
 
@@ -105,61 +97,16 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z0-9_%-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 
-install: ## Install production dependencies
-	@echo "$(BLUE)Installing production dependencies...$(NC)"
-	uv sync --no-dev
-	@echo "$(GREEN)✓ Production dependencies installed$(NC)"
-
 install-dev: ## Install development dependencies (linters, formatters, etc.)
 	@echo "$(BLUE)Installing development dependencies...$(NC)"
 	uv sync
 	@echo "$(GREEN)✓ Development dependencies installed$(NC)"
-
-install-all: ## Install all dependencies (prod + dev + docs)
-	@echo "$(BLUE)Installing all dependencies...$(NC)"
-	uv sync --all-extras --all-groups
-	@echo "$(GREEN)✓ All dependencies installed$(NC)"
-
-# =============================================================================
-# UV DEPENDENCY MANAGEMENT
-# =============================================================================
-
-lock: ## Generate/update uv.lock from pyproject.toml
-	@echo "$(BLUE)Updating lock file...$(NC)"
-	uv lock
-	@echo "$(GREEN)✓ Lock file updated$(NC)"
-
-update: ## Update all dependencies to latest versions
-	@echo "$(BLUE)Upgrading all dependencies...$(NC)"
-	uv lock --upgrade
-	@echo "$(GREEN)✓ Dependencies upgraded$(NC)"
-
-update-pkg: ## Update specific package (usage: make update-pkg PKG=requests)
-ifndef PKG
-	$(error PKG is required. Usage: make update-pkg PKG=requests)
-endif
-	@echo "$(BLUE)Upgrading $(PKG)...$(NC)"
-	uv lock --upgrade-package $(PKG)
-	@echo "$(GREEN)✓ $(PKG) upgraded$(NC)"
-
-reinstall: ## Clean venv and reinstall all dependencies
-	@echo "$(BLUE)Reinstalling dependencies...$(NC)"
-	rm -rf .venv
-	uv sync
-	@echo "$(GREEN)✓ Dependencies reinstalled$(NC)"
 
 setup-hooks: ## Install pre-commit hooks
 	@echo "$(BLUE)Installing pre-commit hooks...$(NC)"
 	uv run pre-commit install
 	uv run pre-commit install --hook-type pre-push
 	@echo "$(GREEN)✓ Pre-commit hooks installed$(NC)"
-
-local-pr-ready: ## Full PR readiness gate (check + unit tests) - run manually
-	@echo "$(BLUE)Running full PR readiness gate...$(NC)"
-	make check
-	@echo "$(BLUE)Running core unit tests...$(NC)"
-	make test-unit
-	@echo "$(GREEN)✓ Full PR readiness gate passed$(NC)"
 
 # =============================================================================
 # CODE QUALITY CHECKS
@@ -169,11 +116,6 @@ lint: ## Run Ruff linter (fast)
 	@echo "$(BLUE)Running Ruff linter...$(NC)"
 	uv run --frozen ruff check $(LINT_PATHS)
 	@echo "$(GREEN)✓ Ruff check complete$(NC)"
-
-lint-fix: ## Run Ruff linter with auto-fix
-	@echo "$(BLUE)Running Ruff with auto-fix...$(NC)"
-	uv run ruff check $(LINT_PATHS) --fix
-	@echo "$(GREEN)✓ Ruff auto-fix complete$(NC)"
 
 format: ## Format code with Ruff
 	@echo "$(BLUE)Formatting code with Ruff...$(NC)"
@@ -190,11 +132,6 @@ type-check: ## Run MyPy type checking
 	uv run --frozen mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
 	@echo "$(GREEN)✓ Type check complete$(NC)"
 
-pylint: ## Run Pylint (comprehensive linting)
-	@echo "$(BLUE)Running Pylint...$(NC)"
-	uv run pylint $(LINT_PATHS) --rcfile=pyproject.toml || true
-	@echo "$(GREEN)✓ Pylint check complete$(NC)"
-
 security: ## Run Bandit security scan + Vulture dead-code check
 	@echo "$(BLUE)Running Bandit security checks...$(NC)"
 	uv run bandit -r $(LINT_PATHS) -c pyproject.toml
@@ -202,26 +139,6 @@ security: ## Run Bandit security scan + Vulture dead-code check
 	@echo "$(BLUE)Checking for dead code with Vulture...$(NC)"
 	uv run vulture $(LINT_PATHS) vulture_whitelist.py --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Vulture dead-code check complete$(NC)"
-
-dead-code: ## Find dead code with Vulture (alias for security)
-	@echo "$(BLUE)Checking for dead code...$(NC)"
-	uv run vulture $(LINT_PATHS) vulture_whitelist.py --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
-	@echo "$(GREEN)✓ Dead code check complete$(NC)"
-
-dead-code-check: dead-code ## Alias: find dead code with Vulture (pre-push gate)
-
-deps-check: deps-audit ## Alias: check dep hygiene with deptry (pre-push gate)
-
-compile-python: ## Compile all repo-tracked Python files (#2320)
-	@echo "$(BLUE)Checking repo-tracked Python syntax...$(NC)"
-	@tmp_file="$$(mktemp)"; \
-	trap 'rm -f "$$tmp_file"' EXIT; \
-	git ls-files '*.py' > "$$tmp_file"; \
-	uv run python -m compileall -q -i "$$tmp_file"
-	@echo "$(GREEN)✓ Repo-tracked Python syntax OK$(NC)"
-
-all-checks: lint type-check security ## Run all code quality checks
-	@echo "$(GREEN)✓✓✓ All checks passed! ✓✓✓$(NC)"
 
 deps-audit: ## Check for unused/missing/misplaced deps with deptry
 	@echo "$(BLUE)Running deptry dependency audit...$(NC)"
@@ -232,16 +149,6 @@ vuln-audit: ## Audit installed packages in .venv for known CVEs with pip-audit
 	@echo "$(BLUE)Running pip-audit vulnerability scan...$(NC)"
 	uv run --frozen pip-audit --path .venv
 	@echo "$(GREEN)✓ pip-audit complete$(NC)"
-
-audit-deps-refresh: ## Refresh OSV advisory cache by running pip-audit against the project (populates HTTP cache)
-	@echo "$(BLUE)Refreshing OSV advisory cache via pip-audit...$(NC)"
-	uvx pip-audit -s osv --progress-spinner off . >/dev/null 2>&1 || true
-	@echo "$(GREEN)✓ OSV cache refreshed$(NC)"
-
-cve-gate: ## Severity-filtered CVE gate (critical/high only, allow-list supported); fails on empty scan
-	@echo "$(BLUE)Running CVE gate (critical/high)...$(NC)"
-	uv run --frozen python scripts/ci/cve_gate.py
-	@echo "$(GREEN)✓ CVE gate passed$(NC)"
 
 arch-lint: ## Enforce module boundary contracts with import-linter
 	@echo "$(BLUE)Running import-linter architecture checks...$(NC)"
@@ -297,8 +204,6 @@ test-telegram-adapter: ## Run Telegram adapter unit tests explicitly
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_TELEGRAM_ADAPTER_PATHS) $(PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Telegram adapter tests complete$(NC)"
 
-
-
 test-ingestion: ## Run ingestion tests (Markdown-only pipeline, #3235 — no extras needed)
 	@echo "$(BLUE)Running ingestion tests...$(NC)"
 	uv sync --all-groups
@@ -307,7 +212,7 @@ test-ingestion: ## Run ingestion tests (Markdown-only pipeline, #3235 — no ext
 
 # bge-m3-api FastAPI endpoint tests — require fastapi (bge-extras).
 # These are silently skipped by importorskip in the core/unit gates (fastapi absent).
-# Run this lane explicitly after: make core-up  (Qdrant + BGE-M3 sidecars not required).
+# Run this lane explicitly after: make docker-core-up  (sidecars not required).
 test-bge-extras: ## Run BGE-M3 FastAPI endpoint tests (bge-extras extra — installs fastapi)
 	@echo "$(BLUE)Running bge-m3-api endpoint tests (bge-extras)...$(NC)"
 	uv sync --extra bge-extras --all-groups
@@ -316,10 +221,6 @@ test-bge-extras: ## Run BGE-M3 FastAPI endpoint tests (bge-extras extra — inst
 	  tests/unit/test_bge_m3_rerank.py \
 	  -q --timeout=30 -m "not slow and not requires_services"
 	@echo "$(GREEN)✓ BGE-extras tests complete$(NC)"
-
-
-
-
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
@@ -341,11 +242,6 @@ test-unit: ## Run broad unit test lane locally in parallel
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Broad unit tests complete$(NC)"
 
-test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse locally)
-	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
-	@echo "$(GREEN)✓ Unit tests (loadscope) complete$(NC)"
-
 test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main)
 	@echo "$(BLUE)Running full unit tests (all extras)...$(NC)"
 	uv sync --all-extras --all-groups
@@ -363,89 +259,13 @@ test-contract: ## Run static contract tests (no Docker; optional SDK lanes exclu
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not requires_extras"
 	@echo "$(GREEN)✓ Static contract tests complete$(NC)"
 
-test-tooling: ## Run swarm/Kiro tooling tests (scripts/tests/ — guards ~/.kiro/skills, launcher, orchestrator)
-	@echo "$(BLUE)Running swarm/Kiro tooling tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest scripts/tests/ -p no:xdist -q --timeout=30
-	@echo "$(GREEN)✓ Swarm/Kiro tooling tests complete$(NC)"
-
-
-test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
-	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
-	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
-
-test-all-fast: ## Run unit tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
-	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
-	@echo "$(GREEN)✓ All fast tests complete$(NC)"
-
-test-lf: ## Run only last failed tests (parallel)
-	@echo "$(BLUE)Running last failed tests...$(NC)"
-	uv run pytest tests/unit/ --lf -n auto -q
-	@echo "$(GREEN)✓ Last failed tests complete$(NC)"
-
-test-ff: ## Run failed first, then rest
-	@echo "$(BLUE)Running failed first...$(NC)"
-	uv run pytest tests/unit/ --ff -v
-	@echo "$(GREEN)✓ Tests complete$(NC)"
-
-test-profile: ## Profile slowest tests (find bottlenecks) — measures the same lane as test-unit
-	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE) $(PYTEST_OPTIONAL_ADAPTER_IGNORE_GLOB) $(PYTEST_PARALLEL_ARGS) --durations=20 --durations-min=0.5 -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
-	@echo "$(GREEN)✓ Profile complete$(NC)"
-
-test-integration: ## Run no-service integration tests (no Docker)
-	@echo "$(BLUE)Running no-service integration tests...$(NC)"
-	$(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/integration -m "no_services and not requires_extras and not slow" -v --timeout=30
-	@echo "$(GREEN)✓ Integration tests complete$(NC)"
-
-test-integration-full: ## Run ALL integration tests (requires Docker)
-	@echo "$(BLUE)Running full integration tests...$(NC)"
-	uv run pytest tests/integration/ -v --timeout=60
-	@echo "$(GREEN)✓ Full integration tests complete$(NC)"
-
-test-nightly: ## Run heavy test suites (chaos, smoke, slow unit) — schedule overnight
-	@echo "$(BLUE)Running nightly test suite...$(NC)"
-	uv run pytest tests/chaos/ -v --timeout=60 -n auto -m "not legacy_api"
-	uv run pytest tests/smoke/ -v --timeout=60 -m "not legacy_api"
-	@set +e; \
-	uv run pytest tests/unit/ -n auto --timeout=30 -m "slow" -q; \
-	rc=$$?; \
-	if [ $$rc -eq 5 ]; then \
-		echo "$(YELLOW)No slow-marked unit tests collected; treating as success.$(NC)"; \
-	elif [ $$rc -ne 0 ]; then \
-		exit $$rc; \
-	fi
-	@echo "$(GREEN)✓ Nightly tests complete$(NC)"
-
 test-store-durations: ## Update .test_durations for pytest-split CI sharding
 	@echo "$(BLUE)Generating test duration data...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --store-durations $(PYTEST_PARALLEL_ARGS) --timeout=30 -m "not legacy_api and not requires_extras and not slow" -q
 	@echo "$(GREEN)✓ .test_durations updated — commit this file$(NC)"
 
-test-all: ## Run all tests with coverage threshold (CI mode)
-	@echo "$(BLUE)Running all tests with coverage...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/ -v -n auto --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
-	@echo "$(GREEN)✓ All tests passed with 80%+ coverage$(NC)"
-
-.PHONY: test-all-local
-
-test-all-local: ## Run all local test suites (pytest all tiers)
-	@echo "$(BLUE)Running all local test suites...$(NC)"
-	make test-full
-	@echo "$(GREEN)✓ All local test suites complete$(NC)"
-
 # =============================================================================
 # SMOKE & LOAD TESTS
-# =============================================================================
-
-test-preflight: ## Run preflight checks (Qdrant/Redis config)
-	@echo "$(BLUE)Running preflight checks...$(NC)"
-	uv run pytest tests/smoke/test_preflight.py -v -s
-	@echo "$(GREEN)✓ Preflight complete$(NC)"
-
-# =============================================================================
-# DEMO GATE (#3205)
 # =============================================================================
 
 # MODE="" runs the full gate (readiness + real Telegram journey);
@@ -457,34 +277,14 @@ demo-gate: ## Run the automated five-minute real-estate Telegram demo gate (#320
 	$(ENV_LOAD) uv run --group e2e --python $(PYTHON_VERSION) python -m scripts.e2e.demo_gate $(MODE)
 	@echo "$(GREEN)✓ Demo gate complete$(NC)"
 
-.PHONY: demo-gate
-
 test-smoke: ## Run smoke tests (requires live services)
 	@echo "$(BLUE)Running smoke tests...$(NC)"
 	uv run pytest tests/smoke/ -v --tb=short
 	@echo "$(GREEN)✓ Smoke tests complete$(NC)"
 
-test-load-eviction: ## Run Redis eviction load on a run-owned disposable container (requires Docker)
-	@echo "$(BLUE)Running Redis eviction load (run-owned disposable target)...$(NC)"
-	PYTHON_DOTENV_DISABLED=1 \
-	uv run pytest tests/load/test_load_redis_eviction.py -v
-	@echo "$(GREEN)✓ Redis eviction tests complete$(NC)"
-
-smoke-fast: ## Quick zoo smoke (~30 sec, bash only)
-	@echo "$(BLUE)Running quick zoo smoke...$(NC)"
-	./scripts/smoke-zoo.sh
-	@echo "$(GREEN)✓ Zoo smoke complete$(NC)"
-
-smoke-zoo: ## Run zoo smoke tests (pytest)
-	@echo "$(BLUE)Running zoo smoke tests...$(NC)"
-	uv run pytest tests/smoke/test_zoo_smoke.py -v
-	@echo "$(GREEN)✓ Zoo smoke tests complete$(NC)"
-
 # =============================================================================
 # REDIS VERIFICATION
 # =============================================================================
-
-.PHONY: bot-response-smoke
 
 BOT_RESPONSE_SMOKE_FLAGS ?=
 
@@ -494,35 +294,11 @@ bot-response-smoke: operator-env-exists ## End-to-end gate: prove `make bot` act
 	@echo "$(GREEN)✓ Bot response smoke gate passed$(NC)"
 
 # =============================================================================
-# PROJECT MANAGEMENT
+# CLEANUP
 # =============================================================================
-
-clean: ## Clean up cache files and build artifacts
-	@echo "$(BLUE)Cleaning up...$(NC)"
-	rm -rf __pycache__ .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov
-	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete
-	find . -type f -name "*.pyo" -delete
-	find . -type f -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-	@echo "$(GREEN)✓ Cleaned up$(NC)"
-
-docker-clean: ## Prune Docker build cache and stopped containers (safe)
-	@echo "$(BLUE)Pruning Docker build cache...$(NC)"
-	docker builder prune -f --filter "until=720h" 2>/dev/null || true
-	@echo "$(BLUE)Removing stopped containers...$(NC)"
-	docker container prune -f 2>/dev/null || true
-	@echo "$(GREEN)✓ Docker cleaned$(NC)"
-
-docker-clean-aggressive: ## Prune ALL unused Docker resources (images, volumes, networks)
-	@echo "$(YELLOW)WARNING: Aggressive cleanup — removes unused images and volumes$(NC)"
-	docker system prune -f --volumes 2>/dev/null || true
-	@echo "$(GREEN)✓ Docker aggressively cleaned$(NC)"
 
 docker-clean-orphan-worktree-volumes: ## Report Docker volumes from removed git worktrees (dry-run, see #1546)
 	@bash scripts/cleanup_orphaned_worktree_volumes.sh
-
-docker-clean-orphan-worktree-volumes-apply: ## Delete Docker volumes from removed git worktrees (destructive, see #1546)
-	@bash scripts/cleanup_orphaned_worktree_volumes.sh --apply
 
 # =============================================================================
 # DOCKER PROFILES
@@ -550,8 +326,6 @@ LOCAL_COMPOSE_CMD := docker compose -f compose.yml -f compose.dev.yml --env-file
 RAG_RUNTIME_ENV_FILE ?= $(OPERATOR_ENV)
 export RAG_RUNTIME_ENV_FILE
 
-.PHONY: operator-env-exists operator-env-check
-
 operator-env-exists: ## Fail with an actionable message when the operator env file is missing
 	@if [ ! -f "$(OPERATOR_ENV)" ]; then \
 		echo "$(RED)ERROR: operator env file '$(OPERATOR_ENV)' not found.$(NC)"; \
@@ -566,152 +340,12 @@ operator-env-check: operator-env-exists ## Validate operator env before Compose:
 	@$(UV_RUN_NO_SYNC) python scripts/validate_operator_env.py --env-file "$(OPERATOR_ENV)"
 	@echo "$(GREEN)✓ Operator env valid$(NC)"
 
-# =============================================================================
-# REMOTE MACBOOK DOCKER HOST
-# =============================================================================
-
-# Set these three vars in your shell/.env before using remote-* targets:
-#   REMOTE_DOCKER_HOST  – SSH hostname for the remote Docker host
-#   REMOTE_DOCKER_IP    – LAN IP of the remote Docker host
-#   REMOTE_DOCKER_REPO  – absolute path to rag-fresh checkout on remote
-REMOTE_DOCKER_HOST ?=
-REMOTE_DOCKER_IP ?=
-REMOTE_DOCKER_REPO ?=
-REMOTE_DOCKER_PATH ?= /opt/homebrew/bin:/usr/local/bin
-REMOTE_COMPOSE_FILE ?= -f compose.yml -f compose.dev.yml
-REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
-REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
-
-REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 bot
-
-remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
-	@echo "$(BLUE)Remote Docker status ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) " \
-		echo \"Hostname: \`hostname\`\"; \
-		echo \"Repo: $(REMOTE_DOCKER_REPO)\"; \
-		cd $(REMOTE_DOCKER_REPO) && echo \"Git branch: \`git branch --show-current 2>/dev/null || echo N/A\`\" && echo \"Last commit: \`git log -1 --format=%h 2>/dev/null || echo N/A\`\"; \
-		export PATH=$(REMOTE_DOCKER_PATH):\$$PATH; \
-		echo \"Colima status:\"; \
-		colima status 2>/dev/null || echo \"  Colima not running or not found\"; \
-		echo \"Docker client: \`docker version --format '{{.Client.Version}}' 2>/dev/null || echo N/A\`\"; \
-		echo \"Docker server: \`docker version --format '{{.Server.Version}}' 2>/dev/null || echo N/A\`\"; \
-		echo \"Buildx version: \`docker buildx version 2>/dev/null || echo 'buildx not available'\`\"; \
-	"
-
-remote-compose-config: ## Render remote Compose config (service names only, no secrets)
-	@echo "$(BLUE)Remote Compose config ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` config --services"
-
-remote-docker-ps: ## Show remote Compose container names, status, and ports
-	@echo "$(BLUE)Remote Docker containers ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
-
-remote-env-sync: ## Sync local .env to remote MacBook repo (fails if local .env missing)
-	@echo "$(BLUE)Syncing .env to remote $(REMOTE_DOCKER_HOST)...$(NC)"
-	@test -f .env || { echo "$(RED)Error: local .env not found$(NC)"; exit 1; }
-	@scp -q .env $(REMOTE_DOCKER_HOST):$(REMOTE_DOCKER_REPO)/.env
-	@echo "$(GREEN)✓ .env synced to remote$(NC)"
-
-remote-env-check: ## Verify remote .env exists and report missing required variable names
-	@echo "$(BLUE)Checking remote .env on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && \
-		if [ ! -f .env ]; then echo 'Error: remote .env not found'; exit 1; fi; \
-		missing=''; \
-		if ! grep -qE '^TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN] .env; then missing=\"$$missing TELEGRAM_BOT_TOKEN\"; fi; \
-		if ! grep -qE '^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)=' .env; then missing=\"$$missing (CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)\"; fi; \
-		if ! grep -qE '^NEXTAUTH_SECRET=' .env; then missing=\"$$missing NEXTAUTH_SECRET\"; fi; \
-		if ! grep -qE '^SALT=' .env; then missing=\"$$missing SALT\"; fi; \
-		if ! grep -qE '^ENCRYPTION_KEY=' .env; then missing=\"$$missing ENCRYPTION_KEY\"; fi; \
-		if [ -n \"$$missing\" ]; then \
-			echo \"Missing variables:$$missing\"; \
-			exit 1; \
-		else \
-			echo 'Required variables present'; \
-		fi"
-
-
-remote-core-up: ## Start minimal RAG bot core on remote MacBook Docker
-	@echo "$(BLUE)Starting minimal RAG bot core on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` --profile bot up -d $(REMOTE_CORE_SERVICES)"
-	@echo "$(GREEN)Remote core stack started$(NC)"
-
-remote-core-ps: ## Show remote core container status
-	@echo "$(BLUE)Remote core containers ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}' $(REMOTE_CORE_SERVICES)"
-
-remote-core-logs: ## Show recent remote core logs
-	@echo "$(BLUE)Remote core logs ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` logs --tail 100 $(REMOTE_CORE_SERVICES)"
-
-
-remote-bot-up: ## Start remote bot container
-	@echo "$(BLUE)Starting remote bot on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` --profile bot up -d bot"
-	@echo "$(GREEN)✓ Remote bot started$(NC)"
-
-remote-bot-restart: ## Recreate remote bot container
-	@echo "$(BLUE)Restarting remote bot on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` --profile bot up -d --force-recreate bot"
-	@echo "$(GREEN)✓ Remote bot restarted$(NC)"
-
-remote-bot-logs: ## Show recent remote bot logs
-	@echo "$(BLUE)Remote bot logs ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` logs --tail 100 bot"
-
-remote-local-up: ## Start the local-service subset on remote MacBook Docker
-	@echo "$(BLUE)Starting local service subset on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` up -d $(LOCAL_SERVICES)"
-	@echo "$(GREEN)✓ Local service subset started on remote$(NC)"
-
-remote-local-down: ## Stop remote MacBook compose stack
-	@echo "$(BLUE)Stopping remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` --profile full down"
-	@echo "$(GREEN)✓ Remote stack stopped$(NC)"
-
-remote-local-logs: ## Show recent remote MacBook compose logs
-	@echo "$(BLUE)Remote compose logs ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` --profile full logs --tail 120"
-	@echo "$(GREEN)✓ Remote compose logs shown$(NC)"
-
-remote-core-health: ## Check minimal RAG bot core health on remote MacBook Docker
-	@echo "$(BLUE)Remote core health ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@fail=0; \
-	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && if [ ! -f .env ]; then echo 'ERROR: remote .env missing on $(REMOTE_DOCKER_HOST); sync it first: make remote-env-sync (#3367)'; exit 1; fi && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('postgres',5432),('redis',6379)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
-	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
-	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(RED)container not found$(NC)"; fail=1; fi; \
-	exit $$fail
-
-remote-core-env-check: ## Verify core-only required variables in remote .env
-	@echo "$(BLUE)Checking core env on $(REMOTE_DOCKER_HOST)...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && \
-		if [ ! -f .env ]; then echo 'Error: remote .env not found'; exit 1; fi; \
-		missing=''; \
-		if ! grep -qE '^TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN] .env; then missing=\"$$missing TELEGRAM_BOT_TOKEN\"; fi; \
-		if ! grep -qE '^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)=' .env; then missing=\"$$missing (CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)\"; fi; \
-		if [ -n \"$$missing\" ]; then \
-			echo \"Missing variables:$$missing\"; \
-			exit 1; \
-		else \
-			echo 'Core required variables present'; \
-		fi"
-
-remote-service-health: ## Check remote service health over SSH on 127.0.0.1
-	@echo "$(BLUE)Remote service health ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@fail=0; \
-	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:6333/readyz >/dev/null 2>&1"; then echo "  Qdrant: $(RED)FAIL$(NC)"; fail=1; else echo "  Qdrant: $(GREEN)OK$(NC)"; fi; \
-	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1"; then echo "  BGE-M3: $(RED)FAIL$(NC)"; fail=1; else echo "  BGE-M3: $(GREEN)OK$(NC)"; fi; \
-	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(docker compose $(REMOTE_COMPOSE_FILE) --env-file \`[ -f .env ] && echo .env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
-	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(YELLOW)container not found$(NC)"; fi; \
-	exit $$fail
-
-.PHONY: core-min-up core-up docker-core-up docker-bot-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
+.PHONY: core-min-up docker-core-up docker-bot-up docker-full-up
 
 core-min-up: ## Start minimal core services only (qdrant + redis)
 	@echo "$(BLUE)Starting minimal core services (qdrant + redis)...$(NC)"
 	docker compose $(CORE_MIN_COMPOSE_FILE) up -d
 	@echo "$(GREEN)✓ Minimal core services started$(NC)"
-
-core-up: docker-core-up ## Start the full default local compose core
 
 docker-core-up: operator-env-check ## Start default local compose stack (unprofiled services; env-validated #3367)
 	@echo "$(BLUE)Starting core services (bounded wait: $(CORE_UP_WAIT_TIMEOUT)s, #3361)...$(NC)"
@@ -722,16 +356,6 @@ docker-bot-up: operator-env-check ## Start core + bot services (bot; env-validat
 	@echo "$(BLUE)Starting bot services...$(NC)"
 	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
-
-docker-ai-up: operator-env-check ## Start core + heavy AI services (bge-m3; env-validated #3367)
-	@echo "$(BLUE)Starting AI services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) up -d bge-m3
-	@echo "$(GREEN)✓ AI services started$(NC)"
-
-docker-ingest-up: operator-env-check ## Start core + ingestion service (env-validated #3367)
-	@echo "$(BLUE)Starting ingestion service...$(NC)"
-	$(LOCAL_COMPOSE_CMD) --profile ingest up -d
-	@echo "$(GREEN)✓ Ingestion service started$(NC)"
 
 docker-full-up: operator-env-check ## Start all services and wait: exit 0 only when all six are healthy; honest failure names them (full stack #3361)
 	@echo "$(BLUE)Starting full stack (bounded wait: $(FULL_UP_WAIT_TIMEOUT)s)...$(NC)"
@@ -746,33 +370,16 @@ docker-full-up: operator-env-check ## Start all services and wait: exit 0 only w
 		exit $$status; \
 	fi
 
-docker-up: docker-core-up ## Alias for docker-core-up (backward compat)
-
-docker-down: ## Stop all Docker services
-	@echo "$(BLUE)Stopping Docker services...$(NC)"
-	$(LOCAL_COMPOSE_CMD) --profile full down
-	@echo "$(GREEN)✓ Services stopped$(NC)"
-
-docker-ps: ## Show Docker service status
-	@echo "$(BLUE)Docker service status:$(NC)"
-	@$(LOCAL_COMPOSE_CMD) --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
-
 # =============================================================================
 # DEVELOPMENT WORKFLOW
 # =============================================================================
 
-dev-setup: install-dev setup-hooks docker-up ## Complete development setup
+dev-setup: install-dev setup-hooks docker-core-up ## Complete development setup
 	@echo "$(GREEN)✓✓✓ Development environment ready! ✓✓✓$(NC)"
 	@echo "$(YELLOW)Next steps:$(NC)"
 	@echo "  1. Copy .env.example to .env"
 	@echo "  2. Fill in your API keys"
 	@echo "  3. Run 'make test' to verify setup"
-
-pre-commit: lint-fix format type-check test ## Run all checks before commit
-	@echo "$(GREEN)✓✓✓ Ready to commit! ✓✓✓$(NC)"
-
-ci: format-check lint type-check security test ## CI/CD pipeline checks
-	@echo "$(GREEN)✓✓✓ CI checks passed! ✓✓✓$(NC)"
 
 # =============================================================================
 # DOCUMENTATION
@@ -787,24 +394,8 @@ docs-check: ## Check Markdown relative links for broken targets
 # QUICK COMMANDS
 # =============================================================================
 
-.PHONY: check-frozen candidate-check
-
 check: lint type-check ## Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
-
-lint-full: ## Full linter gate: bandit + vulture (blocking) + deptry (blocking) + radon + interrogate (report-only)
-	@echo "$(BLUE)Running full lint gate...$(NC)"
-	@echo "$(BLUE)[1/5] bandit security scan...$(NC)"
-	uv run --frozen bandit -r src/ telegram_bot/ -c pyproject.toml
-	@echo "$(BLUE)[2/5] vulture dead-code check...$(NC)"
-	uv run --frozen vulture src/ telegram_bot/ vulture_whitelist.py --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
-	@echo "$(BLUE)[3/5] deptry dependency audit...$(NC)"
-	uv run --frozen deptry .
-	@echo "$(BLUE)[4/5] radon complexity report (report-only)...$(NC)"
-	uv run --frozen radon cc src/ telegram_bot/ -a || true
-	@echo "$(BLUE)[5/5] interrogate docstring coverage (report-only, ≥70%)...$(NC)"
-	uv run --frozen interrogate src/core src/runtime src/ingestion/unified -v --fail-under 70
-	@echo "$(GREEN)✓ Full lint gate complete$(NC)"
 
 check-frozen: ## Read-only check: fail if .venv is stale, then lint + type-check without uv sync
 	@echo "$(BLUE)Checking frozen uv environment...$(NC)"
@@ -824,11 +415,10 @@ candidate-check: check-frozen format-check test test-contract ## Authoritative l
 pre-push: lint format-check test-core ## Pre-push gate (lint + format-check + core tests)
 	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"
 
-fix: lint-fix format ## Fix all auto-fixable issues
+fix: ## Fix all auto-fixable issues (Ruff auto-fix + format)
+	uv run ruff check $(LINT_PATHS) --fix
+	uv run ruff format $(LINT_PATHS)
 	@echo "$(GREEN)✓ Auto-fixes applied$(NC)"
-
-qa: all-checks test ## Full quality assurance
-	@echo "$(GREEN)✓✓✓ Full QA complete! ✓✓✓$(NC)"
 
 # =============================================================================
 # Local Development (compose.yml + compose.dev.yml via explicit -f flags)
@@ -959,48 +549,13 @@ local-build: operator-env-check  ## Rebuild local Docker services (env-validated
 local-redis-recreate:  ## Recreate local Redis container after REDIS_PASSWORD/.env changes
 	@echo "$(BLUE)Recreating local Redis container with current .env values...$(NC)"
 	$(LOCAL_COMPOSE_CMD) up -d --no-deps --force-recreate redis
-	@echo "$(GREEN)✓ Local Redis recreated. Next: make test-bot-health$(NC)"
-
-# =============================================================================
-# Deployment
-# =============================================================================
-
-.PHONY: deploy-code deploy-release deploy-bot deploy-vps-local
-
-deploy-code:  ## Quick deploy (git pull only)
-	git tag -d deploy-code 2>/dev/null || true
-	git tag deploy-code
-	git push origin deploy-code --force
-
-deploy-release:  ## Release deploy (requires VERSION, e.g., make deploy-release VERSION=2.6.0)
-ifndef VERSION
-	$(error VERSION is required. Usage: make deploy-release VERSION=2.6.0)
-endif
-	git tag v$(VERSION)
-	git push origin v$(VERSION)
-
-deploy-bot:  ## Show official deploy flow: PR to dev, then merge dev to main snapshot
-	@echo "$(CYAN)Official deploy flow:$(NC)"
-	@echo "  1. Commit locally"
-	@echo "  2. Push your work branch"
-	@echo "  3. Open PR to dev"
-	@echo "  4. Stage runtime-sensitive changes with make remote-core-up"
-	@echo "  5. Merge dev to main for deployment snapshots"
-	@echo "$(GREEN)No direct push to main is performed by this target.$(NC)"
-
-deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scripts removed from public repo)
-	@echo "$(CYAN)Manual deploy: use private operator runbooks or Docker Compose on VPS$(NC)"
+	@echo "$(GREEN)✓ Local Redis recreated. Next: make local-service-health$(NC)"
 
 # =============================================================================
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-core-live e2e-core-live-real-llm e2e-test-group e2e-telegram-test e2e-setup test-e2e-infra test-e2e-redis-live
-
-e2e-install: ## Install E2E testing dependencies
-	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
-	uv sync --group e2e
-	@echo "$(GREEN)✓ E2E dependencies installed$(NC)"
+.PHONY: e2e-core-live e2e-core-live-real-llm e2e-telegram-test test-e2e-infra test-e2e-redis-live
 
 e2e-core-live: ## Run simplification core live golden path (Qdrant + BGE-M3)
 	@echo "$(BLUE)Running simplification core live E2E golden path...$(NC)"
@@ -1025,13 +580,6 @@ e2e-telegram-test: operator-env-exists ## Run Telegram userbot E2E runner (Telet
 	uv run --group e2e --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py
 	@echo "$(GREEN)✓ Telegram E2E runner complete$(NC)"
 
-e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=filters)
-	uv run --group e2e python scripts/e2e/runner.py --group $(GROUP)
-
-e2e-setup: e2e-install ## Full E2E setup on canonical collection
-	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
-	@echo "$(GREEN)✓ E2E setup complete$(NC)"
-
 test-e2e-infra: ## Run live infrastructure E2E: ingestion + Redis + Qdrant (#2771, #3235)
 	$(UV_RUN_NO_SYNC) pytest tests/e2e/test_infra_ingestion_redis_qdrant.py -v --tb=short -m "e2e and requires_services"
 	@echo "$(GREEN)✓ Infra E2E complete$(NC)"
@@ -1044,53 +592,10 @@ test-e2e-redis-live: ## Run live Redis mode + two-owner polling-lock E2E (#3368;
 	@echo "$(GREEN)✓ Redis modes + polling-lock live E2E complete$(NC)"
 
 # =============================================================================
-# BASELINE & OBSERVABILITY
-# =============================================================================
-
-
-.PHONY: eval-gold-gen eval-gold-gen-dry
-
-eval-gold-gen: ## Generate gold set from Qdrant → JSONL
-	@echo "$(BLUE)Generating gold set from Qdrant...$(NC)"
-	uv run python scripts/generate_gold_set.py --collection gdrive_documents_bge
-
-eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only)
-	@echo "$(BLUE)Generating gold set (dry-run)...$(NC)"
-	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
-
-# =============================================================================
-# GOOGLE DRIVE SYNC (rclone)
-# =============================================================================
-# rclone sync scripts were removed from public repo.
-# See docs/GDRIVE_INGESTION.md for ingestion setup.
-
-# =============================================================================
 # DOCUMENT INGESTION (Ingestion Pipeline)
 # =============================================================================
 
-.PHONY: ingest-setup ingest-services ingest-test
-
-ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
-	@echo "$(BLUE)Setting up ingestion infrastructure...$(NC)"
-	uv run python scripts/setup_ingestion_collection.py
-	@echo "$(GREEN)✓ Ingestion setup complete$(NC)"
-
-ingest-test: ## Run ingestion unit tests
-	@echo "$(BLUE)Running ingestion tests...$(NC)"
-	uv run pytest tests/unit/ingestion/ -v
-	@echo "$(GREEN)✓ Ingestion tests complete$(NC)"
-
-
-ingest-services: ## Index curated services.yaml content into Qdrant
-	@echo "$(BLUE)Indexing services.yaml content...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m scripts.index_services
-	@echo "$(GREEN)✓ services.yaml indexing complete$(NC)"
-
-# =============================================================================
-# UNIFIED INGESTION PIPELINE (v3.2.1)
-# =============================================================================
-
-.PHONY: ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-logs
+.PHONY: ingest-unified-preflight ingest-unified-bootstrap ingest-unified
 
 ingest-unified-preflight: ## Check unified ingestion dependencies and source path
 	@echo "$(BLUE)Running unified ingestion preflight...$(NC)"
@@ -1105,18 +610,11 @@ ingest-unified: ## Run unified ingestion once
 	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run
 	@echo "$(GREEN)✓ Ingestion complete$(NC)"
 
-ingest-unified-watch: ## Run unified ingestion continuously (watch mode)
-	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
-	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run --watch
-
-ingest-unified-logs: ## Show ingestion service logs
-	docker compose logs ingestion -f --tail 100
-
 # =============================================================================
 # QDRANT BACKUP
 # =============================================================================
 
-.PHONY: qdrant-audit-indexes qdrant-ensure-indexes qdrant-backup qdrant-cleanup demo-bootstrap demo-verify
+.PHONY: qdrant-ensure-indexes demo-bootstrap demo-verify
 
 qdrant-ensure-indexes: ## Ensure contract payload indexes for BOTH product collections (non-destructive, #3202)
 	@echo "$(BLUE)Ensuring Qdrant payload indexes (knowledge + apartments)...$(NC)"
@@ -1133,193 +631,11 @@ demo-verify: ## Read-only readiness gate for both Qdrant collections (#3202)
 	@$(ENV_LOAD) uv run python -m scripts.demo_bootstrap --verify-only
 	@echo "$(GREEN)✓ Demo readiness verified$(NC)"
 
-qdrant-audit-indexes: ## Audit Qdrant payload indexes — PASS/FAIL with missing fields (#3074)
-	@echo "$(BLUE)Auditing Qdrant payload indexes for $${QDRANT_COLLECTION:-gdrive_documents_bge}...$(NC)"
-	uv run python -m scripts.qdrant_audit_indexes
-
-qdrant-backup: ## Create Qdrant collection snapshots (all collections)
-	@echo "$(BLUE)Creating Qdrant snapshots...$(NC)"
-	uv run python scripts/qdrant_snapshot.py
-	@echo "$(GREEN)✓ Qdrant backup complete$(NC)"
-
-qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
-	@echo "$(YELLOW)Qdrant storage cleanup — issue #1545$(NC)"
-	@echo "$(BLUE)Step 1/3: taking collection snapshot before cleanup...$(NC)"
-	@QDRANT_URL=$${QDRANT_URL:-http://localhost:6333}; \
-	COLLECTION=$${QDRANT_COLLECTION:-gdrive_documents_bge}; \
-	result=$$(curl -sf -X POST "$$QDRANT_URL/collections/$$COLLECTION/snapshots" 2>&1); \
-	if [ $$? -eq 0 ]; then \
-		echo "$(GREEN)  ✓ Snapshot created for $$COLLECTION$(NC)"; \
-	else \
-		echo "$(YELLOW)  ⚠ Snapshot skipped (Qdrant may not be running): $$result$(NC)"; \
-	fi
-	@echo "$(BLUE)Step 2/3: requesting optimiser run on all segments...$(NC)"
-	@QDRANT_URL=$${QDRANT_URL:-http://localhost:6333}; \
-	COLLECTION=$${QDRANT_COLLECTION:-gdrive_documents_bge}; \
-	result=$$(curl -sf -X PATCH "$$QDRANT_URL/collections/$$COLLECTION" \
-		-H 'Content-Type: application/json' \
-		-d '{"optimizers_config": {"indexing_threshold": 0}}' 2>&1); \
-	if [ $$? -eq 0 ]; then \
-		echo "$(GREEN)  ✓ Indexing threshold set to 0 — segments will be merged$(NC)"; \
-		echo "$(BLUE)  Restoring indexing_threshold to 20000 kB...$(NC)"; \
-		curl -sf -X PATCH "$$QDRANT_URL/collections/$$COLLECTION" \
-			-H 'Content-Type: application/json' \
-			-d '{"optimizers_config": {"indexing_threshold": 20000}}' > /dev/null && \
-		echo "$(GREEN)  ✓ Indexing threshold restored to 20000 kB$(NC)"; \
-	else \
-		echo "$(YELLOW)  ⚠ Optimiser trigger skipped (Qdrant may not be running): $$result$(NC)"; \
-	fi
-	@echo "$(BLUE)Step 3/3: operator checklist$(NC)"
-	@echo "  • Restart Qdrant to apply docker/qdrant/config.yaml changes:"
-	@echo "      docker compose restart qdrant"
-	@echo "  • To enable on_disk_payload on existing collection, patch via REST:"
-	@echo "      curl -X PATCH http://localhost:6333/collections/gdrive_documents_bge \\"
-	@echo "           -H 'Content-Type: application/json' \\"
-	@echo "           -d '{\"on_disk_payload\": true}'"
-	@echo "  • Monitor volume size: docker system df -v | grep qdrant"
-	@echo "$(GREEN)✓ Qdrant cleanup complete$(NC)"
-
 # =============================================================================
 # DOCKER IMAGE DRIFT (#322)
 # =============================================================================
 
-.PHONY: verify-compose-images verify-compose-images-json verify-compose-runtime
+.PHONY: verify-compose-images docker-clean-orphan-worktree-volumes
 
 verify-compose-images: ## Check running containers match compose-pinned images and published ports
 	@python3 scripts/check_image_drift.py -f compose.yml -f compose.dev.yml --fix
-
-verify-compose-images-json: ## Check image/port drift (JSON output for CI)
-	@python3 scripts/check_image_drift.py -f compose.yml -f compose.dev.yml --json
-
-verify-compose-runtime: verify-compose-images ## Alias: read-only local runtime drift guard (#2182/#2188)
-
-# =============================================================================
-# GIT HYGIENE
-# =============================================================================
-
-git-hygiene: ## Git hygiene report (merged branches, stale worktrees, transient files)
-	@echo "$(BLUE)Running git hygiene report...$(NC)"
-	@BASE_BRANCH=$${REPO_BASE_BRANCH:-dev}; \
-	CURRENT_BRANCH=$$(git branch --show-current); \
-	echo "Base branch: $$BASE_BRANCH"; \
-	git fetch --prune origin; \
-	echo ""; \
-	echo "Merged local branches:"; \
-	git branch --merged "origin/$$BASE_BRANCH" --format='%(refname:short)' | awk -v base="$$BASE_BRANCH" -v current="$$CURRENT_BRANCH" '$$0 != base && $$0 != "main" && $$0 != "master" && $$0 != "develop" && $$0 != current {print "  - " $$0}'; \
-	echo ""; \
-	echo "Branches without upstream:"; \
-	git for-each-ref --format='%(refname:short) %(upstream:short)' refs/heads | awk 'NF == 1 {print "  - " $$1}'; \
-	echo ""; \
-	echo "Worktrees:"; \
-	git worktree list --porcelain; \
-	echo ""; \
-	echo "Transient untracked files:"; \
-	git ls-files --others --exclude-standard -- coverage.json 'test_output*' '*.log' | sed 's/^/  - /'
-	@echo ""
-
-git-hygiene-fix: ## Git hygiene safe cleanup preview (dry-run)
-	@echo "$(BLUE)Running git hygiene cleanup (dry-run)...$(NC)"
-	@BASE_BRANCH=$${REPO_BASE_BRANCH:-dev}; \
-	CURRENT_BRANCH=$$(git branch --show-current); \
-	BASE_REF=origin/$$BASE_BRANCH; \
-	echo "Would delete local branches merged into $$BASE_REF, excluding protected/current branches:"; \
-	git fetch --prune origin; \
-	git branch --merged "$$BASE_REF" --format='%(refname:short)' | awk -v base="$$BASE_BRANCH" -v base_ref="$$BASE_REF" -v current="$$CURRENT_BRANCH" '$$0 != base && $$0 != "main" && $$0 != "master" && $$0 != "develop" && $$0 != current {print "  - git merge-base --is-ancestor " $$0 " " base_ref " && git branch -D " $$0}'
-	@echo ""
-
-pr-hygiene: ## PR queue triage report (open PRs, blocked reasons, SLA)
-	@echo "$(BLUE)Running PR queue triage...$(NC)"
-	uv run python scripts/pr_queue_audit.py || true
-	@echo ""
-
-issue-hygiene: ## Issue queue hygiene report (no-label / no-assignee / no-lane / stale)
-	@echo "$(BLUE)Running issue queue hygiene audit...$(NC)"
-	uv run python scripts/issue_queue_audit.py || true
-	@echo ""
-
-repo-cleanup: ## Full repo cleanup: branches, worktrees, stashes (dry-run)
-	@echo "$(BLUE)Running repo cleanup (dry-run)...$(NC)"
-	@MAIN_BRANCH=$${MAIN_BRANCH:-dev}; \
-	BASE_REF=origin/$$MAIN_BRANCH; \
-	CURRENT_BRANCH=$$(git branch --show-current); \
-	WORKTREE_BRANCHES=$$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p'); \
-	echo "Base branch: $$MAIN_BRANCH"; \
-	echo "Base ref: $$BASE_REF"; \
-	git fetch --prune origin; \
-	git rev-parse --verify --quiet "$$BASE_REF" >/dev/null || { echo "Missing base ref: $$BASE_REF"; exit 1; }; \
-	echo ""; \
-	echo "Local merged branches eligible for deletion:"; \
-	git branch --merged "$$BASE_REF" --format='%(refname:short)' | while read -r branch; do \
-		[ -z "$$branch" ] && continue; \
-		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
-		[ "$$branch" = "main" ] && continue; \
-		[ "$$branch" = "master" ] && continue; \
-		[ "$$branch" = "develop" ] && continue; \
-		[ "$$branch" = "$$CURRENT_BRANCH" ] && continue; \
-		printf '%s\n' "$$WORKTREE_BRANCHES" | grep -Fxq "$$branch" && continue; \
-		echo "  - $$branch"; \
-	done; \
-	echo ""; \
-	echo "Remote merged branches and open PR status:"; \
-	git branch -r --merged "origin/$$MAIN_BRANCH" --format='%(refname:short)' | sed 's|^origin/||' | while read -r branch; do \
-		[ -z "$$branch" ] && continue; \
-		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
-		[ "$$branch" = "main" ] && continue; \
-		[ "$$branch" = "master" ] && continue; \
-		[ "$$branch" = "develop" ] && continue; \
-		if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then \
-			open_prs=$$(gh pr list --head "$$branch" --state open --json number --jq length 2>/dev/null || echo unknown); \
-			echo "  - $$branch (open_prs=$$open_prs)"; \
-		else \
-			echo "  - $$branch (gh auth unavailable; review PR status manually)"; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "Worktree prune preview:"; \
-	git worktree prune --dry-run; \
-	echo ""; \
-	echo "Stashes:"; \
-	git stash list
-	@echo ""
-
-repo-cleanup-force: ## Full repo cleanup: interactive deletion mode
-	@echo "$(BLUE)Running repo cleanup (interactive)...$(NC)"
-	@MAIN_BRANCH=$${MAIN_BRANCH:-dev}; \
-	BASE_REF=origin/$$MAIN_BRANCH; \
-	CURRENT_BRANCH=$$(git branch --show-current); \
-	WORKTREE_BRANCHES=$$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p'); \
-	git fetch --prune origin; \
-	git rev-parse --verify --quiet "$$BASE_REF" >/dev/null || { echo "Missing base ref: $$BASE_REF"; exit 1; }; \
-	echo "Local merged branches eligible for deletion from $$BASE_REF:"; \
-	branches=$$(git branch --merged "$$BASE_REF" --format='%(refname:short)' | while read -r branch; do \
-		[ -z "$$branch" ] && continue; \
-		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
-		[ "$$branch" = "main" ] && continue; \
-		[ "$$branch" = "master" ] && continue; \
-		[ "$$branch" = "develop" ] && continue; \
-		[ "$$branch" = "$$CURRENT_BRANCH" ] && continue; \
-		printf '%s\n' "$$WORKTREE_BRANCHES" | grep -Fxq "$$branch" && continue; \
-		echo "$$branch"; \
-	done); \
-	if [ -z "$$branches" ]; then \
-		echo "  (none)"; \
-	else \
-		printf '%s\n' "$$branches" | sed 's/^/  - /'; \
-		printf 'Delete these local branches? [y/N] '; \
-		read -r confirm; \
-		if printf '%s' "$$confirm" | grep -Eq '^[Yy]$$'; then \
-			printf '%s\n' "$$branches" | while read -r branch; do \
-				[ -z "$$branch" ] && continue; \
-				if git merge-base --is-ancestor "$$branch" "$$BASE_REF"; then \
-					git branch -D "$$branch"; \
-				else \
-					echo "  skip $$branch: not an ancestor of $$BASE_REF"; \
-				fi; \
-			done; \
-		fi; \
-	fi; \
-	echo ""; \
-	echo "Pruning stale worktree administrative records..."; \
-	git worktree prune; \
-	echo "Dirty or active worktrees are not removed by this target."
-	@echo ""

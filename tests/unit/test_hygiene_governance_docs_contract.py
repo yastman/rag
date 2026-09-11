@@ -1,7 +1,10 @@
 """Contract locks for repo-hygiene operator entrypoints (closes #1717, #1719, #1720).
 
-Governance markdown playbooks were intentionally removed. The live contract is
-the Makefile targets and audit scripts operators still run.
+Governance markdown playbooks were intentionally removed. #3379 (entrypoint
+convergence) later removed the ``git-hygiene`` / ``pr-hygiene`` /
+``issue-hygiene`` Make targets: the retained contract is only that the
+legacy python helpers stay deleted and the audit-kept scripts stay on disk.
+Operators run those scripts directly with ``uv run`` when needed.
 """
 
 from __future__ import annotations
@@ -19,23 +22,26 @@ ARCHIVE_DIR = REPO_ROOT / "scripts" / "archive"
 
 MAKEFILE = REPO_ROOT / "Makefile"
 
-HYGIENE_TARGETS = ("git-hygiene", "pr-hygiene", "issue-hygiene")
+# #3379: hygiene Make targets were removed; they must not come back silently.
+REMOVED_HYGIENE_TARGETS = (
+    "git-hygiene",
+    "git-hygiene-fix",
+    "pr-hygiene",
+    "issue-hygiene",
+    "repo-cleanup",
+    "repo-cleanup-force",
+)
 
 
-def test_makefile_defines_hygiene_targets() -> None:
-    """Operators still get the three hygiene Make entrypoints."""
+def test_removed_hygiene_targets_stay_removed() -> None:
+    """#3379 removed the hygiene Make DSL; do not resurrect it."""
     makefile = MAKEFILE.read_text(encoding="utf-8")
-    for target in HYGIENE_TARGETS:
-        assert f"\n{target}:" in f"\n{makefile}", (
-            f"Makefile missing target `{target}` required by the hygiene contract"
-        )
+    present = [target for target in REMOVED_HYGIENE_TARGETS if f"\n{target}:" in f"\n{makefile}"]
+    assert present == [], f"Removed hygiene targets reappeared in Makefile: {present}"
 
 
-def test_pr_and_issue_hygiene_targets_wire_audit_scripts() -> None:
-    """Kept audit scripts must stay on disk and wired into Make."""
-    makefile = MAKEFILE.read_text(encoding="utf-8")
-    assert "scripts/pr_queue_audit.py" in makefile
-    assert "scripts/issue_queue_audit.py" in makefile
+def test_audit_scripts_stay_on_disk() -> None:
+    """Audit-kept scripts remain available for direct ``uv run`` invocation."""
     assert SCRIPT_PR_AUDIT.exists(), "scripts/pr_queue_audit.py missing"
     assert SCRIPT_ISSUE_AUDIT.exists(), "scripts/issue_queue_audit.py missing"
 

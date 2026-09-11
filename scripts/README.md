@@ -1,20 +1,22 @@
 # scripts/
 
-Automation, indexing, benchmarking, validation, and maintenance scripts.
+Automation, indexing, validation, and maintenance scripts. Markdown is the only
+RAG ingestion format (#3235); the unified ingestion pipeline owns indexing.
 
 ## Categories
 
 | Category | Scripts | Purpose |
 |----------|---------|---------|
-| **Indexing** | `index_*.py` | Chunk, embed, and load documents into Qdrant |
 | **Setup** | `setup_*.py`, `qdrant_ensure_indexes.py` | Collection schema and score configs |
 | **Validation** | `validate_*.py`, `check_image_drift.py`, `check_services.sh` | Query correctness and drift checks |
-| **Benchmarks** | `benchmark_*.py`, `benchmark/*_ab.py` | A/B and throughput comparisons |
-| **Experiment** | `eval/run_experiment.py` | Synthetic data and experiment runners |
 | **Maintenance** | `qdrant_snapshot.py`, `reindex_to_binary.py` | Disaster recovery and migration |
-| **Ops / health** | `probe/release_health_vps.sh`, `smoke-zoo.sh`, `check_services.sh` | Deployment and health checks |
-| **Swarm / CI** | `launch_kiro_worker.sh`, `accept_worker_report.py`, `ci/*.py` | tmux worker orchestration and CI gates |
-| **Hygiene** | Native `make git-hygiene`, `make repo-cleanup` targets | Repo hygiene |
+| **Ops / health** | `probe/release_health_vps.sh`, `check_services.sh` | Deployment and health checks |
+| **CI** | `ci/*.py` | CI gates (CVE gate, PR guardrails) |
+| **E2E** | `e2e/runner.py`, `e2e/demo_gate.py` | Capability E2E runner and demo gate |
+
+Operators run these scripts directly with `uv run` (see `make help` for the
+retained Make entrypoints). Retired evaluation/benchmark and Kiro/tmux swarm
+surfaces were removed; native task agents are the sole supported agent runtime.
 
 ## Usage
 

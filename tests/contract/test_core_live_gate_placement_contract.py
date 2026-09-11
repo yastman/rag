@@ -16,7 +16,8 @@ MAKEFILE = REPO_ROOT / "Makefile"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
 FAST_LOCAL_TARGETS = (
-    "local-pr-ready",
+    # local-pr-ready was removed by #3379 (duplicate check+test-unit wrapper);
+    # the surviving fast/local PR gates keep the no-live-E2E guarantee.
     "check",
     "check-frozen",
     "candidate-check",

@@ -1,7 +1,7 @@
 """Contract test for issue #1949 — `make` quality-gate targets must cover
 all first-class Python packages.
 
-Historically `make lint` / `make format` / `make pylint` / `make security`
+Historically `make lint` / `make format` / `make security`
 only covered `src/` and `telegram_bot/`, leaving real production code in
 `services/` (`bge-m3-api`) and `scripts/` (e.g. `scripts/e2e/`)
 outside the local quality gate. The
@@ -78,10 +78,6 @@ def test_makefile_format_check_target_uses_lint_paths() -> None:
 
 def test_makefile_type_check_target_uses_lint_paths() -> None:
     _assert_target_uses_lint_paths(_makefile_text(), "type-check", "mypy")
-
-
-def test_makefile_pylint_target_uses_lint_paths() -> None:
-    _assert_target_uses_lint_paths(_makefile_text(), "pylint", "pylint")
 
 
 def test_makefile_security_target_uses_lint_paths_for_bandit_and_vulture() -> None:

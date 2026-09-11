@@ -18,11 +18,7 @@ def test_local_dev_docker_targets_use_local_compose_override() -> None:
     targets = [
         "docker-core-up",
         "docker-bot-up",
-        "docker-ai-up",
-        "docker-ingest-up",
         "docker-full-up",
-        "docker-down",
-        "docker-ps",
         "local-up",
         "local-up-ingest",
         "local-down",

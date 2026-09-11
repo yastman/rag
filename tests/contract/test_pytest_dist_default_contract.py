@@ -97,15 +97,13 @@ def test_makefile_default_parallel_args_is_worksteal() -> None:
     )
 
 
-def test_loadscope_experiment_target_still_exists() -> None:
-    """The opt-in ``test-unit-loadscope`` target must remain available (#1796)."""
+def test_no_target_hardcodes_loadscope() -> None:
+    """#3379 removed the `test-unit-loadscope` experiment target; the global
+    worksteal default (or explicit override) is the only scheduler surface."""
     text = MAKEFILE.read_text(encoding="utf-8")
-    assert re.search(r"^test-unit-loadscope:", text, re.MULTILINE), (
-        "Removing 'test-unit-loadscope' would erase the explicit loadscope "
-        "experiment lane. Keep it as the documented opt-in path."
-    )
-    assert "--dist=loadscope" in text, (
-        "test-unit-loadscope must still pass --dist=loadscope explicitly."
+    assert "--dist=loadscope" not in text, (
+        "No Makefile target may hard-code `--dist=loadscope` after #3379 "
+        "removed the test-unit-loadscope experiment lane."
     )
 
 

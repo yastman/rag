@@ -68,7 +68,7 @@ Base `compose.yml` exposes **no ports**. All ports are loopback-bound in dev.
 make core-min-up
 
 # Default core (redis, qdrant, bge-m3 — no PostgreSQL)
-make core-up
+make docker-core-up
 
 # Core + PostgreSQL (opt-in domain DB for bookmarks/user features)
 docker compose -f compose.yml -f compose.dev.yml --profile postgres up -d
@@ -77,21 +77,22 @@ docker compose -f compose.yml -f compose.dev.yml --profile postgres up -d
 make docker-bot-up
 
 # Core + ingestion (lean Markdown-only ingestion pipeline)
-make docker-ingest-up
+make local-up-ingest
 
 # Full stack (all profiles). `make docker-full-up` returns success only after
 # all six services are healthy; on failure it exits nonzero and prints the
 # failing containers' names/statuses (bounded wait: FULL_UP_WAIT_TIMEOUT=600s).
 make docker-full-up
 
-# Status
-make docker-ps
+# Status (local service set)
+make local-ps
 
-# Stop everything
-make docker-down
+# Stop the local service set
+make local-down
 
-# Prune build cache and stopped containers (safe)
-make docker-clean
+# Prune Docker build cache / stopped containers directly (no Make wrapper):
+docker builder prune -f --filter "until=720h"
+docker container prune -f
 ```
 
 Windows PowerShell equivalents:
@@ -130,14 +131,14 @@ curl -X PUT "http://127.0.0.1:6333/collections/{collection}/snapshots/recover?pr
 Native bot run (bot as host process, sidecars in Compose):
 
 ```bash
-make core-up      # start sidecars
-make run-bot      # run bot natively
+make docker-core-up  # start sidecars
+make run-bot         # run bot natively
 ```
 
 ## Operator Env Gate (#3367)
 
 Real build/up commands (`make docker-full-up`, `docker-core-up`,
-`docker-bot-up`, `docker-ai-up`, `docker-ingest-up`, `local-up`,
+`docker-bot-up`, `local-up`,
 `local-up-ingest`, `local-build`) require an **explicit operator env file**
 (`.env` by default, override with `OPERATOR_ENV=/path/to/env`). When it is
 missing the command exits nonzero with an actionable message — it never falls
@@ -215,7 +216,7 @@ $env:BGE_M3_ONNX_MODEL_HOST_DIR = "C:/data/models/bge_m3_onnx_int8"
 ## Ingestion Bind Source
 
 `GDRIVE_SYNC_DIR` is mounted read-only by the `ingest` profile. Set it to the
-directory containing the exported Drive files before running `make docker-ingest-up`.
+directory containing the exported Drive files before running `make local-up-ingest`.
 On Windows Docker Desktop, use a drive shared with Docker and forward slashes:
 
 ```powershell
@@ -320,8 +321,8 @@ Orphaned Docker volumes from removed git worktrees can be cleaned up safely:
 # Dry-run — list orphaned volumes
 make docker-clean-orphan-worktree-volumes
 
-# Apply — delete orphaned volumes
-make docker-clean-orphan-worktree-volumes-apply
+# Apply — delete orphaned volumes (destructive)
+bash scripts/cleanup_orphaned_worktree_volumes.sh --apply
 ```
 
 The underlying script (`scripts/cleanup_orphaned_worktree_volumes.sh`) defaults to

@@ -65,7 +65,7 @@ do not load another checkout's private environment.
 
 ```bash
 make core-min-up     # minimal: Qdrant + Redis
-make core-up         # default core: + BGE-M3 (PostgreSQL is opt-in, #3241)
+make docker-core-up  # default core: + BGE-M3 (PostgreSQL is opt-in, #3241)
 ```
 
 ### Windows (PowerShell)
@@ -119,8 +119,7 @@ uv run python -m telegram_bot.main
 | Candidate | `make candidate-check` is the authoritative local delivery gate (`check-frozen` + `format-check` + `test` + `test-contract`) |
 | Major candidate | `make test-full` runs all local tiers manually; on Windows use `scripts/windows_preflight.ps1 -Mode Full` |
 | `make test-cov` | Coverage report (`[tool.coverage]` `fail_under=80`) — currently a manual gate |
-| `make e2e-core-live` | Golden E2E: indexes a fixture corpus and runs the full spine through `run_assistant_request` (needs `make core-up`) |
-| `make qdrant-audit-indexes` | Audit Qdrant payload indexes |
+| `make e2e-core-live` | Golden E2E: indexes a fixture corpus and runs the full spine through `run_assistant_request` (needs `make docker-core-up`) |
 | `make qdrant-ensure-indexes` | Create missing contract payload indexes for BOTH product collections (non-destructive, #3202) |
 | `make demo-bootstrap` | Idempotent demo setup/ingest/verify for BOTH Qdrant collections (#3202) |
 | `make demo-verify` | Read-only readiness gate for both Qdrant collections (#3202) |
@@ -167,8 +166,9 @@ live-probe/fixture concern and is not part of the shipped Qdrant demo corpus.
 Collections are never deleted by the readiness gate or bootstrap. To roll back a demo
 bootstrap: delete the freshly created collections explicitly
 (`DELETE /collections/{name}` — destructive, operator-initiated) and re-run your previous
-ingestion path; snapshots can be taken first via `make qdrant-backup`. To move a populated
-environment off an incompatible schema: snapshot (`make qdrant-backup`), export points,
+ingestion path; snapshots can be taken first via the Qdrant snapshot REST call documented in
+[`DOCKER.md`](../DOCKER.md) (snapshot/rollback section). To move a populated
+environment off an incompatible schema: snapshot, export points,
 re-create the collection under the contract schema, and re-index — see
 [`runbooks/`](runbooks/README.md) and [`INGESTION.md`](INGESTION.md).
 
