@@ -2,6 +2,12 @@
 
 Each test gracefully skips if the target service is not available.
 Run with `make docker-core-up` or `make docker-full-up` first.
+
+PostgreSQL is NOT covered here (#3415): a bare connection to the maintenance
+database `postgres` proved neither schema nor observable capability. The
+PostgreSQL health assertion and the real users/bookmarks/search-events
+round trips live in `tests/e2e/test_postgres_capability.py` against a
+run-owned schema through the production capability services.
 """
 
 import pytest
@@ -11,8 +17,6 @@ from redis.exceptions import AuthenticationError as RedisAuthError
 
 
 pytestmark = pytest.mark.requires_services
-
-asyncpg = pytest.importorskip("asyncpg", reason="asyncpg not installed")
 
 
 def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -26,20 +30,6 @@ def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
             return True
         except (OSError, TimeoutError):
             return False
-
-
-@pytest.mark.asyncio
-async def test_postgres_connection():
-    """Test PostgreSQL connectivity."""
-    if not _check_tcp("localhost", 5432):
-        pytest.skip("PostgreSQL not running on localhost:5432")
-
-    conn = await asyncpg.connect(
-        user="postgres", password="postgres", database="postgres", host="localhost", port=5432
-    )
-    version = await conn.fetchval("SELECT version()")
-    await conn.close()
-    assert "PostgreSQL" in version
 
 
 @pytest.mark.asyncio
