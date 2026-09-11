@@ -1,12 +1,14 @@
 """Contract: unified ingestion E2E test file is present and well-structured (#1629).
 
 Retargeted from the deleted ``tests/integration/test_ingestion_e2e.py`` to
-the live file ``tests/integration/test_unified_ingestion_e2e.py``.
+``tests/integration/test_unified_ingestion_e2e.py`` and, when #3416 moved the
+capability into the hermetic harness lane, to
+``tests/e2e/test_markdown_ingestion_capability.py``.
 
 The contract ensures:
 - The live E2E test file exists and is importable (no syntax errors).
 - It carries the correct pytest marks for service-gated tests
-  (``requires_services`` / ``RUN_INTEGRATION_TESTS`` guard).
+  (``requires_services``).
 - It does not silently pass with no tests collected (the file must contain
   at least a fixture or test function — an empty file is a gap).
 """
@@ -18,14 +20,14 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TARGET = REPO_ROOT / "tests" / "integration" / "test_unified_ingestion_e2e.py"
+TARGET = REPO_ROOT / "tests" / "e2e" / "test_markdown_ingestion_capability.py"
 
 
 def test_ingestion_e2e_assertions_target_file_exists() -> None:
-    """Live E2E target file must exist (#1629 retarget)."""
+    """Live E2E target file must exist (#1629 retarget, #3416 harness move)."""
     assert TARGET.exists(), (
         f"missing target: {TARGET.relative_to(REPO_ROOT)}. "
-        "This is the live replacement for the deleted test_ingestion_e2e.py."
+        "This is the live Markdown ingestion capability lane."
     )
 
 
