@@ -1,23 +1,26 @@
 # tests/unit/ingestion/test_qdrant_writer_atomic_replace.py
 """Atomic replace semantics for QdrantHybridWriter (issue #1602).
 
-The bug: ``upsert_chunks_sync`` previously deleted existing points for a
-``file_id`` BEFORE generating replacement embeddings/points and upserting them.
-If embedding generation, ColBERT inference, or the upsert call failed, the
-collection lost the last good version of the document until the next
-successful retry.
+Two generations of the same document must never be partially visible:
 
-The fix: build replacement embeddings and points FIRST, upsert them with
-deterministic IDs, and only then delete points that became stale (those that
-belong to ``file_id`` but are not part of the new upsert batch).
+- The bug first fixed here: ``upsert_chunks_sync`` deleted existing points for
+  a ``file_id`` BEFORE generating replacement embeddings/points and upserting
+  them, so any embedding/upsert failure wiped the last good version until the
+  next successful retry.
+- The bug fixed by the A10 addendum: the writer upserted the replacement in
+  multiple request-size batches, so a failure on batch 2 left batch 1 of the
+  new generation queryable alongside the untouched old generation.
 
-These tests pin the new contract so we do not regress to the destructive
-delete-first ordering.
+The contract now: the complete serialized replacement must fit ONE bounded
+atomic Qdrant request; otherwise the writer fails before the first upsert with
+an operator-actionable split-document error. Success upserts the whole new
+generation in a single request, then sweeps stale ids. Error stats report a
+committed replacement as committed, never as a failed write.
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from qdrant_client.models import HasIdCondition
@@ -270,6 +273,119 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         assert stats.errors is None
         assert stats.points_upserted == 2
         mock_qdrant_client.delete.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Atomic generation visibility (#1602 A10 addendum)
+# ---------------------------------------------------------------------------
+
+
+class TestAtomicGenerationVisibility:
+    """A replacement is fully visible or not visible — never partial (#1602).
+
+    The audited production failure: the writer upserted the replacement in
+    several request-size batches, and an exception on a later batch was
+    converted into error stats while batch 1 of the new generation was already
+    queryable alongside the untouched old generation. The contract: the
+    complete serialized replacement must fit one bounded atomic request, and an
+    oversize replacement is rejected before the FIRST upsert with an
+    operator-actionable split-document error.
+    """
+
+    def test_oversize_replacement_rejected_before_first_upsert_keeps_old_generation_queryable(
+        self, writer_local, mock_qdrant_client, mock_bge_client
+    ):
+        """Batch-1-commits/batch-2-throws must be impossible: zero upsert calls."""
+        old_generation_ids = [
+            "00000000-0000-0000-0000-0000000000a1",
+            "00000000-0000-0000-0000-0000000000a2",
+        ]
+        mock_qdrant_client.count.return_value = MagicMock(count=len(old_generation_ids))
+        mock_qdrant_client.scroll.return_value = (
+            [MagicMock(id=rid) for rid in old_generation_ids],
+            None,
+        )
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024] * 3,
+            lexical_weights=[{"indices": [1], "values": [0.5]}] * 3,
+            colbert_vecs=[[[0.1] * 128] * 5] * 3,
+        )
+        # Inject the audited failure shape: first outgoing batch commits,
+        # second batch throws. Post-fix no batch may go out at all.
+        mock_qdrant_client.upsert.side_effect = [
+            MagicMock(),
+            RuntimeError("injected batch-2 failure"),
+        ]
+
+        chunks = [_make_chunk(text=f"new text {i}", order=i) for i in range(3)]
+        with (
+            patch.object(
+                QdrantHybridWriter,
+                "_estimate_point_request_bytes",
+                side_effect=[300, 300, 300],
+            ),
+            patch("src.ingestion.unified.qdrant_writer.QDRANT_UPSERT_MAX_REQUEST_BYTES", 700),
+        ):
+            stats = writer_local.upsert_chunks_sync(chunks, "file_new", "/doc.md", {}, "col")
+
+        # The failure must be the pre-mutation split-document rejection,
+        # not the injected second-batch exception.
+        assert stats.errors is not None
+        assert "exceeds" in stats.errors[0]
+        assert "split" in stats.errors[0].lower()
+        # Zero points of the new generation may become visible...
+        assert stats.points_upserted == 0
+        mock_qdrant_client.upsert.assert_not_called()
+        # ...and no destructive delete ran: the old generation stays queryable.
+        mock_qdrant_client.delete.assert_not_called()
+
+    def test_fitting_replacement_goes_out_as_one_request_with_all_points(
+        self, writer_local, mock_qdrant_client, mock_bge_client
+    ):
+        """A replacement that fits the bound is exactly one atomic upsert request."""
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024] * 3,
+            lexical_weights=[{"indices": [1], "values": [0.5]}] * 3,
+            colbert_vecs=[[[0.1] * 128] * 5] * 3,
+        )
+
+        chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(3)]
+        with (
+            patch.object(
+                QdrantHybridWriter,
+                "_estimate_point_request_bytes",
+                side_effect=[200, 200, 200],
+            ),
+            patch("src.ingestion.unified.qdrant_writer.QDRANT_UPSERT_MAX_REQUEST_BYTES", 700),
+        ):
+            stats = writer_local.upsert_chunks_sync(chunks, "file_new", "/doc.md", {}, "col")
+
+        assert stats.errors is None
+        assert stats.points_upserted == 3
+        assert mock_qdrant_client.upsert.call_count == 1
+        points = mock_qdrant_client.upsert.call_args.kwargs["points"]
+        assert len(points) == 3
+
+    def test_stale_sweep_failure_reports_committed_replacement_not_failed_write(
+        self, writer_local, mock_qdrant_client, mock_bge_client
+    ):
+        """Error stats must not present a committed replacement as a failed write.
+
+        Once the single upsert request returned, the new generation is fully
+        live; a later sweep failure must say so instead of labeling the
+        replacement as a plain write error.
+        """
+        mock_qdrant_client.count.return_value = MagicMock(count=1)
+        mock_qdrant_client.scroll.side_effect = RuntimeError("scroll boom")
+
+        chunk = _make_chunk()
+        stats = writer_local.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
+
+        assert stats.errors is not None
+        assert "committed" in stats.errors[0].lower()
+        assert "scroll boom" in stats.errors[0]
+        assert stats.points_upserted == 1
 
 
 # Reuse fixtures from the sibling behavior test module
