@@ -8,7 +8,9 @@ that anything was actually read:
   wrapper test only port-checked Qdrant before asserting the helper. So a
   brand-new empty Qdrant gave a green test.
 
-- ``tests/integration/test_hybrid_colbert_live.py`` — the live hybrid test
+- ``tests/e2e/test_core_live_ingest_answer.py`` — the live core lane's sparse
+  contribution scenario (folded from the retired
+  ``tests/integration/test_hybrid_colbert_live.py``, #3421)
   proves that a sparse-only document is absent from dense-only results and
   present once the BM42 prefetch participates.
 
@@ -32,7 +34,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 QDRANT_READ = REPO_ROOT / "tests" / "integration" / "test_qdrant_read.py"
-HYBRID_SPARSE = REPO_ROOT / "tests" / "integration" / "test_hybrid_colbert_live.py"
+HYBRID_SPARSE = REPO_ROOT / "tests" / "e2e" / "test_core_live_ingest_answer.py"
 
 
 def _function(tree: ast.AST, name: str) -> ast.FunctionDef:
