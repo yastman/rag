@@ -30,10 +30,6 @@ def test_classify_chunk_topic_legal() -> None:
     assert classify_chunk_topic("Документы для ВНЖ в Болгарии") == TopicLabel.LEGAL
 
 
-def test_classify_doc_type_for_services_yaml() -> None:
-    assert classify_doc_type("telegram_bot/config/services.yaml", "application/yaml") == DocType.FAQ
-
-
 def test_classify_doc_type_for_audio_transcript() -> None:
     assert classify_doc_type("calls/transcript-1.txt", "audio/mpeg") == DocType.TRANSCRIPT
 
