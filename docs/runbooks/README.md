@@ -41,7 +41,6 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 
 ## Reference
 
-- Runtime infra/config audit: [`../audits/runtime-infra-config-audit-2026-06.md`](../audits/runtime-infra-config-audit-2026-06.md)
 - Compose services, profiles, ports, env: [`../../DOCKER.md`](../../DOCKER.md)
 - Local setup & validation: [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md)
 
