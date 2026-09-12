@@ -37,7 +37,7 @@ and acceptance. PRs own review and delivery evidence. CodeIndexer provides searc
 there is no mandatory second phase/card lifecycle.
 
 The [RAG VPS v2 proposal](architecture/RAG_VPS_V2_PROPOSED.md) is a design target.
-Dated audits and execution reports are historical evidence, not current configuration.
+Dated execution evidence lives in Git history and GitHub Issues, not in tracked docs.
 
 Update the owning document when changing a fact. Link from other pages. Use Git for raw
 history. Add a document only for durable knowledge or a repeatable procedure with no existing home.
