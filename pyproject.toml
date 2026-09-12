@@ -474,8 +474,6 @@ omit = [
     "scripts/**/*",
     # Evaluation surface (archived; was src/evaluation, now archive/evaluation)
     "archive/evaluation/*",
-    # One-off setup scripts
-    "telegram_bot/setup_qdrant_indexes.py",
     # Test/debug scripts in wrong location
     "telegram_bot/test_*.py",
 ]
