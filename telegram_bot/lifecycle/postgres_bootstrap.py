@@ -87,6 +87,19 @@ REALESTATE_SCHEMA_STATEMENTS: tuple[str, ...] = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS feedback_events (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        session_id TEXT NOT NULL,
+        request_id TEXT NOT NULL,
+        action VARCHAR(10) NOT NULL CHECK (action IN ('like', 'dislike')),
+        reason VARCHAR(20),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (request_id)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS lead_scores (
         id BIGSERIAL PRIMARY KEY,
         lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
@@ -112,6 +125,7 @@ REALESTATE_SCHEMA_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_user_favorites_telegram_id ON user_favorites (telegram_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_favorites_created_at ON user_favorites (created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_search_events_user ON search_events (user_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_feedback_events_user ON feedback_events (user_id, created_at DESC)",
 )
 
 
