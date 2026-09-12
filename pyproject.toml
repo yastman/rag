@@ -55,7 +55,7 @@ telegram = [
 # (telegram_bot/Dockerfile).
 redis = [
     "redis>=7.1.0,<8",  # #3226: explicit <8 cap — RedisVL 0.26.x requires redis>=5,<8; redis-py 8 stays a non-goal
-    "redisvl>=0.26.0,<0.27",  # #3226: frozen on the 0.26 line (0.27.0 drops redis 5.x/6.0-6.2, changing the support matrix this decision was made on)
+    "redisvl>=0.26.0,<0.28",  # #3226: frozen on the 0.26 line (0.27.0 drops redis 5.x/6.0-6.2, changing the support matrix this decision was made on)
 ]
 
 
