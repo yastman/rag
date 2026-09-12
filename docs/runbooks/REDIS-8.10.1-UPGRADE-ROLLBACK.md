@@ -9,7 +9,7 @@ references available until the new version has soaked.
 | Variant | New (8.10.1) | Old (8.6.3) |
 |---|---|---|
 | `compose.yml` (dev/prod stack) | `redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5` | `redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529` |
-| `compose.core.yml` (alpine) | `redis:8.10.1-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576` | `redis:8.6.3-alpine@sha256:c25154ff5e2e6d0820a0268abd9dd3bc84f48fddd40396fb1f4de5b3dcc2182a` |
+| `compose.core.yml` (alpine; projection removed by #3451 — row kept for rollback history) | `redis:8.10.1-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576` | `redis:8.6.3-alpine@sha256:c25154ff5e2e6d0820a0268abd9dd3bc84f48fddd40396fb1f4de5b3dcc2182a` |
 
 Notes:
 

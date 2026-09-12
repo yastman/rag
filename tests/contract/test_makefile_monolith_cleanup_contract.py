@@ -132,6 +132,9 @@ REMOVED_TARGETS = (
     "docker-clean-orphan-worktree-volumes-apply",
     "verify-compose-images-json",
     "verify-compose-runtime",
+    # #3451: third topology projection entrypoint (compose.core.yml deleted;
+    # the minimal core mode is the unprofiled base+dev render, docker-core-up)
+    "core-min-up",
     # #3379: wrappers retired with the Make surface consolidation
     "clean",
 )
@@ -216,7 +219,6 @@ def test_make_help_surface_required_targets_still_exist() -> None:
         "ingest-unified-bootstrap",
         "ingest-unified",
         "docker-core-up",
-        "core-min-up",
     )
     missing = [t for t in required if not re.search(rf"^{re.escape(t)}:", text, re.MULTILINE)]
     assert missing == [], f"These required targets must remain in Makefile: {missing}"

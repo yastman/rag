@@ -10,7 +10,16 @@ production-like deploys).
 |---|---|
 | `compose.yml` | Base configuration — all services, no ports exposed |
 | `compose.dev.yml` | Dev overrides — ports, relaxed caps, dev tuning |
-| `compose.core.yml` | Minimal core (Qdrant + Redis only, no auth) |
+
+There is no third projection: the former `compose.core.yml` minimal stack
+(no-auth Redis) was eliminated by #3451. Every mode — minimal, bot, full —
+renders from this one base plus one dev override, with the authenticated
+`redis` service (#3402). To start only the stateful pair for native
+development, name the services explicitly (no extra file needed):
+
+```bash
+docker compose -f compose.yml -f compose.dev.yml up -d qdrant redis
+```
 
 Use explicit files; do not set `COMPOSE_FILE`:
 
@@ -64,10 +73,9 @@ Base `compose.yml` exposes **no ports**. All ports are loopback-bound in dev.
 ## Common Commands
 
 ```bash
-# Minimal core (Qdrant + Redis, no auth — fastest start for native dev)
-make core-min-up
-
-# Default core (redis, qdrant, bge-m3 — no PostgreSQL)
+# Default core (redis, qdrant, bge-m3 — no PostgreSQL). The minimal core mode
+# is this unprofiled render (#3451); for only the stateful pair add the
+# service list: docker compose -f compose.yml -f compose.dev.yml up -d qdrant redis
 make docker-core-up
 
 # Core + PostgreSQL (opt-in domain DB for bookmarks/user features)
@@ -98,7 +106,6 @@ docker container prune -f
 Windows PowerShell equivalents:
 
 ```powershell
-docker compose -f compose.core.yml up -d
 docker compose -f compose.yml -f compose.dev.yml up -d
 docker compose -f compose.yml -f compose.dev.yml down
 ```

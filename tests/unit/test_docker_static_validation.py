@@ -5,12 +5,14 @@ runs against the configuration the Compose **engine** renders
 (``docker compose config``) — never against a handwritten YAML merge, a
 host-port string parser, or a Dockerfile COPY scanner. The one module-scoped
 ``rendered_full`` fixture renders the base+dev project with the ``full``
-profile once per module; scenario tests render their own profile explicitly
-through the same helper. Build correctness is proven by the real build engine:
-a missing COPY source or a nonexistent build context must fail an actual
-``docker compose build`` (the native replacement for the #1993 parser
-contract), and an unhealthy service makes ``up --wait`` exit nonzero
-(#3361 — pinned by the Makefile wait contracts in
+profile once per module; the ``rendered_core_minimal`` fixture pins the
+unprofiled minimal core mode (#3451 — the deleted ``compose.core.yml``
+projection renders from base+dev now); scenario tests render their own
+profile explicitly through the same helper. Build correctness is proven by
+the real build engine: a missing COPY source or a nonexistent build context
+must fail an actual ``docker compose build`` (the native replacement for the
+#1993 parser contract), and an unhealthy service makes ``up --wait`` exit
+nonzero (#3361 — pinned by the Makefile wait contracts in
 ``tests/unit/test_local_compose_contract.py`` and DOCKER.md).
 
 Dockerfile policy (#1814): Langfuse-importing app images pin Python
@@ -259,6 +261,131 @@ def test_compose_bot_profile_keeps_postgres_optional_and_core_always_on() -> Non
         "skips the dependency when postgres is not active (#3361)"
     )
     assert postgres_dep.get("condition") == "service_healthy"
+
+
+# =============================================================================
+# Single-projection topology: the third core projection stays deleted (#3451)
+# =============================================================================
+
+COMPOSE_SOURCE_FILES = (Path("compose.yml"), Path("compose.dev.yml"))
+NOAUTH_REDIS_VARIANT_MARKER = "8.10.1-alpine"
+MINIMAL_MODE_SERVICES = {"redis", "qdrant", "bge-m3"}
+MINIMAL_MODE_VOLUMES = {"hf_cache", "qdrant_data", "redis_data"}
+
+
+def test_third_core_projection_stays_deleted() -> None:
+    """compose.core.yml must stay deleted; every mode renders from base+dev (#3451).
+
+    The minimal core stack is the unprofiled base+dev render (the stack
+    ``make docker-core-up`` starts), not a third compose projection:
+    re-adding compose.core.yml, the CORE_MIN_COMPOSE_FILE variable, or any
+    other Makefile reference would reintroduce the third topology projection
+    that audit A12 eliminated.
+    """
+    assert not Path("compose.core.yml").exists(), (
+        "compose.core.yml must stay deleted (#3451): minimal and full modes "
+        "render from compose.yml + compose.dev.yml only"
+    )
+    makefile = Path("Makefile").read_text(encoding="utf-8")
+    assert "compose.core" not in makefile, (
+        "the Makefile must not reference the deleted compose.core.yml projection (#3451)"
+    )
+
+
+@pytest.mark.parametrize("compose_file", COMPOSE_SOURCE_FILES)
+def test_compose_sources_have_no_noauth_redis_duplicate(compose_file: Path) -> None:
+    """The no-auth alpine redis variant must not survive as a duplicate (#3451).
+
+    The deleted projection carried a second, no-auth alpine redis alongside
+    the authenticated base redis. Exactly one redis service may exist per
+    compose source file, and the alpine no-auth image variant must stay
+    deleted with the projection (#3354/#3402: redis auth is the base contract).
+    """
+    text = compose_file.read_text(encoding="utf-8")
+    loaded = yaml.safe_load(text)
+    redis_services = [name for name in (loaded.get("services") or {}) if "redis" in name]
+    assert redis_services == ["redis"], (
+        f"{compose_file} must define exactly one redis service (no no-auth "
+        f"redis duplicate), got: {redis_services} (#3451)"
+    )
+    assert NOAUTH_REDIS_VARIANT_MARKER not in text, (
+        f"{compose_file} must not reintroduce the no-auth alpine redis "
+        f"variant deleted with compose.core.yml (#3451)"
+    )
+
+
+@pytest.fixture(scope="module")
+def rendered_core_minimal() -> dict:
+    """The minimal core-mode render: unprofiled base+dev, parsed once (#3451).
+
+    This is the stack ``make docker-core-up`` starts — the engine-rendered
+    replacement for the deleted compose.core.yml projection.
+    """
+    return _render_compose_json()
+
+
+def test_minimal_core_mode_renders_exactly_the_sidecar_set(
+    rendered_core_minimal: dict,
+) -> None:
+    """The unprofiled base+dev render is the minimal core mode (#3451).
+
+    Engine-rendered replacement for the deleted
+    tests/unit/test_core_compose_contract.py pins: exactly redis, qdrant,
+    bge-m3 (no postgres/bot/ingestion), every service healthcheck-gated, and
+    exactly the three sidecar volumes.
+    """
+    services = rendered_core_minimal["services"]
+    assert set(services) == MINIMAL_MODE_SERVICES, (
+        f"the minimal core mode must render exactly {sorted(MINIMAL_MODE_SERVICES)}, "
+        f"got {sorted(services)} (#3451)"
+    )
+    missing_healthcheck = sorted(
+        name for name, svc in services.items() if not (svc.get("healthcheck") or {}).get("test")
+    )
+    assert not missing_healthcheck, (
+        f"every minimal-mode service must declare a healthcheck; missing: "
+        f"{missing_healthcheck} (#3361 applies to every mode)"
+    )
+    assert set(rendered_core_minimal.get("volumes") or {}) == MINIMAL_MODE_VOLUMES, (
+        f"the minimal core mode must carry exactly {sorted(MINIMAL_MODE_VOLUMES)} (#3451)"
+    )
+
+
+def test_minimal_core_mode_redis_enforces_requirepass(
+    rendered_core_minimal: dict,
+) -> None:
+    """The minimal mode's single redis is the authenticated one (#3451/#3354).
+
+    The no-auth redis of the deleted projection must not reappear: the
+    minimal render enforces --requirepass and receives REDIS_PASSWORD (#3402).
+    """
+    redis = rendered_core_minimal["services"]["redis"]
+    command = redis["command"]
+    assert isinstance(command, list) and "--requirepass" in command, (
+        "the minimal-mode redis must enforce authentication via --requirepass "
+        "(no no-auth redis duplicate, #3451)"
+    )
+    assert redis["environment"].get("REDIS_PASSWORD"), (
+        "the minimal-mode redis must receive REDIS_PASSWORD (#3402)"
+    )
+
+
+def test_minimal_core_mode_publishes_loopback_native_dev_ports(
+    rendered_core_minimal: dict,
+) -> None:
+    """The minimal mode keeps the loopback native-dev surface (#3451).
+
+    The deleted projection exposed qdrant 6333/6334 and redis 6379 on
+    loopback with zero profile flags; the unprofiled base+dev render must
+    keep exactly that surface plus the bge-m3 health port.
+    """
+    entries = _published_ports(rendered_core_minimal)
+    assert {published for _, _, published in entries} == {"6333", "6334", "6379", "8000"}, (
+        f"minimal-mode host ports must be exactly 6333/6334/6379/8000, got "
+        f"{sorted({p for _, _, p in entries})} (#3451)"
+    )
+    non_loopback = [(s, ip, p) for s, ip, p in entries if ip != "127.0.0.1"]
+    assert not non_loopback, f"minimal-mode binds must stay loopback: {non_loopback}"
 
 
 # =============================================================================

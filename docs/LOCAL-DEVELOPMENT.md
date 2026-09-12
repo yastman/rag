@@ -64,18 +64,20 @@ do not load another checkout's private environment.
 ### Linux / POSIX
 
 ```bash
-make core-min-up     # minimal: Qdrant + Redis
-make docker-core-up  # default core: + BGE-M3 (PostgreSQL is opt-in, #3241)
+make docker-core-up  # default core: Qdrant + Redis + BGE-M3 (PostgreSQL is opt-in, #3241)
+# Minimal pair only (no BGE-M3 build): render the same two files with an
+# explicit service list (#3451 — there is no separate core compose file)
+docker compose -f compose.yml -f compose.dev.yml up -d qdrant redis
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-# Minimal: Qdrant + Redis (standalone core stack)
-docker compose -f compose.core.yml up -d
-
-# Default core: + BGE-M3 (PostgreSQL opt-in, #3241)
+# Default core: Qdrant + Redis + BGE-M3 (PostgreSQL opt-in, #3241)
 docker compose -f compose.yml -f compose.dev.yml up -d
+
+# Minimal pair only (no BGE-M3 build, #3451)
+docker compose -f compose.yml -f compose.dev.yml up -d qdrant redis
 
 # Add the opt-in domain DB (bookmarks/user features)
 docker compose -f compose.yml -f compose.dev.yml --profile postgres up -d
