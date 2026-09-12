@@ -237,13 +237,11 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
-    # The image entrypoint starts as root and drops to the fixed non-root
-    # `ingestion` user via gosu (setuid/setgid) after chowning the manifest
-    # volume. Under cap_drop: [ALL] that switch fails with EPERM and the
-    # container crash-loops, so a cold full-profile start can never reach six
-    # healthy services (#3361 cold start). Grant exactly what the entrypoint
-    # needs; the dropped-to process runs as uid 1000 without them.
-    cap_add: ["CHOWN", "SETGID", "SETUID"]
+    # The image runs the pipeline directly as the fixed non-root `ingestion`
+    # user (USER ingestion + exec-form python entrypoint, #3453) and owns the
+    # manifest directory at build time, so no privilege-switch capabilities
+    # are needed under cap_drop: [ALL]. The #3361 cap_add existed only for the
+    # deleted gosu entrypoint.
     environment:
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - QDRANT_URL=http://qdrant:6333
@@ -270,11 +268,13 @@ services:
       bge-m3:
         condition: service_healthy
     healthcheck:
-      # Capability-honest health (#3361): process alive AND Qdrant ready AND
-      # the BGE-M3 model actually loaded. Cold-start-safe: probes readiness,
-      # not collection existence (a fresh volume has no collection until the
-      # first ingest), and does not contend with running encode batches.
-      test: ["CMD-SHELL", "pgrep -f 'src.ingestion.unified.cli' >/dev/null || exit 1; python -c \"import httpx; c = httpx.Client(timeout=10); q = c.get('http://qdrant:6333/readyz'); b = c.get('http://bge-m3:8000/health'); c.close(); exit(0 if q.status_code == 200 and b.status_code == 200 and b.json().get('model_loaded') is True else 1)\""]
+      # Capability-honest health (#3361): Qdrant ready AND the BGE-M3 model
+      # actually loaded. Cold-start-safe: probes readiness, not collection
+      # existence (a fresh volume has no collection until the first ingest),
+      # and does not contend with running encode batches. Direct CMD exec
+      # form (#3453): the pipeline IS the exec-form PID 1, so the container
+      # running proves the process is alive — no pgrep/procps, no shell.
+      test: ["CMD", "python", "-c", "import httpx; c = httpx.Client(timeout=10); q = c.get('http://qdrant:6333/readyz'); b = c.get('http://bge-m3:8000/health'); c.close(); exit(0 if q.status_code == 200 and b.status_code == 200 and b.json().get('model_loaded') is True else 1)"]
       interval: 30s
       timeout: 15s
       retries: 3

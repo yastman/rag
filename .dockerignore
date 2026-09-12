@@ -78,8 +78,6 @@ scripts/
 
 # Docker configs (not needed in image)
 docker/
-!docker/ingestion/
-!docker/ingestion/entrypoint.sh
 
 # Services (separate builds)
 services/
