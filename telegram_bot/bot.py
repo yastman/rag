@@ -190,6 +190,9 @@ class PropertyBot:
         # Search event store (initialized in start() with pg_pool)
         self._search_event_store: Any | None = None
 
+        # Feedback event store (initialized in setup_postgres with pg_pool, #3422)
+        self._feedback_store: Any | None = None
+
         # Handoff services (Forum Topics bridge + Redis state machine)
         self._handoff_state: HandoffState | None = None
         self._forum_bridge: ForumBridge | None = None
@@ -610,16 +613,24 @@ class PropertyBot:
         )
 
     async def handle_feedback(
-        self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
+        self,
+        callback: CallbackQuery,
+        callback_data: FeedbackCB | None = None,
+        feedback_store: Any | None = None,
     ) -> None:
         """Thin wrapper — see ``_bot_feedback_handlers`` (#2048 PR-9a)."""
-        await _bot_feedback_handlers.handle_feedback(self, callback, callback_data)
+        await _bot_feedback_handlers.handle_feedback(self, callback, callback_data, feedback_store)
 
     async def handle_feedback_reason(
-        self, callback: CallbackQuery, callback_data: FeedbackReasonCB
+        self,
+        callback: CallbackQuery,
+        callback_data: FeedbackReasonCB,
+        feedback_store: Any | None = None,
     ) -> None:
         """Thin wrapper — see ``_bot_feedback_handlers`` (#2048 PR-9a)."""
-        await _bot_feedback_handlers.handle_feedback_reason(self, callback, callback_data)
+        await _bot_feedback_handlers.handle_feedback_reason(
+            self, callback, callback_data, feedback_store
+        )
 
     async def _clear_feedback_confirmation_later(
         self, message: Any, delay_s: float = _FEEDBACK_CONFIRMATION_TTL_S

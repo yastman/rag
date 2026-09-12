@@ -272,20 +272,24 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
         log.info("PostgreSQL schema ready (realestate)")
 
         from telegram_bot.services.favorites_service import FavoritesService
+        from telegram_bot.services.observability.feedback_event_store import FeedbackEventStore
         from telegram_bot.services.observability.search_event_store import SearchEventStore
         from telegram_bot.services.user_service import UserService
 
         user_service = UserService(pool=pool)
         favorites_service = FavoritesService(pool=pool)
         search_event_store = SearchEventStore(pool=pool)
+        feedback_store = FeedbackEventStore(pool=pool)
         log.info("Favorites service ready")
         log.info("Search event store ready")
+        log.info("Feedback event store ready")
 
         # Single commit step (#3440): publish every capability field only
         # after pool, schema, and all constructors succeeded.
         bot._pg_pool = pool
         bot._user_service = user_service
         bot._search_event_store = search_event_store
+        bot._feedback_store = feedback_store
         set_bookmarks_ready(bot, service=favorites_service)
         log.info("Bookmarks capability: enabled (PostgreSQL connection validated)")
 
@@ -297,6 +301,7 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
         bot._pg_pool = None
         bot._user_service = None
         bot._search_event_store = None
+        bot._feedback_store = None
         if pool is not None:
             try:
                 await pool.close()
@@ -414,6 +419,7 @@ def setup_workflow_data(bot: Any) -> None:
     bot.dp["apartments_service"] = bot._apartments_service
     bot.dp["favorites_service"] = bot._favorites_service
     bot.dp["search_event_store"] = bot._search_event_store
+    bot.dp["feedback_store"] = bot._feedback_store
     bot.dp["lead_sink"] = bot._lead_sink
     bot.dp["pipeline"] = bot._apartment_pipeline
     bot.dp["embeddings"] = bot._hybrid
