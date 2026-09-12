@@ -724,8 +724,7 @@ async def _golden_query_probe(config: E2EConfig) -> CheckOutcome:
             message = (
                 f"collection {config.qdrant_apartment_collection!r} is missing — "
                 "create and ingest the demo data before running the gate "
-                "(scripts/apartments/setup_collection.py + "
-                "python -m src.ingestion.apartments.runner)"
+                "(python -m scripts.demo_bootstrap)"
             )
         failures.append(f"golden query probe failed: {message}")
     finally:

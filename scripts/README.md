@@ -7,9 +7,9 @@ RAG ingestion format (#3235); the unified ingestion pipeline owns indexing.
 
 | Category | Scripts | Purpose |
 |----------|---------|---------|
-| **Setup** | `setup_*.py`, `qdrant_ensure_indexes.py` | Collection schema and score configs |
+| **Setup / bootstrap** | `demo_bootstrap.py`, `qdrant_ensure_indexes.py` | Collection schema and score configs (one contract owner: `src/runtime/qdrant/`) |
 | **Validation** | `validate_*.py`, `check_image_drift.py`, `check_services.sh` | Query correctness and drift checks |
-| **Maintenance** | `qdrant_snapshot.py`, `reindex_to_binary.py` | Disaster recovery and migration |
+| **Maintenance** | `qdrant_snapshot.py`, `qdrant_audit_indexes.py` | Disaster recovery and index audits |
 | **Ops / health** | `probe/release_health_vps.sh`, `check_services.sh` | Deployment and health checks |
 | **CI** | `ci/*.py` | CI gates (CVE gate, PR guardrails) |
 | **E2E** | `e2e/runner.py`, `e2e/demo_gate.py` | Capability E2E runner and demo gate |
@@ -23,7 +23,7 @@ surfaces were removed; native task agents are the sole supported agent runtime.
 Most scripts are self-contained and run with `uv run` or directly:
 
 ```bash
-uv run python scripts/setup_qdrant_collection.py
+uv run python -m scripts.demo_bootstrap
 ```
 
 ## Related

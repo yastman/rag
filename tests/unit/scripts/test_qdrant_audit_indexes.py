@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 
 from scripts import qdrant_audit_indexes
 from scripts._qdrant_collection_setup import PAYLOAD_INDEX_FIELDS_BY_COLLECTION, payload_index_types
-from scripts.setup_binary_collection import PAYLOAD_INDEX_FIELDS
 
 
 APARTMENT_INDEX_ORACLE = {
@@ -46,8 +45,13 @@ def test_audit_selects_gdrive_apartment_and_binary_contracts() -> None:
         payload_index_types(PAYLOAD_INDEX_FIELDS_BY_COLLECTION["gdrive_documents_bge"])
     )
     assert qdrant_audit_indexes.expected_indexes("apartments") == set(APARTMENT_INDEX_ORACLE)
+    # A quantization suffix selects the same role's physical collection, so the
+    # knowledge contract applies unchanged (#3381 — one schema authority).
     assert qdrant_audit_indexes.expected_indexes("gdrive_documents_bge_binary") == set(
-        payload_index_types(PAYLOAD_INDEX_FIELDS)
+        payload_index_types(PAYLOAD_INDEX_FIELDS_BY_COLLECTION["gdrive_documents_bge"])
+    )
+    assert qdrant_audit_indexes.expected_indexes("gdrive_documents_bge_scalar") == set(
+        payload_index_types(PAYLOAD_INDEX_FIELDS_BY_COLLECTION["gdrive_documents_bge"])
     )
 
 

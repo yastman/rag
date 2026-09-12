@@ -22,43 +22,16 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
 
 # Names each script binds through the dual-mode import block.
 EXPECTED_SCRIPT_NAMES: dict[str, tuple[str, ...]] = {
-    "setup_scalar_collection": (
-        "collection_exists",
-        "delete_collection",
-        "get_qdrant_client",
-        "_create_payload_indexes",
-    ),
-    "setup_qdrant_collection": (
-        "collection_exists",
-        "delete_collection",
-        "get_qdrant_client",
-        "_create_payload_indexes",
-    ),
-    "setup_binary_collection": (
-        "collection_exists",
-        "delete_collection",
-        "get_qdrant_client",
-        "payload_index_types",
-        "_create_payload_indexes",
-    ),
     "qdrant_ensure_indexes": (
         "GDRIVE_PAYLOAD_INDEX_FIELDS",
         "create_payload_indexes",
         "_get_qdrant_client",
     ),
-    "reindex_to_binary": (
-        "_get_qdrant_client",
-        "collection_exists",
-        "create_binary_collection",
-        "create_payload_indexes",
-        "get_binary_collection_name",
-        "print_collection_info",
-    ),
     "qdrant_audit_indexes": (
         "PAYLOAD_INDEX_FIELDS_BY_COLLECTION",
+        "PayloadIndexFields",
         "get_qdrant_client",
         "payload_index_types",
-        "PAYLOAD_INDEX_FIELDS",
     ),
 }
 

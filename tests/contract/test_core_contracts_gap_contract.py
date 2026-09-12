@@ -49,7 +49,7 @@ def test_architecture_structure_md_references_active_layers() -> None:
 # 2. Qdrant collection schema declares dense + bm42 + colbert
 # ---------------------------------------------------------------------------
 
-_SCHEMA_FILES = [REPO_ROOT / "scripts" / "setup_qdrant_collection.py"]
+_SCHEMA_FILES = [REPO_ROOT / "scripts" / "demo_bootstrap.py"]
 
 _REQUIRED_VECTORS = ("dense", "bm42", "colbert")
 

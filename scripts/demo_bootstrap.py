@@ -133,7 +133,7 @@ def create_knowledge_collection_schema(client: QdrantClient, collection_name: st
 
 
 def create_apartments_collection_schema(client: QdrantClient, collection_name: str) -> None:
-    """Create the apartments collection; mirrors scripts/apartments/setup_collection.py."""
+    """Create the apartments collection with the contract schema (#3381 owner)."""
     from qdrant_client.models import (
         BinaryQuantization,
         BinaryQuantizationConfig,
