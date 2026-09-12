@@ -20,10 +20,11 @@ make run-bot
 
 The default sidecar stack needs a verified BGE-M3 artifact before its image can be built.
 Follow the [BGE artifact instructions](services/bge-m3-api/README.md) and
-[Compose guide](DOCKER.md). `compose.core.yml` backs `make core-min-up`, which starts
-Qdrant + Redis only; embeddings and
-data readiness still need to be supplied for the full bot. `make docker-bot-up` runs the bot
-in Compose. PostgreSQL is an opt-in product capability.
+[Compose guide](DOCKER.md). All modes — minimal, bot, full — render from
+`compose.yml` + `compose.dev.yml`; to start only the stateful pair, run
+`docker compose -f compose.yml -f compose.dev.yml up -d qdrant redis`, while
+embeddings and data readiness still need to be supplied for the full bot.
+`make docker-bot-up` runs the bot in Compose. PostgreSQL is an opt-in product capability.
 
 Local configuration is the root .env, based on [.env.example](.env.example).
 [pyproject.toml](pyproject.toml) and [uv.lock](uv.lock) own application/Telegram dependencies.

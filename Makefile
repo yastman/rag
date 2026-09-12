@@ -4,7 +4,7 @@
 	test test-core test-no-service-lane test-contract test-unit test-unit-full test-unit-extras \
 	test-telegram-adapter test-ingestion test-bge-extras test-full test-cov \
 	test-smoke test-store-durations demo-gate bot-response-smoke \
-	operator-env-exists operator-env-check core-min-up docker-core-up docker-bot-up docker-full-up \
+	operator-env-exists operator-env-check docker-core-up docker-bot-up docker-full-up \
 	local-up local-service-health local-up-ingest local-down local-logs local-ps local-build \
 	local-redis-recreate release-polling-lock run-bot bot bot-logs-tail bot-logs-errors bot-logs-startup \
 	e2e-core-live e2e-core-live-real-llm e2e-telegram-test test-e2e-redis-live \
@@ -306,7 +306,6 @@ docker-clean-orphan-worktree-volumes: ## Report Docker volumes from removed git 
 
 # Compose command вЂ” no --compatibility (Docker Compose v5 rejects it)
 COMPOSE_CMD := docker compose
-CORE_MIN_COMPOSE_FILE := -f compose.core.yml
 # Operator env (#3367): real build/up commands require an explicit operator env
 # file. When .env is absent they FAIL with an actionable message вЂ” they never
 # fall back to the CI Compose fixture (dummy credentials + an invalid BGE
@@ -340,12 +339,7 @@ operator-env-check: operator-env-exists ## Validate operator env before Compose:
 	@$(UV_RUN_NO_SYNC) python scripts/validate_operator_env.py --env-file "$(OPERATOR_ENV)"
 	@echo "$(GREEN)вњ“ Operator env valid$(NC)"
 
-.PHONY: core-min-up docker-core-up docker-bot-up docker-full-up
-
-core-min-up: ## Start minimal core services only (qdrant + redis)
-	@echo "$(BLUE)Starting minimal core services (qdrant + redis)...$(NC)"
-	docker compose $(CORE_MIN_COMPOSE_FILE) up -d
-	@echo "$(GREEN)вњ“ Minimal core services started$(NC)"
+.PHONY: docker-core-up docker-bot-up docker-full-up
 
 docker-core-up: operator-env-check ## Start default local compose stack (unprofiled services; env-validated #3367)
 	@echo "$(BLUE)Starting core services (bounded wait: $(CORE_UP_WAIT_TIMEOUT)s, #3361)...$(NC)"
