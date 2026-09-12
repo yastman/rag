@@ -4,14 +4,14 @@ Pins the canonical schema for the document/CSV pipeline:
 
 * ``metadata.furnished`` is created with ``models.PayloadSchemaType.BOOL`` —
   matching what ``src/ingestion/chunker.py`` writes and what
-  ``src/ingestion/indexer.py``/``scripts/setup_binary_collection.py`` index.
+  ``src/ingestion/indexer.py`` indexes (the unified pipeline owns indexing).
 * The legacy ``metadata.furniture`` ``KEYWORD`` index is *not* created —
   it had zero data hits because the chunker has always written
   ``metadata.furnished`` BOOL.
 
-Mocks ``QdrantClient`` and ``BotConfig`` exactly the way
-``tests/unit/scripts/test_apartments_setup_collection.py`` mocks the
-apartments collection setup, so no live Qdrant or env is required.
+Mocks ``QdrantClient`` and ``BotConfig`` the same way the Qdrant script
+regression tests mock the collection setup, so no live Qdrant or env is
+required.
 """
 
 from unittest import mock

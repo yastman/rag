@@ -15,39 +15,51 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from scripts._qdrant_collection_setup import (
         PAYLOAD_INDEX_FIELDS_BY_COLLECTION,
+        PayloadIndexFields,
         get_qdrant_client,
         payload_index_types,
     )
-    from scripts.setup_binary_collection import PAYLOAD_INDEX_FIELDS
 else:
     try:
         from scripts._qdrant_collection_setup import (
             PAYLOAD_INDEX_FIELDS_BY_COLLECTION,
+            PayloadIndexFields,
             get_qdrant_client,
             payload_index_types,
         )
-        from scripts.setup_binary_collection import PAYLOAD_INDEX_FIELDS
     except ModuleNotFoundError:
         from _qdrant_collection_setup import (
             PAYLOAD_INDEX_FIELDS_BY_COLLECTION,
+            PayloadIndexFields,
             get_qdrant_client,
             payload_index_types,
         )
-        from setup_binary_collection import PAYLOAD_INDEX_FIELDS
 
 
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
 COLLECTION = os.environ.get("QDRANT_COLLECTION", "gdrive_documents_bge")
 
 
+def contract_field_map(collection: str) -> PayloadIndexFields:
+    """Resolve a collection name (with optional quantization suffix) to its contract.
+
+    The canonical per-collection maps live in ``src.runtime.qdrant.contracts``
+    (#3333); the quantization suffix (``_binary``/``_scalar``, see
+    ``src.config.qdrant_policy``) selects a physical collection of the same
+    role, so it never changes the payload-index contract (#3381).
+    """
+    field_map = PAYLOAD_INDEX_FIELDS_BY_COLLECTION.get(collection)
+    if field_map is None:
+        base = collection
+        for suffix in ("_binary", "_scalar"):
+            base = base.removesuffix(suffix)
+        field_map = PAYLOAD_INDEX_FIELDS_BY_COLLECTION[base]
+    return field_map
+
+
 def expected_indexes(collection: str) -> set[str]:
     """Return the payload-index names required by one configured collection."""
-    field_map = (
-        PAYLOAD_INDEX_FIELDS
-        if collection.endswith("_binary")
-        else PAYLOAD_INDEX_FIELDS_BY_COLLECTION[collection]
-    )
-    return set(payload_index_types(field_map))
+    return set(payload_index_types(contract_field_map(collection)))
 
 
 EXPECTED_INDEXES = expected_indexes(COLLECTION)
@@ -81,11 +93,7 @@ def main() -> int:
     indexed_fields = set(payload_schema)
     wrong_types = {
         field: expected_type
-        for field, expected_type in payload_index_types(
-            PAYLOAD_INDEX_FIELDS
-            if COLLECTION.endswith("_binary")
-            else PAYLOAD_INDEX_FIELDS_BY_COLLECTION[COLLECTION]
-        ).items()
+        for field, expected_type in payload_index_types(contract_field_map(COLLECTION)).items()
         if field in payload_schema
         and (actual_type := schema_type(payload_schema[field])) is not None
         and actual_type != expected_type

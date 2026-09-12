@@ -9,8 +9,10 @@ import os
 from dataclasses import replace
 
 import pytest
+from qdrant_client import QdrantClient
 
-from scripts.setup_binary_collection import get_binary_collection_name, setup_binary_collection
+from scripts.demo_bootstrap import create_knowledge_collection_schema
+from src.config.qdrant_policy import resolve_collection_name
 from tests.e2e_core.live_harness import (
     LiveE2EEnv,
     build_live_core_harness,
@@ -45,11 +47,18 @@ async def test_binary_collection_ingest_and_hybrid_search(
         monkeypatch.delenv("QDRANT_API_KEY", raising=False)
 
     context = make_qdrant_context(env)
-    collection_name = get_binary_collection_name(context.collection_name)
+    # QDRANT_QUANTIZATION_MODE=binary remains supported through the canonical
+    # policy suffix + the unified bootstrap schema (#3381).
+    collection_name = resolve_collection_name(context.collection_name, "binary")
     harness = None
 
     try:
-        assert setup_binary_collection(context.collection_name), "Binary collection setup failed"
+        client = QdrantClient(url=env.qdrant_url, api_key=env.qdrant_api_key, timeout=60)
+        try:
+            if not client.collection_exists(collection_name):
+                create_knowledge_collection_schema(client, collection_name)
+        finally:
+            client.close()
 
         indexed_points = await index_fixture_documents(
             env,
