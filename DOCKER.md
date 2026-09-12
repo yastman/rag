@@ -53,7 +53,7 @@ degrades gracefully (bookmarks capability disabled) when it is absent.
 |---|---|---|---|
 | `postgres` | `postgres:17` | `postgres`, `full` | Bot domain DB (users/leads/funnel/favorites) — opt-in |
 | `redis` | `redis:8.10.1` | default | Five caches: semantic answer, embedding, search, rerank, extraction |
-| `qdrant` | `qdrant/qdrant:v1.19.0` | default | Vector store — dense, sparse, ColBERT retrieval; storage config (`on_disk_payload`, `indexing_threshold_kb`) caps growth |
+| `qdrant` | `qdrant/qdrant:v1.19.1` | default | Vector store — dense, sparse, ColBERT retrieval; storage config (`on_disk_payload`, `indexing_threshold_kb`) caps growth |
 | `bge-m3` | built locally | default | Self-hosted BGE-M3 ONNX embedding API |
 | `bot` | built locally | `bot` | Telegram bot process |
 | `ingestion` | built locally | `ingest` | Unified ingestion pipeline (Markdown-only, stdlib parsing) |
