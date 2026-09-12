@@ -50,12 +50,6 @@ LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
 
 WORKDIR /app
 
-# Install runtime deps (procps for healthcheck, gosu for privilege drop)
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && apt-get install -y --no-install-recommends procps gosu
-
 # Create non-root user BEFORE copying files
 RUN useradd -m -u 1000 ingestion
 
@@ -68,19 +62,26 @@ COPY --from=builder --chown=ingestion:ingestion /app/.venv /app/.venv
 # Copy project files with --chown
 COPY --chown=ingestion:ingestion pyproject.toml uv.lock ./
 COPY --chown=ingestion:ingestion src/ ./src/
-COPY docker/ingestion/entrypoint.sh /usr/local/bin/ingestion-entrypoint.sh
 
-RUN chmod +x /usr/local/bin/ingestion-entrypoint.sh
+# Own runtime directories at build time (#3453): a first-use named volume
+# mounted at /data/manifest inherits this directory's ownership, so the
+# non-root pipeline can write its manifest with no runtime chown and no
+# privilege-switch capabilities under cap_drop: [ALL].
+RUN mkdir -p /data/manifest && chown ingestion:ingestion /data/manifest
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD pgrep -f "src.ingestion.unified.cli" || exit 1
+USER ingestion
 
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["/usr/local/bin/ingestion-entrypoint.sh"]
+# Direct exec-form entrypoint (#3453): python is PID 1, so SIGTERM reaches
+# the pipeline directly — no wrapper shell, no privilege-drop helper, and no
+# process-probing tools are shipped in this image. Health is owned by the
+# compose.yml ingestion healthcheck clause (#3361): its capability probe
+# needs the compose network.
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "src.ingestion.unified.cli"]
 CMD ["run", "--watch"]

@@ -464,7 +464,7 @@ def test_rendered_bot_healthcheck_probes_capability_not_only_process(
     )
 
 
-def test_rendered_ingestion_healthcheck_probes_capability_not_only_process(
+def test_rendered_ingestion_healthcheck_probes_capability_without_pgrep(
     rendered_full: dict,
 ) -> None:
     """ingestion healthcheck must probe Qdrant readiness and BGE-M3 model load.
@@ -472,11 +472,22 @@ def test_rendered_ingestion_healthcheck_probes_capability_not_only_process(
     #3361: "process-only checks are insufficient". The probe must stay
     cold-start-safe: it checks Qdrant readiness and the BGE-M3 model-loaded
     capability without requiring the collection to exist (a fresh volume has
-    no collection until the first ingest runs).
+    no collection until the first ingest runs). With the #3453 exec-form
+    entrypoint python IS the container's PID 1 — the container only runs while
+    the pipeline process is alive — so liveness needs no pgrep/procps probe,
+    and the healthcheck runs in direct ``CMD`` exec form with no wrapper
+    shell.
     """
+    healthcheck = rendered_full["services"]["ingestion"].get("healthcheck")
     command = _rendered_healthcheck_command(rendered_full, "ingestion")
 
-    assert "pgrep" in command, "ingestion healthcheck must still prove the process is alive"
+    assert healthcheck["test"][0] == "CMD", (
+        "ingestion healthcheck must use direct CMD exec form, not a CMD-SHELL wrapper (#3453)"
+    )
+    assert "pgrep" not in command, (
+        "ingestion healthcheck must not use pgrep: the pipeline is the "
+        "exec-form PID 1 and procps/pgrep are deleted from the image (#3453)"
+    )
     assert "qdrant:6333/readyz" in command, (
         "ingestion healthcheck must probe Qdrant readiness "
         "(http://qdrant:6333/readyz), not a collection that may not exist yet"
@@ -581,21 +592,22 @@ def test_rendered_postgres_keeps_base_cap_drop_with_dev_only_cap_add(rendered_fu
     }
 
 
-def test_rendered_ingestion_keeps_caps_required_by_gosu_entrypoint(rendered_full: dict) -> None:
-    """ingestion must keep the minimal caps its gosu entrypoint needs to start.
+def test_rendered_ingestion_runs_without_privilege_switch_caps(rendered_full: dict) -> None:
+    """ingestion must need no capability grants to start (#3453).
 
-    The image entrypoint runs as root and drops to the fixed non-root
-    ``ingestion`` user via gosu (setuid/setgid) after chowning the manifest
-    volume. Under the base ``cap_drop: [ALL]`` hardening the container
-    crash-loops with "failed switching to ingestion: operation not permitted",
-    so a cold full-profile start can never reach six healthy services (#3361
-    cold-start proof). The caps are exactly the entrypoint's needs; the
-    dropped-to python process runs as a non-root user without them.
+    The image runs the pipeline directly as the fixed non-root ``ingestion``
+    user (``USER ingestion`` + exec-form python entrypoint) and owns
+    ``/data/manifest`` at build time, so there is no root entrypoint, no gosu
+    setuid/setgid switch, and no runtime chown left to authorize. The #3361
+    ``cap_add: [CHOWN, SETGID, SETUID]`` existed only to keep that gosu
+    entrypoint from crash-looping under ``cap_drop: [ALL]`` and is deleted
+    with the mechanism it served.
     """
     caps = set(rendered_full["services"]["ingestion"].get("cap_add") or [])
-    assert {"CHOWN", "SETGID", "SETUID"} <= caps, (
-        f"ingestion.cap_add must include CHOWN, SETGID, SETUID for the gosu "
-        f"entrypoint under cap_drop: [ALL]; got {sorted(caps)}"
+    assert not caps, (
+        f"ingestion.cap_add must stay empty: the image starts directly as the "
+        f"non-root ingestion user and needs no privilege-switch capabilities "
+        f"under cap_drop: [ALL] (#3453); got {sorted(caps)}"
     )
 
 
@@ -672,6 +684,64 @@ def test_dockerfile_from_lines_are_digest_pinned(dockerfile: str) -> None:
         assert _DIGEST_RE.search(line), (
             f"{dockerfile}: FROM line missing @sha256 digest pin (policy #1814): {line!r}"
         )
+
+
+# =============================================================================
+# Ingestion non-root runtime: Docker USER + direct exec-form Python (#3453)
+# =============================================================================
+
+INGESTION_ENTRYPOINT_CMD = 'ENTRYPOINT ["/app/.venv/bin/python", "-m", "src.ingestion.unified.cli"]'
+INGESTION_ENTRYPOINT_WRAPPER = Path("docker/ingestion/entrypoint.sh")
+
+
+def test_ingestion_dockerfile_runs_direct_non_root_python() -> None:
+    """The ingestion image starts as the fixed non-root user with no wrapper (#3453).
+
+    Replaces the gosu privilege-drop entrypoint (#3105/#3361 lineage): the
+    image declares ``USER ingestion``, owns ``/data/manifest`` at build time,
+    and exec-form launches the pipeline CLI directly so python is PID 1 and
+    SIGTERM reaches the pipeline process without any wrapper shell or gosu
+    hop.
+    """
+    text = Path("Dockerfile.ingestion").read_text(encoding="utf-8")
+
+    assert re.search(r"^USER ingestion$", text, re.MULTILINE), (
+        "Dockerfile.ingestion must run the pipeline as the fixed non-root "
+        "ingestion user via USER ingestion (#3453)"
+    )
+    assert INGESTION_ENTRYPOINT_CMD in text, (
+        "Dockerfile.ingestion must use the direct exec-form ENTRYPOINT "
+        f"{INGESTION_ENTRYPOINT_CMD} so python is PID 1 and signals reach it "
+        "directly (#3453)"
+    )
+    assert "mkdir -p /data/manifest" in text, (
+        "Dockerfile.ingestion must create the runtime manifest directory at build time (#3453)"
+    )
+    assert "chown ingestion:ingestion /data/manifest" in text, (
+        "Dockerfile.ingestion must own the runtime manifest directory for the "
+        "ingestion user at build time so first-use named volumes inherit "
+        "non-root ownership (#3453)"
+    )
+
+
+def test_ingestion_runtime_has_no_privilege_drop_or_process_probing() -> None:
+    """gosu/procps/pgrep and the wrapper shell stay deleted from the runtime (#3453).
+
+    The gosu entrypoint needed root + CHOWN/SETGID/SETUID at runtime and
+    probed liveness with pgrep (procps); the direct ``USER ingestion`` runtime
+    needs none of it. The wrapper file itself must stay deleted, and the
+    Dockerfile must not copy or reference it.
+    """
+    dockerfile = Path("Dockerfile.ingestion").read_text(encoding="utf-8")
+    for token in ("gosu", "procps", "pgrep", "ingestion-entrypoint", "entrypoint.sh"):
+        assert token not in dockerfile, (
+            f"Dockerfile.ingestion must not reference {token!r} — the runtime "
+            f"runs as USER ingestion with a direct exec-form entrypoint (#3453)"
+        )
+    assert not INGESTION_ENTRYPOINT_WRAPPER.exists(), (
+        "docker/ingestion/entrypoint.sh must stay deleted — the exec-form "
+        "ENTRYPOINT replaces the wrapper shell (#3453)"
+    )
 
 
 # =============================================================================

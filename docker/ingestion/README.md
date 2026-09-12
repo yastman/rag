@@ -7,7 +7,8 @@ Navigation index for the folder. Use this page to quickly find files and route i
 docker/ingestion
 
 ## Contents
-- entrypoint.sh
+(empty — the entrypoint.sh wrapper was deleted by #3453; the image entrypoint
+is the direct exec-form python command in `Dockerfile.ingestion`)
 
 ## Parent
 - [..](..)

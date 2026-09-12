@@ -20,9 +20,10 @@ Database initialization scripts executed on first Postgres startup.
 
 ### `ingestion/`
 
-Ingestion service wrapper assets.
-
-- **`entrypoint.sh`** — Entrypoint script for the unified ingestion container.
+(empty — the `entrypoint.sh` wrapper was deleted by #3453; the unified
+ingestion container is defined by `Dockerfile.ingestion`, which runs the
+pipeline directly as the non-root `ingestion` user via a direct exec-form
+python entrypoint).
 
 ## Validation
 
