@@ -6,6 +6,8 @@ bounds.  This contract file is the RED gate that forces the repo to:
 
 1. Ship ``docker/qdrant/config.yaml`` with storage optimisations.
 2. Mount that file into the Qdrant container via ``compose.yml``.
+3. Keep the file minimized to configuration only: no issue/runbook prose
+   may remain in the YAML (#3395 A12 addendum).
 
 (The #1545 ``qdrant-cleanup`` Make target was removed by #3379 with the
 legacy-collection Make surface; operators use the snapshot/optimiser REST
@@ -67,6 +69,34 @@ def test_qdrant_config_has_storage_section() -> None:
         "'storage.on_disk_payload' must be true to move payload storage to disk "
         "and reduce the unbounded RAM / volume growth observed in #1545."
     )
+
+
+# ---------------------------------------------------------------------------
+# 2b. Config is minimized to configuration only (#3395 A12 addendum)
+# ---------------------------------------------------------------------------
+
+
+def test_qdrant_config_contains_configuration_only_no_prose() -> None:
+    """``docker/qdrant/config.yaml`` must carry configuration, never prose (#3395).
+
+    A12 addendum: operational/issue rationale belongs to the Docker runbook
+    and GitHub history, so the YAML must reduce to its actual configuration —
+    no comment blocks, no issue references, exactly the two optimisation keys.
+    """
+    assert QDRANT_CONFIG.exists(), "Prerequisite: docker/qdrant/config.yaml is missing."
+    lines = QDRANT_CONFIG.read_text(encoding="utf-8").splitlines()
+    prose = [line for line in lines if line.lstrip().startswith("#")]
+    assert not prose, (
+        "docker/qdrant/config.yaml must contain configuration only; move "
+        f"operational/issue prose to the runbook (#3395 A12), found: {prose}"
+    )
+    cfg = yaml.safe_load(QDRANT_CONFIG.read_text(encoding="utf-8"))
+    assert cfg == {
+        "storage": {
+            "on_disk_payload": True,
+            "optimizers": {"indexing_threshold_kb": 20000},
+        }
+    }, f"the minimized config must match the characterized storage mapping, got: {cfg}"
 
 
 # ---------------------------------------------------------------------------

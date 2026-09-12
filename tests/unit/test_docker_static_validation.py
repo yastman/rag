@@ -615,6 +615,24 @@ def test_rendered_hub_images_are_digest_pinned(rendered_full: dict) -> None:
     assert not unpinned, f"registry images must pin @sha256 digests: {unpinned} (#1814)"
 
 
+# Qdrant server pin (#3395): the characterized, digest-pinned server image.
+# v1.19.1 is a patch release over v1.19.0 (fixes + performance only, no API
+# change for the dense/sparse/ColBERT surface); the digest is the official
+# multi-arch OCI index digest of the ``v1.19.1`` tag.
+QDRANT_SERVER_IMAGE = (
+    "qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10"
+)
+
+
+def test_rendered_qdrant_server_image_is_the_characterized_pin(rendered_full: dict) -> None:
+    """The single qdrant declaration must pin the characterized 1.19.1 digest (#3395)."""
+    image = rendered_full["services"]["qdrant"]["image"]
+    assert image == QDRANT_SERVER_IMAGE, (
+        f"the qdrant server image must be exactly {QDRANT_SERVER_IMAGE} "
+        f"(#3395 characterization), got {image}"
+    )
+
+
 # =============================================================================
 # Dockerfile runtime policy (#1814, #1307, #1381 — absorbed from A09 contract)
 # =============================================================================
