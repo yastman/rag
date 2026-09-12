@@ -13,7 +13,8 @@ This contract fails on:
 - a dev ``.python-version`` outside the 3.12 release line
 
 The Langfuse-importing Docker runtime constraint (>=3.13) is enforced by
-``test_dockerfile_runtime_policy_contract.py``. This contract covers the
+``tests/unit/test_docker_static_validation.py`` (native Compose/Dockerfile
+static validation, #3424). This contract covers the
 pyproject-level floor only. ``telegram_bot`` has no manifest since #3210
 (root lock is the single Telegram authority), so only the root floor and
 the ``.python-version`` dev floor are asserted here.

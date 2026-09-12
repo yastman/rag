@@ -328,6 +328,34 @@ bash scripts/cleanup_orphaned_worktree_volumes.sh --apply
 The underlying script (`scripts/cleanup_orphaned_worktree_volumes.sh`) defaults to
 dry-run mode and protects active worktrees and long-lived project volumes.
 
+## Compose Source Hygiene
+
+Compose records every source file used to create a project. Stale `/tmp/compose.*.yml`
+overrides or files mixed in from another worktree checkout leave container drift,
+port-binding overrides, and stale env active. Local project `dev` must use one
+checkout's canonical `compose.yml` + `compose.dev.yml`.
+
+Inspect:
+
+```bash
+docker compose ls --all --format json
+```
+
+Find project `dev` and check `ConfigFiles`: no path may begin with `/tmp/compose`, and
+every non-temporary path must share the same checkout root.
+
+Recreate from the checkout that owns the local stack:
+
+```bash
+docker compose -p dev down --remove-orphans
+docker compose -p dev -f compose.yml -f compose.dev.yml up -d
+```
+
+Keep the operator `.env` in the same checkout as the compose files — real `up`
+commands validate it through the operator env gate (never fall back to the CI
+rendering fixture). Run `docker compose ls --all --format json` again — project
+`dev` should list only this checkout's `compose.yml` and `compose.dev.yml`.
+
 ## Security Defaults
 
 `compose.yml` applies hardened defaults to all services:

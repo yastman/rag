@@ -180,10 +180,10 @@ def test_compose_change_with_compose_runtime_policy_test_passes() -> None:
     failures = validate(
         _pr(
             "fix: repair compose runtime contract",
-            "Regression guardrail: tests/unit/test_compose_runtime_contract.py\n"
+            "Regression guardrail: tests/unit/test_docker_static_validation.py\n"
             "Checks run: pytest compose policy tests",
         ),
-        ["compose.yml", "tests/unit/test_compose_runtime_contract.py"],
+        ["compose.yml", "tests/unit/test_docker_static_validation.py"],
         large_threshold=25,
     )
 
@@ -206,7 +206,7 @@ def test_duplicate_process_wording_without_disposition_does_not_require_bug_clas
             "ci: add project guardrail",
             "This keeps project-specific duplicate/root-cause logic in Python.",
         ),
-        [".github/workflows/ci.yml", "tests/unit/test_compose_runtime_contract.py"],
+        [".github/workflows/ci.yml", "tests/unit/test_docker_static_validation.py"],
         large_threshold=25,
     )
 

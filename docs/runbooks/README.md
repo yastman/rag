@@ -32,7 +32,9 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 |---|---|
 | Validate prod env vars | `scripts/validate_prod_env.sh` |
 | Compose config validation | `docker compose -f compose.yml -f compose.dev.yml config` |
-| Remove stale Compose source files | [`COMPOSE_SOURCE_CLEANUP.md`](COMPOSE_SOURCE_CLEANUP.md) |
+
+> Stray Compose source cleanup moved to [`../../DOCKER.md`](../../DOCKER.md)
+> ("Compose Source Hygiene").
 
 > Production access (VPS, secrets, SSH, real CRM write paths) is out of scope for routine
 > work — prefer local/test environments and redact secrets.

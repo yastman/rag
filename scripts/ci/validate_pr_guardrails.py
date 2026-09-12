@@ -46,7 +46,6 @@ PYPROJECT_LOCK_RELEVANT_KEYS = (
 WORKFLOW_POLICY_TESTS = {
     "tests/unit/test_ci_deploy_workflow.py",
     "tests/unit/test_codeowners_contract.py",
-    "tests/unit/test_compose_runtime_contract.py",
     "tests/unit/test_docker_static_validation.py",
 }
 
