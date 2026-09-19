@@ -13,7 +13,6 @@ telegram_bot/dialogs
 - filter/ (filter dialog package)
 - funnel/ (funnel dialog package)
 - client_menu.py
-- crm_cards.py
 - demo.py
 - faq.py
 - filter_constants.py
