@@ -18,7 +18,7 @@ _ALLOWED_HOSTED_ACTIONS = {
     "docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf",
     "docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee",
     "docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9",
-    "docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5",
+    "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069",
     "github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd",
     "github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd",
     "gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e",
