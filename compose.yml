@@ -167,6 +167,7 @@ services:
       REDIS_MODE: ${REDIS_MODE:-single_instance}
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
+      QDRANT_QUANTIZATION_MODE: ${QDRANT_QUANTIZATION_MODE:-off}
       # LLM (LiteLLM Python SDK router)
       CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-${LLM_API_KEY:-}}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
@@ -245,7 +246,8 @@ services:
     environment:
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - QDRANT_URL=http://qdrant:6333
-      - GDRIVE_COLLECTION_NAME=gdrive_documents_bge
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-gdrive_documents_bge}
+      - QDRANT_QUANTIZATION_MODE=${QDRANT_QUANTIZATION_MODE:-off}
       # Local embeddings (matches VPS production)
       - USE_LOCAL_DENSE_EMBEDDINGS=true
       - BGE_M3_URL=http://bge-m3:8000

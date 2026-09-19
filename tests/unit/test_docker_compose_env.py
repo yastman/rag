@@ -31,3 +31,40 @@ class TestDevComposeEnv:
     def test_dev_compose_has_var(self, var: str):
         env = _load_bot_env("compose.yml")
         assert var in env, f"{var} missing from compose.yml bot environment"
+
+
+@pytest.mark.parametrize("mode", ["off", "scalar", "binary"])
+def test_rendered_collection_and_quantization_match_services(monkeypatch, mode):
+    import json
+    import os
+    import subprocess
+
+    monkeypatch.setenv("QDRANT_COLLECTION", "audit_isolated_collection")
+    monkeypatch.setenv("QDRANT_QUANTIZATION_MODE", mode)
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            "tests/fixtures/compose.ci.env",
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            "--profile",
+            "full",
+            "config",
+            "--format",
+            "json",
+        ],
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=True,
+    )
+    services = json.loads(result.stdout)["services"]
+    for service in ("bot", "ingestion"):
+        env = services[service]["environment"]
+        assert env["QDRANT_COLLECTION"] == "audit_isolated_collection"
+        assert env["QDRANT_QUANTIZATION_MODE"] == mode
