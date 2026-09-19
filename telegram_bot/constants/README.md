@@ -7,7 +7,6 @@ Shared constant values used by bot dialogs, handlers, and services.
 ## Files
 
 - `apartment_constants.py` — apartment filter options, canonical city names, and aliases used by:
-  - `telegram_bot/services/apartment/filter_extractor.py`
   - `telegram_bot/services/apartment/apartment_filter_extractor.py`
   - `telegram_bot/dialogs/filter_constants.py`
   - corresponding tests in `tests/unit`

@@ -14,7 +14,7 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 | [`qdrant.py`](./qdrant.py) | Re-export shim → `src.runtime.qdrant.QdrantService` (the real hybrid dense+sparse+ColBERT gateway) |
 | [`generation/telegram_formatting.py`](./generation/telegram_formatting.py) | Telegram-only HTML formatting/delivery for generated answers (generation itself lives in `src/runtime/generation`) |
 | [`src/runtime/services/rag_core.py`](../../src/runtime/services/rag_core.py) | Canonical shared RAG core functions |
-| [`apartment/filter_extractor.py`](./apartment/filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |
+| [`apartment/apartment_filter_extractor.py`](./apartment/apartment_filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |
 | [`apartment/apartment_llm_extractor.py`](./apartment/apartment_llm_extractor.py) | LLM-based apartment data extraction |
 | [`apartment/apartment_catalog.py`](./apartment/apartment_catalog.py) | `ApartmentCatalog` — one application interface (extraction → payload-filtered price-ordered pages → cursor continuation) shared by demo and catalog entrypoints (#3238) |
 | [`voice_transcription.py`](./voice_transcription.py) | Whisper STT helper shared by the demo and catalog dialogs (#3238) |
