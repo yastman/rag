@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 _ALLOWED_HOSTED_ACTIONS = {
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b",
+    "astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4",
     "docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf",
     "docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee",
     "docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9",
