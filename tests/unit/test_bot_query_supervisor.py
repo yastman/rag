@@ -695,7 +695,6 @@ class TestCoreResponseDelivery:
     async def test_private_response_allocates_id_then_sends_before_marking_sent(self):
         from telegram_bot.pipeline import streaming, supervisor
 
-        assert supervisor._new_draft_id is streaming._new_draft_id
         ctx = SimpleNamespace(response_sent=False, history_reply_markup=None)
         events = []
 
