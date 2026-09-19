@@ -12,7 +12,7 @@ from telegram_bot.constants.apartment_constants import (
     APARTMENT_CITY_ALIASES_SORTED,
     APARTMENT_CITY_NAMES,
 )
-from telegram_bot.services.apartment.base_filter_extractor import BaseFilterExtractor
+from telegram_bot.services.util.text_utils import parse_int_with_k_suffix
 
 
 # All canonical complex names plus RU/EN short aliases — sorted longest-first for greedy match
@@ -48,7 +48,7 @@ _COMPLEX_ALIASES: dict[str, str] = {
 _COMPLEX_ALIASES_SORTED = sorted(_COMPLEX_ALIASES, key=len, reverse=True)
 
 
-class ApartmentFilterExtractor(BaseFilterExtractor):
+class ApartmentFilterExtractor:
     """Extract apartment filters from natural language (regex-only, 0 LLM calls)."""
 
     def parse(self, query: str) -> ApartmentQueryParseResult:
@@ -140,8 +140,8 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         if m:
             mn_raw = m.group(1)
             mx_raw = m.group(2)
-            mn = self._parse_number(mn_raw)
-            mx = self._parse_number(mx_raw)
+            mn = parse_int_with_k_suffix(mn_raw)
+            mx = parse_int_with_k_suffix(mx_raw)
             has_currency = bool(m.group(3))
             has_k_suffix = "к" in mn_raw.lower() or "к" in mx_raw.lower()
             if mn and mx and (has_currency or has_k_suffix or mn >= 1000 or mx >= 1000):
@@ -160,7 +160,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         ]:
             m2 = re.search(pat, text)
             if m2:
-                val = self._parse_number(m2.group(1))
+                val = parse_int_with_k_suffix(m2.group(1))
                 # Prices are always >= 1000 EUR; guard against area "до 80 м²" false-matches
                 if val and val >= 1000:
                     consumed.append(m2.span())
@@ -175,7 +175,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         ]:
             m3 = re.search(pat, text)
             if m3:
-                val = self._parse_number(m3.group(1))
+                val = parse_int_with_k_suffix(m3.group(1))
                 if val and val >= 1000:
                     consumed.append(m3.span())
                     min_p = float(val)
@@ -275,13 +275,12 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
                 return APARTMENT_CITY_ALIASES[alias]
         return None
 
-    # --- Legacy dict-format extraction (replaces FilterExtractor) ---
+    # --- Dict-format extraction for pre-agent cache filters ---
 
     def extract_filters(self, query: str) -> dict[str, Any]:
         """Extract structured filters from natural language query, returning a dict.
 
-        This is the legacy interface previously provided by FilterExtractor.
-        Retained for callers that need a plain dict (e.g. pre-agent semantic cache path).
+        The pre-agent semantic cache path consumes this plain-dict shape.
         """
         filters: dict[str, Any] = {}
 
@@ -352,8 +351,8 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         q = query.lower()
         m = re.search(r"от\s+(\d+[\s\d]*к?)\s+до\s+(\d+[\s\d]*к?)", q)
         if m:
-            mn = self._parse_number(m.group(1))
-            mx = self._parse_number(m.group(2))
+            mn = parse_int_with_k_suffix(m.group(1))
+            mx = parse_int_with_k_suffix(m.group(2))
             if mn and mx:
                 return {"gte": mn, "lte": mx}
         for pat in [
@@ -365,7 +364,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         ]:
             m2 = re.search(pat, q)
             if m2:
-                val = self._parse_number(m2.group(1))
+                val = parse_int_with_k_suffix(m2.group(1))
                 if val:
                     return {"lt": val}
         for pat in [
@@ -376,7 +375,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         ]:
             m3 = re.search(pat, q)
             if m3:
-                val = self._parse_number(m3.group(1))
+                val = parse_int_with_k_suffix(m3.group(1))
                 if val:
                     return {"gt": val}
         return None

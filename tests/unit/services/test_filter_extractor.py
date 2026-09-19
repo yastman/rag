@@ -1,22 +1,20 @@
-"""Unit tests for FilterExtractor service."""
+"""Unit tests for ApartmentFilterExtractor."""
 
 import pytest
 
 from telegram_bot.constants.apartment_constants import APARTMENT_CITY_NAMES, APARTMENT_CITY_OPTIONS
-from telegram_bot.services.apartment.apartment_filter_extractor import (
-    ApartmentFilterExtractor as FilterExtractor,
-)
+from telegram_bot.services.apartment.apartment_filter_extractor import ApartmentFilterExtractor
 from telegram_bot.services.util.text_utils import parse_int_with_k_suffix
 
 
 # Read-only: safe to share across all tests.
-_ext = FilterExtractor()
+_ext = ApartmentFilterExtractor()
 
 
 # ---------------------------------------------------------------------------
 # Price
 # ---------------------------------------------------------------------------
-class TestFilterExtractorPrice:
+class TestApartmentFilterExtractorPrice:
     """Tests for price filter extraction."""
 
     @pytest.mark.parametrize(
@@ -67,7 +65,7 @@ class TestFilterExtractorPrice:
 # ---------------------------------------------------------------------------
 # Rooms
 # ---------------------------------------------------------------------------
-class TestFilterExtractorRooms:
+class TestApartmentFilterExtractorRooms:
     """Tests for rooms filter extraction."""
 
     @pytest.mark.parametrize(
@@ -112,7 +110,7 @@ class TestFilterExtractorRooms:
 # ---------------------------------------------------------------------------
 # City
 # ---------------------------------------------------------------------------
-class TestFilterExtractorCity:
+class TestApartmentFilterExtractorCity:
     """Tests for city filter extraction."""
 
     def test_city_list_matches_shared_apartment_constants(self) -> None:
@@ -184,7 +182,7 @@ class TestFilterExtractorCity:
 # ---------------------------------------------------------------------------
 # Distance to sea
 # ---------------------------------------------------------------------------
-class TestFilterExtractorDistanceToSea:
+class TestApartmentFilterExtractorDistanceToSea:
     """Tests for distance to sea filter extraction."""
 
     @pytest.mark.parametrize(
@@ -214,7 +212,7 @@ class TestFilterExtractorDistanceToSea:
 # ---------------------------------------------------------------------------
 # Furniture
 # ---------------------------------------------------------------------------
-class TestFilterExtractorFurniture:
+class TestApartmentFilterExtractorFurniture:
     """Tests for furnished filter extraction.
 
     Canonical key for the document/CSV pipeline (#1401) is
@@ -253,7 +251,7 @@ class TestFilterExtractorFurniture:
 # ---------------------------------------------------------------------------
 # Year-round
 # ---------------------------------------------------------------------------
-class TestFilterExtractorYearRound:
+class TestApartmentFilterExtractorYearRound:
     """Tests for year_round filter extraction."""
 
     @pytest.mark.parametrize(
@@ -275,7 +273,7 @@ class TestFilterExtractorYearRound:
 # ---------------------------------------------------------------------------
 # Area
 # ---------------------------------------------------------------------------
-class TestFilterExtractorArea:
+class TestApartmentFilterExtractorArea:
     """Tests for area filter extraction."""
 
     @pytest.mark.parametrize(
@@ -297,7 +295,7 @@ class TestFilterExtractorArea:
 # ---------------------------------------------------------------------------
 # Floor
 # ---------------------------------------------------------------------------
-class TestFilterExtractorFloor:
+class TestApartmentFilterExtractorFloor:
     """Tests for floor filter extraction."""
 
     @pytest.mark.parametrize(
@@ -318,7 +316,7 @@ class TestFilterExtractorFloor:
 # ---------------------------------------------------------------------------
 # Maintenance
 # ---------------------------------------------------------------------------
-class TestFilterExtractorMaintenance:
+class TestApartmentFilterExtractorMaintenance:
     """Tests for maintenance cost filter extraction."""
 
     @pytest.mark.parametrize(
@@ -339,7 +337,7 @@ class TestFilterExtractorMaintenance:
 # ---------------------------------------------------------------------------
 # Bathrooms
 # ---------------------------------------------------------------------------
-class TestFilterExtractorBathrooms:
+class TestApartmentFilterExtractorBathrooms:
     """Tests for bathrooms filter extraction."""
 
     @pytest.mark.parametrize(
@@ -361,7 +359,7 @@ class TestFilterExtractorBathrooms:
 # ---------------------------------------------------------------------------
 # Combined filters
 # ---------------------------------------------------------------------------
-class TestFilterExtractorCombined:
+class TestApartmentFilterExtractorCombined:
     """Tests for multiple filters extraction."""
 
     def test_combined_price_and_rooms(self) -> None:
@@ -400,7 +398,7 @@ class TestFilterExtractorCombined:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
-class TestFilterExtractorEdgeCases:
+class TestApartmentFilterExtractorEdgeCases:
     """Tests for edge cases and boundary conditions."""
 
     def test_price_zero(self) -> None:
@@ -448,10 +446,10 @@ class TestFilterExtractorEdgeCases:
 
 
 # ---------------------------------------------------------------------------
-# _parse_number helper
+# Canonical numeric parsing utility
 # ---------------------------------------------------------------------------
-class TestParseNumberMethod:
-    """Tests for the _parse_number helper method."""
+class TestParseIntWithKSuffix:
+    """Tests for the canonical numeric parser."""
 
     @pytest.mark.parametrize(
         ("input_str", "expected"),
@@ -466,7 +464,7 @@ class TestParseNumberMethod:
         ],
     )
     def test_parse_number(self, input_str: str, expected: int | None) -> None:
-        assert _ext._parse_number(input_str) == expected
+        assert parse_int_with_k_suffix(input_str) == expected
 
     @pytest.mark.parametrize(
         ("input_str", "expected"),
@@ -481,4 +479,3 @@ class TestParseNumberMethod:
         self, input_str: str, expected: int | None
     ) -> None:
         assert parse_int_with_k_suffix(input_str) == expected
-        assert _ext._parse_number(input_str) == expected
