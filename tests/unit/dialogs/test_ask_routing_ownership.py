@@ -21,7 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram import Dispatcher
 
@@ -196,13 +196,17 @@ def _build_dialog_dispatcher() -> tuple[Dispatcher, Any]:
     attached to one dispatcher, so the built dispatcher is shared between
     tests in this module.
     """
+    from aiogram_dialog import setup_dialogs as sdk_setup_dialogs
+
     from telegram_bot.lifecycle.lifecycle import setup_dialogs
 
     async def _catch_all_query(message: Any) -> None:  # pragma: no cover - stub
         return None
 
     stub = SimpleNamespace(dp=Dispatcher(), handle_query=_catch_all_query)
-    setup_dialogs(stub)
+    with patch("aiogram_dialog.setup_dialogs", wraps=sdk_setup_dialogs) as sdk_setup:
+        setup_dialogs(stub)
+        sdk_setup.assert_called_once_with(stub.dp)
     return stub.dp, stub
 
 
