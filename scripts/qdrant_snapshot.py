@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+from pydantic_settings import BaseSettings
 from qdrant_client import AsyncQdrantClient
 
 
@@ -39,6 +40,12 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_QDRANT_URL = "http://localhost:6333"
 DEFAULT_OUTPUT_DIR = "/backups"
+
+
+class SnapshotSettings(BaseSettings):
+    """Snapshot output default is resolved when parsing CLI arguments."""
+
+    QDRANT_BACKUP_DIR: str = DEFAULT_OUTPUT_DIR
 
 
 async def get_all_collections(client: AsyncQdrantClient) -> list[str]:
@@ -246,7 +253,7 @@ Examples:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default=os.getenv("QDRANT_BACKUP_DIR", DEFAULT_OUTPUT_DIR),
+        default=SnapshotSettings().QDRANT_BACKUP_DIR,
         help=f"Directory to save snapshots (default: {DEFAULT_OUTPUT_DIR})",
     )
     parser.add_argument(

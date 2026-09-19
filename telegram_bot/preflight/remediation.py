@@ -3,13 +3,14 @@
 import contextlib
 import inspect
 import logging
-import os
 import re
 from typing import Any
 from urllib.parse import urlparse
 
 import redis.asyncio as aioredis
 from qdrant_client import AsyncQdrantClient, models
+
+from telegram_bot.config import CoverageSettings
 
 
 logger = logging.getLogger(__name__)
@@ -40,10 +41,7 @@ _APARTMENTS_ROLE = "apartments"
 
 def _read_colbert_coverage_warn_threshold() -> float:
     """Read configurable ColBERT coverage warning threshold safely."""
-    raw = os.getenv(
-        "COLBERT_COVERAGE_WARN_THRESHOLD",
-        str(_DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD),
-    )
+    raw = CoverageSettings().COLBERT_COVERAGE_WARN_THRESHOLD
     try:
         return float(raw)
     except (TypeError, ValueError):

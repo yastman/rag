@@ -1,7 +1,6 @@
 """Bot dependency preflight checks with CRITICAL/OPTIONAL classification."""
 
 import logging
-import os
 from enum import StrEnum
 from typing import Any
 from urllib.parse import urlparse
@@ -17,6 +16,7 @@ from src.services.bge_m3_client import (
     _parse_hybrid_response,
     _validate_hybrid_families,
 )
+from telegram_bot.config import CoverageSettings
 from telegram_bot.preflight.remediation import (
     COLBERT_COVERAGE_WARN_THRESHOLD,  # noqa: F401 — re-exported for tests
     _exception_message_with_type,
@@ -172,10 +172,7 @@ def _collect_qdrant_failure(failures: dict[str, str] | None, dep_name: str, reas
 
 def _read_colbert_coverage_warn_threshold() -> float:
     """Read configurable ColBERT coverage warning threshold safely."""
-    raw = os.getenv(
-        "COLBERT_COVERAGE_WARN_THRESHOLD",
-        str(_DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD),
-    )
+    raw = CoverageSettings().COLBERT_COVERAGE_WARN_THRESHOLD
     try:
         return float(raw)
     except (TypeError, ValueError):

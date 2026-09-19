@@ -34,6 +34,8 @@ import re
 import time
 from typing import TYPE_CHECKING, Any
 
+from pydantic_settings import BaseSettings
+
 from src.runtime.integrations.redis_mode import RedisCapability, RedisMode
 from src.services.bge_m3_query_bundle import (
     BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
@@ -87,6 +89,12 @@ def _redact_redis_credentials(text: str) -> str:
     return _REDIS_URL_CREDENTIALS_RE.sub(r"\1***@", text)
 
 
+class RedisClientSettings(BaseSettings):
+    """Pool configuration is read only when creating an enabled Redis client."""
+
+    REDIS_MAX_CONNECTIONS: int = 50
+
+
 def _create_redis_client(redis_url: str) -> AsyncRedis:
     """Create the async Redis client.
 
@@ -102,7 +110,7 @@ def _create_redis_client(redis_url: str) -> AsyncRedis:
         redis_url,
         encoding="utf-8",
         decode_responses=True,
-        max_connections=int(os.getenv("REDIS_MAX_CONNECTIONS", "50")),
+        max_connections=RedisClientSettings().REDIS_MAX_CONNECTIONS,
         socket_connect_timeout=5,
         socket_timeout=5,
         retry_on_timeout=True,
