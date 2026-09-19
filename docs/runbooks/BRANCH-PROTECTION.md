@@ -10,7 +10,7 @@ configuration; the GitHub API is authoritative for its current settings.
 | CodeQL | codeql | Static security analysis |
 | Compose Config | CI | Compose rendering |
 | CVE Scan | CI | Dependency severity gate |
-| Candidate Gate | CI | MyPy, core, no-service integration/smoke |
+| Candidate Gate | CI | MyPy, core, no-service integration/smoke, deterministic contracts |
 | GitHub Actions Lint | CI | actionlint |
 | Lint | CI | Ruff lint and format |
 | Lockfile Check | CI | Lock consistency |
@@ -18,8 +18,9 @@ configuration; the GitHub API is authoritative for its current settings.
 
 See [ci.yml](../../.github/workflows/ci.yml) and
 [codeql.yml](../../.github/workflows/codeql.yml) for execution. Candidate Gate covers
-deterministic tests but does not currently run the full contract suite. The local
-`make candidate-check` delivery gate remains required, including contracts.
+the full `tests/contract/` selector excluding `requires_extras`, matching local
+`make test-contract`, alongside core and no-service tests. Broad unit and credentialed/live
+provider tests are separate lanes. The local `make candidate-check` delivery gate remains required.
 
 ## Normal delivery
 

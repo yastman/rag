@@ -81,9 +81,12 @@ developer's private .env or data. Do not run live tests merely because credentia
 
 ## Hosted and local evidence
 
-GitHub Candidate Gate runs MyPy, core tests, and the no-service lane, alongside hosted
-static/security checks. The full contract suite and full local delivery gate are not currently
-part of that job. Exact required check names and merge rules live in
+GitHub Candidate Gate runs MyPy, core tests, the no-service lane, and `tests/contract/`
+with `-m "not requires_extras"`, alongside hosted static/security checks. The contract
+selector matches `make test-contract`, including safety, privacy, Make-gate and native
+environment ownership checks. Broad unit and credentialed/live-provider tests remain
+separate lanes. The full local `make candidate-check` delivery gate remains required.
+Exact required check names and merge rules live in
 [branch protection](../docs/runbooks/BRANCH-PROTECTION.md).
 
 Before claiming success, record the command, exit status, relevant result/skip counts, and

@@ -175,8 +175,10 @@ environment off an incompatible schema: snapshot, export points,
 re-create the collection under the contract schema, and re-index — see
 [`runbooks/`](runbooks/README.md) and [`INGESTION.md`](INGESTION.md).
 
-GitHub Candidate Gate runs MyPy, core tests, and the no-service lane; the full local gate
-additionally checks contracts. Required hosted checks are documented in
+GitHub Candidate Gate runs MyPy, core tests, the no-service lane, and the deterministic
+`tests/contract/` suite excluding `requires_extras`, matching the local test selectors.
+The full local `make candidate-check` delivery gate remains required. Broad unit and
+credentialed/live-provider checks are separate lanes. Required hosted checks are documented in
 [branch protection](runbooks/BRANCH-PROTECTION.md).
 On Windows the pre-push core hook invokes `uv run --no-sync pytest` without Make.
 Run Linux portability and release verification through WSL or a container.
