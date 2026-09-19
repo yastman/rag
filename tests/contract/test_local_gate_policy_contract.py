@@ -70,6 +70,10 @@ _APPROVED_HOSTED_RUNS = {
         "uv run --no-sync pytest tests/integration tests/smoke "
         '-q --timeout=30 -m "no_services and not requires_extras and not slow"'
     ),
+    (".github/workflows/ci.yml", "candidate", "Deterministic contract suite"): (
+        "uv run --no-sync pytest tests/contract/ -n auto --dist=worksteal "
+        '-q --timeout=30 -m "not requires_extras"'
+    ),
     (
         ".github/workflows/publish-internal-images.yml",
         "publish",

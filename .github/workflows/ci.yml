@@ -117,11 +117,8 @@ jobs:
         run: uv run --frozen python scripts/ci/cve_gate.py
 
   candidate:
-    # #3327: deterministic type/unit candidate coverage for required checks.
-    # Mirrors the local `make test-core` + `make test-no-service-lane` lanes
-    # and the candidate mypy scope. The contract suite joins this job once
-    # #3437 (env ownership) lands via #3328; it is intentionally not required
-    # while it still carries that known red pair.
+    # Mirrors local core, no-service and deterministic contract lanes (#3328),
+    # including native environment ownership (#3437), plus candidate MyPy scope.
     name: Candidate Gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -160,3 +157,8 @@ jobs:
         run: >
           uv run --no-sync pytest tests/integration tests/smoke
           -q --timeout=30 -m "no_services and not requires_extras and not slow"
+
+      - name: Deterministic contract suite
+        run: >
+          uv run --no-sync pytest tests/contract/ -n auto --dist=worksteal
+          -q --timeout=30 -m "not requires_extras"
