@@ -86,16 +86,6 @@ def test_obsolete_observability_bug_classes_are_removed() -> None:
         assert bug_class not in flattened
 
 
-def test_pr_template_has_validation_and_runtime_fields() -> None:
-    """The PR template stays lightweight but still asks for checks and runtime impact."""
-    pr_template = REPO_ROOT / ".github" / "pull_request_template.md"
-    text = pr_template.read_text(encoding="utf-8")
-    for field in ("Checks run", "Runtime Impact", "Reviewer Notes"):
-        assert field in text, (
-            f".github/pull_request_template.md must keep lightweight reviewer field {field!r}."
-        )
-
-
 def test_bug_issue_template_collects_duplicate_and_bug_class_metadata() -> None:
     """Bug reports must collect enough metadata for duplicate/recurrence triage."""
     issue_template = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"

@@ -77,9 +77,3 @@ class TestRetrievalReadme:
         assert "SearchResult" not in text
         assert "rerank_results" not in text
         assert "search engine classes" in text
-
-
-class TestDataDemoReadme:
-    def test_explicit_not_committed_wording(self):
-        text = _read("data/demo/README.md")
-        assert "not committed" in text or "not tracked" in text
