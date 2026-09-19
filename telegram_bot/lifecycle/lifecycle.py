@@ -10,8 +10,8 @@ Module-level imports are stdlib only; the helpers receive their
 collaborators (the hybrid embedder, the polling-lock state holder) as
 arguments instead of reading ``self`` directly. This keeps the import
 graph narrow — no ``aiogram`` / ``langgraph`` / ``qdrant_client`` /
-``fastapi`` at module scope, pinned by
-``tests/contract/test_bot_lifecycle_extraction_contract.py``.
+``fastapi`` at module scope. Direct warmup and heartbeat behavior is covered by
+``tests/unit/test_lifecycle_helpers.py``.
 
 Owned helpers (verbatim, byte-for-byte semantics with the pre-extract
 ``bot.py`` definitions):
