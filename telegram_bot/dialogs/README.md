@@ -16,7 +16,7 @@ telegram_bot/dialogs
 - demo.py
 - faq.py
 - filter_constants.py
-- filter_dialog.py
+- filter/ — dialog assembly, handlers, getters and state helpers
 - handoff.py
 - root_nav.py
 - settings.py

@@ -8,9 +8,8 @@ Closes the duplication called out in #1614. This module routes consumers
 through ``phonenumbers.is_valid_number`` and E.164 formatting.
 
 This module is intentionally UI-free (no aiogram / no FastAPI) so it can be
-imported from any context without side-effects. The original location at
-``telegram_bot/phone_utils.py`` is kept as a thin re-export shim for back
-compatibility with existing bot internal callers (see #1948).
+imported from any context without side-effects. Callers import
+``src.phone_utils`` directly.
 """
 
 from __future__ import annotations

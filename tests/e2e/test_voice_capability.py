@@ -579,7 +579,7 @@ class _VoiceStack:
 
 async def _build_voice_bot(env: LiveE2EEnv, live: LiveRedis, collection: str, ogg: bytes) -> Any:
     """Assemble the production bot, voice-enabled, over real Redis/Qdrant."""
-    from src.runtime.services.qdrant import QdrantService
+    from src.runtime.qdrant import QdrantService
     from telegram_bot.services.apartment.apartment_extraction_pipeline import (
         ApartmentExtractionPipeline,
     )

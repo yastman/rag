@@ -2,14 +2,14 @@
 
 ``_build_trace_metadata`` was moved from ``telegram_bot/bot.py`` into
 ``telegram_bot/_bot_observability.py``, then homed to
-``telegram_bot/observability/bot_observability.py`` (card_2a71ec058138).
+``telegram_bot/observability/trace.py`` (card_2a71ec058138).
 
 ``_write_voice_error_scores`` was removed in #2942 when the voice handlers and
 their Langfuse score paths were deleted from the bot.
 
 Pinned properties:
 
-* ``telegram_bot.observability.bot_observability`` exists and exposes ``_build_trace_metadata``.
+* ``telegram_bot.observability.trace`` exists and exposes ``_build_trace_metadata``.
 * The module avoids aiogram / langgraph / fastapi imports so it stays
   cheap to import in tests.
 * ``telegram_bot.bot`` re-exports ``_build_trace_metadata`` via a thin wrapper.
@@ -30,7 +30,7 @@ pytestmark = pytest.mark.requires_extras
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
-HELPERS_PY = REPO_ROOT / "telegram_bot" / "observability" / "bot_observability.py"
+HELPERS_PY = REPO_ROOT / "telegram_bot" / "observability" / "trace.py"
 
 # Baseline carried forward from #1265 Slice 1 PR-1 (refactor/1265-bot-state-helpers-extract).
 # Each subsequent slice in the published plan must ratchet this number down.
@@ -39,7 +39,7 @@ BOT_PY_LINE_COUNT_CEILING = 4846
 
 def test_bot_observability_helpers_module_exists() -> None:
     assert HELPERS_PY.exists(), (
-        "card_2a71ec058138: telegram_bot/observability/bot_observability.py is the new home "
+        "card_2a71ec058138: telegram_bot/observability/trace.py is the new home "
         "for _build_trace_metadata (homed from _bot_observability.py)."
     )
 
@@ -50,15 +50,15 @@ def test_extracted_helpers_module_has_no_aiogram_or_fastapi_imports() -> None:
     text = HELPERS_PY.read_text(encoding="utf-8")
     for forbidden in ("aiogram", "langgraph", "langchain", "fastapi"):
         assert f"import {forbidden}" not in text and f"from {forbidden}" not in text, (
-            f"telegram_bot/observability/bot_observability.py must not import {forbidden!r}; "
+            f"telegram_bot/observability/trace.py must not import {forbidden!r}; "
             "it is a pure observability dict/score helper module."
         )
 
 
 def test_bot_observability_module_exposes_build_trace_metadata() -> None:
-    module = importlib.import_module("telegram_bot.observability.bot_observability")
+    module = importlib.import_module("telegram_bot.observability.trace")
     assert hasattr(module, "_build_trace_metadata"), (
-        "telegram_bot.observability.bot_observability missing required helper '_build_trace_metadata'."
+        "telegram_bot.observability.trace missing required helper '_build_trace_metadata'."
     )
 
 
@@ -66,7 +66,7 @@ def test_bot_py_re_exports_build_trace_metadata_with_runtime_parity() -> None:
     """telegram_bot.bot._build_trace_metadata must produce identical output to
     the canonical implementation in observability.bot_observability."""
     bot = importlib.import_module("telegram_bot.bot")
-    helpers = importlib.import_module("telegram_bot.observability.bot_observability")
+    helpers = importlib.import_module("telegram_bot.observability.trace")
 
     sample_state = {
         "input_type": "text",

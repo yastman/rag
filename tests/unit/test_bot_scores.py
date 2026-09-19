@@ -101,7 +101,7 @@ async def _run_handle_query(
 ) -> None:
     """Drive handle_query with the assistant-core adapter mocked (#3208 flow)."""
     with (
-        patch("telegram_bot.bot.detect_injection", return_value=(False, 0.0, None)),
+        patch("src.runtime.safety.guard.detect_injection", return_value=(False, 0.0, None)),
         patch(
             "telegram_bot.assistant_core_adapter.run_core_text_request",
             new_callable=AsyncMock,

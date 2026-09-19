@@ -1,7 +1,7 @@
 """Security tests for injection detection and PII masking edge cases (#550)."""
 
+from src.observability import mask_pii
 from src.runtime.safety.guard import detect_injection
-from telegram_bot.observability import mask_pii
 
 
 def test_mask_pii_masks_international_phone_ru():

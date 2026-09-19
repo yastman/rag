@@ -2,16 +2,16 @@
 
 ## Purpose
 
-External service wrappers and adapters for the Telegram bot. Provides focused adapters between the bot and external services: Redis caching, embedding providers, prompt management, and polling locks. Keeps integration concerns separate from business logic in [`../services/`](../services/).
+The Telegram adapter uses shared integrations directly from `src.runtime.integrations`: Redis caching, embedding providers, prompt management and polling locks.
 
 ## Entrypoints
 
 | File | Role |
 |------|------|
-| [`cache.py`](./cache.py) | Re-export shim → `src.runtime.integrations.cache.CacheLayerManager` (5-tier Redis cache; #3010) |
-| [`embeddings.py`](./embeddings.py) | Embedding provider wrappers (shim → `src.runtime.integrations`) |
-| [`prompt_manager.py`](./prompt_manager.py) | Prompt registry / template loading (shim → `src.runtime.integrations`) |
-| [`polling_lock.py`](./polling_lock.py) | Telegram polling lock to prevent duplicate workers |
+| [`src/runtime/integrations/cache.py`](../../src/runtime/integrations/cache.py) | `src.runtime.integrations.cache.CacheLayerManager` (5-tier Redis cache; #3010) |
+| [`src/runtime/integrations/embeddings.py`](../../src/runtime/integrations/embeddings.py) | Embedding providers |
+| [`src/runtime/integrations/prompt_manager.py`](../../src/runtime/integrations/prompt_manager.py) | Prompt registry / template loading |
+| [`src/runtime/integrations/polling_lock.py`](../../src/runtime/integrations/polling_lock.py) | Telegram polling lock to prevent duplicate workers |
 
 ## Boundaries
 

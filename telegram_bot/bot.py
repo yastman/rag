@@ -2,12 +2,11 @@
 
 Module-level helpers are extracted to focused ``_bot_*`` submodules and
 lifecycle/observability subpackages.
-The thin wrappers below preserve the ``from telegram_bot.bot import X``
-import surface for tests that ``patch("telegram_bot.bot.X", ...)``.
+Shared capabilities are imported from their canonical modules.
 
 Extraction map:
   observability/state_helpers (card_2a71ec058138, #1265 PR-1),
-  observability/bot_observability (card_2a71ec058138, #1265 PR-2),
+  observability/trace (card_2a71ec058138, #1265 PR-2),
   pipeline/streaming (#1265 PR-4, card_2a71ec058138 SLICE 3),
   pipeline/supervisor (#2816 Slice 2, card_2a71ec058138 SLICE 3),
   lifecycle/lifecycle (card_2a71ec058138),
@@ -53,10 +52,10 @@ from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.update_dedup import UpdateDeduplicationMiddleware
 from .observability import (
-    bot_observability as _bot_observability,  # card_2a71ec058138: homed to observability/
+    state_helpers as _bot_state_helpers,  # card_2a71ec058138: homed to observability/
 )
 from .observability import (
-    state_helpers as _bot_state_helpers,  # card_2a71ec058138: homed to observability/
+    trace as _bot_observability,  # card_2a71ec058138: homed to observability/
 )
 from .pipeline import streaming as _bot_streaming  # card_2a71ec058138 SLICE 3: moved to pipeline/
 from .pipeline import (
@@ -74,10 +73,6 @@ if TYPE_CHECKING:
 else:
     Services = Any
 
-# Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
-AsyncQdrantClient: Any = None
-
-
 logger = logging.getLogger(__name__)
 
 # --- Checkpoint namespace constants (versioned for safe migration) ---
@@ -86,20 +81,6 @@ _APARTMENT_PAGE_SIZE = 5
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 # Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
 _POLLING_LOCK_MAX_REFRESH_FAILURES = 2
-
-
-def classify_query(*args: Any, **kwargs: Any) -> Any:
-    """Lazy wrapper that keeps module-level patchability for tests."""
-    from src.runtime.routing.classify import classify_query as _classify_query
-
-    return _classify_query(*args, **kwargs)
-
-
-def detect_injection(*args: Any, **kwargs: Any) -> Any:
-    """Lazy wrapper that keeps module-level patchability for tests."""
-    from src.runtime.safety.guard import detect_injection as _detect_injection
-
-    return _detect_injection(*args, **kwargs)
 
 
 def _new_draft_id() -> int:
@@ -126,7 +107,7 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
 
 
 # Re-export from shared module (avoid circular imports with middlewares)
-from .tracing_context import make_session_id as make_session_id  # noqa: E402
+from .observability.context import make_session_id as make_session_id  # noqa: E402
 
 
 def _extract_current_turn(messages: list[Any]) -> list[Any]:
@@ -140,7 +121,7 @@ def _extract_current_turn(messages: list[Any]) -> list[Any]:
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     """Build shared metadata dict for trace (text + voice handlers).
 
-    Re-exported from :mod:`telegram_bot.observability.bot_observability` (card_2a71ec058138).
+    Re-exported from :mod:`telegram_bot.observability.trace` (card_2a71ec058138).
     """
     return _bot_observability._build_trace_metadata(result)
 

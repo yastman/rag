@@ -19,7 +19,7 @@ def _create_bot(config: BotConfig | None = None):
         patch("src.runtime.integrations.cache.CacheLayerManager"),
         patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
         patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-        patch("src.runtime.services.qdrant.QdrantService"),
+        patch("src.runtime.qdrant.QdrantService"),
         patch("src.runtime.config.GraphConfig.create_llm"),
         patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
     ):
@@ -43,7 +43,7 @@ def _create_bot_with_constructor_spies(config: BotConfig | None = None):
         patch("src.runtime.integrations.cache.CacheLayerManager") as spies["cache"],
         patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings") as spies["hybrid"],
         patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings") as spies["sparse"],
-        patch("src.runtime.services.qdrant.QdrantService") as spies["qdrant"],
+        patch("src.runtime.qdrant.QdrantService") as spies["qdrant"],
         patch("src.runtime.config.GraphConfig.create_llm"),
         patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
         patch("telegram_bot.bot.setup_throttling_middleware") as spies["throttle_mw"],
@@ -164,7 +164,7 @@ def _start_patches(bot):
     stack = ExitStack()
     stack.enter_context(
         patch(
-            "telegram_bot.preflight.check_dependencies",
+            "telegram_bot.preflight.checks.check_dependencies",
             new_callable=AsyncMock,
             return_value={"postgres": True, "redis": True, "qdrant": True},
         )
@@ -205,13 +205,13 @@ class TestPropertyBotStart:
 
     async def test_preflight_failure_propagates(self):
         """When check_dependencies raises PreflightError, start() re-raises."""
-        from telegram_bot.preflight import PreflightError
+        from telegram_bot.preflight.checks import PreflightError
 
         bot = _create_bot()
 
         with (
             patch(
-                "telegram_bot.preflight.check_dependencies",
+                "telegram_bot.preflight.checks.check_dependencies",
                 new_callable=AsyncMock,
                 side_effect=PreflightError(failed_deps=["redis"], report=StartupReport()),
             ),
@@ -233,7 +233,7 @@ class TestPropertyBotStart:
         with _start_patches(bot):
             with (
                 patch(
-                    "telegram_bot.preflight.check_dependencies",
+                    "telegram_bot.preflight.checks.check_dependencies",
                     new_callable=AsyncMock,
                     return_value={"postgres": False, "redis": True, "qdrant": True},
                 ),

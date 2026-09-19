@@ -1,7 +1,7 @@
 """Observability helpers: trace metadata builder.
 
 Moved from ``telegram_bot/_bot_observability.py`` into this package
-(card_265772dd6bd4). The old module is kept as a backward-compat shim.
+(card_265772dd6bd4). Import this canonical module directly.
 
 * :func:`_build_trace_metadata` — pure dict transform that flattens the
   per-query graph state into the metadata payload.

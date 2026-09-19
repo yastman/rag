@@ -661,7 +661,7 @@ async def test_multi_instance_two_owner_lock_contention_renewal_loss_and_takeove
 
 async def _preflight_failed_deps(config: Any) -> tuple[list[str], Any]:
     """Run the public preflight gate; return (fatal deps, startup report)."""
-    from telegram_bot.preflight import PreflightError, check_dependencies
+    from telegram_bot.preflight.checks import PreflightError, check_dependencies
 
     try:
         result = await check_dependencies(config, log_summary=False)

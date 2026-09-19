@@ -179,7 +179,7 @@ async def setup_preflight(bot: Any) -> tuple[Any, Any]:
     from telegram_bot.startup_status import StartupReport
 
     startup_report = StartupReport()
-    from telegram_bot.preflight import PreflightError, check_dependencies
+    from telegram_bot.preflight.checks import PreflightError, check_dependencies
 
     try:
         preflight_result = await check_dependencies(bot.config, log_summary=False)
@@ -443,7 +443,7 @@ def setup_dialogs(bot: Any) -> None:
     from telegram_bot.dialogs.client_menu import client_menu_dialog
     from telegram_bot.dialogs.demo import demo_dialog
     from telegram_bot.dialogs.faq import faq_dialog
-    from telegram_bot.dialogs.filter_dialog import filter_dialog
+    from telegram_bot.dialogs.filter.dialog import filter_dialog
     from telegram_bot.dialogs.funnel import funnel_dialog
     from telegram_bot.dialogs.handoff import handoff_dialog
     from telegram_bot.dialogs.settings import settings_dialog

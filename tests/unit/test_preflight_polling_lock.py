@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.preflight import check_polling_lock
+from telegram_bot.preflight.checks import check_polling_lock
 
 
 @pytest.mark.asyncio

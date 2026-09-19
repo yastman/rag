@@ -138,7 +138,7 @@ class _FakeBgeClient:
 
 async def test_backfill_enables_server_side_colbert_search(tmp_path):
     from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
-    from src.runtime.services.qdrant import QdrantService
+    from src.runtime.qdrant import QdrantService
 
     storage = _FakeQdrantStorage()
     storage.points[1] = _StoredPoint(

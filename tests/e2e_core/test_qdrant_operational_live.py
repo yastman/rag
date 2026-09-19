@@ -3,7 +3,7 @@
 One live lane proving the database is USEFUL, not merely listening: a fresh
 run-owned collection with the production schema receives dense + sparse +
 ColBERT points, answers retrieval through the production
-:class:`~src.runtime.services.qdrant.QdrantService` (RRF fusion and server-side
+:class:`~src.runtime.qdrant.QdrantService` (RRF fusion and server-side
 ColBERT MaxSim reranking), and survives a controlled container restart.
 Deterministic unit vectors isolate the Qdrant boundary — no BGE, no LLM, no
 Redis, no PostgreSQL, no Telegram, no external network.
@@ -69,8 +69,7 @@ import httpx
 import pytest
 from qdrant_client import QdrantClient, models
 
-from src.runtime.qdrant import contracts
-from src.runtime.services.qdrant import QdrantService
+from src.runtime.qdrant import QdrantService, contracts
 from tests.e2e_core.live_harness import (
     LiveE2EEnv,
     RunNamespace,

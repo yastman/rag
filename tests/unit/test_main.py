@@ -218,7 +218,7 @@ class TestMainFunction:
 
     async def test_main_handles_polling_lock_busy_without_traceback(self):
         """Polling lock conflicts should exit non-zero with concise operator log."""
-        from telegram_bot.integrations.polling_lock import PollingLockBusy
+        from src.runtime.integrations.polling_lock import PollingLockBusy
 
         mock_property_bot_instance = AsyncMock()
         lock_error = PollingLockBusy(

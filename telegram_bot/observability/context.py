@@ -1,7 +1,7 @@
 """Shared tracing helpers — unified session ID.
 
 Moved from ``telegram_bot/tracing_context.py`` into this package
-(card_265772dd6bd4). The old module is kept as a backward-compat shim.
+(card_265772dd6bd4). Import this canonical module directly.
 """
 
 from __future__ import annotations

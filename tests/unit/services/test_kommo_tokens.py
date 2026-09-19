@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 
@@ -20,7 +22,7 @@ def mock_redis():
 
 @pytest.fixture
 def token_store(mock_redis):
-    from telegram_bot.services.crm.kommo_tokens import KommoTokenStore
+    from src.services.kommo_tokens import KommoTokenStore
 
     return KommoTokenStore(
         redis=mock_redis,
@@ -190,3 +192,55 @@ class TestKommoTokenStore:
             token = await token_store.initialize(authorization_code=None)
             assert token == "seeded_token"
             mock_refresh.assert_not_called()
+
+
+async def test_concurrent_force_refresh_posts_once_and_returns_rotated_token(mock_redis):
+    from src.services.kommo_tokens import KommoTokenStore
+
+    tokens = {"access_token": "expired", "refresh_token": "old-refresh", "expires_at": "0"}
+    first_post = asyncio.Event()
+    second_read = asyncio.Event()
+    reads = 0
+
+    async def read_tokens(_key):
+        nonlocal reads
+        reads += 1
+        if reads == 3:
+            second_read.set()
+        return {key.encode(): value.encode() for key, value in tokens.items()}
+
+    async def write_tokens(_key, *, mapping):
+        tokens.update({key: str(value) for key, value in mapping.items()})
+
+    async def post_tokens(url, **kwargs):
+        first_post.set()
+        await asyncio.wait_for(second_read.wait(), timeout=2)
+        return httpx.Response(
+            200,
+            request=httpx.Request("POST", url),
+            json={
+                "access_token": "new-access",
+                "refresh_token": "new-refresh",
+                "expires_in": 3600,
+            },
+        )
+
+    mock_redis.hgetall.side_effect = read_tokens
+    mock_redis.hset.side_effect = write_tokens
+    store = KommoTokenStore(
+        redis=mock_redis,
+        subdomain="test",
+        client_id="id",
+        client_secret="secret",
+        redirect_uri="https://example.test/callback",
+    )
+    post = AsyncMock(side_effect=post_tokens)
+    with patch("src.services.kommo_tokens.httpx.AsyncClient") as client:
+        client.return_value.__aenter__.return_value.post = post
+        async with asyncio.TaskGroup() as tasks:
+            first = tasks.create_task(store.force_refresh())
+            await asyncio.wait_for(first_post.wait(), timeout=2)
+            second = tasks.create_task(store.force_refresh())
+    assert first.result() == second.result() == "new-access"
+    post.assert_awaited_once()
+    assert tokens["refresh_token"] == "new-refresh"

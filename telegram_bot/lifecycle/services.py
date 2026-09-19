@@ -57,7 +57,7 @@ def build_services(config: BotConfig) -> Services:
     from src.runtime.integrations.cache import CacheLayerManager
     from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
     from src.runtime.integrations.redis_mode import redis_mode_policy
-    from src.runtime.services.qdrant import QdrantService
+    from src.runtime.qdrant import QdrantService
     from telegram_bot.services.apartment.apartments_service import ApartmentsService
 
     graph_config = GraphConfig(

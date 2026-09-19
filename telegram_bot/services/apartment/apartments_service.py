@@ -9,8 +9,8 @@ from uuid import UUID
 from qdrant_client import models
 
 from src.runtime.domain_defaults import DEMO_CITY_PROMPT_FORMS
+from src.runtime.qdrant import QdrantService
 from src.runtime.qdrant.contracts import build_payload_filter
-from src.runtime.services.qdrant import QdrantService
 
 
 logger = logging.getLogger(__name__)

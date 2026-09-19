@@ -52,9 +52,9 @@ def _recorders(redis_passes: bool):
 def _patched(redis_passes: bool):
     probed, single, critical = _recorders(redis_passes)
     return probed, (
-        patch("telegram_bot.preflight._check_single_dep", side_effect=single),
-        patch("telegram_bot.preflight._check_critical_with_retry", side_effect=critical),
-        patch("telegram_bot.preflight.CRITICAL_RETRY_DELAY", 0),
+        patch("telegram_bot.preflight.checks._check_single_dep", side_effect=single),
+        patch("telegram_bot.preflight.checks._check_critical_with_retry", side_effect=critical),
+        patch("telegram_bot.preflight.checks.CRITICAL_RETRY_DELAY", 0),
     )
 
 

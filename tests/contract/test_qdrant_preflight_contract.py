@@ -18,7 +18,7 @@ import pytest
 
 pytest.importorskip("asyncpg", reason="telegram extra required")
 
-from telegram_bot.preflight import _build_dependency_report, _check_single_dep
+from telegram_bot.preflight.checks import _build_dependency_report, _check_single_dep
 
 
 def _contract_payload_schema(role: str) -> dict:
@@ -78,7 +78,7 @@ async def test_qdrant_grpc_exception_can_fallback_to_rest_transport(caplog):
 
     with (
         patch(
-            "telegram_bot.preflight.AsyncQdrantClient",
+            "telegram_bot.preflight.checks.AsyncQdrantClient",
             side_effect=[Exception(), fallback_client],
         ) as create_client,
         caplog.at_level(logging.WARNING),
@@ -119,7 +119,7 @@ async def test_qdrant_grpc_collection_exists_exception_can_fallback_to_rest_tran
     fallback_client = _ready_client(_collection_info(points=7))
 
     with patch(
-        "telegram_bot.preflight.AsyncQdrantClient",
+        "telegram_bot.preflight.checks.AsyncQdrantClient",
         side_effect=[primary_client, fallback_client],
     ) as create_client:
         client = AsyncMock(spec=httpx.AsyncClient)
@@ -147,7 +147,10 @@ async def test_qdrant_empty_exceptions_are_reported_in_dependency_summary():
     reasons: dict[str, str] = {}
 
     with (
-        patch("telegram_bot.preflight.AsyncQdrantClient", side_effect=[Exception(), Exception()]),
+        patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient",
+            side_effect=[Exception(), Exception()],
+        ),
     ):
         client = AsyncMock(spec=httpx.AsyncClient)
         result = await _check_single_dep("qdrant", config, client, failure_reasons=reasons)

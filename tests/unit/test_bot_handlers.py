@@ -25,7 +25,7 @@ from telegram_bot.handlers.command_handlers import (
     cmd_start,
     cmd_stats,
 )
-from telegram_bot.preflight import PreflightError
+from telegram_bot.preflight.checks import PreflightError
 from telegram_bot.startup_status import DependencyCheckResult, StartupReport
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -85,7 +85,7 @@ class TestPropertyBotInit:
             patch("src.runtime.integrations.cache.CacheLayerManager"),
             patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-            patch("src.runtime.services.qdrant.QdrantService"),
+            patch("src.runtime.qdrant.QdrantService"),
             patch("src.runtime.config.GraphConfig.create_llm", return_value=MagicMock()),
             patch(
                 "telegram_bot.services.apartment.apartments_service.ApartmentsService",
@@ -121,7 +121,7 @@ class TestPropertyBotInit:
             patch("src.runtime.integrations.cache.CacheLayerManager"),
             patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-            patch("src.runtime.services.qdrant.QdrantService"),
+            patch("src.runtime.qdrant.QdrantService"),
             patch("src.runtime.config.GraphConfig.create_llm", return_value=MagicMock()),
             patch(
                 "telegram_bot.services.apartment.apartments_service.ApartmentsService",
@@ -161,7 +161,7 @@ class TestPropertyBotInit:
             patch("src.runtime.integrations.cache.CacheLayerManager"),
             patch("src.runtime.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
-            patch("src.runtime.services.qdrant.QdrantService"),
+            patch("src.runtime.qdrant.QdrantService"),
             patch("src.runtime.config.GraphConfig.create_llm", return_value=MagicMock()),
             patch(
                 "telegram_bot.services.apartment.apartments_service.ApartmentsService",
@@ -495,7 +495,7 @@ class TestHandleQuery:
         bot = make_property_bot(mock_config)
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -514,7 +514,7 @@ class TestHandleQuery:
         bot = make_property_bot(mock_config)
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -533,7 +533,7 @@ class TestHandleQuery:
         meta = {}
         message = _make_text_message("квартиры")
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -551,7 +551,7 @@ class TestHandleQuery:
         bot = make_property_bot(mock_config)
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -577,7 +577,7 @@ class TestHandleQuery:
         long_response = "x" * 10050
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -604,8 +604,8 @@ class TestPreAgentGuard:
         bot = make_property_bot(mock_config)
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch("telegram_bot.bot.detect_injection", return_value=(False, 0.0, None)),
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
+            patch("src.runtime.safety.guard.detect_injection", return_value=(False, 0.0, None)),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -624,8 +624,8 @@ class TestPreAgentGuard:
         bot = make_property_bot(mock_config)
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch("telegram_bot.bot.detect_injection") as mock_detect,
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
+            patch("src.runtime.safety.guard.detect_injection") as mock_detect,
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -645,9 +645,9 @@ class TestPreAgentGuard:
         bot = make_property_bot(mock_config)
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("src.runtime.routing.classify.classify_query", return_value="FAQ"),
             patch(
-                "telegram_bot.bot.detect_injection",
+                "src.runtime.safety.guard.detect_injection",
                 return_value=(True, 0.9, "prompt_injection"),
             ),
             patch(
@@ -680,7 +680,7 @@ class TestBotLifecycle:
         bot.bot.set_my_commands = AsyncMock()
         bot.bot.set_chat_menu_button = AsyncMock()
 
-        with patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock):
+        with patch("telegram_bot.preflight.checks.check_dependencies", new_callable=AsyncMock):
             await bot.start()
 
         bot._cache.initialize.assert_called_once()
@@ -700,7 +700,7 @@ class TestBotLifecycle:
         bot.bot.set_my_commands = AsyncMock()
         bot.bot.set_chat_menu_button = AsyncMock()
 
-        with patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock):
+        with patch("telegram_bot.preflight.checks.check_dependencies", new_callable=AsyncMock):
             await bot.start()
 
         bot._cache.initialize.assert_not_called()
@@ -722,7 +722,7 @@ class TestBotLifecycle:
 
         with (
             patch(
-                "telegram_bot.preflight.check_dependencies",
+                "telegram_bot.preflight.checks.check_dependencies",
                 new_callable=AsyncMock,
                 side_effect=preflight_error,
             ),
@@ -751,7 +751,7 @@ class TestBotLifecycle:
 
         with (
             patch(
-                "telegram_bot.preflight.check_dependencies",
+                "telegram_bot.preflight.checks.check_dependencies",
                 new_callable=AsyncMock,
                 return_value=result,
             ),
@@ -795,7 +795,7 @@ class TestBotLifecycle:
             return real_task
 
         with (
-            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch("telegram_bot.preflight.checks.check_dependencies", new_callable=AsyncMock),
             patch(
                 "src.runtime.integrations.polling_lock.RedisPollingLock",
                 return_value=polling_lock,
@@ -831,7 +831,7 @@ class TestBotLifecycle:
 
         with (
             patch(
-                "telegram_bot.preflight.check_dependencies",
+                "telegram_bot.preflight.checks.check_dependencies",
                 new_callable=AsyncMock,
                 return_value=result,
             ),

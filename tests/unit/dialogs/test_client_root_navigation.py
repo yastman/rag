@@ -39,7 +39,7 @@ async def test_root_menu_button_from_nested_flow_returns_to_reply_keyboard_root(
 
 
 def test_filter_dialog_contains_main_menu_button():
-    from telegram_bot.dialogs.filter_dialog import filter_dialog
+    from telegram_bot.dialogs.filter.dialog import filter_dialog
 
     button_ids = {
         getattr(widget, "widget_id", "")
