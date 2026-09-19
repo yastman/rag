@@ -7,10 +7,12 @@ import json
 import os
 import re
 import secrets
+import socket
 import subprocess
 import sys
 import uuid
 import xml.etree.ElementTree as ET
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -175,7 +177,7 @@ def cleanup(compose: list[str], run_dir: Path, env: dict[str, str]) -> None:
         raise RuntimeError("run-owned resources remain after teardown")
 
 
-def write_inputs(run_dir: Path, model_dir: Path, password: str) -> Path:
+def write_inputs(run_dir: Path, model_dir: Path, password: str, ports: dict[str, int]) -> Path:
     (run_dir / "ingestion").mkdir()
     values = {
         "COMPOSE_PROJECT_NAME": project_name(run_dir.name),
@@ -197,7 +199,7 @@ def write_inputs(run_dir: Path, model_dir: Path, password: str) -> Path:
     for service, port in (("postgres", 5432), ("redis", 6379), ("qdrant", 6333), ("bge-m3", 8000)):
         override += (
             f"  {service}:\n    networks: [default, host_access]\n"
-            f'    ports: !override\n      - "127.0.0.1::{port}"\n'
+            f'    ports: !override\n      - "127.0.0.1:{ports[service]}:{port}"\n'
         )
     adapter = json.dumps((ROOT / "tests/e2e_core/bot_runtime.py").as_posix())
     health = (
@@ -266,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     run_dir.mkdir(parents=True, exist_ok=False)
     password = secrets.token_hex(16)
-    env_file = write_inputs(run_dir, model_dir, password)
+    env_file = run_dir / "compose.env"
     compose = [
         "docker",
         "compose",
@@ -301,9 +303,20 @@ def main(argv: list[str] | None = None) -> int:
         "cleaned": False,
     }
     try:
-        rendered = command([*compose, "--profile", "full", "config", "--services"], env)
-        if set(rendered.splitlines()) != SERVICES:
-            raise ValueError("rendered topology is not the required six services")
+        # Ask the OS for run-local ports, then pin them in Compose. Docker's
+        # published port 0 may be allocated again on restart (Docker Desktop).
+        with ExitStack() as reservations:
+            ports = {}
+            for service in ("postgres", "redis", "qdrant", "bge-m3"):
+                reservation = reservations.enter_context(socket.socket())
+                reservation.bind(("127.0.0.1", 0))
+                ports[service] = reservation.getsockname()[1]
+            write_inputs(run_dir, model_dir, password, ports)
+            rendered = command([*compose, "--profile", "full", "config", "--services"], env)
+            if set(rendered.splitlines()) != SERVICES:
+                raise ValueError("rendered topology is not the required six services")
+        # Release immediately before Docker binds; a racing bind fails up,
+        # and the normal run-owned cleanup retains the failure evidence.
         print(f"Starting four dependencies for {project}", flush=True)
         command(
             [
@@ -332,9 +345,10 @@ def main(argv: list[str] | None = None) -> int:
             ("bge-m3", 8000),
         ):
             address = command([*compose, "port", service, str(port)], env)
-            if not re.fullmatch(r"127\.0\.0\.1:\d+", address):
+            expected = f"127.0.0.1:{ports[service]}"
+            if address != expected:
                 raise ValueError(
-                    f"expected one loopback ephemeral endpoint for {service}, got {address!r}"
+                    f"expected reserved endpoint {expected!r} for {service}, got {address!r}"
                 )
             endpoints[service] = address
         test_env = {

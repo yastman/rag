@@ -1,6 +1,7 @@
 """Promotion cannot turn absent or skipped evidence into success."""
 
 import json
+import socket
 import subprocess
 from pathlib import Path
 
@@ -77,7 +78,10 @@ def test_snapshot_requires_six_owned_healthy_services(monkeypatch, fault):
         gate.service_snapshot(["docker", "compose"], "rag-e2e-012345abcdef", {})
 
 
-@pytest.mark.parametrize("failure", [None, "build", "endpoint", "bootstrap", "skip", "test"])
+@pytest.mark.parametrize(
+    "failure",
+    [None, "build", "collision", "endpoint", "wrong_endpoint", "bootstrap", "skip", "test"],
+)
 def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeypatch, failure):
     monkeypatch.setattr(gate, "ROOT", tmp_path)
     monkeypatch.setattr(gate, "resources", lambda *_: {})
@@ -85,6 +89,7 @@ def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeyp
         gate, "service_snapshot", lambda *_a, **_k: [{"service": "bot", "healthy": True}]
     )
     calls = []
+    published = {}
     run_dir = tmp_path / "logs/e2e-full/012345abcdef"
     existing_state = tmp_path / ".apartments_ingestion_state_apartments.json"
     existing_state.write_text("existing operator state")
@@ -100,8 +105,8 @@ def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeyp
             assert _env["PYTHONPATH"] == str(tmp_path)
             assert _env["PYTHON_DOTENV_DISABLED"] == "1"
             assert _env["QDRANT_COLLECTION"] == "e2e_012345abcdef_documents"
-            for flag in ("--qdrant-url", "--bge-url"):
-                assert args[args.index(flag) + 1] == "http://127.0.0.1:12345"
+            for flag, service in (("--qdrant-url", "qdrant"), ("--bge-url", "bge-m3")):
+                assert args[args.index(flag) + 1] == f"http://127.0.0.1:{published[service]}"
             assert (
                 Path(args[args.index("--apartments-csv") + 1]) == tmp_path / "data/apartments.csv"
             )
@@ -114,11 +119,30 @@ def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeyp
         if "rev-parse" in args:
             return "frozen-sha"
         if "--services" in args:
+            overlay = yaml.load(
+                (run_dir / "compose.override.yml").read_text(), Loader=yaml.BaseLoader
+            )
+            for service in ("postgres", "redis", "qdrant", "bge-m3"):
+                host, port, _target = overlay["services"][service]["ports"][0].split(":")
+                assert host == "127.0.0.1" and port.isdigit() and int(port) > 0
+                published[service] = int(port)
+                with socket.socket() as probe, pytest.raises(OSError):
+                    probe.bind((host, int(port)))
+            assert len(set(published.values())) == 4
             return "\n".join(gate.SERVICES)
+        if "up" in args:
+            for port in published.values():
+                with socket.socket() as probe:
+                    probe.bind(("127.0.0.1", port))
+            if failure == "collision":
+                raise RuntimeError("port is already allocated")
         if "--build" in args and failure == "build":
             raise RuntimeError("build failed")
         if "port" in args:
-            return "invalid IP:0" if failure == "endpoint" else "127.0.0.1:12345"
+            if failure == "endpoint":
+                return "invalid IP:0"
+            port = published[args[-2]]
+            return f"127.0.0.1:{port + 1 if failure == 'wrong_endpoint' else port}"
         return ""
 
     def pytest_run(args, **kwargs):
@@ -148,7 +172,7 @@ def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeyp
     if failure == "endpoint":
         assert "postgres" in evidence["error"]
         assert repr("invalid IP:0") in evidence["error"]
-    if failure in {"build", "endpoint", "bootstrap"}:
+    if failure in {"build", "collision", "endpoint", "wrong_endpoint", "bootstrap"}:
         assert len(starts) == 1
         assert evidence["suites"] == []
     else:
@@ -277,7 +301,8 @@ def test_only_controlled_qdrant_restart_has_a_budget(monkeypatch, restarts):
 def test_generated_topology_limits_host_access_to_dependencies(tmp_path):
     run_dir = tmp_path / "012345abcdef"
     run_dir.mkdir()
-    gate.write_inputs(run_dir, tmp_path, "generated-test-password")
+    ports = {"postgres": 15432, "redis": 16379, "qdrant": 16333, "bge-m3": 18000}
+    gate.write_inputs(run_dir, tmp_path, "generated-test-password", ports)
     override = yaml.load((run_dir / "compose.override.yml").read_text(), Loader=yaml.BaseLoader)
 
     assert override["networks"] == {
@@ -287,7 +312,43 @@ def test_generated_topology_limits_host_access_to_dependencies(tmp_path):
     for service, port in (("postgres", 5432), ("redis", 6379), ("qdrant", 6333), ("bge-m3", 8000)):
         config = override["services"][service]
         assert set(config["networks"]) == {"default", "host_access"}
-        assert config["ports"] == [f"127.0.0.1::{port}"]
+        assert config["ports"] == [f"127.0.0.1:{ports[service]}:{port}"]
     for service in ("bot", "ingestion"):
         config = override["services"].get(service, {})
         assert config.get("networks", ["default"]) == ["default"]
+
+
+@pytest.mark.parametrize("fail_render", [False, True])
+def test_reserved_ports_are_released_when_render_or_start_fails(tmp_path, monkeypatch, fail_render):
+    monkeypatch.setattr(gate, "ROOT", tmp_path)
+    monkeypatch.setattr(gate, "resources", lambda *_: {})
+    ports = []
+    run_dir = tmp_path / "logs/e2e-full/012345abcdef"
+
+    def command(args, _env, **_kwargs):
+        if "--services" in args:
+            overlay = yaml.load(
+                (run_dir / "compose.override.yml").read_text(), Loader=yaml.BaseLoader
+            )
+            for service in ("postgres", "redis", "qdrant", "bge-m3"):
+                port = int(overlay["services"][service]["ports"][0].split(":")[1])
+                ports.append(port)
+                with socket.socket() as probe, pytest.raises(OSError):
+                    probe.bind(("127.0.0.1", port))
+            if fail_render:
+                raise RuntimeError("render failed")
+            return "\n".join(gate.SERVICES)
+        if "up" in args:
+            raise RuntimeError("start failed")
+        return ""
+
+    monkeypatch.setattr(gate, "command", command)
+    assert gate.main(["--model-dir", str(tmp_path), "--run-id", "012345abcdef"]) == 1
+    assert len(ports) == 4
+    for port in ports:
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", port))
+    evidence = json.loads((run_dir / "result.json").read_text())
+    assert evidence["cleaned"] is True
+    assert evidence["suites"] == []
+    assert evidence["error"] == ("render failed" if fail_render else "start failed")

@@ -50,7 +50,11 @@ starting PostgreSQL, Redis, Qdrant and BGE-M3. It then runs the production
 knowledge collection, preparing both knowledge and `apartments` before starting
 bot and ingestion. Bootstrap failure fails the gate and triggers owned-resource
 cleanup; bot readiness is never bypassed. The fresh `rag-e2e-<run-id>` Compose
-project uses dynamic loopback ports and caps BGE memory at 6 GB. Bootstrap uses
+project reserves four OS-selected loopback ports through Compose rendering, then
+releases them immediately before Docker binds those explicit ports. The ports stay
+fixed for that run, including the Qdrant restart. A bind collision or a published
+endpoint mismatch fails the run before bootstrap; no global port allocation is used.
+BGE memory is capped at 6 GB. Bootstrap uses
 absolute shipped-corpus paths and writes its local apartment ingestion state only
 under `logs/e2e-full/<run-id>/`, preserving any existing operator state.
 Bot and ingestion attach only to the internal default network, without an
