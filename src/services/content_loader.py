@@ -21,8 +21,6 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-import telegram_bot as telegram_bot
-
 
 # ``src/services/content_loader.py`` → ``parents[2]`` is the repo root.
 _CONFIG_DIR = Path(__file__).resolve().parents[2] / "src" / "config"
