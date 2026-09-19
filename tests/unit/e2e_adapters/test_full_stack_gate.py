@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.e2e import full_stack_gate as gate
 
@@ -76,7 +77,7 @@ def test_snapshot_requires_six_owned_healthy_services(monkeypatch, fault):
         gate.service_snapshot(["docker", "compose"], "rag-e2e-012345abcdef", {})
 
 
-@pytest.mark.parametrize("failure", [None, "build", "bootstrap", "skip", "test"])
+@pytest.mark.parametrize("failure", [None, "build", "endpoint", "bootstrap", "skip", "test"])
 def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeypatch, failure):
     monkeypatch.setattr(gate, "ROOT", tmp_path)
     monkeypatch.setattr(gate, "resources", lambda *_: {})
@@ -117,7 +118,7 @@ def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeyp
         if "--build" in args and failure == "build":
             raise RuntimeError("build failed")
         if "port" in args:
-            return "127.0.0.1:12345"
+            return "invalid IP:0" if failure == "endpoint" else "127.0.0.1:12345"
         return ""
 
     def pytest_run(args, **kwargs):
@@ -144,7 +145,10 @@ def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeyp
     assert existing_state.read_text() == "existing operator state"
     starts = [call for call in calls if "up" in call]
     assert set(starts[0][-4:]) == {"postgres", "redis", "qdrant", "bge-m3"}
-    if failure in {"build", "bootstrap"}:
+    if failure == "endpoint":
+        assert "postgres" in evidence["error"]
+        assert repr("invalid IP:0") in evidence["error"]
+    if failure in {"build", "endpoint", "bootstrap"}:
         assert len(starts) == 1
         assert evidence["suites"] == []
     else:
@@ -268,3 +272,22 @@ def test_only_controlled_qdrant_restart_has_a_budget(monkeypatch, restarts):
             )
             == 6
         )
+
+
+def test_generated_topology_limits_host_access_to_dependencies(tmp_path):
+    run_dir = tmp_path / "012345abcdef"
+    run_dir.mkdir()
+    gate.write_inputs(run_dir, tmp_path, "generated-test-password")
+    override = yaml.load((run_dir / "compose.override.yml").read_text(), Loader=yaml.BaseLoader)
+
+    assert override["networks"] == {
+        "default": {"internal": "true"},
+        "host_access": {"driver": "bridge"},
+    }
+    for service, port in (("postgres", 5432), ("redis", 6379), ("qdrant", 6333), ("bge-m3", 8000)):
+        config = override["services"][service]
+        assert set(config["networks"]) == {"default", "host_access"}
+        assert config["ports"] == [f"127.0.0.1::{port}"]
+    for service in ("bot", "ingestion"):
+        config = override["services"].get(service, {})
+        assert config.get("networks", ["default"]) == ["default"]

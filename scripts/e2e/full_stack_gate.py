@@ -195,7 +195,10 @@ def write_inputs(run_dir: Path, model_dir: Path, password: str) -> Path:
     # !override replaces fixed development ports rather than merging them.
     override = "services:\n"
     for service, port in (("postgres", 5432), ("redis", 6379), ("qdrant", 6333), ("bge-m3", 8000)):
-        override += f'  {service}:\n    ports: !override\n      - "127.0.0.1::{port}"\n'
+        override += (
+            f"  {service}:\n    networks: [default, host_access]\n"
+            f'    ports: !override\n      - "127.0.0.1::{port}"\n'
+        )
     adapter = json.dumps((ROOT / "tests/e2e_core/bot_runtime.py").as_posix())
     health = (
         "import os,time,httpx,redis; from pathlib import Path; p=Path('/tmp/e2e-polling'); "
@@ -225,6 +228,8 @@ def write_inputs(run_dir: Path, model_dir: Path, password: str) -> Path:
 networks:
   default:
     internal: true
+  host_access:
+    driver: bridge
 """
     (run_dir / "compose.override.yml").write_text(override, encoding="utf-8")
     return env_file
@@ -328,7 +333,9 @@ def main(argv: list[str] | None = None) -> int:
         ):
             address = command([*compose, "port", service, str(port)], env)
             if not re.fullmatch(r"127\.0\.0\.1:\d+", address):
-                raise ValueError(f"expected one loopback ephemeral endpoint for {service}")
+                raise ValueError(
+                    f"expected one loopback ephemeral endpoint for {service}, got {address!r}"
+                )
             endpoints[service] = address
         test_env = {
             **env,

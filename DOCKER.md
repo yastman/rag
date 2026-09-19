@@ -53,7 +53,11 @@ cleanup; bot readiness is never bypassed. The fresh `rag-e2e-<run-id>` Compose
 project uses dynamic loopback ports and caps BGE memory at 6 GB. Bootstrap uses
 absolute shipped-corpus paths and writes its local apartment ingestion state only
 under `logs/e2e-full/<run-id>/`, preserving any existing operator state.
-Its isolated network has no external gateway. The bot executes production
+Bot and ingestion attach only to the internal default network, without an
+external gateway. Only PostgreSQL, Redis, Qdrant and BGE-M3 also attach to the
+run-owned `host_access` bridge so Docker can publish their ephemeral ports on
+`127.0.0.1` for the host test processes. Both networks remain scoped to the
+Compose project and are removed by its cleanup. The bot executes production
 `telegram_bot.main` with a test-only aiogram transport; health requires recent
 entry into the real Dispatcher polling loop. The ingestion service runs the
 production watcher against an empty run-owned input directory. The existing
