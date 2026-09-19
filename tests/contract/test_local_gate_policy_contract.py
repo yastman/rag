@@ -16,7 +16,7 @@ _ALLOWED_HOSTED_ACTIONS = {
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4",
     "docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf",
-    "docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee",
+    "docker/login-action@dbcb813823bdd20940b903addbd779551569679f",
     "docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9",
     "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069",
     "github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd",
