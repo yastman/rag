@@ -164,7 +164,7 @@ def test_build_live_core_harness_accepts_config_override() -> None:
 def test_failing_llm_config_raises_provider_error() -> None:
     from tests.e2e_core.live_harness import FailingLLMConfig
 
-    llm = FailingLLMConfig(error_message="provider down").create_llm(auto_trace=False)
+    llm = FailingLLMConfig(error_message="provider down").create_llm()
 
     with pytest.raises(TimeoutError, match="provider down"):
         asyncio.run(llm.completion(model="fake", messages=[]))
@@ -185,7 +185,7 @@ def test_fake_llm_config_builds_grounded_answer_from_context() -> None:
     from tests.e2e_core.live_harness import FakeLLMConfig
 
     config = FakeLLMConfig()
-    llm = config.create_llm(auto_trace=False)
+    llm = config.create_llm()
 
     messages = [
         {"role": "system", "content": "test"},

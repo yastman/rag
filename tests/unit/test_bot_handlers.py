@@ -38,7 +38,6 @@ def mock_config(monkeypatch):
         _env_file=None,
         telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         llm_api_key="llm-key",
-        llm_base_url="https://api.example.com/v1",
         llm_model="gpt-4o-mini",
         qdrant_url="http://localhost:6333",
         qdrant_api_key="qdrant-key",

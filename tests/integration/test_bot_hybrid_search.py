@@ -24,7 +24,6 @@ def _make_config() -> BotConfig:
     return BotConfig(
         telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
         llm_api_key="test-llm-key",
-        llm_base_url="https://api.example.com/v1",
         llm_model="test-model",
         qdrant_url="http://localhost:6333",
         qdrant_api_key="",

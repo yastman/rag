@@ -61,7 +61,6 @@ def build_services(config: BotConfig) -> Services:
     from telegram_bot.services.apartment.apartments_service import ApartmentsService
 
     graph_config = GraphConfig(
-        llm_base_url=config.llm_base_url,
         llm_api_key=config.llm_api_key,
         llm_model=config.llm_model,
         bge_m3_url=config.bge_m3_url,

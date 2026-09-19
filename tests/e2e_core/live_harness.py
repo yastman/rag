@@ -472,7 +472,7 @@ class FakeLLMConfig:
     response_style_enabled = False
     response_style_shadow_mode = False
 
-    def create_llm(self, *, auto_trace: bool = False) -> Any:
+    def create_llm(self) -> Any:
         return _FakeLLM()
 
     def get_reasoning_kwargs(self) -> dict[str, Any]:
@@ -492,7 +492,7 @@ class FailingLLMConfig:
     response_style_enabled: bool = False
     response_style_shadow_mode = False
 
-    def create_llm(self, *, auto_trace: bool = False) -> Any:
+    def create_llm(self) -> Any:
         return _FailingLLM(self.error_message)
 
     def get_reasoning_kwargs(self) -> dict[str, Any]:

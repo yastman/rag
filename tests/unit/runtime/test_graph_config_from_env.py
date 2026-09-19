@@ -18,7 +18,6 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
         "OPENAI_API_KEY",
         "LLM_MODEL",
         "LLM_TEMPERATURE",
-        "LLM_MAX_TOKENS",
         "GENERATE_MAX_TOKENS",
         "REWRITE_MODEL",
         "REWRITE_MAX_TOKENS",
@@ -44,10 +43,6 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
         "RESPONSE_STYLE_ENABLED",
         "RESPONSE_STYLE_SHADOW_MODE",
         "SHOW_SOURCES",
-        "TTFT_DRIFT_WARN_MS",
-        "SHOW_TRANSCRIPTION",
-        "VOICE_LANGUAGE",
-        "STT_MODEL",
         "GUARD_MODE",
         "CONTENT_FILTER_ENABLED",
         "REASONING_EFFORT",
@@ -63,7 +58,6 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
     # LLM defaults
     assert cfg.llm_model == "gpt-4o-mini"
     assert cfg.llm_temperature == 0.7
-    assert cfg.llm_max_tokens == 4096
     assert cfg.generate_max_tokens == 1024
     assert cfg.rewrite_model == "gpt-4o-mini"
     assert cfg.rewrite_max_tokens == 64
@@ -98,12 +92,6 @@ def test_graph_config_from_env_roundtrip_defaults(monkeypatch: pytest.MonkeyPatc
     assert cfg.response_style_enabled is False
     assert cfg.response_style_shadow_mode is False
     assert cfg.show_sources is False
-    assert cfg.ttft_drift_warn_ms == 500
-
-    # Voice defaults
-    assert cfg.show_transcription is True
-    assert cfg.voice_language == "ru"
-    assert cfg.stt_model == "whisper"
 
     # Security defaults
     assert cfg.guard_mode == "hard"
@@ -114,7 +102,6 @@ def test_graph_config_from_env_roundtrip_overrides(monkeypatch: pytest.MonkeyPat
     """from_env() must pick up env vars with proper type coercion."""
     monkeypatch.setenv("LLM_MODEL", "gpt-4o")
     monkeypatch.setenv("LLM_TEMPERATURE", "0.3")
-    monkeypatch.setenv("LLM_MAX_TOKENS", "2048")
     monkeypatch.setenv("SEARCH_TOP_K", "20")
     monkeypatch.setenv("RERANK_TOP_K", "5")
     monkeypatch.setenv("SHOW_SOURCES", "true")
@@ -133,7 +120,6 @@ def test_graph_config_from_env_roundtrip_overrides(monkeypatch: pytest.MonkeyPat
 
     assert cfg.llm_model == "gpt-4o"
     assert cfg.llm_temperature == pytest.approx(0.3)
-    assert cfg.llm_max_tokens == 2048
     assert cfg.search_top_k == 20
     assert cfg.rerank_top_k == 5
     assert cfg.show_sources is True
@@ -171,3 +157,28 @@ def test_graph_config_from_env_llm_api_key_alias(monkeypatch: pytest.MonkeyPatch
     cfg = _mod.GraphConfig.from_env()
 
     assert cfg.llm_api_key == "sk-test-openai"
+
+
+@pytest.mark.parametrize("from_env", [False, True])
+def test_graph_config_keeps_api_key_out_of_repr(monkeypatch, from_env):
+    from src.runtime.config import GraphConfig
+
+    canary = "graph-secret-repr-canary"
+    monkeypatch.setenv("LLM_API_KEY", canary)
+    config = GraphConfig.from_env() if from_env else GraphConfig(llm_api_key=canary)
+
+    assert config.llm_api_key == canary
+    assert canary not in repr(config)
+    assert canary not in repr(config.llm)
+
+
+def test_direct_config_does_not_load_environment(monkeypatch):
+    from src.runtime.config import GraphConfig
+
+    monkeypatch.setenv("LLM_MODEL", "environment-model")
+    monkeypatch.setenv("REWRITE_MODEL", "environment-rewrite")
+    assert GraphConfig().llm_model == "gpt-4o-mini"
+    assert GraphConfig().rewrite_model == "gpt-4o-mini"
+    assert GraphConfig(llm_model="explicit-model").llm_model == "explicit-model"
+    assert GraphConfig.from_env().llm_model == "environment-model"
+    assert GraphConfig.from_env().rewrite_model == "environment-rewrite"
