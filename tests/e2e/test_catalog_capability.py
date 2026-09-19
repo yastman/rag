@@ -72,6 +72,7 @@ import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import count
 from pathlib import Path
 from typing import Any
 
@@ -123,6 +124,7 @@ _MANAGERS_GROUP_ID = -100_3417_0001
 _BOT_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
 
 _MODULE_LOOP = pytest.mark.asyncio(loop_scope="module")
+_UPDATE_IDS = count(1)
 
 
 # ---------------------------------------------------------------------------
@@ -642,7 +644,7 @@ class _CatalogJourney:
         self.bot = stack.bot
         self.transport = stack.transport
         self.client_id = client_id
-        self._next_update_id = 1
+        self._next_update_id = 0
 
     def _journey_user(self) -> User:
         return User(
@@ -658,7 +660,7 @@ class _CatalogJourney:
         self, text: str | None = None, *, contact: Contact | None = None
     ) -> None:
         await asyncio.sleep(_MESSAGE_PACE_S)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             message=Message(
@@ -674,7 +676,7 @@ class _CatalogJourney:
 
     async def feed_callback(self, data: str) -> None:
         await asyncio.sleep(_CALLBACK_PACE_S)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             callback_query=CallbackQuery(

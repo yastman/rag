@@ -70,6 +70,7 @@ import sys
 from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import count
 from typing import Any
 
 import pytest
@@ -111,6 +112,7 @@ _BANNED_PHONE = "+79991234567"
 _BANNED_PROMPT = "Какие документы нужны для оформления ВНЖ?"
 
 _MODULE_LOOP = pytest.mark.asyncio(loop_scope="module")
+_UPDATE_IDS = count(1)
 
 _SALT_SEQUENCE = itertools.count(1)
 
@@ -298,7 +300,7 @@ class _FeedbackJourney:
         self.bot = stack.bot
         self.transport = transport
         self.client_id = _deterministic_telegram_id(stack.namespace.run_id, next(_SALT_SEQUENCE))
-        self._next_update_id = 1
+        self._next_update_id = 0
 
     @property
     def session_id(self) -> str:
@@ -318,7 +320,7 @@ class _FeedbackJourney:
     async def feed_callback(self, data: str) -> None:
         """One production callback Update through ``Dispatcher.feed_update``."""
         await asyncio.sleep(_CALLBACK_PACE_S)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             callback_query=CallbackQuery(

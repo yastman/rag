@@ -62,6 +62,7 @@ import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import count
 from typing import Any
 
 import pytest
@@ -102,6 +103,7 @@ _BOT_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
 
 _WAITING_PHONE_STATE = "PhoneCollectorStates:waiting_phone"
 _MODULE_LOOP = pytest.mark.asyncio(loop_scope="module")
+_UPDATE_IDS = count(1)
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +339,7 @@ class _FunnelJourney:
         self.bot = bot
         self.transport = transport
         self.client_id = client_id
-        self._next_update_id = 1
+        self._next_update_id = 0
 
     def _journey_user(self) -> User:
         return User(
@@ -353,7 +355,7 @@ class _FunnelJourney:
         self, text: str | None = None, *, contact: Contact | None = None
     ) -> None:
         await asyncio.sleep(_MESSAGE_PACE_S)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             message=Message(
@@ -369,7 +371,7 @@ class _FunnelJourney:
 
     async def feed_callback(self, data: str) -> None:
         await asyncio.sleep(_CALLBACK_PACE_S)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             callback_query=CallbackQuery(

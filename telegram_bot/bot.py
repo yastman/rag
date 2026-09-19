@@ -51,6 +51,7 @@ from .handlers import (
 from .lifecycle import lifecycle as _bot_lifecycle  # card_2a71ec058138: homed to lifecycle/
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
+from .middlewares.update_dedup import UpdateDeduplicationMiddleware
 from .observability import (
     bot_observability as _bot_observability,  # card_2a71ec058138: homed to observability/
 )
@@ -236,6 +237,7 @@ class PropertyBot:
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
+        self.dp.update.outer_middleware(UpdateDeduplicationMiddleware())
         setup_throttling_middleware(self.dp, default_rate=1.0, admin_ids=self.config.admin_ids)
         setup_error_handler(self.dp)
         self.dp.message.outer_middleware(FSMCancelMiddleware())

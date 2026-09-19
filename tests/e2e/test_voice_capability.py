@@ -92,6 +92,7 @@ import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import count
 from pathlib import Path
 from typing import Any
 
@@ -159,6 +160,7 @@ _TRANSCRIPT = "двушка до 90000 евро с видом на море"
 
 _EXTRACTION_CACHE_PREFIX = "extraction:v1:"
 _MODULE_LOOP = pytest.mark.asyncio(loop_scope="module")
+_UPDATE_IDS = count(1)
 
 
 def _synthetic_ogg_opus() -> bytes:
@@ -778,7 +780,7 @@ class _VoiceJourney:
         self.transport: RecordingVoiceTelegramSession = stack.bot.bot.session
         self.stt = stack.stt
         self.client_id = client_id
-        self._next_update_id = 1
+        self._next_update_id = 0
 
     def _journey_user(self) -> User:
         return User(
@@ -799,7 +801,7 @@ class _VoiceJourney:
         document: Document | None = None,
     ) -> None:
         await asyncio.sleep(_MESSAGE_PACE_S)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             message=Message(
@@ -817,7 +819,7 @@ class _VoiceJourney:
 
     async def feed_callback(self, data: str) -> None:
         await asyncio.sleep(_CALLBACK_PACE_S)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             callback_query=CallbackQuery(
