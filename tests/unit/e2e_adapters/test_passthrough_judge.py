@@ -52,6 +52,36 @@ def _price_filter_scenario() -> scenarios.TestScenario:
     )
 
 
+def _price_range_scenario() -> scenarios.TestScenario:
+    return scenarios.TestScenario(
+        id="3.5",
+        name="Price range",
+        query="квартиры от 60000 до 80000 евро",
+        group=scenarios.TestGroup.PRICE_FILTERS,
+        expected_filters=scenarios.ExpectedFilters(price_min=60000, price_max=80000),
+    )
+
+
+def _rooms_filter_scenario() -> scenarios.TestScenario:
+    return scenarios.TestScenario(
+        id="4.2",
+        name="Two rooms",
+        query="двухкомнатная квартира",
+        group=scenarios.TestGroup.ROOM_FILTERS,
+        expected_filters=scenarios.ExpectedFilters(rooms=2),
+    )
+
+
+def _distance_filter_scenario() -> scenarios.TestScenario:
+    return scenarios.TestScenario(
+        id="5.3",
+        name="Distance to sea",
+        query="квартира до 500 метров от моря",
+        group=scenarios.TestGroup.LOCATION_FILTERS,
+        expected_filters=scenarios.ExpectedFilters(distance_to_sea_max=500),
+    )
+
+
 def test_passthrough_judge_chitchat_passes_with_response_presence() -> None:
     judge = PassthroughJudge(E2EConfig())
     result = asyncio.run(judge.evaluate(_chitchat_scenario(), "Привет! Как дела?"))
@@ -298,3 +328,301 @@ def test_price_evidence_fails_digits_before_longer_euro_word() -> None:
     evidence = result.check_details["filter_evidence"]
     assert evidence is not None
     assert evidence["price_max"] is False
+
+
+def test_passthrough_judge_rejects_price_above_requested_maximum() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_price_filter_scenario(), "Подходит квартира за 90 000 евро.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": "expected <= 80000 EUR; observed EUR values: 90000"
+    }
+
+
+def test_passthrough_judge_rejects_price_digits_as_room_evidence() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_rooms_filter_scenario(), "Есть вариант за 120 000 евро."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"rooms": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "rooms": "expected 2 rooms; observed room counts: none"
+    }
+
+
+def test_passthrough_judge_rejects_sea_mention_without_bounded_distance() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_distance_filter_scenario(), "Квартира рядом с морем и пляжем.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"distance_to_sea_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": "expected <= 500 m; observed distances: none"
+    }
+
+
+def test_passthrough_judge_accepts_distance_within_requested_maximum() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_distance_filter_scenario(), "Квартира находится в 450 м от моря.")
+    )
+
+    assert result.passed is True
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"distance_to_sea_max": True}
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": "expected <= 500 m; observed distances: 450"
+    }
+
+
+def test_passthrough_judge_normalizes_complete_decimal_k_price_tokens() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_filter_scenario(), "Цена квартиры 90.5k евро."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": "expected <= 80000 EUR; observed EUR values: 90500"
+    }
+
+
+def test_passthrough_judge_rejects_unsupported_dotted_price_without_suffix_match() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_filter_scenario(), "Цена квартиры 90.000 евро."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": (
+            "expected <= 80000 EUR; observed EUR values: none; unsupported EUR tokens: 90.000"
+        )
+    }
+
+
+def test_passthrough_judge_rejects_conflicting_price_range_values() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(
+            _price_range_scenario(),
+            "Цены квартир 50 000 евро и 100 000 евро.",
+        )
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": False, "price_min": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": "expected <= 80000 EUR; observed EUR values: 50000, 100000",
+        "price_min": "expected >= 60000 EUR; observed EUR values: 50000, 100000",
+    }
+
+
+def test_passthrough_judge_rejects_mixed_prices_for_upper_bound() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_price_filter_scenario(), "Есть варианты за 70 000 евро и 90 000 евро.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": False}
+
+
+def test_passthrough_judge_rejects_decimal_room_token() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_rooms_filter_scenario(), "Есть 2.2-комнатная квартира."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "rooms": ("expected 2 rooms; observed room counts: none; unsupported room tokens: 2.2")
+    }
+
+
+def test_passthrough_judge_rejects_mixed_room_counts() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(
+            _rooms_filter_scenario(),
+            "Есть 2-комнатная квартира и 3-комнатная квартира.",
+        )
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"rooms": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "rooms": "expected 2 rooms; observed room counts: 2, 3"
+    }
+
+
+def test_passthrough_judge_rejects_non_sea_distance_and_distant_sea() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(
+            _distance_filter_scenario(),
+            "До магазина 100 м, до моря 2 км.",
+        )
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"distance_to_sea_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": "expected <= 500 m; observed distances: 2000"
+    }
+
+
+def test_passthrough_judge_rejects_distance_just_above_meter_bound() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_distance_filter_scenario(), "Квартира расположена в 500.4 м от моря.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": "expected <= 500 m; observed distances: 500.4"
+    }
+
+
+def test_passthrough_judge_rejects_distance_just_above_kilometer_bound() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_distance_filter_scenario(), "Квартира расположена в 0.5004 км от моря.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": "expected <= 500 m; observed distances: 500.4"
+    }
+
+
+def test_passthrough_judge_accepts_distance_at_kilometer_bound() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_distance_filter_scenario(), "Квартира расположена в 0.5 км от моря.")
+    )
+
+    assert result.passed is True
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": "expected <= 500 m; observed distances: 500"
+    }
+
+
+def test_passthrough_judge_normalizes_nonbreaking_space_price_grouping() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_price_filter_scenario(), "Цена квартиры 90\u00a0000 евро.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": "expected <= 80000 EUR; observed EUR values: 90000"
+    }
+
+
+def test_passthrough_judge_normalizes_narrow_nonbreaking_space_price_grouping() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_price_filter_scenario(), "Цена квартиры 90\u202f000 евро.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": "expected <= 80000 EUR; observed EUR values: 90000"
+    }
+
+
+def test_passthrough_judge_rejects_valid_price_with_unsupported_price_token() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(
+            _price_filter_scenario(),
+            "Есть варианты за 70 000 евро и 90.000 евро.",
+        )
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": (
+            "expected <= 80000 EUR; observed EUR values: 70000; unsupported EUR tokens: 90.000"
+        )
+    }
+
+
+def test_passthrough_judge_rejects_valid_room_with_unsupported_room_token() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(
+            _rooms_filter_scenario(),
+            "Есть 2-комнатная квартира и 2.2-комнатная квартира.",
+        )
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"rooms": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "rooms": ("expected 2 rooms; observed room counts: 2; unsupported room tokens: 2.2")
+    }
+
+
+def test_passthrough_judge_normalizes_grouped_sea_distance() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_distance_filter_scenario(), "Квартира находится в 1 000 м от моря.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": "expected <= 500 m; observed distances: 1000"
+    }
+
+
+def test_passthrough_judge_normalizes_nonbreaking_space_grouped_sea_distance() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_distance_filter_scenario(), "Квартира находится в 1\u00a0000 м от моря.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": "expected <= 500 m; observed distances: 1000"
+    }
+
+
+def test_passthrough_judge_rejects_valid_distance_with_unsupported_distance_token() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(
+            _distance_filter_scenario(),
+            "Квартира находится в 100 м от моря и 1.000.000 м от моря.",
+        )
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"distance_to_sea_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": (
+            "expected <= 500 m; observed distances: 100; unsupported distance tokens: 1.000.000"
+        )
+    }
