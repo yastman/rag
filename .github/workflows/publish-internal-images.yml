@@ -1,4 +1,4 @@
-name: Publish Internal Images
+name: Publish Action Proof Images
 
 on:
   push:
@@ -27,15 +27,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image_name: rag-bot
+          - image_name: rag-actions-proof-bot
             build_context: .
             dockerfile: telegram_bot/Dockerfile
-          - image_name: rag-ingestion
+          - image_name: rag-actions-proof-ingestion
             build_context: .
             dockerfile: Dockerfile.ingestion
-          - image_name: rag-bge-m3
-            build_context: ./services/bge-m3-api
-            dockerfile: services/bge-m3-api/Dockerfile
 
     steps:
       - name: Resolve release tag
@@ -71,9 +68,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}
           tags: |
-            type=raw,value=${{ steps.version.outputs.value }}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short,prefix=sha-
+            type=raw,value=proof-${{ steps.version.outputs.value }}-${{ github.run_id }}
 
       - name: Build and push image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
