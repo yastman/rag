@@ -66,16 +66,18 @@ class TestUpdateLeadScore:
             )
             assert result["id"] == 5001
 
-    async def test_update_lead_score_retries_on_5xx(self, kommo_client):
+    async def test_update_lead_score_reports_uncertain_on_5xx(self, kommo_client):
+        from src.services.kommo_client import KommoOutcomeUncertain
+
         resp_503 = httpx.Response(503, request=_DUMMY_REQ)
-        resp_200 = httpx.Response(200, json={"id": 5001}, request=_DUMMY_REQ)
         with (
             patch.object(kommo_client._request.retry, "wait", wait_none()),
-            patch.object(kommo_client._client, "request", side_effect=[resp_503, resp_200]),
+            patch.object(kommo_client._client, "request", return_value=resp_503) as send,
+            pytest.raises(KommoOutcomeUncertain),
         ):
-            result = await kommo_client.update_lead_score(
+            await kommo_client.update_lead_score(
                 lead_id=5001,
                 payload={"custom_fields_values": []},
                 idempotency_key="lead-score:11:chat-1:74",
             )
-            assert result["id"] == 5001
+        assert send.await_count == 1
