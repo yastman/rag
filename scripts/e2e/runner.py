@@ -126,7 +126,10 @@ async def run_tests(
     start_time = time.time()
 
     if no_judge:
-        console.print("[yellow]No-judge mode: skipping LLM evaluation[/]")
+        console.print(
+            "[yellow]No-judge mode: deterministic assertions only; "
+            "provider-judge-only scenarios are blocked[/]"
+        )
     else:
         console.print(f"[cyan]Judge provider:[/] {config.judge_provider} ({config.judge_model})")
     if route_proof:
@@ -256,7 +259,10 @@ def main():
     parser.add_argument(
         "--no-judge",
         action="store_true",
-        help="Skip LLM judge — pass any non-empty bot response (no judge credentials needed)",
+        help=(
+            "Use deterministic assertions without an LLM; provider-judge-only scenarios "
+            "cannot pass (no judge credentials needed)"
+        ),
     )
     parser.add_argument(
         "--judge-provider",

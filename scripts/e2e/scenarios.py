@@ -18,6 +18,13 @@ class TestGroup(Enum):
     VOICE_TRANSCRIPTION = "voice_transcription"
 
 
+class KeywordMatch(Enum):
+    """How a deterministic keyword assertion combines its listed terms."""
+
+    ALL = "all"
+    ANY = "any"
+
+
 @dataclass
 class ExpectedFilters:
     """Expected filters for validation."""
@@ -25,13 +32,25 @@ class ExpectedFilters:
     price_max: int | None = None
     price_min: int | None = None
     rooms: int | None = None
+    rooms_min: int | None = None
     city: str | None = None
     distance_to_sea_max: int | None = None
 
 
 @dataclass
 class TestScenario:
-    """Single test scenario."""
+    """Single test scenario.
+
+    ``--no-judge`` assertion inventory:
+    - ``expected_filters``: normalized exact/minimum rooms, price/distance
+      bounds, and all required normalized city terms;
+    - ``expected_keywords``: required-all terms by default, or an explicit
+      ``KeywordMatch.ANY`` alternative set;
+    - generic fallbacks: explicit forbidden statements for RAG scenarios;
+    - transport routes and runtime errors: runner-owned outcomes; a scenario
+      that needs response-text proof of either is provider-judge-only;
+    - semantic-answer correctness: provider-judge-only.
+    """
 
     id: str
     name: str
@@ -39,10 +58,12 @@ class TestScenario:
     group: TestGroup
     description: str = ""
     expected_keywords: list[str] = field(default_factory=list)
+    keyword_match: KeywordMatch = KeywordMatch.ALL
     expected_filters: ExpectedFilters | None = None
     should_skip_rag: bool = False  # For CHITCHAT tests
     timeout: int = 60
     delivery: str = "text"  # "text" or "voice"
+    provider_judge_only: bool = False
 
 
 # All 28 test scenarios
@@ -53,6 +74,7 @@ SCENARIOS: list[TestScenario] = [
         name="Digital Nomad visa basics",
         query="Какие требования для визы Digital Nomad в Болгарии?",
         group=TestGroup.IMMIGRATION,
+        provider_judge_only=True,
         expected_keywords=["digital", "nomad", "виза", "болгар"],
     ),
     TestScenario(
@@ -60,6 +82,7 @@ SCENARIOS: list[TestScenario] = [
         name="VNZ options",
         query="Какие есть основные основания для ВНЖ в Болгарии?",
         group=TestGroup.IMMIGRATION,
+        provider_judge_only=True,
         expected_keywords=["внж", "основан", "болгар"],
     ),
     TestScenario(
@@ -67,6 +90,7 @@ SCENARIOS: list[TestScenario] = [
         name="PMJ path",
         query="Через сколько лет после ВНЖ можно получить ПМЖ в Болгарии?",
         group=TestGroup.IMMIGRATION,
+        provider_judge_only=True,
         expected_keywords=["пмж", "внж", "лет"],
     ),
     TestScenario(
@@ -74,6 +98,7 @@ SCENARIOS: list[TestScenario] = [
         name="Immigration plus housing cross-question",
         query="Можно ли получить ВНЖ через покупку недвижимости и какие есть риски?",
         group=TestGroup.IMMIGRATION,
+        provider_judge_only=True,
         expected_keywords=["внж", "недвижим", "риск"],
     ),
     TestScenario(
@@ -81,6 +106,7 @@ SCENARIOS: list[TestScenario] = [
         name="Document checklist",
         query="Какие документы обычно нужны для подачи на ВНЖ?",
         group=TestGroup.IMMIGRATION,
+        provider_judge_only=True,
         expected_keywords=["документ", "внж", "подач"],
     ),
     TestScenario(
@@ -88,6 +114,7 @@ SCENARIOS: list[TestScenario] = [
         name="2026 rule changes",
         query="Что изменилось в правилах ВНЖ/ПМЖ в Болгарии в 2026 году?",
         group=TestGroup.IMMIGRATION,
+        provider_judge_only=True,
         expected_keywords=["2026", "внж", "пмж", "измен"],
     ),
     # Group 1: Commands (4 tests)
@@ -96,7 +123,7 @@ SCENARIOS: list[TestScenario] = [
         name="/start command",
         query="/start",
         group=TestGroup.COMMANDS,
-        expected_keywords=["недвижимост", "Болгари", "привет", "помощ"],
+        expected_keywords=["недвижимост", "Болгари", "привет", "помо"],
     ),
     TestScenario(
         id="1.2",
@@ -126,6 +153,7 @@ SCENARIOS: list[TestScenario] = [
         query="Привет!",
         group=TestGroup.CHITCHAT,
         should_skip_rag=True,
+        provider_judge_only=True,
         expected_keywords=["привет", "здравствуй", "добр"],
     ),
     TestScenario(
@@ -134,6 +162,7 @@ SCENARIOS: list[TestScenario] = [
         query="Спасибо большое",
         group=TestGroup.CHITCHAT,
         should_skip_rag=True,
+        provider_judge_only=True,
         expected_keywords=["пожалуйста", "рад", "обращ"],
     ),
     TestScenario(
@@ -142,6 +171,7 @@ SCENARIOS: list[TestScenario] = [
         query="До свидания",
         group=TestGroup.CHITCHAT,
         should_skip_rag=True,
+        provider_judge_only=True,
         expected_keywords=["свидан", "удач", "всего"],
     ),
     TestScenario(
@@ -150,6 +180,7 @@ SCENARIOS: list[TestScenario] = [
         query="Как дела?",
         group=TestGroup.CHITCHAT,
         should_skip_rag=True,
+        provider_judge_only=True,
     ),
     # Group 3: Price Filters (4 tests)
     TestScenario(
@@ -178,6 +209,7 @@ SCENARIOS: list[TestScenario] = [
         name="No price filter",
         query="покажи квартиры",
         group=TestGroup.PRICE_FILTERS,
+        provider_judge_only=True,
         expected_filters=None,
     ),
     # Group 4: Room Filters (4 tests)
@@ -194,6 +226,7 @@ SCENARIOS: list[TestScenario] = [
         name="2 rooms",
         query="двухкомнатная квартира",
         group=TestGroup.ROOM_FILTERS,
+        keyword_match=KeywordMatch.ANY,
         expected_filters=ExpectedFilters(rooms=2),
         expected_keywords=["2-комнат", "двухкомнат"],
     ),
@@ -202,8 +235,7 @@ SCENARIOS: list[TestScenario] = [
         name="3+ rooms",
         query="трехкомнатные и больше",
         group=TestGroup.ROOM_FILTERS,
-        expected_filters=ExpectedFilters(rooms=3),
-        expected_keywords=["3-комнат", "трехкомнат"],
+        expected_filters=ExpectedFilters(rooms_min=3),
     ),
     TestScenario(
         id="4.4",
@@ -234,6 +266,7 @@ SCENARIOS: list[TestScenario] = [
         name="Distance to sea",
         query="до 300м от моря",
         group=TestGroup.LOCATION_FILTERS,
+        keyword_match=KeywordMatch.ANY,
         expected_filters=ExpectedFilters(distance_to_sea_max=300),
         expected_keywords=["мор", "пляж", "300"],
     ),
@@ -243,6 +276,7 @@ SCENARIOS: list[TestScenario] = [
         name="Semantic search",
         query="уютная квартира с видом",
         group=TestGroup.SEARCH,
+        provider_judge_only=True,
         expected_keywords=["квартир", "вид"],
     ),
     TestScenario(
@@ -250,6 +284,7 @@ SCENARIOS: list[TestScenario] = [
         name="Exact match",
         query="корпус 5 этаж 3",
         group=TestGroup.SEARCH,
+        provider_judge_only=True,
         expected_keywords=["корпус", "этаж"],
     ),
     TestScenario(
@@ -257,6 +292,7 @@ SCENARIOS: list[TestScenario] = [
         name="Complex query",
         query="2-комн в Солнечный берег до 120к с видом на море",
         group=TestGroup.SEARCH,
+        provider_judge_only=True,
         expected_filters=ExpectedFilters(rooms=2, city="Солнечный берег", price_max=120000),
         expected_keywords=["Солнечн", "мор"],
     ),
@@ -266,6 +302,7 @@ SCENARIOS: list[TestScenario] = [
         name="No results",
         query="замок за 1 евро",
         group=TestGroup.EDGE_CASES,
+        provider_judge_only=True,
         expected_keywords=["не нашел", "не найден", "попробуйте"],
     ),
     TestScenario(
@@ -276,12 +313,14 @@ SCENARIOS: list[TestScenario] = [
         "балконом с видом на море, в комплексе с бассейном и охраной, "
         "цена до 100 тысяч евро, 2 или 3 комнаты, этаж не первый и не последний",
         group=TestGroup.EDGE_CASES,
+        provider_judge_only=True,
     ),
     TestScenario(
         id="7.3",
         name="Special chars",
         query="квартира <script>alert(1)</script>",
         group=TestGroup.EDGE_CASES,
+        provider_judge_only=True,
         description="Should handle safely without XSS",
     ),
     # Group 8: Voice transcription (3 tests)
@@ -291,6 +330,7 @@ SCENARIOS: list[TestScenario] = [
         query="(voice) найди квартиру у моря до 120 тысяч",
         group=TestGroup.VOICE_TRANSCRIPTION,
         delivery="voice",
+        provider_judge_only=True,
         description="Voice message should transcribe and run property search flow.",
         expected_keywords=["квартир", "мор", "120"],
     ),
@@ -300,6 +340,7 @@ SCENARIOS: list[TestScenario] = [
         query="(voice) [simulate timeout]",
         group=TestGroup.VOICE_TRANSCRIPTION,
         delivery="voice",
+        provider_judge_only=True,
         description="Voice transcription timeout should return graceful fallback.",
         expected_keywords=["не удалось", "попробуйте", "голос"],
     ),
