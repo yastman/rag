@@ -26,5 +26,5 @@ whether it may start.
 
 ## See Also
 
-- [`../lifecycle/README.md`](../lifecycle/README.md) — startup path that runs these checks
+- [Telegram adapter](../README.md) — startup path that runs these checks
 - [`../../docs/runbooks/README.md`](../../docs/runbooks/README.md) — operational preflight commands

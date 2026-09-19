@@ -28,4 +28,4 @@ Observability helpers for the `src/` layer. **Langfuse and OpenTelemetry were fu
 ## See Also
 
 - [`../utils/README.md`](../utils/README.md) — product-event logging (the canonical path)
-- [`../../telegram_bot/observability/README.md`](../../telegram_bot/observability/README.md) — bot-side shims re-exported from here
+- [Telegram adapter](../../telegram_bot/README.md) — transport trace metadata and session context
