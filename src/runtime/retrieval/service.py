@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.adapters.embeddings.base import EmbeddingProvider
-from src.runtime.services.qdrant import QdrantService, SearchReturn
+from src.runtime.qdrant import QdrantService, SearchReturn
 
 
 @dataclass(frozen=True)

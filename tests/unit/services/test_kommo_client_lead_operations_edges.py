@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from telegram_bot.services.crm.kommo_client import KommoClient
-from telegram_bot.services.crm.kommo_models import LeadCreate, LeadUpdate
+from src.services.kommo_client import KommoClient
+from src.services.kommo_models import LeadCreate, LeadUpdate
 
 
 @pytest.fixture

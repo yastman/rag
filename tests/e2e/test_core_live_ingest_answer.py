@@ -581,8 +581,8 @@ async def _direct_search_orders(
     env: LiveE2EEnv, collection: str, query: str
 ) -> tuple[list[str], list[str]]:
     """RRF and ColBERT orderings for ``query`` via the retrieval boundary."""
+    from src.runtime.qdrant import QdrantService
     from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
-    from src.runtime.services.qdrant import QdrantService
     from src.services.bge_m3_client import BGEM3Client
 
     bge = BGEM3Client(base_url=env.bge_m3_url, timeout=120.0)
@@ -679,8 +679,8 @@ async def test_sparse_vector_contributes_to_results(harness_env, owned_collectio
     real Qdrant prefetch — the sparse-only document is absent from dense-only
     RRF and present once the bm42 prefetch participates.
     """
+    from src.runtime.qdrant import QdrantService
     from src.runtime.retrieval import RetrievalService, VectorRetrievalRequest
-    from src.runtime.services.qdrant import QdrantService
     from src.services.bge_m3_client import BGEM3Client
 
     await require_live_services(harness_env)

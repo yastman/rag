@@ -2,7 +2,7 @@
 
 Used by phone_collector FSM and viewing dialog to avoid duplication.
 
-Phone normalization itself lives in ``telegram_bot.phone_utils`` (UI-free).
+Phone normalization itself lives in ``src.phone_utils`` (UI-free).
 This module re-exports ``normalize_phone`` / ``validate_phone`` for backward
 compatibility with existing callers.
 """

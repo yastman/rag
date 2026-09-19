@@ -44,7 +44,7 @@ are swept.
 - **Idempotency**: a file whose `(file_id, content_hash)` already exists in Qdrant is skipped; there is no separate state store.
 - **Replace semantics**: re-ingesting a changed file deletes the prior version's points by `source_path` and upserts new chunks (deterministic ids), so no stale chunks survive a content change.
 - **Deleted source files (known limitation)**: removing a file from `sync_dir` does **not** delete its chunks from Qdrant. There is no scan for vanished sources; orphaned points remain until manual cleanup. Use `QdrantHybridWriter.delete_file_sync`/`delete_by_source_path_sync` out-of-band to remove them.
-- **Payload contract**: `qdrant_writer.py` writes a consistent payload schema expected by retrieval. Changing fields here requires a coordinated change in `telegram_bot/services/qdrant.py` and `src/retrieval/`.
+- **Payload contract**: `qdrant_writer.py` writes a consistent payload schema expected by retrieval. Changing fields here requires a coordinated change in `src/runtime/qdrant/service.py` and `src/retrieval/`.
 - **Do not change hashing or collection semantics** without a migration plan; downstream retrieval and history depend on stable point identities.
 
 ## Related Runtime Services

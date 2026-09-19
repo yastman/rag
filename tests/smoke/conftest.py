@@ -15,7 +15,7 @@ import pytest
 import redis.asyncio as redis
 
 from src.runtime.integrations.cache import CacheLayerManager
-from src.runtime.services.qdrant import QdrantService
+from src.runtime.qdrant import QdrantService
 
 
 @pytest.fixture(scope="module")

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.runtime.services.qdrant import QdrantService
+from src.runtime.qdrant import QdrantService
 
 
 _PATCH_TARGET = "src.runtime.qdrant.service.AsyncQdrantClient"

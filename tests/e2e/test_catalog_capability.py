@@ -479,7 +479,7 @@ class _CatalogStack:
 
 async def _build_catalog_bot(env: LiveE2EEnv, live: LiveRedis, collection: str) -> Any:
     """Assemble the production bot over real Redis/Qdrant via the DI seams."""
-    from src.runtime.services.qdrant import QdrantService
+    from src.runtime.qdrant import QdrantService
     from telegram_bot.services.apartment.apartment_extraction_pipeline import (
         ApartmentExtractionPipeline,
     )

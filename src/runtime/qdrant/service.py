@@ -1,8 +1,7 @@
 """Canonical runtime Qdrant SDK gateway with Query API, Score Boosting, and MMR.
 
 Moved to ``src/runtime/qdrant/service.py`` as part of the module-ownership
-cleanup tracked under #3012. ``src.runtime.services.qdrant`` is kept as a
-thin re-export façade for backward compatibility.
+cleanup tracked under #3012. The public API is exported by ``src.runtime.qdrant``.
 
 Smart Gateway pattern for Qdrant vector database.
 Features: RRF fusion, freshness boosting, MMR diversity.

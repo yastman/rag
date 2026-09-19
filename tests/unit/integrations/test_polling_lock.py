@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.integrations.polling_lock import PollingLockBusy, RedisPollingLock
+from src.runtime.integrations.polling_lock import PollingLockBusy, RedisPollingLock
 
 
 @pytest.mark.asyncio

@@ -48,20 +48,3 @@ def test_unified_cli_import_keeps_flow_lazy(monkeypatch: pytest.MonkeyPatch) -> 
     assert module is not None
     assert "src.ingestion.unified.flow" not in sys.modules
     assert "src.ingestion.unified.qdrant_writer" not in sys.modules
-
-
-@pytest.mark.parametrize(
-    ("name", "owner"),
-    [
-        ("BGEM3Client", "src.services.bge_m3_client"),
-        ("BGEM3SyncClient", "src.services.bge_m3_client"),
-        ("ExpandedChunk", "src.runtime.services.small_to_big"),
-        ("QdrantService", "src.runtime.services.qdrant"),
-        ("SmallToBigService", "src.runtime.services.small_to_big"),
-    ],
-)
-def test_telegram_services_exports_resolve_to_live_owners(name: str, owner: str) -> None:
-    import telegram_bot.services as services
-
-    assert name in services.__all__
-    assert getattr(services, name) is getattr(importlib.import_module(owner), name)

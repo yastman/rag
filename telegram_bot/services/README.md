@@ -10,8 +10,8 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 
 | File | Purpose |
 |------|---------|
-| [`__init__.py`](./__init__.py) | Public API exports (QdrantService, BGEM3Client, GenerationDeps, etc.) |
-| [`qdrant.py`](./qdrant.py) | Re-export shim → `src.runtime.qdrant.QdrantService` (the real hybrid dense+sparse+ColBERT gateway) |
+| [`__init__.py`](./__init__.py) | Package marker; import capabilities from their defining modules |
+| [`src/runtime/qdrant/service.py`](../../src/runtime/qdrant/service.py) | Shared `QdrantService` (the real hybrid dense+sparse+ColBERT gateway) |
 | [`generation/telegram_formatting.py`](./generation/telegram_formatting.py) | Telegram-only HTML formatting/delivery for generated answers (generation itself lives in `src/runtime/generation`) |
 | [`src/runtime/services/rag_core.py`](../../src/runtime/services/rag_core.py) | Canonical shared RAG core functions |
 | [`apartment/apartment_filter_extractor.py`](./apartment/apartment_filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |

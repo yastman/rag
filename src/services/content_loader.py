@@ -2,15 +2,13 @@
 
 Issue #1948 flagged that shared modules used by both the bot and other
 surfaces sat under ``telegram_bot/``. This file is the canonical home for the
-``services.yaml`` loader. The previous module at
-``telegram_bot/services/content_loader.py`` is now a thin re-export shim
-that points here, preserving the bot's existing import surface.
+``services.yaml`` loader. Callers import ``src.services.content_loader`` directly.
 
 Layering rule (enforced by
 ``tests/contract/test_layering_no_telegram_bot_imports_contract.py``
 and ``tests/contract/test_content_loader_path_contract.py``):
 
-  - ``telegram_bot/`` internals may continue to use either path.
+  - ``telegram_bot/`` internals use the canonical shared module.
 
 YAML payloads live under ``src/config/`` (#2747) so this shared module
 does not depend on the Telegram adapter's directory layout.

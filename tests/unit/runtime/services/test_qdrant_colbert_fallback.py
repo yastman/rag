@@ -2,7 +2,7 @@
 
 Issue #1542 flagged a ColBERT->RRF fallback pattern repeated 4 times inside
 ``hybrid_search_rrf_colbert`` (qdrant.py). After the layering migration
-(#1948 / #2049) the file moved to ``src.runtime.services.qdrant`` but the
+(#1948 / #2049) the file moved to ``src.runtime.qdrant`` but the
 duplication came along with it — line 631, 659, 744, 811 each contain the
 same ~17-line block:
 
@@ -33,7 +33,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.runtime.services.qdrant import QdrantService
+from src.runtime.qdrant import QdrantService
 
 
 def _make_service() -> QdrantService:

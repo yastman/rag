@@ -89,7 +89,7 @@ class TestQuerySupervisorHandoffMode:
         bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
 
-        from telegram_bot.services.handoff_state import HandoffData
+        from src.services.handoff_state import HandoffData
 
         handoff_data = HandoffData(client_id=12345, topic_id=999, mode="human")
 
@@ -116,7 +116,7 @@ class TestQuerySupervisorHandoffMode:
         bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
 
-        from telegram_bot.services.handoff_state import HandoffData
+        from src.services.handoff_state import HandoffData
 
         handoff_data = HandoffData(client_id=12345, topic_id=999, mode="human_waiting")
 
@@ -151,7 +151,7 @@ class TestQuerySupervisorHandoffMode:
         """Relay failure in 'human' mode logs and falls back to bot routing (#3239)."""
         from aiogram.exceptions import TelegramBadRequest
 
-        from telegram_bot.services.handoff_state import HandoffData
+        from src.services.handoff_state import HandoffData
 
         bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
@@ -185,7 +185,7 @@ class TestQuerySupervisorHandoffMode:
         """Relay failure in 'human_waiting' mode logs and continues to RAG (#3239)."""
         from aiogram.exceptions import TelegramBadRequest
 
-        from telegram_bot.services.handoff_state import HandoffData
+        from src.services.handoff_state import HandoffData
 
         bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
@@ -303,7 +303,7 @@ class TestQuerySupervisorCoreEntrypoint:
         )
 
         with (
-            patch("telegram_bot.bot.classify_query", return_value="GENERAL"),
+            patch("src.runtime.routing.classify.classify_query", return_value="GENERAL"),
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,
@@ -469,8 +469,8 @@ class TestQuerySupervisorConvergence:
         message = _make_message("Сколько стоит студия в Sunny Beach?")
 
         with (
-            patch("telegram_bot.bot.classify_query") as mock_classify,
-            patch("telegram_bot.bot.detect_injection") as mock_detect,
+            patch("src.runtime.routing.classify.classify_query") as mock_classify,
+            patch("src.runtime.safety.guard.detect_injection") as mock_detect,
             patch(
                 "telegram_bot.assistant_core_adapter.run_core_text_request",
                 new_callable=AsyncMock,

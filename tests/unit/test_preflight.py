@@ -8,17 +8,19 @@ import httpx
 import pytest
 
 from src.runtime.integrations.redis_mode import RedisMode
-from telegram_bot.preflight import (
-    CACHE_KEY_PREFIXES,
+from telegram_bot.preflight.checks import (
     CRITICAL_RETRIES,
     DEP_CLASSIFICATION,
     PreflightError,
     _build_dependency_report,
-    _check_redis_deep,
     _check_single_dep,
     _read_colbert_coverage_warn_threshold,
-    _verify_cache_synthetic,
     check_dependencies,
+)
+from telegram_bot.preflight.remediation import (
+    CACHE_KEY_PREFIXES,
+    _check_redis_deep,
+    _verify_cache_synthetic,
 )
 from telegram_bot.startup_status import StartupReport
 
@@ -215,7 +217,7 @@ class TestCheckRedisDeep:
         )
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, details = await _check_redis_deep("redis://localhost")
 
         assert passed is True
@@ -241,7 +243,7 @@ class TestCheckRedisDeep:
         )
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, details = await _check_redis_deep("redis://localhost")
 
         assert passed is True
@@ -252,7 +254,7 @@ class TestCheckRedisDeep:
         mock_redis.ping = AsyncMock(side_effect=ConnectionError("Connection refused"))
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, details = await _check_redis_deep("redis://localhost")
 
         assert passed is False
@@ -265,7 +267,7 @@ class TestCheckRedisDeep:
         )
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, details = await _check_redis_deep("redis://localhost")
 
         assert passed is False
@@ -279,7 +281,7 @@ class TestCheckRedisDeep:
         )
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, details = await _check_redis_deep("redis://localhost")
 
         assert passed is False
@@ -302,7 +304,7 @@ class TestCheckRedisDeep:
         )
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, details = await _check_redis_deep("redis://localhost")
 
         assert passed is True
@@ -325,7 +327,7 @@ class TestCheckRedisDeep:
         )
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, details = await _check_redis_deep("redis://localhost")
 
         assert passed is True
@@ -339,7 +341,7 @@ class TestPostgresRemediation:
 
         with (
             patch(
-                "telegram_bot.preflight.asyncpg.connect",
+                "telegram_bot.preflight.checks.asyncpg.connect",
                 AsyncMock(side_effect=ConnectionRefusedError(111, "Connection refused")),
             ),
             caplog.at_level("WARNING"),
@@ -368,7 +370,7 @@ class TestVerifyCacheSynthetic:
         mock_redis.delete = AsyncMock(return_value=1)
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, errors = await _verify_cache_synthetic("redis://localhost")
 
         assert passed is True
@@ -380,7 +382,7 @@ class TestVerifyCacheSynthetic:
         mock_redis.delete = AsyncMock()
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, errors = await _verify_cache_synthetic("redis://localhost")
 
         assert passed is False
@@ -393,7 +395,7 @@ class TestVerifyCacheSynthetic:
         mock_redis.get = AsyncMock(return_value="wrong_value")
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, errors = await _verify_cache_synthetic("redis://localhost")
 
         assert passed is False
@@ -406,7 +408,7 @@ class TestVerifyCacheSynthetic:
         mock_redis.ttl = AsyncMock(return_value=-1)
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, errors = await _verify_cache_synthetic("redis://localhost")
 
         assert passed is False
@@ -420,7 +422,7 @@ class TestVerifyCacheSynthetic:
         mock_redis.delete = AsyncMock(return_value=0)
         mock_redis.aclose = AsyncMock()
 
-        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+        with patch("telegram_bot.preflight.remediation.aioredis.from_url", return_value=mock_redis):
             passed, errors = await _verify_cache_synthetic("redis://localhost")
 
         assert passed is False
@@ -440,7 +442,7 @@ class TestCheckSingleDep:
         client = AsyncMock(spec=httpx.AsyncClient)
 
         with patch(
-            "telegram_bot.preflight._check_redis_deep",
+            "telegram_bot.preflight.remediation._check_redis_deep",
             new_callable=AsyncMock,
             return_value=(True, {"ping": "ok"}),
         ) as mock_deep:
@@ -457,7 +459,7 @@ class TestCheckSingleDep:
 
         with (
             patch(
-                "telegram_bot.preflight._check_redis_deep",
+                "telegram_bot.preflight.remediation._check_redis_deep",
                 new_callable=AsyncMock,
                 return_value=(
                     False,
@@ -478,7 +480,7 @@ class TestCheckSingleDep:
         client = AsyncMock(spec=httpx.AsyncClient)
 
         with patch(
-            "telegram_bot.preflight._verify_cache_synthetic",
+            "telegram_bot.preflight.remediation._verify_cache_synthetic",
             new_callable=AsyncMock,
             return_value=(True, []),
         ) as mock_verify:
@@ -493,7 +495,9 @@ class TestCheckSingleDep:
 
         mock_qdrant_client = _ready_qdrant_client(knowledge_name="test_col_scalar")
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             result = await _check_single_dep("qdrant", config, client)
 
         assert result is True
@@ -517,7 +521,9 @@ class TestCheckSingleDep:
         mock_qdrant_client.get_collection = AsyncMock(side_effect=Exception("Connection refused"))
         mock_qdrant_client.close = AsyncMock()
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             result = await _check_single_dep("qdrant", config, client)
 
         assert result is False
@@ -634,12 +640,12 @@ class TestCheckDependencies:
 
         with (
             patch(
-                "telegram_bot.preflight._check_critical_with_retry",
+                "telegram_bot.preflight.checks._check_critical_with_retry",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "telegram_bot.preflight._check_single_dep",
+                "telegram_bot.preflight.checks._check_single_dep",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
@@ -662,8 +668,11 @@ class TestCheckDependencies:
             return True
 
         with (
-            patch("telegram_bot.preflight._check_critical_with_retry", side_effect=fake_critical),
-            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_optional),
+            patch(
+                "telegram_bot.preflight.checks._check_critical_with_retry",
+                side_effect=fake_critical,
+            ),
+            patch("telegram_bot.preflight.checks._check_single_dep", side_effect=fake_optional),
             pytest.raises(PreflightError) as exc_info,
         ):
             await check_dependencies(config)
@@ -679,11 +688,11 @@ class TestCheckDependencies:
 
         with (
             patch(
-                "telegram_bot.preflight._check_critical_with_retry",
+                "telegram_bot.preflight.checks._check_critical_with_retry",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
-            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_optional),
+            patch("telegram_bot.preflight.checks._check_single_dep", side_effect=fake_optional),
         ):
             results = await check_dependencies(config)
 
@@ -701,8 +710,8 @@ class TestCheckDependencies:
             return not (name == "qdrant" and call_counts[name] < 2)
 
         with (
-            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_check),
-            patch("telegram_bot.preflight.CRITICAL_RETRY_DELAY", 0),
+            patch("telegram_bot.preflight.checks._check_single_dep", side_effect=fake_check),
+            patch("telegram_bot.preflight.checks.CRITICAL_RETRY_DELAY", 0),
         ):
             results = await check_dependencies(config)
 
@@ -716,8 +725,11 @@ class TestCheckDependencies:
             return name != "redis"
 
         with (
-            patch("telegram_bot.preflight._check_critical_with_retry", side_effect=fake_critical),
-            patch("telegram_bot.preflight._check_single_dep", new_callable=AsyncMock),
+            patch(
+                "telegram_bot.preflight.checks._check_critical_with_retry",
+                side_effect=fake_critical,
+            ),
+            patch("telegram_bot.preflight.checks._check_single_dep", new_callable=AsyncMock),
             pytest.raises(PreflightError),
         ):
             await check_dependencies(config)
@@ -729,9 +741,12 @@ class TestCheckDependencies:
             return name != "bge_m3"
 
         with (
-            patch("telegram_bot.preflight._check_critical_with_retry", side_effect=fake_critical),
             patch(
-                "telegram_bot.preflight._check_single_dep",
+                "telegram_bot.preflight.checks._check_critical_with_retry",
+                side_effect=fake_critical,
+            ),
+            patch(
+                "telegram_bot.preflight.checks._check_single_dep",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
@@ -765,7 +780,9 @@ class TestQdrantVectorValidation:
         )
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
+            patch(
+                "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+            ),
             caplog.at_level(logging.WARNING),
         ):
             client = AsyncMock()
@@ -781,7 +798,9 @@ class TestQdrantVectorValidation:
         mock_qdrant_client = _ready_qdrant_client()
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
+            patch(
+                "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+            ),
             caplog.at_level(logging.WARNING),
         ):
             client = AsyncMock()
@@ -800,7 +819,9 @@ class TestQdrantVectorValidation:
         mock_qdrant_client.count = AsyncMock(return_value=MagicMock(count=180))
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
+            patch(
+                "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+            ),
             caplog.at_level(logging.WARNING),
         ):
             client = AsyncMock()
@@ -819,7 +840,9 @@ class TestQdrantVectorValidation:
         mock_qdrant_client.count = AsyncMock(return_value=MagicMock(count=100))
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
+            patch(
+                "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+            ),
             caplog.at_level(logging.INFO),
         ):
             client = AsyncMock()
@@ -838,7 +861,9 @@ class TestQdrantVectorValidation:
         mock_qdrant_client.count = AsyncMock(side_effect=RuntimeError("count unavailable"))
 
         with (
-            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client),
+            patch(
+                "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+            ),
             caplog.at_level(logging.WARNING),
         ):
             client = AsyncMock()
@@ -857,7 +882,9 @@ class TestQdrantVectorValidation:
             ),
         )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep("qdrant", config, client)
             assert result is False
@@ -872,7 +899,9 @@ class TestQdrantVectorValidation:
             ),
         )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep("qdrant", config, client)
             assert result is False
@@ -885,7 +914,9 @@ class TestQdrantVectorValidation:
             knowledge_info=_collection_info(points=278, dense_size=768),
         )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep(
                 "qdrant", config, client, failure_reasons=failure_reasons
@@ -905,7 +936,9 @@ class TestQdrantVectorValidation:
             knowledge_info=_collection_info(points=278, payload_schema=schema),
         )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep(
                 "qdrant", config, client, failure_reasons=failure_reasons
@@ -925,7 +958,9 @@ class TestQdrantVectorValidation:
             knowledge_info=_collection_info(points=278, payload_schema=schema),
         )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep(
                 "qdrant", config, client, failure_reasons=failure_reasons
@@ -942,7 +977,9 @@ class TestQdrantVectorValidation:
             knowledge_info=_collection_info(points=0),
         )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep(
                 "qdrant", config, client, failure_reasons=failure_reasons
@@ -961,7 +998,9 @@ class TestQdrantVectorValidation:
             apartments_info=_collection_info(points=5, payload_schema=schema),
         )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep(
                 "qdrant", config, client, failure_reasons=failure_reasons
@@ -986,7 +1025,7 @@ class TestQdrantPreflightClient:
         mock_qdrant_client = _ready_qdrant_client()
 
         with patch(
-            "telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
         ) as MockClient:
             client = AsyncMock()
             await _check_single_dep("qdrant", config, client)
@@ -1002,7 +1041,8 @@ class TestQdrantPreflightClient:
         failure_reasons: dict[str, str] = {}
 
         with patch(
-            "telegram_bot.preflight.AsyncQdrantClient", side_effect=[Exception(), Exception()]
+            "telegram_bot.preflight.checks.AsyncQdrantClient",
+            side_effect=[Exception(), Exception()],
         ):
             result = await _check_single_dep(
                 "qdrant",
@@ -1028,7 +1068,7 @@ class TestPostgresPreflight:
     async def test_postgres_check_passes_when_db_exists(self):
         """Preflight passes when Postgres connection succeeds."""
         config = _make_config(realestate_database_url="postgresql://u:p@localhost/realestate")
-        with patch("telegram_bot.preflight.asyncpg") as mock_asyncpg:
+        with patch("telegram_bot.preflight.checks.asyncpg") as mock_asyncpg:
             mock_conn = AsyncMock()
             mock_conn.fetchval = AsyncMock(return_value=1)
             mock_conn.close = AsyncMock()
@@ -1043,7 +1083,7 @@ class TestPostgresPreflight:
         import asyncpg as real_asyncpg
 
         config = _make_config(realestate_database_url="postgresql://u:p@localhost/realestate")
-        with patch("telegram_bot.preflight.asyncpg") as mock_asyncpg:
+        with patch("telegram_bot.preflight.checks.asyncpg") as mock_asyncpg:
             mock_asyncpg.connect = AsyncMock(
                 side_effect=real_asyncpg.InvalidCatalogNameError(
                     'database "realestate" does not exist'
@@ -1058,7 +1098,7 @@ class TestPostgresPreflight:
 
     def test_postgres_in_dep_classification_as_optional(self):
         """Postgres is OPTIONAL — bot degrades without it."""
-        from telegram_bot.preflight import DEP_CLASSIFICATION, DepLevel
+        from telegram_bot.preflight.checks import DEP_CLASSIFICATION, DepLevel
 
         assert DEP_CLASSIFICATION.get("postgres") == DepLevel.OPTIONAL
 
@@ -1075,11 +1115,11 @@ class TestPostgresOptionalBehavior:
 
         with (
             patch(
-                "telegram_bot.preflight._check_critical_with_retry",
+                "telegram_bot.preflight.checks._check_critical_with_retry",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
-            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_optional),
+            patch("telegram_bot.preflight.checks._check_single_dep", side_effect=fake_optional),
         ):
             results = await check_dependencies(config)
 
@@ -1095,7 +1135,7 @@ class TestQdrantRemediationHint:
     """Qdrant remediation points at the idempotent demo bootstrap."""
 
     def test_qdrant_remediation_mentions_demo_bootstrap(self):
-        from telegram_bot.preflight import _DEP_REMEDIATION
+        from telegram_bot.preflight.checks import _DEP_REMEDIATION
 
         assert "make demo-bootstrap" in _DEP_REMEDIATION["qdrant"].lower(), (
             "Qdrant remediation should mention 'make demo-bootstrap', "
@@ -1107,7 +1147,7 @@ class TestBgeM3RemediationHint:
     """BGE-M3 remediation names the hybrid encode contract (#3442)."""
 
     def test_bge_m3_remediation_mentions_hybrid_encode(self):
-        from telegram_bot.preflight import _DEP_REMEDIATION
+        from telegram_bot.preflight.checks import _DEP_REMEDIATION
 
         assert "encode/hybrid" in _DEP_REMEDIATION["bge_m3"], (
             f"BGE-M3 remediation should mention 'encode/hybrid', got: {_DEP_REMEDIATION['bge_m3']}"
@@ -1127,7 +1167,7 @@ class TestQdrantPreflightBothCollections:
         mock_qdrant.create_collection = AsyncMock()
         mock_qdrant.close = AsyncMock()
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+        with patch("telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant):
             client = AsyncMock()
             result = await _check_single_dep(
                 "qdrant", config, client, failure_reasons=failure_reasons
@@ -1151,7 +1191,7 @@ class TestQdrantPreflightBothCollections:
 
         mock_qdrant.collection_exists = AsyncMock(side_effect=_exists)
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+        with patch("telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant):
             client = AsyncMock()
             result = await _check_single_dep(
                 "qdrant", config, client, failure_reasons=failure_reasons
@@ -1166,7 +1206,9 @@ class TestQdrantPreflightBothCollections:
         config = _make_config()
         mock_qdrant_client = _ready_qdrant_client()
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep("qdrant", config, client)
 
@@ -1183,7 +1225,9 @@ class TestQdrantPreflightBothCollections:
             ),
         )
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+        with patch(
+            "telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant_client
+        ):
             client = AsyncMock()
             result = await _check_single_dep(
                 "qdrant", config, client, failure_reasons=failure_reasons
@@ -1204,7 +1248,7 @@ class TestQdrantPreflightBothCollections:
         mock_qdrant.create_collection = AsyncMock()
         mock_qdrant.close = AsyncMock()
 
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+        with patch("telegram_bot.preflight.checks.AsyncQdrantClient", return_value=mock_qdrant):
             client = AsyncMock()
             result = await _check_single_dep("qdrant", config, client)
 
@@ -1221,99 +1265,99 @@ class TestBgeM3UrlGuardrail:
     """Guardrail validates BGE-M3 URLs before any network call."""
 
     def test_localhost_8000_passes(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("http://localhost:8000")
         assert ok is True
         assert err == ""
 
     def test_localhost_ipv4_8000_passes(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("http://127.0.0.1:8000")
         assert ok is True
         assert err == ""
 
     def test_localhost_ipv6_8000_passes(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("http://[::1]:8000")
         assert ok is True
         assert err == ""
 
     def test_container_host_bge_m3_8000_passes(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("http://bge-m3:8000")
         assert ok is True
         assert err == ""
 
     def test_container_host_bge_m3_wrong_port_rejects(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("http://bge-m3:8888")
         assert ok is False
         assert "8000" in err
 
     def test_container_host_bge_m3_no_port_rejects(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("http://bge-m3")
         assert ok is False
         assert "8000" in err
 
     def test_non_local_host_passes_any_port(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("http://embedding.example.com:9090")
         assert ok is True
         assert err == ""
 
     def test_localhost_8888_rejects_and_does_not_call_network(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("http://localhost:8888")
         assert ok is False
         assert "non-canonical port" in err or "port" in err.lower()
 
     def test_localhost_8080_rejects(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, _err = _validate_bge_m3_url("http://localhost:8080")
         assert ok is False
 
     def test_ipv4_9000_rejects(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, _err = _validate_bge_m3_url("http://127.0.0.1:9000")
         assert ok is False
 
     def test_ipv6_9999_rejects(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, _err = _validate_bge_m3_url("http://[::1]:9999")
         assert ok is False
 
     def test_localhost_no_port_rejects(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, _err = _validate_bge_m3_url("http://localhost")
         assert ok is False
 
     def test_valid_url_malformed_rejects(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, _err = _validate_bge_m3_url("not-a-valid-url://")
         assert ok is False
 
     def test_empty_url_rejects(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, _err = _validate_bge_m3_url("")
         assert ok is False
 
     def test_https_localhost_8000_passes(self):
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, err = _validate_bge_m3_url("https://localhost:8000")
         assert ok is True
@@ -1321,14 +1365,14 @@ class TestBgeM3UrlGuardrail:
 
     def test_localhost_abc_port_rejects_and_does_not_call_network(self):
         """Malformed port like 'http://localhost:abc' rejects without network call."""
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, _err = _validate_bge_m3_url("http://localhost:abc")
         assert ok is False
 
     def test_localhost_99999_port_rejects_and_does_not_call_network(self):
         """Out-of-range port like 'http://localhost:99999' rejects without network call."""
-        from telegram_bot.preflight import _validate_bge_m3_url
+        from telegram_bot.preflight.checks import _validate_bge_m3_url
 
         ok, _err = _validate_bge_m3_url("http://localhost:99999")
         assert ok is False

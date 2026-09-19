@@ -81,7 +81,7 @@ from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
 from src.runtime.integrations.cache import CacheLayerManager
 from src.runtime.integrations.redis_mode import RedisMode
-from src.runtime.services.qdrant import QdrantService
+from src.runtime.qdrant import QdrantService
 from tests.e2e_core.live_harness import (
     FakeLLMConfig,
     LiveBGEEmbeddings,

@@ -29,10 +29,10 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from src.core import SUPPORTED_REQUEST_LANGUAGES, normalize_request_language
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
+from telegram_bot.observability.context import make_session_id
 from telegram_bot.pipeline.streaming import (
     _new_draft_id,
 )
-from telegram_bot.tracing_context import make_session_id
 
 
 if TYPE_CHECKING:  # pragma: no cover

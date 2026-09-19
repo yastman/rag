@@ -9,9 +9,9 @@ from typing import Any, cast
 from aiogram_dialog import DialogManager
 from aiogram_dialog.utils import remove_intent_id
 
+from src.observability import mask_pii
 from telegram_bot.dialogs.filter_constants import FIELD_TO_FILTER_KEY
 from telegram_bot.dialogs.root_nav import get_main_menu_label
-from telegram_bot.observability import mask_pii
 
 
 # "Любой" option used in every filter sub-menu to clear that filter.

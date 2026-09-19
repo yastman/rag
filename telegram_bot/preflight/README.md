@@ -10,7 +10,7 @@ whether it may start.
 |------|---------|
 | [`checks.py`](./checks.py) | Dependency checks with CRITICAL/OPTIONAL classification; builds a `StartupReport` of `DependencyCheckResult`s (with retry on critical deps) |
 | [`remediation.py`](./remediation.py) | Human-readable remediation hints + deeper Redis/cache verification (`_check_redis_deep`, `_verify_cache_synthetic`) and the Qdrant readiness-contract validation (`_qdrant_validate_collection`, `_qdrant_validate_product_collections`) |
-| [`__init__.py`](./__init__.py) | Backward-compat re-export surface (checks + remediation) |
+| [`__init__.py`](./__init__.py) | Package marker; import operations from `checks` or `remediation` |
 
 ## Boundaries
 
