@@ -15,6 +15,7 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
+from pydantic import BaseModel
 
 from src.services._retry import kommo_retry
 from src.services.kommo_models import (
@@ -36,6 +37,24 @@ if TYPE_CHECKING:
     from src.services.kommo_tokens import KommoTokenStoreProtocol
 
 logger = logging.getLogger(__name__)
+
+
+class KommoOutcomeUncertain(RuntimeError):
+    """A mutation may have completed; reconcile it before submitting it again."""
+
+    def __init__(self) -> None:
+        super().__init__("Kommo mutation outcome is uncertain; reconcile before retrying.")
+
+
+def _mutation_result[Model: BaseModel](
+    model: type[Model], data: dict, collection: str | None = None
+) -> Model:
+    """An unusable write acknowledgement cannot establish whether the write failed."""
+    try:
+        item = data["_embedded"][collection][0] if collection else data
+        return model(**item)
+    except (KeyError, IndexError, TypeError, ValueError):
+        raise KommoOutcomeUncertain() from None
 
 
 class KommoOAuthAuth(httpx.Auth):
@@ -104,23 +123,45 @@ class KommoClient:
 
     @kommo_retry
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
-        """Execute a request; bearer + refresh handled by ``KommoOAuthAuth``."""
-        response = await self._client.request(method, path, **kwargs)
+        """Retry reads and failures before sending, never ambiguous writes.
+
+        No current mutation has a documented remote deduplication guarantee.
+        In particular, sending X-Idempotency-Key alone does not establish one.
+        Rejected writes remain HTTPStatusError; uncertain ones require reconciliation.
+        """
+        mutation = method.upper() not in {"GET", "HEAD", "OPTIONS"}
+        try:
+            response = await self._client.request(method, path, **kwargs)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+            raise  # No application request was sent; bounded retry is safe.
+        except httpx.RequestError:
+            if mutation:
+                raise KommoOutcomeUncertain() from None
+            raise
+
+        if mutation and response.status_code >= 500:
+            raise KommoOutcomeUncertain()
 
         if response.status_code == 204:
             return {}
 
-        # Raises for 401 (after the auth flow has already retried), 429, 5xx so
-        # tenacity retries transient cases and a seeded-token 401 surfaces
-        # as the canonical HTTPStatusError.
+        # 401 has already passed through the auth flow. 429 is an explicit
+        # rejection; transient read failures also retain bounded retries.
         response.raise_for_status()
 
         # Kommo can return empty body on some successful endpoints.
         if not response.content:
             return {}
 
-        response_json = response.json()
+        try:
+            response_json = response.json()
+        except ValueError:
+            if mutation:
+                raise KommoOutcomeUncertain() from None
+            raise
         if not isinstance(response_json, dict):
+            if mutation:
+                raise KommoOutcomeUncertain()
             msg = "Unexpected Kommo API response shape."
             raise RuntimeError(msg)
         return cast(dict[str, Any], response_json)
@@ -132,8 +173,7 @@ class KommoClient:
         data = await self._request(
             "POST", "/leads", json=[lead.model_dump(exclude_none=True, by_alias=True)]
         )
-        item = data["_embedded"]["leads"][0]
-        return Lead(**item)
+        return _mutation_result(Lead, data, "leads")
 
     async def get_lead(self, lead_id: int) -> Lead:
         """GET /api/v4/leads/{id}."""
@@ -145,7 +185,7 @@ class KommoClient:
         data = await self._request(
             "PATCH", f"/leads/{lead_id}", json=update.model_dump(exclude_none=True, by_alias=True)
         )
-        return Lead(**data)
+        return _mutation_result(Lead, data)
 
     async def search_leads(
         self,
@@ -231,8 +271,7 @@ class KommoClient:
             contact_dict["custom_fields_values"] = existing_cfv + extra_fields
 
         data = await self._request("POST", "/contacts", json=[contact_dict])
-        item = data["_embedded"]["contacts"][0]
-        return Contact(**item)
+        return _mutation_result(Contact, data, "contacts")
 
     async def get_contacts(self, query: str) -> list[Contact]:
         """GET /api/v4/contacts?query=..."""
@@ -247,7 +286,7 @@ class KommoClient:
             f"/contacts/{contact_id}",
             json=update.model_dump(exclude_none=True),
         )
-        return Contact(**data)
+        return _mutation_result(Contact, data)
 
     # --- Notes ---
 
@@ -258,16 +297,14 @@ class KommoClient:
             f"/{entity_type}/{entity_id}/notes",
             json=[{"note_type": "common", "params": {"text": text}}],
         )
-        item = data["_embedded"]["notes"][0]
-        return Note(**item)
+        return _mutation_result(Note, data, "notes")
 
     # --- Tasks ---
 
     async def create_task(self, task: TaskCreate) -> Task:
         """POST /api/v4/tasks."""
         data = await self._request("POST", "/tasks", json=[task.model_dump(exclude_none=True)])
-        item = data["_embedded"]["tasks"][0]
-        return Task(**item)
+        return _mutation_result(Task, data, "tasks")
 
     async def update_task(self, task_id: int, update: TaskUpdate) -> Task:
         """PATCH /api/v4/tasks/{id} (#697)."""
@@ -276,7 +313,7 @@ class KommoClient:
             f"/tasks/{task_id}",
             json=update.model_dump(exclude_none=True),
         )
-        return Task(**data)
+        return _mutation_result(Task, data)
 
     async def complete_task(self, task_id: int, result_text: str | None = None) -> Task:
         """PATCH /api/v4/tasks/{id} — mark task as completed (#697)."""
@@ -284,7 +321,7 @@ class KommoClient:
         if result_text is not None:
             payload["result"] = {"text": result_text}
         data = await self._request("PATCH", f"/tasks/{task_id}", json=payload)
-        return Task(**data)
+        return _mutation_result(Task, data)
 
     # --- Links ---
 
