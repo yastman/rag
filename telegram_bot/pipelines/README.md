@@ -9,7 +9,6 @@ telegram_bot/pipelines
 
 ## Contents
 - __init__.py
-- state_contract.py
 
 ## Parent
 - [..](..)

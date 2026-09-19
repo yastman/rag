@@ -5,8 +5,7 @@ Applies to telegram_bot/**; extends [root AGENTS](../AGENTS.md).
 - Keep Telegram transport/lifecycle separate from retrieval and product service behavior.
 - Enter shared assistant behavior through src/core; classify/guard/GraphConfig live in
   src/runtime, not a Telegram graph package.
-- Preserve PreAgentStateContract in pipelines/state_contract.py while its callers remain.
-  When changing a boundary, update consumers and behavior tests together.
+- When changing a boundary, update consumers and behavior tests together.
 - Trace compatibility facades to their shared owner before fixing a bug in two places.
 - Preserve supported capability checks, user-visible error behavior, and score/trace fields.
   Observability shims are not proof of an external tracing backend.

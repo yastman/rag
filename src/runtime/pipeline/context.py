@@ -1,10 +1,8 @@
 # SPDX-License-Identifier: MIT
 """Typed pipeline state contract for rag_pipeline() (#2946).
 
-Replaces the stringly-typed ``dict[str, Any]`` previously passed as
-``state_contract``.  The shape mirrors ``PreAgentStateContract`` in
-``telegram_bot.pipelines.state_contract``; the two stay in sync but live in
-separate layers (src/ must not import telegram_bot/).
+Owns the ``state_contract`` shape passed into the runtime pipeline.
+Transport adapters supply this context without introducing a second state type.
 """
 
 from __future__ import annotations

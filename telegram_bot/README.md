@@ -55,7 +55,6 @@ make test
 | `agents/` | Agent SDK tools (RAG retrieval delegated to `src/runtime/pipeline/`) |
 | `dialogs/` | aiogram-dialog packages: catalog, filter, funnel + demo/viewing/settings |
 | `pipeline/` | Supervisor + pre-agent + streaming (agent orchestration) |
-| `pipelines/` | Shared pre-agent state contract (`state_contract.py`) |
 | `lifecycle/` | Bot startup/teardown, postgres bootstrap, service wiring |
 | `integrations/` | Embeddings, cache, prompt manager, memory (several are shims to `src.runtime.integrations`) |
 | `observability/` | Trace/context helpers + no-op `@observe` shim (Langfuse removed) |
