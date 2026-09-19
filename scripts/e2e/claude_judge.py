@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 from openai import AsyncOpenAI
 
 from .config import E2EConfig
-from .scenarios import TestGroup, TestScenario
+from .scenarios import ExpectedFilters, KeywordMatch, TestGroup, TestScenario
 
 
 logger = logging.getLogger(__name__)
@@ -125,6 +125,8 @@ class _BaseLLMJudge:
                 filters_parts.append(f"цена >= {ef.price_min}")
             if ef.rooms is not None:
                 filters_parts.append(f"комнат: {ef.rooms}")
+            if ef.rooms_min is not None:
+                filters_parts.append(f"комнат >= {ef.rooms_min}")
             if ef.city:
                 filters_parts.append(f"город: {ef.city}")
             if ef.distance_to_sea_max:
@@ -255,13 +257,43 @@ def build_judge(config: E2EConfig) -> LiteLLMJudge | OpenAICompatibleJudge | Cla
 class PassthroughJudge:
     """Deterministic judge with product-meaningful checks (no LLM needed)."""
 
+    _NUMERIC_TOKEN_START = r"(?:(?<![\w\d.,])|(?=[<>=]))"
+    _BOUND_OPERATOR = (
+        r">=|<=|>|<|=|не\s+(?:более|выше|менее|ниже)|"
+        r"более|больше|свыше|менее|меньше|выше|ниже|до|от"
+    )
+    _UPPER_BOUND_OPERATORS = frozenset({"до", "менее", "меньше", "ниже", "не более", "не выше"})
+
     def __init__(self, config: E2EConfig):
         self.config = config
 
     @staticmethod
-    def _contains_any_keyword(response: str, keywords: list[str]) -> bool:
+    def _check_keywords(
+        response: str,
+        keywords: list[str],
+        keyword_match: KeywordMatch,
+    ) -> tuple[bool, list[str]]:
         lowered = response.lower()
-        return any(keyword.lower() in lowered for keyword in keywords)
+        observed_keywords = [keyword for keyword in keywords if keyword.lower() in lowered]
+        if keyword_match is KeywordMatch.ALL:
+            return len(observed_keywords) == len(keywords), observed_keywords
+        return bool(observed_keywords), observed_keywords
+
+    @staticmethod
+    def _has_filter_assertions(filters: ExpectedFilters | None) -> bool:
+        if filters is None:
+            return False
+        return any(
+            value is not None
+            for value in (
+                filters.price_max,
+                filters.price_min,
+                filters.rooms,
+                filters.rooms_min,
+                filters.city,
+                filters.distance_to_sea_max,
+            )
+        )
 
     @staticmethod
     def _generic_fallback_detected(response: str) -> bool:
@@ -275,51 +307,122 @@ class PassthroughJudge:
         return any(marker in lowered for marker in bad_markers)
 
     @staticmethod
-    def _extract_price_values(response: str) -> tuple[list[int], list[str]]:
-        """Return normalized prices and explicit malformed price candidates."""
-        values: list[int] = []
+    def _bound_relation(operator: str | None) -> str:
+        """Classify only explicit, supported Russian numeric bound operators."""
+        if operator is None:
+            return "exact"
+        normalized_operator = " ".join(operator.split())
+        if normalized_operator in {">=", "<=", ">", "<", "="}:
+            return f"unsupported:{normalized_operator}"
+        if normalized_operator in PassthroughJudge._UPPER_BOUND_OPERATORS:
+            return "upper"
+        return "lower"
+
+    @staticmethod
+    def _extract_price_values(
+        response: str,
+    ) -> tuple[list[tuple[int, str]], list[str]]:
+        """Return normalized prices with their explicit bound relation, if any."""
+        values: list[tuple[int, str]] = []
         unsupported_tokens: list[str] = []
         numeric_candidate = r"\d(?:[\d\s._,]*\d)?"
+        range_spans: list[tuple[int, int]] = []
         for match in re.finditer(
-            rf"(?<![\d.,])(?:(?:€|евро\b)\s*(?P<prefix>{numeric_candidate})|"
-            rf"(?P<suffix>{numeric_candidate})\s*(?:€|евро\b))",
+            rf"(?<![\w\d.,])от\s*(?P<lower>{numeric_candidate})\s*"
+            rf"(?:(?:€|евро\b)\s*)?до\s*(?P<upper>{numeric_candidate})\s*(?:€|евро\b)",
             response.lower(),
         ):
-            raw_value = (match.group("prefix") or match.group("suffix")).strip()
+            range_spans.append(match.span())
+            range_values: dict[str, int] = {}
+            for group in ("lower", "upper"):
+                raw_value = match.group(group).strip()
+                if re.fullmatch(r"\d+|\d{1,3}(?:[\s_,]\d{3})+", raw_value):
+                    range_values[group] = int(re.sub(r"[\s_,]", "", raw_value))
+                else:
+                    unsupported_tokens.append(raw_value)
+            if len(range_values) != 2:
+                continue
+            lower, upper = range_values["lower"], range_values["upper"]
+            if lower > upper:
+                unsupported_tokens.append(f"invalid range {lower}..{upper}")
+                continue
+            values.extend(((lower, "range_lower"), (upper, "range_upper")))
+
+        price_pattern = (
+            rf"{PassthroughJudge._NUMERIC_TOKEN_START}(?:"
+            rf"(?P<before_currency_operator>{PassthroughJudge._BOUND_OPERATOR})\s*"
+            rf"(?:€|евро\b)\s*(?P<before_currency_value>{numeric_candidate})|"
+            rf"(?:€|евро\b)\s*(?P<prefix_operator>{PassthroughJudge._BOUND_OPERATOR})?\s*"
+            rf"(?P<prefix_value>{numeric_candidate})|"
+            rf"(?P<suffix_operator>{PassthroughJudge._BOUND_OPERATOR})?\s*"
+            rf"(?P<suffix_value>{numeric_candidate})\s*(?:€|евро\b)"
+            rf")"
+        )
+        for match in re.finditer(price_pattern, response.lower()):
+            if any(start <= match.start() < end for start, end in range_spans):
+                continue
+            value_group = next(
+                group
+                for group in ("before_currency_value", "prefix_value", "suffix_value")
+                if match.group(group) is not None
+            )
+            raw_value = match.group(value_group).strip()
+            operator = next(
+                (
+                    match.group(group)
+                    for group in (
+                        "before_currency_operator",
+                        "prefix_operator",
+                        "suffix_operator",
+                    )
+                    if match.group(group) is not None
+                ),
+                None,
+            )
+            relation = PassthroughJudge._bound_relation(operator)
             if re.fullmatch(r"\d+|\d{1,3}(?:[\s_,]\d{3})+", raw_value):
-                values.append(int(re.sub(r"[\s_,]", "", raw_value)))
+                values.append((int(re.sub(r"[\s_,]", "", raw_value)), relation))
             else:
                 unsupported_tokens.append(raw_value)
+
         for match in re.finditer(
-            rf"(?<![\d.,])(?P<value>{numeric_candidate})\s*(?:k|к)\b",
+            rf"{PassthroughJudge._NUMERIC_TOKEN_START}(?P<operator>{PassthroughJudge._BOUND_OPERATOR})?\s*"
+            rf"(?P<value>{numeric_candidate})\s*(?:k|к)\b",
             response.lower(),
         ):
+            raw_value = match.group("value").strip()
+            if re.fullmatch(r"\d+|\d{1,3}(?:[\s_,]\d{3})+", raw_value):
+                # A grouped integer with a k suffix is unambiguous only after normalization.
+                raw_value = re.sub(r"[\s_,]", "", raw_value)
             try:
-                normalized = Decimal(match.group("value").replace(",", ".")) * 1000
+                normalized = Decimal(raw_value.replace(",", ".")) * 1000
             except InvalidOperation:
-                unsupported_tokens.append(match.group("value"))
+                unsupported_tokens.append(raw_value)
             else:
                 if normalized != normalized.to_integral_value():
-                    unsupported_tokens.append(match.group("value"))
+                    unsupported_tokens.append(raw_value)
                     continue
-                values.append(int(normalized))
+                operator = match.group("operator")
+                values.append((int(normalized), PassthroughJudge._bound_relation(operator)))
         return values, unsupported_tokens
 
     @staticmethod
-    def _extract_room_counts(response: str) -> tuple[list[int], list[str]]:
-        """Return room counts and explicit malformed room candidates."""
+    def _extract_room_counts(response: str) -> tuple[list[tuple[int, str]], list[str]]:
+        """Return room counts and their explicit bound relation, if any."""
         lowered = response.lower()
-        counts: list[int] = []
+        counts: list[tuple[int, str]] = []
         unsupported_tokens: list[str] = []
         numeric_candidate = r"\d(?:[\d\s._,]*\d)?"
         for match in re.finditer(
-            rf"(?<![\d.,])(?P<value>{numeric_candidate})\s*[- ]?"
+            rf"{PassthroughJudge._NUMERIC_TOKEN_START}(?P<operator>{PassthroughJudge._BOUND_OPERATOR})?\s*"
+            rf"(?P<value>{numeric_candidate})\s*[- ]?"
             rf"(?:комнат\w*|комн\w*|спальн\w*)",
             lowered,
         ):
             raw_value = match.group("value").strip()
             if raw_value.isdecimal():
-                counts.append(int(raw_value))
+                operator = match.group("operator")
+                counts.append((int(raw_value), PassthroughJudge._bound_relation(operator)))
             else:
                 unsupported_tokens.append(raw_value)
         for count, marker in (
@@ -330,22 +433,26 @@ class PassthroughJudge:
             (4, "четырехкомнат"),
         ):
             if marker in lowered:
-                counts.append(count)
+                counts.append((count, "exact"))
         return counts, unsupported_tokens
 
     @staticmethod
-    def _extract_distances_in_meters(response: str) -> tuple[list[Decimal], list[str]]:
+    def _extract_distances_in_meters(
+        response: str,
+    ) -> tuple[list[tuple[Decimal, str]], list[str]]:
         """Return sea-distance values and explicit malformed numeric candidates."""
         numeric_candidate = r"\d(?:[\d\s._,]*\d)?"
         unit = r"км|километр\w*|м|метр\w*"
         destination = r"(?:мор\w*|пляж\w*)"
         patterns = (
-            rf"(?<![\d.,])(?P<value>{numeric_candidate})\s*(?P<unit>{unit})\b\s*"
+            rf"{PassthroughJudge._NUMERIC_TOKEN_START}(?P<operator>{PassthroughJudge._BOUND_OPERATOR})?\s*"
+            rf"(?P<value>{numeric_candidate})\s*(?P<unit>{unit})\b\s*"
             rf"(?:до|от)\s*{destination}\b",
-            rf"(?:до|от)\s*{destination}\b\s*(?P<value>{numeric_candidate})\s*"
+            rf"(?:до|от)\s*{destination}\b\s*(?P<operator>{PassthroughJudge._BOUND_OPERATOR})?\s*"
+            rf"(?P<value>{numeric_candidate})\s*"
             rf"(?P<unit>{unit})\b",
         )
-        distances: list[Decimal] = []
+        distances: list[tuple[Decimal, str]] = []
         unsupported_tokens: list[str] = []
         for pattern in patterns:
             for match in re.finditer(pattern, response.lower()):
@@ -359,20 +466,55 @@ class PassthroughJudge:
                 else:
                     unsupported_tokens.append(raw_value)
                     continue
-                distances.append(value * 1000 if match.group("unit").startswith("к") else value)
+                normalized_value = value * 1000 if match.group("unit").startswith("к") else value
+                operator = match.group("operator")
+                distances.append((normalized_value, PassthroughJudge._bound_relation(operator)))
         return distances, unsupported_tokens
 
     @staticmethod
-    def _format_observed_values(values: Sequence[int | Decimal]) -> str:
+    def _format_observed_values(
+        values: Sequence[int | Decimal | tuple[int | Decimal, str]],
+    ) -> str:
         if not values:
             return "none"
         formatted_values: list[str] = []
-        for value in values:
+        for observed in values:
+            if isinstance(observed, tuple):
+                value, relation = observed
+            else:
+                value, relation = observed, "exact"
             formatted = format(Decimal(value).normalize(), "f")
             if "." in formatted:
                 formatted = formatted.rstrip("0").rstrip(".")
+            if relation == "upper":
+                formatted = f"<= {formatted} (upper-bound)"
+            elif relation == "lower":
+                formatted = f">= {formatted} (lower-bound)"
+            elif relation == "range_lower":
+                formatted = f">= {formatted} (range-lower)"
+            elif relation == "range_upper":
+                formatted = f"<= {formatted} (range-upper)"
+            elif relation.startswith("unsupported:"):
+                operator = relation.removeprefix("unsupported:")
+                formatted = f"{formatted} (unsupported operator {operator})"
             formatted_values.append(formatted)
         return ", ".join(formatted_values)
+
+    @staticmethod
+    def _proves_upper_bound(values: Sequence[tuple[int | Decimal, str]], maximum: int) -> bool:
+        return any(relation in {"exact", "upper", "range_upper"} for _, relation in values) and all(
+            relation == "range_lower"
+            or (relation in {"exact", "upper", "range_upper"} and value <= maximum)
+            for value, relation in values
+        )
+
+    @staticmethod
+    def _proves_lower_bound(values: Sequence[tuple[int | Decimal, str]], minimum: int) -> bool:
+        return any(relation in {"exact", "lower", "range_lower"} for _, relation in values) and all(
+            relation == "range_upper"
+            or (relation in {"exact", "lower", "range_lower"} and value >= minimum)
+            for value, relation in values
+        )
 
     @staticmethod
     def _city_terms(city: str) -> list[str]:
@@ -384,7 +526,7 @@ class PassthroughJudge:
         lowered = response.lower()
         checks: dict[str, bool] = {}
         diagnostics: dict[str, str] = {}
-        prices: list[int] = []
+        prices: list[tuple[int, str]] = []
         unsupported_price_tokens: list[str] = []
         if filters.price_max is not None or filters.price_min is not None:
             prices, unsupported_price_tokens = PassthroughJudge._extract_price_values(response)
@@ -396,9 +538,8 @@ class PassthroughJudge:
 
         if filters.price_max is not None:
             checks["price_max"] = (
-                bool(prices)
+                PassthroughJudge._proves_upper_bound(prices, filters.price_max)
                 and not unsupported_price_tokens
-                and all(price <= filters.price_max for price in prices)
             )
             diagnostics["price_max"] = (
                 f"expected <= {filters.price_max} EUR; observed EUR values: {price_diagnostics}"
@@ -406,9 +547,8 @@ class PassthroughJudge:
 
         if filters.price_min is not None:
             checks["price_min"] = (
-                bool(prices)
+                PassthroughJudge._proves_lower_bound(prices, filters.price_min)
                 and not unsupported_price_tokens
-                and all(price >= filters.price_min for price in prices)
             )
             diagnostics["price_min"] = (
                 f"expected >= {filters.price_min} EUR; observed EUR values: {price_diagnostics}"
@@ -433,10 +573,32 @@ class PassthroughJudge:
             checks["rooms"] = (
                 bool(room_counts)
                 and not unsupported_room_tokens
-                and all(room_count == filters.rooms for room_count in room_counts)
+                and all(
+                    relation == "exact" and room_count == filters.rooms
+                    for room_count, relation in room_counts
+                )
             )
             diagnostics["rooms"] = (
                 f"expected {filters.rooms} rooms; observed room counts: {room_diagnostics}"
+            )
+
+        if filters.rooms_min is not None:
+            room_counts, unsupported_room_tokens = PassthroughJudge._extract_room_counts(response)
+            room_diagnostics = PassthroughJudge._format_observed_values(room_counts) + (
+                f"; unsupported room tokens: {', '.join(unsupported_room_tokens)}"
+                if unsupported_room_tokens
+                else ""
+            )
+            checks["rooms_min"] = (
+                bool(room_counts)
+                and not unsupported_room_tokens
+                and all(
+                    relation == "exact" and room_count >= filters.rooms_min
+                    for room_count, relation in room_counts
+                )
+            )
+            diagnostics["rooms_min"] = (
+                f"expected >= {filters.rooms_min} rooms; observed room counts: {room_diagnostics}"
             )
 
         if filters.distance_to_sea_max is not None:
@@ -444,9 +606,8 @@ class PassthroughJudge:
                 response
             )
             checks["distance_to_sea_max"] = (
-                bool(distances)
+                PassthroughJudge._proves_upper_bound(distances, filters.distance_to_sea_max)
                 and not unsupported_distance_tokens
-                and all(distance <= filters.distance_to_sea_max for distance in distances)
             )
             distance_diagnostics = PassthroughJudge._format_observed_values(distances) + (
                 f"; unsupported distance tokens: {', '.join(unsupported_distance_tokens)}"
@@ -466,6 +627,23 @@ class PassthroughJudge:
         bot_response: str,
     ) -> JudgeResult:
         """Evaluate bot response with deterministic product checks."""
+        if scenario.provider_judge_only:
+            summary = "Scenario requires a provider judge; --no-judge cannot verify semantic or route behavior"
+            return JudgeResult(
+                relevance=CriterionScore(0, summary),
+                completeness=CriterionScore(0, summary),
+                filter_accuracy=CriterionScore(0, summary),
+                tone_format=CriterionScore(0, summary),
+                no_hallucination=CriterionScore(0, summary),
+                total_score=0.0,
+                passed=False,
+                summary=summary,
+                check_details={
+                    "presence": bool(bot_response and bot_response.strip()),
+                    "provider_judge_only": True,
+                },
+            )
+
         if not bot_response or not bot_response.strip():
             return JudgeResult(
                 relevance=CriterionScore(0, "Empty response"),
@@ -481,15 +659,31 @@ class PassthroughJudge:
 
         check_details: dict = {"presence": True}
         failed_checks: list[str] = []
+        has_deterministic_assertions = bool(
+            scenario.expected_keywords
+        ) or self._has_filter_assertions(scenario.expected_filters)
+        check_details["deterministic_assertions"] = has_deterministic_assertions
+        if not has_deterministic_assertions:
+            failed_checks.append("Scenario has no deterministic assertions")
 
         # 1. Expected keywords
         if scenario.expected_keywords:
-            has_keywords = self._contains_any_keyword(bot_response, scenario.expected_keywords)
+            has_keywords, observed_keywords = self._check_keywords(
+                bot_response,
+                scenario.expected_keywords,
+                scenario.keyword_match,
+            )
             check_details["expected_keywords"] = has_keywords
+            check_details["keyword_diagnostics"] = (
+                f"expected {scenario.keyword_match.value} keywords: "
+                f"{', '.join(scenario.expected_keywords)}; observed keywords: "
+                f"{', '.join(observed_keywords) or 'none'}"
+            )
             if not has_keywords:
                 failed_checks.append(f"Missing expected keywords: {scenario.expected_keywords}")
         else:
             check_details["expected_keywords"] = None
+            check_details["keyword_diagnostics"] = None
 
         # 2. Generic fallback rejection for RAG/property scenarios
         is_rag_property = scenario.group in {

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from scripts.e2e import scenarios as scenarios
 from scripts.e2e.claude_judge import PassthroughJudge
 from scripts.e2e.config import E2EConfig
@@ -25,7 +27,7 @@ def _immigration_scenario() -> scenarios.TestScenario:
         name="Digital Nomad visa basics",
         query="Какие требования для визы Digital Nomad в Болгарии?",
         group=scenarios.TestGroup.IMMIGRATION,
-        expected_keywords=["digital", "nomad", "виза", "болгар"],
+        expected_keywords=["digital", "nomad", "виз", "болгар"],
     )
 
 
@@ -62,6 +64,16 @@ def _price_range_scenario() -> scenarios.TestScenario:
     )
 
 
+def _price_min_scenario() -> scenarios.TestScenario:
+    return scenarios.TestScenario(
+        id="3.6",
+        name="Price minimum",
+        query="квартиры от 60000 евро",
+        group=scenarios.TestGroup.PRICE_FILTERS,
+        expected_filters=scenarios.ExpectedFilters(price_min=60000),
+    )
+
+
 def _rooms_filter_scenario() -> scenarios.TestScenario:
     return scenarios.TestScenario(
         id="4.2",
@@ -69,6 +81,16 @@ def _rooms_filter_scenario() -> scenarios.TestScenario:
         query="двухкомнатная квартира",
         group=scenarios.TestGroup.ROOM_FILTERS,
         expected_filters=scenarios.ExpectedFilters(rooms=2),
+    )
+
+
+def _rooms_min_scenario() -> scenarios.TestScenario:
+    return scenarios.TestScenario(
+        id="4.3",
+        name="Three or more rooms",
+        query="трехкомнатные и больше",
+        group=scenarios.TestGroup.ROOM_FILTERS,
+        expected_filters=scenarios.ExpectedFilters(rooms_min=3),
     )
 
 
@@ -82,14 +104,16 @@ def _distance_filter_scenario() -> scenarios.TestScenario:
     )
 
 
-def test_passthrough_judge_chitchat_passes_with_response_presence() -> None:
+def test_passthrough_judge_rejects_response_without_deterministic_assertions() -> None:
     judge = PassthroughJudge(E2EConfig())
     result = asyncio.run(judge.evaluate(_chitchat_scenario(), "Привет! Как дела?"))
 
-    assert result.passed is True
+    assert result.passed is False
     assert result.check_details is not None
     assert result.check_details["presence"] is True
     assert result.check_details["expected_keywords"] is None
+    assert result.check_details["deterministic_assertions"] is False
+    assert "Scenario has no deterministic assertions" in result.summary
 
 
 def test_passthrough_judge_fails_empty_response() -> None:
@@ -127,6 +151,55 @@ def test_passthrough_judge_fails_missing_expected_keywords() -> None:
     assert result.passed is False
     assert result.check_details is not None
     assert result.check_details["expected_keywords"] is False
+
+
+def test_passthrough_judge_requires_all_default_keywords() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    scenario = scenarios.TestScenario(
+        id="keyword-all",
+        name="All required keywords",
+        query="keyword test",
+        group=scenarios.TestGroup.COMMANDS,
+        expected_keywords=["первый", "второй"],
+    )
+    result = asyncio.run(judge.evaluate(scenario, "Есть только первый термин."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["expected_keywords"] is False
+
+
+def test_passthrough_judge_accepts_explicit_alternative_keyword() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    scenario = scenarios.TestScenario(
+        id="keyword-any",
+        name="Alternative keywords",
+        query="keyword test",
+        group=scenarios.TestGroup.COMMANDS,
+        expected_keywords=["первый", "второй"],
+        keyword_match=scenarios.KeywordMatch.ANY,
+    )
+    result = asyncio.run(judge.evaluate(scenario, "Есть только первый термин."))
+
+    assert result.passed is True
+    assert result.check_details is not None
+    assert result.check_details["expected_keywords"] is True
+
+
+def test_passthrough_judge_rejects_empty_filter_assertions() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    scenario = scenarios.TestScenario(
+        id="empty-filters",
+        name="Empty filters",
+        query="anything",
+        group=scenarios.TestGroup.PRICE_FILTERS,
+        expected_filters=scenarios.ExpectedFilters(),
+    )
+    result = asyncio.run(judge.evaluate(scenario, "Есть ответ."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["deterministic_assertions"] is False
 
 
 def test_passthrough_judge_fails_generic_fallback_for_rag() -> None:
@@ -344,6 +417,179 @@ def test_passthrough_judge_rejects_price_above_requested_maximum() -> None:
     }
 
 
+def test_passthrough_judge_rejects_unsupported_price_comparison_operator() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_filter_scenario(), "Цена > 80000 евро."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": ("expected <= 80000 EUR; observed EUR values: 80000 (unsupported operator >)")
+    }
+
+
+@pytest.mark.parametrize("operator", [">", ">=", "<", "<=", "="])
+@pytest.mark.parametrize("spacing", ["", " "])
+@pytest.mark.parametrize(
+    ("scenario_factory", "token", "filter_name"),
+    [
+        (_price_filter_scenario, "€80000", "price_max"),
+        (_price_filter_scenario, "евро 80000", "price_max"),
+        (_price_filter_scenario, "80000 евро", "price_max"),
+        (_price_filter_scenario, "80000€", "price_max"),
+        (_price_filter_scenario, "80к", "price_max"),
+        (_price_filter_scenario, "80k", "price_max"),
+        (_rooms_filter_scenario, "2 комнат", "rooms"),
+        (_distance_filter_scenario, "500 м от моря", "distance_to_sea_max"),
+    ],
+)
+def test_passthrough_judge_rejects_symbolic_comparison_for_each_token_form(
+    scenario_factory, token: str, filter_name: str, operator: str, spacing: str
+) -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(scenario_factory(), f"Значение{spacing}{operator}{spacing}{token}.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {filter_name: False}
+    assert (
+        f"unsupported operator {operator}"
+        in result.check_details["filter_diagnostics"][filter_name]
+    )
+
+
+@pytest.mark.parametrize("token", ["€80000", "евро 80000", "80000 евро", "80000€", "80к", "80k"])
+def test_passthrough_judge_accepts_exact_price_token_forms(token: str) -> None:
+    result = asyncio.run(
+        PassthroughJudge(E2EConfig()).evaluate(_price_filter_scenario(), f"Цена {token}.")
+    )
+
+    assert result.passed is True
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": True}
+
+
+def test_passthrough_judge_rejects_adjacent_price_operator_with_k_shorthand() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_filter_scenario(), "Цена>80к."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": ("expected <= 80000 EUR; observed EUR values: 80000 (unsupported operator >)")
+    }
+
+
+def test_passthrough_judge_accepts_explicit_price_range() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_range_scenario(), "Цены от 60000 до 80000 евро."))
+
+    assert result.passed is True
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": True, "price_min": True}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": (
+            "expected <= 80000 EUR; observed EUR values: "
+            ">= 60000 (range-lower), <= 80000 (range-upper)"
+        ),
+        "price_min": (
+            "expected >= 60000 EUR; observed EUR values: "
+            ">= 60000 (range-lower), <= 80000 (range-upper)"
+        ),
+    }
+
+
+def test_passthrough_judge_accepts_explicit_price_range_with_both_currencies() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_price_range_scenario(), "Цены от 60000 евро до 80000 евро.")
+    )
+
+    assert result.passed is True
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": True, "price_min": True}
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "Цены от 90000 до 70000 евро.",
+        "Цены от 90000 до 70000 евро. Есть квартира за 70000 евро.",
+        "Цены от 90000 до 70000 евро. Другие цены от 60000 до 80000 евро.",
+    ],
+)
+def test_passthrough_judge_rejects_inverted_explicit_price_range(response: str) -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_range_scenario(), response))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {
+        "price_max": False,
+        "price_min": False,
+    }
+    for diagnostic in result.check_details["filter_diagnostics"].values():
+        assert "unsupported EUR tokens: invalid range 90000..70000" in diagnostic
+
+
+def test_passthrough_judge_rejects_lower_price_bound_for_requested_maximum() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_filter_scenario(), "Цены от 70 000 евро."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": ("expected <= 80000 EUR; observed EUR values: >= 70000 (lower-bound)")
+    }
+
+
+def test_passthrough_judge_rejects_lower_price_bound_before_currency() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_filter_scenario(), "Цены от €70 000."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_max": ("expected <= 80000 EUR; observed EUR values: >= 70000 (lower-bound)")
+    }
+
+
+def test_passthrough_judge_rejects_upper_price_bound_for_requested_minimum() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_price_min_scenario(), "Цены до 70 000 евро."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"price_min": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "price_min": ("expected >= 60000 EUR; observed EUR values: <= 70000 (upper-bound)")
+    }
+
+
+def test_passthrough_judge_accepts_supported_price_bounds() -> None:
+    judge = PassthroughJudge(E2EConfig())
+
+    maximum_result = asyncio.run(judge.evaluate(_price_filter_scenario(), "Цены до 70 000 евро."))
+    minimum_result = asyncio.run(judge.evaluate(_price_min_scenario(), "Цены от 70 000 евро."))
+
+    assert maximum_result.passed is True
+    assert maximum_result.check_details is not None
+    assert maximum_result.check_details["filter_diagnostics"] == {
+        "price_max": ("expected <= 80000 EUR; observed EUR values: <= 70000 (upper-bound)")
+    }
+    assert minimum_result.passed is True
+    assert minimum_result.check_details is not None
+    assert minimum_result.check_details["filter_diagnostics"] == {
+        "price_min": ("expected >= 60000 EUR; observed EUR values: >= 70000 (lower-bound)")
+    }
+
+
 def test_passthrough_judge_rejects_price_digits_as_room_evidence() -> None:
     judge = PassthroughJudge(E2EConfig())
     result = asyncio.run(judge.evaluate(_rooms_filter_scenario(), "Есть вариант за 120 000 евро."))
@@ -353,6 +599,42 @@ def test_passthrough_judge_rejects_price_digits_as_room_evidence() -> None:
     assert result.check_details["filter_evidence"] == {"rooms": False}
     assert result.check_details["filter_diagnostics"] == {
         "rooms": "expected 2 rooms; observed room counts: none"
+    }
+
+
+def test_passthrough_judge_rejects_lower_room_bound_for_exact_rooms() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_rooms_filter_scenario(), "Есть более 2 комнат."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"rooms": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "rooms": "expected 2 rooms; observed room counts: >= 2 (lower-bound)"
+    }
+
+
+def test_passthrough_judge_rejects_adjacent_room_comparison_operator() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_rooms_filter_scenario(), "комнат>2 комнат"))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"rooms": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "rooms": "expected 2 rooms; observed room counts: 2 (unsupported operator >)"
+    }
+
+
+def test_passthrough_judge_accepts_room_count_above_minimum() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_rooms_min_scenario(), "Есть 4-комнатная квартира."))
+
+    assert result.passed is True
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"rooms_min": True}
+    assert result.check_details["filter_diagnostics"] == {
+        "rooms_min": "expected >= 3 rooms; observed room counts: 4"
     }
 
 
@@ -368,6 +650,102 @@ def test_passthrough_judge_rejects_sea_mention_without_bounded_distance() -> Non
     assert result.check_details["filter_diagnostics"] == {
         "distance_to_sea_max": "expected <= 500 m; observed distances: none"
     }
+
+
+def test_passthrough_judge_rejects_lower_distance_bound_for_requested_maximum() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(_distance_filter_scenario(), "Квартира более 500 м от моря.")
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"distance_to_sea_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": ("expected <= 500 m; observed distances: >= 500 (lower-bound)")
+    }
+
+
+def test_passthrough_judge_rejects_lower_distance_bound_spelling_variant() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_distance_filter_scenario(), "Больше 500 м от моря."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"distance_to_sea_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": ("expected <= 500 m; observed distances: >= 500 (lower-bound)")
+    }
+
+
+def test_passthrough_judge_rejects_adjacent_distance_comparison_operator() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_distance_filter_scenario(), "Расстояние>500 м от моря."))
+
+    assert result.passed is False
+    assert result.check_details is not None
+    assert result.check_details["filter_evidence"] == {"distance_to_sea_max": False}
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": (
+            "expected <= 500 m; observed distances: 500 (unsupported operator >)"
+        )
+    }
+
+
+def test_passthrough_judge_accepts_supported_distance_upper_bound() -> None:
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(judge.evaluate(_distance_filter_scenario(), "Квартира до 500 м от моря."))
+
+    assert result.passed is True
+    assert result.check_details is not None
+    assert result.check_details["filter_diagnostics"] == {
+        "distance_to_sea_max": ("expected <= 500 m; observed distances: <= 500 (upper-bound)")
+    }
+
+
+def test_passthrough_judge_blocks_provider_judge_only_scenario() -> None:
+    scenario = scenarios.get_scenario_by_id("0.1")
+    assert scenario is not None
+    assert scenario.provider_judge_only is True
+
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(scenario, "Для визы Digital Nomad в Болгарии нужны документы.")
+    )
+
+    assert result.passed is False
+    assert result.check_details == {
+        "presence": True,
+        "provider_judge_only": True,
+    }
+    assert result.summary == (
+        "Scenario requires a provider judge; --no-judge cannot verify semantic or route behavior"
+    )
+
+
+def test_passthrough_judge_accepts_deterministic_filter_scenario_set() -> None:
+    responses = {
+        "3.1": "Квартира за 70 000 евро.",
+        "3.2": "Квартира за 120 000 евро.",
+        "3.3": "Квартира до 60 000 евро.",
+        "4.1": "Есть студия у моря.",
+        "4.2": "Есть двухкомнатная квартира.",
+        "4.3": "Есть 4-комнатная квартира.",
+        "4.4": "Есть 2-комнатная квартира за 100 000 евро.",
+        "5.1": "Есть квартира в Несебре.",
+        "5.2": "Есть квартира в Солнечном берегу.",
+        "5.3": "Квартира до 300 м от моря.",
+    }
+    judge = PassthroughJudge(E2EConfig())
+
+    results = []
+    for scenario_id, response in responses.items():
+        scenario = scenarios.get_scenario_by_id(scenario_id)
+        assert scenario is not None
+        assert scenario.provider_judge_only is False
+        results.append(asyncio.run(judge.evaluate(scenario, response)))
+
+    assert all(result.passed for result in results)
 
 
 def test_passthrough_judge_accepts_distance_within_requested_maximum() -> None:
