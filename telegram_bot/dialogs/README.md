@@ -12,7 +12,6 @@ telegram_bot/dialogs
 - catalog/ (catalog search dialog package)
 - filter/ (filter dialog package)
 - funnel/ (funnel dialog package)
-- catalog_transport.py
 - client_menu.py
 - demo.py
 - faq.py

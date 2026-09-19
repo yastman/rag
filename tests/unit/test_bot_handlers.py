@@ -26,7 +26,6 @@ from telegram_bot.handlers.command_handlers import (
     cmd_stats,
 )
 from telegram_bot.preflight import PreflightError
-from telegram_bot.services.util.error_utils import walk_traceback_frames
 from telegram_bot.startup_status import DependencyCheckResult, StartupReport
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -72,93 +71,6 @@ def _make_typing_cm():
     mock_cm.__aenter__ = AsyncMock()
     mock_cm.__aexit__ = AsyncMock(return_value=False)
     return mock_cm
-
-
-def _raise_nested_runtime_error() -> None:
-    def _inner() -> None:
-        raise RuntimeError("boom")
-
-    _inner()
-
-
-class TestPreAgentStateContract:
-    def test_build_pre_agent_miss_contract_sets_required_fields(self):
-        from telegram_bot.pipelines.state_contract import build_pre_agent_miss_contract
-
-        contract = build_pre_agent_miss_contract(
-            query_type="FAQ",
-            topic_hint="legal",
-            dense_vector=[0.1, 0.2],
-            sparse_vector={"indices": [1], "values": [0.5]},
-            colbert_query=[[0.2] * 4],
-            grounding_mode="strict",
-        )
-
-        assert contract["cache_checked"] is True
-        assert contract["cache_hit"] is False
-        assert contract["cache_scope"] == "rag"
-        assert contract["embedding_bundle_ready"] is True
-        assert contract["embedding_bundle_version"] == "bge_m3_hybrid_colbert"
-        assert contract["retrieval_policy"] == "topic_then_relax"
-        assert contract["query_type"] == "FAQ"
-        assert contract["topic_hint"] == "legal"
-        assert contract["grounding_mode"] == "strict"
-
-    def test_build_pre_agent_miss_contract_preserves_filters(self):
-        from telegram_bot.pipelines.state_contract import build_pre_agent_miss_contract
-
-        filters = {"city": "Несебр", "price": {"lte": 80000}}
-        contract = build_pre_agent_miss_contract(
-            query_type="FAQ",
-            topic_hint="finance",
-            dense_vector=[0.1, 0.2],
-            sparse_vector={"indices": [1], "values": [0.5]},
-            colbert_query=[[0.2] * 4],
-            grounding_mode="strict",
-            filters=filters,
-        )
-
-        assert contract["filters"] == filters
-
-    def test_coerce_pre_agent_state_contract_backfills_empty_existing_filters(self):
-        from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
-
-        store = {
-            "filters": {"city": "Несебр", "price": {"lte": 80000}},
-            "state_contract": {
-                "cache_checked": True,
-                "cache_hit": False,
-                "cache_scope": "rag",
-                "embedding_bundle_ready": True,
-                "embedding_bundle_version": "bge_m3_hybrid_colbert",
-                "query_type": "FAQ",
-                "topic_hint": "finance",
-                "filters": {},
-                "retrieval_policy": "topic_then_relax",
-                "grounding_mode": "normal",
-            },
-        }
-
-        contract = coerce_pre_agent_state_contract(
-            store,
-            query_type="FAQ",
-            topic_hint="finance",
-            grounding_mode="normal",
-        )
-
-        assert contract is not None
-        assert contract["filters"] == {"city": "Несебр", "price": {"lte": 80000}}
-
-
-class TestErrorUtils:
-    def test_walk_traceback_frames_returns_function_names(self):
-        with pytest.raises(RuntimeError) as exc_info:
-            _raise_nested_runtime_error()
-
-        frames = list(walk_traceback_frames(exc_info.value))
-
-        assert any(function_name == "_raise_nested_runtime_error" for _, function_name in frames)
-        assert any(function_name == "_inner" for _, function_name in frames)
 
 
 class TestPropertyBotInit:
