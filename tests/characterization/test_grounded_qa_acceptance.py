@@ -122,7 +122,7 @@ class _CannedLLMConfig:
         self._fail = fail
         self.llm = _CannedLLM(answer)
 
-    def create_llm(self, *, auto_trace: bool = False) -> Any:
+    def create_llm(self) -> Any:
         if self._fail:
             raise TimeoutError("llm provider unavailable")
         return self.llm

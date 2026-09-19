@@ -6,7 +6,7 @@ history: moved from ``telegram_bot/graph/config.py`` as the second slice
 of the reverse-layering fix tracked under #1948 / #2045 / #2049; the
 legacy ``telegram_bot.graph.config`` re-export shim was removed in #3220.
 
-Provides service factories for LLM, embeddings, and cache thresholds.
+Provides the live LLM factory and runtime settings.
 
 #2482: GraphConfig is now a composition of focused config classes.
 #2577: Flat @property accessors are generated automatically from _FLAT_KWARGS,
@@ -37,12 +37,9 @@ from src.runtime.integrations.redis_mode import DEFAULT_REDIS_MODE, RedisMode, p
 class LlmConfig(BaseModel):
     """LLM provider and generation settings."""
 
-    # Deprecated compatibility field; LiteLLM SDK routing no longer uses a proxy base URL.
-    llm_base_url: str = ""
-    llm_api_key: str = ""
+    llm_api_key: str = Field(default="", repr=False)
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.7
-    llm_max_tokens: int = 4096
     generate_max_tokens: int = 1024
     # Reasoning control for Cerebras models (#reasoning)
     reasoning_effort: str | None = None  # "low"/"medium"/"high" (gpt-oss-120b)
@@ -101,27 +98,6 @@ class RetrievalConfig(BaseModel):
     max_context_tokens: int = 8000
 
 
-class CacheConfig(BaseModel):
-    """Redis cache thresholds and TTLs."""
-
-    cache_thresholds: dict[str, float] = Field(
-        default_factory=lambda: {
-            "FAQ": 0.12,
-            "ENTITY": 0.10,
-            "GENERAL": 0.08,
-            "STRUCTURED": 0.05,
-        }
-    )
-    cache_ttl: dict[str, int] = Field(
-        default_factory=lambda: {
-            "FAQ": 86400,  # 24h
-            "ENTITY": 3600,  # 1h
-            "GENERAL": 3600,  # 1h
-            "STRUCTURED": 7200,  # 2h
-        }
-    )
-
-
 class DomainConfig(BaseModel):
     """Domain identity and language settings."""
 
@@ -137,17 +113,6 @@ class ResponseConfig(BaseModel):
     response_style_shadow_mode: bool = False
     # Source attribution (#225)
     show_sources: bool = False
-    # TTFT drift warning threshold in ms (#675); raise for reasoning models behind proxy
-    ttft_drift_warn_ms: int = 500
-
-
-class VoiceConfig(BaseModel):
-    """Voice transcription settings."""
-
-    # Voice transcription (#151)
-    show_transcription: bool = True
-    voice_language: str = "ru"
-    stt_model: str = "whisper"
 
 
 class SecurityConfig(BaseModel):
@@ -181,6 +146,7 @@ class _GraphEnvSettings(BaseSettings):
     llm_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("llm_api_key", "LLM_API_KEY", "OPENAI_API_KEY"),
+        repr=False,
     )
     llm_model: str = Field(
         default="gpt-4o-mini",
@@ -189,10 +155,6 @@ class _GraphEnvSettings(BaseSettings):
     llm_temperature: float = Field(
         default=0.7,
         validation_alias=AliasChoices("llm_temperature", "LLM_TEMPERATURE"),
-    )
-    llm_max_tokens: int = Field(
-        default=4096,
-        validation_alias=AliasChoices("llm_max_tokens", "LLM_MAX_TOKENS"),
     )
     generate_max_tokens: int = Field(
         default=1024,
@@ -316,24 +278,6 @@ class _GraphEnvSettings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("show_sources", "SHOW_SOURCES"),
     )
-    ttft_drift_warn_ms: int = Field(
-        default=500,
-        validation_alias=AliasChoices("ttft_drift_warn_ms", "TTFT_DRIFT_WARN_MS"),
-    )
-
-    # Voice
-    show_transcription: bool = Field(
-        default=True,
-        validation_alias=AliasChoices("show_transcription", "SHOW_TRANSCRIPTION"),
-    )
-    voice_language: str = Field(
-        default="ru",
-        validation_alias=AliasChoices("voice_language", "VOICE_LANGUAGE"),
-    )
-    stt_model: str = Field(
-        default="whisper",
-        validation_alias=AliasChoices("stt_model", "STT_MODEL"),
-    )
 
     # Security
     guard_mode: str = Field(
@@ -353,11 +297,9 @@ class _GraphEnvSettings(BaseSettings):
 
 _FLAT_KWARGS: dict[str, tuple[str, str]] = {
     # LLM
-    "llm_base_url": ("llm", "llm_base_url"),
     "llm_api_key": ("llm", "llm_api_key"),
     "llm_model": ("llm", "llm_model"),
     "llm_temperature": ("llm", "llm_temperature"),
-    "llm_max_tokens": ("llm", "llm_max_tokens"),
     "generate_max_tokens": ("llm", "generate_max_tokens"),
     "reasoning_effort": ("llm", "reasoning_effort"),
     "reasoning_format": ("llm", "reasoning_format"),
@@ -383,9 +325,6 @@ _FLAT_KWARGS: dict[str, tuple[str, str]] = {
     "small_to_big_window_after": ("retrieval", "small_to_big_window_after"),
     "max_expanded_chunks": ("retrieval", "max_expanded_chunks"),
     "max_context_tokens": ("retrieval", "max_context_tokens"),
-    # Cache
-    "cache_thresholds": ("cache", "cache_thresholds"),
-    "cache_ttl": ("cache", "cache_ttl"),
     # Domain
     "domain": ("domain_cfg", "domain"),
     "domain_language": ("domain_cfg", "domain_language"),
@@ -393,11 +332,6 @@ _FLAT_KWARGS: dict[str, tuple[str, str]] = {
     "response_style_enabled": ("response", "response_style_enabled"),
     "response_style_shadow_mode": ("response", "response_style_shadow_mode"),
     "show_sources": ("response", "show_sources"),
-    "ttft_drift_warn_ms": ("response", "ttft_drift_warn_ms"),
-    # Voice
-    "show_transcription": ("voice", "show_transcription"),
-    "voice_language": ("voice", "voice_language"),
-    "stt_model": ("voice", "stt_model"),
     # Security
     "guard_mode": ("security", "guard_mode"),
     "content_filter_enabled": ("security", "content_filter_enabled"),
@@ -436,22 +370,18 @@ class GraphConfig:
 
     llm: LlmConfig
     retrieval: RetrievalConfig
-    cache: CacheConfig
     # Named ``domain_cfg`` to avoid clash with the ``domain`` string property below.
     domain_cfg: DomainConfig
     response: ResponseConfig
-    voice: VoiceConfig
     security: SecurityConfig
 
     if TYPE_CHECKING:
         # mypy stubs for flat compat accessors generated at runtime from _FLAT_KWARGS.
         # At runtime these properties are injected via setattr() after class creation.
         # LLM
-        llm_base_url: str
         llm_api_key: str
         llm_model: str
         llm_temperature: float
-        llm_max_tokens: int
         generate_max_tokens: int
         reasoning_effort: str | None
         reasoning_format: str | None
@@ -477,9 +407,6 @@ class GraphConfig:
         small_to_big_window_after: int
         max_expanded_chunks: int
         max_context_tokens: int
-        # Cache
-        cache_thresholds: dict[str, float]
-        cache_ttl: dict[str, int]
         # Domain
         domain: str
         domain_language: str
@@ -487,11 +414,6 @@ class GraphConfig:
         response_style_enabled: bool
         response_style_shadow_mode: bool
         show_sources: bool
-        ttft_drift_warn_ms: int
-        # Voice
-        show_transcription: bool
-        voice_language: str
-        stt_model: str
         # Security
         guard_mode: str
         content_filter_enabled: bool
@@ -500,10 +422,8 @@ class GraphConfig:
         self,
         llm: LlmConfig | None = None,
         retrieval: RetrievalConfig | None = None,
-        cache: CacheConfig | None = None,
         domain_cfg: DomainConfig | None = None,
         response: ResponseConfig | None = None,
-        voice: VoiceConfig | None = None,
         security: SecurityConfig | None = None,
         **flat_kwargs: Any,
     ) -> None:
@@ -514,10 +434,8 @@ class GraphConfig:
         """
         self.llm = llm if llm is not None else LlmConfig()
         self.retrieval = retrieval if retrieval is not None else RetrievalConfig()
-        self.cache = cache if cache is not None else CacheConfig()
         self.domain_cfg = domain_cfg if domain_cfg is not None else DomainConfig()
         self.response = response if response is not None else ResponseConfig()
-        self.voice = voice if voice is not None else VoiceConfig()
         self.security = security if security is not None else SecurityConfig()
 
         for key, value in flat_kwargs.items():
@@ -549,7 +467,6 @@ class GraphConfig:
                 llm_api_key=e.llm_api_key,
                 llm_model=e.llm_model,
                 llm_temperature=e.llm_temperature,
-                llm_max_tokens=e.llm_max_tokens,
                 generate_max_tokens=e.generate_max_tokens,
                 reasoning_effort=e.reasoning_effort or None,
                 reasoning_format=e.reasoning_format or None,
@@ -585,12 +502,6 @@ class GraphConfig:
                 response_style_enabled=e.response_style_enabled,
                 response_style_shadow_mode=e.response_style_shadow_mode,
                 show_sources=e.show_sources,
-                ttft_drift_warn_ms=e.ttft_drift_warn_ms,
-            ),
-            voice=VoiceConfig(
-                show_transcription=e.show_transcription,
-                voice_language=e.voice_language,
-                stt_model=e.stt_model,
             ),
             security=SecurityConfig(
                 guard_mode=e.guard_mode,
@@ -598,36 +509,13 @@ class GraphConfig:
             ),
         )
 
-    def create_llm(self, model_override: str | None = None, *, auto_trace: bool = True) -> Any:
+    def create_llm(self, model_override: str | None = None) -> Any:
         """Create the native LiteLLM SDK client."""
-        _ = auto_trace
         from src.runtime.llm import create_llm_client
 
         return create_llm_client(
             model=model_override or self.llm.llm_model,
             timeout=60.0,
-        )
-
-    def create_supervisor_llm(self, model_override: str | None = None) -> Any:
-        """Create a supervisor client without LangChain wrappers."""
-        return self.create_llm(model_override=model_override)
-
-    def create_embeddings(self) -> Any:
-        """Create BGEM3Embeddings instance."""
-        from src.runtime.integrations.embeddings import BGEM3Embeddings
-
-        return BGEM3Embeddings(
-            base_url=self.retrieval.bge_m3_url,
-            timeout=self.retrieval.bge_m3_timeout,
-        )
-
-    def create_sparse_embeddings(self) -> Any:
-        """Create BGEM3SparseEmbeddings instance."""
-        from src.runtime.integrations.embeddings import BGEM3SparseEmbeddings
-
-        return BGEM3SparseEmbeddings(
-            base_url=self.retrieval.bge_m3_url,
-            timeout=self.retrieval.bge_m3_timeout,
         )
 
 
@@ -639,12 +527,10 @@ for _flat_name, (_sub_attr, _sub_field) in _FLAT_KWARGS.items():
 
 __all__ = [
     "_FLAT_KWARGS",
-    "CacheConfig",
     "DomainConfig",
     "GraphConfig",
     "LlmConfig",
     "ResponseConfig",
     "RetrievalConfig",
     "SecurityConfig",
-    "VoiceConfig",
 ]

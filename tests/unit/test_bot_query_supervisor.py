@@ -390,7 +390,6 @@ class TestQuerySupervisorCoreEntrypoint:
         # The real generation chain reads string fields off the runtime config,
         # so this test injects a real GraphConfig instead of the factory mock.
         graph_config = GraphConfig(
-            llm_base_url=config.llm_base_url,
             llm_api_key=config.llm_api_key,
             llm_model=config.llm_model,
             bge_m3_url=config.bge_m3_url,

@@ -59,7 +59,7 @@ class _Config:
     def __init__(self, llm: _RecordingLLM) -> None:
         self._llm = llm
 
-    def create_llm(self, *, auto_trace: bool = False) -> Any:
+    def create_llm(self) -> Any:
         return self._llm
 
     def get_reasoning_kwargs(self) -> dict[str, Any]:
