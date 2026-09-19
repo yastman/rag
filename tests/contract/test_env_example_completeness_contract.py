@@ -39,10 +39,19 @@ hint, and a pointer at this docstring.
 from __future__ import annotations
 
 import ast
+import json
+import os
 import re
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+
+from scripts.e2e.config import E2EConfig
+from src.runtime.config import _GraphEnvSettings
+from telegram_bot.config import BotConfig
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -58,6 +67,78 @@ EXCLUDE_PARTS: frozenset[str] = frozenset(
 )
 
 ENV_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
+_BGE_MODEL_FIELDS_SCRIPT = """
+import importlib.util
+import json
+import sys
+
+spec = importlib.util.spec_from_file_location("contract_bge_settings", sys.argv[1])
+assert spec is not None and spec.loader is not None
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps(sorted(module.Settings.model_fields)))
+"""
+
+
+def _bge_settings_env_names() -> set[str]:
+    environment = {
+        name: os.environ[name] for name in ("SYSTEMROOT", "WINDIR", "COMSPEC") if name in os.environ
+    }
+    with tempfile.TemporaryDirectory() as working_directory:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                _BGE_MODEL_FIELDS_SCRIPT,
+                str(REPO_ROOT / "services" / "bge-m3-api" / "config.py"),
+            ],
+            cwd=working_directory,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    return set(json.loads(result.stdout))
+
+
+def _model_field_env_names(settings_type: type) -> set[str]:
+    names: set[str] = set()
+    for field_name, model_field in settings_type.model_fields.items():
+        alias = model_field.validation_alias or model_field.alias or field_name
+        for name in getattr(alias, "choices", (alias,)):
+            if isinstance(name, str) and ENV_KEY_PATTERN.fullmatch(name):
+                names.add(name)
+    return names
+
+
+def _settings_env_names() -> set[str]:
+    names = _bge_settings_env_names()
+    for settings_type in (_GraphEnvSettings, BotConfig, E2EConfig):
+        names |= _model_field_env_names(settings_type)
+    return names
+
+
+def _compose_env_names() -> set[str]:
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            "config",
+            "--variables",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return {line.split(maxsplit=1)[0] for line in result.stdout.splitlines()[1:] if line.strip()}
 
 
 # ---------------------------------------------------------------------------
@@ -404,7 +485,7 @@ def test_no_env_vars_used_in_code_missing_from_env_example() -> None:
 
 def test_no_env_vars_in_env_example_unused_by_code() -> None:
     """Every var in ``.env.example`` must be read by code or live in allowlist."""
-    code_keys = _scan_code()
+    code_keys = _scan_code() | _settings_env_names() | _compose_env_names()
     env_example_keys = _parse_env_example()
     allowlisted = set(ALLOWLIST_NOT_IN_CODE.keys())
 
@@ -421,6 +502,23 @@ def test_no_env_vars_in_env_example_unused_by_code() -> None:
             " short note pointing at the non-Python consumer (Compose, Dockerfile,"
             " shell script, third-party service)."
         )
+
+
+def test_typed_settings_include_plain_aliases() -> None:
+    assert {"ANTHROPIC_API_KEY", "MODEL_NAME"} <= _settings_env_names()
+
+
+def test_bge_settings_metadata_ignores_ambient_config(monkeypatch, tmp_path) -> None:
+    (tmp_path / ".env").write_text("PORT=not-a-sidecar-port\nOMP_NUM_THREADS=not-an-int\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PORT", "not-a-sidecar-port")
+    monkeypatch.setenv("OMP_NUM_THREADS", "not-an-int")
+
+    assert "MODEL_NAME" in _settings_env_names()
+
+
+def test_compose_variables_include_router_provider_keys() -> None:
+    assert {"CEREBRAS_API_KEY", "GROQ_API_KEY"} <= _compose_env_names()
 
 
 def test_env_example_is_split_into_sections() -> None:
