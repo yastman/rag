@@ -51,7 +51,7 @@ def _base_dyn(detector=None):
     }
 
 
-def _fake_response(text: str, model: str = "gpt-test") -> MagicMock:
+def _fake_response(text: str | None, model: str = "gpt-test") -> MagicMock:
     """Build a minimal OpenAI-style response object."""
     choice = SimpleNamespace(message=SimpleNamespace(content=text))
     usage = SimpleNamespace(completion_tokens=10)
@@ -144,6 +144,31 @@ async def test_generate_answer_llm_failure_returns_fallback() -> None:
     assert result.payload["llm_provider_model"] == "fallback"
     assert result.payload["grounded"] is False
     assert result.payload["llm_timeout"] is True
+
+
+@pytest.mark.asyncio
+async def test_generate_answer_none_content_returns_cache_unsafe_fallback() -> None:
+    """A successful SDK response with ``content=None`` is not a grounded answer."""
+    llm_mock = MagicMock()
+    llm_mock.completion = AsyncMock(return_value=_fake_response(None))
+
+    cfg = _config()
+    cfg.create_llm.return_value = llm_mock
+    request = GenerationRequest(
+        query="Что такое рассрочка?",
+        documents=_DOCS,
+        grounding_mode="normal",
+        config=cfg,
+        extra_kwargs=_base_dyn(),
+    )
+
+    result = await generate_answer(request)
+
+    assert result.response_text
+    assert result.payload["llm_provider_model"] == "fallback"
+    assert result.payload["grounded"] is False
+    assert result.payload["llm_timeout"] is True
+    assert result.payload["semantic_cache_safe_reuse"] is False
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-"""Native LiteLLM SDK boundary for chat text, structured output and streaming.
+"""Native LiteLLM SDK boundary for chat text and structured output.
 
 Runtime code calls the in-process LiteLLM SDK Router through this module —
 the one small native interface replacing the former OpenAI-shaped
@@ -246,28 +246,38 @@ def _reject_shim_kwargs(kwargs: dict[str, Any]) -> None:
             )
 
 
+def _validate_messages(messages: object) -> None:
+    """Reject malformed message containers before the Router can retry or fallback.
+
+    LiteLLM's completion contract accepts an empty list, so that SDK-admitted
+    value remains valid. Its message values are TypedDict variants at runtime,
+    therefore this boundary validates only the stable container and dictionary
+    shape without imposing provider-specific field rules.
+    """
+    if not isinstance(messages, list) or not all(isinstance(message, dict) for message in messages):
+        raise TypeError("LiteLlmClient messages must be a list of message dictionaries")
+
+
 @dataclass(slots=True)
 class LiteLlmClient:
     """Native async LiteLLM SDK boundary over the process-local Router.
 
-    One interface, three verbs:
+    One interface, two verbs:
 
     - :meth:`completion` — one ``Router.acompletion`` call returning the
       native LiteLLM response (text, ``response_format``, ``stream=False``).
     - :meth:`structured` — Pydantic model in, validated instance out.
-    - :meth:`stream` — ``Router.acompletion(stream=True)`` returning the
-      native async chunk iterator.
 
     ``observation_name`` is call-site observability metadata only; it is
-    logged and never forwarded to the SDK. All other kwargs pass through to
-    ``acompletion`` unchanged. Shim-era kwargs (``name``, ``max_retries``)
-    are rejected with a clear error.
+    logged and never forwarded to the SDK. Non-streaming kwargs pass through
+    to ``acompletion`` unchanged. Shim-era kwargs (``name``, ``max_retries``)
+    and the removed ``stream`` option are rejected with a clear error.
 
     Connection-error classification is owned here end to end (#3483):
     ``completion`` re-raises LiteLLM connection failures as the project-owned
-    :class:`LLMConnectionError`, so every verb (completion, structured,
-    stream) and every generation call site classifies them through one
-    contract instead of importing provider exception types.
+    :class:`LLMConnectionError`, so both verbs and every generation call site
+    classify them through one contract instead of importing provider exception
+    types.
     """
 
     router: Router
@@ -288,7 +298,10 @@ class LiteLlmClient:
         (normalized via :func:`normalize_connection_error`); every other
         provider exception propagates unchanged.
         """
+        _validate_messages(messages)
         _reject_shim_kwargs(kwargs)
+        if "stream" in kwargs:
+            raise TypeError("LiteLlmClient does not support streaming completions")
         target_model = model or self.default_model
         if observation_name:
             logger.debug("LLM completion '%s' (model=%s)", observation_name, target_model)
@@ -321,29 +334,6 @@ class LiteLlmClient:
             **kwargs,
         )
         return parse_structured_response(response, response_model)
-
-    async def stream(
-        self,
-        *,
-        messages: list[dict[str, Any]],
-        model: str | None = None,
-        observation_name: str | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        """Return the native async chunk iterator from a streaming completion.
-
-        This method owns the ``stream`` flag: a caller-supplied ``stream``
-        kwarg is dropped here instead of colliding with the forced value
-        (#3223 review C1).
-        """
-        kwargs.pop("stream", None)
-        return await self.completion(
-            messages=messages,
-            model=model,
-            observation_name=observation_name,
-            stream=True,
-            **kwargs,
-        )
 
 
 def create_llm_client(
