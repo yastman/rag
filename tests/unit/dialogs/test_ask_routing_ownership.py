@@ -27,6 +27,7 @@ from aiogram import Dispatcher
 
 from telegram_bot.dialogs.root_nav import exit_to_client_root
 from telegram_bot.handlers import catalog as _bot_catalog
+from telegram_bot.handlers import catalog as catalog_handlers
 
 
 _TELEGRAM_BOT_DIR = Path(__file__).resolve().parents[3] / "telegram_bot"
@@ -200,11 +201,16 @@ def _build_dialog_dispatcher() -> tuple[Dispatcher, Any]:
 
     from telegram_bot.lifecycle.lifecycle import setup_dialogs
 
-    async def _catch_all_query(message: Any) -> None:  # pragma: no cover - stub
-        return None
+    observed = []
 
-    stub = SimpleNamespace(dp=Dispatcher(), handle_query=_catch_all_query)
-    with patch("aiogram_dialog.setup_dialogs", wraps=sdk_setup_dialogs) as sdk_setup:
+    async def _catch_all_query(bot: Any, message: Any, *, locale: str = "ru") -> None:
+        observed.append((bot, message.text, locale))
+
+    stub = SimpleNamespace(dp=Dispatcher(), observed=observed)
+    with (
+        patch("aiogram_dialog.setup_dialogs", wraps=sdk_setup_dialogs) as sdk_setup,
+        patch("telegram_bot.pipeline.supervisor.handle_query", new=_catch_all_query),
+    ):
         setup_dialogs(stub)
         sdk_setup.assert_called_once_with(stub.dp)
     return stub.dp, stub
@@ -237,7 +243,31 @@ def test_catch_all_owns_only_stateless_text():
     free_text = [fo for fo in filter_objects if fo.magic is not None]
     assert stateless, "catch-all must be gated by StateFilter(None)"
     assert free_text, "catch-all must be gated by F.text"
-    assert handlers[0].callback == stub.handle_query
+
+
+async def test_catch_all_dispatches_text_and_locale_to_canonical_handler():
+    from datetime import UTC, datetime
+
+    from aiogram import Bot
+    from aiogram.types import Chat, Message, Update, User
+
+    dp, stub = _build_dialog_dispatcher()
+    stub.observed.clear()
+    bot = Bot("123456:ABCdef_GHIjkl-MNOpqr_STUvwx")
+    update = Update(
+        update_id=901,
+        message=Message(
+            message_id=901,
+            date=datetime(2026, 1, 1, tzinfo=UTC),
+            chat=Chat(id=42, type="private"),
+            from_user=User(id=42, is_bot=False, first_name="Test"),
+            text="question",
+        ),
+    )
+    with patch.object(Bot, "__call__", new=AsyncMock()):
+        await dp.feed_update(bot, update, locale="uk")
+    assert stub.observed == [(stub, "question", "uk")]
+    await bot.session.close()
 
 
 # ---------------------------------------------------------------------------
@@ -262,11 +292,11 @@ def test_ask_callback_family_has_single_owner():
 # ---------------------------------------------------------------------------
 
 
-async def test_inline_root_menu_ask_passes_state_and_manager():
+async def test_inline_root_menu_ask_passes_state_and_manager(monkeypatch):
     from telegram_bot.dialogs.client_menu import on_menu_action
 
     mock_bot = AsyncMock()
-    mock_bot._handle_ask = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_handle_ask", AsyncMock())
 
     callback = MagicMock()
     callback.from_user = None
@@ -285,7 +315,8 @@ async def test_inline_root_menu_ask_passes_state_and_manager():
     await on_menu_action(callback, button, manager)
 
     manager.done.assert_awaited_once()
-    mock_bot._handle_ask.assert_awaited_once_with(
+    catalog_handlers._handle_ask.assert_awaited_once_with(
+        mock_bot,
         callback.message,
         i18n="i18n-stub",
         state="state-stub",

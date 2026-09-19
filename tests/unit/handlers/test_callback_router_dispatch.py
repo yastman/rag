@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from datetime import UTC, datetime
+from functools import wraps
 from types import ModuleType
 from unittest.mock import AsyncMock, patch
 
@@ -89,3 +90,68 @@ async def test_router_family_routes_to_its_own_collaborator(family: str) -> None
         for key, injected in mocks.items():
             if key != (module.__name__, name):
                 injected.assert_not_awaited()
+
+
+@pytest.mark.parametrize("route", ["menu", "group", "feedback", "feedback_done", "reason"])
+async def test_bound_handler_receives_dispatcher_dependencies(route: str) -> None:
+    """Native partial binding preserves dispatch and SDK dependency injection."""
+    from telegram_bot.callback_data import FeedbackCB, FeedbackReasonCB
+    from telegram_bot.handlers import bot_handoff, command_handlers, feedback_handlers
+    from tests.unit._bot_config_factory import make_full_bot_config
+
+    targets = {
+        "menu": (command_handlers, "handle_menu_button"),
+        "group": (bot_handoff, "_handle_group_message"),
+        "feedback": (feedback_handlers, "handle_feedback"),
+        "feedback_done": (feedback_handlers, "handle_feedback"),
+        "reason": (feedback_handlers, "handle_feedback_reason"),
+    }
+    module, name = targets[route]
+    recorder = AsyncMock()
+
+    @wraps(getattr(module, name))
+    async def handler(*args, **kwargs):
+        await recorder(*args, **kwargs)
+
+    config = make_full_bot_config()
+    config.managers_group_id = -10042
+    manager = object()
+    feedback_store = object()
+    with patch.object(module, name, handler), patch.object(Bot, "__call__", new=AsyncMock()):
+        bot = make_property_bot(config)
+        if route in {"feedback", "feedback_done", "reason"}:
+            data = {
+                "feedback": FeedbackCB(action="like", trace_id="trace").pack(),
+                "feedback_done": "fb:done",
+                "reason": FeedbackReasonCB(code="wrong_topic", trace_id="trace").pack(),
+            }[route]
+            update = _callback_update(data)
+        else:
+            update = Update(
+                update_id=1,
+                message=Message(
+                    message_id=1,
+                    date=datetime(2026, 1, 1, tzinfo=UTC),
+                    from_user=User(id=42, is_bot=False, first_name="Test"),
+                    chat=Chat(
+                        id=-10042 if route == "group" else 42,
+                        type="supergroup" if route == "group" else "private",
+                    ),
+                    message_thread_id=7 if route == "group" else None,
+                    text="🔑 Услуги" if route == "menu" else "question",
+                ),
+            )
+        await bot.dp.feed_update(
+            bot.bot, update, dialog_manager=manager, feedback_store=feedback_store, locale="uk"
+        )
+        recorder.assert_awaited_once()
+        assert recorder.await_args.args[0] is bot
+        if route == "menu":
+            assert recorder.await_args.kwargs["dialog_manager"] is manager
+            assert recorder.await_args.kwargs["state"] is not None
+        elif route in {"feedback", "reason"}:
+            assert recorder.await_args.kwargs["callback_data"].trace_id == "trace"
+            assert recorder.await_args.kwargs["feedback_store"] is feedback_store
+        elif route == "group":
+            assert recorder.await_args.args[1].message_thread_id == 7
+        await bot.dp.storage.close()

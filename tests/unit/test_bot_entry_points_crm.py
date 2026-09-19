@@ -6,6 +6,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from telegram_bot.handlers import catalog as catalog_handlers
+from telegram_bot.handlers import favorites as favorite_handlers
 from tests.unit._bot_config_factory import make_full_bot_config as _make_config
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -81,7 +83,7 @@ async def test_handle_viewing_starts_dialog_when_manager_available() -> None:
     dialog_manager = AsyncMock()
     dialog_manager.start = AsyncMock()
 
-    await bot._handle_viewing(msg, state, dialog_manager=dialog_manager)
+    await catalog_handlers._handle_viewing(bot, msg, state, dialog_manager=dialog_manager)
 
     dialog_manager.start.assert_awaited_once_with(ViewingSG.date, mode=StartMode.RESET_STACK)
 
@@ -92,7 +94,7 @@ async def test_handle_viewing_fallback_without_dialog_manager() -> None:
     state = _make_state()
     msg = _make_message()
 
-    await bot._handle_viewing(msg, state, dialog_manager=None)
+    await catalog_handlers._handle_viewing(bot, msg, state, dialog_manager=None)
 
     msg.answer.assert_awaited_once()
     text = msg.answer.call_args[0][0]
@@ -114,7 +116,7 @@ async def test_cta_manager_starts_phone_collection() -> None:
         "telegram_bot.handlers.phone_collector.start_phone_collection",
         new=AsyncMock(),
     ) as mock_collect:
-        await bot.handle_cta_callback(cb, state, dialog_manager=None)
+        await catalog_handlers.handle_cta_callback(bot, cb, state, dialog_manager=None)
 
     mock_collect.assert_awaited_once_with(cb, state, service_key="manager")
 
@@ -134,7 +136,7 @@ async def test_cta_get_offer_passes_service_key() -> None:
         "telegram_bot.handlers.phone_collector.start_phone_collection",
         new=AsyncMock(),
     ) as mock_collect:
-        await bot.handle_cta_callback(cb, state)
+        await catalog_handlers.handle_cta_callback(bot, cb, state)
 
     mock_collect.assert_awaited_once_with(cb, state, service_key="installment")
 
@@ -166,7 +168,7 @@ async def test_results_viewing_is_stale_compat_only() -> None:
         "telegram_bot.handlers.phone_collector.start_phone_collection",
         new=AsyncMock(),
     ) as mock_collect:
-        await bot.handle_results_callback(cb, state)
+        await catalog_handlers.handle_results_callback(bot, cb, state)
 
     mock_collect.assert_not_awaited()
     cb.message.answer.assert_awaited_once_with(
@@ -190,8 +192,8 @@ async def test_fav_viewing_passes_single_object() -> None:
     # callback_data so action dispatch does not depend on FavoriteCB().
     callback_data = SimpleNamespace(action="viewing", apartment_id="prop-42")
 
-    await bot.handle_favorite_callback(
-        cb, state, callback_data=callback_data, dialog_manager=dialog_manager
+    await favorite_handlers.handle_favorite_callback(
+        bot, cb, state, callback_data=callback_data, dialog_manager=dialog_manager
     )
 
     dialog_manager.start.assert_awaited_once()

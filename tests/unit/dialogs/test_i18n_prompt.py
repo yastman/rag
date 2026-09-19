@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from ._property_bot_ast import get_default_map, get_parameter_names, get_property_bot_method
-
 
 def test_supervisor_aligns_with_canonical_locale_codes():
     """The supervisor forwards canonical locale codes to the core (#3491).
@@ -23,17 +21,3 @@ def test_supervisor_aligns_with_canonical_locale_codes():
     assert normalize_request_language("de") == "ru"
     assert normalize_request_language("") == "ru"
     assert normalize_request_language(None) == "ru"
-
-
-def test_handle_query_accepts_locale_parameter():
-    """handle_query signature accepts locale kwarg injected by i18n middleware."""
-    method = get_property_bot_method("handle_query")
-    assert "locale" in get_parameter_names(method)
-    assert get_default_map(method)["locale"] == "ru"
-
-
-def test_handle_query_supervisor_accepts_locale_parameter():
-    """_handle_query_supervisor accepts locale kwarg."""
-    method = get_property_bot_method("_handle_query_supervisor")
-    assert "locale" in get_parameter_names(method)
-    assert get_default_map(method)["locale"] == "ru"

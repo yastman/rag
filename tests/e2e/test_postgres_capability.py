@@ -71,19 +71,14 @@ def _deterministic_telegram_id(run_id: str, worker: str, salt: int) -> int:
 def _bot_stub(realestate_database_url: str) -> SimpleNamespace:
     """Minimal bot surface exactly as ``lifecycle.setup_postgres`` consumes it.
 
-    The two bootstrap attributes mirror the PropertyBot thin wrappers
-    (``bot.py``) so the auto-create fallback stays on production code.
+    Database creation and schema setup use the canonical bootstrap functions.
     """
-    from telegram_bot.lifecycle import postgres_bootstrap
-
     return SimpleNamespace(
         config=SimpleNamespace(realestate_database_url=realestate_database_url),
         _pg_pool=None,
         _favorites_service=None,
         _user_service=None,
         _search_event_store=None,
-        _extract_database_name=postgres_bootstrap.extract_database_name,
-        _ensure_postgres_database_exists=postgres_bootstrap.ensure_postgres_database_exists,
     )
 
 

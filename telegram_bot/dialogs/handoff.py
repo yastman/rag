@@ -11,6 +11,8 @@ from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
 from aiogram_dialog.widgets.kbd import Back, Button, Group, Select
 from aiogram_dialog.widgets.text import Format
 
+from telegram_bot.handlers import bot_handoff as handoff_handlers
+
 from .states import HandoffSG
 
 
@@ -138,7 +140,8 @@ async def _on_contact_chat(
         logger.warning("property_bot not in middleware_data, cannot complete handoff")
         return
 
-    await property_bot._complete_handoff(
+    await handoff_handlers._complete_handoff(
+        property_bot,
         user_id=user_id,
         username=username,
         display_name=display_name,

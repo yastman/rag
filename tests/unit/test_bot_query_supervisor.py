@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.handlers import command_handlers as command_handlers
+from telegram_bot.pipeline import supervisor as query_supervisor
 from tests.unit._bot_config_factory import make_bot_config as _make_config
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -101,7 +103,7 @@ class TestQuerySupervisorHandoffMode:
         forum_bridge.relay_to_topic = AsyncMock()
         bot._forum_bridge = forum_bridge
 
-        await bot.handle_query(message)
+        await query_supervisor.handle_query(bot, message)
 
         forum_bridge.relay_to_topic.assert_awaited_once_with(
             from_chat_id=12345,
@@ -136,7 +138,7 @@ class TestQuerySupervisorHandoffMode:
             bot._cache = MagicMock()
             bot._cache.redis = None
 
-            await bot.handle_query(message)
+            await query_supervisor.handle_query(bot, message)
 
         # Relay was called
         forum_bridge.relay_to_topic.assert_awaited_once_with(
@@ -175,7 +177,7 @@ class TestQuerySupervisorHandoffMode:
             bot._cache = MagicMock()
             bot._cache.redis = None
 
-            await bot.handle_query(message)
+            await query_supervisor.handle_query(bot, message)
 
         forum_bridge.relay_to_topic.assert_awaited_once()
         # Message must not be swallowed — normal bot routing takes over.
@@ -209,7 +211,7 @@ class TestQuerySupervisorHandoffMode:
             bot._cache = MagicMock()
             bot._cache.redis = None
 
-            await bot.handle_query(message)
+            await query_supervisor.handle_query(bot, message)
 
         forum_bridge.relay_to_topic.assert_awaited_once()
         mock_hqs.assert_awaited_once()
@@ -228,7 +230,7 @@ class TestQuerySupervisorHandoffMode:
             bot._cache = MagicMock()
             bot._cache.redis = None
 
-            await bot.handle_query(message)
+            await query_supervisor.handle_query(bot, message)
 
         mock_hqs.assert_awaited_once()
 
@@ -241,7 +243,7 @@ class TestQuerySupervisorHandoffMode:
 class TestQuerySupervisorSemanticCache:
     """Cache checks live in the core (#3208): Telegram must not look up."""
 
-    async def test_cache_lookup_not_performed_by_telegram(self):
+    async def test_cache_lookup_not_performed_by_telegram(self, monkeypatch):
         """Telegram never calls check_semantic; the core owns the cache stage."""
         config = _make_config(content_filter_enabled=False)
         bot = _make_supervisor_bot(config)
@@ -258,13 +260,14 @@ class TestQuerySupervisorSemanticCache:
                 side_effect=_noop_typing,
             ),
         ):
-            bot._resolve_user_role = AsyncMock(return_value="client")
+            monkeypatch.setattr(
+                command_handlers, "resolve_user_role", AsyncMock(return_value="client")
+            )
             bot._cache = MagicMock()
             bot._cache.check_semantic = AsyncMock(return_value="Cached: deposit is 10%")
-            bot._send_markdown_chunks = AsyncMock()
 
-            result = await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            result = await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="ru", root_trace_metadata={}
             )
 
         bot._cache.check_semantic.assert_not_awaited()
@@ -314,11 +317,13 @@ class TestQuerySupervisorCoreEntrypoint:
                 side_effect=_noop_typing,
             ),
         ):
-            bot._resolve_user_role = AsyncMock(return_value="client")
+            monkeypatch.setattr(
+                command_handlers, "resolve_user_role", AsyncMock(return_value="client")
+            )
             bot._cache = MagicMock()
 
-            result = await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            result = await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="ru", root_trace_metadata={}
             )
 
         assert result == "Sunny Beach studio is 110k EUR."
@@ -333,7 +338,7 @@ class TestQuerySupervisorCoreEntrypoint:
         assert callable(deps.config.create_llm)
         assert callable(deps.config.get_reasoning_kwargs)
 
-    async def test_supervisor_forwards_canonical_locale_code_to_core(self):
+    async def test_supervisor_forwards_canonical_locale_code_to_core(self, monkeypatch):
         """#3491: the Fluent locale reaches the core as a canonical locale code.
 
         The supervisor passes the transport-neutral code (not a display label)
@@ -355,16 +360,18 @@ class TestQuerySupervisorCoreEntrypoint:
                 side_effect=_noop_typing,
             ),
         ):
-            bot._resolve_user_role = AsyncMock(return_value="client")
+            monkeypatch.setattr(
+                command_handlers, "resolve_user_role", AsyncMock(return_value="client")
+            )
             bot._cache = MagicMock()
 
-            await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="en", root_trace_metadata={}
+            await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="en", root_trace_metadata={}
             )
             supported = mock_run_core.await_args.kwargs["user_context"].language
 
-            await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="xx", root_trace_metadata={}
+            await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="xx", root_trace_metadata={}
             )
             unsupported = mock_run_core.await_args.kwargs["user_context"].language
 
@@ -373,7 +380,7 @@ class TestQuerySupervisorCoreEntrypoint:
         assert unsupported == "ru"
         assert config.domain_language == "ru"
 
-    async def test_core_generation_reaches_llm_boundary_with_graph_config(self):
+    async def test_core_generation_reaches_llm_boundary_with_graph_config(self, monkeypatch):
         """Regression #3486: the real supervisor → adapter → core → generation
         chain reaches the substituted LLM boundary on non-empty retrieval.
 
@@ -439,12 +446,14 @@ class TestQuerySupervisorCoreEntrypoint:
                 side_effect=_noop_typing,
             ),
         ):
-            bot._resolve_user_role = AsyncMock(return_value="client")
+            monkeypatch.setattr(
+                command_handlers, "resolve_user_role", AsyncMock(return_value="client")
+            )
             bot._cache = MagicMock()
             meta: dict = {}
 
-            result = await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="ru", root_trace_metadata=meta
+            result = await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="ru", root_trace_metadata=meta
             )
 
         # Generation built its LLM from the passed runtime config and reached
@@ -462,7 +471,7 @@ class TestQuerySupervisorCoreEntrypoint:
 class TestQuerySupervisorConvergence:
     """One core call; classify/embed/cache are not duplicated in Telegram (#3208)."""
 
-    async def test_single_core_call_no_telegram_classify_embed_cache(self):
+    async def test_single_core_call_no_telegram_classify_embed_cache(self, monkeypatch):
         config = _make_config(content_filter_enabled=False)
         bot = _make_supervisor_bot(config)
         message = _make_message("Сколько стоит студия в Sunny Beach?")
@@ -480,13 +489,15 @@ class TestQuerySupervisorConvergence:
                 side_effect=_noop_typing,
             ),
         ):
-            bot._resolve_user_role = AsyncMock(return_value="client")
+            monkeypatch.setattr(
+                command_handlers, "resolve_user_role", AsyncMock(return_value="client")
+            )
             bot._cache = MagicMock()
             bot._embeddings = MagicMock()
             bot._embeddings.aembed_query = AsyncMock()
 
-            result = await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            result = await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="ru", root_trace_metadata={}
             )
 
         assert result == "ответ"
@@ -499,7 +510,7 @@ class TestQuerySupervisorConvergence:
         bot.bot.send_message.assert_awaited_once()
         message.answer.assert_not_awaited()
 
-    async def test_filters_propagate_into_core_user_context(self):
+    async def test_filters_propagate_into_core_user_context(self, monkeypatch):
         """Deterministic filter extraction still feeds the core request (#3208)."""
         config = _make_config(content_filter_enabled=False)
         bot = _make_supervisor_bot(config)
@@ -516,18 +527,20 @@ class TestQuerySupervisorConvergence:
                 side_effect=_noop_typing,
             ),
         ):
-            bot._resolve_user_role = AsyncMock(return_value="client")
+            monkeypatch.setattr(
+                command_handlers, "resolve_user_role", AsyncMock(return_value="client")
+            )
             bot._cache = MagicMock()
             bot._extract_pre_agent_filters = AsyncMock(return_value={"city": "Несебр"})
 
-            await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="ru", root_trace_metadata={}
             )
 
         ctx = mock_run_core.await_args.kwargs["user_context"]
         assert ctx.filters == {"city": "Несебр"}
 
-    async def test_cache_hit_result_presented_once(self):
+    async def test_cache_hit_result_presented_once(self, monkeypatch):
         """Core cache-hit results flow through the same single presentation path."""
         config = _make_config(content_filter_enabled=False)
         bot = _make_supervisor_bot(config)
@@ -549,19 +562,21 @@ class TestQuerySupervisorConvergence:
                 side_effect=_noop_typing,
             ),
         ):
-            bot._resolve_user_role = AsyncMock(return_value="client")
+            monkeypatch.setattr(
+                command_handlers, "resolve_user_role", AsyncMock(return_value="client")
+            )
             bot._cache = MagicMock()
             bot._graph_config = MagicMock(show_sources=True)
 
-            result = await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="ru", root_trace_metadata={}
+            result = await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="ru", root_trace_metadata={}
             )
 
         assert result == "Cached: deposit is 10%"
         bot.bot.send_message.assert_awaited_once()
         message.answer.assert_not_awaited()
 
-    async def test_trace_metadata_is_truthful_not_hardcoded(self):
+    async def test_trace_metadata_is_truthful_not_hardcoded(self, monkeypatch):
         """Grounding/safety trace fields mirror the core result (#3208)."""
         config = _make_config(content_filter_enabled=False)
         bot = _make_supervisor_bot(config)
@@ -586,12 +601,14 @@ class TestQuerySupervisorConvergence:
                 side_effect=_noop_typing,
             ),
         ):
-            bot._resolve_user_role = AsyncMock(return_value="client")
+            monkeypatch.setattr(
+                command_handlers, "resolve_user_role", AsyncMock(return_value="client")
+            )
             bot._cache = MagicMock()
             bot._graph_config = MagicMock(show_sources=False)
 
-            await bot._handle_query_supervisor(
-                message, time.perf_counter(), locale="ru", root_trace_metadata=meta
+            await query_supervisor._handle_query_supervisor(
+                bot, message, time.perf_counter(), locale="ru", root_trace_metadata=meta
             )
 
         assert meta["grounded"] is False

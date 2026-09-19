@@ -13,6 +13,7 @@ from telegram_bot.dialogs.handoff import (
     handoff_dialog,
 )
 from telegram_bot.dialogs.states import HandoffSG
+from telegram_bot.handlers import bot_handoff as handoff_handlers
 from telegram_bot.handlers.handoff import (
     HandoffStates,
     parse_qual_callback,
@@ -153,10 +154,10 @@ async def test_contact_getter_prefers_current_middleware_context():
 
 
 @pytest.mark.asyncio
-async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion():
+async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion(monkeypatch):
     property_bot = MagicMock()
     property_bot._i18n_hub = None
-    property_bot._complete_handoff = AsyncMock()
+    monkeypatch.setattr(handoff_handlers, "_complete_handoff", AsyncMock())
 
     callback = MagicMock()
     callback.from_user = SimpleNamespace(id=7, full_name="Test User", username="tester")
@@ -176,15 +177,15 @@ async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion():
 
     await _on_contact_chat(callback, MagicMock(), manager)
 
-    kwargs = property_bot._complete_handoff.await_args.kwargs
+    kwargs = handoff_handlers._complete_handoff.await_args.kwargs
     assert kwargs["locale"] == "en"
 
 
 @pytest.mark.asyncio
-async def test_on_contact_chat_localizes_connecting_message():
+async def test_on_contact_chat_localizes_connecting_message(monkeypatch):
     hub = create_translator_hub()
     property_bot = MagicMock()
-    property_bot._complete_handoff = AsyncMock()
+    monkeypatch.setattr(handoff_handlers, "_complete_handoff", AsyncMock())
 
     callback = MagicMock()
     callback.from_user = SimpleNamespace(id=7, full_name="Test User", username="tester")

@@ -9,6 +9,7 @@ import pytest
 import telegram_bot.dialogs.funnel as funnel_module
 from telegram_bot.dialogs.funnel import funnel_dialog
 from telegram_bot.dialogs.states import FunnelSG
+from telegram_bot.handlers import catalog as catalog_handlers
 
 
 # --- build_funnel_filters ---
@@ -559,7 +560,7 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
         )
     )
     mock_bot = MagicMock()
-    mock_bot._send_property_card = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
     mock_bot._apartments_service = mock_svc
 
     callback = MagicMock()
@@ -582,7 +583,7 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
 
     await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-    mock_bot._send_property_card.assert_awaited_once()
+    catalog_handlers._send_property_card.assert_awaited_once()
     manager.done.assert_awaited_once()
     callback.message.delete.assert_awaited_once()
 
@@ -987,7 +988,7 @@ class TestOnSummarySearchRedesign:
             return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
         )
         mock_bot = MagicMock()
-        mock_bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         state_mock = MagicMock()
         state_mock.update_data = AsyncMock()
         state_mock.get_data = AsyncMock(return_value={})
@@ -1004,7 +1005,7 @@ class TestOnSummarySearchRedesign:
             return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
         )
         mock_bot = MagicMock()
-        mock_bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         state_mock = MagicMock()
         state_mock.update_data = AsyncMock()
         state_mock.get_data = AsyncMock(return_value={})
@@ -1029,7 +1030,7 @@ class TestOnSummarySearchRedesign:
             return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
         )
         mock_bot = MagicMock()
-        mock_bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
 
         state_mock = MagicMock()
         state_mock.update_data = AsyncMock()
@@ -1049,7 +1050,7 @@ class TestOnSummarySearchRedesign:
             return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
         )
         mock_bot = MagicMock()
-        mock_bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         state_mock = MagicMock()
         state_mock.update_data = AsyncMock()
         state_mock.set_state = AsyncMock()
@@ -1067,7 +1068,7 @@ class TestOnSummarySearchRedesign:
             return_value=([_APT_PAYLOAD] * 10, 30, 55000.0, ["apt-1"] * 10)
         )
         mock_bot = MagicMock()
-        mock_bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         state_mock = MagicMock()
         state_mock.update_data = AsyncMock()
         state_mock.get_data = AsyncMock(return_value={})
@@ -1186,7 +1187,7 @@ async def test_on_summary_search_list_mode_sends_text(monkeypatch):
         )
     )
     mock_bot = MagicMock()
-    mock_bot._send_property_card = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
 
     callback = MagicMock()
     callback.from_user = MagicMock(id=123)
@@ -1211,7 +1212,7 @@ async def test_on_summary_search_list_mode_sends_text(monkeypatch):
     await funnel_module.on_summary_search(callback, button, manager)
 
     # Should send text, not cards
-    mock_bot._send_property_card.assert_not_awaited()
+    catalog_handlers._send_property_card.assert_not_awaited()
     # Should have at least one answer call with HTML (the list text)
     html_calls = [
         c for c in callback.message.answer.call_args_list if c.kwargs.get("parse_mode") == "HTML"

@@ -54,8 +54,8 @@ from src.runtime.integrations.polling_lock import (
     RedisPollingLock,
 )
 from src.runtime.integrations.redis_mode import RedisCapability, RedisMode
+from telegram_bot.lifecycle import lifecycle as bot_lifecycle
 from telegram_bot.lifecycle.lifecycle import (
-    polling_lock_heartbeat_tick,
     redis_capability_signal,
     setup_handoff_services,
     setup_polling_lock,
@@ -259,9 +259,6 @@ class _LifecycleBot:
         self._handoff_state: Any = None
         self._forum_bridge: Any = None
         self._lead_sink: Any = None
-
-    async def _polling_lock_heartbeat_tick(self) -> None:
-        await polling_lock_heartbeat_tick(self)
 
     async def cancel_heartbeat(self) -> None:
         if self._polling_lock_task is not None:
@@ -588,7 +585,7 @@ async def test_multi_instance_two_owner_lock_contention_renewal_loss_and_takeove
         async with _observer(live_redis) as observer:
             pttl_before_renewal = await observer.pttl(POLLING_LOCK_KEY)
         assert 0 < pttl_before_renewal < pttl_acquired
-        await bot_a._polling_lock_heartbeat_tick()
+        await bot_lifecycle.polling_lock_heartbeat_tick(bot_a)
         assert bot_a._polling_lock_consecutive_failures == 0
         async with _observer(live_redis) as observer:
             pttl_after_renewal = await observer.pttl(POLLING_LOCK_KEY)
@@ -602,10 +599,10 @@ async def test_multi_instance_two_owner_lock_contention_renewal_loss_and_takeove
         # 4. Forced lease loss (server-side) stops A after the tolerated retries.
         async with _observer(live_redis) as observer:
             assert await observer.delete(POLLING_LOCK_KEY) == 1
-        await bot_a._polling_lock_heartbeat_tick()
+        await bot_lifecycle.polling_lock_heartbeat_tick(bot_a)
         assert bot_a._polling_lock_consecutive_failures == 1
         assert bot_a.dp.stop_polling_calls == 0  # first failure: retry, keep polling
-        await bot_a._polling_lock_heartbeat_tick()
+        await bot_lifecycle.polling_lock_heartbeat_tick(bot_a)
         assert bot_a._polling_lock_consecutive_failures == 2
         assert bot_a.dp.stop_polling_calls == 1  # second failure: polling stopped
         transcript.append("A lease lost: 2 failed heartbeats -> dp.stop_polling() called once")

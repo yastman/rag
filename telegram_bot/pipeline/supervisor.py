@@ -29,6 +29,7 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from src.core import SUPPORTED_REQUEST_LANGUAGES, normalize_request_language
 from src.runtime.services.query_filter_signal import detect_filter_sensitive_query
+from telegram_bot.handlers import command_handlers as command_handlers
 from telegram_bot.observability.context import make_session_id
 from telegram_bot.pipeline.streaming import (
     _new_draft_id,
@@ -352,7 +353,7 @@ async def _handle_query_supervisor(
     assert message.from_user is not None
     user_id = message.from_user.id
     session_id = make_session_id("chat", message.chat.id)
-    role = await bot._resolve_user_role(user_id)
+    role = await command_handlers.resolve_user_role(bot, user_id)
     # Canonical locale code (#3491): the core consumes transport-neutral
     # codes, not display labels. A Fluent locale outside the supported set
     # falls back to the configured domain language, then to the canonical

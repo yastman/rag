@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from telegram_bot.config import BotConfig
+from telegram_bot.handlers import command_handlers as command_handlers
 from telegram_bot.startup_status import StartupReport, StartupSeverity, StartupSignal
 from tests.unit._bot_config_factory import make_bot_config as _make_config
 
@@ -183,7 +184,9 @@ def _start_patches(bot):
     stack.enter_context(patch.object(bot.dp, "include_router", MagicMock()))
     stack.enter_context(patch("telegram_bot.middlewares.i18n.setup_i18n_middleware", MagicMock()))
     stack.enter_context(patch("aiogram_dialog.setup_dialogs", MagicMock()))
-    stack.enter_context(patch.object(bot, "_warmup_bge", new_callable=AsyncMock))
+    stack.enter_context(
+        patch("telegram_bot.lifecycle.lifecycle.warmup_bge_pool", new_callable=AsyncMock)
+    )
     # Prevent start_polling from actually blocking
     stack.enter_context(patch.object(bot.dp, "start_polling", new_callable=AsyncMock))
     # Mock cache.redis as None to skip polling lock and handoff sections that need real Redis
@@ -257,33 +260,33 @@ class TestResolveUserRole:
 
     async def test_user_in_manager_ids_returns_manager(self):
         bot = self._bot_with_user_service(user_service=None)
-        role = await bot._resolve_user_role(100)
+        role = await command_handlers.resolve_user_role(bot, 100)
         assert role == "manager"
 
     async def test_user_service_returns_manager(self):
         svc = MagicMock()
         svc.get_role = AsyncMock(return_value="manager")
         bot = self._bot_with_user_service(user_service=svc)
-        role = await bot._resolve_user_role(999)
+        role = await command_handlers.resolve_user_role(bot, 999)
         assert role == "manager"
 
     async def test_user_service_returns_client(self):
         svc = MagicMock()
         svc.get_role = AsyncMock(return_value="client")
         bot = self._bot_with_user_service(user_service=svc)
-        role = await bot._resolve_user_role(999)
+        role = await command_handlers.resolve_user_role(bot, 999)
         assert role == "client"
 
     async def test_user_service_raises_falls_back_to_client(self):
         svc = MagicMock()
         svc.get_role = AsyncMock(side_effect=Exception("DB down"))
         bot = self._bot_with_user_service(user_service=svc)
-        role = await bot._resolve_user_role(999)
+        role = await command_handlers.resolve_user_role(bot, 999)
         assert role == "client"
 
     async def test_user_service_none_falls_back_to_client(self):
         bot = self._bot_with_user_service(user_service=None)
-        role = await bot._resolve_user_role(999)
+        role = await command_handlers.resolve_user_role(bot, 999)
         assert role == "client"
 
 

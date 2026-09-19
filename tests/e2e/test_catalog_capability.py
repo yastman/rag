@@ -93,6 +93,7 @@ from aiogram.types import (
 
 from src.runtime.integrations.cache import CacheLayerManager
 from src.runtime.integrations.redis_mode import RedisMode
+from telegram_bot.lifecycle import lifecycle as bot_lifecycle
 from tests.e2e_core.live_harness import (
     LiveE2EEnv,
     RunNamespace,
@@ -530,9 +531,9 @@ async def _build_catalog_bot(env: LiveE2EEnv, live: LiveRedis, collection: str) 
     # ForumBridge, so the production bridge owns this transport.
     bot.bot = Bot(token=_BOT_TOKEN, session=RecordingTelegramSession())
     # The exact production lifecycle steps that wire the durable stack.
-    bot._setup_handoff_services()
-    bot._setup_workflow_data()
-    bot._setup_dialogs()
+    bot_lifecycle.setup_handoff_services(bot)
+    bot_lifecycle.setup_workflow_data(bot)
+    bot_lifecycle.setup_dialogs(bot)
     assert bot._lead_sink is not None, "production lifecycle must wire the lead sink"
     assert bot._forum_bridge is not None, "managers group must wire the forum bridge"
     assert bot._apartments_service is apartments_service, (

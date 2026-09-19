@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+from telegram_bot.handlers import feedback_handlers as feedback_handlers
 from tests.unit._bot_config_factory import make_bot_config as _make_config
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -38,7 +39,7 @@ class TestHandleFeedback:
         callback_data.action = "done"
         callback_data.trace_id = ""
 
-        await bot.handle_feedback(callback, callback_data=callback_data)
+        await feedback_handlers.handle_feedback(bot, callback, callback_data=callback_data)
 
         callback.answer.assert_awaited_once_with()
 
@@ -51,7 +52,7 @@ class TestHandleFeedback:
         callback_data.action = "dislike"
         callback_data.trace_id = "trace123"
 
-        await bot.handle_feedback(callback, callback_data=callback_data)
+        await feedback_handlers.handle_feedback(bot, callback, callback_data=callback_data)
 
         callback.answer.assert_awaited_once_with()
         callback.message.edit_reply_markup.assert_awaited_once()
@@ -68,7 +69,7 @@ class TestHandleFeedback:
         callback_data.action = "like"
         callback_data.trace_id = "trace123"
 
-        await bot.handle_feedback(callback, callback_data=callback_data)
+        await feedback_handlers.handle_feedback(bot, callback, callback_data=callback_data)
 
         callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
         callback.message.edit_reply_markup.assert_awaited_once()
@@ -78,7 +79,7 @@ class TestHandleFeedback:
         bot = make_property_bot(_make_config())
         callback = _make_callback(data="fb:done")
 
-        await bot.handle_feedback(callback, callback_data=None)
+        await feedback_handlers.handle_feedback(bot, callback, callback_data=None)
 
         callback.answer.assert_awaited_once_with()
 
@@ -87,7 +88,7 @@ class TestHandleFeedback:
         bot = make_property_bot(_make_config())
         callback = _make_callback(data="fb:0:trace123abc")
 
-        await bot.handle_feedback(callback, callback_data=None)
+        await feedback_handlers.handle_feedback(bot, callback, callback_data=None)
 
         callback.answer.assert_awaited_once_with()
         callback.message.edit_reply_markup.assert_awaited_once()

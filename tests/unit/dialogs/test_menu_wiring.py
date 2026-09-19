@@ -4,24 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ._property_bot_ast import get_default_map, get_parameter_names, get_property_bot_method
-
-
-def test_handle_menu_button_accepts_dialog_manager():
-    """handle_menu_button accepts state and optional dialog_manager."""
-    method = get_property_bot_method("handle_menu_button")
-    params = get_parameter_names(method)
-    assert "state" in params
-    assert "dialog_manager" in params
-    assert get_default_map(method)["dialog_manager"] is None
-
-
-def test_handle_search_accepts_dialog_manager():
-    """_handle_search accepts optional dialog_manager."""
-    method = get_property_bot_method("_handle_search")
-    params = get_parameter_names(method)
-    assert "dialog_manager" in params
-    assert get_default_map(method)["dialog_manager"] is None
+from telegram_bot.handlers import catalog as catalog_handlers
+from telegram_bot.handlers import command_handlers as command_handlers
 
 
 async def test_handle_menu_button_clears_stale_fsm_state():
@@ -40,7 +24,7 @@ async def test_handle_menu_button_clears_stale_fsm_state():
             state.get_state = AsyncMock(return_value="PhoneCollectorStates:waiting_phone")
             state.clear = AsyncMock()
 
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
             state.clear.assert_called_once()
 
@@ -60,7 +44,7 @@ async def test_handle_menu_button_no_clear_when_state_is_none():
         state.get_state = AsyncMock(return_value=None)
         state.clear = AsyncMock()
 
-        await bot.handle_menu_button(message, state)
+        await command_handlers.handle_menu_button(bot, message, state)
 
         state.clear.assert_not_called()
         # bot delegates to catalog._handle_services directly
@@ -81,7 +65,7 @@ async def test_handle_menu_button_no_clear_for_unrelated_state():
         state.get_state = AsyncMock(return_value="FunnelSG:budget")
         state.clear = AsyncMock()
 
-        await bot.handle_menu_button(message, state)
+        await command_handlers.handle_menu_button(bot, message, state)
 
         state.clear.assert_not_called()
         # bot delegates to catalog._handle_services directly
@@ -101,7 +85,7 @@ async def test_handle_search_starts_funnel_dialog():
         dialog_manager = AsyncMock()
         dialog_manager.start = AsyncMock()
 
-        await bot._handle_search(message, dialog_manager)
+        await catalog_handlers._handle_search(bot, message, dialog_manager)
 
         dialog_manager.start.assert_called_once()
         call_args = dialog_manager.start.call_args
@@ -119,7 +103,7 @@ async def test_handle_search_fallback_without_dialog_manager():
 
         message = MagicMock()
 
-        await bot._handle_search(message, None)
+        await catalog_handlers._handle_search(bot, message, None)
 
         bot.handle_menu_action_text.assert_called_once_with(message, "Подбери апартаменты")
 
@@ -139,7 +123,11 @@ async def test_handle_menu_button_passes_dialog_manager_to_search():
 
         dialog_manager = AsyncMock()
 
-        await bot.handle_menu_button(message, state, dialog_manager)
+        with patch(
+            "telegram_bot.handlers.catalog._handle_search", new_callable=AsyncMock
+        ) as search:
+            await command_handlers.handle_menu_button(bot, message, state, dialog_manager)
+        search.assert_awaited_once_with(bot, message, dialog_manager)
 
     # bot delegates to catalog._handle_search directly
 
@@ -162,7 +150,7 @@ async def test_handle_menu_button_parses_localized_labels_with_hub():
         with patch(
             "telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="services"
         ) as parse_mock:
-            await bot.handle_menu_button(message, state, i18n=MagicMock())
+            await command_handlers.handle_menu_button(bot, message, state, i18n=MagicMock())
 
         parse_mock.assert_called_once_with("🔑 Послуги", i18n_hub=bot._i18n_hub)
     # bot delegates to catalog._handle_services directly

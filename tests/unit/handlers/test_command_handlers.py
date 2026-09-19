@@ -26,7 +26,6 @@ def mock_bot():
     bot._cache = MagicMock()
     bot._cache.clear_conversation = AsyncMock()
     bot._cache.get_metrics = MagicMock(return_value={})
-    bot._resolve_user_role = AsyncMock(return_value="client")
     bot._is_admin = MagicMock(return_value=False)
     bot._i18n_hub = None
     return bot
@@ -135,7 +134,6 @@ class TestCmdStart:
     async def test_client_shows_main_menu(self, mock_bot):
         """cmd_start for client role shows client main menu."""
         message = _make_message()
-        mock_bot._resolve_user_role = AsyncMock(return_value="client")
 
         with patch(
             "telegram_bot.dialogs.root_nav.show_client_main_menu",

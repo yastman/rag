@@ -82,6 +82,7 @@ from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from src.runtime.integrations.cache import CacheLayerManager
 from src.runtime.integrations.redis_mode import RedisMode
 from src.runtime.qdrant import QdrantService
+from telegram_bot.lifecycle import lifecycle as bot_lifecycle
 from tests.e2e_core.live_harness import (
     FakeLLMConfig,
     LiveBGEEmbeddings,
@@ -477,9 +478,9 @@ async def _build_dispatch_bot(stack: _DispatchStack) -> Any:
     bot.bot = Bot(token=_BOT_TOKEN, session=RecordingTelegramSession())
     # The exact production lifecycle steps that wire the durable stack and
     # the dialog routers + catch-all query handler.
-    bot._setup_handoff_services()
-    bot._setup_workflow_data()
-    bot._setup_dialogs()
+    bot_lifecycle.setup_handoff_services(bot)
+    bot_lifecycle.setup_workflow_data(bot)
+    bot_lifecycle.setup_dialogs(bot)
     # The E2E sentinel rides the REAL middleware chain (outer, after the
     # production FSM-cancel middleware registered at construction).
     bot.dp.message.outer_middleware(stack.sentinel)

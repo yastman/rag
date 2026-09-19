@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from telegram_bot.handlers import catalog as catalog_handlers
 from tests.unit._property_bot_factory import make_property_bot
 
 
@@ -48,7 +49,7 @@ async def test_send_property_card_calls_format_and_answer(_mock_photos: MagicMoc
 
     result = _sample_result("prop-1")
 
-    await bot._send_property_card(message, result, telegram_id=123)
+    await catalog_handlers._send_property_card(bot, message, result, telegram_id=123)
 
     message.answer_media_group.assert_awaited_once()
     message.answer.assert_awaited_once()
@@ -76,7 +77,7 @@ async def test_send_property_card_favorited_shows_remove(_mock_photos: MagicMock
 
     result = _sample_result("prop-1")
 
-    await bot._send_property_card(message, result, telegram_id=123)
+    await catalog_handlers._send_property_card(bot, message, result, telegram_id=123)
 
     kb = message.answer.call_args.kwargs.get("reply_markup")
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
@@ -105,7 +106,7 @@ async def test_send_property_card_no_favorites_service(_mock_photos: MagicMock) 
 
     result = _sample_result("prop-99")
 
-    await bot._send_property_card(message, result, telegram_id=42)
+    await catalog_handlers._send_property_card(bot, message, result, telegram_id=42)
 
     message.answer_media_group.assert_awaited_once()
     message.answer.assert_awaited_once()
@@ -135,7 +136,7 @@ async def test_send_property_card_includes_section_and_apartment_number(
 
     result = _sample_result("prop-1")
 
-    await bot._send_property_card(message, result, telegram_id=123)
+    await catalog_handlers._send_property_card(bot, message, result, telegram_id=123)
 
     card_text = message.answer.call_args[0][0]
     assert "B-2" in card_text

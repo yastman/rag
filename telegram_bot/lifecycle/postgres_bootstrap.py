@@ -5,18 +5,15 @@ PR-7 of Slice 1: pulls the postgres bootstrap helpers
 ``_ensure_realestate_schema``) out of the ``PropertyBot`` god-object so
 ``bot.py`` shrinks toward a thin facade. The functions become
 module-level callables that take their dependencies (admin URL, pool)
-as arguments instead of reading ``self``. The class methods on
-``PropertyBot`` stay as thin wrappers that bind ``self.config`` /
-``self._pg_pool`` and delegate here, so existing tests at
-``tests/unit/test_bot_handlers.py`` (which call
-``bot._ensure_realestate_schema()``) keep working.
+as arguments instead of reading ``self``. The lifecycle owner passes the
+configured database URL and pool directly.
 
 Module-level imports are kept light (stdlib + ``logging`` + ``re`` +
 ``urllib.parse``) so this file is cheap to import in unit tests that
 exercise the bootstrap helpers in isolation. ``asyncpg`` is taken as a
 parameter rather than imported at the top so the bot's existing
 "asyncpg-import-failure must not crash unit tests" contract still
-holds — see the wrapper in ``bot.py`` for the lazy import dance.
+holds — the lifecycle owner imports asyncpg only when setting up PostgreSQL.
 
 Tracked under #1265. Direct URL parsing and database bootstrap behavior is covered by
 ``tests/unit/test_postgres_bootstrap.py``.

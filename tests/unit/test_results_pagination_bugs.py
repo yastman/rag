@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from telegram_bot.handlers import catalog as catalog_handlers
 from tests.unit._property_bot_factory import make_property_bot
 
 
@@ -44,7 +45,7 @@ async def test_results_more_stale_compat_does_not_call_scroll_with_filters() -> 
     )
     callback = _make_callback()
 
-    await bot.handle_results_callback(callback, state)
+    await catalog_handlers.handle_results_callback(bot, callback, state)
 
     bot._apartments_service.scroll_with_filters.assert_not_awaited()
     state.update_data.assert_not_awaited()

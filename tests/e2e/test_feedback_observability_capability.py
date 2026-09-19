@@ -80,6 +80,7 @@ from aiogram.client.session.base import BaseSession
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
 from telegram_bot.callback_data import FeedbackCB, FeedbackReasonCB
+from telegram_bot.lifecycle import lifecycle as bot_lifecycle
 from telegram_bot.observability.context import make_session_id
 from telegram_bot.startup_status import StartupReport
 from tests.e2e_core.live_harness import (
@@ -269,7 +270,7 @@ async def feedback_stack() -> AsyncIterator[_FeedbackStack]:
         assert bot._feedback_store is not None, (
             "production setup_postgres must wire the feedback event store (#3422)"
         )
-        bot._setup_workflow_data()
+        bot_lifecycle.setup_workflow_data(bot)
         assert bot.dp["feedback_store"] is bot._feedback_store, (
             "the real dispatcher must receive the configured feedback store"
         )

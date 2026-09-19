@@ -10,17 +10,8 @@ handlers:
 * :func:`clear_feedback_confirmation_later` — async cleanup of the
   confirmation keyboard after a TTL.
 
-The functions are module-level and take the ``PropertyBot`` instance
-as the first positional argument. ``PropertyBot.handle_feedback`` /
-``handle_feedback_reason`` / ``_clear_feedback_confirmation_later``
-remain on the class as thin delegates so:
-
-* aiogram dispatcher registration in ``_register_handlers`` keeps
-  binding ``self.handle_feedback`` directly (the dispatcher captures
-  the bound method);
-* the existing ``tests/unit/test_bot_handlers.py`` suite keeps
-  resolving ``bot.handle_feedback`` / ``bot._clear_feedback_confirmation_later``
-  unchanged.
+Dispatcher registration binds the canonical async handlers to the bot with
+``functools.partial``; tests exercise these functions directly.
 
 Module-level imports are kept to stdlib + the small set of
 ``telegram_bot`` helpers each handler reaches for; the heavier

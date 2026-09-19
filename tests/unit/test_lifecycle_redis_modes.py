@@ -193,3 +193,25 @@ class TestStartBotCapabilitySignal:
         signals = [s for s in report.signals if s.source == "redis_capabilities"]
         assert signals
         assert signals[0].severity is StartupSeverity.OK
+
+
+async def test_heartbeat_loop_calls_canonical_tick_with_existing_policy(monkeypatch) -> None:
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.lifecycle import lifecycle
+
+    bot = _bot(RedisMode.MULTI_INSTANCE, redis_backend=_FakeRedis(acquire_result=True))
+    tick = AsyncMock(side_effect=asyncio.CancelledError)
+    monkeypatch.setattr(lifecycle, "polling_lock_heartbeat_tick", tick)
+    sleep = AsyncMock()
+    monkeypatch.setattr(asyncio, "sleep", sleep)
+
+    await setup_polling_lock(bot)
+    with pytest.raises(asyncio.CancelledError):
+        await bot._polling_lock_task
+
+    sleep.assert_awaited_once_with(max(1, bot._polling_lock.ttl_sec // 3))
+    tick.assert_awaited_once()
+    assert tick.await_args.args == (bot,)
+    assert tick.await_args.kwargs["log"].name == "telegram_bot.bot"
+    assert tick.await_args.kwargs["max_refresh_failures"] == 2
