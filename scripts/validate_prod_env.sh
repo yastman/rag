@@ -36,7 +36,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   export "$key=$value"
 done < .env
 
-# shellcheck source=lib/release_compose.sh
+# shellcheck source=scripts/lib/release_compose.sh
 . "${SCRIPT_DIR}/lib/release_compose.sh"
 release_compose_init
 

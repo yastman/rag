@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}/../.."
-# shellcheck source=../lib/release_compose.sh
+# shellcheck source=scripts/lib/release_compose.sh
 . "${SCRIPT_DIR}/../lib/release_compose.sh"
 release_compose_init
 
