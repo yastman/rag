@@ -17,8 +17,9 @@ instantiating the full bot stack.
 - **Narrow import graph:** module-level imports are stdlib-only — no `aiogram` /
   `langgraph` / `qdrant_client` / `fastapi` at module scope. Helpers receive their
   collaborators (embedder, polling-lock holder) as arguments rather than reading `self`.
-- Pinned by
-  [`../../tests/contract/test_bot_lifecycle_extraction_contract.py`](../../tests/contract/test_bot_lifecycle_extraction_contract.py).
+- Direct behavior coverage:
+  [warmup and heartbeat helpers](../../tests/unit/test_lifecycle_helpers.py),
+  [PostgreSQL bootstrap](../../tests/unit/test_postgres_bootstrap.py).
 
 ## See Also
 

@@ -18,8 +18,8 @@ parameter rather than imported at the top so the bot's existing
 "asyncpg-import-failure must not crash unit tests" contract still
 holds — see the wrapper in ``bot.py`` for the lazy import dance.
 
-Tracked under #1265. Pinned by
-``tests/contract/test_bot_postgres_bootstrap_extraction_contract.py``.
+Tracked under #1265. Direct URL parsing and database bootstrap behavior is covered by
+``tests/unit/test_postgres_bootstrap.py``.
 """
 
 from __future__ import annotations
