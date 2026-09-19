@@ -11,11 +11,9 @@ keeps in the LangGraph checkpointer:
 * :func:`_extract_current_turn` — slice agent checkpointer history down to
   the messages that belong to the current user turn.
 
-They are byte-for-byte the bodies that previously lived in ``bot.py``;
-``telegram_bot/bot.py`` re-exports them from this module so existing
-callers (and ``from telegram_bot.bot import _extract_current_turn`` in
-``tests/unit/test_bot_scores.py``) continue to resolve to the same
-callables.
+``telegram_bot/bot.py`` retains pass-through wrappers for these helpers.
+Direct behavior tests live in ``tests/unit/test_bot_state_helpers.py`` and
+``tests/unit/test_bot_scores.py`` and import this module.
 
 The module has no aiogram / fastapi / langgraph imports, which keeps it
 cheap to import and easy to unit-test in isolation.
