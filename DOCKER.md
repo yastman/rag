@@ -45,8 +45,14 @@ make test-e2e-full E2E_MODEL_DIR=/absolute/path/to/pinned-artifact
 
 This dedicated test gate does not load `.env` or require provider/Telegram
 credentials. It verifies the artifact against the repository manifest before
-building the application images and starting six production services, uses a fresh `rag-e2e-<run-id>` Compose
-project, allocates loopback ports dynamically, and caps BGE memory at 6 GB.
+starting PostgreSQL, Redis, Qdrant and BGE-M3. It then runs the production
+`scripts.demo_bootstrap` against the run-owned Qdrant/BGE endpoints and canonical
+knowledge collection, preparing both knowledge and `apartments` before starting
+bot and ingestion. Bootstrap failure fails the gate and triggers owned-resource
+cleanup; bot readiness is never bypassed. The fresh `rag-e2e-<run-id>` Compose
+project uses dynamic loopback ports and caps BGE memory at 6 GB. Bootstrap uses
+absolute shipped-corpus paths and writes its local apartment ingestion state only
+under `logs/e2e-full/<run-id>/`, preserving any existing operator state.
 Its isolated network has no external gateway. The bot executes production
 `telegram_bot.main` with a test-only aiogram transport; health requires recent
 entry into the real Dispatcher polling loop. The ingestion service runs the

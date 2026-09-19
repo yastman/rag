@@ -69,10 +69,12 @@ def clean_environment() -> dict[str, str]:
     return {key: value for key, value in os.environ.items() if key.upper() in allowed}
 
 
-def command(args: list[str], env: dict[str, str], *, timeout: int = 120) -> str:
+def command(
+    args: list[str], env: dict[str, str], *, timeout: int = 120, cwd: Path | None = None
+) -> str:
     result = subprocess.run(
         args,
-        cwd=ROOT,
+        cwd=cwd or ROOT,
         env=env,
         capture_output=True,
         text=True,
@@ -297,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         rendered = command([*compose, "--profile", "full", "config", "--services"], env)
         if set(rendered.splitlines()) != SERVICES:
             raise ValueError("rendered topology is not the required six services")
-        print(f"Building and starting six services for {project}", flush=True)
+        print(f"Starting four dependencies for {project}", flush=True)
         command(
             [
                 *compose,
@@ -309,11 +311,14 @@ def main(argv: list[str] | None = None) -> int:
                 "--wait",
                 "--wait-timeout",
                 "900",
+                "postgres",
+                "redis",
+                "qdrant",
+                "bge-m3",
             ],
             env,
             timeout=2400,
         )
-        evidence["before"] = service_snapshot(compose, project, env)
         endpoints = {}
         for service, port in (
             ("postgres", 5432),
@@ -336,10 +341,52 @@ def main(argv: list[str] | None = None) -> int:
             "QDRANT_E2E_RESTART_PROJECT": project,
             "RUN_INTEGRATION_TESTS": "1",
             "QDRANT_URL": f"http://{endpoints['qdrant']}",
+            "QDRANT_COLLECTION": f"e2e_{run_id}_documents",
             "BGE_M3_URL": f"http://{endpoints['bge-m3']}",
             "REDIS_URL": f"redis://:{password}@{endpoints['redis']}/0",
             "POSTGRES_DSN": f"postgresql://postgres:{password}@{endpoints['postgres']}/realestate",
         }
+        print("Bootstrapping both product collections before bot startup", flush=True)
+        bootstrap_output = command(
+            [
+                sys.executable,
+                "-m",
+                "scripts.demo_bootstrap",
+                "--qdrant-url",
+                test_env["QDRANT_URL"],
+                "--bge-url",
+                test_env["BGE_M3_URL"],
+                "--knowledge-corpus",
+                str(ROOT / "data/test"),
+                "--apartments-csv",
+                str(ROOT / "data/apartments.csv"),
+            ],
+            {**test_env, "PYTHONPATH": str(ROOT)},
+            # The production bootstrap's apartment state filename is relative.
+            # Keep it in this fresh run directory, never the operator checkout.
+            cwd=run_dir,
+            timeout=1800,
+        )
+        (run_dir / "bootstrap.log").write_text(bootstrap_output, encoding="utf-8")
+        command(
+            [
+                *compose,
+                "--profile",
+                "full",
+                "up",
+                "-d",
+                "--build",
+                "--no-deps",
+                "--wait",
+                "--wait-timeout",
+                "900",
+                "bot",
+                "ingestion",
+            ],
+            env,
+            timeout=2400,
+        )
+        evidence["before"] = service_snapshot(compose, project, env)
         for suite in SUITES:
             print(f"Required suite: {suite}", flush=True)
             report = run_dir / (Path(suite).stem + ".xml")

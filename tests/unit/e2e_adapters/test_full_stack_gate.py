@@ -76,7 +76,7 @@ def test_snapshot_requires_six_owned_healthy_services(monkeypatch, fault):
         gate.service_snapshot(["docker", "compose"], "rag-e2e-012345abcdef", {})
 
 
-@pytest.mark.parametrize("failure", [None, "build", "skip", "test"])
+@pytest.mark.parametrize("failure", [None, "build", "bootstrap", "skip", "test"])
 def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeypatch, failure):
     monkeypatch.setattr(gate, "ROOT", tmp_path)
     monkeypatch.setattr(gate, "resources", lambda *_: {})
@@ -84,9 +84,32 @@ def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeyp
         gate, "service_snapshot", lambda *_a, **_k: [{"service": "bot", "healthy": True}]
     )
     calls = []
+    run_dir = tmp_path / "logs/e2e-full/012345abcdef"
+    existing_state = tmp_path / ".apartments_ingestion_state_apartments.json"
+    existing_state.write_text("existing operator state")
 
     def command(args, _env, **_kwargs):
         calls.append(args)
+        if "scripts.demo_bootstrap" in args:
+            from argparse import Namespace
+
+            from scripts.demo_bootstrap import _state_path
+
+            assert _kwargs["cwd"] == run_dir
+            assert _env["PYTHONPATH"] == str(tmp_path)
+            assert _env["PYTHON_DOTENV_DISABLED"] == "1"
+            assert _env["QDRANT_COLLECTION"] == "e2e_012345abcdef_documents"
+            for flag in ("--qdrant-url", "--bge-url"):
+                assert args[args.index(flag) + 1] == "http://127.0.0.1:12345"
+            assert (
+                Path(args[args.index("--apartments-csv") + 1]) == tmp_path / "data/apartments.csv"
+            )
+            assert Path(args[args.index("--knowledge-corpus") + 1]) == tmp_path / "data/test"
+            state = run_dir / _state_path(Namespace(apartments_collection="apartments"))
+            state.write_text("run-owned bootstrap state")
+            if failure == "bootstrap":
+                raise RuntimeError("bootstrap failed")
+            return "both product collections ready"
         if "rev-parse" in args:
             return "frozen-sha"
         if "--services" in args:
@@ -118,6 +141,17 @@ def test_full_command_keeps_failure_and_exact_cleanup_evidence(tmp_path, monkeyp
     down = next(call for call in calls if "down" in call)
     assert down[2:4] == ["-p", "rag-e2e-012345abcdef"]
     assert "--volumes" in down
+    assert existing_state.read_text() == "existing operator state"
+    starts = [call for call in calls if "up" in call]
+    assert set(starts[0][-4:]) == {"postgres", "redis", "qdrant", "bge-m3"}
+    if failure in {"build", "bootstrap"}:
+        assert len(starts) == 1
+        assert evidence["suites"] == []
+    else:
+        assert len(starts) == 2
+        assert set(starts[1][-2:]) == {"bot", "ingestion"}
+        bootstrap = next(call for call in calls if "scripts.demo_bootstrap" in call)
+        assert calls.index(starts[0]) < calls.index(bootstrap) < calls.index(starts[1])
     if failure is None:
         assert {item["path"] for item in evidence["suites"]} == set(gate.SUITES)
 
