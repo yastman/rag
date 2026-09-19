@@ -13,7 +13,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 
 _ALLOWED_HOSTED_ACTIONS = {
-    "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b",
     "docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf",
     "docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee",
