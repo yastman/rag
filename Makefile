@@ -63,7 +63,6 @@ PYTEST_TELEGRAM_ADAPTER_PATHS := \
 	tests/unit/pipelines \
 	tests/unit/services/test_catalog_rendering.py \
 	tests/unit/services/test_catalog_session.py \
-	tests/unit/services/test_draft_streamer_removed.py \
 	tests/unit/services/test_favorites_service.py
 PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_*bot*.py \

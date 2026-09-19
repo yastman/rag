@@ -652,3 +652,68 @@ class TestSupervisorFeedbackKeyboard:
 
         mock_kb.assert_called_once_with("core-cache-hit-1234")
         assert message.answer.await_args.kwargs.get("reply_markup") is markup
+
+
+class TestCoreResponseDelivery:
+    """Private responses allocate a draft identity and finalize visible output."""
+
+    def test_draft_id_signed_int32_boundaries(self):
+        from telegram_bot.pipeline.streaming import _new_draft_id
+
+        for random_value in (0, 2**31 - 2):
+            with patch(
+                "telegram_bot.pipeline.streaming.secrets.randbelow", return_value=random_value
+            ) as random:
+                draft_id = _new_draft_id()
+            random.assert_called_once_with(2**31 - 1)
+            assert type(draft_id) is int
+            assert draft_id == random_value + 1
+            assert 1 <= draft_id < 2**31
+
+    async def test_private_response_allocates_id_then_sends_before_marking_sent(self):
+        from telegram_bot.pipeline import streaming, supervisor
+
+        assert supervisor._new_draft_id is streaming._new_draft_id
+        ctx = SimpleNamespace(response_sent=False, history_reply_markup=None)
+        events = []
+
+        def allocate_id():
+            events.append("allocate")
+            return streaming._new_draft_id()
+
+        async def send(**kwargs):
+            assert ctx.response_sent is False
+            events.append(("send", kwargs))
+
+        bot = SimpleNamespace(
+            _graph_config=SimpleNamespace(show_sources=False),
+            bot=SimpleNamespace(send_message=AsyncMock(side_effect=send)),
+        )
+        message = _make_message()
+        with patch.object(supervisor, "_new_draft_id", side_effect=allocate_id) as draft_id:
+            await supervisor._send_core_response(
+                bot,
+                message=message,
+                response_text="answer body",
+                user_text="question",
+                query_type="FAQ",
+                rag_result_store={},
+                ctx=ctx,
+                forum_thread_id=7,
+            )
+        draft_id.assert_called_once_with()
+        assert events == [
+            "allocate",
+            (
+                "send",
+                {
+                    "chat_id": 12345,
+                    "text": "answer body",
+                    "parse_mode": "HTML",
+                    "reply_markup": None,
+                    "message_thread_id": 7,
+                },
+            ),
+        ]
+        assert ctx.response_sent is True
+        message.answer.assert_not_awaited()
