@@ -31,7 +31,9 @@ operational assets that exist today; for the full runtime/Compose/ports/env refe
 | Task | Command / asset |
 |---|---|
 | Validate prod env vars | `scripts/validate_prod_env.sh` |
-| Compose config validation | `docker compose -f compose.yml -f compose.dev.yml config` |
+| Validate full release env | `RELEASE_TOPOLOGY=full bash scripts/validate_prod_env.sh` |
+| Probe selected running release | `RELEASE_TOPOLOGY=minimal bash scripts/probe/release_health_vps.sh` (use `full` for ingestion) |
+| Release topology and native config commands | [Compose release validation](../../DOCKER.md#release-validation-no-deployment) |
 
 > Stray Compose source cleanup moved to [`../../DOCKER.md`](../../DOCKER.md)
 > ("Compose Source Hygiene").

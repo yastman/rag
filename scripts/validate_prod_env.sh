@@ -12,14 +12,20 @@ fi
 
 # Safe .env parsing - reject lines that look like shell commands
 while IFS= read -r line || [[ -n "$line" ]]; do
+  line="${line%$'\r'}"
   # skip empty lines and comments
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
   # Must be KEY=VALUE format
   if [[ ! "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-    echo "Invalid .env line (not KEY=VALUE): $line" >&2
+    echo "Invalid .env line (expected KEY=VALUE; content withheld)" >&2
     exit 1
   fi
   key="${line%%=*}"
+  # Release selection belongs to the caller, as in the health entrypoint.
+  # The dotenv file supplies service credentials, not release control overrides.
+  case "$key" in
+    COMPOSE_FILE|COMPOSE_PATH_SEPARATOR|RELEASE_TOPOLOGY|COMPOSE_PROJECT_NAME) continue ;;
+  esac
   value="${line#*=}"
   # Strip surrounding quotes if present
   if [[ "$value" == \"*\" ]]; then
@@ -29,6 +35,10 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   fi
   export "$key=$value"
 done < .env
+
+# shellcheck source=scripts/lib/release_compose.sh
+. "${SCRIPT_DIR}/lib/release_compose.sh"
+release_compose_init
 
 handoff_enabled="${HANDOFF_ENABLED:-false}"
 managers_group_id="${MANAGERS_GROUP_ID:-}"
@@ -57,29 +67,8 @@ if [ -z "${CEREBRAS_API_KEY:-}${GROQ_API_KEY:-}${OPENAI_API_KEY:-}${LLM_API_KEY:
 fi
 
 optional_profile_vars=()
-optional_password_vars=()
-
-compose_profiles=",${COMPOSE_PROFILES:-},"
-
-if [[ "${compose_profiles}" == *",ingest,"* || "${compose_profiles}" == *",full,"* || "${compose_profiles}" == *",vps-noncore,"* ]]; then
+if [ "$release_profile" = full ]; then
   optional_profile_vars+=(GDRIVE_SYNC_DIR)
-fi
-
-if [[ "${compose_profiles}" == *",ml,"* || "${compose_profiles}" == *",full,"* || "${compose_profiles}" == *",vps-noncore,"* ]]; then
-  optional_profile_vars+=(
-    NEXTAUTH_SECRET
-    SALT
-    ENCRYPTION_KEY
-    CLICKHOUSE_PASSWORD
-    MINIO_ROOT_PASSWORD
-  )
-  optional_password_vars+=(
-    NEXTAUTH_SECRET
-    SALT
-    ENCRYPTION_KEY
-    CLICKHOUSE_PASSWORD
-    MINIO_ROOT_PASSWORD
-  )
 fi
 
 require_present() {
@@ -99,7 +88,7 @@ if [ "${#optional_profile_vars[@]}" -gt 0 ]; then
 fi
 
 # Minimum password complexity check (>=12 chars) for active sensitive credentials
-for pw_var in "${core_password_vars[@]}" "${optional_password_vars[@]}"; do
+for pw_var in "${core_password_vars[@]}"; do
   pw_value="${!pw_var:-}"
   if [ "${#pw_value}" -lt 12 ]; then
     echo "${pw_var} must be at least 12 characters long (got ${#pw_value})" >&2
@@ -123,6 +112,4 @@ if [ -n "$root_usage_percent" ] && [ "$root_usage_percent" -gt "$vps_disk_usage_
   exit 1
 fi
 
-# Validate merged Compose config
-
-docker compose --env-file .env -f compose.yml -f compose.vps.yml config >/dev/null
+# release_compose_init already validated the rendered Compose configuration.

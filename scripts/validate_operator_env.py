@@ -51,9 +51,6 @@ REQUIRED_KEYS: tuple[str, ...] = (
     "TELEGRAM_BOT_TOKEN",
     "POSTGRES_PASSWORD",
     "REDIS_PASSWORD",
-    "ENCRYPTION_KEY",
-    "SALT",
-    "NEXTAUTH_SECRET",
     "BGE_M3_ONNX_MODEL_HOST_DIR",
 )
 LLM_KEY_CHOICES: tuple[str, ...] = (
@@ -65,7 +62,6 @@ LLM_KEY_CHOICES: tuple[str, ...] = (
 OPTIONAL_PATH_KEYS: tuple[str, ...] = ("GDRIVE_SYNC_DIR",)
 
 TELEGRAM_TOKEN_RE = re.compile(r"^\d{5,}:[A-Za-z0-9_-]{30,}$")
-HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 # A Windows drive-letter absolute path accepts either slash style (Docker
 # Desktop handles both; .env.example documents the forward-slash form).
 WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:[\\/]")
@@ -132,8 +128,6 @@ def _is_known_dummy(key: str, value: str) -> bool:
         return hashlib.sha256(value.encode("utf-8")).hexdigest() == (KNOWN_CI_DUMMY_TOKEN_SHA256)
     if key == "POSTGRES_PASSWORD":
         return value == CI_DUMMY_POSTGRES_PASSWORD
-    if key == "ENCRYPTION_KEY":
-        return set(value) == {"0"}
     return False
 
 
@@ -162,14 +156,6 @@ def _shape_problems(key: str, value: str) -> list[str]:
         problems.append(
             f"  - {key}: expected shape '<digits>:<>=30 token characters' "
             "(Telegram bot token format); value not shown"
-        )
-    if key == "ENCRYPTION_KEY" and not HEX64_RE.match(value):
-        problems.append(
-            f"  - {key}: must be 64 hex characters (generate with: openssl rand -hex 32)"
-        )
-    if key in {"SALT", "NEXTAUTH_SECRET"} and len(value) < 16:
-        problems.append(
-            f"  - {key}: too short (minimum 16 characters; generate with: openssl rand -base64 32)"
         )
     if key in {"POSTGRES_PASSWORD", "REDIS_PASSWORD"}:
         if len(value) < 8:

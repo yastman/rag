@@ -33,6 +33,43 @@ docker compose -f compose.yml -f compose.dev.yml up -d
 > `-f` flags work unchanged; use Windows absolute paths (e.g., `C:\path\to\dir`)
 > for host bind mounts and build contexts in `.env`.
 
+## Release validation (no deployment)
+
+The release scripts use tracked `compose.yml` without the development port
+and security overrides. Minimal release selects `--profile postgres`:
+`redis`, `qdrant`, `bge-m3`, `bot`, and `postgres`. Full release selects
+`--profile full` and additionally requires `ingestion`, matching the six-service
+`make docker-full-up` capability contract.
+
+```bash
+RELEASE_TOPOLOGY=minimal bash scripts/validate_prod_env.sh
+RELEASE_TOPOLOGY=minimal bash scripts/probe/release_health_vps.sh
+RELEASE_TOPOLOGY=full bash scripts/validate_prod_env.sh
+RELEASE_TOPOLOGY=full bash scripts/probe/release_health_vps.sh
+# Read-only native rendering of those same production topologies:
+docker compose --env-file .env -f compose.yml --profile postgres config --services
+docker compose --env-file .env -f compose.yml --profile full config --services
+```
+
+Both gates default to minimal and project `vps`, validate the rendered service
+set, and never start, recreate, or delete containers or volumes. The health gate
+requires every selected container to be running **and healthy**, including
+full-mode ingestion; it uses the Compose healthchecks and prints service names
+without raw inspection output. Full production validation requires
+`GDRIVE_SYNC_DIR`; only live PostgreSQL/Redis and bot/provider credentials are
+required, with no retired observability secrets or proxy endpoint.
+
+For an explicit operator override, these two scripts accept `COMPOSE_FILE`
+(a colon-separated file list; `COMPOSE_PATH_SEPARATOR` can select a different
+separator for Windows drive-letter paths). Every file must exist before Docker
+runs; no private overlay is assumed. An override must retain exactly the selected
+service set. `RELEASE_TOPOLOGY` owns profile selection for these release gates;
+ambient `COMPOSE_PROFILES` does not change their contract. `COMPOSE_FILE`,
+`COMPOSE_PATH_SEPARATOR`, `RELEASE_TOPOLOGY`, and `COMPOSE_PROJECT_NAME` are caller
+environment controls in both entrypoints; values of those names in `.env` do
+not override caller selection or the release defaults. Run the existing
+operator environment/artifact gate before any actual build/up command.
+
 ## Profiles
 
 Services are gated by profiles. Run only what you need. PostgreSQL is an

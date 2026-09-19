@@ -7,39 +7,6 @@ from pathlib import Path
 ROOT = Path(__file__).parents[2]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 RELEASE_SMOKE_SCRIPT = ROOT / "scripts" / "probe" / "release_health_vps.sh"
-VPS_NONCORE_SERVICES_LIB = ROOT / "scripts" / "lib" / "vps_noncore_services.sh"
-
-
-def test_release_smoke_script_does_not_allow_profile_or_mini_app_mode() -> None:
-    """Release smoke must not support profile or archived Mini App downgrades."""
-    script = RELEASE_SMOKE_SCRIPT.read_text()
-    assert "profile" not in script, (
-        "scripts/probe/release_health_vps.sh still supports 'profile', "
-        "which lets release-critical callers skip minimal-core parity."
-    )
-    assert "REQUIRE_MINI_APP_ENDPOINT" not in script
-
-
-def test_release_smoke_asserts_removed_services_absent() -> None:
-    script = RELEASE_SMOKE_SCRIPT.read_text()
-    noncore_services = VPS_NONCORE_SERVICES_LIB.read_text()
-    for service in [
-        "docling",
-        "ingestion",
-        "clickhouse",
-        "minio",
-    ]:
-        assert service in noncore_services
-    assert "VPS_NONCORE_SERVICES" in script
-    assert "removed_service" in script
-
-
-def test_release_smoke_sources_noncore_lib_from_probe_dir() -> None:
-    """The probe script moved under scripts/probe, so the lib path must go up one level."""
-    script = RELEASE_SMOKE_SCRIPT.read_text()
-    assert "# shellcheck source=../lib/vps_noncore_services.sh" in script
-    assert "# shellcheck disable=SC1091" in script
-    assert '. "${SCRIPT_DIR}/../lib/vps_noncore_services.sh"' in script
 
 
 def test_public_ci_does_not_run_release_smoke() -> None:
@@ -71,7 +38,6 @@ def test_release_gate_script_contains_handoff_contract() -> None:
     script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
     assert "HANDOFF_ENABLED" in script
     assert "MANAGERS_GROUP_ID" in script
-    assert "docker compose --env-file .env -f compose.yml -f compose.vps.yml config" in script
 
 
 def test_release_gate_script_core_required_vars_are_minimal() -> None:
@@ -101,22 +67,8 @@ def test_release_smoke_logs_when_handoff_smoke_is_skipped() -> None:
 def test_release_smoke_reads_handoff_gate_from_bot_runtime_env() -> None:
     """Release smoke must key off container runtime env, not the host shell env."""
     script = RELEASE_SMOKE_SCRIPT.read_text()
-    assert "docker compose exec -T bot python - <<'PY'" in script
+    assert '"${release_compose[@]}" exec -T bot python -' in script
     assert 'HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"' not in script
-
-
-def test_release_gate_script_optional_profile_vars_are_gated() -> None:
-    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
-    assert "optional_profile_vars" in script
-    for var in [
-        "GDRIVE_SYNC_DIR",
-        "NEXTAUTH_SECRET",
-        "SALT",
-        "ENCRYPTION_KEY",
-        "CLICKHOUSE_PASSWORD",
-        "MINIO_ROOT_PASSWORD",
-    ]:
-        assert var in script
 
 
 def test_release_gate_script_enforces_password_length() -> None:
