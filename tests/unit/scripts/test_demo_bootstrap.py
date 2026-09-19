@@ -438,7 +438,7 @@ class TestMain:
         ingest_k.assert_not_called()
         ingest_a.assert_not_called()
 
-    def test_incompatible_schema_is_reported_not_touched(self):
+    def test_incompatible_schema_is_reported_not_touched(self, capsys):
         client = MagicMock()
         client.get_collection.side_effect = [
             _info(points=0, dense=("dense",), sparse=()),  # knowledge: no bm42
@@ -446,13 +446,20 @@ class TestMain:
         ]
         results = [_ready_readiness("i3202-knowledge"), _ready_readiness("i3202-apartments")]
         with (
+            patch("httpx.Client.send", side_effect=AssertionError("unexpected HTTP")) as http_send,
             patch.object(db, "QdrantClient", return_value=client),
             patch.object(db, "verify_ready", AsyncMock(return_value=results)),
             patch.object(db, "create_knowledge_collection_schema") as create_k,
             patch.object(db, "ingest_knowledge_demo") as ingest_k,
+            patch.object(db, "ingest_apartments_demo", return_value={}) as ingest_a,
         ):
             code = db.main(self._argv())
 
         assert code == 1
+        http_send.assert_not_called()
         create_k.assert_not_called()
         ingest_k.assert_not_called()
+        ingest_a.assert_called_once()
+        output = capsys.readouterr().out
+        assert "[schema_incompatible] collection 'i3202-knowledge'" in output
+        assert "[ingest_failed]" not in output
