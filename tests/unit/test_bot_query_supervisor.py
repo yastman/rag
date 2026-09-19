@@ -9,8 +9,26 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from tests.unit._bot_config_factory import make_bot_config as _make_config
 from tests.unit._property_bot_factory import make_property_bot
+
+
+def _make_supervisor_bot(config, **kwargs):
+    bot = make_property_bot(config, **kwargs)
+    bot.bot.send_message = AsyncMock()
+    return bot
+
+
+@pytest.fixture(autouse=True)
+def no_telegram_http(monkeypatch):
+    from aiogram.client.session.aiohttp import AiohttpSession
+
+    request = AsyncMock(side_effect=AssertionError("Unexpected Telegram HTTP request"))
+    monkeypatch.setattr(AiohttpSession, "make_request", request)
+    yield
+    request.assert_not_awaited()
 
 
 @asynccontextmanager
@@ -68,7 +86,7 @@ class TestQuerySupervisorHandoffMode:
 
     async def test_handoff_human_mode_relays_and_returns(self):
         """Handoff mode='human' relays message and returns without RAG processing."""
-        bot = make_property_bot(_make_config())
+        bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
 
         from telegram_bot.services.handoff_state import HandoffData
@@ -95,7 +113,7 @@ class TestQuerySupervisorHandoffMode:
 
     async def test_handoff_human_waiting_relays_and_continues(self):
         """Handoff mode='human_waiting' relays AND continues with RAG."""
-        bot = make_property_bot(_make_config())
+        bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
 
         from telegram_bot.services.handoff_state import HandoffData
@@ -135,7 +153,7 @@ class TestQuerySupervisorHandoffMode:
 
         from telegram_bot.services.handoff_state import HandoffData
 
-        bot = make_property_bot(_make_config())
+        bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
 
         handoff_data = HandoffData(client_id=12345, topic_id=999, mode="human")
@@ -169,7 +187,7 @@ class TestQuerySupervisorHandoffMode:
 
         from telegram_bot.services.handoff_state import HandoffData
 
-        bot = make_property_bot(_make_config())
+        bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
 
         handoff_data = HandoffData(client_id=12345, topic_id=999, mode="human_waiting")
@@ -198,7 +216,7 @@ class TestQuerySupervisorHandoffMode:
 
     async def test_no_handoff_proceeds_normally(self):
         """No handoff state proceeds directly to _handle_query_supervisor."""
-        bot = make_property_bot(_make_config())
+        bot = _make_supervisor_bot(_make_config())
         message = _make_message("hello")
         bot._handoff_state = None
 
@@ -226,7 +244,7 @@ class TestQuerySupervisorSemanticCache:
     async def test_cache_lookup_not_performed_by_telegram(self):
         """Telegram never calls check_semantic; the core owns the cache stage."""
         config = _make_config(content_filter_enabled=False)
-        bot = make_property_bot(config)
+        bot = _make_supervisor_bot(config)
         message = _make_message("What is the deposit amount?")
 
         with (
@@ -251,7 +269,8 @@ class TestQuerySupervisorSemanticCache:
 
         bot._cache.check_semantic.assert_not_awaited()
         assert result == "core answer"
-        message.answer.assert_awaited_once()
+        bot.bot.send_message.assert_awaited_once()
+        message.answer.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +284,7 @@ class TestQuerySupervisorCoreEntrypoint:
     async def test_core_entrypoint_called_and_agent_bypassed(self, monkeypatch):
         """Assistant core is the text path: invoke assistant core request and bypass legacy agent."""
         config = _make_config(content_filter_enabled=False)
-        bot = make_property_bot(config)
+        bot = _make_supervisor_bot(config)
         message = _make_message("What is the cost of Sunny Beach studio?")
 
         from src.core import AssistantResult
@@ -304,7 +323,8 @@ class TestQuerySupervisorCoreEntrypoint:
 
         assert result == "Sunny Beach studio is 110k EUR."
         mock_run_core.assert_awaited_once()
-        message.answer.assert_awaited_once()
+        bot.bot.send_message.assert_awaited_once()
+        message.answer.assert_not_awaited()
 
         # #3486: the core must receive the runtime GraphConfig, not BotConfig.
         deps = mock_run_core.await_args.kwargs["dependencies"]
@@ -321,7 +341,7 @@ class TestQuerySupervisorCoreEntrypoint:
         configured domain language.
         """
         config = _make_config(content_filter_enabled=False)
-        bot = make_property_bot(config)
+        bot = _make_supervisor_bot(config)
         message = _make_message("What is included in the complex?")
 
         with (
@@ -382,7 +402,7 @@ class TestQuerySupervisorCoreEntrypoint:
             domain=config.domain,
             domain_language=config.domain_language,
         )
-        bot = make_property_bot(config, service_overrides={"graph_config": graph_config})
+        bot = _make_supervisor_bot(config, service_overrides={"graph_config": graph_config})
         message = _make_message("Подскажите варианты студии у моря")
 
         async def fake_rag_pipeline(**_kwargs):
@@ -445,7 +465,7 @@ class TestQuerySupervisorConvergence:
 
     async def test_single_core_call_no_telegram_classify_embed_cache(self):
         config = _make_config(content_filter_enabled=False)
-        bot = make_property_bot(config)
+        bot = _make_supervisor_bot(config)
         message = _make_message("Сколько стоит студия в Sunny Beach?")
 
         with (
@@ -477,12 +497,13 @@ class TestQuerySupervisorConvergence:
         bot._cache.check_semantic.assert_not_called()
         bot._embeddings.aembed_query.assert_not_awaited()
         # Exactly one send.
-        message.answer.assert_awaited_once()
+        bot.bot.send_message.assert_awaited_once()
+        message.answer.assert_not_awaited()
 
     async def test_filters_propagate_into_core_user_context(self):
         """Deterministic filter extraction still feeds the core request (#3208)."""
         config = _make_config(content_filter_enabled=False)
-        bot = make_property_bot(config)
+        bot = _make_supervisor_bot(config)
         message = _make_message("Двухкомнатные квартиры в Несебре до 80000 евро")
 
         with (
@@ -510,7 +531,7 @@ class TestQuerySupervisorConvergence:
     async def test_cache_hit_result_presented_once(self):
         """Core cache-hit results flow through the same single presentation path."""
         config = _make_config(content_filter_enabled=False)
-        bot = make_property_bot(config)
+        bot = _make_supervisor_bot(config)
         message = _make_message("What is the deposit amount?")
 
         cached_result = _core_result("Cached: deposit is 10%")
@@ -538,12 +559,13 @@ class TestQuerySupervisorConvergence:
             )
 
         assert result == "Cached: deposit is 10%"
-        assert message.answer.await_count == 1
+        bot.bot.send_message.assert_awaited_once()
+        message.answer.assert_not_awaited()
 
     async def test_trace_metadata_is_truthful_not_hardcoded(self):
         """Grounding/safety trace fields mirror the core result (#3208)."""
         config = _make_config(content_filter_enabled=False)
-        bot = make_property_bot(config)
+        bot = _make_supervisor_bot(config)
         message = _make_message("Что-то Спросить?")
 
         core_result = _core_result("ответ")
