@@ -53,8 +53,8 @@ async def transcribe_voice(message: Message, *, config: Any = None) -> str | Non
     client exposes no transcription API.
 
     Text-fallback safe: Telegram download failures, provider errors, and
-    timeouts are logged and returned as ``None`` — this helper never raises,
-    so dialogs can offer typed input instead of blocking.
+    timeouts are logged and returned as ``None`` so dialogs can offer typed
+    input instead of blocking. Cancellation propagates to the caller.
     """
     bot = getattr(message, "bot", None)
     voice = getattr(message, "voice", None)
@@ -65,10 +65,11 @@ async def transcribe_voice(message: Message, *, config: Any = None) -> str | Non
     voice_language = str(getattr(config, "voice_language", "") or "ru")
     api_key = (
         str(getattr(config, "llm_api_key", "") or "").strip()
-        or os.getenv("OPENAI_API_KEY")
-        or os.getenv("LLM_API_KEY")
-        or "sk-dev"
+        or os.getenv("OPENAI_API_KEY", "").strip()
+        or os.getenv("LLM_API_KEY", "").strip()
     )
+    if not api_key:
+        return None
     try:
         timeout_seconds = float(getattr(config, "voice_timeout", None) or 30)
     except (TypeError, ValueError):
@@ -84,13 +85,13 @@ async def transcribe_voice(message: Message, *, config: Any = None) -> str | Non
         # Direct official OpenAI transcription (#3240 keeps this strategy).
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=api_key)
-        transcript = await client.audio.transcriptions.create(
-            model=stt_model,
-            file=data,
-            language=voice_language,
-        )
-        return transcript.text or None  # type: ignore[no-any-return]
+        async with AsyncOpenAI(api_key=api_key) as client:
+            transcript = await client.audio.transcriptions.create(
+                model=stt_model,
+                file=data,
+                language=voice_language,
+            )
+            return transcript.text or None  # type: ignore[no-any-return]
 
     try:
         return await asyncio.wait_for(_run(), timeout=timeout_seconds)
