@@ -1,153 +1,26 @@
-"""GraphConfig — configuration for the imperative RAG runtime.
+"""Typed runtime settings with explicit environment loading.
 
-Canonical home (issue #3207): moved from ``src/runtime/graph/config.py``
-so configuration ownership lives outside the graph namespace. Earlier
-history: moved from ``telegram_bot/graph/config.py`` as the second slice
-of the reverse-layering fix tracked under #1948 / #2045 / #2049; the
-legacy ``telegram_bot.graph.config`` re-export shim was removed in #3220.
-
-Provides the live LLM factory and runtime settings.
-
-#2482: GraphConfig is now a composition of focused config classes.
-#2577: Flat @property accessors are generated automatically from _FLAT_KWARGS,
-removing the duplicated manual getter/setter pairs. The constructor still
-accepts legacy flat kwargs so existing call-sites like
-``GraphConfig(llm_model="x", bge_m3_url="y")`` continue to work.
-#card_176c964330b6: sub-configs migrated to BaseModel; env-loading via
-pydantic-settings BaseSettings (_GraphEnvSettings), dropping manual os.getenv
-casting in from_env().
+Direct construction uses only arguments and defaults. ``from_env()`` reads the
+process environment through Pydantic's native source; neither path loads dotenv.
+Transport settings and client endpoints remain owned by their respective adapters.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from pydantic import AliasChoices, BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+from pydantic_settings.sources import EnvSettingsSource
 
 from src.runtime.integrations.redis_mode import DEFAULT_REDIS_MODE, RedisMode, parse_redis_mode
 
 
-# ---------------------------------------------------------------------------
-# Sub-config models (pydantic BaseModel — validated, no env-loading)
-# ---------------------------------------------------------------------------
+class GraphConfig(BaseSettings):
+    """One flat runtime API; call ``from_env()`` explicitly to load environment values."""
 
+    model_config = SettingsConfigDict(extra="forbid", populate_by_name=True, env_file=None)
 
-class LlmConfig(BaseModel):
-    """LLM provider and generation settings."""
-
-    llm_api_key: str = Field(default="", repr=False)
-    llm_model: str = "gpt-4o-mini"
-    llm_temperature: float = 0.7
-    generate_max_tokens: int = 1024
-    # Reasoning control for Cerebras models (#reasoning)
-    reasoning_effort: str | None = None  # "low"/"medium"/"high" (gpt-oss-120b)
-    reasoning_format: str | None = None  # "hidden"/"parsed"/"raw"/"none"
-    disable_reasoning: bool | None = None  # True/False (zai-glm-4.7)
-    rewrite_model: str = "gpt-4o-mini"
-    rewrite_max_tokens: int = 64
-
-    model_config = {"arbitrary_types_allowed": True}
-
-    def get_reasoning_kwargs(self) -> dict[str, Any]:
-        """Return SDK-shaped reasoning params for chat.completions.create()."""
-        extra_body: dict[str, Any] = {}
-        if self.disable_reasoning is not None:
-            extra_body["disable_reasoning"] = self.disable_reasoning
-            return {"extra_body": extra_body}
-
-        kwargs: dict[str, Any] = {}
-        if self.reasoning_effort is not None:
-            kwargs["reasoning_effort"] = self.reasoning_effort
-        if self.reasoning_format is not None:
-            extra_body["reasoning_format"] = self.reasoning_format
-        if extra_body:
-            kwargs["extra_body"] = extra_body
-        return kwargs
-
-
-class RetrievalConfig(BaseModel):
-    """Qdrant, BGE-M3, search, and rerank settings."""
-
-    bge_m3_url: str = "http://bge-m3:8000"
-    bge_m3_timeout: float = 120.0
-    qdrant_url: str = "http://qdrant:6333"
-    qdrant_collection: str = "gdrive_documents_bge"
-    search_top_k: int = 40
-    rerank_top_k: int = 7
-    redis_url: str = "redis://redis:6379"
-    # Honest Redis operating mode (decision #3354). The reusable core
-    # defaults to ``disabled``; the bot/Compose layer overrides explicitly.
-    redis_mode: RedisMode = DEFAULT_REDIS_MODE
-    max_rewrite_attempts: int = 1
-    # RRF score scale: 1/(rank+k), k=60 default. Top-1 = ~0.016, Top-20 last = ~0.012.
-    # skip_rerank_threshold >= 0.018 means top-1 result already has very high rank — safe to skip
-    # ColBERT rerank. Must be > 1/61≈0.016 to ensure ColBERT runs on borderline cases.
-    skip_rerank_threshold: float = 0.018
-    # RRF score scale: threshold 0.005 accepts all top-20 results (~0.012..0.016 typical range).
-    # This is intentional — loose filter that only rejects truly irrelevant results (score < 0.005).
-    relevance_threshold_rrf: float = 0.005
-    score_improvement_delta: float = 0.001
-    rerank_provider: str = "colbert"
-    # Small-to-big context expansion
-    small_to_big_mode: str = "on"
-    small_to_big_window_before: int = 0
-    small_to_big_window_after: int = 2
-    max_expanded_chunks: int = 10
-    max_context_tokens: int = 8000
-
-
-class DomainConfig(BaseModel):
-    """Domain identity and language settings."""
-
-    domain: str = "недвижимость"
-    domain_language: str = "ru"
-
-
-class ResponseConfig(BaseModel):
-    """Response style and source attribution settings."""
-
-    # Response length control rollout (#129)
-    response_style_enabled: bool = False
-    response_style_shadow_mode: bool = False
-    # Source attribution (#225)
-    show_sources: bool = False
-
-
-class SecurityConfig(BaseModel):
-    """Guard and content filter settings."""
-
-    # Prompt injection defense (#226)
-    guard_mode: str = "hard"  # "hard" = block, "soft" = flag + continue, "log" = log only
-    # Content filtering (#227)
-    content_filter_enabled: bool = True
-
-
-# ---------------------------------------------------------------------------
-# Env-loading settings (pydantic-settings) — used only by from_env()
-# ---------------------------------------------------------------------------
-
-
-class _GraphEnvSettings(BaseSettings):
-    """Flat env-var loader for GraphConfig.from_env().
-
-    Reads all environment variables that GraphConfig cares about,
-    with proper type coercion handled by pydantic-settings.
-    Not part of the public API — use GraphConfig.from_env().
-    """
-
-    model_config = SettingsConfigDict(
-        extra="ignore",
-        populate_by_name=True,
-    )
-
-    # LLM
-    llm_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("llm_api_key", "LLM_API_KEY", "OPENAI_API_KEY"),
-        repr=False,
-    )
     llm_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("llm_model", "LLM_MODEL"),
@@ -172,35 +45,17 @@ class _GraphEnvSettings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("disable_reasoning", "DISABLE_REASONING"),
     )
-    rewrite_model: str | None = Field(
-        default=None,
+    rewrite_model: str = Field(
+        default="gpt-4o-mini",
         validation_alias=AliasChoices("rewrite_model", "REWRITE_MODEL"),
     )
     rewrite_max_tokens: int = Field(
         default=64,
         validation_alias=AliasChoices("rewrite_max_tokens", "REWRITE_MAX_TOKENS"),
     )
-
-    # Retrieval
-    bge_m3_url: str = Field(
-        default="http://bge-m3:8000",
-        validation_alias=AliasChoices("bge_m3_url", "BGE_M3_URL"),
-    )
     bge_m3_timeout: float = Field(
         default=120.0,
         validation_alias=AliasChoices("bge_m3_timeout", "BGE_M3_TIMEOUT"),
-    )
-    qdrant_url: str = Field(
-        default="http://qdrant:6333",
-        validation_alias=AliasChoices("qdrant_url", "QDRANT_URL"),
-    )
-    qdrant_collection: str = Field(
-        default="gdrive_documents_bge",
-        validation_alias=AliasChoices("qdrant_collection", "QDRANT_COLLECTION"),
-    )
-    search_top_k: int = Field(
-        default=40,
-        validation_alias=AliasChoices("search_top_k", "SEARCH_TOP_K"),
     )
     rerank_top_k: int = Field(
         default=7,
@@ -209,19 +64,22 @@ class _GraphEnvSettings(BaseSettings):
     redis_url: str = Field(
         default="redis://redis:6379",
         validation_alias=AliasChoices("redis_url", "REDIS_URL"),
+        repr=False,
     )
-    redis_mode: str = Field(
-        default="",
+    redis_mode: RedisMode = Field(
+        default=DEFAULT_REDIS_MODE,
         validation_alias=AliasChoices("redis_mode", "REDIS_MODE"),
     )
     max_rewrite_attempts: int = Field(
         default=1,
         validation_alias=AliasChoices("max_rewrite_attempts", "MAX_REWRITE_ATTEMPTS"),
     )
+    # RRF k=60 scores: top-1 is ~0.016; 0.018 preserves reranking for borderline hits.
     skip_rerank_threshold: float = Field(
         default=0.018,
         validation_alias=AliasChoices("skip_rerank_threshold", "SKIP_RERANK_THRESHOLD"),
     )
+    # Deliberately loose: top-20 RRF scores are ~0.012..0.016; reject only very low scores.
     relevance_threshold_rrf: float = Field(
         default=0.005,
         validation_alias=AliasChoices("relevance_threshold_rrf", "RELEVANCE_THRESHOLD_RRF"),
@@ -229,10 +87,6 @@ class _GraphEnvSettings(BaseSettings):
     score_improvement_delta: float = Field(
         default=0.001,
         validation_alias=AliasChoices("score_improvement_delta", "SCORE_IMPROVEMENT_DELTA"),
-    )
-    rerank_provider: str = Field(
-        default="colbert",
-        validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER"),
     )
     small_to_big_mode: str = Field(
         default="on",
@@ -254,18 +108,10 @@ class _GraphEnvSettings(BaseSettings):
         default=8000,
         validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
     )
-
-    # Domain
     domain: str = Field(
         default="недвижимость",
         validation_alias=AliasChoices("domain", "BOT_DOMAIN"),
     )
-    domain_language: str = Field(
-        default="ru",
-        validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE"),
-    )
-
-    # Response
     response_style_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("response_style_enabled", "RESPONSE_STYLE_ENABLED"),
@@ -278,8 +124,6 @@ class _GraphEnvSettings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("show_sources", "SHOW_SOURCES"),
     )
-
-    # Security
     guard_mode: str = Field(
         default="hard",
         validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),
@@ -289,248 +133,54 @@ class _GraphEnvSettings(BaseSettings):
         validation_alias=AliasChoices("content_filter_enabled", "CONTENT_FILTER_ENABLED"),
     )
 
-
-# ---------------------------------------------------------------------------
-# Mapping from legacy flat kwarg name -> (sub_config_attr, sub_config_field).
-# This is the single source of truth for backward-compatible flat access (#2577).
-# ---------------------------------------------------------------------------
-
-_FLAT_KWARGS: dict[str, tuple[str, str]] = {
-    # LLM
-    "llm_api_key": ("llm", "llm_api_key"),
-    "llm_model": ("llm", "llm_model"),
-    "llm_temperature": ("llm", "llm_temperature"),
-    "generate_max_tokens": ("llm", "generate_max_tokens"),
-    "reasoning_effort": ("llm", "reasoning_effort"),
-    "reasoning_format": ("llm", "reasoning_format"),
-    "disable_reasoning": ("llm", "disable_reasoning"),
-    "rewrite_model": ("llm", "rewrite_model"),
-    "rewrite_max_tokens": ("llm", "rewrite_max_tokens"),
-    # Retrieval
-    "bge_m3_url": ("retrieval", "bge_m3_url"),
-    "bge_m3_timeout": ("retrieval", "bge_m3_timeout"),
-    "qdrant_url": ("retrieval", "qdrant_url"),
-    "qdrant_collection": ("retrieval", "qdrant_collection"),
-    "search_top_k": ("retrieval", "search_top_k"),
-    "rerank_top_k": ("retrieval", "rerank_top_k"),
-    "redis_url": ("retrieval", "redis_url"),
-    "redis_mode": ("retrieval", "redis_mode"),
-    "max_rewrite_attempts": ("retrieval", "max_rewrite_attempts"),
-    "skip_rerank_threshold": ("retrieval", "skip_rerank_threshold"),
-    "relevance_threshold_rrf": ("retrieval", "relevance_threshold_rrf"),
-    "score_improvement_delta": ("retrieval", "score_improvement_delta"),
-    "rerank_provider": ("retrieval", "rerank_provider"),
-    "small_to_big_mode": ("retrieval", "small_to_big_mode"),
-    "small_to_big_window_before": ("retrieval", "small_to_big_window_before"),
-    "small_to_big_window_after": ("retrieval", "small_to_big_window_after"),
-    "max_expanded_chunks": ("retrieval", "max_expanded_chunks"),
-    "max_context_tokens": ("retrieval", "max_context_tokens"),
-    # Domain
-    "domain": ("domain_cfg", "domain"),
-    "domain_language": ("domain_cfg", "domain_language"),
-    # Response
-    "response_style_enabled": ("response", "response_style_enabled"),
-    "response_style_shadow_mode": ("response", "response_style_shadow_mode"),
-    "show_sources": ("response", "show_sources"),
-    # Security
-    "guard_mode": ("security", "guard_mode"),
-    "content_filter_enabled": ("security", "content_filter_enabled"),
-}
-
-
-def _make_flat_property(sub_attr: str, sub_field: str) -> property:
-    """Build a getter+setter property that routes through a sub-config attribute."""
-
-    def _get(self: Any) -> Any:
-        return getattr(getattr(self, sub_attr), sub_field)
-
-    def _set(self: Any, v: Any) -> None:
-        setattr(getattr(self, sub_attr), sub_field, v)
-
-    return property(_get, _set)
-
-
-@dataclass(init=False)
-class GraphConfig:
-    """Configuration for the imperative RAG runtime.
-
-    Composed from focused sub-config classes (#2482). Flat attribute
-    access (e.g. ``config.llm_model``, ``config.domain``) is preserved
-    via auto-generated properties from ``_FLAT_KWARGS`` (#2577) for
-    backward compatibility with all existing callers.
-    The constructor also accepts legacy flat kwargs (e.g.
-    ``GraphConfig(llm_model="x")``) so existing call-sites continue to work.
-
-    Sub-configs are accessible directly::
-
-        cfg.llm.llm_model
-        cfg.retrieval.search_top_k
-        cfg.domain_cfg.domain
-    """
-
-    llm: LlmConfig
-    retrieval: RetrievalConfig
-    # Named ``domain_cfg`` to avoid clash with the ``domain`` string property below.
-    domain_cfg: DomainConfig
-    response: ResponseConfig
-    security: SecurityConfig
-
-    if TYPE_CHECKING:
-        # mypy stubs for flat compat accessors generated at runtime from _FLAT_KWARGS.
-        # At runtime these properties are injected via setattr() after class creation.
-        # LLM
-        llm_api_key: str
-        llm_model: str
-        llm_temperature: float
-        generate_max_tokens: int
-        reasoning_effort: str | None
-        reasoning_format: str | None
-        disable_reasoning: bool | None
-        rewrite_model: str
-        rewrite_max_tokens: int
-        # Retrieval
-        bge_m3_url: str
-        bge_m3_timeout: float
-        qdrant_url: str
-        qdrant_collection: str
-        search_top_k: int
-        rerank_top_k: int
-        redis_url: str
-        redis_mode: RedisMode
-        max_rewrite_attempts: int
-        skip_rerank_threshold: float
-        relevance_threshold_rrf: float
-        score_improvement_delta: float
-        rerank_provider: str
-        small_to_big_mode: str
-        small_to_big_window_before: int
-        small_to_big_window_after: int
-        max_expanded_chunks: int
-        max_context_tokens: int
-        # Domain
-        domain: str
-        domain_language: str
-        # Response
-        response_style_enabled: bool
-        response_style_shadow_mode: bool
-        show_sources: bool
-        # Security
-        guard_mode: str
-        content_filter_enabled: bool
-
-    def __init__(
-        self,
-        llm: LlmConfig | None = None,
-        retrieval: RetrievalConfig | None = None,
-        domain_cfg: DomainConfig | None = None,
-        response: ResponseConfig | None = None,
-        security: SecurityConfig | None = None,
-        **flat_kwargs: Any,
-    ) -> None:
-        """Accept both sub-config objects and legacy flat kwargs.
-
-        Flat kwargs (e.g. ``llm_model="x"``) are applied *after* the
-        sub-config defaults, so they override only the specified fields.
-        """
-        self.llm = llm if llm is not None else LlmConfig()
-        self.retrieval = retrieval if retrieval is not None else RetrievalConfig()
-        self.domain_cfg = domain_cfg if domain_cfg is not None else DomainConfig()
-        self.response = response if response is not None else ResponseConfig()
-        self.security = security if security is not None else SecurityConfig()
-
-        for key, value in flat_kwargs.items():
-            if key not in _FLAT_KWARGS:
-                raise TypeError(f"GraphConfig() got unexpected keyword argument {key!r}")
-            sub_attr, sub_field = _FLAT_KWARGS[key]
-            setattr(getattr(self, sub_attr), sub_field, value)
-
-    def get_reasoning_kwargs(self) -> dict[str, Any]:
-        """Return SDK-shaped reasoning params for chat.completions.create().
-
-        ``reasoning_effort`` is part of the OpenAI Python SDK chat completions
-        schema. Provider-specific LiteLLM/Cerebras/Z.ai controls must travel in
-        ``extra_body`` so the OpenAI-compatible client does not reject them as
-        unexpected top-level kwargs.
-        """
-        return self.llm.get_reasoning_kwargs()
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],  # noqa: ARG003 - native hook signature
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,  # noqa: ARG003 - explicit from_env only
+        dotenv_settings: PydanticBaseSettingsSource,  # noqa: ARG003 - never load dotenv
+        file_secret_settings: PydanticBaseSettingsSource,  # noqa: ARG003 - init only
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Preserve construction-time isolation from ambient environment and files.
+        return (init_settings,)
 
     @classmethod
     def from_env(cls) -> GraphConfig:
-        """Create GraphConfig from environment variables.
+        """Read current process environment, retaining the established normalization."""
+        values = EnvSettingsSource(cls)()
+        values["redis_mode"] = parse_redis_mode(values.get("redis_mode"))
+        config = cls(**values)
+        if not values.get("rewrite_model"):
+            config.rewrite_model = config.llm_model
+        config.reasoning_effort = config.reasoning_effort or None
+        config.reasoning_format = config.reasoning_format or None
+        return config
 
-        Delegates env-var parsing and type coercion to pydantic-settings
-        (_GraphEnvSettings), then assembles sub-configs from the loaded values.
-        """
-        e = _GraphEnvSettings()
-        return cls(
-            llm=LlmConfig(
-                llm_api_key=e.llm_api_key,
-                llm_model=e.llm_model,
-                llm_temperature=e.llm_temperature,
-                generate_max_tokens=e.generate_max_tokens,
-                reasoning_effort=e.reasoning_effort or None,
-                reasoning_format=e.reasoning_format or None,
-                disable_reasoning=e.disable_reasoning,
-                rewrite_model=e.rewrite_model or e.llm_model,
-                rewrite_max_tokens=e.rewrite_max_tokens,
-            ),
-            retrieval=RetrievalConfig(
-                bge_m3_url=e.bge_m3_url,
-                bge_m3_timeout=e.bge_m3_timeout,
-                qdrant_url=e.qdrant_url,
-                qdrant_collection=e.qdrant_collection,
-                search_top_k=e.search_top_k,
-                rerank_top_k=e.rerank_top_k,
-                redis_url=e.redis_url,
-                redis_mode=parse_redis_mode(e.redis_mode),
-                max_rewrite_attempts=e.max_rewrite_attempts,
-                skip_rerank_threshold=e.skip_rerank_threshold,
-                relevance_threshold_rrf=e.relevance_threshold_rrf,
-                score_improvement_delta=e.score_improvement_delta,
-                rerank_provider=e.rerank_provider,
-                small_to_big_mode=e.small_to_big_mode,
-                small_to_big_window_before=e.small_to_big_window_before,
-                small_to_big_window_after=e.small_to_big_window_after,
-                max_expanded_chunks=e.max_expanded_chunks,
-                max_context_tokens=e.max_context_tokens,
-            ),
-            domain_cfg=DomainConfig(
-                domain=e.domain,
-                domain_language=e.domain_language,
-            ),
-            response=ResponseConfig(
-                response_style_enabled=e.response_style_enabled,
-                response_style_shadow_mode=e.response_style_shadow_mode,
-                show_sources=e.show_sources,
-            ),
-            security=SecurityConfig(
-                guard_mode=e.guard_mode,
-                content_filter_enabled=e.content_filter_enabled,
-            ),
-        )
+    def get_reasoning_kwargs(self) -> dict[str, Any]:
+        """Return SDK-shaped reasoning params for chat.completions.create()."""
+        extra_body: dict[str, Any] = {}
+        if self.disable_reasoning is not None:
+            extra_body["disable_reasoning"] = self.disable_reasoning
+            return {"extra_body": extra_body}
+
+        kwargs: dict[str, Any] = {}
+        if self.reasoning_effort is not None:
+            kwargs["reasoning_effort"] = self.reasoning_effort
+        if self.reasoning_format is not None:
+            extra_body["reasoning_format"] = self.reasoning_format
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+        return kwargs
 
     def create_llm(self, model_override: str | None = None) -> Any:
         """Create the native LiteLLM SDK client."""
         from src.runtime.llm import create_llm_client
 
         return create_llm_client(
-            model=model_override or self.llm.llm_model,
+            model=model_override or self.llm_model,
             timeout=60.0,
         )
 
 
-# Auto-generate flat @property accessors from _FLAT_KWARGS.
-# This replaces hundreds of manually written getter/setter pairs (#2577).
-for _flat_name, (_sub_attr, _sub_field) in _FLAT_KWARGS.items():
-    setattr(GraphConfig, _flat_name, _make_flat_property(_sub_attr, _sub_field))
-
-
-__all__ = [
-    "_FLAT_KWARGS",
-    "DomainConfig",
-    "GraphConfig",
-    "LlmConfig",
-    "ResponseConfig",
-    "RetrievalConfig",
-    "SecurityConfig",
-]
+__all__ = ["GraphConfig"]

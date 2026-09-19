@@ -17,7 +17,7 @@ from pathlib import Path
 from scripts.e2e.config import E2EConfig
 from scripts.qdrant_snapshot import SnapshotSettings
 from src.ingestion.unified.config import UnifiedConfig
-from src.runtime.config import _GraphEnvSettings
+from src.runtime.config import GraphConfig
 from src.runtime.integrations.cache import RedisClientSettings
 from telegram_bot.config import (
     BotConfig,
@@ -82,7 +82,7 @@ def _model_field_env_names(settings_type: type) -> set[str]:
 def _settings_env_names() -> set[str]:
     names = _bge_settings_env_names()
     for model in (
-        _GraphEnvSettings,
+        GraphConfig,
         BotConfig,
         E2EConfig,
         UnifiedConfig,

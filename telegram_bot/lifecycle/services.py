@@ -61,16 +61,10 @@ def build_services(config: BotConfig) -> Services:
     from telegram_bot.services.apartment.apartments_service import ApartmentsService
 
     graph_config = GraphConfig(
-        llm_api_key=config.llm_api_key,
         llm_model=config.llm_model,
-        bge_m3_url=config.bge_m3_url,
-        qdrant_url=config.qdrant_url,
-        qdrant_collection=config.qdrant_collection,
-        search_top_k=config.search_top_k,
         redis_url=config.redis_url,
         redis_mode=config.redis_mode,
         domain=config.domain,
-        domain_language=config.domain_language,
     )
 
     cache = CacheLayerManager(redis_url=config.redis_url, mode=config.redis_mode)

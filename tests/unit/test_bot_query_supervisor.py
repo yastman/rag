@@ -390,16 +390,10 @@ class TestQuerySupervisorCoreEntrypoint:
         # The real generation chain reads string fields off the runtime config,
         # so this test injects a real GraphConfig instead of the factory mock.
         graph_config = GraphConfig(
-            llm_api_key=config.llm_api_key,
             llm_model=config.llm_model,
-            bge_m3_url=config.bge_m3_url,
-            qdrant_url=config.qdrant_url,
-            qdrant_collection=config.qdrant_collection,
-            search_top_k=config.search_top_k,
             redis_url=config.redis_url,
             redis_mode=config.redis_mode,
             domain=config.domain,
-            domain_language=config.domain_language,
         )
         bot = _make_supervisor_bot(config, service_overrides={"graph_config": graph_config})
         message = _make_message("Подскажите варианты студии у моря")
