@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.config import BotLoggingSettings, BotStartupSettings
+
 
 class TestMainFunction:
     """Test main() function logic."""
@@ -60,6 +62,8 @@ class TestMainFunction:
 
         mock_config_mod = MagicMock()
         mock_config_mod.BotConfig = mock_bot_config
+        mock_config_mod.BotStartupSettings = BotStartupSettings
+        mock_config_mod.BotLoggingSettings = BotLoggingSettings
 
         mock_logging_config_mod = MagicMock()
         mock_logging_config_mod.setup_logging = mock_setup_logging
@@ -99,6 +103,8 @@ class TestMainFunction:
 
         mock_config_mod = MagicMock()
         mock_config_mod.BotConfig = mock_bot_config
+        mock_config_mod.BotStartupSettings = BotStartupSettings
+        mock_config_mod.BotLoggingSettings = BotLoggingSettings
 
         mock_logging_config_mod = MagicMock()
         mock_logging_config_mod.setup_logging = mock_setup_logging
@@ -138,6 +144,8 @@ class TestMainFunction:
 
         mock_config_mod = MagicMock()
         mock_config_mod.BotConfig = mock_bot_config
+        mock_config_mod.BotStartupSettings = BotStartupSettings
+        mock_config_mod.BotLoggingSettings = BotLoggingSettings
 
         mock_logging_config_mod = MagicMock()
         mock_logging_config_mod.setup_logging = mock_setup_logging
@@ -179,6 +187,8 @@ class TestMainFunction:
 
         mock_config_mod = MagicMock()
         mock_config_mod.BotConfig = mock_bot_config
+        mock_config_mod.BotStartupSettings = BotStartupSettings
+        mock_config_mod.BotLoggingSettings = BotLoggingSettings
 
         mock_logging_config_mod = MagicMock()
         mock_logging_config_mod.setup_logging = mock_setup_logging
@@ -225,6 +235,8 @@ class TestMainFunction:
 
         mock_config_mod = MagicMock()
         mock_config_mod.BotConfig = mock_bot_config
+        mock_config_mod.BotStartupSettings = BotStartupSettings
+        mock_config_mod.BotLoggingSettings = BotLoggingSettings
 
         mock_logging_config_mod = MagicMock()
         mock_logging_config_mod.setup_logging = mock_setup_logging

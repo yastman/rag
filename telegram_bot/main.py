@@ -3,7 +3,6 @@
 
 import asyncio
 import logging
-import os
 
 from aiogram.exceptions import (
     TelegramConflictError,
@@ -22,14 +21,15 @@ from tenacity import (
 from src.runtime.integrations.polling_lock import PollingLockBusy
 
 from .bot import PropertyBot
-from .config import BotConfig
+from .config import BotConfig, BotLoggingSettings, BotStartupSettings
 from .logging_config import setup_logging
 
 
 # Startup retry settings
-_MAX_START_ATTEMPTS = int(os.getenv("BOT_START_MAX_ATTEMPTS", "10"))
-_START_WAIT_MIN = float(os.getenv("BOT_START_RETRY_DELAY_SEC", "2"))
-_START_WAIT_MAX = float(os.getenv("BOT_START_RETRY_MAX_SEC", "60"))
+_startup = BotStartupSettings()
+_MAX_START_ATTEMPTS = _startup.BOT_START_MAX_ATTEMPTS
+_START_WAIT_MIN = _startup.BOT_START_RETRY_DELAY_SEC
+_START_WAIT_MAX = _startup.BOT_START_RETRY_MAX_SEC
 
 
 def _install_loop_exception_handler(
@@ -63,9 +63,10 @@ def _install_loop_exception_handler(
 async def main():
     """Run bot."""
     # Setup structured logging
-    json_format = os.getenv("LOG_FORMAT", "json") == "json"
-    log_level = os.getenv("LOG_LEVEL", "INFO")
-    log_file = os.getenv("LOG_FILE")
+    logging_settings = BotLoggingSettings()
+    json_format = logging_settings.LOG_FORMAT == "json"
+    log_level = logging_settings.LOG_LEVEL
+    log_file = logging_settings.LOG_FILE
 
     setup_logging(level=log_level, json_format=json_format, log_file=log_file)
     logger = logging.getLogger(__name__)

@@ -138,6 +138,10 @@ class TestImportIsolation:
 
     def test_disabled_mode_imports_and_runs_without_redis(self) -> None:
         result = self._run_blocked(
+            "import os\n"
+            "os.environ['REDIS_MAX_CONNECTIONS'] = 'invalid-and-unused'\n"
+            "os.environ.pop('REDIS_PASSWORD', None)\n"
+            "os.environ.pop('REDIS_URL', None)\n"
             "import asyncio\n"
             "from src.runtime.integrations.cache import CacheLayerManager\n"
             "from src.runtime.integrations.redis_mode import RedisMode\n"

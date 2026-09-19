@@ -14,6 +14,10 @@ RAG ingestion format (#3235); the unified ingestion pipeline owns indexing.
 | **CI** | `ci/*.py` | CI gates (CVE gate, PR guardrails) |
 | **E2E** | `e2e/runner.py`, `e2e/demo_gate.py` | Capability E2E runner and demo gate |
 
+`check_services.sh` accepts `REDIS_HOST` (default `localhost`) and `REDIS_PORT`
+(default `6379`) as environment overrides for its Redis TCP health probe. These
+are CLI probe settings; the bot connection is configured with `REDIS_URL`.
+
 Operators run these scripts directly with `uv run` (see `make help` for the
 retained Make entrypoints). Retired evaluation/benchmark and Kiro/tmux swarm
 surfaces were removed; native task agents are the sole supported agent runtime.

@@ -35,6 +35,36 @@ def _empty_str_to_false(v: object) -> object:
 EmptyStrBool = Annotated[bool, BeforeValidator(_empty_str_to_false)]
 
 
+class BotStartupSettings(BaseSettings):
+    """Polling retry defaults, loaded at entrypoint import as before."""
+
+    BOT_START_MAX_ATTEMPTS: int = 10
+    BOT_START_RETRY_DELAY_SEC: float = 2
+    BOT_START_RETRY_MAX_SEC: float = 60
+
+
+class BotLoggingSettings(BaseSettings):
+    """Logging overrides, loaded when main starts."""
+
+    LOG_FORMAT: str = "json"
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str | None = None
+
+
+class ThrottleSettings(BaseSettings):
+    """Middleware defaults, loaded when the middleware module is imported."""
+
+    BOT_THROTTLE_CACHE_MAXSIZE: int = 10000
+    BOT_QUERY_QUOTA: int = 0
+    BOT_QUERY_WINDOW_SECONDS: int = 60
+
+
+class CoverageSettings(BaseSettings):
+    """Keep tolerant float parsing at the existing preflight boundary."""
+
+    COLBERT_COVERAGE_WARN_THRESHOLD: str = "0.995"
+
+
 def _empty_str_to_none(v: object) -> object:
     """Convert empty string to None for optional int env vars (#2149)."""
     if v == "":

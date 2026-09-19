@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
@@ -15,6 +14,8 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 from aiogram.utils.callback_answer import CallbackAnswerMiddleware
 from cachetools import TTLCache  # type: ignore[import-untyped]
 
+from telegram_bot.config import ThrottleSettings
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +25,10 @@ _DEFAULT_CALLBACK_RATE = 0.3
 _DEFAULT_KEY = "default"
 
 # Env-configurable defaults — read once at module import so reload() works in tests
-_DEFAULT_CACHE_MAXSIZE: int = int(os.getenv("BOT_THROTTLE_CACHE_MAXSIZE", "10000"))
-_DEFAULT_QUERY_QUOTA: int = int(os.getenv("BOT_QUERY_QUOTA", "0"))  # 0 = disabled
-_DEFAULT_QUERY_WINDOW: int = int(os.getenv("BOT_QUERY_WINDOW_SECONDS", "60"))
+_settings = ThrottleSettings()
+_DEFAULT_CACHE_MAXSIZE: int = _settings.BOT_THROTTLE_CACHE_MAXSIZE
+_DEFAULT_QUERY_QUOTA: int = _settings.BOT_QUERY_QUOTA  # 0 = disabled
+_DEFAULT_QUERY_WINDOW: int = _settings.BOT_QUERY_WINDOW_SECONDS
 
 
 class QuotaTracker:

@@ -13,71 +13,64 @@
 
 """Configuration for unified ingestion pipeline."""
 
-import os
-from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Annotated, Any
+
+from pydantic import AliasChoices, Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, PydanticBaseSettingsSource, SettingsConfigDict
 
 
-@dataclass
-class UnifiedConfig:
-    """Unified ingestion pipeline configuration."""
+class UnifiedConfig(BaseSettings):
+    """Unified ingestion configuration; explicit arguments override environment aliases."""
 
-    # Paths
-    sync_dir: Path = field(
-        default_factory=lambda: Path(
-            # Prefer neutral ``SYNC_DIR``; fall back to legacy ``GDRIVE_SYNC_DIR``
-            os.getenv(
-                "SYNC_DIR",
-                os.getenv("GDRIVE_SYNC_DIR", os.path.expanduser("~/drive-sync")),
-            )
-        )
+    model_config = SettingsConfigDict(populate_by_name=True, env_file=None)
+
+    sync_dir: Path = Field(
+        default_factory=lambda: Path.home() / "drive-sync",
+        validation_alias=AliasChoices("SYNC_DIR", "GDRIVE_SYNC_DIR"),
     )
-    manifest_dir: Path | None = field(
-        default_factory=lambda: Path(v) if (v := os.getenv("MANIFEST_DIR")) else None
+    manifest_dir: Path | None = Field(default=None, validation_alias="MANIFEST_DIR")
+    qdrant_url: str = Field(default="http://localhost:6333", validation_alias="QDRANT_URL")
+    qdrant_api_key: str | None = Field(default=None, validation_alias="QDRANT_API_KEY")
+    collection_name: str = Field(
+        default="file_documents_bge",
+        validation_alias=AliasChoices(
+            "COLLECTION_NAME", "UNIFIED_COLLECTION_NAME", "GDRIVE_COLLECTION_NAME"
+        ),
     )
-
-    # Qdrant
-    qdrant_url: str = field(
-        default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333")
-    )
-    qdrant_api_key: str | None = field(default_factory=lambda: os.getenv("QDRANT_API_KEY"))
-    collection_name: str = field(
-        default_factory=lambda: (
-            # Prefer neutral collection name env vars; fall back to legacy GDRIVE_COLLECTION_NAME
-            os.getenv(
-                "COLLECTION_NAME",
-                os.getenv(
-                    "UNIFIED_COLLECTION_NAME",
-                    os.getenv("GDRIVE_COLLECTION_NAME", "file_documents_bge"),
-                ),
-            )
-        )
-    )
-
-    # Markdown chunking (#3235): char budget derives from the historical
-    # BGE-M3 token budget (≈4 chars/token) — see src/ingestion/markdown.py.
     max_tokens_per_chunk: int = 512
-
-    # BGE-M3 API (dense + sparse embeddings)
-    bge_m3_url: str = field(
-        default_factory=lambda: os.getenv("BGE_M3_URL", "http://localhost:8000")
-    )
-    bge_m3_timeout: float = field(default_factory=lambda: float(os.getenv("BGE_M3_TIMEOUT", "300")))
-    bge_m3_concurrency: int = field(
-        default_factory=lambda: int(os.getenv("BGE_M3_CONCURRENCY", "1"))
-    )
-
-    # Pipeline
-    # Watch mode polls sync_dir every ``poll_interval_seconds`` (see flow.run_watch).
+    bge_m3_url: str = Field(default="http://localhost:8000", validation_alias="BGE_M3_URL")
+    bge_m3_timeout: float = Field(default=300, validation_alias="BGE_M3_TIMEOUT")
+    bge_m3_concurrency: int = Field(default=1, validation_alias="BGE_M3_CONCURRENCY")
     poll_interval_seconds: int = 60
     pipeline_version: str = "v3.2.1"
+    supported_extensions: Annotated[frozenset[str], NoDecode] = frozenset({".md"})
 
-    # Supported extensions (#3235): production ingestion is Markdown-only.
-    supported_extensions: frozenset[str] = frozenset({".md"})
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],  # noqa: ARG003 - native hook signature
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,  # noqa: ARG003 - environment only
+        file_secret_settings: PydanticBaseSettingsSource,  # noqa: ARG003
+    ) -> tuple:
+        # Chunking/version/watch options remain constructor-only, as with the
+        # original dataclass. Reuse native env decoding for aliased inputs.
+        def ingestion_environment() -> dict[str, Any]:
+            return {
+                name: value
+                for name, value in env_settings().items()
+                if name not in cls.model_fields or cls.model_fields[name].validation_alias
+            }
+
+        return init_settings, ingestion_environment
+
+    @field_validator("manifest_dir", mode="before")
+    @classmethod
+    def empty_manifest_is_unset(cls, value: object) -> object:
+        return None if value == "" else value
 
     def effective_manifest_dir(self) -> Path:
-        """Return writable directory for manifest storage.
-
-        Uses MANIFEST_DIR if set, otherwise falls back to sync_dir.
-        """
+        """Use MANIFEST_DIR when set, otherwise the sync directory."""
         return self.manifest_dir if self.manifest_dir is not None else self.sync_dir
