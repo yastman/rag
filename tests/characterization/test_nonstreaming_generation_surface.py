@@ -3,8 +3,7 @@
 Pins the surviving non-streaming ``generate_answer`` behavior across the
 removal of the test-only streaming runtime surface (#3481):
 
-- the live path drives the one-shot ``completion`` verb and never the
-  router-boundary ``stream`` verb;
+- the live path drives the one-shot ``completion`` verb;
 - the strict-grounding safe fallback skips the LLM entirely and stays
   cache-unsafe;
 - provider usage/token metrics survive on the non-streaming payload.
@@ -27,13 +26,12 @@ from src.runtime.services.response_style_detector import StyleInfo
 
 
 class _RecordingLLM:
-    """One-shot LLM double that records both completion and stream verb usage."""
+    """One-shot LLM double for the retained completion boundary."""
 
     def __init__(self, answer: str, model: str = "characterization-model") -> None:
         self._answer = answer
         self._model = model
         self.completion_calls = 0
-        self.stream_calls = 0
 
     async def completion(self, **_kwargs: Any) -> Any:
         self.completion_calls += 1
@@ -42,10 +40,6 @@ class _RecordingLLM:
             usage=SimpleNamespace(prompt_tokens=120, completion_tokens=48, total_tokens=168),
             choices=[SimpleNamespace(message=SimpleNamespace(content=self._answer))],
         )
-
-    def stream(self, **_kwargs: Any) -> Any:
-        self.stream_calls += 1
-        raise AssertionError("generate_answer must not use the streaming verb")
 
     def get_reasoning_kwargs(self) -> dict[str, Any]:
         return {}
@@ -111,7 +105,7 @@ def _request(llm: _RecordingLLM, **overrides: Any) -> GenerationRequest:
 
 
 @pytest.mark.asyncio
-async def test_generate_answer_drives_completion_never_stream() -> None:
+async def test_generate_answer_drives_one_shot_completion() -> None:
     """Happy path: one-shot completion only, with surviving usage/token metrics."""
     llm = _RecordingLLM("Стоимость 115 000 EUR, акт 16 выдан.")
 
@@ -119,7 +113,6 @@ async def test_generate_answer_drives_completion_never_stream() -> None:
 
     assert result.response_text == "Стоимость 115 000 EUR, акт 16 выдан."
     assert llm.completion_calls == 1
-    assert llm.stream_calls == 0
     assert result.payload["grounded"] is True
     assert result.payload["safe_fallback_used"] is False
     assert result.payload["llm_timeout"] is False
@@ -146,7 +139,6 @@ async def test_strict_fallback_skips_llm_and_stays_cache_unsafe() -> None:
 
     assert result.response_text.strip()
     assert llm.completion_calls == 0
-    assert llm.stream_calls == 0
     assert result.payload["safe_fallback_used"] is True
     assert result.payload["grounded"] is False
     assert result.payload["llm_provider_model"] == "safe_fallback"
