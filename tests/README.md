@@ -45,6 +45,31 @@ candidate-check runs check-frozen (environment + Ruff + MyPy), format-check, tes
 test-contract. A skipped optional/live check is not proof that capability works.
 Coverage is a separate `make test-cov` check, configured in pyproject.toml.
 
+## Collection with real dependencies
+
+Shared unit fixtures do not synthesize missing SDK packages. Collect each owner lane
+with its declared dependencies; a successful collection does not replace executing it.
+The following commands use the same selectors as their runtime lanes:
+
+```bash
+uv sync --frozen
+PYTEST_ADDOPTS="--collect-only --no-cov" make test-core
+
+# Each owner target installs its real extra before collection.
+PYTEST_ADDOPTS="--collect-only --no-cov" make test-telegram-adapter
+PYTEST_ADDOPTS="--collect-only --no-cov" make test-bge-extras
+
+# Full unit collection has its own environment, including operator tooling.
+uv sync --frozen --all-extras --all-groups
+uv run --no-sync pytest tests/unit/ --collect-only --no-cov -q -m "not legacy_api"
+```
+
+The full-unit lane also owns the Telethon operator-tool tests excluded from the
+base lane; its `e2e` dependency group supplies the real SDK. The BGE endpoint lane
+needs FastAPI, not model weights or ML packages. Tests patch
+local collaborators explicitly and use real imported SDK types. Restore the base
+selection with `uv sync --frozen` before the frozen candidate gate.
+
 ## Native Windows checks
 
 Use PowerShell with the root lock; Make recipes require POSIX tools. For a focused test:
