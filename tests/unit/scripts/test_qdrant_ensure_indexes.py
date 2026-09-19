@@ -3,7 +3,9 @@
 import os
 import subprocess
 import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from threading import Thread
 from unittest.mock import MagicMock
 
 import pytest
@@ -41,15 +43,38 @@ def test_ensure_returns_nonzero_when_index_creation_fails(monkeypatch, capsys) -
     assert "network unavailable" in capsys.readouterr().err
 
 
-def test_ensure_module_entrypoint_returns_nonzero_when_qdrant_is_unreachable() -> None:
-    result = subprocess.run(
-        [sys.executable, "-m", "scripts.qdrant_ensure_indexes"],
-        cwd=Path(__file__).parents[3],
-        env=os.environ | {"QDRANT_URL": "http://127.0.0.1:1"},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def test_ensure_module_entrypoint_returns_nonzero_when_qdrant_is_unavailable() -> None:
+    # A local failure response avoids OS-dependent connection-refusal delays
+    # for every index while exercising the real client and module entrypoint.
+    class UnavailableQdrant(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_error(503, "Qdrant unavailable")
+
+        do_PUT = do_GET
+
+        def log_message(self, *args):
+            pass
+
+    with HTTPServer(("127.0.0.1", 0), UnavailableQdrant) as server:
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "scripts.qdrant_ensure_indexes"],
+                cwd=Path(__file__).parents[3],
+                env=os.environ
+                | {
+                    "QDRANT_URL": f"http://127.0.0.1:{server.server_port}",
+                    "NO_PROXY": "127.0.0.1",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
 
     assert result.returncode == 1
     assert "could not ensure indexes" in result.stderr
