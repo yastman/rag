@@ -142,6 +142,7 @@ class TestTranscribeVoice:
         def _factory(*args, **kwargs):
             created["kwargs"] = kwargs
             client = MagicMock()
+            client.__aenter__.return_value = client
             client.audio.transcriptions.create = create
             return client
 
@@ -177,6 +178,7 @@ class TestTranscribeVoice:
 
         def _factory(*args, **kwargs):
             client = MagicMock()
+            client.__aenter__.return_value = client
             client.audio.transcriptions.create = AsyncMock(side_effect=RuntimeError("provider 500"))
             return client
 
@@ -196,6 +198,7 @@ class TestTranscribeVoice:
 
         def _factory(*args, **kwargs):
             client = MagicMock()
+            client.__aenter__.return_value = client
 
             async def _slow(*_a, **_k):
                 await asyncio.sleep(5)

@@ -15,6 +15,7 @@ class TestTranscribeVoiceOpenAIRouting:
 
         created: dict = {}
         mock_client = MagicMock()
+        mock_client.__aenter__.return_value = mock_client
         mock_client.audio.transcriptions.create = AsyncMock(return_value=MagicMock(text="привет"))
 
         def _factory(*args, **kwargs):
@@ -35,7 +36,7 @@ class TestTranscribeVoiceOpenAIRouting:
         assert result == "привет"
         assert created.get("kwargs", {}).get("api_key") == "test-key"
 
-    async def test_transcribe_voice_default_client_falls_back_to_dev_key(self, monkeypatch) -> None:
+    async def test_transcribe_voice_without_key_returns_typed_fallback(self, monkeypatch) -> None:
         import openai
 
         from telegram_bot.handlers.demo_handler import transcribe_voice
@@ -43,15 +44,8 @@ class TestTranscribeVoiceOpenAIRouting:
         monkeypatch.delenv("LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-        created: dict = {}
-        mock_client = MagicMock()
-        mock_client.audio.transcriptions.create = AsyncMock(return_value=MagicMock(text="привет"))
-
-        def _factory(*args, **kwargs):
-            created["kwargs"] = kwargs
-            return mock_client
-
-        monkeypatch.setattr(openai, "AsyncOpenAI", _factory)
+        factory = MagicMock()
+        monkeypatch.setattr(openai, "AsyncOpenAI", factory)
 
         message = AsyncMock()
         message.voice = MagicMock(file_id="f1")
@@ -62,5 +56,5 @@ class TestTranscribeVoiceOpenAIRouting:
 
         result = await transcribe_voice(message)
 
-        assert result == "привет"
-        assert created.get("kwargs", {}).get("api_key") == "sk-dev"
+        assert result is None
+        factory.assert_not_called()
