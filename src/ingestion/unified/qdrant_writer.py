@@ -31,6 +31,7 @@ from qdrant_client.models import (
 )
 
 from src.retrieval.topic_classifier import classify_chunk_topic, classify_doc_type
+from src.runtime.qdrant.contracts import STRICT_MODE_LIMITS
 
 
 logger = logging.getLogger(__name__)
@@ -572,7 +573,7 @@ class QdrantHybridWriter:
                         )
                     ]
                 ),
-                limit=512,
+                limit=STRICT_MODE_LIMITS["max_query_limit"],
                 offset=next_offset,
                 with_payload=False,
                 with_vectors=False,
@@ -581,7 +582,7 @@ class QdrantHybridWriter:
                 rid = record.id
                 if rid not in new_ids:
                     stale_ids.append(rid)
-            if not next_offset:
+            if next_offset is None:
                 break
 
         if not stale_ids:
