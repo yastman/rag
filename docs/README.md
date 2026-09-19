@@ -32,12 +32,13 @@ Choose the document for the task. Each durable fact has one owner.
 
 ## Decisions and work state
 
-[GitHub Issues](https://github.com/yastman/rag/issues) own work, priorities, dependencies,
-and acceptance. PRs own review and delivery evidence. CodeIndexer provides search and context;
+[Beads](LOCAL-DEVELOPMENT.md#beads-task-tracking) owns work, priorities, dependencies,
+and acceptance. Original GitHub Issues retain historical context.
+PRs own review and delivery evidence. CodeIndexer provides search and context;
 there is no mandatory second phase/card lifecycle.
 
 The [RAG VPS v2 proposal](architecture/RAG_VPS_V2_PROPOSED.md) is a design target.
-Dated execution evidence lives in Git history and GitHub Issues, not in tracked docs.
+Dated execution evidence lives in Beads, PRs, and Git history, not in tracked docs.
 
 Update the owning document when changing a fact. Link from other pages. Use Git for raw
 history. Add a document only for durable knowledge or a repeatable procedure with no existing home.

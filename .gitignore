@@ -321,6 +321,7 @@ rockfresh-autoresearch-summary-and-implementation-prompt.md
 # codeindexer local config
 .indexer.toml
 .agents/
+.beads.gate.lock
 
 # Voice test fixture (archived surface — voice archival #2598)
 data/test/voice_note_sample.ogg

@@ -1,0 +1,2 @@
+issue-prefix: rag
+sync.remote: "git+https://github.com/yastman/rag.git"

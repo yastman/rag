@@ -3,7 +3,8 @@
 [PROJECT.md](PROJECT.md) defines scope. [AGENTS.md](AGENTS.md) owns repository workflow,
 task tracking, and delivery rules for both automated and manual contributions.
 
-1. Use the existing GitHub issue when available; define the concrete outcome and boundaries.
+1. Use the existing Beads issue; define the concrete outcome and boundaries. Imported
+   GitHub issue #N maps to `rag-N`, with its original link and acceptance preserved.
 2. Work on a focused branch from dev, preserving unrelated work.
 3. Implement and update the document that owns any changed fact.
 4. Run focused checks, then the required local `make candidate-check` delivery gate.
@@ -22,7 +23,7 @@ complement the full local gate; they do not replace it. See
 
 Explain the problem, resulting behavior, and actual validation in the PR. Include extra
 detail only for a relevant risk or contract change. Keep temporary evidence and acceptance
-progress with the issue/PR; keep raw history in Git.
+progress in Beads/the PR; keep raw history in Git.
 
 Do not commit credentials, private datasets, local recordings, caches, or generated logs.
 Use test fixtures for local checks. Production, CRM, and messaging writes need explicit

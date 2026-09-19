@@ -79,7 +79,7 @@ and the actual [CI workflow](.github/workflows/ci.yml).
 | Find other maintained documents | [Documentation hub](docs/README.md) |
 
 The [RAG VPS v2 proposal](docs/architecture/RAG_VPS_V2_PROPOSED.md) describes a future design.
-[GitHub Issues](https://github.com/yastman/rag/issues) own work state;
+[Beads](docs/LOCAL-DEVELOPMENT.md#beads-task-tracking) owns work state;
 [ADRs](docs/adr/) own accepted rationale.
 
 ## License

@@ -38,8 +38,9 @@ Git carries the shared project context: [AGENTS.md](../AGENTS.md), the existing
 allowlisted `AGENTS.override.md` files, [PROJECT.md](../PROJECT.md), the maintained
 `docs/` tree, and any current project `CLAUDE.md` files. New `AGENTS.override.md`
 files and `.claude/rules/` remain ignored.
-[AGENTS.md](../AGENTS.md) defines their authority; GitHub Issues remain the owner of
-work status. Do not add obsolete specs, historical worker plans, or session artifacts
+[AGENTS.md](../AGENTS.md) defines their authority; Beads owns work status.
+Synchronize its database separately as described below. Do not add obsolete specs,
+historical worker plans, or session artifacts
 just to transfer them to another computer.
 
 Commit and push shared documentation with the related task changes. On the other
@@ -53,6 +54,43 @@ personal settings in ignored files such as `.env`, `.mcp.json`, `CLAUDE.local.md
 reports, and session prompts stay local. If a shared document does not appear in
 `git status`, run `git check-ignore -v --no-index -- <path>` to identify the rule,
 including rules in a machine's global Git ignore file.
+
+## Beads task tracking
+
+The project uses [Beads](https://github.com/gastownhall/beads), verified with `bd 1.3.0`.
+Install the CLI using its official instructions. From the main checkout, use
+`bd bootstrap --yes` on a fresh clone to restore the project database from `origin`.
+Use `bd context --json` to check the resolved database location, especially in worktrees.
+The embedded database is shared by worktrees; run writes sequentially.
+
+```text
+bd dolt pull
+bd ready
+bd show rag-3482
+bd update <id> --claim
+bd comments add <id> "Progress and verification evidence"
+bd close <id> --reason "Acceptance evidence and PR link"
+bd dolt push
+```
+
+The root [AGENTS.md](../AGENTS.md) owns claim, acceptance, and delivery rules.
+Imported GitHub issue #N has ID `rag-N` and its original URL in `external_ref`.
+Bodies, labels, priorities, comments, and explicit dependencies were imported;
+original GitHub records, including duplicate comments, remain in issue metadata.
+Closed historical issues remain accessible through their GitHub links. Read the full
+issue and comments before acting: textual prerequisites and partial implementation
+boundaries remain binding even when an issue appears in `bd ready`.
+
+Beads is now the working tracker. Avoid bidirectional `bd github sync`: it can
+reimport historical work or overwrite the migrated queue. GitHub Issues are retained
+as source history; PRs remain the review and code delivery channel.
+
+`bd dolt push` / `bd dolt pull` synchronize database history through `refs/dolt/data`
+on the existing Git remote, separately from code branches. Commit tracked Beads
+configuration and project instructions normally; never commit the database directory,
+lock files, or tokens. Git credentials remain local. Do not force-push the database.
+Use `bd backup init <path>` and `bd backup sync` for a separate full backup.
+`bd export --all -o <path>` is an issue interchange snapshot, not a full database backup.
 
 ## Bring up the sidecar stack
 
