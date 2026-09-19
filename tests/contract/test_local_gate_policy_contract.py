@@ -21,7 +21,7 @@ _ALLOWED_HOSTED_ACTIONS = {
     "docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5",
     "github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa",
     "github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa",
-    "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7",
+    "gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e",
 }
 _APPROVED_HOSTED_RUNS = {
     (".github/workflows/ci.yml", "lint", "Ruff lint"): (
@@ -345,7 +345,7 @@ jobs:
         _assert_approved_hosted_execution(
             {".github/workflows/example.yml": workflow},
             approved_runs={},
-            allowed_actions={"gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7"},
+            allowed_actions={"gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e"},
         )
 
 
