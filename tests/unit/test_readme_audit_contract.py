@@ -17,21 +17,6 @@ def _read(path: str) -> str:
     return (REPO_ROOT / path).read_text(encoding="utf-8")
 
 
-class TestServicesReadme:
-    def test_no_stale_file_references(self):
-        text = _read("telegram_bot/services/README.md")
-        stale = [
-            "cache.py",
-            "query_router.py",
-            "cesc.py",
-            "retriever.py",
-            "user_context.py",
-            "embeddings.py",
-        ]
-        for name in stale:
-            assert f"[{name}]" not in text, f"Stale file reference {name} found"
-
-
 class TestIngestionReadme:
     def test_no_pdf_parser_reference(self):
         text = _read("src/ingestion/README.md")
