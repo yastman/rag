@@ -43,9 +43,9 @@ Scenarios (issue #3419 acceptance):
 5. A dead Qdrant backend yields the canonical safe service-unavailable text
    exactly once — zero generation calls, and NOT the dispatcher error text
    (the core owns the failure, safely).
-6. A repeated update id (the same update delivered twice while the first is
-   still in flight) is absorbed by the production throttling middleware:
-   exactly one answer, exactly one core call, one truthful throttle notice.
+6. A repeated update id is absorbed by production update deduplication while
+   the first is in flight beyond the throttle window and after completion:
+   exactly one answer, exactly one core call, and no throttle notice.
 
 The bot is assembled once per module: aiogram-dialog routers are module
 singletons, so a dispatcher can attach them exactly once per process
@@ -69,6 +69,7 @@ import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import count
 from typing import Any
 
 import pytest
@@ -158,6 +159,7 @@ _GOLDEN_DOC_IDS = [
 ]
 
 _MODULE_LOOP = pytest.mark.asyncio(loop_scope="module")
+_UPDATE_IDS = count(1)
 
 
 def _namespaced_query(base: str, client_id: int) -> str:
@@ -287,6 +289,8 @@ class RecordingTelegramSession(BaseSession):
         super().__init__()
         self.calls: list[TelegramCall] = []
         self._next_message_id = 20_000
+        self.send_started: asyncio.Event | None = None
+        self.send_release: asyncio.Event | None = None
 
     async def close(self) -> None:
         return None
@@ -318,6 +322,9 @@ class RecordingTelegramSession(BaseSession):
 
         result: Any = True
         if name == "sendMessage":
+            if self.send_started is not None and self.send_release is not None:
+                self.send_started.set()
+                await self.send_release.wait()
             self._next_message_id += 1
             chat_id = int(payload.get("chat_id") or 0)
             result = Message(
@@ -557,7 +564,7 @@ class _DispatchJourney:
         self.sentinel = stack.sentinel
         self.transport = stack.bot.bot.session
         self.client_id = client_id
-        self._next_update_id = 1
+        self._next_update_id = 0
         # Cumulative core counters snapshotted at journey start: every test
         # asserts its own DELTA, never the module-wide absolute.
         self._generations_before = stack.llm_config.create_calls
@@ -585,7 +592,7 @@ class _DispatchJourney:
 
     def build_message_update(self, text: str) -> Update:
         """Build (without feeding) one private-chat text Update."""
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         return Update(
             update_id=self._next_update_id,
             message=Message(
@@ -610,7 +617,7 @@ class _DispatchJourney:
     async def feed_callback(self, data: str, *, pace_s: float = _CALLBACK_PACE_S) -> Update:
         if pace_s:
             await asyncio.sleep(pace_s)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             callback_query=CallbackQuery(
@@ -898,32 +905,39 @@ async def test_duplicate_update_id_is_absorbed_with_exactly_one_answer(
     query = _namespaced_query(_DUPLICATE_QUERY, journey.client_id)
     update = journey.build_message_update(query)
 
-    # Deliver the SAME update twice: the duplicate enters while the first is
-    # still inside the production pipeline, inside the catch-all's 2.0 s
-    # throttle bucket window.
+    # Hold the real send boundary open beyond the catch-all's 2.0 s throttle
+    # window. A duplicate must finish while the original dispatch is active.
+    started, release = asyncio.Event(), asyncio.Event()
+    journey.transport.send_started = started
+    journey.transport.send_release = release
     first = asyncio.create_task(journey.feed_update(update))
-    await asyncio.sleep(0.5)
-    await journey.feed_update(update)
-    await first
+    try:
+        await asyncio.wait_for(started.wait(), timeout=120)
+        await asyncio.sleep(2.1)
+        assert not first.done(), "original dispatch must still be active"
+        await asyncio.wait_for(journey.feed_update(update), timeout=10)
+        assert not first.done(), "duplicate must not complete the original dispatch"
+    finally:
+        release.set()
+        await asyncio.wait_for(first, timeout=120)
+        journey.transport.send_started = None
+        journey.transport.send_release = None
 
-    # Both deliveries traversed the REAL middleware chain (same message id).
+    # The completed-id cache must also absorb later redelivery.
+    await asyncio.wait_for(journey.feed_update(update), timeout=10)
+
+    # Deduplication precedes the inner message middleware chain.
     identity = ("message", int(update.message.message_id))  # type: ignore[union-attr]
-    assert journey.sentinel.seen.count(identity) == 2, journey.sentinel.seen
+    assert journey.sentinel.seen.count(identity) == 1, journey.sentinel.seen
 
     # Exactly one answer from exactly one core call.
     texts = journey.surface_texts()
-    assert len(texts) == 2, texts
-    answers = [text for text in texts if _THROTTLE_NOTICE not in text]
-    assert len(answers) == 1, texts
+    assert len(texts) == 1, texts
     assert journey.generations == 1, (
         f"the duplicate update must not re-run the core, got {journey.generations} generations"
     )
 
-    # The duplicate got the truthful throttle notice — never a second answer,
-    # never a dispatcher error.
-    texts = journey.surface_texts()
-    throttle_notices = [text for text in texts if _THROTTLE_NOTICE in text]
-    assert len(throttle_notices) == 1, texts
+    assert not any(_THROTTLE_NOTICE in text for text in texts), texts
     assert not any(_DISPATCH_ERROR_TEXT in text for text in texts), texts
 
     # Chat/reply linkage on every user-visible send.

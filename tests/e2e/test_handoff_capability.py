@@ -68,6 +68,7 @@ import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import count
 from typing import Any
 
 import pytest
@@ -117,6 +118,7 @@ _MANAGER_USER_ID = 34_209_001
 _BOT_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
 
 _MODULE_LOOP = pytest.mark.asyncio(loop_scope="module")
+_UPDATE_IDS = count(1)
 
 # Topic ids land in the durable reverse map (topic_map:{id}), so they must be
 # unique for the whole pytest process, across every journey and session.
@@ -435,7 +437,7 @@ class _HandoffJourney:
         self.bot = bot
         self.transport = transport
         self.client_id = client_id
-        self._next_update_id = 1
+        self._next_update_id = 0
 
     def _journey_user(self) -> User:
         return User(
@@ -448,7 +450,7 @@ class _HandoffJourney:
         )
 
     def _build_message(self, **kwargs: Any) -> Message:
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         return Message(
             message_id=self._next_update_id,
             date=datetime.now(UTC),
@@ -472,7 +474,7 @@ class _HandoffJourney:
 
     async def feed_client_callback(self, data: str) -> None:
         await asyncio.sleep(_CALLBACK_PACE_S)
-        self._next_update_id += 1
+        self._next_update_id = next(_UPDATE_IDS)
         update = Update(
             update_id=self._next_update_id,
             callback_query=CallbackQuery(
