@@ -8,6 +8,7 @@ from typing import Any, TypeVar
 
 import httpx
 from tenacity import (
+    RetryCallState,
     before_sleep_log,
     retry,
     retry_if_exception,
@@ -45,6 +46,7 @@ def make_retry_decorator(
     max_: float = 8.0,
     jitter: float = 2.0,
     max_attempts: int = 3,
+    before_sleep: Callable[[RetryCallState], None] = before_sleep_log(logger, logging.WARNING),
 ) -> Callable[[RetryWrappedFn], RetryWrappedFn]:
     """Factory for retry decorators with common configuration."""
     retry_predicate: Any = retry_if_exception_type(RETRYABLE_TRANSPORT_ERRORS)
@@ -55,7 +57,7 @@ def make_retry_decorator(
         retry=retry_predicate,
         wait=wait_exponential_jitter(initial=initial, max=max_, jitter=jitter),
         stop=stop_after_attempt(max_attempts),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=before_sleep,
         reraise=True,
     )
 
@@ -71,10 +73,17 @@ bge_retry = make_retry_decorator(
     max_attempts=3,
 )
 
+
+def _log_kommo_retry(state: RetryCallState) -> None:
+    # HTTPStatusError messages include URLs; queries may contain contact data.
+    logger.warning("Retrying Kommo request after attempt %s", state.attempt_number)
+
+
 kommo_retry = make_retry_decorator(
     retry_on_http_status=True,
     initial=1.0,
     max_=8,
     jitter=2,
     max_attempts=3,
+    before_sleep=_log_kommo_retry,
 )
