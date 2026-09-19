@@ -15,12 +15,18 @@ This file enforces:
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
-import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiogram.exceptions import TelegramConflictError, TelegramUnauthorizedError
+from aiogram.methods import GetMe
+
+from telegram_bot import main as main_module
 
 
 MAKEFILE = Path("Makefile")
@@ -181,210 +187,59 @@ class TestBotLogsStartupSemantics:
 
 
 @pytest.fixture
-def cleanup_modules():
-    """Mirror the isolation fixture used in tests/unit/test_main.py."""
-    tracked = (
-        "telegram_bot.main",
-        "telegram_bot.bot",
-        "telegram_bot.config",
-        "telegram_bot.logging_config",
+async def runtime(monkeypatch):
+    loop = asyncio.get_running_loop()
+    previous_handler = loop.get_exception_handler()
+    bot = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+    monkeypatch.setattr(main_module, "PropertyBot", lambda _config: bot)
+    monkeypatch.setattr(
+        main_module,
+        "BotConfig",
+        lambda: SimpleNamespace(telegram_token="test-token", llm_api_key="test-key"),
     )
-    originals = {name: sys.modules.get(name) for name in tracked}
-    pkg = sys.modules.get("telegram_bot")
-    had_main_attr = pkg is not None and hasattr(pkg, "main")
-    original_main_attr = getattr(pkg, "main", None) if had_main_attr else None
-    for name in tracked:
-        sys.modules.pop(name, None)
-    if pkg is not None and hasattr(pkg, "main"):
-        delattr(pkg, "main")
-    yield
-    for name, module in originals.items():
-        if module is None:
-            sys.modules.pop(name, None)
-        else:
-            sys.modules[name] = module
-    if pkg is not None:
-        if had_main_attr:
-            pkg.main = original_main_attr
-        elif hasattr(pkg, "main"):
-            delattr(pkg, "main")
+    monkeypatch.setattr(main_module, "setup_logging", MagicMock())
+    try:
+        yield bot, loop
+    finally:
+        loop.set_exception_handler(previous_handler)
 
 
-def _build_main_mocks() -> tuple[AsyncMock, MagicMock, dict[str, MagicMock]]:
-    """Build the standard set of mocks used by the main.py tests."""
-    mock_property_bot_instance = AsyncMock()
-    mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
-    mock_bot_config = MagicMock()
-    mock_setup_logging = MagicMock()
-
-    mock_bot_mod = MagicMock()
-    mock_bot_mod.PropertyBot = mock_property_bot
-
-    mock_config_mod = MagicMock()
-    mock_config_mod.BotConfig = mock_bot_config
-
-    mock_logging_config_mod = MagicMock()
-    mock_logging_config_mod.setup_logging = mock_setup_logging
-
-    mock_config_instance = MagicMock()
-    mock_config_instance.telegram_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
-    mock_config_instance.llm_api_key = "test-api-key"
-    mock_bot_config.return_value = mock_config_instance
-
-    return (
-        mock_property_bot_instance,
-        mock_property_bot,
-        {
-            "telegram_bot.bot": mock_bot_mod,
-            "telegram_bot.config": mock_config_mod,
-            "telegram_bot.logging_config": mock_logging_config_mod,
-        },
-    )
+@pytest.mark.parametrize("error_type", [TelegramUnauthorizedError, TelegramConflictError])
+async def test_fatal_telegram_error_logs_original_traceback(runtime, caplog, error_type):
+    bot, _ = runtime
+    error = error_type(method=GetMe(), message="fatal startup error")
+    bot.start.side_effect = error
+    with pytest.raises(error_type) as raised:
+        await main_module.main()
+    assert raised.value is error
+    bot.start.assert_awaited_once()
+    bot.stop.assert_awaited_once()
+    record = next(record for record in caplog.records if "Fatal Telegram error" in record.message)
+    assert record.exc_info is not None
+    assert record.exc_info[1] is error
+    assert record.exc_info[2] is not None
 
 
-class TestFatalTelegramErrorTraceback:
-    """Fatal Telegram errors (Unauthorized/Conflict) must be logged with traceback."""
-
-    async def test_unauthorized_uses_logger_exception(self, cleanup_modules):
-        from aiogram.exceptions import TelegramUnauthorizedError
-
-        mock_bot_instance, _mock_bot_cls, sys_mocks = _build_main_mocks()
-        # Use a real exception so logger.exception sees a usable __traceback__.
-        unauthorized = TelegramUnauthorizedError(method=MagicMock(), message="bad token")
-        mock_bot_instance.start = AsyncMock(side_effect=unauthorized)
-
-        mock_logger = MagicMock()
-
-        with (
-            patch.dict(sys.modules, sys_mocks),
-        ):
-            from telegram_bot import main as main_module
-
-            with patch.object(main_module.logging, "getLogger", return_value=mock_logger):
-                with pytest.raises(TelegramUnauthorizedError):
-                    await main_module.main()
-
-        assert mock_logger.exception.called, (
-            "Fatal Telegram errors (Unauthorized/Conflict) must be logged via "
-            "logger.exception() so operators see the traceback in logs/bot-run.log"
-        )
-        # The fatal-error log must mention what happened.
-        call_msgs = [c.args[0] for c in mock_logger.exception.call_args_list if c.args]
-        assert any("Fatal Telegram error" in msg for msg in call_msgs), (
-            "logger.exception() call must keep the existing 'Fatal Telegram error' "
-            f"message for grep-ability; saw: {call_msgs!r}"
-        )
-
-    async def test_conflict_uses_logger_exception(self, cleanup_modules):
-        from aiogram.exceptions import TelegramConflictError
-
-        mock_bot_instance, _mock_bot_cls, sys_mocks = _build_main_mocks()
-        conflict = TelegramConflictError(method=MagicMock(), message="already running")
-        mock_bot_instance.start = AsyncMock(side_effect=conflict)
-
-        mock_logger = MagicMock()
-
-        with (
-            patch.dict(sys.modules, sys_mocks),
-        ):
-            from telegram_bot import main as main_module
-
-            with patch.object(main_module.logging, "getLogger", return_value=mock_logger):
-                with pytest.raises(TelegramConflictError):
-                    await main_module.main()
-
-        assert mock_logger.exception.called, (
-            "TelegramConflictError must be logged via logger.exception() so the "
-            "stacktrace lands in logs/bot-run.log"
-        )
+async def test_main_installs_loop_handler_and_logs_background_traceback(runtime, caplog):
+    _, loop = runtime
+    await main_module.main()
+    handler = loop.get_exception_handler()
+    assert handler is not None
+    error = RuntimeError("background boom")
+    with caplog.at_level(logging.ERROR):
+        handler(loop, {"message": "Unhandled background task", "exception": error})
+    record = next(record for record in caplog.records if "asyncio loop error" in record.message)
+    assert "Unhandled background task" in record.message
+    assert record.exc_info is not None
+    assert record.exc_info[1] is error
+    assert record.exc_info[2] is not None
 
 
-class TestAsyncioLoopExceptionHandler:
-    """main.py must install an asyncio loop exception handler that logs tracebacks."""
-
-    async def test_loop_handler_installed(self, cleanup_modules):
-        _mock_bot_instance, _mock_bot_cls, sys_mocks = _build_main_mocks()
-
-        with (
-            patch.dict(sys.modules, sys_mocks),
-        ):
-            from telegram_bot import main as main_module
-
-            captured: dict[str, object] = {}
-
-            real_get_running_loop = main_module.asyncio.get_running_loop
-
-            def _spy_get_running_loop():
-                loop = real_get_running_loop()
-                captured.setdefault("loop", loop)
-                return loop
-
-            with patch.object(
-                main_module.asyncio,
-                "get_running_loop",
-                side_effect=_spy_get_running_loop,
-            ):
-                await main_module.main()
-
-            loop = captured.get("loop")
-            assert loop is not None, (
-                "main() must call asyncio.get_running_loop() so it can install "
-                "an exception handler for background tasks"
-            )
-            handler = loop.get_exception_handler()
-            assert handler is not None, (
-                "main() must install a custom loop exception handler so unhandled "
-                "asyncio task exceptions are logged with traceback"
-            )
-
-    async def test_loop_handler_logs_with_traceback(self, cleanup_modules):
-        """The installed handler must call logger.exception (or use exc_info=True)."""
-        _mock_bot_instance, _mock_bot_cls, sys_mocks = _build_main_mocks()
-
-        mock_logger = MagicMock()
-
-        with (
-            patch.dict(sys.modules, sys_mocks),
-        ):
-            from telegram_bot import main as main_module
-
-            captured_handler: dict[str, object] = {}
-            real_get_running_loop = main_module.asyncio.get_running_loop
-
-            def _spy_get_running_loop():
-                loop = real_get_running_loop()
-                captured_handler.setdefault("loop", loop)
-                return loop
-
-            with (
-                patch.object(main_module.logging, "getLogger", return_value=mock_logger),
-                patch.object(
-                    main_module.asyncio,
-                    "get_running_loop",
-                    side_effect=_spy_get_running_loop,
-                ),
-            ):
-                await main_module.main()
-
-            loop = captured_handler.get("loop")
-            assert loop is not None
-            handler = loop.get_exception_handler()
-            assert handler is not None
-
-            # Reset call history so we only see what the handler logs.
-            mock_logger.reset_mock()
-            try:
-                raise RuntimeError("background boom")
-            except RuntimeError as exc:
-                ctx = {
-                    "message": "Unhandled exception in event loop",
-                    "exception": exc,
-                }
-                handler(loop, ctx)
-
-            assert mock_logger.exception.called or any(
-                call.kwargs.get("exc_info") for call in mock_logger.error.call_args_list
-            ), (
-                "loop exception handler must use logger.exception() or "
-                "logger.error(..., exc_info=...) so the traceback is captured"
-            )
+async def test_loop_handler_logs_context_without_exception(runtime, caplog):
+    _, loop = runtime
+    await main_module.main()
+    handler = loop.get_exception_handler()
+    assert handler is not None
+    handler(loop, {"message": "background warning", "task": "test-task"})
+    assert "background warning" in caplog.text
+    assert "test-task" in caplog.text

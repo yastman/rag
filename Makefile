@@ -52,7 +52,11 @@ PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/test_evaluator.py \
 	tests/unit/evaluation \
 	tests/unit/ingestion \
-	tests/unit/observability)
+	tests/unit/observability \
+	tests/unit/e2e_adapters/test_demo_gate.py \
+	tests/unit/e2e_adapters/test_telegram_client_voice.py \
+	tests/unit/scripts/test_e2e_telethon_session.py \
+	tests/unit/scripts/test_e2e_runner.py)
 # Explicit owner lanes for tests excluded from the lean broad unit lane.
 # Keep these variables in sync with the matching opt-in targets below.
 PYTEST_TELEGRAM_ADAPTER_PATHS := \
@@ -63,7 +67,12 @@ PYTEST_TELEGRAM_ADAPTER_PATHS := \
 	tests/unit/pipelines \
 	tests/unit/services/test_catalog_rendering.py \
 	tests/unit/services/test_catalog_session.py \
-	tests/unit/services/test_favorites_service.py
+	tests/unit/services/test_favorites_service.py \
+	tests/unit/services/test_forum_bridge.py \
+	tests/unit/services/test_lead_sink.py \
+	tests/unit/services/test_voice_transcription.py \
+	tests/unit/services/test_demo_seed_truthfulness.py \
+	tests/unit/test_setup_postgres_capability.py
 PYTEST_TELEGRAM_ADAPTER_ROOT_TESTS := \
 	tests/unit/test_*bot*.py \
 	tests/unit/test_bot*.py \

@@ -1,271 +1,90 @@
-"""Unit tests for telegram_bot/main.py.
+"""Entry-point behavior with real SDK errors and explicit local collaborators."""
 
-Tests use sys.modules mocking to avoid slow imports (aiogram, services).
-Note: Due to module caching complexities, only basic flow tests are included.
-For integration testing of main(), use the E2E test suite.
-"""
-
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiogram.exceptions import TelegramNetworkError
+from aiogram.methods import GetMe
 
-from telegram_bot.config import BotLoggingSettings, BotStartupSettings
+from src.runtime.integrations.polling_lock import PollingLockBusy
+from telegram_bot import main as main_module
 
 
-class TestMainFunction:
-    """Test main() function logic."""
-
-    @pytest.fixture(autouse=True)
-    def cleanup_modules(self):
-        """Isolate telegram_bot.main imports while restoring original modules.
-
-        We clear the modules that ``telegram_bot.main`` imports and then
-        restore original module objects after each test, preventing leakage
-        into other test files that keep imported references.
-        """
-        tracked = (
-            "telegram_bot.main",
-            "telegram_bot.bot",
-            "telegram_bot.config",
-            "telegram_bot.logging_config",
+@pytest.fixture
+async def runtime(monkeypatch):
+    loop = asyncio.get_running_loop()
+    previous_handler = loop.get_exception_handler()
+    config = SimpleNamespace(telegram_token="test-token", llm_api_key="test-key")
+    bot = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+    constructor = MagicMock(return_value=bot)
+    setup_logging = MagicMock()
+    monkeypatch.setattr(main_module, "BotConfig", lambda: config)
+    monkeypatch.setattr(main_module, "PropertyBot", constructor)
+    monkeypatch.setattr(main_module, "setup_logging", setup_logging)
+    monkeypatch.setattr(main_module, "_MAX_START_ATTEMPTS", 3)
+    monkeypatch.setattr(main_module, "_START_WAIT_MIN", 0)
+    monkeypatch.setattr(main_module, "_START_WAIT_MAX", 0)
+    try:
+        yield SimpleNamespace(
+            config=config, bot=bot, constructor=constructor, logging=setup_logging
         )
-        originals = {name: sys.modules.get(name) for name in tracked}
-        pkg = sys.modules.get("telegram_bot")
-        had_main_attr = pkg is not None and hasattr(pkg, "main")
-        original_main_attr = getattr(pkg, "main", None) if had_main_attr else None
-        for name in tracked:
-            sys.modules.pop(name, None)
-        if pkg is not None and hasattr(pkg, "main"):
-            delattr(pkg, "main")
-        yield
-        for name, module in originals.items():
-            if module is None:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = module
-        if pkg is not None:
-            if had_main_attr:
-                pkg.main = original_main_attr
-            elif hasattr(pkg, "main"):
-                delattr(pkg, "main")
+    finally:
+        loop.set_exception_handler(previous_handler)
 
-    async def test_main_success_flow(self):
-        """Test successful bot startup and shutdown."""
-        mock_property_bot_instance = AsyncMock()
-        mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
-        mock_bot_config = MagicMock()
-        mock_setup_logging = MagicMock()
 
-        mock_bot_mod = MagicMock()
-        mock_bot_mod.PropertyBot = mock_property_bot
+async def test_main_success_flow(runtime):
+    await main_module.main()
+    runtime.logging.assert_called_once()
+    runtime.constructor.assert_called_once_with(runtime.config)
+    runtime.bot.start.assert_awaited_once()
+    runtime.bot.stop.assert_awaited_once()
 
-        mock_config_mod = MagicMock()
-        mock_config_mod.BotConfig = mock_bot_config
-        mock_config_mod.BotStartupSettings = BotStartupSettings
-        mock_config_mod.BotLoggingSettings = BotLoggingSettings
 
-        mock_logging_config_mod = MagicMock()
-        mock_logging_config_mod.setup_logging = mock_setup_logging
+async def test_main_no_telegram_token_exits_early(runtime, caplog):
+    runtime.config.telegram_token = ""
+    await main_module.main()
+    runtime.constructor.assert_not_called()
+    assert "TELEGRAM_BOT_TOKEN not set" in caplog.text
 
-        mock_config_instance = MagicMock()
-        mock_config_instance.telegram_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
-        mock_config_instance.llm_api_key = "test-api-key"
-        mock_bot_config.return_value = mock_config_instance
 
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "telegram_bot.bot": mock_bot_mod,
-                    "telegram_bot.config": mock_config_mod,
-                    "telegram_bot.logging_config": mock_logging_config_mod,
-                },
-            ),
-        ):
-            from telegram_bot import main as main_module
+async def test_main_retries_on_temporary_startup_error(runtime):
+    error = TelegramNetworkError(method=GetMe(), message="temporary network failure")
+    runtime.bot.start.side_effect = [error, None]
+    await main_module.main()
+    assert runtime.bot.start.await_count == 2
+    runtime.bot.stop.assert_awaited_once()
 
-            await main_module.main()
 
-            mock_setup_logging.assert_called_once()
-            mock_property_bot_instance.start.assert_awaited_once()
-            mock_property_bot_instance.stop.assert_awaited_once()
-            mock_property_bot.assert_called_once_with(mock_config_instance)
+async def test_main_stops_after_retry_budget(runtime):
+    error = TelegramNetworkError(method=GetMe(), message="persistent network failure")
+    runtime.bot.start.side_effect = error
+    with pytest.raises(TelegramNetworkError) as raised:
+        await main_module.main()
+    assert raised.value is error
+    assert runtime.bot.start.await_count == 3
+    runtime.bot.stop.assert_awaited_once()
 
-    async def test_main_no_telegram_token_exits_early(self):
-        """Test main exits early when no telegram token."""
-        mock_property_bot = MagicMock()
-        mock_bot_config = MagicMock()
-        mock_setup_logging = MagicMock()
 
-        mock_bot_mod = MagicMock()
-        mock_bot_mod.PropertyBot = mock_property_bot
+async def test_main_propagates_non_retryable_startup_error(runtime):
+    error = RuntimeError("boom")
+    runtime.bot.start.side_effect = error
+    with pytest.raises(RuntimeError) as raised:
+        await main_module.main()
+    assert raised.value is error
+    runtime.bot.start.assert_awaited_once()
+    runtime.bot.stop.assert_awaited_once()
 
-        mock_config_mod = MagicMock()
-        mock_config_mod.BotConfig = mock_bot_config
-        mock_config_mod.BotStartupSettings = BotStartupSettings
-        mock_config_mod.BotLoggingSettings = BotLoggingSettings
 
-        mock_logging_config_mod = MagicMock()
-        mock_logging_config_mod.setup_logging = mock_setup_logging
-
-        mock_config_instance = MagicMock()
-        mock_config_instance.telegram_token = ""  # Empty token
-        mock_config_instance.llm_api_key = "test-api-key"
-        mock_bot_config.return_value = mock_config_instance
-
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "telegram_bot.bot": mock_bot_mod,
-                    "telegram_bot.config": mock_config_mod,
-                    "telegram_bot.logging_config": mock_logging_config_mod,
-                },
-            ),
-        ):
-            from telegram_bot import main as main_module
-
-            await main_module.main()
-
-            # Bot should not be created when token is missing
-            mock_property_bot.assert_not_called()
-
-    async def test_main_retries_on_temporary_startup_error(self):
-        """Temporary network errors should trigger retry with sleep."""
-        mock_property_bot_instance = AsyncMock()
-        mock_property_bot_instance.start = AsyncMock(side_effect=[OSError("dns failure"), None])
-        mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
-        mock_bot_config = MagicMock()
-        mock_setup_logging = MagicMock()
-
-        mock_bot_mod = MagicMock()
-        mock_bot_mod.PropertyBot = mock_property_bot
-
-        mock_config_mod = MagicMock()
-        mock_config_mod.BotConfig = mock_bot_config
-        mock_config_mod.BotStartupSettings = BotStartupSettings
-        mock_config_mod.BotLoggingSettings = BotLoggingSettings
-
-        mock_logging_config_mod = MagicMock()
-        mock_logging_config_mod.setup_logging = mock_setup_logging
-
-        mock_config_instance = MagicMock()
-        mock_config_instance.telegram_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
-        mock_config_instance.llm_api_key = "test-api-key"
-        mock_bot_config.return_value = mock_config_instance
-
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "telegram_bot.bot": mock_bot_mod,
-                    "telegram_bot.config": mock_config_mod,
-                    "telegram_bot.logging_config": mock_logging_config_mod,
-                },
-            ),
-        ):
-            from telegram_bot import main as main_module
-
-            with patch.object(main_module.asyncio, "sleep", new=AsyncMock()) as mock_sleep:
-                await main_module.main()
-
-            assert mock_property_bot_instance.start.await_count == 2
-            mock_sleep.assert_awaited_once()
-            mock_property_bot_instance.stop.assert_awaited_once()
-
-    async def test_main_propagates_non_retryable_startup_error(self):
-        """Unexpected startup errors should not be retried indefinitely."""
-        mock_property_bot_instance = AsyncMock()
-        mock_property_bot_instance.start = AsyncMock(side_effect=RuntimeError("boom"))
-        mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
-        mock_bot_config = MagicMock()
-        mock_setup_logging = MagicMock()
-
-        mock_bot_mod = MagicMock()
-        mock_bot_mod.PropertyBot = mock_property_bot
-
-        mock_config_mod = MagicMock()
-        mock_config_mod.BotConfig = mock_bot_config
-        mock_config_mod.BotStartupSettings = BotStartupSettings
-        mock_config_mod.BotLoggingSettings = BotLoggingSettings
-
-        mock_logging_config_mod = MagicMock()
-        mock_logging_config_mod.setup_logging = mock_setup_logging
-
-        mock_config_instance = MagicMock()
-        mock_config_instance.telegram_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
-        mock_config_instance.llm_api_key = "test-api-key"
-        mock_bot_config.return_value = mock_config_instance
-
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "telegram_bot.bot": mock_bot_mod,
-                    "telegram_bot.config": mock_config_mod,
-                    "telegram_bot.logging_config": mock_logging_config_mod,
-                },
-            ),
-        ):
-            from telegram_bot import main as main_module
-
-            with pytest.raises(RuntimeError, match="boom"):
-                await main_module.main()
-
-            mock_property_bot_instance.start.assert_awaited_once()
-            mock_property_bot_instance.stop.assert_awaited_once()
-
-    async def test_main_handles_polling_lock_busy_without_traceback(self):
-        """Polling lock conflicts should exit non-zero with concise operator log."""
-        from src.runtime.integrations.polling_lock import PollingLockBusy
-
-        mock_property_bot_instance = AsyncMock()
-        lock_error = PollingLockBusy(
-            "Polling lock busy key='telegram-bot:polling' owner='host:456' pttl_ms=52000 ttl_sec=None;"
-            " stop the other bot instance first"
-        )
-        mock_property_bot_instance.start = AsyncMock(side_effect=lock_error)
-        mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
-        mock_bot_config = MagicMock()
-        mock_setup_logging = MagicMock()
-
-        mock_bot_mod = MagicMock()
-        mock_bot_mod.PropertyBot = mock_property_bot
-
-        mock_config_mod = MagicMock()
-        mock_config_mod.BotConfig = mock_bot_config
-        mock_config_mod.BotStartupSettings = BotStartupSettings
-        mock_config_mod.BotLoggingSettings = BotLoggingSettings
-
-        mock_logging_config_mod = MagicMock()
-        mock_logging_config_mod.setup_logging = mock_setup_logging
-
-        mock_config_instance = MagicMock()
-        mock_config_instance.telegram_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
-        mock_config_instance.llm_api_key = "test-api-key"
-        mock_bot_config.return_value = mock_config_instance
-        mock_logger = MagicMock()
-
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "telegram_bot.bot": mock_bot_mod,
-                    "telegram_bot.config": mock_config_mod,
-                    "telegram_bot.logging_config": mock_logging_config_mod,
-                },
-            ),
-        ):
-            from telegram_bot import main as main_module
-
-            with patch.object(main_module.logging, "getLogger", return_value=mock_logger):
-                with pytest.raises(SystemExit, match="2"):
-                    await main_module.main()
-
-            mock_property_bot_instance.start.assert_awaited_once()
-            mock_property_bot_instance.stop.assert_awaited_once()
-            mock_logger.error.assert_called_once_with(
-                "Polling lock is busy; another bot instance is active: %s", lock_error
-            )
-            mock_logger.exception.assert_not_called()
+async def test_main_handles_polling_lock_busy_without_traceback(runtime, caplog):
+    error = PollingLockBusy("another instance owns polling")
+    runtime.bot.start.side_effect = error
+    with pytest.raises(SystemExit) as raised:
+        await main_module.main()
+    assert raised.value.code == 2
+    runtime.bot.start.assert_awaited_once()
+    runtime.bot.stop.assert_awaited_once()
+    record = next(record for record in caplog.records if "Polling lock is busy" in record.message)
+    assert str(error) in record.message
+    assert record.exc_info is None
