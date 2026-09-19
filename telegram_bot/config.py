@@ -146,8 +146,6 @@ class BotConfig(BaseSettings):
         default="",
         validation_alias=AliasChoices("llm_api_key", "LLM_API_KEY", "OPENAI_API_KEY"),
     )
-    # Deprecated compatibility field; chat routing uses LiteLLM SDK in-process.
-    llm_base_url: str = ""
     llm_model: str = Field(
         default="gpt-4o-mini", validation_alias=AliasChoices("llm_model", "LLM_MODEL")
     )

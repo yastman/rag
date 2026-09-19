@@ -131,3 +131,12 @@ def test_pytest_bootstrap_disables_downstream_dotenv_discovery() -> None:
         assert load_dotenv() is False
 
     find_dotenv.assert_not_called()
+
+
+def test_judge_keeps_legacy_base_url_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("E2E_JUDGE_BASE_URL", raising=False)
+    monkeypatch.setenv("LLM_BASE_URL", "https://judge.example.test/v1")
+    assert E2EConfig(_env_file=None).judge_base_url == "https://judge.example.test/v1"
+
+    monkeypatch.setenv("E2E_JUDGE_BASE_URL", "https://explicit.example.test/v1")
+    assert E2EConfig(_env_file=None).judge_base_url == "https://explicit.example.test/v1"

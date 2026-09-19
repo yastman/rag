@@ -21,7 +21,6 @@ def _create_bot(config: BotConfig | None = None):
         patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings"),
         patch("src.runtime.qdrant.QdrantService"),
         patch("src.runtime.config.GraphConfig.create_llm"),
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
     ):
         from telegram_bot.bot import PropertyBot
 
@@ -45,7 +44,6 @@ def _create_bot_with_constructor_spies(config: BotConfig | None = None):
         patch("src.runtime.integrations.embeddings.BGEM3SparseEmbeddings") as spies["sparse"],
         patch("src.runtime.qdrant.QdrantService") as spies["qdrant"],
         patch("src.runtime.config.GraphConfig.create_llm"),
-        patch("src.runtime.config.GraphConfig.create_supervisor_llm"),
         patch("telegram_bot.bot.setup_throttling_middleware") as spies["throttle_mw"],
         patch("telegram_bot.bot.setup_error_handler") as spies["error_mw"],
     ):

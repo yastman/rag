@@ -247,7 +247,7 @@ class CountingLLMConfig(FakeLLMConfig):
     def __init__(self) -> None:
         self.create_calls = 0
 
-    def create_llm(self, *, auto_trace: bool = False) -> Any:
+    def create_llm(self) -> Any:
         self.create_calls += 1
         return _CountingLLM()
 
@@ -270,7 +270,7 @@ class EmptyOutputLLMConfig(FakeLLMConfig):
 
     llm_model = "empty-local-e2e"
 
-    def create_llm(self, *, auto_trace: bool = False) -> Any:
+    def create_llm(self) -> Any:
         return _EmptyOutputLLM()
 
 

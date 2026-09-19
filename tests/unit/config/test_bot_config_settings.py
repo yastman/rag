@@ -45,7 +45,6 @@ class TestBotConfigIsPydanticSettings:
         config = BotConfig(
             telegram_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
             llm_api_key="test-key",
-            llm_base_url="http://fake:4000",
             search_top_k=42,
         )
 
@@ -170,7 +169,6 @@ class TestBotConfigLiveSchemaDefaults:
         "qdrant_collection": "gdrive_documents_bge",
         # LLM
         "llm_api_key": "",
-        "llm_base_url": "",
         "llm_model": "gpt-4o-mini",
         # Search / rerank (live surface preserved by #3350)
         "search_top_k": 40,

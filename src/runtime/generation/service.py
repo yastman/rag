@@ -159,7 +159,7 @@ async def generate_answer(
     hard_timeout = False
 
     try:
-        llm = config.create_llm(auto_trace=False)
+        llm = config.create_llm()
         t_llm_start_ns = time.perf_counter_ns()
         create_kwargs = {
             "model": config.llm_model,
