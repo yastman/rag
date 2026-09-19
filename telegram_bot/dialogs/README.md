@@ -14,7 +14,6 @@ telegram_bot/dialogs
 - funnel/ (funnel dialog package)
 - catalog_transport.py
 - client_menu.py
-- crm_cards.py
 - demo.py
 - faq.py
 - filter_constants.py

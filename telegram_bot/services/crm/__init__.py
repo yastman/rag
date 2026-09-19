@@ -1,1 +1,1 @@
-"""CRM services subpackage — Kommo CRM integration, lead scoring, forum topics."""
+"""CRM services subpackage — Kommo CRM integration and handoff summaries."""

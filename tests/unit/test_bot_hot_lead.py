@@ -1,4 +1,4 @@
-"""Test HotLeadNotifier surface after bot wiring removal (#402, #2625)."""
+"""Regression test for retired hot-lead bot wiring (#2625)."""
 
 from __future__ import annotations
 
@@ -22,17 +22,8 @@ def _make_config() -> BotConfig:
     )
 
 
-class TestHotLeadNotifierWiring:
-    """HotLeadNotifier remains importable; bot no longer owns the attribute (#2625)."""
+def test_bot_has_no_removed_notifier_attribute() -> None:
+    """PropertyBot intentionally no longer declares _hot_lead_notifier (#2625)."""
+    bot = make_property_bot(_make_config())
 
-    def test_bot_has_no_removed_notifier_attribute(self):
-        """PropertyBot intentionally no longer declares _hot_lead_notifier (#2625)."""
-        bot = make_property_bot(_make_config())
-        assert not hasattr(bot, "_hot_lead_notifier")
-
-    def test_notifier_importable_and_has_interface(self):
-        """HotLeadNotifier is importable and has notify_if_hot method."""
-        from telegram_bot.services.crm.hot_lead_notifier import HotLeadNotifier
-
-        assert hasattr(HotLeadNotifier, "notify_if_hot")
-        assert callable(getattr(HotLeadNotifier, "notify_if_hot", None))
+    assert not hasattr(bot, "_hot_lead_notifier")
