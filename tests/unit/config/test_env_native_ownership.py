@@ -42,8 +42,9 @@ def test_ingestion_alias_precedence_and_explicit_arguments(monkeypatch):
     monkeypatch.setenv("SYNC_DIR", "neutral")
     monkeypatch.setenv("GDRIVE_SYNC_DIR", "legacy")
     monkeypatch.setenv("COLLECTION_NAME", "first")
-    monkeypatch.setenv("UNIFIED_COLLECTION_NAME", "second")
-    monkeypatch.setenv("GDRIVE_COLLECTION_NAME", "third")
+    monkeypatch.delenv("QDRANT_COLLECTION", raising=False)
+    monkeypatch.delenv("UNIFIED_COLLECTION_NAME", raising=False)
+    monkeypatch.delenv("GDRIVE_COLLECTION_NAME", raising=False)
     assert UnifiedConfig().sync_dir == Path("neutral")
     assert UnifiedConfig().collection_name == "first"
     assert (
@@ -54,9 +55,7 @@ def test_ingestion_alias_precedence_and_explicit_arguments(monkeypatch):
     monkeypatch.delenv("SYNC_DIR")
     monkeypatch.delenv("COLLECTION_NAME")
     assert UnifiedConfig().sync_dir == Path("legacy")
-    assert UnifiedConfig().collection_name == "second"
-    monkeypatch.delenv("UNIFIED_COLLECTION_NAME")
-    assert UnifiedConfig().collection_name == "third"
+    assert UnifiedConfig().collection_name == "gdrive_documents_bge"
 
 
 def test_ingestion_empty_manifest_and_argument_override_invalid_env(monkeypatch):

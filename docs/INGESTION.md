@@ -44,6 +44,23 @@ perform a read-only inventory; if non-Markdown sources or points exist, run a se
 operational migration (snapshot, explicit conversion/removal decisions, rebuild,
 validation, rollback). Do not silently delete external data.
 
+## Knowledge collection
+
+Set `QDRANT_COLLECTION` for the bot, unified ingestion, bootstrap and readiness.
+The default is `gdrive_documents_bge`. All use the existing
+[`resolve_collection_name`](../src/config/qdrant_policy.py) policy with
+`QDRANT_QUANTIZATION_MODE` (default `off`) to select the physical collection;
+`scalar` and `binary` select the corresponding suffix.
+
+Standalone ingestion still accepts `COLLECTION_NAME`, `UNIFIED_COLLECTION_NAME`,
+then `GDRIVE_COLLECTION_NAME` when the canonical variable is absent. These aliases
+emit a migration warning and conflicting values fail. The bot does not read them.
+Explicit `UnifiedConfig` constructor arguments override environment inputs.
+
+If standalone ingestion relied on the former `file_documents_bge` default, set
+`QDRANT_COLLECTION=file_documents_bge` explicitly before upgrading. Configuration
+changes never move, rename or recreate existing collection data.
+
 ## Run it
 
 ```bash
