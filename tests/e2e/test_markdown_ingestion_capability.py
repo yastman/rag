@@ -3,8 +3,7 @@
 One bounded scenario proving the production unified ingestion path end to end
 (``run_once`` -> Markdown parser -> manifest -> BGE-M3 -> Qdrant writer)
 against the hermetic harness stack (#3414): a run/worker-owned collection
-with the production vector contract (harness ``recreate_collection``, the
-same provisioning the harness lane uses), real Qdrant writes, real BGE-M3
+with the production bootstrap schema and strict-mode limits, real Qdrant writes, real BGE-M3
 embeddings, real dense retrieval.
 
 Lifecycle proven (issue #3416 acceptance):
@@ -42,12 +41,13 @@ import pytest
 from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
+from scripts.demo_bootstrap import create_knowledge_collection_schema
+from src.runtime.qdrant.contracts import STRICT_MODE_LIMITS
 from tests.e2e_core.live_harness import (
     LiveE2EEnv,
     RunNamespace,
     TeardownRegistry,
     make_qdrant_context,
-    recreate_collection,
     require_live_services,
 )
 from tests.e2e_core.qdrant_helpers import production_collection_names
@@ -310,13 +310,19 @@ async def test_markdown_cli_document_lifecycle_through_retrieval(
 
     await require_live_services(harness_env)
 
-    # -- Phase 0: run-owned collection with the production vector contract ---
-    # (dense 1024 + colbert multivector + bm42 sparse, per the harness helper;
-    # production cmd_bootstrap's strict-mode guardrails currently reject
-    # run_once's scroll page sizes — reported separately, #3459 evidence.)
+    # -- Phase 0: actual production bootstrap, including strict-mode limits ---
     assert owned_context.collection_name.startswith(f"rag_e2e_{run_namespace.run_id}_")
     assert owned_context.collection_name not in production_collection_names()
-    recreate_collection(harness_env, owned_context.collection_name)
+    client = QdrantClient(
+        url=harness_env.qdrant_url, api_key=harness_env.qdrant_api_key, timeout=60
+    )
+    try:
+        create_knowledge_collection_schema(client, owned_context.collection_name)
+        strict = client.get_collection(owned_context.collection_name).config.strict_mode_config
+        assert strict is not None and strict.enabled is True
+        assert strict.max_query_limit == STRICT_MODE_LIMITS["max_query_limit"]
+    finally:
+        client.close()
 
     # -- Phase 1: ingest -> only .md indexed, vectors complete, retrievable -
     (sync_dir / "alpha.md").write_text(_markdown_body(_ALPHA_V1), encoding="utf-8")

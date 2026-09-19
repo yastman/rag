@@ -44,6 +44,7 @@ from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 from src.ingestion.unified.manifest import FileManifest, compute_content_hash_from_bytes
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
+from src.runtime.qdrant.contracts import STRICT_MODE_LIMITS
 
 
 if TYPE_CHECKING:
@@ -91,7 +92,7 @@ def _file_ids_for_source(client: object, collection_name: str, source_path: str)
         records, offset = client.scroll(  # type: ignore[attr-defined]
             collection_name=collection_name,
             scroll_filter=source_filter,
-            limit=256,
+            limit=STRICT_MODE_LIMITS["max_query_limit"],
             offset=offset,
             with_payload=True,
             with_vectors=False,
