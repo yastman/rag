@@ -2,8 +2,7 @@
 #
 # These patterns gate changes to CI infrastructure, deployment surface,
 # observability wiring, contract tests, and Compose configuration.
-# Each zone must have an explicit reviewer before merge and every
-# addition must stay in sync with tests/unit/test_codeowners_contract.py.
+# GitHub owns pattern matching and branch-protection enforcement.
 
 # CODEOWNERS self-ownership (governance)
 .github/CODEOWNERS                        @yastman
