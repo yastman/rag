@@ -84,7 +84,7 @@ from pydantic import ValidationError
 
 from src.runtime.integrations.cache import CacheLayerManager
 from src.runtime.integrations.redis_mode import RedisCapability, RedisMode
-from tests.e2e_core.live_harness import guard_service_skip
+from tests.e2e_core.live_harness import full_gate_docker_args, guard_service_skip
 from tests.unit._bot_config_factory import make_full_bot_config
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -132,7 +132,7 @@ _TOPIC_ID_SEQUENCE = itertools.count(3_420_5000)
 
 def _docker(*args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["docker", *args],
+        full_gate_docker_args(args),
         capture_output=True,
         text=True,
         timeout=timeout,

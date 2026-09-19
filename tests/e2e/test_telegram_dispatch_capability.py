@@ -89,6 +89,7 @@ from tests.e2e_core.live_harness import (
     LiveE2EEnv,
     RunNamespace,
     TeardownRegistry,
+    full_gate_docker_args,
     guard_service_skip,
     index_fixture_documents,
     load_golden_case,
@@ -180,7 +181,7 @@ def _namespaced_query(base: str, client_id: int) -> str:
 
 def _docker(*args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["docker", *args],
+        full_gate_docker_args(args),
         capture_output=True,
         text=True,
         timeout=timeout,

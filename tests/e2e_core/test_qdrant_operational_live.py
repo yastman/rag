@@ -74,6 +74,7 @@ from tests.e2e_core.live_harness import (
     LiveE2EEnv,
     RunNamespace,
     TeardownRegistry,
+    full_gate_docker_args,
     make_qdrant_context,
     recreate_collection,
 )
@@ -533,7 +534,11 @@ if _RESTART_PROJECT:  # pragma: no cover - exercised only in the opt-in lane
 
     def _docker(*args: str, timeout: float = 120.0) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["docker", *args], capture_output=True, text=True, timeout=timeout, check=False
+            full_gate_docker_args(args),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
         )
 
     def _restart_target_container(project: str) -> str:

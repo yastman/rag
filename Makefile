@@ -592,6 +592,12 @@ test-e2e-redis-live: ## Run live Redis mode + two-owner polling-lock E2E (#3368;
 # base commit, so it is not part of this default lane (successor #3413).
 
 E2E_RUN_ID ?= $(shell python -c "import uuid; print(uuid.uuid4().hex[:12])")
+E2E_MODEL_DIR ?=
+
+.PHONY: test-e2e-full
+test-e2e-full: ## Strict six-service deterministic promotion; explicit pinned model, no operator credentials (#3364)
+	$(UV_RUN_NO_SYNC) python -m scripts.e2e.full_stack_gate --model-dir "$(E2E_MODEL_DIR)" --run-id "$(E2E_RUN_ID)"
+
 E2E_HARNESS_STACK_WAIT ?= 900
 E2E_HARNESS_PYTEST_ARGS ?= -n 2 --dist=worksteal
 E2E_HARNESS_PATHS ?= tests/e2e_core/test_live_stack_required_live.py

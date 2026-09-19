@@ -141,6 +141,15 @@ def allow_remote_services() -> bool:
     return os.environ.get("E2E_HARNESS_ALLOW_REMOTE", "").strip().lower() in _TRUTHY
 
 
+def full_gate_docker_args(args: tuple[str, ...]) -> list[str]:
+    """Label real fixture containers only when the six-service gate owns the run."""
+    if args and args[0] == "run" and os.environ.get("E2E_FULL_GATE") == "1":
+        run_id = os.environ.get("E2E_RUN_ID", "")
+        validate_run_id(run_id)
+        return ["docker", "run", "--label", f"rag.e2e.run={run_id}", *args[1:]]
+    return ["docker", *args]
+
+
 def no_fake_sdk_modules() -> list[str]:
     """Return aiogram-family module names currently faked by MagicMocks.
 

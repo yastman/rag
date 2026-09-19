@@ -120,6 +120,7 @@ from tests.e2e_core.live_harness import (
     LiveE2EEnv,
     RunNamespace,
     TeardownRegistry,
+    full_gate_docker_args,
     guard_service_skip,
 )
 from tests.unit._bot_config_factory import make_full_bot_config
@@ -260,7 +261,7 @@ SEED_ROWS: list[dict[str, Any]] = [
 
 def _docker(*args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["docker", *args],
+        full_gate_docker_args(args),
         capture_output=True,
         text=True,
         timeout=timeout,

@@ -61,6 +61,7 @@ from telegram_bot.lifecycle.lifecycle import (
     setup_polling_lock,
 )
 from telegram_bot.startup_status import StartupSeverity
+from tests.e2e_core.live_harness import full_gate_docker_args
 from tests.unit._bot_config_factory import make_bot_config
 
 
@@ -103,7 +104,7 @@ def _unavailable(reason: str) -> None:
 
 def _docker(*args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["docker", *args],
+        full_gate_docker_args(args),
         capture_output=True,
         text=True,
         timeout=timeout,

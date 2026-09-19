@@ -97,6 +97,7 @@ from tests.e2e_core.live_harness import (
     LiveE2EEnv,
     RunNamespace,
     TeardownRegistry,
+    full_gate_docker_args,
     guard_service_skip,
     require_live_services,
 )
@@ -288,7 +289,7 @@ def _write_seed_csv(directory: Path) -> Path:
 
 def _docker(*args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["docker", *args],
+        full_gate_docker_args(args),
         capture_output=True,
         text=True,
         timeout=timeout,
