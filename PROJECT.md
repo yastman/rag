@@ -59,8 +59,9 @@ Detailed invariants belong to their subsystem documents.
 - [README](README.md): start and navigation.
 - [Structure](docs/architecture/STRUCTURE.md): owners, flows, dependencies.
 - [AGENTS](AGENTS.md): work routing and delivery rules.
-- [GitHub Issues](https://github.com/yastman/rag/issues): work state and acceptance.
+- [Beads](docs/LOCAL-DEVELOPMENT.md#beads-task-tracking): work state and acceptance;
+  original GitHub Issues retain historical context.
 - [ADRs](docs/adr/): accepted architectural rationale.
 - [Documentation hub](docs/README.md): procedures and subsystem references.
 
-Update this file when accepted scope changes. Keep task progress with its issue/PR.
+Update this file when accepted scope changes. Keep task progress in Beads/the PR.

@@ -7,7 +7,8 @@ User instructions take precedence over repository workflow defaults.
 
 1. Resolve the checkout with `git rev-parse --show-toplevel`; inspect HEAD and
    `git status --short`. Preserve unrelated changes.
-2. Identify the outcome, affected area, and existing GitHub issue when supplied.
+2. Identify the outcome, affected area, and existing Beads issue (`bd show <id>`).
+   Imported GitHub issue #N maps to `rag-N`; preserve its original scope and acceptance.
 3. Use the using-codeindex-codegraph skill before source search. Check indexed root/revision
    against this checkout; current Git/files win on mismatch. Do not refresh indexes implicitly.
 4. Read the nearest scoped instructions below. Load other documents only for a concrete gap.
@@ -24,13 +25,18 @@ User instructions take precedence over repository workflow defaults.
 | Deployment and recovery | [DOCKER.md](DOCKER.md), [runbooks](docs/runbooks/README.md) |
 | Other maintained documentation | [Documentation hub](docs/README.md) |
 
-GitHub Issues own work state, priority, dependencies, and acceptance. PRs own review/delivery
-evidence. CodeGraph/CodeIndexer provide search, callers, tests, and semantic/history context;
+Beads (`bd`) owns work state, priority, dependencies, and acceptance. GitHub Issues retain
+historical context and imported source links; PRs own review/delivery evidence.
+Use `bd ready`, read the full issue and comments, then `bd update <id> --claim` before work.
+Read scope restrictions and non-issue prerequisites even when `bd ready` lists a task.
+Record progress with `bd comments add <id>` and close only after acceptance is met.
+Use [Local Development](docs/LOCAL-DEVELOPMENT.md#beads-task-tracking) for setup and sync.
+CodeGraph/CodeIndexer provide search, callers, tests, and semantic/history context;
 they are not a second required task tracker. Existing card/phase IDs are lookup references,
 not a requirement to create phase branches, duplicate cards, or synchronize two lifecycles.
 
 Keep one owner per durable fact and link to it. Update that owner when a change makes it false.
-Keep progress, investigation logs, and test-run evidence in the issue/PR. Proposed designs
+Keep progress, investigation logs, and test-run evidence in Beads/the PR. Proposed designs
 remain proposals until an accepted, bounded change implements them.
 
 ## Work routes
