@@ -91,8 +91,9 @@ def test_vulture_excludes_archive() -> None:
 # ---------------------------------------------------------------------------
 
 REQUIRED_CONTRACT_NAMES = {
-    "Core must not import telegram_bot",
-    "Runtime must not import telegram_bot",
+    "src must not import telegram_bot",
+    "Services and adapters must not import runtime",
+    "Ingestion must not import runtime except Qdrant contracts",
     "Core contracts layer is import-independent",
     "src must not import archive",
 }
@@ -111,7 +112,7 @@ def test_importlinter_root_packages() -> None:
 
 
 def test_importlinter_contracts_present() -> None:
-    """All four architecture contracts must be declared."""
+    """All native architecture contracts must be declared."""
     contracts = _data()["tool"]["importlinter"].get("contracts", [])
     names = {c.get("name") for c in contracts}
     missing = REQUIRED_CONTRACT_NAMES - names

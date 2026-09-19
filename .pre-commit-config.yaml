@@ -52,9 +52,16 @@ repos:
           tests/regression/
           tests/characterization/
           tests/contract/test_runtime_no_telegram_bot_coupling_contract.py
-          tests/contract/test_layering_no_telegram_bot_imports_contract.py
           --ignore=tests/unit/core/test_pipeline.py
           -q --timeout=30 -m "not requires_extras and not slow"
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: import-linter
+        name: Import-linter architecture gate
+        entry: uv run --no-sync lint-imports
         language: system
         pass_filenames: false
         always_run: true

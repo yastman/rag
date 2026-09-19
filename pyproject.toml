@@ -317,8 +317,8 @@ disallow_untyped_defs = true
 # Contracts encode the key layering invariants documented in
 # docs/designs/adr-2855-module-collapse.md. Run with: uv run lint-imports
 #
-# Layer model (strict, inner cannot import outer):
-#   src/core  →  src/runtime  →  telegram_bot
+# Layer model (strict, shared implementation cannot import transport):
+#   src  →  telegram_bot
 # The archived surfaces (archive/, services/) must never be imported by src/.
 
 [tool.importlinter]
@@ -326,21 +326,35 @@ root_packages = ["src", "telegram_bot"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Core must not import telegram_bot"
+name = "src must not import telegram_bot"
 type = "forbidden"
-source_modules = ["src.core"]
+source_modules = ["src"]
 forbidden_modules = ["telegram_bot"]
 
 [[tool.importlinter.contracts]]
-# src.core.assistant is the documented public entrypoint: it orchestrates
-# src.runtime.pipeline by design (see README "Assistant core entrypoint").
-# src.core.contracts and src.core.telemetry are shared contracts consumed by
-# both core and runtime — bidirectional coupling is intentional.
-# The real invariant to guard is that runtime must not import telegram_bot.
-name = "Runtime must not import telegram_bot"
+# Services and adapters sit below runtime orchestration. The retired AST
+# architecture contract guarded the same direction.
+name = "Services and adapters must not import runtime"
 type = "forbidden"
-source_modules = ["src.runtime"]
-forbidden_modules = ["telegram_bot"]
+source_modules = ["src.services", "src.adapters"]
+forbidden_modules = ["src.runtime"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+# Ingestion is parallel to runtime. These five direct imports share only the
+# pure Qdrant schema authority; all other runtime coupling remains forbidden.
+name = "Ingestion must not import runtime except Qdrant contracts"
+type = "forbidden"
+source_modules = ["src.ingestion"]
+forbidden_modules = ["src.runtime"]
+allow_indirect_imports = true
+ignore_imports = [
+    "src.ingestion.apartments.flow -> src.runtime.qdrant.contracts",
+    "src.ingestion.apartments.runner -> src.runtime.qdrant.contracts",
+    "src.ingestion.unified.commands -> src.runtime.qdrant.contracts",
+    "src.ingestion.unified.flow -> src.runtime.qdrant.contracts",
+    "src.ingestion.unified.qdrant_writer -> src.runtime.qdrant.contracts",
+]
 
 [[tool.importlinter.contracts]]
 name = "Core contracts layer is import-independent"

@@ -4,9 +4,8 @@ The #2949 structure ratchets (module-exists import check, per-constant
 export/type checks, compatibility import-location asserts) were replaced by
 one behavior table that probes each constant the way its consumers use it,
 plus the live filter-signal detection test. Consumer-side compat is owned by
-test_assistant_pipeline.py (CHITCHAT_RESPONSES) and
-tests/contract/test_bot_no_private_runtime_internals_contract.py
-(BLOCKED_RESPONSE via rag_core).
+test_assistant_pipeline.py (CHITCHAT_RESPONSES); the public BLOCKED_RESPONSE
+path is exercised by tests/contract/test_core_guard_contract.py.
 """
 
 from __future__ import annotations

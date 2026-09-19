@@ -11,6 +11,8 @@ import importlib
 import logging
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 
 # =============================================================================
 # Import isolation — must pass BEFORE the module is imported by other tests.
@@ -141,6 +143,13 @@ class TestAssistantRequest:
 
         assert FromCore is FromContracts
         assert FromAssistant is FromContracts
+
+    def test_public_request_rejects_per_request_collection(self) -> None:
+        """Collection authority belongs to injected dependencies, never a request."""
+        from src.core import AssistantRequest
+
+        with pytest.raises(TypeError, match="collection"):
+            AssistantRequest(query="q", collection="tenant-b")  # type: ignore[call-arg]
 
 
 # =============================================================================
@@ -372,6 +381,13 @@ class TestRunAssistantRequest:
         result = await run_assistant_request("q", user_context=ctx)
 
         assert isinstance(result.response_text, str)
+
+    async def test_public_request_rejects_per_request_collection(self) -> None:
+        """The public entrypoint cannot select a corpus per request."""
+        from src.core.assistant import run_assistant_request
+
+        with pytest.raises(TypeError, match="collection"):
+            await run_assistant_request("q", collection="tenant-b")  # type: ignore[call-arg]
 
 
 # =============================================================================
