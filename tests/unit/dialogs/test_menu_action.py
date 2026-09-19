@@ -8,13 +8,17 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+from telegram_bot.handlers import bot_handoff as handoff_handlers
+from telegram_bot.handlers import catalog as catalog_handlers
+from telegram_bot.handlers import favorites as favorite_handlers
 
-async def test_on_menu_action_services_closes_dialog_and_calls_handler():
+
+async def test_on_menu_action_services_closes_dialog_and_calls_handler(monkeypatch):
     """Legacy non-dialog buttons should close the root dialog and call existing handlers."""
     from telegram_bot.dialogs.client_menu import on_menu_action
 
     mock_bot = AsyncMock()
-    mock_bot._handle_services = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_handle_services", AsyncMock())
 
     callback = MagicMock()
     callback.from_user = None
@@ -29,15 +33,17 @@ async def test_on_menu_action_services_closes_dialog_and_calls_handler():
     await on_menu_action(callback, button, manager)
 
     manager.done.assert_called_once()
-    mock_bot._handle_services.assert_awaited_once_with(callback.message, i18n="i18n-stub")
+    catalog_handlers._handle_services.assert_awaited_once_with(
+        mock_bot, callback.message, i18n="i18n-stub"
+    )
 
 
-async def test_on_menu_action_bookmarks_rebinds_from_user_to_callback_actor():
+async def test_on_menu_action_bookmarks_rebinds_from_user_to_callback_actor(monkeypatch):
     """Bookmark handler must receive the clicking user, not the bot-authored message actor."""
     from telegram_bot.dialogs.client_menu import on_menu_action
 
     mock_bot = AsyncMock()
-    mock_bot._handle_bookmarks = AsyncMock()
+    monkeypatch.setattr(favorite_handlers, "_handle_bookmarks", AsyncMock())
 
     callback = MagicMock()
     callback.from_user = MagicMock(id=777)
@@ -52,9 +58,9 @@ async def test_on_menu_action_bookmarks_rebinds_from_user_to_callback_actor():
 
     await on_menu_action(callback, button, manager)
 
-    passed_message = mock_bot._handle_bookmarks.await_args.args[0]
+    passed_message = favorite_handlers._handle_bookmarks.await_args.args[1]
     assert passed_message.from_user is callback.from_user
-    assert mock_bot._handle_bookmarks.await_args.args[1] == "state-stub"
+    assert favorite_handlers._handle_bookmarks.await_args.args[2] == "state-stub"
 
 
 async def test_on_menu_action_no_bot_silently_skips():
@@ -76,12 +82,12 @@ async def test_on_menu_action_no_bot_silently_skips():
     manager.done.assert_not_called()
 
 
-async def test_on_menu_action_manager_reuses_dialog_manager():
+async def test_on_menu_action_manager_reuses_dialog_manager(monkeypatch):
     """Manager button should keep SDK ownership and start the manager flow via dialog_manager."""
     from telegram_bot.dialogs.client_menu import on_menu_action
 
     mock_bot = AsyncMock()
-    mock_bot._handle_manager = AsyncMock()
+    monkeypatch.setattr(handoff_handlers, "_handle_manager", AsyncMock())
 
     callback = MagicMock()
     callback.from_user = None
@@ -100,7 +106,8 @@ async def test_on_menu_action_manager_reuses_dialog_manager():
     await on_menu_action(callback, button, manager)
 
     manager.done.assert_not_called()
-    mock_bot._handle_manager.assert_awaited_once_with(
+    handoff_handlers._handle_manager.assert_awaited_once_with(
+        mock_bot,
         callback.message,
         i18n="i18n-stub",
         state="state-stub",
@@ -108,12 +115,12 @@ async def test_on_menu_action_manager_reuses_dialog_manager():
     )
 
 
-async def test_on_menu_action_manager_rebinds_from_user_to_callback_actor():
+async def test_on_menu_action_manager_rebinds_from_user_to_callback_actor(monkeypatch):
     """Manager handler fallback paths rely on the real clicking user in message.from_user."""
     from telegram_bot.dialogs.client_menu import on_menu_action
 
     mock_bot = AsyncMock()
-    mock_bot._handle_manager = AsyncMock()
+    monkeypatch.setattr(handoff_handlers, "_handle_manager", AsyncMock())
 
     callback = MagicMock()
     callback.from_user = MagicMock(id=888)
@@ -131,6 +138,5 @@ async def test_on_menu_action_manager_rebinds_from_user_to_callback_actor():
 
     await on_menu_action(callback, button, manager)
 
-    passed_message = mock_bot._handle_manager.await_args.args[0]
+    passed_message = handoff_handlers._handle_manager.await_args.args[1]
     assert passed_message.from_user is callback.from_user
-

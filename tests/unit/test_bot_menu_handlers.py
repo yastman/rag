@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.handlers import bot_handoff as handoff_handlers
+
 
 @pytest.mark.asyncio()
 async def test_handle_manager_no_forum_bridge_starts_phone_collection():
@@ -22,7 +24,7 @@ async def test_handle_manager_no_forum_bridge_starts_phone_collection():
 
     with patch("telegram_bot.handlers.phone_collector.start_phone_collection") as mock_phone:
         mock_phone.return_value = None
-        await bot._handle_manager(message, state=state)
+        await handoff_handlers._handle_manager(bot, message, state=state)
 
     mock_phone.assert_awaited_once()
     call_kwargs = mock_phone.call_args

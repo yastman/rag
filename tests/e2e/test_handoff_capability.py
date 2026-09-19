@@ -84,6 +84,7 @@ from pydantic import ValidationError
 
 from src.runtime.integrations.cache import CacheLayerManager
 from src.runtime.integrations.redis_mode import RedisCapability, RedisMode
+from telegram_bot.lifecycle import lifecycle as bot_lifecycle
 from tests.e2e_core.live_harness import guard_service_skip
 from tests.unit._bot_config_factory import make_full_bot_config
 from tests.unit._property_bot_factory import make_property_bot
@@ -562,9 +563,9 @@ async def _build_handoff_bot(live_redis: LiveRedis) -> Any:
     # ForumBridge, so the production bridge owns this transport.
     bot.bot = Bot(token=_BOT_TOKEN, session=RecordingTelegramSession())
     # The exact production lifecycle steps that wire the durable stack.
-    bot._setup_handoff_services()
-    bot._setup_workflow_data()
-    bot._setup_dialogs()
+    bot_lifecycle.setup_handoff_services(bot)
+    bot_lifecycle.setup_workflow_data(bot)
+    bot_lifecycle.setup_dialogs(bot)
     assert bot._handoff_state is not None, "production lifecycle must wire the handoff state"
     assert bot._forum_bridge is not None, "managers group must wire the forum bridge"
     assert bot.forum_handoff_available, "single-instance capability must be enabled"
@@ -595,8 +596,8 @@ async def _assemble_capability_bot(live_redis: LiveRedis | None, *, mode: RedisM
         service_overrides={"cache": cache, "apartments_service": None},
     )
     bot.bot = Bot(token=_BOT_TOKEN, session=RecordingTelegramSession())
-    bot._setup_handoff_services()
-    bot._setup_workflow_data()
+    bot_lifecycle.setup_handoff_services(bot)
+    bot_lifecycle.setup_workflow_data(bot)
     return bot
 
 
@@ -624,7 +625,7 @@ async def test_disabled_mode_blocks_handoff_config_and_falls_back_to_phone_sink(
         # Honest degraded wiring (#3354): no client, no durable substitutes.
         assert bot._cache.capability == RedisCapability.DISABLED
         assert bot._cache.redis is None
-        bot._setup_handoff_services()
+        bot_lifecycle.setup_handoff_services(bot)
         assert bot._handoff_state is None, "disabled mode must not build handoff state"
         assert bot._forum_bridge is None, "disabled mode must not build the forum bridge"
         assert bot._lead_sink is None
@@ -667,7 +668,7 @@ async def test_multi_instance_mode_keeps_durable_handoff_capability(
     try:
         assert bot._cache.capability == RedisCapability.ENABLED
         assert bot._cache.redis is not None
-        bot._setup_handoff_services()
+        bot_lifecycle.setup_handoff_services(bot)
         assert bot._handoff_state is not None, "multi mode requires the shared handoff state"
         assert bot._forum_bridge is not None
         assert bot.forum_handoff_available is True

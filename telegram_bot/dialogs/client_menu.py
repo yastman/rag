@@ -12,6 +12,10 @@ from aiogram_dialog.widgets.kbd import Button, Group, Start
 from aiogram_dialog.widgets.text import Format
 
 from src.services.content_loader import load_services_config
+from telegram_bot.handlers import bot_handoff as handoff_handlers
+from telegram_bot.handlers import catalog as catalog_handlers
+from telegram_bot.handlers import demo_handler as demo_handler
+from telegram_bot.handlers import favorites as favorite_handlers
 
 from .states import ClientMenuSG, FunnelSG, ViewingSG
 
@@ -111,28 +115,22 @@ async def on_menu_action(
         if action_id in _DIRECT_ACTIONS:
             await manager.done()
             if action_id == "services":
-                await bot_instance._handle_services(actor_message, i18n=i18n)
+                await catalog_handlers._handle_services(bot_instance, actor_message, i18n=i18n)
             elif action_id == "ask":
                 # Ask owns its free-text step by exiting any active flow
                 # first (#3204); done() above already closed the root dialog.
-                await bot_instance._handle_ask(
-                    actor_message,
-                    i18n=i18n,
-                    state=state,
-                    dialog_manager=manager,
+                await catalog_handlers._handle_ask(
+                    bot_instance, actor_message, i18n=i18n, state=state, dialog_manager=manager
                 )
             elif action_id == "bookmarks":
-                await bot_instance._handle_bookmarks(actor_message, state)
+                await favorite_handlers._handle_bookmarks(bot_instance, actor_message, state)
             elif action_id == "demo":
-                await bot_instance._handle_demo(actor_message)
+                await demo_handler.handle_demo_button(actor_message)
             return
 
         if action_id == "manager":
-            await bot_instance._handle_manager(
-                actor_message,
-                i18n=i18n,
-                state=state,
-                dialog_manager=manager,
+            await handoff_handlers._handle_manager(
+                bot_instance, actor_message, i18n=i18n, state=state, dialog_manager=manager
             )
     except Exception:
         logger.exception("client_menu action failed for widget_id=%s", button.widget_id)

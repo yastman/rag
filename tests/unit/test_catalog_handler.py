@@ -7,6 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.handlers import bot_handoff as handoff_handlers
+from telegram_bot.handlers import catalog as catalog_handlers
+from telegram_bot.handlers import favorites as favorite_handlers
+
 
 def _make_state(data: dict) -> MagicMock:
     state = MagicMock()
@@ -43,7 +47,10 @@ def test_results_callback_route_is_compat_only_not_primary_catalog_owner() -> No
     bot_pkg = Path("telegram_bot")
     source = (
         "\n".join(p.read_text(encoding="utf-8") for p in bot_pkg.glob("bot.py"))
-        + "\n".join(p.read_text(encoding="utf-8") for p in bot_pkg.glob("_bot_*.py"))
+        + "\n".join(
+            p.read_text(encoding="utf-8")
+            for p in (bot_pkg / "handlers").glob("results_callbacks.py")
+        )
         + "\n".join(
             p.read_text(encoding="utf-8") for p in (bot_pkg / "dialogs" / "catalog").glob("*.py")
         )
@@ -94,7 +101,7 @@ async def test_catalog_more_loads_next_page_and_updates_runtime() -> None:
 
 
 @pytest.mark.asyncio
-async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
+async def test_catalog_more_uses_callback_user_id_for_cards(monkeypatch) -> None:
     from telegram_bot.dialogs.catalog import on_catalog_more
 
     state = _make_state(
@@ -113,7 +120,7 @@ async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
     svc.scroll_with_filters = AsyncMock(return_value=([{"id": "apt-2"}], 1, None, ["apt-2"]))
     property_bot = MagicMock()
     property_bot._apartments_service = svc
-    property_bot._send_property_card = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
     manager = AsyncMock()
     manager.middleware_data = {"state": state, "property_bot": property_bot}
     callback = _make_callback()
@@ -121,8 +128,8 @@ async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
 
     await on_catalog_more(callback, MagicMock(), manager)
 
-    property_bot._send_property_card.assert_awaited_once_with(
-        callback.message, {"id": "apt-2"}, 123
+    catalog_handlers._send_property_card.assert_awaited_once_with(
+        property_bot, callback.message, {"id": "apt-2"}, 123
     )
 
 
@@ -150,51 +157,51 @@ async def test_catalog_filters_starts_filter_dialog() -> None:
 
 
 @pytest.mark.asyncio
-async def test_catalog_bookmarks_delegates_to_property_bot() -> None:
+async def test_catalog_bookmarks_delegates_to_property_bot(monkeypatch) -> None:
     from telegram_bot.dialogs.catalog import on_catalog_bookmarks
 
     state = _make_state({})
     property_bot = MagicMock()
-    property_bot._handle_bookmarks = AsyncMock()
+    monkeypatch.setattr(favorite_handlers, "_handle_bookmarks", AsyncMock())
     manager = AsyncMock()
     manager.middleware_data = {"state": state, "property_bot": property_bot}
     callback = _make_callback()
 
     await on_catalog_bookmarks(callback, MagicMock(), manager)
 
-    property_bot._handle_bookmarks.assert_awaited_once()
+    favorite_handlers._handle_bookmarks.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_catalog_viewing_delegates_to_existing_handler() -> None:
+async def test_catalog_viewing_delegates_to_existing_handler(monkeypatch) -> None:
     from telegram_bot.dialogs.catalog import on_catalog_viewing
 
     state = _make_state({})
     property_bot = MagicMock()
-    property_bot._handle_viewing = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_handle_viewing", AsyncMock())
     manager = AsyncMock()
     manager.middleware_data = {"state": state, "property_bot": property_bot}
     callback = _make_callback()
 
     await on_catalog_viewing(callback, MagicMock(), manager)
 
-    property_bot._handle_viewing.assert_awaited_once()
+    catalog_handlers._handle_viewing.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_catalog_manager_delegates_to_existing_handler() -> None:
+async def test_catalog_manager_delegates_to_existing_handler(monkeypatch) -> None:
     from telegram_bot.dialogs.catalog import on_catalog_manager
 
     state = _make_state({})
     property_bot = MagicMock()
-    property_bot._handle_manager = AsyncMock()
+    monkeypatch.setattr(handoff_handlers, "_handle_manager", AsyncMock())
     manager = AsyncMock()
     manager.middleware_data = {"state": state, "property_bot": property_bot, "i18n": None}
     callback = _make_callback()
 
     await on_catalog_manager(callback, MagicMock(), manager)
 
-    property_bot._handle_manager.assert_awaited_once()
+    handoff_handlers._handle_manager.assert_awaited_once()
 
 
 @pytest.mark.asyncio

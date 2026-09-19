@@ -34,16 +34,15 @@ Owned helpers (verbatim, byte-for-byte semantics with the pre-extract
   - :func:`start_bot` — full startup sequence.
   - :func:`stop_bot` — graceful teardown.
 
-The class methods on ``PropertyBot`` (``_warmup_bge``,
-``_polling_lock_heartbeat_tick``, ``_setup_*``, ``start``, ``stop``)
-become thin delegates: they exist so existing call sites and tests keep
-working without touching their signatures.
+``PropertyBot.start`` and ``stop`` retain the application entrypoint API.
+Internal callers invoke the canonical lifecycle helpers directly.
 """
 
 from __future__ import annotations
 
 import contextlib
 import logging
+from functools import partial
 from typing import TYPE_CHECKING, Any, Protocol
 
 
@@ -70,9 +69,7 @@ __all__ = (
 
 
 # Maximum consecutive Redis polling-lock heartbeat failures tolerated before we
-# stop polling. Mirrors ``telegram_bot.bot._POLLING_LOCK_MAX_REFRESH_FAILURES``;
-# kept here so the helper is self-contained and the contract test does not
-# have to reach back into ``bot.py`` for a constant.
+# stop polling. The heartbeat interval is ttl/3, so a third miss risks expiry.
 POLLING_LOCK_MAX_REFRESH_FAILURES = 2
 
 
@@ -212,6 +209,7 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
     them and UI surfaces hide the bookmarks entry points.
     """
     from telegram_bot.capabilities import set_bookmarks_ready
+    from telegram_bot.lifecycle import postgres_bootstrap
     from telegram_bot.startup_status import StartupSeverity, StartupSignal
 
     log = logging.getLogger(__name__)
@@ -245,11 +243,13 @@ async def setup_postgres(bot: Any, preflight_result: Any, startup_report: Any) -
         try:
             test_conn = await asyncpg.connect(bot.config.realestate_database_url, timeout=5)
         except asyncpg.InvalidCatalogNameError:
-            target_db = bot._extract_database_name(bot.config.realestate_database_url)
+            target_db = postgres_bootstrap.extract_database_name(bot.config.realestate_database_url)
             if target_db is None:
                 raise
             log.warning("PostgreSQL database %s missing; attempting auto-create", target_db)
-            if not await bot._ensure_postgres_database_exists(asyncpg, target_db):
+            if not await postgres_bootstrap.ensure_postgres_database_exists(
+                asyncpg, bot.config.realestate_database_url, target_db
+            ):
                 raise
             test_conn = await asyncpg.connect(bot.config.realestate_database_url, timeout=5)
         finally:
@@ -462,12 +462,14 @@ def setup_dialogs(bot: Any) -> None:
     bot.dp.include_router(handoff_dialog)
 
     # Catch-all text handler — AFTER dialog routers (first-match wins).
+    from telegram_bot.pipeline.supervisor import handle_query
+
     bot._catch_all_router = _Router(name="catch_all_query")
     bot._catch_all_router.message(
         StateFilter(None),
         F.text,
         flags={"rate_limit": {"rate": 2.0, "key": "query"}},
-    )(bot.handle_query)
+    )(partial(handle_query, bot))
     bot.dp.include_router(bot._catch_all_router)
 
     aiogram_setup_dialogs(bot.dp)
@@ -549,7 +551,11 @@ async def setup_polling_lock(bot: Any) -> None:
         while True:
             await asyncio.sleep(refresh_interval)
             try:
-                await bot._polling_lock_heartbeat_tick()
+                await polling_lock_heartbeat_tick(
+                    bot,
+                    log=logging.getLogger("telegram_bot.bot"),
+                    max_refresh_failures=POLLING_LOCK_MAX_REFRESH_FAILURES,
+                )
             except Exception:
                 log.exception("Polling lock heartbeat loop error")
 

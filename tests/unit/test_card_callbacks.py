@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.handlers import catalog as catalog_handlers
 from tests.unit._bot_config_factory import make_full_bot_config as _make_config
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -62,7 +63,7 @@ async def test_card_viewing_starts_phone_collection() -> None:
 
     _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
     with patch(_patch, new_callable=AsyncMock) as mock_spc:
-        await bot.handle_card_callback(callback, state)
+        await catalog_handlers.handle_card_callback(bot, callback, state)
 
         mock_spc.assert_awaited_once()
         call_kwargs = mock_spc.call_args.kwargs
@@ -78,7 +79,7 @@ async def test_card_ask_starts_phone_collection_manager_question() -> None:
 
     _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
     with patch(_patch, new_callable=AsyncMock) as mock_spc:
-        await bot.handle_card_callback(callback, state)
+        await catalog_handlers.handle_card_callback(bot, callback, state)
 
         mock_spc.assert_awaited_once()
         call_kwargs = mock_spc.call_args.kwargs
@@ -94,7 +95,7 @@ async def test_card_callback_no_results_in_state() -> None:
 
     _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
     with patch(_patch, new_callable=AsyncMock) as mock_spc:
-        await bot.handle_card_callback(callback, state)
+        await catalog_handlers.handle_card_callback(bot, callback, state)
 
         call_kwargs = mock_spc.call_args.kwargs
         vo = call_kwargs.get("viewing_objects")
@@ -123,7 +124,7 @@ async def test_card_callback_fallbacks_to_favorites_when_state_missing() -> None
 
     _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
     with patch(_patch, new_callable=AsyncMock) as mock_spc:
-        await bot.handle_card_callback(callback, state)
+        await catalog_handlers.handle_card_callback(bot, callback, state)
 
         call_kwargs = mock_spc.call_args.kwargs
         assert call_kwargs["service_key"] == "viewing"
@@ -139,7 +140,7 @@ async def test_card_callback_uses_catalog_runtime_results() -> None:
 
     _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
     with patch(_patch, new_callable=AsyncMock) as mock_spc:
-        await bot.handle_card_callback(callback, state)
+        await catalog_handlers.handle_card_callback(bot, callback, state)
 
         call_kwargs = mock_spc.call_args.kwargs
         assert call_kwargs["viewing_objects"][0]["id"] == "prop-42"
@@ -153,7 +154,7 @@ async def test_card_callback_unknown_action_answers_empty() -> None:
 
     _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
     with patch(_patch, new_callable=AsyncMock) as mock_spc:
-        await bot.handle_card_callback(callback, state)
+        await catalog_handlers.handle_card_callback(bot, callback, state)
 
         mock_spc.assert_not_awaited()
         callback.answer.assert_awaited()
@@ -165,7 +166,7 @@ async def test_card_callback_malformed_data_answers_empty() -> None:
     state = _make_state({})
     callback = _make_callback("card")
 
-    await bot.handle_card_callback(callback, state)
+    await catalog_handlers.handle_card_callback(bot, callback, state)
 
     callback.answer.assert_awaited()
 
@@ -180,7 +181,7 @@ async def test_card_viewing_starts_dialog_with_edit_mode() -> None:
     callback = _make_callback("card:viewing:prop-42")
     dialog_manager = AsyncMock()
 
-    await bot.handle_card_callback(callback, state, dialog_manager=dialog_manager)
+    await catalog_handlers.handle_card_callback(bot, callback, state, dialog_manager=dialog_manager)
 
     dialog_manager.start.assert_awaited_once()
     call_kwargs = dialog_manager.start.call_args.kwargs
@@ -201,6 +202,6 @@ async def test_card_viewing_deletes_catalog_control_message_when_runtime_present
     callback = _make_callback("card:viewing:prop-42")
     dialog_manager = AsyncMock()
 
-    await bot.handle_card_callback(callback, state, dialog_manager=dialog_manager)
+    await catalog_handlers.handle_card_callback(bot, callback, state, dialog_manager=dialog_manager)
 
     callback.bot.delete_message.assert_awaited_once_with(456, 777)

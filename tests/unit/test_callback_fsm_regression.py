@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.handlers import catalog as catalog_handlers
+from telegram_bot.handlers import favorites as favorite_handlers
 from tests.unit._bot_config_factory import make_full_bot_config as _make_config
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -87,39 +89,39 @@ def _fav_bot(favorites: list | None = None):
 class TestLegacyResultsCompat:
     """Legacy results buttons should only show stale compatibility guidance."""
 
-    async def test_results_more_is_stale_when_results_exist(self) -> None:
+    async def test_results_more_is_stale_when_results_exist(self, monkeypatch) -> None:
         bot = make_property_bot(_make_config())
-        bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         state = _make_state({"apartment_results": _make_results(12), "apartment_offset": 0})
         cb = _make_callback("results:more")
 
-        await bot.handle_results_callback(cb, state)
+        await catalog_handlers.handle_results_callback(bot, cb, state)
 
         cb.message.answer.assert_awaited_once_with(
             "Это устаревшая кнопка. Используйте актуальное меню ниже."
         )
         state.update_data.assert_not_awaited()
-        bot._send_property_card.assert_not_awaited()
+        catalog_handlers._send_property_card.assert_not_awaited()
 
-    async def test_results_more_is_stale_at_end_of_legacy_state(self) -> None:
+    async def test_results_more_is_stale_at_end_of_legacy_state(self, monkeypatch) -> None:
         bot = make_property_bot(_make_config())
-        bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         state = _make_state({"apartment_results": _make_results(12), "apartment_offset": 10})
         cb = _make_callback("results:more")
 
-        await bot.handle_results_callback(cb, state)
+        await catalog_handlers.handle_results_callback(bot, cb, state)
 
         cb.message.answer.assert_awaited_once_with(
             "Это устаревшая кнопка. Используйте актуальное меню ниже."
         )
-        bot._send_property_card.assert_not_awaited()
+        catalog_handlers._send_property_card.assert_not_awaited()
 
     async def test_results_more_is_stale_without_results(self) -> None:
         bot = make_property_bot(_make_config())
         state = _make_state({"apartment_results": None, "apartment_offset": 0})
         cb = _make_callback("results:more")
 
-        await bot.handle_results_callback(cb, state)
+        await catalog_handlers.handle_results_callback(bot, cb, state)
 
         cb.message.answer.assert_awaited_once_with(
             "Это устаревшая кнопка. Используйте актуальное меню ниже."
@@ -142,7 +144,7 @@ class TestRefineStaleButton:
         cb = _make_callback("fav:add:prop-0")
 
         # Should not raise
-        await bot.handle_favorite_callback(cb, state)
+        await favorite_handlers.handle_favorite_callback(bot, cb, state)
 
         call_kwargs = bot._favorites_service.add.call_args.kwargs
         assert call_kwargs["property_data"] == {}
@@ -166,7 +168,9 @@ class TestViewingDialog:
         cb = _make_callback("results:viewing")
         dialog_manager = AsyncMock()
 
-        await bot.handle_results_callback(cb, state, dialog_manager=dialog_manager)
+        await catalog_handlers.handle_results_callback(
+            bot, cb, state, dialog_manager=dialog_manager
+        )
 
         dialog_manager.start.assert_not_awaited()
         cb.message.answer.assert_awaited_once_with(
@@ -183,7 +187,7 @@ class TestViewingDialog:
             "telegram_bot.handlers.phone_collector.start_phone_collection",
             new=AsyncMock(),
         ) as mock_collect:
-            await bot.handle_results_callback(cb, state)
+            await catalog_handlers.handle_results_callback(bot, cb, state)
 
         mock_collect.assert_not_awaited()
         cb.message.answer.assert_awaited_once_with(
@@ -198,7 +202,9 @@ class TestViewingDialog:
         cb = _make_callback("fav:viewing:prop-42")
         dialog_manager = AsyncMock()
 
-        await bot.handle_favorite_callback(cb, state, dialog_manager=dialog_manager)
+        await favorite_handlers.handle_favorite_callback(
+            bot, cb, state, dialog_manager=dialog_manager
+        )
 
         dialog_manager.start.assert_awaited_once()
         from telegram_bot.dialogs.states import ViewingSG
@@ -223,7 +229,9 @@ class TestViewingDialog:
         cb = _make_callback("fav:viewing_all")
         dialog_manager = AsyncMock()
 
-        await bot.handle_favorite_callback(cb, state, dialog_manager=dialog_manager)
+        await favorite_handlers.handle_favorite_callback(
+            bot, cb, state, dialog_manager=dialog_manager
+        )
 
         dialog_manager.start.assert_awaited_once()
         from telegram_bot.dialogs.states import ViewingSG
@@ -255,7 +263,7 @@ class TestMalformedStateFavAdd:
         state = _make_state({"apartment_results": bad_results})
         cb = _make_callback("fav:add:prop-0")
 
-        await bot.handle_favorite_callback(cb, state)
+        await favorite_handlers.handle_favorite_callback(bot, cb, state)
 
         call_kwargs = bot._favorites_service.add.call_args.kwargs
         assert call_kwargs["property_data"] == {}
@@ -279,7 +287,7 @@ class TestMalformedStateFavAdd:
         state = _make_state({"apartment_results": mixed})
         cb = _make_callback("fav:add:prop-0")
 
-        await bot.handle_favorite_callback(cb, state)
+        await favorite_handlers.handle_favorite_callback(bot, cb, state)
 
         call_kwargs = bot._favorites_service.add.call_args.kwargs
         assert call_kwargs["property_data"]["complex_name"] == "Tower A"
@@ -292,7 +300,7 @@ class TestMalformedStateFavAdd:
         state = _make_state({"apartment_results": [result_no_payload]})
         cb = _make_callback("fav:add:prop-0")
 
-        await bot.handle_favorite_callback(cb, state)
+        await favorite_handlers.handle_favorite_callback(bot, cb, state)
 
         call_kwargs = bot._favorites_service.add.call_args.kwargs
         assert call_kwargs["property_data"] == {}
@@ -309,7 +317,7 @@ class TestMalformedStateFavAdd:
         state = _make_state({"apartment_results": [result]})
         cb = _make_callback("fav:add:prop-0")
 
-        await bot.handle_favorite_callback(cb, state)
+        await favorite_handlers.handle_favorite_callback(bot, cb, state)
 
         call_kwargs = bot._favorites_service.add.call_args.kwargs
         assert call_kwargs["property_data"] == {}
@@ -326,39 +334,40 @@ class TestFooterContract:
     @pytest.mark.parametrize("total,offset", [(12, 0), (12, 5), (10, 0), (6, 0), (7, 0)])
     async def test_results_more_always_returns_stale_guidance(
         self,
+        monkeypatch,
         total: int,
         offset: int,
     ) -> None:
         bot = make_property_bot(_make_config())
-        bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         results = _make_results(total)
         state = _make_state({"apartment_results": results, "apartment_offset": offset})
         cb = _make_callback("results:more")
 
-        await bot.handle_results_callback(cb, state)
+        await catalog_handlers.handle_results_callback(bot, cb, state)
 
         cb.message.answer.assert_awaited_once_with(
             "Это устаревшая кнопка. Используйте актуальное меню ниже."
         )
-        bot._send_property_card.assert_not_awaited()
+        catalog_handlers._send_property_card.assert_not_awaited()
 
-    async def test_results_more_does_not_emit_partial_page_cards(self) -> None:
+    async def test_results_more_does_not_emit_partial_page_cards(self, monkeypatch) -> None:
         bot = make_property_bot(_make_config())
-        bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         state = _make_state({"apartment_results": _make_results(7), "apartment_offset": 0})
         cb = _make_callback("results:more")
 
-        await bot.handle_results_callback(cb, state)
+        await catalog_handlers.handle_results_callback(bot, cb, state)
 
-        assert bot._send_property_card.await_args_list == []
+        assert catalog_handlers._send_property_card.await_args_list == []
 
-    async def test_single_result_legacy_button_uses_stale_guidance(self) -> None:
+    async def test_single_result_legacy_button_uses_stale_guidance(self, monkeypatch) -> None:
         bot = make_property_bot(_make_config())
-        bot._send_property_card = AsyncMock()
+        monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
         state = _make_state({"apartment_results": _make_results(1), "apartment_offset": 0})
         cb = _make_callback("results:more")
 
-        await bot.handle_results_callback(cb, state)
+        await catalog_handlers.handle_results_callback(bot, cb, state)
 
         cb.message.answer.assert_awaited_once_with(
             "Это устаревшая кнопка. Используйте актуальное меню ниже."

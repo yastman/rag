@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import telegram_bot.dialogs.funnel as funnel_module
 from telegram_bot.dialogs.states import FunnelSG
+from telegram_bot.handlers import catalog as catalog_handlers
 
 
 async def test_summary_search_stores_filters_in_fsm(monkeypatch):
@@ -35,7 +36,7 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
         )
     )
     mock_bot = MagicMock()
-    mock_bot._send_property_card = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
     mock_bot._apartments_service = mock_svc
 
     state_mock = MagicMock()

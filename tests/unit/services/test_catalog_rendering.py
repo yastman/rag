@@ -6,13 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.handlers import catalog as catalog_handlers
 from telegram_bot.services.apartment.catalog_rendering import send_catalog_results
 
 
 @pytest.mark.asyncio
-async def test_send_catalog_results_cards_uses_property_card_sender() -> None:
+async def test_send_catalog_results_cards_uses_property_card_sender(monkeypatch) -> None:
     property_bot = MagicMock()
-    property_bot._send_property_card = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
     message = MagicMock()
     message.answer = AsyncMock()
 
@@ -26,7 +27,7 @@ async def test_send_catalog_results_cards_uses_property_card_sender() -> None:
         telegram_id=42,
     )
 
-    assert property_bot._send_property_card.await_count == 2
+    assert catalog_handlers._send_property_card.await_count == 2
     message.answer.assert_not_awaited()
 
 

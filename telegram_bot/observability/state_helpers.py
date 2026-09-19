@@ -1,22 +1,6 @@
-"""State-shape helper functions extracted from ``telegram_bot/bot.py`` (#1265).
+"""Read apartment payloads and control-message IDs from catalog state.
 
-Slice 1 PR-1 of the bot.py decomposition plan. These three helpers are pure
-read-only accessors over the per-thread state dict that ``PropertyBot``
-keeps in the LangGraph checkpointer:
-
-* :func:`_state_apartment_results` — read cached apartment payloads from
-  legacy or dialog-owned state shapes.
-* :func:`_state_control_message_id` — locate the catalog control message id
-  used to update inline keyboards in place.
-* :func:`_extract_current_turn` — slice agent checkpointer history down to
-  the messages that belong to the current user turn.
-
-``telegram_bot/bot.py`` retains pass-through wrappers for these helpers.
-Direct behavior tests live in ``tests/unit/test_bot_state_helpers.py`` and
-``tests/unit/test_bot_scores.py`` and import this module.
-
-The module has no aiogram / fastapi / langgraph imports, which keeps it
-cheap to import and easy to unit-test in isolation.
+Direct behavior tests live in ``tests/unit/test_bot_state_helpers.py``.
 """
 
 from __future__ import annotations
@@ -52,24 +36,7 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
     return None
 
 
-def _extract_current_turn(messages: list[Any]) -> list[Any]:
-    """Extract current-turn messages from full checkpointer history (#507).
-
-    Agent checkpointer returns full conversation history across turns.
-    For per-turn scoring we only need messages after the last HumanMessage.
-    """
-    last_human_idx = -1
-    for i in range(len(messages) - 1, -1, -1):
-        if getattr(messages[i], "type", None) == "human":
-            last_human_idx = i
-            break
-    if last_human_idx < 0:
-        return messages
-    return messages[last_human_idx:]
-
-
 __all__ = [
-    "_extract_current_turn",
     "_state_apartment_results",
     "_state_control_message_id",
 ]

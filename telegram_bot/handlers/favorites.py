@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from telegram_bot.callback_data import FavoriteCB
+from telegram_bot.handlers import catalog as catalog_handlers
 from telegram_bot.observability.state_helpers import (
     _state_apartment_results,  # card_2a71ec058138: homed to observability/
 )
@@ -75,7 +76,9 @@ async def _handle_bookmarks(
                 "price_eur": d.get("price_eur", 0),
             },
         }
-        sent = await bot._send_property_card(message, result_like, message.from_user.id)
+        sent = await catalog_handlers._send_property_card(
+            bot, message, result_like, message.from_user.id
+        )
         msg_id = getattr(sent, "message_id", None)
         if isinstance(msg_id, int):
             bookmark_message_ids.append(msg_id)

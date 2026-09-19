@@ -34,7 +34,6 @@ def _bot_stub() -> MagicMock:
     # Kept as a no-op guard: whichever way the schema stage is wired (bot
     # wrapper or the canonical postgres_bootstrap function), the unit tests
     # stay hermetic. Fault injection for the schema stage uses pool.execute.
-    bot._ensure_realestate_schema = AsyncMock()
     return bot
 
 

@@ -44,7 +44,7 @@ Shared cache, embeddings, prompts and polling-lock implementations live in
 [`src/runtime/integrations`](../src/runtime/integrations/); the canonical Qdrant
 client lives in [`src/runtime/qdrant`](../src/runtime/qdrant/). Shared content and
 CRM clients belong to [`src/services`](../src/services/README.md).
-[Trace metadata](observability/trace.py) and [session context](observability/context.py)
+[Pipeline trace metadata](pipeline/supervisor.py) and [session context](observability/context.py)
 support structured logging; they do not initialize a tracing backend.
 [PII masking](../src/observability/README.md) has a separate shared owner.
 

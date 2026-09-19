@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from telegram_bot.dialogs.states import CatalogSG
+from telegram_bot.handlers import catalog as catalog_handlers
 
 
 def _make_message() -> MagicMock:
@@ -277,7 +278,7 @@ async def test_text_input_triggers_search_and_catalog() -> None:
 
 
 @pytest.mark.asyncio
-async def test_catalog_more_works_after_demo_search() -> None:
+async def test_catalog_more_works_after_demo_search(monkeypatch) -> None:
     """After demo search, dialog-native 'more' should load next page."""
     from telegram_bot.dialogs.catalog import on_catalog_more
 
@@ -300,7 +301,7 @@ async def test_catalog_more_works_after_demo_search() -> None:
     )
     property_bot = MagicMock()
     property_bot._apartments_service = mock_svc
-    property_bot._send_property_card = AsyncMock()
+    monkeypatch.setattr(catalog_handlers, "_send_property_card", AsyncMock())
 
     manager = AsyncMock()
     manager.middleware_data = {"state": state, "property_bot": property_bot}

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from telegram_bot.config import BotConfig
+from telegram_bot.pipeline import supervisor as query_supervisor
 from tests.unit._property_bot_factory import make_property_bot
 
 
@@ -113,7 +114,7 @@ async def _run_handle_query(
         patch("telegram_bot.pipeline.supervisor.ChatActionSender") as mock_cas,
     ):
         mock_cas.typing.return_value = _make_typing_cm()
-        await bot.handle_query(message)  # type: ignore[attr-defined]
+        await query_supervisor.handle_query(bot, message)  # type: ignore[attr-defined]
 
 
 class TestTextPathFeedbackButtons:
@@ -189,60 +190,3 @@ class TestTextPathNoSemanticCacheStore:
 
         cache.store_semantic.assert_not_called()
         cache.check_semantic.assert_not_called()
-
-
-class TestExtractCurrentTurn:
-    """Regression tests for current-turn score isolation (#507)."""
-
-    @pytest.mark.parametrize(
-        ("kinds", "start"),
-        [
-            (["human", "ai", "human", "ai", "tool"], 2),
-            (["human", "ai"], 0),
-            (["ai"], 0),
-            ([], 0),
-            ([None, "human", "human"], 2),
-            ([None, "tool"], 0),
-        ],
-    )
-    def test_current_turn_messages(self, kinds, start):
-        from types import SimpleNamespace
-
-        from telegram_bot.observability.state_helpers import _extract_current_turn
-
-        messages = [SimpleNamespace(type=kind) if kind else object() for kind in kinds]
-        assert _extract_current_turn(messages) == messages[start:]
-
-    def test_tool_calls_count_excludes_history(self):
-        from telegram_bot.observability.state_helpers import _extract_current_turn
-
-        old_human = MagicMock(type="human")
-        old_ai = MagicMock(type="ai", tool_calls=[{"name": "rag_search"}, {"name": "history"}])
-        old_tool1 = MagicMock(type="tool", name="rag_search")
-        old_tool2 = MagicMock(type="tool", name="history_search")
-        old_ai2 = MagicMock(type="ai", tool_calls=[], content="old answer")
-
-        cur_human = MagicMock(type="human")
-        cur_ai = MagicMock(type="ai", tool_calls=[{"name": "rag_search"}])
-        cur_tool = MagicMock(type="tool", name="rag_search")
-        cur_ai2 = MagicMock(type="ai", tool_calls=[], content="current answer")
-
-        all_msgs = [
-            old_human,
-            old_ai,
-            old_tool1,
-            old_tool2,
-            old_ai2,
-            cur_human,
-            cur_ai,
-            cur_tool,
-            cur_ai2,
-        ]
-
-        current = _extract_current_turn(all_msgs)
-        tool_calls = sum(
-            len(m.tool_calls)
-            for m in current
-            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
-        )
-        assert tool_calls == 1

@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from telegram_bot.lifecycle import lifecycle as bot_lifecycle
+
 
 # ---------------------------------------------------------------------------
 # #951: Eliminate redundant BGE-M3 call on agent query rewrite
@@ -166,7 +168,7 @@ async def test_warmup_bge_calls_hybrid_embed():
         bot._hybrid = AsyncMock()
         bot._hybrid.aembed_query = AsyncMock(return_value=[0.1] * 1024)
 
-        await bot._warmup_bge()
+        await bot_lifecycle.warmup_bge_pool(bot._hybrid)
 
         bot._hybrid.aembed_query.assert_called_once_with("warmup")
     finally:
@@ -197,7 +199,7 @@ async def test_warmup_bge_failure_nonfatal():
         bot._hybrid.aembed_query = AsyncMock(side_effect=ConnectionError("BGE-M3 down"))
 
         # Should not raise
-        await bot._warmup_bge()
+        await bot_lifecycle.warmup_bge_pool(bot._hybrid)
 
         bot._hybrid.aembed_query.assert_called_once_with("warmup")
     finally:

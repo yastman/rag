@@ -42,8 +42,6 @@ async def test_cmd_start_client_shows_reply_keyboard_even_with_dialog_manager(mo
         async def fake_resolve_role(user_id: int) -> str:
             return "client"
 
-        bot._resolve_user_role = fake_resolve_role
-
         await cmd_start(bot, message, dialog_manager=dialog_manager)
 
     dialog_manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
@@ -73,8 +71,6 @@ async def test_cmd_start_manager_without_kommo_shows_client_reply_keyboard(mock_
         async def fake_resolve_role(user_id: int) -> str:
             return "manager"
 
-        bot._resolve_user_role = fake_resolve_role
-
         await cmd_start(bot, message, dialog_manager=dialog_manager)
 
     dialog_manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
@@ -101,8 +97,6 @@ async def test_cmd_start_fallback_without_dialog_manager(mock_config):
 
         async def fake_resolve_role(user_id: int) -> str:
             return "client"
-
-        bot._resolve_user_role = fake_resolve_role
 
         await cmd_start(bot, message, dialog_manager=None)
 

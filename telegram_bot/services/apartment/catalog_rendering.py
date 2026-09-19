@@ -6,6 +6,8 @@ from typing import Any
 
 from aiogram.types import Message
 
+from telegram_bot.handlers import catalog as catalog_handlers
+
 
 async def send_catalog_results(
     *,
@@ -28,4 +30,4 @@ async def send_catalog_results(
         return
 
     for result in results:
-        await property_bot._send_property_card(message, result, telegram_id)
+        await catalog_handlers._send_property_card(property_bot, message, result, telegram_id)

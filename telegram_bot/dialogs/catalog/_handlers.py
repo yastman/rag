@@ -22,6 +22,9 @@ from telegram_bot.dialogs.catalog._search import (
     load_next_catalog_page,
 )
 from telegram_bot.dialogs.root_nav import show_client_main_menu
+from telegram_bot.handlers import bot_handoff as handoff_handlers
+from telegram_bot.handlers import catalog as catalog_handlers
+from telegram_bot.handlers import favorites as favorite_handlers
 from telegram_bot.keyboards.catalog_keyboard import parse_catalog_button
 
 
@@ -91,7 +94,8 @@ async def _handle_catalog_manager_message(
     property_bot = manager.middleware_data.get("property_bot")
     state = await _get_state(manager)
     if property_bot is not None and state is not None:
-        await property_bot._handle_manager(
+        await handoff_handlers._handle_manager(
+            property_bot,
             message,
             state=state,
             dialog_manager=manager,
@@ -107,7 +111,7 @@ async def _handle_catalog_viewing_message(
     property_bot = manager.middleware_data.get("property_bot")
     state = await _get_state(manager)
     if property_bot is not None and state is not None:
-        await property_bot._handle_viewing(message, state, manager)
+        await catalog_handlers._handle_viewing(property_bot, message, state, manager)
 
 
 async def _handle_catalog_bookmarks_message(
@@ -118,7 +122,7 @@ async def _handle_catalog_bookmarks_message(
     property_bot = manager.middleware_data.get("property_bot")
     state = await _get_state(manager)
     if property_bot is not None and state is not None:
-        await property_bot._handle_bookmarks(message, state=state)
+        await favorite_handlers._handle_bookmarks(property_bot, message, state=state)
 
 
 async def dispatch_catalog_text_action(

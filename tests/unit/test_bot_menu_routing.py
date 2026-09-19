@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from telegram_bot.handlers import catalog as catalog_handlers
+from telegram_bot.handlers import command_handlers as command_handlers
 from tests.unit._bot_config_factory import make_bot_config as _make_config
 from tests.unit._property_bot_factory import make_property_bot
 
@@ -65,7 +67,7 @@ class TestHandleMenuButton:
                 "telegram_bot.handlers.catalog._handle_search", new_callable=AsyncMock
             ) as mock_search,
         ):
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
         mock_search.assert_awaited_once_with(bot, message, None)
 
@@ -82,7 +84,7 @@ class TestHandleMenuButton:
                 "telegram_bot.handlers.catalog._handle_services", new_callable=AsyncMock
             ) as mock_svc,
         ):
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
         mock_svc.assert_awaited_once_with(bot, message, i18n=None)
 
@@ -99,7 +101,7 @@ class TestHandleMenuButton:
                 "telegram_bot.handlers.catalog._handle_viewing", new_callable=AsyncMock
             ) as mock_viewing,
         ):
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
         mock_viewing.assert_awaited_once_with(bot, message, state, None)
 
@@ -116,7 +118,7 @@ class TestHandleMenuButton:
                 "telegram_bot.handlers.favorites._handle_bookmarks", new_callable=AsyncMock
             ) as mock_bm,
         ):
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
         mock_bm.assert_awaited_once_with(bot, message, state)
 
@@ -129,7 +131,7 @@ class TestHandleMenuButton:
             patch("telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value="ask"),
             patch("telegram_bot.handlers.catalog._handle_ask", new_callable=AsyncMock) as mock_ask,
         ):
-            await bot.handle_menu_button(message, state, dialog_manager=None)
+            await command_handlers.handle_menu_button(bot, message, state, dialog_manager=None)
 
         # Ask must receive state/dialog_manager so it can exit any active
         # flow and hand the typed question to the Q&A route (#3204).
@@ -154,7 +156,7 @@ class TestHandleMenuButton:
                 "telegram_bot.handlers.bot_handoff._handle_manager", new_callable=AsyncMock
             ) as mock_mgr,
         ):
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
         mock_mgr.assert_awaited_once_with(bot, message, i18n=None, state=state, dialog_manager=None)
 
@@ -164,7 +166,7 @@ class TestHandleMenuButton:
         state = _make_state()
 
         with patch("telegram_bot.keyboards.client_keyboard.parse_menu_button", return_value=None):
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
         # No handler should have been called
 
@@ -179,7 +181,7 @@ class TestHandleMenuButton:
             ),
             patch("telegram_bot.handlers.catalog._handle_search", new_callable=AsyncMock),
         ):
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
         state.clear.assert_awaited_once()
 
@@ -194,7 +196,7 @@ class TestHandleMenuButton:
             ),
             patch("telegram_bot.handlers.catalog._handle_search", new_callable=AsyncMock),
         ):
-            await bot.handle_menu_button(message, state)
+            await command_handlers.handle_menu_button(bot, message, state)
 
         state.clear.assert_not_awaited()
 
@@ -215,7 +217,7 @@ class TestHandleServiceCallback:
             "telegram_bot.keyboards.services_keyboard.parse_service_callback",
             return_value=("back", None),
         ):
-            await bot.handle_service_callback(callback)
+            await catalog_handlers.handle_service_callback(bot, callback)
 
         callback.message.delete.assert_awaited_once()
         callback.answer.assert_awaited_once()
@@ -234,7 +236,7 @@ class TestHandleServiceCallback:
                 return_value=MagicMock(),
             ),
         ):
-            await bot.handle_service_callback(callback)
+            await catalog_handlers.handle_service_callback(bot, callback)
 
         callback.message.edit_text.assert_awaited_once()
         callback.answer.assert_awaited_once()
@@ -257,7 +259,7 @@ class TestHandleServiceCallback:
                 return_value=MagicMock(),
             ),
         ):
-            await bot.handle_service_callback(callback)
+            await catalog_handlers.handle_service_callback(bot, callback)
 
         callback.message.edit_text.assert_awaited_once()
         callback.answer.assert_awaited_once()
@@ -270,7 +272,7 @@ class TestHandleServiceCallback:
             "telegram_bot.keyboards.services_keyboard.parse_service_callback",
             return_value=None,
         ):
-            await bot.handle_service_callback(callback)
+            await catalog_handlers.handle_service_callback(bot, callback)
 
         callback.answer.assert_awaited_once()
         callback.message.edit_text.assert_not_awaited()
@@ -284,7 +286,7 @@ class TestHandleServiceCallback:
             "telegram_bot.keyboards.services_keyboard.parse_service_callback",
             return_value=("unknown_action", None),
         ):
-            await bot.handle_service_callback(callback)
+            await catalog_handlers.handle_service_callback(bot, callback)
 
         callback.answer.assert_awaited_once()
         callback.message.edit_text.assert_not_awaited()
@@ -314,7 +316,7 @@ class TestHandleCtaCallback:
                 new_callable=AsyncMock,
             ) as mock_phone,
         ):
-            await bot.handle_cta_callback(callback, state)
+            await catalog_handlers.handle_cta_callback(bot, callback, state)
 
         mock_phone.assert_awaited_once()
         call_kwargs = mock_phone.call_args
@@ -342,7 +344,7 @@ class TestHandleCtaCallback:
                 new_callable=AsyncMock,
             ) as mock_qual,
         ):
-            await bot.handle_cta_callback(callback, state)
+            await catalog_handlers.handle_cta_callback(bot, callback, state)
 
         mock_qual.assert_awaited_once()
 
@@ -368,7 +370,7 @@ class TestHandleCtaCallback:
                 new_callable=AsyncMock,
             ) as mock_phone,
         ):
-            await bot.handle_cta_callback(callback, state)
+            await catalog_handlers.handle_cta_callback(bot, callback, state)
 
         mock_qual.assert_not_awaited()
         mock_phone.assert_awaited_once_with(callback, state, service_key="manager")
@@ -389,7 +391,7 @@ class TestHandleCtaCallback:
                 new_callable=AsyncMock,
             ) as mock_phone,
         ):
-            await bot.handle_cta_callback(callback, state)
+            await catalog_handlers.handle_cta_callback(bot, callback, state)
 
         mock_phone.assert_awaited_once()
         call_kwargs = mock_phone.call_args
@@ -404,6 +406,6 @@ class TestHandleCtaCallback:
             "telegram_bot.keyboards.services_keyboard.parse_service_callback",
             return_value=None,
         ):
-            await bot.handle_cta_callback(callback, state)
+            await catalog_handlers.handle_cta_callback(bot, callback, state)
 
         callback.answer.assert_awaited_once()
