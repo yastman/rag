@@ -188,14 +188,21 @@ class TestValidatorCommandCases:
         output = result.stdout + result.stderr
         assert "POSTGRES_PASSWORD" in output
 
-    def test_all_zero_encryption_key_rejected(self, tmp_path: Path) -> None:
-        values = _valid_env_values(tmp_path / "bge-artifact")
-        values["ENCRYPTION_KEY"] = "0" * 64
-        env_file = _write_env(tmp_path / "zero-key.env", values)
-        result = _run_validator(env_file)
-        assert result.returncode != 0
-        output = result.stdout + result.stderr
-        assert "ENCRYPTION_KEY" in output
+    def test_retired_observability_secrets_are_not_required(self, tmp_path: Path) -> None:
+        artifact, pin = _make_pinned_artifact(tmp_path)
+        values = _valid_env_values(artifact)
+        for key in (
+            "ENCRYPTION_KEY",
+            "SALT",
+            "NEXTAUTH_SECRET",
+            "CLICKHOUSE_PASSWORD",
+            "MINIO_ROOT_PASSWORD",
+        ):
+            values.pop(key, None)
+        result = _run_validator(
+            _write_env(tmp_path / "operator.env", values), "--pin-manifest", str(pin)
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
 
     def test_missing_llm_key_is_reported(self, tmp_path: Path) -> None:
         values = _valid_env_values(tmp_path / "bge-artifact")
