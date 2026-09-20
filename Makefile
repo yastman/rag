@@ -201,7 +201,6 @@ test-core: ## Run monolith core-required tests only (local/manual)
 	  tests/regression/ \
 	  tests/characterization/ \
 	  tests/contract/test_runtime_no_telegram_bot_coupling_contract.py \
-	  tests/contract/test_layering_no_telegram_bot_imports_contract.py \
 	  --ignore=tests/unit/core/test_pipeline.py \
 	  -q --timeout=30 -m "not requires_extras and not slow"
 	@echo "$(GREEN)вњ“ Monolith core test gate complete$(NC)"
@@ -413,8 +412,12 @@ check-frozen: ## Read-only check: fail if .venv is stale, then lint + type-check
 	@echo "$(GREEN)вњ“ Frozen check complete$(NC)"
 
 candidate-check: check-frozen format-check test test-contract ## Authoritative local delivery gate (format parity with CI before long lanes, #3326)
+	@echo "$(BLUE)Running import-linter without uv auto-sync...$(NC)"
+	@$(UV_RUN_NO_SYNC) lint-imports
+	@echo "$(GREEN)вњ“ Import-linter complete$(NC)"
 
-pre-push: lint format-check test-core ## Pre-push gate (lint + format-check + core tests)
+pre-push: lint format-check test-core ## Pre-push gate (lint + format-check + core tests + import-linter)
+	@$(UV_RUN_NO_SYNC) lint-imports
 	@echo "$(GREEN)вњ“ Pre-push gate passed$(NC)"
 
 fix: ## Fix all auto-fixable issues (Ruff auto-fix + format)

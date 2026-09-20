@@ -60,10 +60,12 @@ _APPROVED_HOSTED_RUNS = {
         "uv run --no-sync mypy src/ telegram_bot/ services/ scripts/ "
         "--ignore-missing-imports --no-error-summary"
     ),
+    (".github/workflows/ci.yml", "candidate", "Import-linter architecture checks"): (
+        "uv run --no-sync lint-imports"
+    ),
     (".github/workflows/ci.yml", "candidate", "Monolith core tests"): (
         "uv run --no-sync pytest tests/unit/core/ tests/unit/runtime/ tests/regression/ "
         "tests/characterization/ tests/contract/test_runtime_no_telegram_bot_coupling_contract.py "
-        "tests/contract/test_layering_no_telegram_bot_imports_contract.py "
         '--ignore=tests/unit/core/test_pipeline.py -q --timeout=30 -m "not requires_extras and not slow"'
     ),
     (".github/workflows/ci.yml", "candidate", "No-service integration/smoke lane"): (
@@ -382,7 +384,15 @@ def test_makefile_local_gate_ladder() -> None:
         makefile,
         re.MULTILINE,
     )
-    assert re.search(r"^pre-push:\s+lint\s+format-check\s+test-core\b", makefile, re.MULTILINE)
+    candidate_target = re.search(
+        r"^candidate-check:.*?(?=^\S|\Z)", makefile, re.MULTILINE | re.DOTALL
+    )
+    assert candidate_target
+    assert "$(UV_RUN_NO_SYNC) lint-imports" in candidate_target.group(0)
+    pre_push_target = re.search(r"^pre-push:.*?(?=^\S|\Z)", makefile, re.MULTILINE | re.DOTALL)
+    assert pre_push_target
+    assert re.search(r"^pre-push:\s+lint\s+format-check\s+test-core\b", pre_push_target.group(0))
+    assert "$(UV_RUN_NO_SYNC) lint-imports" in pre_push_target.group(0)
 
 
 def test_ci_ruff_paths_match_makefile_lint_paths() -> None:
@@ -425,13 +435,28 @@ def test_pre_push_core_hook_is_cross_platform_and_read_only() -> None:
         "tests/regression/",
         "tests/characterization/",
         "tests/contract/test_runtime_no_telegram_bot_coupling_contract.py",
-        "tests/contract/test_layering_no_telegram_bot_imports_contract.py",
     ):
         assert selector in block
     assert "pass_filenames: false" in block
     assert "always_run: true" in block
     assert "stages: [pre-push]" in block
     assert "make " not in block
+
+
+def test_pre_push_import_linter_hook_is_cross_platform_and_read_only() -> None:
+    config = _text(".pre-commit-config.yaml")
+    hook = re.search(
+        r"^\s*- id: import-linter\b.*?(?=^\s*- id:|^\S|\Z)",
+        config,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert hook, "pre-commit must define an import-linter hook"
+    block = hook.group(0)
+    assert "entry: uv run --no-sync lint-imports" in block
+    assert "language: system" in block
+    assert "pass_filenames: false" in block
+    assert "always_run: true" in block
+    assert "stages: [pre-push]" in block
 
 
 def test_docs_define_candidate_check_as_delivery_gate() -> None:

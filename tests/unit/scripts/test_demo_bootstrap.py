@@ -111,6 +111,26 @@ class TestSchemaCompatible:
 
 
 class TestExplicitBootstrapMutations:
+    @pytest.mark.parametrize(
+        ("create_schema", "collection_name"),
+        [
+            (db.create_knowledge_collection_schema, "i3202-knowledge"),
+            (db.create_apartments_collection_schema, "i3202-apartments"),
+        ],
+    )
+    def test_schema_creation_defines_full_bge_m3_vectors(self, create_schema, collection_name):
+        """Both production bootstrap paths create dense, bm42, and ColBERT vectors."""
+        client = MagicMock()
+
+        create_schema(client, collection_name)
+
+        call_kwargs = client.create_collection.call_args.kwargs
+        assert call_kwargs["collection_name"] == collection_name
+        assert set(call_kwargs["vectors_config"]) == {"dense", "colbert"}
+        assert set(call_kwargs["sparse_vectors_config"]) == {"bm42"}
+        assert call_kwargs["vectors_config"]["dense"].size == contracts.BGEM3_DENSE_DIM
+        assert call_kwargs["vectors_config"]["colbert"].size == contracts.BGEM3_DENSE_DIM
+
     def test_knowledge_schema_creation_applies_strict_mode(self):
         client = MagicMock()
         db.create_knowledge_collection_schema(client, "i3202-knowledge")

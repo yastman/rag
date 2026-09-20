@@ -151,6 +151,9 @@ jobs:
           uv run --no-sync mypy src/ telegram_bot/ services/ scripts/
           --ignore-missing-imports --no-error-summary
 
+      - name: Import-linter architecture checks
+        run: uv run --no-sync lint-imports
+
       - name: Monolith core tests
         run: >
           uv run --no-sync pytest
@@ -159,7 +162,6 @@ jobs:
           tests/regression/
           tests/characterization/
           tests/contract/test_runtime_no_telegram_bot_coupling_contract.py
-          tests/contract/test_layering_no_telegram_bot_imports_contract.py
           --ignore=tests/unit/core/test_pipeline.py
           -q --timeout=30 -m "not requires_extras and not slow"
 

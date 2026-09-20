@@ -11,8 +11,6 @@ decisions, shared integrations, and runtime configuration
 
 This package is the finished destination of the reverse-layering migration
 (#1948 and the related slice in #1265): the shared kernel modules moved out
-of ``telegram_bot/`` now live here, and the ratchet allowlist
-(``tests/data/known_layering_violations.json``) is empty. The standing
-invariant is enforced by contract tests: ``runtime`` must not import
-``telegram_bot``.
+of ``telegram_bot/`` now live here. Import-linter enforces the standing
+invariant that no ``src`` module imports ``telegram_bot``.
 """

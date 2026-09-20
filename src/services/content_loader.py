@@ -4,9 +4,8 @@ Issue #1948 flagged that shared modules used by both the bot and other
 surfaces sat under ``telegram_bot/``. This file is the canonical home for the
 ``services.yaml`` loader. Callers import ``src.services.content_loader`` directly.
 
-Layering rule (enforced by
-``tests/contract/test_layering_no_telegram_bot_imports_contract.py``
-and ``tests/contract/test_content_loader_path_contract.py``):
+Layering rule (enforced by import-linter and
+``tests/contract/test_content_loader_path_contract.py``):
 
   - ``telegram_bot/`` internals use the canonical shared module.
 
