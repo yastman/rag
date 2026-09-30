@@ -16,7 +16,7 @@ dependencies = [
     # Monitoring & Metrics
     "prometheus-client==0.26.0",
     # Utilities
-    "numpy==2.5.2",
+    "numpy==2.5.3",
 ]
 
 [project.optional-dependencies]
