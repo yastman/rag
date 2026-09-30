@@ -10,7 +10,7 @@ dependencies = [
     # FastAPI & Web Server
     "fastapi==0.141.1",
     "starlette>=1.6.0",  # CVE-2026-48817/48818 SSRF fix
-    "uvicorn[standard]==0.52.4",
+    "uvicorn[standard]==0.53.0",
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
     # Monitoring & Metrics
